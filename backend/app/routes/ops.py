@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import (
+    SnapshotInfo,
     AutomationCandidate,
     BacklogResponse,
     InboxItem,
@@ -29,7 +30,7 @@ from app.schemas import (
     WeekResponse,
 )
 from app.services.automation import build_ask_items, cluster_by_intent, store_ask_log
-from app.services.crm import load_crm_tasks
+from app.services.crm import load_crm_snapshot
 from app.services.intake import build_inbox_items
 from app.services.store import read_json, write_json
 from app.config import CRM_API_BASE_URL, CRM_API_TOKEN, DATA_DIR
@@ -145,7 +146,7 @@ def build_risk_signals(tasks: list[dict]) -> list[str]:
     return signals or ["No critical data risks detected"]
 
 
-def build_backlog_response(tasks: list[dict]) -> BacklogResponse:
+def build_backlog_response(tasks: list[dict], snapshot: SnapshotInfo | None) -> BacklogResponse:
     backlog_tasks = [task for task in tasks if task.get("status") == "Backlog"]
     unsorted_tasks = [task for task in tasks if not task.get("project_id")]
     needs_verify_tasks = [
@@ -172,6 +173,7 @@ def build_backlog_response(tasks: list[dict]) -> BacklogResponse:
         project_candidates = ["Map missing projects"]
 
     return BacklogResponse(
+        snapshot=snapshot,
         items=[as_item(task, "backlog") for task in backlog_tasks[:10]],
         needs_verify=[
             as_item(task, "needs_verify", f"Missing owner: {task['title']}")
@@ -189,7 +191,9 @@ def build_backlog_response(tasks: list[dict]) -> BacklogResponse:
         suggest_ops=build_suggest_ops(tasks),
     )
 
-def build_backlog_from_intake(items: list[dict], suggest_ops: list[SuggestOp]) -> BacklogResponse:
+def build_backlog_from_intake(
+    items: list[dict], suggest_ops: list[SuggestOp], snapshot: SnapshotInfo | None
+) -> BacklogResponse:
     def as_item(raw: dict) -> InboxItem:
         return InboxItem(
             inbox_id=raw.get("inbox_id", "unknown"),
@@ -203,6 +207,7 @@ def build_backlog_from_intake(items: list[dict], suggest_ops: list[SuggestOp]) -
 
     inbox = [as_item(item) for item in items]
     return BacklogResponse(
+        snapshot=snapshot,
         items=[item for item in inbox if item.status == "new"],
         needs_verify=[item for item in inbox if item.status == "needs_verify"],
         unsorted=[item for item in inbox if item.status == "unsorted"],
@@ -212,7 +217,7 @@ def build_backlog_from_intake(items: list[dict], suggest_ops: list[SuggestOp]) -
     )
 
 
-def build_today_response(tasks: list[dict]) -> TodayResponse:
+def build_today_response(tasks: list[dict], snapshot: SnapshotInfo | None) -> TodayResponse:
     wip = [task for task in tasks if task.get("status") in {"InProgress", "Review"}]
     if not wip:
         wip = tasks[:]
@@ -222,6 +227,7 @@ def build_today_response(tasks: list[dict]) -> TodayResponse:
         wip, lambda task: task.get("assignee_name") or task.get("assignee_id") or "Unassigned"
     )
     return TodayResponse(
+        snapshot=snapshot,
         plan_by_project=plan_by_project,
         plan_by_people=plan_by_people,
         risk_signals=build_risk_signals(tasks),
@@ -229,7 +235,7 @@ def build_today_response(tasks: list[dict]) -> TodayResponse:
     )
 
 
-def build_week_response(tasks: list[dict]) -> WeekResponse:
+def build_week_response(tasks: list[dict], snapshot: SnapshotInfo | None) -> WeekResponse:
     week_tasks = [task for task in tasks if task.get("status") in {"Backlog", "InProgress", "Review"}]
     if not week_tasks:
         week_tasks = tasks[:]
@@ -247,6 +253,7 @@ def build_week_response(tasks: list[dict]) -> WeekResponse:
         load_issues.append("No load issues detected")
 
     return WeekResponse(
+        snapshot=snapshot,
         by_people=group_plan_lines(
             week_tasks,
             lambda task: task.get("assignee_name") or task.get("assignee_id") or "Unassigned",
@@ -257,7 +264,9 @@ def build_week_response(tasks: list[dict]) -> WeekResponse:
     )
 
 
-def build_metrics_response(tasks: list[dict], intake_items: list[dict]) -> MetricsResponse:
+def build_metrics_response(
+    tasks: list[dict], intake_items: list[dict], snapshot: SnapshotInfo | None
+) -> MetricsResponse:
     total = len(tasks)
     done = sum(1 for task in tasks if task.get("status") == "Done")
     review = sum(1 for task in tasks if task.get("status") == "Review")
@@ -292,6 +301,7 @@ def build_metrics_response(tasks: list[dict], intake_items: list[dict]) -> Metri
         ]
 
     return MetricsResponse(
+        snapshot=snapshot,
         metrics=metrics,
         not_ok_signals=build_risk_signals(tasks),
         automation_candidates=automation_candidates,
@@ -517,37 +527,41 @@ def build_fallback_metrics() -> MetricsResponse:
 
 @router.get("/backlog", response_model=BacklogResponse)
 async def get_backlog():
-    tasks = load_crm_tasks()
+    snapshot_dict, tasks = load_crm_snapshot()
+    snapshot = SnapshotInfo(**snapshot_dict) if snapshot_dict else None
     intake_items = build_inbox_items(tasks)
     if intake_items:
-        return build_backlog_from_intake(intake_items, build_suggest_ops(tasks))
+        return build_backlog_from_intake(intake_items, build_suggest_ops(tasks), snapshot)
     if tasks:
-        return build_backlog_response(tasks)
+        return build_backlog_response(tasks, snapshot)
     return build_fallback_backlog()
 
 
 @router.get("/today", response_model=TodayResponse)
 async def get_today():
-    tasks = load_crm_tasks()
+    snapshot_dict, tasks = load_crm_snapshot()
+    snapshot = SnapshotInfo(**snapshot_dict) if snapshot_dict else None
     if tasks:
-        return build_today_response(tasks)
+        return build_today_response(tasks, snapshot)
     return build_fallback_today()
 
 
 @router.get("/week", response_model=WeekResponse)
 async def get_week():
-    tasks = load_crm_tasks()
+    snapshot_dict, tasks = load_crm_snapshot()
+    snapshot = SnapshotInfo(**snapshot_dict) if snapshot_dict else None
     if tasks:
-        return build_week_response(tasks)
+        return build_week_response(tasks, snapshot)
     return build_fallback_week()
 
 
 @router.get("/metrics", response_model=MetricsResponse)
 async def get_metrics():
-    tasks = load_crm_tasks()
+    snapshot_dict, tasks = load_crm_snapshot()
+    snapshot = SnapshotInfo(**snapshot_dict) if snapshot_dict else None
     intake_items = build_inbox_items(tasks)
     if tasks:
-        return build_metrics_response(tasks, intake_items)
+        return build_metrics_response(tasks, intake_items, snapshot)
     return build_fallback_metrics()
 
 

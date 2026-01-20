@@ -796,6 +796,10 @@ body::before {
   flex-wrap: wrap;
 }
 
+.footer-snapshot {
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .empty-state {
   text-align: center;
 }

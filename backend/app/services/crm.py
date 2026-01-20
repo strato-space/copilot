@@ -71,6 +71,14 @@ def _parse_snapshot_date(path: Path) -> date | None:
         return None
 
 
+def snapshot_info(path: Path) -> dict[str, str | None]:
+    snap_date = _parse_snapshot_date(path)
+    return {
+        "filename": path.name,
+        "date": snap_date.isoformat() if snap_date else None,
+    }
+
+
 def resolve_snapshot() -> Path | None:
     default_path = Path(DEFAULT_CRM_SNAPSHOT) if DEFAULT_CRM_SNAPSHOT else None
     if default_path and default_path.exists():
@@ -143,3 +151,10 @@ def load_crm_tasks(snapshot_path: Path | None = None) -> list[dict]:
             )
 
     return tasks
+
+
+def load_crm_snapshot(snapshot_path: Path | None = None) -> tuple[dict[str, str | None] | None, list[dict]]:
+    path = snapshot_path or resolve_snapshot()
+    if not path or not path.exists():
+        return None, []
+    return snapshot_info(path), load_crm_tasks(path)

@@ -3,6 +3,11 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class SnapshotInfo(BaseModel):
+    filename: str
+    date: Optional[str] = None
+
+
 class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -145,6 +150,7 @@ class WeekBlock(BaseModel):
 
 
 class BacklogResponse(BaseModel):
+    snapshot: Optional[SnapshotInfo] = None
     items: list[InboxItem]
     needs_verify: list[InboxItem]
     unsorted: list[InboxItem]
@@ -154,6 +160,7 @@ class BacklogResponse(BaseModel):
 
 
 class TodayResponse(BaseModel):
+    snapshot: Optional[SnapshotInfo] = None
     plan_by_project: list[PlanLine]
     plan_by_people: list[PlanLine]
     risk_signals: list[str]
@@ -161,6 +168,7 @@ class TodayResponse(BaseModel):
 
 
 class WeekResponse(BaseModel):
+    snapshot: Optional[SnapshotInfo] = None
     by_people: list[PlanLine]
     by_projects: list[PlanLine]
     load_issues: list[str]
@@ -168,6 +176,7 @@ class WeekResponse(BaseModel):
 
 
 class MetricsResponse(BaseModel):
+    snapshot: Optional[SnapshotInfo] = None
     metrics: list[MetricLine]
     not_ok_signals: list[str]
     automation_candidates: list[AutomationCandidate]

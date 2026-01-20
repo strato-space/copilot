@@ -857,6 +857,29 @@ function apiStatusLine() {
   `;
 }
 
+function formatSnapshot(snapshot) {
+  if (!snapshot) return null;
+  const filename = snapshot.filename || "";
+  const date = snapshot.date || "";
+  if (date && filename) return `${date} — ${filename}`;
+  if (date) return date;
+  if (filename) return filename;
+  return null;
+}
+
+function updateFooterSnapshot(snapshot) {
+  const el = document.getElementById("footerSnapshot");
+  if (!el) return;
+  const text = formatSnapshot(snapshot);
+  if (!text) {
+    el.textContent = "";
+    el.hidden = true;
+    return;
+  }
+  el.textContent = text;
+  el.hidden = false;
+}
+
 function getInitials(name) {
   if (!name) return "--";
   const parts = name.split(/\s+/).filter(Boolean);
@@ -884,6 +907,7 @@ function renderBacklogEntry(item) {
 }
 
 function renderBacklog(data, options = {}) {
+  const snapshotText = formatSnapshot(data.snapshot) || "voicebot/downloads";
   return `
     ${options.notice ? noticeBanner(options.notice) : ""}
     ${pageHeader({
@@ -929,7 +953,7 @@ function renderBacklog(data, options = {}) {
             <div class="panel-title">${t("section.data_health")}</div>
             <div class="data-row">
               <span>${t("label.crm_snapshot")}</span>
-              <span class="data-value">voicebot/downloads</span>
+              <span class="data-value">${snapshotText}</span>
             </div>
             ${apiStatusLine()}
             <div class="data-row">
@@ -1558,6 +1582,7 @@ async function render(path) {
     currentContext = route.key;
     lastApproveId = null;
     app.innerHTML = renderView(route.key, data);
+    updateFooterSnapshot(data.snapshot);
   } catch (error) {
     const fallback = getFallback(route.key);
     if (fallback) {
@@ -1567,8 +1592,10 @@ async function render(path) {
       app.innerHTML = renderView(route.key, fallback, {
         notice: t("notice.fallback"),
       });
+      updateFooterSnapshot(fallback.snapshot);
     } else {
       app.innerHTML = renderError();
+      updateFooterSnapshot(null);
     }
   }
 
