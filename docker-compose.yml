@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - COPILOT_CSV_DIR=/workspace/voicebot/downloads
+      - COPILOT_INTAKE_DIR=/workspace/voicebot/downloads
+    volumes:
+      - ../voicebot/downloads:/workspace/voicebot/downloads:ro
+      - copilot_data:/app/app/data
+
+  web:
+    build: ./frontend
+    container_name: copilot-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  copilot_data:
