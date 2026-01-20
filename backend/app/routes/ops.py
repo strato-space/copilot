@@ -67,7 +67,7 @@ def build_suggest_ops(tasks: list[dict], limit: int = 30) -> list[SuggestOp]:
 
     # Gate-1: WIP tasks must have assignee.
     for task in wip:
-        if task.get("assignee_name"):
+        if task.get("assignee_name") or task.get("assignee_id"):
             continue
         add_op(
             "assign",
@@ -127,6 +127,7 @@ def build_risk_signals(tasks: list[dict]) -> list[str]:
         1
         for task in tasks
         if task.get("status") in {"InProgress", "Review"} and not task.get("assignee_name")
+        and not task.get("assignee_id")
     )
     missing_estimate = sum(
         1
@@ -150,7 +151,9 @@ def build_backlog_response(tasks: list[dict]) -> BacklogResponse:
     needs_verify_tasks = [
         task
         for task in tasks
-        if task.get("status") in {"InProgress", "Review"} and not task.get("assignee_name")
+        if task.get("status") in {"InProgress", "Review"}
+        and not task.get("assignee_name")
+        and not task.get("assignee_id")
     ]
 
     def as_item(task: dict, status: str, summary_override: str | None = None) -> InboxItem:
@@ -160,7 +163,7 @@ def build_backlog_response(tasks: list[dict]) -> BacklogResponse:
             summary=summary_override or task["title"],
             status=status,
             project_guess=task.get("project_name"),
-            owner_guess=task.get("assignee_name"),
+            owner_guess=task.get("assignee_name") or task.get("assignee_id"),
             priority=task.get("priority"),
         )
 
@@ -215,7 +218,9 @@ def build_today_response(tasks: list[dict]) -> TodayResponse:
         wip = tasks[:]
 
     plan_by_project = group_plan_lines(wip, lambda task: task.get("project_name") or "No project")
-    plan_by_people = group_plan_lines(wip, lambda task: task.get("assignee_name") or "Unassigned")
+    plan_by_people = group_plan_lines(
+        wip, lambda task: task.get("assignee_name") or task.get("assignee_id") or "Unassigned"
+    )
     return TodayResponse(
         plan_by_project=plan_by_project,
         plan_by_people=plan_by_people,
@@ -233,14 +238,19 @@ def build_week_response(tasks: list[dict]) -> WeekResponse:
     missing_estimate = sum(1 for task in week_tasks if task.get("estimate_h") is None)
     if missing_estimate:
         load_issues.append(f"Missing estimates: {missing_estimate}")
-    missing_assignee = sum(1 for task in week_tasks if not task.get("assignee_name"))
+    missing_assignee = sum(
+        1 for task in week_tasks if not task.get("assignee_name") and not task.get("assignee_id")
+    )
     if missing_assignee:
         load_issues.append(f"Missing assignee: {missing_assignee}")
     if not load_issues:
         load_issues.append("No load issues detected")
 
     return WeekResponse(
-        by_people=group_plan_lines(week_tasks, lambda task: task.get("assignee_name") or "Unassigned"),
+        by_people=group_plan_lines(
+            week_tasks,
+            lambda task: task.get("assignee_name") or task.get("assignee_id") or "Unassigned",
+        ),
         by_projects=group_plan_lines(week_tasks, lambda task: task.get("project_name") or "No project"),
         load_issues=load_issues,
         suggest_ops=build_suggest_ops(tasks),
