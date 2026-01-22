@@ -33,7 +33,7 @@ interface PlanFactState {
 
 const now = dayjs();
 const initialRangeStart = now.format('YYYY-MM');
-const initialRangeEnd = now.add(2, 'month').format('YYYY-MM');
+const initialRangeEnd = now.format('YYYY-MM');
 
 const clonePlanFact = (data: PlanFactGridResponse): PlanFactGridResponse => {
   if (typeof structuredClone === 'function') {

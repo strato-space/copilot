@@ -1,6 +1,7 @@
 import { Card, Col, Row, Statistic, Typography } from 'antd';
 import { type ReactElement } from 'react';
 import { type PlanFactClientRow, type PlanFactGridResponse } from '../services/types';
+import { useFxStore } from '../store/fxStore';
 import { formatCurrency, formatNumber } from '../utils/format';
 
 interface Props {
@@ -32,8 +33,12 @@ const sumByMonth = (
 };
 
 export default function KpiCards({ data, focusMonth }: Props): ReactElement {
+  const fxRates = useFxStore((state) => state.rates);
   const totals = sumByMonth(data, focusMonth);
-  const variance = totals.fact - totals.forecast;
+  const fxFactor = fxRates[focusMonth]?.base ? fxRates[focusMonth].rate / fxRates[focusMonth].base : 1;
+  const factRub = totals.fact * fxFactor;
+  const forecastRub = totals.forecast * fxFactor;
+  const variance = factRub - forecastRub;
 
   return (
     <Row gutter={[16, 16]}>
@@ -41,7 +46,7 @@ export default function KpiCards({ data, focusMonth }: Props): ReactElement {
         <Card className="h-[160px] flex flex-col justify-between">
           <Typography.Text type="secondary">Выручка, факт</Typography.Text>
           <Statistic
-            value={totals.fact}
+            value={factRub}
             formatter={(value: string | number): string => formatCurrency(Number(value))}
           />
         </Card>
@@ -50,7 +55,7 @@ export default function KpiCards({ data, focusMonth }: Props): ReactElement {
         <Card className="h-[160px] flex flex-col justify-between">
           <Typography.Text type="secondary">Выручка, прогноз</Typography.Text>
           <Statistic
-            value={totals.forecast}
+            value={forecastRub}
             formatter={(value: string | number): string => formatCurrency(Number(value))}
           />
         </Card>

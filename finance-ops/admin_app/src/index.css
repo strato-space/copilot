@@ -48,6 +48,43 @@ h5 {
   appearance: none;
 }
 
+.finops-table .finops-month-header {
+  position: relative;
+  width: 100%;
+  text-align: center;
+}
+
+.finops-table .finops-month-label {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.finops-table .finops-pin-button {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.finops-table .finops-month-header:hover .finops-pin-button,
+.finops-table .finops-month-header.is-pinned .finops-pin-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.finops-table .finops-month-header.is-pinned .finops-pin-button {
+  color: #0f172a;
+}
+
 .finops-table .finops-month-button:focus,
 .finops-table .finops-month-button:focus-visible,
 .finops-table .finops-month-button:active {
@@ -104,6 +141,16 @@ h5 {
   text-align: left;
 }
 
+.finops-table .finops-cell-button {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.finops-table .ant-table-tbody > tr > td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 .finops-table .finops-cell-content {
   display: flex;
   align-items: center;
@@ -127,11 +174,11 @@ h5 {
 }
 
 .finops-table .finops-focus-left {
-  border-left: 2px solid #4d4d4d !important;
+  border-left: 2px solid #808080 !important;
 }
 
 .finops-table .finops-focus-right {
-  border-right: 2px solid #4d4d4d !important;
+  border-right: 2px solid #808080 !important;
 }
 
 .finops-table .finops-summary-row > td {
@@ -140,6 +187,22 @@ h5 {
   background: #ffffff;
   z-index: 2;
   border-top: 1px solid #e2e8f0;
+}
+
+.finops-table .finops-summary-fixed {
+  z-index: 4;
+  background: #ffffff;
+  overflow: visible;
+  position: relative;
+}
+
+.finops-table .finops-summary-pin {
+  position: sticky;
+  left: var(--pin-left);
+  z-index: 5;
+  background: #ffffff;
+  display: block;
+  width: 100%;
 }
 
 .finops-page-header {
@@ -169,8 +232,8 @@ h5 {
 }
 
 .finops-table .finops-focus-group {
-  border-left: 2px solid #4d4d4d !important;
-  border-right: 2px solid #4d4d4d !important;
+  border-left: 2px solid #808080 !important;
+  border-right: 2px solid #808080 !important;
 }
 
 .finops-page > * + * {
@@ -201,19 +264,9 @@ h5 {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.finops-pie::after {
-  content: '';
-  position: absolute;
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  background: #ffffff;
 }
 
 .finops-pie-center {
@@ -226,6 +279,60 @@ h5 {
   flex: 1 1 240px;
   display: grid;
   gap: 10px;
+}
+
+.finops-pie-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.finops-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.finops-line-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.finops-line-svg {
+  width: 100%;
+  height: auto;
+}
+
+.finops-line-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.finops-line-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.finops-line-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finops-line-legend-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+@media (max-width: 1024px) {
+  .finops-chart-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .finops-pie-legend-item {

@@ -98,14 +98,12 @@ export default function ClientsProjectsRatesPage(): ReactElement {
 
   return (
     <div className="finops-page animate-fade-up">
+      <Button type="link" className="!p-0 mb-2">
+        <Link to="/directories">← Назад к справочникам</Link>
+      </Button>
       <PageHeader
         title="Клиенты, проекты и ставки"
         description="Базовые справочники для расчёта выручки и прогноза."
-        actions={
-          <Button type="link">
-            <Link to="/directories">← Назад к справочникам</Link>
-          </Button>
-        }
       />
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>

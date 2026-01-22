@@ -1,11 +1,12 @@
 import dayjs from 'dayjs';
 
-export const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB',
+export const formatCurrency = (value: number): string => {
+  const formatted = new Intl.NumberFormat('ru-RU', {
     maximumFractionDigits: 0,
+    useGrouping: false,
   }).format(value);
+  return `${formatted} ₽`;
+};
 
 export const formatNumber = (value: number): string =>
   new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);

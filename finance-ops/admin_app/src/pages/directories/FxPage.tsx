@@ -1,7 +1,8 @@
 import { Button, Card, DatePicker, Form, Input, InputNumber, Modal, Table, Typography, message } from 'antd';
 import { Link } from 'react-router-dom';
-import { type ReactElement, useState } from 'react';
+import { type ReactElement, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
+import { useFxStore } from '../../store/fxStore';
 
 interface FxRow {
   key: string;
@@ -10,29 +11,28 @@ interface FxRow {
   source: string;
 }
 
-const fxData: FxRow[] = [
-  { key: '1', month: '2026‑01', rate: '92.40', source: 'ЦБ РФ' },
-  { key: '2', month: '2026‑02', rate: '93.10', source: 'ЦБ РФ' },
-];
-
 export default function FxPage(): ReactElement {
-  const [fxRows, setFxRows] = useState<FxRow[]>(fxData);
+  const fxRates = useFxStore((state) => state.rates);
+  const setRate = useFxStore((state) => state.setRate);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [form] = Form.useForm();
+  const rows = useMemo((): FxRow[] => {
+    return Object.values(fxRates)
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map((item) => ({
+        key: item.month,
+        month: item.month,
+        rate: item.rate.toFixed(2),
+        source: item.source,
+      }));
+  }, [fxRates]);
 
   const handleAddFx = async (): Promise<void> => {
     const values = await form.validateFields();
     const monthValue = values.month.format('YYYY-MM');
-    setFxRows((prev) => [
-      ...prev,
-      {
-        key: `${Date.now()}-fx`,
-        month: monthValue,
-        rate: String(values.rate),
-        source: values.source,
-      },
-    ]);
-    message.success('Курс добавлен');
+    const rateValue = Number(values.rate);
+    setRate(monthValue, rateValue, values.source);
+    message.success('Курс обновлён, данные пересчитаны');
     form.resetFields();
     setModalOpen(false);
   };
@@ -56,7 +56,7 @@ export default function FxPage(): ReactElement {
         <Table
           size="small"
           pagination={false}
-          dataSource={fxRows}
+          dataSource={rows}
           columns={[
             { title: 'Месяц', dataIndex: 'month', key: 'month' },
             { title: 'Курс', dataIndex: 'rate', key: 'rate' },
