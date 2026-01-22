@@ -1,0 +1,299 @@
+openapi: 3.0.3
+info:
+  title: Finance Ops Console API (MVP)
+  version: 0.1.0
+servers:
+  - url: /api
+paths:
+  /plan-fact:
+    get:
+      summary: Get plan-fact grid
+      parameters:
+        - in: query
+          name: year
+          schema: { type: integer }
+          required: true
+        - in: query
+          name: focus_month
+          schema: { type: string, example: "2026-01" }
+          required: true
+        - in: query
+          name: forecast_version_id
+          schema: { type: string }
+          required: true
+      responses:
+        '200':
+          description: Grid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanFactGrid'
+  /project/{project_id}/month/{month}:
+    get:
+      summary: Get project month details for Drawer
+      parameters:
+        - in: path
+          name: project_id
+          schema: { type: string }
+          required: true
+        - in: path
+          name: month
+          schema: { type: string, example: "2026-01" }
+          required: true
+      responses:
+        '200':
+          description: Drawer data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMonthDetails'
+  /fact/{project_id}/{month}:
+    put:
+      summary: Update fact for project month
+      parameters:
+        - in: path
+          name: project_id
+          schema: { type: string }
+          required: true
+        - in: path
+          name: month
+          schema: { type: string }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactUpdate'
+      responses:
+        '200':
+          description: Updated fact
+        '409':
+          description: Optimistic lock conflict
+  /forecast/{forecast_version_id}/{project_id}/{month}:
+    put:
+      summary: Update forecast for project month
+      parameters:
+        - in: path
+          name: forecast_version_id
+          schema: { type: string }
+          required: true
+        - in: path
+          name: project_id
+          schema: { type: string }
+          required: true
+        - in: path
+          name: month
+          schema: { type: string }
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForecastUpdate'
+      responses:
+        '200': { description: Updated forecast }
+  /forecast/versions:
+    get:
+      summary: List forecast versions
+      parameters:
+        - in: query
+          name: year
+          schema: { type: integer }
+          required: true
+      responses:
+        '200':
+          description: Versions list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ForecastVersion' }
+    post:
+      summary: Create forecast version from active
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                year: { type: integer }
+                name: { type: string }
+      responses:
+        '201': { description: Created }
+  /forecast/copy:
+    post:
+      summary: Copy forecast month forward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopyForecastRequest'
+      responses:
+        '200': { description: Copy completed }
+  /period/close:
+    post:
+      summary: Close month (lock)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                month: { type: string }
+      responses:
+        '200': { description: Closed }
+        '400': { description: Blocking validation errors }
+  /analytics:
+    get:
+      summary: Analytics dashboard data
+      parameters:
+        - in: query
+          name: year
+          schema: { type: integer }
+          required: true
+      responses:
+        '200':
+          description: Analytics payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsPayload'
+  /agent-requests:
+    post:
+      summary: Create agent request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRequestCreate'
+      responses:
+        '201': { description: Created }
+  /agent-requests/{agent_request_id}/apply:
+    post:
+      summary: Apply agent changes (approve gate)
+      parameters:
+        - in: path
+          name: agent_request_id
+          schema: { type: string }
+          required: true
+      responses:
+        '200': { description: Applied }
+        '409': { description: Conflict or locked period }
+
+components:
+  schemas:
+    PlanFactGrid:
+      type: object
+      properties:
+        snapshot_date: { type: string }
+        forecast_version_id: { type: string }
+        clients:
+          type: array
+          items:
+            type: object
+            properties:
+              client_id: { type: string }
+              client_name: { type: string }
+              totals_by_month: { type: object }
+              projects:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    project_id: { type: string }
+                    project_name: { type: string }
+                    subproject_name: { type: string }
+                    contract_type: { type: string }
+                    rate_rub_per_hour: { type: integer }
+                    months: { type: object }
+    ProjectMonthDetails:
+      type: object
+      properties:
+        fact: { $ref: '#/components/schemas/FactProjectMonth' }
+        forecast: { $ref: '#/components/schemas/ForecastProjectMonth' }
+        cost_breakdown: { type: array, items: { type: object } }
+        audit_events: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+        attachments: { type: array, items: { $ref: '#/components/schemas/Attachment' } }
+    FactUpdate:
+      type: object
+      properties:
+        row_version: { type: integer }
+        billed_hours: { type: number }
+        invoice_amount_original: { type: number }
+        invoice_currency: { type: string }
+        fx_manual: { type: number }
+        comment: { type: string }
+    ForecastUpdate:
+      type: object
+      properties:
+        row_version: { type: integer }
+        forecast_hours: { type: number }
+        forecast_amount_original: { type: number }
+        forecast_currency: { type: string }
+        comment: { type: string }
+    CopyForecastRequest:
+      type: object
+      properties:
+        source_month: { type: string }
+        target_month: { type: string }
+        mode: { type: string, enum: [overwrite, fill_zero] }
+        project_ids: { type: array, items: { type: string } }
+    AnalyticsPayload:
+      type: object
+      properties:
+        kpis: { type: array, items: { type: object } }
+        alerts: { type: array, items: { type: object } }
+        charts: { type: object }
+    ForecastVersion:
+      type: object
+      properties:
+        forecast_version_id: { type: string }
+        name: { type: string }
+        year: { type: integer }
+        type: { type: string }
+        is_active: { type: boolean }
+        locked: { type: boolean }
+    FactProjectMonth:
+      type: object
+      properties:
+        project_id: { type: string }
+        month: { type: string }
+        type: { type: string }
+        billed_amount_rub: { type: integer }
+        billed_hours: { type: number }
+    ForecastProjectMonth:
+      type: object
+      properties:
+        project_id: { type: string }
+        month: { type: string }
+        forecast_amount_rub: { type: integer }
+        forecast_hours: { type: number }
+    AuditEvent:
+      type: object
+      properties:
+        timestamp: { type: string }
+        actor_type: { type: string }
+        action: { type: string }
+        changes: { type: array, items: { type: object } }
+    Attachment:
+      type: object
+      properties:
+        attachment_id: { type: string }
+        file_name: { type: string }
+        content_type: { type: string }
+        file_size: { type: integer }
+    AgentRequestCreate:
+      type: object
+      properties:
+        project_id: { type: string }
+        month: { type: string }
+        scope_fact: { type: boolean }
+        scope_forecast: { type: boolean }
+        scope_attachments: { type: boolean }
+        request_text: { type: string }

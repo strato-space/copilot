@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Copilot Ops Mini App</title>
+    <meta name="color-scheme" content="only light" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app" id="app">
+      <header class="app-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <div class="brand-title">Copilot</div>
+            <div class="brand-subtitle" data-i18n="subtitle">Ops mini app</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="chip" id="langToggle" type="button">RU / EN</button>
+          <span class="chip" id="snapshot">-</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <div class="hero-title" data-i18n="hero_title">Backlog -> Week -> Today</div>
+          <div class="hero-text" data-i18n="hero_text">
+            Short, clear view for daily ops focus.
+          </div>
+        </div>
+        <div class="hero-card" id="stats"></div>
+      </section>
+
+      <nav class="tabs tabs-primary" aria-label="Primary">
+        <button class="tab is-active" data-view="backlog" type="button">Backlog</button>
+        <button class="tab" data-view="week" type="button">Week</button>
+        <button class="tab" data-view="today" type="button">Today</button>
+      </nav>
+
+      <nav class="tabs tabs-secondary" aria-label="Secondary">
+        <button class="tab tab-secondary" data-view="metrics" type="button">Metrics</button>
+        <button class="tab tab-secondary" data-view="timeline" type="button">Timeline</button>
+        <button class="tab tab-secondary" data-view="memory" type="button">Memory</button>
+        <button class="tab tab-secondary" data-view="month_plan" type="button">Month</button>
+        <button class="tab tab-secondary" data-view="profiles" type="button">Profiles</button>
+      </nav>
+
+      <section class="view" id="view" aria-live="polite"></section>
+
+      <footer class="app-footer">
+        <div class="footer-left">
+          <span data-i18n="source_label">Источник:</span>
+          <span id="sourcePath">-</span>
+        </div>
+        <div class="footer-right" id="status">-</div>
+      </footer>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

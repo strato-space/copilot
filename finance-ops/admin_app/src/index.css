@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+
+@import 'tailwindcss/theme.css';
+@import 'tailwindcss/utilities.css';
+
+body {
+  margin: 0;
+  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
+
+.finops-table .ant-table-thead > tr > th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.finops-table .finops-month-button {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  appearance: none;
+}
+
+.finops-table .finops-month-button:focus,
+.finops-table .finops-month-button:focus-visible,
+.finops-table .finops-month-button:active {
+  outline: none;
+  box-shadow: none;
+}
+
+.finops-table .finops-cell-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+  appearance: none;
+}
+
+.finops-table .finops-cell-button:focus,
+.finops-table .finops-cell-button:focus-visible,
+.finops-table .finops-cell-button:active {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
+}
+
+.finops-table .finops-row-project .finops-row-action {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.finops-table .finops-row-project:hover .finops-row-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.finops-table .finops-project-col {
+  border-right: none !important;
+}
+
+.finops-table .finops-actions-col {
+  border-left: none !important;
+}
+
+.finops-table .ant-table-cell-fix-left,
+.finops-table .ant-table-cell-fix-left-last {
+  box-shadow: none !important;
+}
+
+.finops-table .finops-value-col {
+  text-align: left !important;
+}
+
+.finops-table .finops-cell-button {
+  text-align: left;
+}
+
+.finops-table .finops-cell-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.finops-table .finops-cell-text {
+  text-align: left;
+}
+
+.finops-table .finops-cell-icon {
+  margin-left: auto;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.finops-table .finops-cell-button:hover .finops-cell-icon {
+  opacity: 1;
+  visibility: visible;
+}
+
+.finops-table .finops-focus-left {
+  border-left: 2px solid #4d4d4d !important;
+}
+
+.finops-table .finops-focus-right {
+  border-right: 2px solid #4d4d4d !important;
+}
+
+.finops-table .finops-summary-row > td {
+  position: sticky;
+  bottom: 0;
+  background: #ffffff;
+  z-index: 2;
+  border-top: 1px solid #e2e8f0;
+}
+
+.finops-page-header {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+}
+
+.finops-header-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.finops-header-title {
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+
+.finops-header-actions {
+  margin-left: auto;
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+.finops-table .finops-focus-group {
+  border-left: 2px solid #4d4d4d !important;
+  border-right: 2px solid #4d4d4d !important;
+}
+
+.finops-page > * + * {
+  margin-top: 16px;
+}
+
+.finops-table-card {
+  margin-top: 16px !important;
+}
+
+.finops-table .finops-subhead {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-weight: 400;
+  color: #0f172a;
+}
+
+.finops-pie-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.finops-pie {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.finops-pie::after {
+  content: '';
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.finops-pie-center {
+  position: absolute;
+  z-index: 1;
+  text-align: center;
+}
+
+.finops-pie-legend {
+  flex: 1 1 240px;
+  display: grid;
+  gap: 10px;
+}
+
+.finops-pie-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.finops-pie-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}

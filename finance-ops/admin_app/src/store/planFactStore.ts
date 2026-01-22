@@ -1,0 +1,150 @@
+import { create } from 'zustand';
+import dayjs from 'dayjs';
+import { apiClient } from '../services/api';
+import {
+  type PlanFactGridResponse,
+  type PlanFactMonthCell,
+  type PlanFactProjectRow,
+} from '../services/types';
+import { mockPlanFact } from '../services/mockPlanFact';
+
+interface PlanFactState {
+  data: PlanFactGridResponse | null;
+  loading: boolean;
+  error: string | null;
+  usingMock: boolean;
+  year: number;
+  focusMonth: string;
+  forecastVersionId: string;
+  dateRange: [string, string];
+  fetchPlanFact: () => Promise<void>;
+  updateProjectMonth: (
+    clientId: string,
+    projectId: string,
+    month: string,
+    values: PlanFactMonthCell,
+  ) => void;
+  setDateRange: (range: [string, string]) => void;
+  setYear: (year: number) => void;
+  setFocusMonth: (month: string) => void;
+  setForecastVersionId: (value: string) => void;
+  setUsingMock: (value: boolean) => void;
+}
+
+const now = dayjs();
+const initialRangeStart = now.format('YYYY-MM');
+const initialRangeEnd = now.add(2, 'month').format('YYYY-MM');
+
+const clonePlanFact = (data: PlanFactGridResponse): PlanFactGridResponse => {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(data);
+  }
+  return JSON.parse(JSON.stringify(data)) as PlanFactGridResponse;
+};
+
+const emptyCell = (): PlanFactMonthCell => ({
+  fact_rub: 0,
+  fact_hours: 0,
+  forecast_rub: 0,
+  forecast_hours: 0,
+});
+
+export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState => ({
+  data: null,
+  loading: false,
+  error: null,
+  usingMock: true,
+  year: now.year(),
+  focusMonth: now.format('YYYY-MM'),
+  forecastVersionId: 'baseline',
+  dateRange: [initialRangeStart, initialRangeEnd],
+  fetchPlanFact: async (): Promise<void> => {
+    const { year, focusMonth, forecastVersionId, usingMock } = get();
+    set({ loading: true, error: null });
+    try {
+      if (usingMock) {
+        set({ data: clonePlanFact(mockPlanFact), loading: false });
+        return;
+      }
+      const response = await apiClient.get<{
+        data: PlanFactGridResponse;
+        error: { message: string } | null;
+      }>('/plan-fact', {
+        params: {
+          year,
+          focus_month: focusMonth,
+          forecast_version_id: forecastVersionId,
+        },
+      });
+      set({ data: response.data.data, loading: false, usingMock: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      set({ error: message, loading: false, data: clonePlanFact(mockPlanFact), usingMock: true });
+    }
+  },
+  updateProjectMonth: (
+    clientId: string,
+    projectId: string,
+    month: string,
+    values: PlanFactMonthCell,
+  ): void => {
+    const current = get().data;
+    if (!current) {
+      return;
+    }
+    const nextClients = current.clients.map((client): PlanFactGridResponse['clients'][number] => {
+      if (client.client_id !== clientId) {
+        return client;
+      }
+      const nextProjects = client.projects.map((project): PlanFactProjectRow => {
+        if (project.project_id !== projectId) {
+          return project;
+        }
+        return {
+          ...project,
+          months: {
+            ...project.months,
+            [month]: values,
+          },
+        };
+      });
+      const totals = nextProjects.reduce<PlanFactMonthCell>(
+        (acc: PlanFactMonthCell, project: PlanFactProjectRow): PlanFactMonthCell => {
+          const cell = project.months[month] ?? emptyCell();
+          return {
+            fact_rub: acc.fact_rub + cell.fact_rub,
+            fact_hours: acc.fact_hours + cell.fact_hours,
+            forecast_rub: acc.forecast_rub + cell.forecast_rub,
+            forecast_hours: acc.forecast_hours + cell.forecast_hours,
+          };
+        },
+        emptyCell(),
+      );
+      return {
+        ...client,
+        projects: nextProjects,
+        totals_by_month: {
+          ...client.totals_by_month,
+          [month]: totals,
+        },
+      };
+    });
+    set({
+      data: {
+        ...current,
+        clients: nextClients,
+      },
+    });
+  },
+  setDateRange: (range: [string, string]): void => set({ dateRange: range }),
+  setYear: (year: number): void => set({ year }),
+  setFocusMonth: (month: string): void => set({ focusMonth: month }),
+  setForecastVersionId: (value: string): void => set({ forecastVersionId: value }),
+  setUsingMock: (value: boolean): void => {
+    if (value) {
+      set({ usingMock: true, data: clonePlanFact(mockPlanFact), error: null });
+      return;
+    }
+    set({ usingMock: false });
+  },
+}));

@@ -1,6 +1,11 @@
 # Copilot
 
-A minimal SPA frontend with a FastAPI backend. The web server is Nginx and the domain target is `copilot.stratospace.fun`.
+Copilot is the umbrella workspace for Ops tools. The web entry point is `copilot.stratospace.fun`.
+
+## Modules
+- **OperOps**: operational control hub (placeholder UI at `operops.stratospace.fun`).
+- **FinOps**: plan-fact and forecasting console (source in `finance-ops/`, deployed at `finops.stratospace.fun`).
+- **ChatOps**: assistant and chat automation workspace (placeholder UI at `chatops.stratospace.fun`).
 
 ## What is included
 - `frontend/` Static SPA (HTML, CSS, JS)

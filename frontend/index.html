@@ -3,190 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ops Planning Copilot</title>
+    <title>Copilot Ops Hub</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="bg-noise"></div>
-    <div class="orb orb--sun"></div>
-    <div class="orb orb--sea"></div>
-    <div class="orb orb--ember"></div>
-
-    <div class="app-shell">
-      <header class="topbar">
+    <div class="app">
+      <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">OPS</div>
+          <div class="brand-mark">C</div>
           <div>
-            <div class="brand-title">Ops Planning Copilot</div>
-            <div class="brand-sub">copilot.stratospace.fun</div>
+            <div class="brand-title">Copilot Ops</div>
+            <div class="brand-subtitle">Единый портал</div>
           </div>
         </div>
-        <div class="topbar-actions">
-          <div class="lang-switch" aria-label="Language">
-            <span class="lang-label" data-i18n="lang.ru">RU</span>
-            <label class="switch">
-              <input id="langToggle" type="checkbox" aria-label="Toggle language" />
-              <span class="switch-slider"></span>
-            </label>
-            <span class="lang-label" data-i18n="lang.en">EN</span>
-          </div>
-          <button
-            class="btn btn--ghost burger-button"
-            id="burgerToggle"
-            type="button"
-            aria-expanded="false"
-            aria-controls="burgerPanel"
-          >
-            <span class="burger-icon"></span>
-            <span data-i18n="menu.more">Menu</span>
-          </button>
-        </div>
-      </header>
-
-      <div class="burger-backdrop" id="burgerBackdrop" hidden></div>
-      <aside class="burger-panel" id="burgerPanel" aria-hidden="true">
-        <div class="burger-header">
-          <div class="burger-title" data-i18n="menu.title">More</div>
-          <button class="btn btn--ghost burger-close" id="burgerClose" type="button">×</button>
-        </div>
-        <nav class="burger-links" aria-label="Secondary">
-          <a href="/month" data-link>
-            <span class="nav-title" data-i18n="nav.month">Month</span>
-            <span class="nav-sub" data-i18n="nav.month.sub">Horizon</span>
-          </a>
-          <a href="/memory" data-link>
-            <span class="nav-title" data-i18n="nav.memory">Memory</span>
-            <span class="nav-sub" data-i18n="nav.memory.sub">Notes</span>
-          </a>
-          <a href="/performer" data-link>
-            <span class="nav-title" data-i18n="nav.performer">Performer</span>
-            <span class="nav-sub" data-i18n="nav.performer.sub">Profile</span>
-          </a>
+        <nav class="nav">
+          <a class="nav-link" href="https://operops.stratospace.fun/">OperOps</a>
+          <a class="nav-link" href="https://finops.stratospace.fun/">FinOps</a>
+          <a class="nav-link" href="https://chatops.stratospace.fun/">ChatOps</a>
         </nav>
+        <div class="sidebar-note">
+          Управляйте каждым блоком отдельно, по общим правилам и в одном месте.
+        </div>
       </aside>
-
-      <main id="app" class="page"></main>
-
-      <footer class="footer">
-        <span data-i18n="footer.source">Data source: voicebot/downloads</span>
-        <span id="footerSnapshot" class="footer-snapshot" hidden></span>
-        <span data-i18n="footer.approve">Approve via side panel</span>
-        <span data-i18n="footer.api">API: /api/health</span>
-      </footer>
+      <main class="content">
+        <header class="hero">
+          <div>
+            <h1>Ops‑экосистема Copilot</h1>
+            <p>
+              Три независимых продукта — OperOps, FinOps и ChatOps — связаны общими
+              стандартами. Каждый обновляется отдельно, но остаётся частью единого портала.
+            </p>
+          </div>
+          <div class="hero-card">
+            <div class="hero-card-title">Быстрый старт</div>
+            <div class="hero-card-body">
+              Выберите нужный раздел в левом меню. Каждая вкладка открывает отдельный сервис.
+            </div>
+          </div>
+        </header>
+        <section class="grid">
+          <article class="tile">
+            <div class="tile-title">OperOps</div>
+            <p>Операционный контур: контроль задач, SLA и ежедневная дисциплина.</p>
+            <a href="https://operops.stratospace.fun/" class="tile-link">Открыть OperOps →</a>
+          </article>
+          <article class="tile highlight">
+            <div class="tile-title">FinOps</div>
+            <p>План‑факт, прогнозы, маржа и финансовая прозрачность по проектам.</p>
+            <a href="https://finops.stratospace.fun/" class="tile-link">Открыть FinOps →</a>
+          </article>
+          <article class="tile">
+            <div class="tile-title">ChatOps</div>
+            <p>Коммуникация, ассистенты и быстрые решения прямо из диалогов.</p>
+            <a href="https://chatops.stratospace.fun/" class="tile-link">Открыть ChatOps →</a>
+          </article>
+        </section>
+      </main>
     </div>
-
-    <nav class="bottom-nav" aria-label="Primary">
-      <a href="/backlog" data-link>
-        <span class="nav-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-            <path d="M6 7h12M6 12h12M6 17h8" />
-          </svg>
-        </span>
-        <span class="nav-title" data-i18n="nav.backlog">Backlog</span>
-        <span class="nav-sub" data-i18n="nav.backlog.sub">Intake queue</span>
-      </a>
-      <a href="/week" data-link>
-        <span class="nav-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-            <path d="M7 3v4M17 3v4M4 9h16M6 12h4M6 16h4M12 12h6M12 16h6" />
-          </svg>
-        </span>
-        <span class="nav-title" data-i18n="nav.week">Week</span>
-        <span class="nav-sub" data-i18n="nav.week.sub">Plan view</span>
-      </a>
-      <a href="/today" data-link>
-        <span class="nav-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-            <path d="M12 4v2M12 18v2M4 12h2M18 12h2M6.5 6.5l1.5 1.5M16 16l1.5 1.5M16 8l1.5-1.5M6.5 17.5l1.5-1.5" />
-            <circle cx="12" cy="12" r="4" />
-          </svg>
-        </span>
-        <span class="nav-title" data-i18n="nav.today">Today</span>
-        <span class="nav-sub" data-i18n="nav.today.sub">Daily plan</span>
-      </a>
-      <a href="/metrics" data-link>
-        <span class="nav-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-            <path d="M4 19h16M7 16v-4M12 16v-7M17 16v-10" />
-          </svg>
-        </span>
-        <span class="nav-title" data-i18n="nav.metrics">Metrics</span>
-        <span class="nav-sub" data-i18n="nav.metrics.sub">Signals</span>
-      </a>
-      <a href="/timeline" data-link>
-        <span class="nav-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
-            <path d="M4 12h6l2 3 3-7 2 4h3" />
-          </svg>
-        </span>
-        <span class="nav-title" data-i18n="nav.timeline">Timeline</span>
-        <span class="nav-sub" data-i18n="nav.timeline.sub">Decisions</span>
-      </a>
-    </nav>
-
-    <button class="agent-fab" id="agentFab" type="button" data-i18n="agent.fab">
-      Agent
-    </button>
-
-    <aside class="agent-drawer" id="agentDrawer" aria-hidden="true">
-      <div class="agent-drawer-header">
-        <div>
-          <div class="agent-drawer-title" data-i18n="agent.title">Agent</div>
-          <div class="agent-drawer-sub" data-i18n="agent.subtitle">
-            Ask for plans, patches, and metrics.
-          </div>
-        </div>
-        <button class="btn btn--ghost" id="agentClose" type="button" data-i18n="btn.close">
-          Close
-        </button>
-      </div>
-      <div class="agent-thread">
-        <div class="agent-empty" data-i18n="agent.empty">No messages yet.</div>
-      </div>
-      <div class="agent-commands">
-        <div class="agent-commands-title" data-i18n="agent.commands.title">Commands</div>
-        <div class="agent-commands-grid">
-          <button class="chip chip--command" type="button" data-command="/today" data-i18n="agent.cmd.today">
-            Today plan
-          </button>
-          <button class="chip chip--command" type="button" data-command="/week" data-i18n="agent.cmd.week">
-            Week plan
-          </button>
-          <button class="chip chip--command" type="button" data-command="/metrics" data-i18n="agent.cmd.metrics">
-            Show metrics
-          </button>
-          <button class="chip chip--command" type="button" data-command="/backlog" data-i18n="agent.cmd.backlog">
-            Triage backlog
-          </button>
-          <button class="chip chip--command" type="button" data-command="/suggest" data-i18n="agent.cmd.suggest">
-            Build suggest patch
-          </button>
-          <button class="chip chip--command" type="button" data-command="/epic" data-i18n="agent.cmd.epic">
-            Create epic
-          </button>
-        </div>
-      </div>
-      <div class="agent-composer">
-        <textarea
-          id="agentInput"
-          rows="3"
-          data-i18n-placeholder="agent.input.placeholder"
-          placeholder="Ask for a plan or a patch"
-        ></textarea>
-        <div class="agent-preview">
-          <div>
-            <div class="meta-label" data-i18n="agent.intent.label">Intent preview</div>
-            <div class="meta-value">daily_slice</div>
-          </div>
-          <div>
-            <div class="meta-label" data-i18n="agent.preview.label">Result preview</div>
-            <div class="meta-value" data-i18n="agent.preview.value">2 suggestions prepared</div>
-          </div>
-        </div>
-        <button class="btn btn--accent" type="button" data-i18n="btn.send">Send</button>
-      </div>
-    </aside>
-
-    <script src="/app.js"></script>
   </body>
 </html>
