@@ -30,10 +30,18 @@
 ### PROBLEM SOLVED
 - Pinned-month totals in the plan-fact summary row slipped and appeared only after horizontal scroll → sticky positioning is now applied directly to summary cells so totals stay under pinned months.
 - TypeScript builds could re-create JS duplicates inside `admin_app/src` → `noEmit` now prevents output into source folders.
+- Expense tracking only covered salaries and could not include other operating costs → expenses now consolidate payroll and other categories in one table.
+- Expense attachments had no persistence path → backend now saves uploads and serves them from a stable URL.
+- Employees could not be edited inline from the directory list → row-level edit actions now open the edit modal with prefilled data.
 
 ### FEATURE IMPLEMENTED
 - Pinned months now allow unpinning the active month as long as at least one month remains pinned (still capped at 3).
+- Added “Затраты” tab with unified rows for payroll and other expense categories, month pinning, and sticky totals.
+- Added “Добавить расход” flow with category creation, FX handling, and an operations drawer per category/month.
 
 ### CHANGES
 - Added a typed wrapper for summary cells to allow inline sticky styles with Ant Design typings.
 - Removed conflicting relative positioning from summary cells to keep sticky offsets accurate.
+- Added `/api/uploads/expense-attachments` and `/uploads/expenses` to store expense files on the backend.
+- Introduced expense/category seed data and unified expense grid component in `finance-ops/admin_app`.
+- Wired employee directory data into both the expenses view and the salaries directory, with editable rows.

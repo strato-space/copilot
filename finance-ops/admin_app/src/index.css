@@ -124,6 +124,19 @@ h5 {
   border-right: none !important;
 }
 
+.finops-table .finops-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 14px;
+}
+
+.finops-table .finops-filter-trigger:hover {
+  color: #0f172a;
+}
+
 .finops-table .finops-actions-col {
   border-left: none !important;
 }

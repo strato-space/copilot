@@ -1,12 +1,14 @@
-import { Button, Card, Tag, Typography, message } from 'antd';
+import { Button, Card, Tabs, Tag, Typography, message } from 'antd';
 import dayjs from 'dayjs';
-import { type ReactElement, useEffect, useMemo, useState } from 'react';
+import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import PlanFactDrawer from '../components/PlanFactDrawer';
 import PlanFactGrid from '../components/PlanFactGrid';
+import ExpensesGrid, { type ExpensesGridHandle } from '../components/ExpensesGrid';
 import PageHeader from '../components/PageHeader';
 import { usePlanFactStore } from '../store/planFactStore';
 import { type PlanFactCellContext, type PlanFactMonthCell } from '../services/types';
 import { formatMonthLabel } from '../utils/format';
+import { employeeDirectory } from '../services/employeeDirectory';
 
 const buildYearMonths = (year: number): string[] => {
   const start = dayjs(`${year}-01-01`);
@@ -33,6 +35,8 @@ export default function PlanFactPage(): ReactElement {
 
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [drawerContext, setDrawerContext] = useState<PlanFactCellContext | null>(null);
+  const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
+  const expensesRef = useRef<ExpensesGridHandle | null>(null);
 
   const yearMonths = useMemo((): string[] => buildYearMonths(year), [year]);
 
@@ -147,20 +151,58 @@ export default function PlanFactPage(): ReactElement {
       )}
 
       <Card className="finops-table-card">
-        <PlanFactGrid
-          clients={data?.clients ?? []}
-          months={yearMonths}
-          focusMonth={focusMonth}
-          onFocusMonthChange={handleFocusMonthChange}
-          onOpenDrawer={handleOpenDrawer}
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key): void => setActiveTab(key as 'income' | 'expense')}
+          tabBarExtraContent={
+            activeTab === 'expense' ? (
+              <Button
+                type="default"
+                className="border border-slate-300 text-slate-900"
+                onClick={(): void => expensesRef.current?.openAddExpense()}
+              >
+                + Расход
+              </Button>
+            ) : null
+          }
+          items={[
+            {
+              key: 'income',
+              label: 'Доход',
+              children: (
+                <PlanFactGrid
+                  clients={data?.clients ?? []}
+                  months={yearMonths}
+                  focusMonth={focusMonth}
+                  onFocusMonthChange={handleFocusMonthChange}
+                  onOpenDrawer={handleOpenDrawer}
+                />
+              ),
+            },
+            {
+              key: 'expense',
+              label: 'Затраты',
+              children: (
+                <ExpensesGrid
+                  ref={expensesRef}
+                  employees={employeeDirectory}
+                  months={yearMonths}
+                  focusMonth={focusMonth}
+                  onFocusMonthChange={handleFocusMonthChange}
+                />
+              ),
+            },
+          ]}
         />
       </Card>
-      <PlanFactDrawer
-        open={drawerOpen}
-        context={drawerContext}
-        onClose={handleCloseDrawer}
-        onApply={handleApply}
-      />
+      {activeTab === 'income' && (
+        <PlanFactDrawer
+          open={drawerOpen}
+          context={drawerContext}
+          onClose={handleCloseDrawer}
+          onApply={handleApply}
+        />
+      )}
     </div>
   );
 }

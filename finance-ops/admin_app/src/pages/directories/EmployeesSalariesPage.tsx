@@ -1,7 +1,9 @@
-import { Button, Card, Form, Input, InputNumber, Modal, Table, Typography, message } from 'antd';
+import { Button, Card, Form, Input, InputNumber, Modal, Table, Tooltip, Typography, message } from 'antd';
+import { EditOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { type ReactElement, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
+import { employeeDirectory } from '../../services/employeeDirectory';
 
 interface EmployeeRow {
   key: string;
@@ -34,20 +36,25 @@ interface ChatMessage {
   text: string;
 }
 
-const employeeData: EmployeeRow[] = [
-  { key: '1', name: 'Иван П.', role: 'Senior Dev', team: 'Platform' },
-  { key: '2', name: 'Мария С.', role: 'PM', team: 'Delivery' },
-];
+const employeeData: EmployeeRow[] = employeeDirectory.map((employee) => ({
+  key: employee.id,
+  name: employee.name,
+  role: employee.role,
+  team: employee.team,
+}));
 
-const salaryData: SalaryRow[] = [
-  { key: '1', role: 'Senior Dev', monthly: '320 000 ₽', costRate: '2 000 ₽/ч' },
-  { key: '2', role: 'PM', monthly: '260 000 ₽', costRate: '1 600 ₽/ч' },
-];
+const salaryData: SalaryRow[] = employeeDirectory.map((employee) => ({
+  key: employee.id,
+  role: employee.role,
+  monthly: `${employee.monthlySalary} ₽`,
+  costRate: `${employee.costRate} ₽/ч`,
+}));
 
 export default function EmployeesSalariesPage(): ReactElement {
   const [employees, setEmployees] = useState<EmployeeRow[]>(employeeData);
   const [salaries, setSalaries] = useState<SalaryRow[]>(salaryData);
   const [employeeModalOpen, setEmployeeModalOpen] = useState<boolean>(false);
+  const [editingEmployeeKey, setEditingEmployeeKey] = useState<string | null>(null);
   const [employeeForm] = Form.useForm();
   const [chatInput, setChatInput] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -71,29 +78,54 @@ export default function EmployeesSalariesPage(): ReactElement {
     };
   });
 
-  const handleAddEmployee = async (): Promise<void> => {
+  const handleSaveEmployee = async (): Promise<void> => {
     const values = await employeeForm.validateFields();
-    setEmployees((prev) => [
-      ...prev,
-      {
-        key: `${Date.now()}-employee`,
-        name: values.name,
-        role: values.role,
-        team: values.team,
-      },
-    ]);
-    setSalaries((prev) => [
-      ...prev,
-      {
-        key: `${Date.now()}-salary`,
-        role: values.role,
-        monthly: `${values.monthly} ₽`,
-        costRate: `${values.costRate} ₽/ч`,
-      },
-    ]);
-    message.success('Исполнитель добавлен');
+    if (editingEmployeeKey) {
+      setEmployees((prev) =>
+        prev.map((employee) =>
+          employee.key === editingEmployeeKey
+            ? { ...employee, name: values.name, role: values.role, team: values.team }
+            : employee,
+        ),
+      );
+      setSalaries((prev) =>
+        prev.map((salary) =>
+          salary.key === editingEmployeeKey
+            ? {
+                ...salary,
+                role: values.role,
+                monthly: `${values.monthly} ₽`,
+                costRate: `${values.costRate} ₽/ч`,
+              }
+            : salary,
+        ),
+      );
+      message.success('Исполнитель обновлён');
+    } else {
+      const key = `${Date.now()}-employee`;
+      setEmployees((prev) => [
+        ...prev,
+        {
+          key,
+          name: values.name,
+          role: values.role,
+          team: values.team,
+        },
+      ]);
+      setSalaries((prev) => [
+        ...prev,
+        {
+          key,
+          role: values.role,
+          monthly: `${values.monthly} ₽`,
+          costRate: `${values.costRate} ₽/ч`,
+        },
+      ]);
+      message.success('Исполнитель добавлен');
+    }
     employeeForm.resetFields();
     setDraft({});
+    setEditingEmployeeKey(null);
     setEmployeeModalOpen(false);
   };
 
@@ -178,6 +210,20 @@ export default function EmployeesSalariesPage(): ReactElement {
     pushMessage('agent', 'Заполнил форму. Проверьте и нажмите «Сохранить».');
   };
 
+  const handleEditEmployee = (row: EmployeeUnifiedRow): void => {
+    setEditingEmployeeKey(row.key);
+    const monthlyValue = Number(String(row.monthly).replace(/[^\d]/g, '')) || 0;
+    const costRateValue = Number(String(row.costRate).replace(/[^\d]/g, '')) || 0;
+    employeeForm.setFieldsValue({
+      name: row.name,
+      role: row.role,
+      team: row.team,
+      monthly: monthlyValue,
+      costRate: costRateValue,
+    });
+    setEmployeeModalOpen(true);
+  };
+
   return (
     <div className="finops-page animate-fade-up">
       <Button type="link" className="!p-0 mb-2">
@@ -230,17 +276,36 @@ export default function EmployeesSalariesPage(): ReactElement {
           { title: 'Команда', dataIndex: 'team', key: 'team' },
           { title: 'Оклад', dataIndex: 'monthly', key: 'monthly' },
           { title: 'Cost rate', dataIndex: 'costRate', key: 'costRate' },
+          {
+            title: '',
+            key: 'actions',
+            width: 48,
+            render: (_: unknown, row: EmployeeUnifiedRow): ReactElement => (
+              <div className="flex items-start justify-end">
+                <Tooltip title="Редактировать исполнителя">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    className="text-slate-400 hover:text-slate-900"
+                    onClick={(): void => handleEditEmployee(row)}
+                  />
+                </Tooltip>
+              </div>
+            ),
+          },
         ]}
       />
 
       <Modal
-        title="Добавить исполнителя"
+        title={editingEmployeeKey ? 'Редактировать исполнителя' : 'Добавить исполнителя'}
         open={employeeModalOpen}
         onCancel={(): void => {
           employeeForm.resetFields();
+          setEditingEmployeeKey(null);
           setEmployeeModalOpen(false);
         }}
-        onOk={(): Promise<void> => handleAddEmployee()}
+        onOk={(): Promise<void> => handleSaveEmployee()}
         okText="Сохранить"
         cancelText="Отмена"
       >
