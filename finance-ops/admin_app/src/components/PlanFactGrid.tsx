@@ -2,7 +2,7 @@ import { Button, Table, Tag, Tooltip, Typography } from 'antd';
 import { EditOutlined, EllipsisOutlined, FilterOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { FilterValue } from 'antd/es/table/interface';
-import { type CSSProperties, type ReactElement, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactElement, type TdHTMLAttributes, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   type PlanFactCellContext,
@@ -34,6 +34,14 @@ interface Props {
   onFocusMonthChange: (month: string) => void;
   onOpenDrawer: (context: PlanFactCellContext) => void;
 }
+
+type SummaryCellProps = TdHTMLAttributes<HTMLTableCellElement> & {
+  index: number;
+  colSpan?: number;
+  rowSpan?: number;
+};
+
+const SummaryCell = Table.Summary.Cell as unknown as (props: SummaryCellProps) => ReactElement;
 
 const emptyCell = (): PlanFactMonthCell => ({
   fact_rub: 0,
@@ -123,6 +131,7 @@ const buildTotalsFromRows = (
   return totals;
 };
 
+
 const abbreviateClient = (name: string): string => {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const initials = words.map((word) => word[0]).join('');
@@ -182,7 +191,7 @@ const buildColumns = (
   onTogglePin: (month: string) => void,
   getFxFactor: (month: string) => number,
 ): ColumnsType<RowItem> => {
-  const pinnedSet = new Set([...pinnedMonths, focusMonth]);
+  const pinnedSet = new Set(pinnedMonths);
   const orderedMonths = [
     ...months.filter((month) => pinnedSet.has(month)),
     ...months.filter((month) => !pinnedSet.has(month)),
@@ -402,21 +411,22 @@ export default function PlanFactGrid({
   };
   const [pinnedMonths, setPinnedMonths] = useState<string[]>(() => {
     if (typeof window === 'undefined') {
-      return [];
+      return [focusMonth];
     }
     try {
       const raw = window.localStorage.getItem(PIN_STORAGE_KEY);
       if (!raw) {
-        return [];
+        return [focusMonth];
       }
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter((value): value is string => typeof value === 'string');
+        const sanitized = parsed.filter((value): value is string => typeof value === 'string');
+        return sanitized.length > 0 ? sanitized : [focusMonth];
       }
     } catch {
-      return [];
+      return [focusMonth];
     }
-    return [];
+    return [focusMonth];
   });
 
   const rows = useMemo((): RowItem[] => toRows(clients, months), [clients, months]);
@@ -428,31 +438,44 @@ export default function PlanFactGrid({
     [clients],
   );
 
-  const filteredRows = useMemo((): RowItem[] => {
+  const normalizedFilters = useMemo((): {
+    selectedClients: string[];
+    selectedTypes: string[];
+    hasAllTypes: boolean;
+  } => {
     const normalize = (value: FilterValue | null | undefined): string[] =>
       Array.isArray(value) ? value.map((item) => String(item)) : [];
     const selectedClients = normalize(tableFilters.client_name);
     const selectedTypes = normalize(tableFilters.project_name);
-    const hasAll = selectedTypes.includes('all');
+    const hasAllTypes = selectedTypes.includes('all');
+    return { selectedClients, selectedTypes, hasAllTypes };
+  }, [tableFilters]);
 
+  const filteredRows = useMemo((): RowItem[] => {
+    const { selectedClients, selectedTypes, hasAllTypes } = normalizedFilters;
     return rows.filter((row) => {
       const matchClient = selectedClients.length === 0 || selectedClients.includes(row.client_name);
       const matchType =
-        selectedTypes.length === 0 || hasAll || selectedTypes.includes(row.contract_type);
+        selectedTypes.length === 0 || hasAllTypes || selectedTypes.includes(row.contract_type);
       return matchClient && matchType;
     });
-  }, [rows, tableFilters]);
+  }, [rows, normalizedFilters]);
+
+  const hasActiveFilters =
+    normalizedFilters.selectedClients.length > 0 ||
+    (normalizedFilters.selectedTypes.length > 0 && !normalizedFilters.hasAllTypes);
 
   const totalsByMonth = useMemo(
-    (): Record<string, PlanFactMonthCell> => buildTotalsFromRows(filteredRows, months),
-    [filteredRows, months],
+    (): Record<string, PlanFactMonthCell> =>
+      buildTotalsFromRows(hasActiveFilters ? filteredRows : rows, months),
+    [filteredRows, rows, months, hasActiveFilters],
   );
 
   useEffect((): void => {
     setPinnedMonths((prev) => {
       let next = prev.filter((month) => months.includes(month));
-      if (!next.includes(focusMonth)) {
-        next = [...next, focusMonth];
+      if (next.length === 0) {
+        next = [focusMonth];
       }
       while (next.length > 3) {
         next.shift();
@@ -516,7 +539,7 @@ export default function PlanFactGrid({
       summary={(): ReactElement => {
         const firstCellIndex = 0;
         let cellIndex = summaryLabelColSpan;
-        const pinnedSet = new Set([...pinnedMonths, focusMonth]);
+        const pinnedSet = new Set(pinnedMonths);
         const summaryMonths = [
           ...months.filter((month) => pinnedSet.has(month)),
           ...months.filter((month) => !pinnedSet.has(month)),
@@ -527,88 +550,74 @@ export default function PlanFactGrid({
         return (
           <Table.Summary fixed="bottom">
             <Table.Summary.Row className="finops-summary-row">
-              <Table.Summary.Cell
+              <SummaryCell
                 index={firstCellIndex}
                 colSpan={summaryLabelColSpan}
                 className="finops-summary-fixed"
+                style={{ left: 0, zIndex: 6, background: '#ffffff' }}
               >
-                <div className="finops-summary-pin" style={{ '--pin-left': '0px' } as CSSProperties}>
-                  <Typography.Text strong>ИТОГО</Typography.Text>
-                </div>
-              </Table.Summary.Cell>
-            {summaryMonths.flatMap((month: string): ReactElement[] => {
-              const cell = totalsByMonth[month] ?? emptyCell();
-              const fxFactor = getFxFactor(month);
-              const isPinned = pinnedSet.has(month);
-              const isHighlighted = month === focusMonth || isPinned;
-              const focusLeftClass = isHighlighted ? 'finops-focus-left' : '';
-              const focusRightClass = isHighlighted ? 'finops-focus-right' : '';
-              const pinnedIndex = pinnedIndexMap.get(month);
-              const monthLeft = typeof pinnedIndex === 'number' ? baseLeft + pinnedIndex * monthWidth : null;
-              const forecastStyle =
-                isPinned && monthLeft !== null
-                  ? ({ '--pin-left': `${monthLeft}px` } as CSSProperties)
-                  : undefined;
-              const factStyle =
-                isPinned && monthLeft !== null
-                  ? ({ '--pin-left': `${monthLeft + MONTH_COL_WIDTH}px` } as CSSProperties)
-                  : undefined;
-              const content = isPinned ? (
-                <div className="finops-cell-text">
-                  <div className={cell.forecast_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400'}>
-                    {cell.forecast_rub ? formatCurrency(cell.forecast_rub * fxFactor) : '—'}
-                  </div>
-                  <div className={cell.forecast_hours ? 'text-[10px] text-slate-500' : 'text-[10px] text-slate-400'}>
-                    {cell.forecast_hours ? formatHours(cell.forecast_hours) : '—'}
-                  </div>
-                </div>
-              ) : (
-                <div className="finops-cell-text text-xs text-transparent">—</div>
-              );
-              const factContent = isPinned ? (
-                <div className="finops-cell-text">
-                  <div className={cell.fact_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400'}>
-                    {cell.fact_rub ? formatCurrency(cell.fact_rub * fxFactor) : '—'}
-                  </div>
-                  <div className={cell.fact_hours ? 'text-[10px] text-slate-500' : 'text-[10px] text-slate-400'}>
-                    {cell.fact_hours ? formatHours(cell.fact_hours) : '—'}
-                  </div>
-                </div>
-              ) : (
-                <div className="finops-cell-text text-xs text-transparent">—</div>
-              );
-              const factCell = (
-                <Table.Summary.Cell
-                  key={`${month}-fact`}
-                  index={cellIndex++}
-                  className={`${isPinned ? 'finops-summary-fixed' : ''} finops-value-col ${focusRightClass}`.trim()}
-                >
-                  {isPinned ? (
-                    <div className="finops-summary-pin" style={factStyle}>
-                      {factContent}
+                <Typography.Text strong>ИТОГО</Typography.Text>
+              </SummaryCell>
+              {summaryMonths.flatMap((month: string): ReactElement[] => {
+                const cell = totalsByMonth[month] ?? emptyCell();
+                const fxFactor = getFxFactor(month);
+                const isPinned = pinnedSet.has(month);
+                const isHighlighted = month === focusMonth || isPinned;
+                const focusLeftClass = isHighlighted ? 'finops-focus-left' : '';
+                const focusRightClass = isHighlighted ? 'finops-focus-right' : '';
+                const pinnedIndex = pinnedIndexMap.get(month);
+                const monthLeft =
+                  typeof pinnedIndex === 'number' ? baseLeft + pinnedIndex * monthWidth : null;
+                const forecastStyle =
+                  isPinned && monthLeft !== null
+                    ? ({ left: `${monthLeft}px`, zIndex: 5, background: '#ffffff' } as CSSProperties)
+                    : undefined;
+                const factStyle =
+                  isPinned && monthLeft !== null
+                    ? ({ left: `${monthLeft + MONTH_COL_WIDTH}px`, zIndex: 5, background: '#ffffff' } as CSSProperties)
+                    : undefined;
+                const forecastContent = (
+                  <div className="finops-cell-text">
+                    <div className={cell.forecast_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400'}>
+                      {cell.forecast_rub ? formatCurrency(cell.forecast_rub * fxFactor) : '—'}
                     </div>
-                  ) : (
-                    factContent
-                  )}
-                </Table.Summary.Cell>
-              );
-              const forecastCell = (
-                <Table.Summary.Cell
-                  key={`${month}-forecast`}
-                  index={cellIndex++}
-                  className={`${isPinned ? 'finops-summary-fixed' : ''} finops-value-col ${focusLeftClass}`.trim()}
-                >
-                  {isPinned ? (
-                    <div className="finops-summary-pin" style={forecastStyle}>
-                      {content}
+                    <div className={cell.forecast_hours ? 'text-[10px] text-slate-500' : 'text-[10px] text-slate-400'}>
+                      {cell.forecast_hours ? formatHours(cell.forecast_hours) : '—'}
                     </div>
-                  ) : (
-                    content
-                  )}
-                </Table.Summary.Cell>
-              );
-              return [forecastCell, factCell];
-            })}
+                  </div>
+                );
+                const factContent = (
+                  <div className="finops-cell-text">
+                    <div className={cell.fact_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400'}>
+                      {cell.fact_rub ? formatCurrency(cell.fact_rub * fxFactor) : '—'}
+                    </div>
+                    <div className={cell.fact_hours ? 'text-[10px] text-slate-500' : 'text-[10px] text-slate-400'}>
+                      {cell.fact_hours ? formatHours(cell.fact_hours) : '—'}
+                    </div>
+                  </div>
+                );
+                const factCell = (
+                  <SummaryCell
+                    key={`${month}-fact`}
+                    index={cellIndex++}
+                    className={`${isPinned ? 'finops-summary-fixed' : ''} finops-value-col ${focusRightClass}`.trim()}
+                    style={factStyle}
+                  >
+                    {factContent}
+                  </SummaryCell>
+                );
+                const forecastCell = (
+                  <SummaryCell
+                    key={`${month}-forecast`}
+                    index={cellIndex++}
+                    className={`${isPinned ? 'finops-summary-fixed' : ''} finops-value-col ${focusLeftClass}`.trim()}
+                    style={forecastStyle}
+                  >
+                    {forecastContent}
+                  </SummaryCell>
+                );
+                return [forecastCell, factCell];
+              })}
             </Table.Summary.Row>
           </Table.Summary>
         );

@@ -25,3 +25,15 @@
 - Added `fxStore` and wired it into FX, analytics, KPI cards, and plan-fact grid calculations.
 - Reworked pinned-month summary positioning using shared width constants and sticky wrappers.
 - Adjusted directory pages (Employees and Clients/Projects/Rates) layout and helper UI.
+
+## 2026-01-23
+### PROBLEM SOLVED
+- Pinned-month totals in the plan-fact summary row slipped and appeared only after horizontal scroll → sticky positioning is now applied directly to summary cells so totals stay under pinned months.
+- TypeScript builds could re-create JS duplicates inside `admin_app/src` → `noEmit` now prevents output into source folders.
+
+### FEATURE IMPLEMENTED
+- Pinned months now allow unpinning the active month as long as at least one month remains pinned (still capped at 3).
+
+### CHANGES
+- Added a typed wrapper for summary cells to allow inline sticky styles with Ant Design typings.
+- Removed conflicting relative positioning from summary cells to keep sticky offsets accurate.

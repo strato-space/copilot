@@ -10,6 +10,7 @@ Copilot is the umbrella workspace for Ops tools. The web entry point is `copilot
 ## FinOps notes
 - FX rates are managed in `finance-ops/admin_app` and recalculate RUB values in analytics, KPIs, and plan-fact tables.
 - The Employees directory supports a chat-driven form fill that prompts for missing fields.
+- Plan-fact months can be pinned (up to 3), and the totals row stays visible under pinned months.
 
 ## What is included
 - `frontend/` Static SPA (HTML, CSS, JS)
