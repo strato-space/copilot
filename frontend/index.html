@@ -7,7 +7,31 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="app">
+    <div class="login-screen is-hidden" id="login-screen">
+      <form class="login-card" id="login-form" autocomplete="off">
+        <div class="login-brand">
+          <img class="login-logo" src="/ss-logo.svg" alt="StratoSpace logo" />
+          <h3 class="login-title">Sign in</h3>
+        </div>
+        <div class="login-fields">
+          <input
+            type="email"
+            name="login"
+            placeholder="Corporate Email"
+            required
+          />
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            required
+          />
+        </div>
+        <button class="login-submit" id="login-submit" type="submit">Enter</button>
+        <div class="login-error" id="login-error"></div>
+      </form>
+    </div>
+    <div class="app is-hidden" id="app-root">
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-mark">C</div>
@@ -23,6 +47,16 @@
         </nav>
         <div class="sidebar-note">
           Управляйте каждым блоком отдельно, по общим правилам и в одном месте.
+        </div>
+        <div class="sidebar-footer">
+          <div class="sidebar-user">
+            <div class="sidebar-user-label">Signed in as</div>
+            <div class="sidebar-user-name" id="user-name">—</div>
+            <div class="sidebar-user-email" id="user-email"></div>
+          </div>
+          <button class="logout-button" id="logout-btn" type="button">
+            Logout
+          </button>
         </div>
       </aside>
       <main class="content">
@@ -60,5 +94,6 @@
         </section>
       </main>
     </div>
+    <script src="/app.js"></script>
   </body>
 </html>

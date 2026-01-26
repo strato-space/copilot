@@ -44,7 +44,7 @@ export default function FxPage(): ReactElement {
         description="Курсы валют и ручные корректировки."
         actions={
           <Button type="link">
-            <Link to="/directories">← Назад к справочникам</Link>
+            <Link to="/guide">← Назад к Guide</Link>
           </Button>
         }
       />

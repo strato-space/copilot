@@ -31,11 +31,21 @@ class CRMTask(BaseModel):
     title: str
     project_id: Optional[str] = None
     project_name: Optional[str] = None
+    status_raw: Optional[str] = None
     status: str
+    priority: Optional[str] = None
+    created_at: Optional[str] = None
+    upload_date: Optional[str] = None
+    order: Optional[int] = None
     assignee_id: Optional[str] = None
     assignee_name: Optional[str] = None
+    task_type_id: Optional[str] = None
+    task_type_name: Optional[str] = None
+    description: Optional[str] = None
+    epic: Optional[str] = None
     estimate_h: Optional[float] = None
     updated_at: Optional[str] = None
+    source: Optional[str] = None
 
 
 class InboxItem(BaseModel):
@@ -203,3 +213,24 @@ class MemoryResponse(BaseModel):
 class PerformerResponse(BaseModel):
     profile: PerformerProfile
     suggest_ops: list[SuggestOp]
+
+
+class TasksResponse(BaseModel):
+    snapshot: Optional[SnapshotInfo] = None
+    tasks: list[CRMTask]
+    suggest_ops: list[SuggestOp]
+
+
+class IntakeResponse(BaseModel):
+    snapshot: Optional[SnapshotInfo] = None
+    items: list[InboxItem]
+
+
+class ProjectRef(BaseModel):
+    project_id: str
+    project_name: Optional[str] = None
+
+
+class ProjectsResponse(BaseModel):
+    snapshot: Optional[SnapshotInfo] = None
+    projects: list[ProjectRef]

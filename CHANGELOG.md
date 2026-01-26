@@ -45,3 +45,22 @@
 - Added `/api/uploads/expense-attachments` and `/uploads/expenses` to store expense files on the backend.
 - Introduced expense/category seed data and unified expense grid component in `finance-ops/admin_app`.
 - Wired employee directory data into both the expenses view and the salaries directory, with editable rows.
+
+## 2026-01-26
+### PROBLEM SOLVED
+- The Copilot portal had no login and could not reuse Voicebot credentials → added a Voicebot-backed auth proxy and a portal login flow with token persistence.
+- Ops planning exports did not surface enough task metadata for dashboards → CRM parsing now keeps status details, priority, task type, descriptions, epic links, and timestamps.
+- Navigation URLs were inconsistent between FinOps, guide, and legacy paths → normalized `/analytics`, `/finops`, `/guide` routes with redirects to preserve deep links.
+
+### FEATURE IMPLEMENTED
+- Added a global agent/notification drawer with popup alerts, filters, snooze/mute actions, and command presets.
+- Expanded analytics into OperOps/DesOps tabs with Ops metrics, approve/apply flow, and snapshot visibility.
+- Introduced new module shells (Agents, OperOps, ChatOps, DesOps, Voice) with placeholder pages and badges.
+- Added a persisted employee directory with per-month salary mapping, FX-aware totals, and updated roster seeds.
+
+### CHANGES
+- Added `/api/ops/tasks`, `/api/ops/intake`, and `/api/ops/projects` endpoints plus new response schemas.
+- Added `/api/try_login` proxy and Voicebot auth configuration (`VOICEBOT_API_URL` / `VOICEBOT_TRY_LOGIN_URL`).
+- KPI cards now include payroll + other expenses, FX-aware totals, and extra deltas derived from employee/expense stores.
+- Updated expense categories/seeds, analytics layout styles, and notification UI styling.
+- Host Nginx config now serves the FinOps build from `finance-ops/admin_app/dist` with clean SPA routing.

@@ -39,7 +39,7 @@ import {
   useState,
 } from 'react';
 import { formatCurrency, formatHours, formatMonthLabel } from '../utils/format';
-import { type EmployeeDirectoryEntry } from '../services/employeeDirectory';
+import { type EmployeeDirectoryEntry, getEmployeeMonthlyHours, getEmployeeMonthlySalary } from '../services/employeeDirectory';
 import { apiClient } from '../services/api';
 import {
   convertToRub,
@@ -106,12 +106,6 @@ const NAME_COL_WIDTH = 240;
 const ACTION_COL_WIDTH = 32;
 const MONTH_COL_WIDTH = 128;
 
-const buildHours = (employeeIndex: number, monthIndex: number): number => {
-  const base = 120 + employeeIndex * 6;
-  const wave = (monthIndex % 4) * 6;
-  return base + wave;
-};
-
 const buildRows = (
   employees: EmployeeDirectoryEntry[],
   categories: ExpenseCategory[],
@@ -122,8 +116,8 @@ const buildRows = (
     const monthCells: Record<string, ExpenseMonthCell> = {};
     months.forEach((month, monthIndex) => {
       monthCells[month] = {
-        amount: employee.monthlySalary,
-        hours: buildHours(index, monthIndex),
+        amount: getEmployeeMonthlySalary(employee, month),
+        hours: getEmployeeMonthlyHours(employee, month),
       };
     });
     return {
@@ -261,7 +255,7 @@ const buildColumns = (
         <div>
           <div className="text-sm font-semibold text-slate-900">{row.name}</div>
           {row.kind === 'salary' ? (
-            <div className="text-xs text-slate-500">{row.role} • {row.team}</div>
+            <div className="text-xs text-slate-500">{row.team} • {row.role}</div>
           ) : (
             <div className="text-xs text-slate-500">Прочие расходы</div>
           )}
@@ -283,7 +277,7 @@ const buildColumns = (
           <div className="flex items-start justify-end">
             <Tooltip title="Редактировать исполнителя">
               <Link
-                to={`/directories/employees-salaries?employeeId=${row.employee_id}`}
+                to={`/guide/employees-salaries?employeeId=${row.employee_id}`}
                 className="finops-row-action"
                 aria-label="Редактировать исполнителя"
               >

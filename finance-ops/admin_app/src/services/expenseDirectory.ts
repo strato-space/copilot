@@ -20,44 +20,26 @@ export interface ExpenseOperation {
 
 export const expenseCategories: ExpenseCategory[] = [
   { id: 'taxes', name: 'Налоги', is_active: true },
-  { id: 'bonus', name: 'Бонусы', is_active: true },
-  { id: 'ai-subscription', name: 'AI подписка', is_active: true },
+  { id: 'ai-subscription', name: 'AI подписки', is_active: true },
+  { id: 'servers', name: 'Сервера', is_active: true },
 ];
 
 export const expenseOperationsSeed: ExpenseOperation[] = [
   {
-    id: 'op-1',
-    category_id: 'taxes',
-    month: '2026-01',
-    amount: 160000,
-    currency: 'RUB',
-    vendor: 'ФНС',
-  },
-  {
-    id: 'op-2',
-    category_id: 'bonus',
-    month: '2026-01',
-    amount: 80000,
-    currency: 'RUB',
-    comment: 'Бонусы за Q4',
-  },
-  {
-    id: 'op-3',
+    id: 'op-ai-2026-01',
     category_id: 'ai-subscription',
     month: '2026-01',
-    amount: 1200,
+    amount: 500,
     currency: 'USD',
-    fx_used: 92.4,
-    vendor: 'OpenAI',
+    vendor: 'AI подписки',
   },
   {
-    id: 'op-4',
-    category_id: 'ai-subscription',
-    month: '2026-02',
-    amount: 1200,
-    currency: 'USD',
-    fx_used: 93.1,
-    vendor: 'OpenAI',
+    id: 'op-servers-2026-01',
+    category_id: 'servers',
+    month: '2026-01',
+    amount: 12700,
+    currency: 'RUB',
+    vendor: 'Сервера',
   },
 ];
 

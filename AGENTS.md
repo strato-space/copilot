@@ -18,7 +18,10 @@ This repository is the umbrella workspace for three related modules:
 - Expense attachments are stored under `backend/app/data/uploads/expenses` and served from `/uploads/expenses`.
 
 ## Deployment endpoints
-- `copilot.stratospace.fun` → portal (`frontend/`)
+- `copilot.stratospace.fun` → FinOps shell served from `finance-ops/admin_app/dist` (host Nginx config in `deploy/nginx-host.conf`; the portal lives in `frontend/` for containerized runs).
 - `operops.stratospace.fun` → OperOps placeholder (`operops/site/`)
 - `finops.stratospace.fun` → FinOps frontend (`finance-ops/admin_app/dist`)
 - `chatops.stratospace.fun` → ChatOps placeholder (`chatops/site/`)
+
+## Portal auth
+- The Copilot portal uses `/api/try_login`, which proxies Voicebot `/try_login`; configure `VOICEBOT_API_URL` or `VOICEBOT_TRY_LOGIN_URL` for the backend.

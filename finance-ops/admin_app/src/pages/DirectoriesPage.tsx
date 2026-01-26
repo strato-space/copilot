@@ -13,22 +13,22 @@ const directoryCards: DirectoryCard[] = [
   {
     title: 'Клиенты / Проекты / Ставки',
     description: 'Контракты, структура проектов и базовые ставки.',
-    to: '/directories/clients-projects-rates',
+    to: '/guide/clients-projects-rates',
   },
   {
     title: 'Исполнители / Зарплаты',
     description: 'Команды, роли и база для расчёта себестоимости.',
-    to: '/directories/employees-salaries',
+    to: '/guide/employees-salaries',
   },
   {
     title: 'FX',
     description: 'Курсы валют и ручные корректировки с комментариями.',
-    to: '/directories/fx',
+    to: '/guide/fx',
   },
   {
     title: 'Агенты',
     description: 'Правила работы и сценарии автоматизации.',
-    to: '/directories/agents',
+    to: '/guide/agents',
   },
 ];
 
@@ -36,8 +36,8 @@ export default function DirectoriesPage(): ReactElement {
   return (
     <div className="finops-page animate-fade-up">
       <PageHeader
-        title="Справочники"
-        description="Управление ключевыми списками и настройками, которые используются в финансах."
+        title="Guide"
+        description="Общие справочники и настройки, используемые всеми разделами OPS."
       />
       <Row gutter={[16, 16]}>
         {directoryCards.map((card: DirectoryCard): ReactElement => (

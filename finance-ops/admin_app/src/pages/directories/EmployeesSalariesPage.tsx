@@ -3,21 +3,12 @@ import { EditOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { type ReactElement, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
-import { employeeDirectory } from '../../services/employeeDirectory';
-
-interface EmployeeRow {
-  key: string;
-  name: string;
-  role: string;
-  team: string;
-}
-
-interface SalaryRow {
-  key: string;
-  role: string;
-  monthly: string;
-  costRate: string;
-}
+import {
+  SALARY_MONTHS,
+  getEmployeeMonthlySalary,
+  type EmployeeDirectoryEntry,
+} from '../../services/employeeDirectory';
+import { useEmployeeStore } from '../../store/employeeStore';
 
 interface EmployeeUnifiedRow {
   key: string;
@@ -36,23 +27,10 @@ interface ChatMessage {
   text: string;
 }
 
-const employeeData: EmployeeRow[] = employeeDirectory.map((employee) => ({
-  key: employee.id,
-  name: employee.name,
-  role: employee.role,
-  team: employee.team,
-}));
-
-const salaryData: SalaryRow[] = employeeDirectory.map((employee) => ({
-  key: employee.id,
-  role: employee.role,
-  monthly: `${employee.monthlySalary} ₽`,
-  costRate: `${employee.costRate} ₽/ч`,
-}));
-
 export default function EmployeesSalariesPage(): ReactElement {
-  const [employees, setEmployees] = useState<EmployeeRow[]>(employeeData);
-  const [salaries, setSalaries] = useState<SalaryRow[]>(salaryData);
+  const employees = useEmployeeStore((state) => state.employees);
+  const updateEmployee = useEmployeeStore((state) => state.updateEmployee);
+  const addEmployee = useEmployeeStore((state) => state.addEmployee);
   const [employeeModalOpen, setEmployeeModalOpen] = useState<boolean>(false);
   const [editingEmployeeKey, setEditingEmployeeKey] = useState<string | null>(null);
   const [employeeForm] = Form.useForm();
@@ -66,61 +44,58 @@ export default function EmployeesSalariesPage(): ReactElement {
   ]);
   const [draft, setDraft] = useState<Partial<Record<string, string | number>>>({});
 
-  const unifiedRows = employees.map((employee): EmployeeUnifiedRow => {
-    const salary = salaries.find((item) => item.role === employee.role);
-    return {
-      key: employee.key,
-      name: employee.name,
-      role: employee.role,
-      team: employee.team,
-      monthly: salary?.monthly ?? '—',
-      costRate: salary?.costRate ?? '—',
-    };
-  });
+  const primaryMonth = SALARY_MONTHS[0] ?? '2026-01';
+  const unifiedRows = useMemo(
+    (): EmployeeUnifiedRow[] =>
+      employees.map((employee) => {
+        const monthlyValue = getEmployeeMonthlySalary(employee, primaryMonth);
+        return {
+          key: employee.id,
+          name: employee.name,
+          role: employee.role,
+          team: employee.team,
+          monthly: `${monthlyValue} ₽`,
+          costRate: `${employee.costRate} ₽/ч`,
+        };
+      }),
+    [employees, primaryMonth],
+  );
+
+  const applyMonthlySalaryByMonth = (
+    employee: EmployeeDirectoryEntry | null,
+    monthly: number,
+  ): Record<string, number> => {
+    const next: Record<string, number> = { ...(employee?.monthlySalaryByMonth ?? {}) };
+    SALARY_MONTHS.forEach((month) => {
+      next[month] = monthly;
+    });
+    return next;
+  };
 
   const handleSaveEmployee = async (): Promise<void> => {
     const values = await employeeForm.validateFields();
     if (editingEmployeeKey) {
-      setEmployees((prev) =>
-        prev.map((employee) =>
-          employee.key === editingEmployeeKey
-            ? { ...employee, name: values.name, role: values.role, team: values.team }
-            : employee,
-        ),
-      );
-      setSalaries((prev) =>
-        prev.map((salary) =>
-          salary.key === editingEmployeeKey
-            ? {
-                ...salary,
-                role: values.role,
-                monthly: `${values.monthly} ₽`,
-                costRate: `${values.costRate} ₽/ч`,
-              }
-            : salary,
-        ),
-      );
+      const current = employees.find((employee) => employee.id === editingEmployeeKey) ?? null;
+      updateEmployee(editingEmployeeKey, {
+        name: values.name,
+        role: values.role,
+        team: values.team,
+        monthlySalary: values.monthly,
+        monthlySalaryByMonth: applyMonthlySalaryByMonth(current, values.monthly),
+        costRate: values.costRate,
+      });
       message.success('Исполнитель обновлён');
     } else {
       const key = `${Date.now()}-employee`;
-      setEmployees((prev) => [
-        ...prev,
-        {
-          key,
-          name: values.name,
-          role: values.role,
-          team: values.team,
-        },
-      ]);
-      setSalaries((prev) => [
-        ...prev,
-        {
-          key,
-          role: values.role,
-          monthly: `${values.monthly} ₽`,
-          costRate: `${values.costRate} ₽/ч`,
-        },
-      ]);
+      addEmployee({
+        id: key,
+        name: values.name,
+        role: values.role,
+        team: values.team,
+        monthlySalary: values.monthly,
+        monthlySalaryByMonth: applyMonthlySalaryByMonth(null, values.monthly),
+        costRate: values.costRate,
+      });
       message.success('Исполнитель добавлен');
     }
     employeeForm.resetFields();
@@ -212,14 +187,17 @@ export default function EmployeesSalariesPage(): ReactElement {
 
   const handleEditEmployee = (row: EmployeeUnifiedRow): void => {
     setEditingEmployeeKey(row.key);
-    const monthlyValue = Number(String(row.monthly).replace(/[^\d]/g, '')) || 0;
-    const costRateValue = Number(String(row.costRate).replace(/[^\d]/g, '')) || 0;
+    const employee = employees.find((item) => item.id === row.key);
+    if (!employee) {
+      return;
+    }
+    const monthlyValue = getEmployeeMonthlySalary(employee, primaryMonth);
     employeeForm.setFieldsValue({
-      name: row.name,
-      role: row.role,
-      team: row.team,
+      name: employee.name,
+      role: employee.role,
+      team: employee.team,
       monthly: monthlyValue,
-      costRate: costRateValue,
+      costRate: employee.costRate,
     });
     setEmployeeModalOpen(true);
   };
@@ -227,7 +205,7 @@ export default function EmployeesSalariesPage(): ReactElement {
   return (
     <div className="finops-page animate-fade-up">
       <Button type="link" className="!p-0 mb-2">
-        <Link to="/directories">← Назад к справочникам</Link>
+        <Link to="/guide">← Назад к Guide</Link>
       </Button>
       <PageHeader
         title="Исполнители"
@@ -271,9 +249,17 @@ export default function EmployeesSalariesPage(): ReactElement {
         pagination={false}
         dataSource={unifiedRows}
         columns={[
-          { title: 'Имя', dataIndex: 'name', key: 'name' },
-          { title: 'Роль', dataIndex: 'role', key: 'role' },
-          { title: 'Команда', dataIndex: 'team', key: 'team' },
+          {
+            title: 'Имя',
+            dataIndex: 'name',
+            key: 'name',
+            render: (_: unknown, row: EmployeeUnifiedRow): ReactElement => (
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{row.name}</div>
+                <div className="text-xs text-slate-500">{row.team} • {row.role}</div>
+              </div>
+            ),
+          },
           { title: 'Оклад', dataIndex: 'monthly', key: 'monthly' },
           { title: 'Cost rate', dataIndex: 'costRate', key: 'costRate' },
           {

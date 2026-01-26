@@ -99,7 +99,7 @@ export default function ClientsProjectsRatesPage(): ReactElement {
   return (
     <div className="finops-page animate-fade-up">
       <Button type="link" className="!p-0 mb-2">
-        <Link to="/directories">← Назад к справочникам</Link>
+        <Link to="/guide">← Назад к Guide</Link>
       </Button>
       <PageHeader
         title="Клиенты, проекты и ставки"

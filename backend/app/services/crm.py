@@ -52,6 +52,18 @@ def parse_assignee(raw: str | None) -> str | None:
     return raw
 
 
+def parse_task_type(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    if isinstance(data, dict):
+        return data.get("name") or data.get("long_name") or raw
+    return raw
+
+
 def parse_estimate(raw: str | None) -> float | None:
     if not raw:
         return None
@@ -126,10 +138,20 @@ def load_crm_tasks(snapshot_path: Path | None = None) -> list[dict]:
             project_id = project_id_raw.strip().strip('"').strip("'") or None
             status_raw = (row.get("task_status") or "").strip()
             priority = (row.get("priority") or "").strip() or None
+            created_at = (row.get("created_at") or "").strip() or None
             assignee_id = (row.get("performer_id") or "").strip() or None
             assignee_name = parse_assignee(row.get("performer"))
+            task_type_id_raw = (row.get("task_type_id") or "").strip()
+            task_type_id = task_type_id_raw.strip().strip('"').strip("'") or None
+            task_type_name = parse_task_type(row.get("task_type"))
+            description = (row.get("description") or "").strip() or None
+            epic = (row.get("epic") or "").strip() or None
             estimate_h = parse_estimate(row.get("estimated_time"))
             updated_at = (row.get("updated_at") or "").strip() or None
+            source = (row.get("source") or "").strip() or None
+            upload_date = (row.get("upload_date") or "").strip() or None
+            order_raw = (row.get("order") or "").strip()
+            order = int(order_raw) if order_raw.isdigit() else None
 
             if not task_id and not title:
                 continue
@@ -143,10 +165,18 @@ def load_crm_tasks(snapshot_path: Path | None = None) -> list[dict]:
                     "status_raw": status_raw,
                     "status": normalize_status(status_raw),
                     "priority": priority,
+                    "created_at": created_at,
                     "assignee_id": assignee_id,
                     "assignee_name": assignee_name,
+                    "task_type_id": task_type_id,
+                    "task_type_name": task_type_name,
+                    "description": description,
+                    "epic": epic,
                     "estimate_h": estimate_h,
                     "updated_at": updated_at,
+                    "source": source,
+                    "upload_date": upload_date,
+                    "order": order,
                 }
             )
 

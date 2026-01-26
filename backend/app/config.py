@@ -14,3 +14,6 @@ DEFAULT_CRM_SNAPSHOT = os.environ.get("COPILOT_DEFAULT_CRM_SNAPSHOT", "")
 
 CRM_API_BASE_URL = os.environ.get("CRM_API_BASE_URL")
 CRM_API_TOKEN = os.environ.get("CRM_API_TOKEN")
+
+VOICEBOT_API_URL = os.environ.get("VOICEBOT_API_URL", "")
+VOICEBOT_TRY_LOGIN_URL = os.environ.get("VOICEBOT_TRY_LOGIN_URL", "")

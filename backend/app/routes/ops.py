@@ -5,9 +5,11 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas import (
     SnapshotInfo,
+    CRMTask,
     AutomationCandidate,
     BacklogResponse,
     InboxItem,
+    IntakeResponse,
     MemoryCreateRequest,
     MemoryNote,
     MemoryResponse,
@@ -22,7 +24,10 @@ from app.schemas import (
     PerformerProfile,
     PerformerResponse,
     PlanLine,
+    ProjectRef,
+    ProjectsResponse,
     SuggestOp,
+    TasksResponse,
     TimelineEvent,
     TimelineResponse,
     TodayResponse,
@@ -563,6 +568,46 @@ async def get_metrics():
     if tasks:
         return build_metrics_response(tasks, intake_items, snapshot)
     return build_fallback_metrics()
+
+
+@router.get("/tasks", response_model=TasksResponse)
+async def get_tasks():
+    snapshot_dict, tasks = load_crm_snapshot()
+    snapshot = SnapshotInfo(**snapshot_dict) if snapshot_dict else None
+    return TasksResponse(
+        snapshot=snapshot,
+        tasks=[CRMTask(**task) for task in tasks],
+        suggest_ops=build_suggest_ops(tasks, limit=30),
+    )
+
+
+@router.get("/intake", response_model=IntakeResponse)
+async def get_intake():
+    snapshot_dict, tasks = load_crm_snapshot()
+    snapshot = SnapshotInfo(**snapshot_dict) if snapshot_dict else None
+    items = build_inbox_items(tasks)
+    return IntakeResponse(
+        snapshot=snapshot,
+        items=[InboxItem(**item) for item in items],
+    )
+
+
+@router.get("/projects", response_model=ProjectsResponse)
+async def get_projects():
+    snapshot_dict, tasks = load_crm_snapshot()
+    snapshot = SnapshotInfo(**snapshot_dict) if snapshot_dict else None
+    projects: dict[str, str | None] = {}
+    for task in tasks:
+        project_id = task.get("project_id")
+        if not project_id:
+            continue
+        if project_id not in projects:
+            projects[project_id] = task.get("project_name")
+    sorted_projects = [
+        ProjectRef(project_id=project_id, project_name=projects[project_id])
+        for project_id in sorted(projects.keys(), key=lambda key: (projects[key] or "", key))
+    ]
+    return ProjectsResponse(snapshot=snapshot, projects=sorted_projects)
 
 
 @router.post("/approve", response_model=ApprovePackage)

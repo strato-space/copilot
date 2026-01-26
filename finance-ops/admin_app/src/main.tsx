@@ -11,7 +11,7 @@ dayjs.locale('ru');
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <BrowserRouter basename="/finops">
+    <BrowserRouter>
       <App />
     </BrowserRouter>
   </React.StrictMode>,

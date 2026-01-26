@@ -15,11 +15,11 @@ Copilot is the umbrella workspace for Ops tools. The web entry point is `copilot
 - Expense attachments are uploaded via `/api/uploads/expense-attachments` and served from `/uploads/expenses`.
 
 ## What is included
-- `frontend/` Static SPA (HTML, CSS, JS)
-- `backend/` FastAPI app with `/api/health`, `/api/hello`, and `/api/items` CRUD
-- `docker-compose.yml` to run both services
-- `frontend/nginx.conf` for the container domain and reverse proxy
-- `deploy/` Host-level Nginx config and notes
+- `frontend/` Static portal SPA (HTML, CSS, JS) with Voicebot-backed login.
+- `backend/` FastAPI app with `/api/health`, `/api/hello`, `/api/items`, and Ops Planning endpoints.
+- `docker-compose.yml` to run both services (portal on :8080, API on :8000).
+- `frontend/nginx.conf` for the container domain and reverse proxy.
+- `deploy/` Host-level Nginx config and notes (currently serves FinOps build at `copilot.stratospace.fun`).
 
 ## Ops Planning mock endpoints
 These endpoints power the Ops Planning UI (reading CRM snapshot CSV from `voicebot/downloads` when available):
@@ -30,6 +30,9 @@ These endpoints power the Ops Planning UI (reading CRM snapshot CSV from `voiceb
 - `GET /api/ops/timeline`
 - `GET /api/ops/month`
 - `GET /api/ops/memory`
+- `GET /api/ops/tasks`
+- `GET /api/ops/intake`
+- `GET /api/ops/projects`
 - `GET /api/ops/performer/{id}`
 - `POST /api/ops/approve`
 - `POST /api/ops/apply`
@@ -42,6 +45,10 @@ Local JSON storage for future writes lives in `backend/app/data/`.
 ## Data source (CRM snapshot)
 - Default: `../voicebot/downloads/crm-tasks-active-selected-YYYY-MM-DD.csv` (latest date/mtime).
 - Docker: `docker-compose.yml` mounts `../voicebot/downloads` into the backend container and sets `COPILOT_CSV_DIR`.
+
+## Portal authentication
+The portal login posts to `/api/try_login` and proxies Voicebot `/try_login`.
+Set `VOICEBOT_API_URL` (or `VOICEBOT_TRY_LOGIN_URL`) for the backend so auth can reach Voicebot.
 
 ## Safe apply (fail-closed)
 `POST /api/ops/apply` is **fail-closed** until CRM API details are provided:
@@ -86,5 +93,5 @@ docker-compose up --build
 - Backend: http://localhost:8000/api/health
 
 ## Nginx
-The SPA is served by Nginx, and `/api` is proxied to the backend. The container config is in `frontend/nginx.conf`.
-For the public domain, see `deploy/nginx-host.conf` and `deploy/README.md`.
+The portal SPA is served by Nginx, and `/api` is proxied to the backend. The container config is in `frontend/nginx.conf`.
+For the public domain, see `deploy/nginx-host.conf` and `deploy/README.md` (currently pointing `copilot.stratospace.fun` to the FinOps build).

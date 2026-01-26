@@ -54,7 +54,7 @@ export default function AgentsPage(): ReactElement {
         description="Настройка автоматизированных действий и сценариев."
         actions={
           <Button type="link">
-            <Link to="/directories">← Назад к справочникам</Link>
+            <Link to="/guide">← Назад к Guide</Link>
           </Button>
         }
       />

@@ -1,13 +1,18 @@
-import { Layout, Menu } from 'antd';
+import { Layout, Menu, Tag } from 'antd';
 import {
   AppstoreOutlined,
+  BgColorsOutlined,
+  MessageOutlined,
   LineChartOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  RobotOutlined,
+  SettingOutlined,
+  SoundOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
-import { type ReactElement, useState } from 'react';
-import { Route, Routes, NavLink, useLocation } from 'react-router-dom';
+import { type ReactElement, useEffect, useState } from 'react';
+import { Navigate, Route, Routes, NavLink, useLocation, useParams } from 'react-router-dom';
 import PlanFactPage from './pages/PlanFactPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import DirectoriesPage from './pages/DirectoriesPage';
@@ -16,14 +21,32 @@ import ClientsProjectsRatesPage from './pages/directories/ClientsProjectsRatesPa
 import EmployeesSalariesPage from './pages/directories/EmployeesSalariesPage';
 import FxPage from './pages/directories/FxPage';
 import ProjectEditPage from './pages/ProjectEditPage';
+import NotificationsDrawer from './components/NotificationsDrawer';
+import { useNotificationStore } from './store/notificationStore';
+import VoicePage from './pages/VoicePage';
+import OperopsPage from './pages/OperopsPage';
+import ChatopsPage from './pages/ChatopsPage';
+import AgentsOpsPage from './pages/AgentsOpsPage';
+import DesopsPage from './pages/DesopsPage';
 
 const { Sider, Content } = Layout;
 
 const navItems = [
-  { key: 'analytics', label: 'Аналитика', to: '/analytics', icon: <LineChartOutlined /> },
-  { key: 'plan-fact', label: 'Финансы', to: '/plan-fact', icon: <WalletOutlined /> },
-  { key: 'directories', label: 'Справочники', to: '/directories', icon: <AppstoreOutlined /> },
+  { key: 'analytics', label: 'Analytic', to: '/analytics', icon: <LineChartOutlined />, badge: 'beta' },
+  { key: 'agents', label: 'Agents', to: '/agents', icon: <RobotOutlined />, badge: 'dev' },
+  { key: 'operops', label: 'OperOps', to: '/operops', icon: <SettingOutlined />, badge: 'beta' },
+  { key: 'finops', label: 'FinOps', to: '/finops', icon: <WalletOutlined />, badge: 'beta' },
+  { key: 'chatops', label: 'ChatOps', to: '/chatops', icon: <MessageOutlined />, badge: 'dev' },
+  { key: 'devops', label: 'DesOps', to: '/desops', icon: <BgColorsOutlined />, badge: 'dev' },
+  { key: 'voice', label: 'Voice', to: '/voice', icon: <SoundOutlined />, badge: 'dev' },
+  { key: 'guides', label: 'Guides', to: '/guide', icon: <AppstoreOutlined />, badge: 'beta' },
 ];
+
+function LegacyProjectRedirect(): ReactElement {
+  const { projectId } = useParams();
+
+  return <Navigate to={projectId ? `/projects/${projectId}` : '/projects'} replace />;
+}
 
 export default function App(): ReactElement {
   const location = useLocation();
@@ -31,6 +54,30 @@ export default function App(): ReactElement {
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const selectedKey =
     navItems.find((item): boolean => normalizedPath.startsWith(item.to))?.key ?? 'analytics';
+  const setContextLabel = useNotificationStore((state) => state.setContextLabel);
+  const contextLabel = normalizedPath.startsWith('/finops') || normalizedPath.startsWith('/plan-fact')
+    ? 'FinOps'
+    : normalizedPath.startsWith('/guide')
+    ? 'Guides'
+    : normalizedPath.startsWith('/voice')
+    ? 'Voice'
+    : normalizedPath.startsWith('/operops')
+    ? 'OperOps'
+    : normalizedPath.startsWith('/chatops')
+    ? 'ChatOps'
+    : normalizedPath.startsWith('/agents')
+    ? 'Agents'
+    : normalizedPath.startsWith('/devops')
+    ? 'DesOps'
+    : normalizedPath.startsWith('/desops')
+    ? 'DesOps'
+    : normalizedPath.startsWith('/projects')
+    ? 'Проект'
+    : 'Analytic';
+
+  useEffect((): void => {
+    setContextLabel(contextLabel);
+  }, [contextLabel, setContextLabel]);
 
   return (
     <Layout className="min-h-screen">
@@ -71,7 +118,15 @@ export default function App(): ReactElement {
           </Menu.Item>
           {navItems.map((item): ReactElement => (
             <Menu.Item key={item.key} icon={item.icon}>
-              <NavLink to={item.to}>{item.label}</NavLink>
+              <NavLink to={item.to} className="flex items-center gap-2 w-full">
+                <span className="min-w-0 truncate">{item.label}</span>
+                <Tag
+                  color={item.badge === 'beta' ? 'cyan' : 'default'}
+                  className="ml-auto"
+                >
+                  {item.badge === 'beta' ? '(beta)' : '(dev)'}
+                </Tag>
+              </NavLink>
             </Menu.Item>
           ))}
         </Menu>
@@ -80,20 +135,49 @@ export default function App(): ReactElement {
         <Content style={{ margin: '24px 16px 0', overflow: 'initial', background: '#f5f5f5' }}>
           <div className="p-6 min-h-screen">
             <Routes>
-              <Route path="/" element={<AnalyticsPage />} />
-              <Route path="/plan-fact" element={<PlanFactPage />} />
+              <Route path="/" element={<Navigate to="/analytics" replace />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/directories" element={<DirectoriesPage />} />
-              <Route path="/directories/clients-projects-rates" element={<ClientsProjectsRatesPage />} />
-              <Route path="/directories/employees-salaries" element={<EmployeesSalariesPage />} />
-              <Route path="/directories/fx" element={<FxPage />} />
-              <Route path="/directories/agents" element={<AgentsPage />} />
+              <Route path="/operops" element={<OperopsPage />} />
+              <Route path="/chatops" element={<ChatopsPage />} />
+              <Route path="/agents" element={<AgentsOpsPage />} />
+              <Route path="/voice" element={<VoicePage />} />
+              <Route path="/finops" element={<PlanFactPage />} />
+              <Route path="/plan-fact" element={<Navigate to="/finops" replace />} />
+              <Route path="/finops/plan-fact" element={<Navigate to="/finops" replace />} />
+              <Route path="/desops" element={<DesopsPage />} />
+              <Route path="/devops" element={<Navigate to="/desops" replace />} />
+              <Route path="/guide" element={<DirectoriesPage />} />
+              <Route path="/guide/clients-projects-rates" element={<ClientsProjectsRatesPage />} />
+              <Route path="/guide/employees-salaries" element={<EmployeesSalariesPage />} />
+              <Route path="/guide/fx" element={<FxPage />} />
+              <Route path="/guide/agents" element={<AgentsPage />} />
+              <Route path="/directories" element={<Navigate to="/guide" replace />} />
+              <Route path="/directories/clients-projects-rates" element={<Navigate to="/guide/clients-projects-rates" replace />} />
+              <Route path="/directories/employees-salaries" element={<Navigate to="/guide/employees-salaries" replace />} />
+              <Route path="/directories/fx" element={<Navigate to="/guide/fx" replace />} />
+              <Route path="/directories/agents" element={<Navigate to="/guide/agents" replace />} />
+              {/* Backward-compatible deep links from the old /finops/* basename */}
+              <Route path="/finops/analytics" element={<Navigate to="/analytics" replace />} />
+              <Route path="/finops/operops" element={<Navigate to="/operops" replace />} />
+              <Route path="/finops/chatops" element={<Navigate to="/chatops" replace />} />
+              <Route path="/finops/agents" element={<Navigate to="/agents" replace />} />
+              <Route path="/finops/voice" element={<Navigate to="/voice" replace />} />
+              <Route path="/finops/devops" element={<Navigate to="/desops" replace />} />
+              <Route path="/finops/desops" element={<Navigate to="/desops" replace />} />
+              <Route path="/finops/guide" element={<Navigate to="/guide" replace />} />
+              <Route path="/finops/directories" element={<Navigate to="/guide" replace />} />
+              <Route path="/finops/directories/clients-projects-rates" element={<Navigate to="/guide/clients-projects-rates" replace />} />
+              <Route path="/finops/directories/employees-salaries" element={<Navigate to="/guide/employees-salaries" replace />} />
+              <Route path="/finops/directories/fx" element={<Navigate to="/guide/fx" replace />} />
+              <Route path="/finops/directories/agents" element={<Navigate to="/guide/agents" replace />} />
+              <Route path="/finops/projects/:projectId" element={<LegacyProjectRedirect />} />
               <Route path="/projects/:projectId" element={<ProjectEditPage />} />
-              <Route path="*" element={<AnalyticsPage />} />
+              <Route path="*" element={<Navigate to="/analytics" replace />} />
             </Routes>
           </div>
         </Content>
       </Layout>
+      <NotificationsDrawer />
     </Layout>
   );
 }

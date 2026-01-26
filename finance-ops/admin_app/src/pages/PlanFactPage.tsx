@@ -8,7 +8,8 @@ import PageHeader from '../components/PageHeader';
 import { usePlanFactStore } from '../store/planFactStore';
 import { type PlanFactCellContext, type PlanFactMonthCell } from '../services/types';
 import { formatMonthLabel } from '../utils/format';
-import { employeeDirectory } from '../services/employeeDirectory';
+import { useEmployeeStore } from '../store/employeeStore';
+import { useNotificationStore } from '../store/notificationStore';
 
 const buildYearMonths = (year: number): string[] => {
   const start = dayjs(`${year}-01-01`);
@@ -37,6 +38,8 @@ export default function PlanFactPage(): ReactElement {
   const [drawerContext, setDrawerContext] = useState<PlanFactCellContext | null>(null);
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const expensesRef = useRef<ExpensesGridHandle | null>(null);
+  const triggerCheck = useNotificationStore((state) => state.triggerCheck);
+  const employees = useEmployeeStore((state) => state.employees);
 
   const yearMonths = useMemo((): string[] => buildYearMonths(year), [year]);
 
@@ -138,7 +141,13 @@ export default function PlanFactPage(): ReactElement {
           </div>
         }
         actions={
-          <Button type="primary" loading={loading} onClick={(): void => void fetchPlanFact()}>
+          <Button
+            type="primary"
+            loading={loading}
+            onClick={(): void => {
+              void fetchPlanFact().then(() => triggerCheck('refresh'));
+            }}
+          >
             Обновить
           </Button>
         }
@@ -185,7 +194,7 @@ export default function PlanFactPage(): ReactElement {
               children: (
                 <ExpensesGrid
                   ref={expensesRef}
-                  employees={employeeDirectory}
+                  employees={employees}
                   months={yearMonths}
                   focusMonth={focusMonth}
                   onFocusMonthChange={handleFocusMonthChange}
