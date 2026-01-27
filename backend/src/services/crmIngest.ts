@@ -13,7 +13,7 @@ const DATE_RE = /(\d{4}-\d{2}-\d{2})/;
 
 const parseSnapshotDate = (fileName: string): string => {
   const match = fileName.match(DATE_RE);
-  return match ? match[1] : new Date().toISOString().slice(0, 10);
+  return match?.[1] ?? new Date().toISOString().slice(0, 10);
 };
 
 export const findLatestSnapshot = async (): Promise<CrmSnapshotMeta | null> => {

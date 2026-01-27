@@ -45,5 +45,7 @@
 
     "esModuleInterop": true,
     "resolveJsonModule": true
-  }
+  },
+  "include": ["src"],
+  "exclude": ["__tests__", "dist"]
 }

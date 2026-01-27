@@ -1,4 +1,4 @@
-import { Layout, Menu, Tag } from 'antd';
+import { Layout, Menu, Spin, Tag } from 'antd';
 import {
   AppstoreOutlined,
   BgColorsOutlined,
@@ -12,7 +12,7 @@ import {
   WalletOutlined,
 } from '@ant-design/icons';
 import { type ReactElement, useEffect, useState } from 'react';
-import { Navigate, Route, Routes, NavLink, useLocation, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes, NavLink, useLocation, useParams, Outlet } from 'react-router-dom';
 import PlanFactPage from './pages/PlanFactPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import DirectoriesPage from './pages/DirectoriesPage';
@@ -28,6 +28,8 @@ import OperopsPage from './pages/OperopsPage';
 import ChatopsPage from './pages/ChatopsPage';
 import AgentsOpsPage from './pages/AgentsOpsPage';
 import DesopsPage from './pages/DesopsPage';
+import LoginPage from './pages/LoginPage';
+import { useAuthStore } from './store/authStore';
 
 const { Sider, Content } = Layout;
 
@@ -48,7 +50,26 @@ function LegacyProjectRedirect(): ReactElement {
   return <Navigate to={projectId ? `/projects/${projectId}` : '/projects'} replace />;
 }
 
-export default function App(): ReactElement {
+function RequireAuth(): ReactElement {
+  const { isAuth, loading, ready } = useAuthStore();
+  const location = useLocation();
+
+  if (!ready || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (!isAuth) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <Outlet />;
+}
+
+function MainLayout(): ReactElement {
   const location = useLocation();
   const normalizedPath = location.pathname === '/' ? '/analytics' : location.pathname;
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -134,50 +155,67 @@ export default function App(): ReactElement {
       <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin 0.2s' }}>
         <Content style={{ margin: '24px 16px 0', overflow: 'initial', background: '#f5f5f5' }}>
           <div className="p-6 min-h-screen">
-            <Routes>
-              <Route path="/" element={<Navigate to="/analytics" replace />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/operops" element={<OperopsPage />} />
-              <Route path="/chatops" element={<ChatopsPage />} />
-              <Route path="/agents" element={<AgentsOpsPage />} />
-              <Route path="/voice" element={<VoicePage />} />
-              <Route path="/finops" element={<PlanFactPage />} />
-              <Route path="/plan-fact" element={<Navigate to="/finops" replace />} />
-              <Route path="/finops/plan-fact" element={<Navigate to="/finops" replace />} />
-              <Route path="/desops" element={<DesopsPage />} />
-              <Route path="/devops" element={<Navigate to="/desops" replace />} />
-              <Route path="/guide" element={<DirectoriesPage />} />
-              <Route path="/guide/clients-projects-rates" element={<ClientsProjectsRatesPage />} />
-              <Route path="/guide/employees-salaries" element={<EmployeesSalariesPage />} />
-              <Route path="/guide/fx" element={<FxPage />} />
-              <Route path="/guide/agents" element={<AgentsPage />} />
-              <Route path="/directories" element={<Navigate to="/guide" replace />} />
-              <Route path="/directories/clients-projects-rates" element={<Navigate to="/guide/clients-projects-rates" replace />} />
-              <Route path="/directories/employees-salaries" element={<Navigate to="/guide/employees-salaries" replace />} />
-              <Route path="/directories/fx" element={<Navigate to="/guide/fx" replace />} />
-              <Route path="/directories/agents" element={<Navigate to="/guide/agents" replace />} />
-              {/* Backward-compatible deep links from the old /finops/* basename */}
-              <Route path="/finops/analytics" element={<Navigate to="/analytics" replace />} />
-              <Route path="/finops/operops" element={<Navigate to="/operops" replace />} />
-              <Route path="/finops/chatops" element={<Navigate to="/chatops" replace />} />
-              <Route path="/finops/agents" element={<Navigate to="/agents" replace />} />
-              <Route path="/finops/voice" element={<Navigate to="/voice" replace />} />
-              <Route path="/finops/devops" element={<Navigate to="/desops" replace />} />
-              <Route path="/finops/desops" element={<Navigate to="/desops" replace />} />
-              <Route path="/finops/guide" element={<Navigate to="/guide" replace />} />
-              <Route path="/finops/directories" element={<Navigate to="/guide" replace />} />
-              <Route path="/finops/directories/clients-projects-rates" element={<Navigate to="/guide/clients-projects-rates" replace />} />
-              <Route path="/finops/directories/employees-salaries" element={<Navigate to="/guide/employees-salaries" replace />} />
-              <Route path="/finops/directories/fx" element={<Navigate to="/guide/fx" replace />} />
-              <Route path="/finops/directories/agents" element={<Navigate to="/guide/agents" replace />} />
-              <Route path="/finops/projects/:projectId" element={<LegacyProjectRedirect />} />
-              <Route path="/projects/:projectId" element={<ProjectEditPage />} />
-              <Route path="*" element={<Navigate to="/analytics" replace />} />
-            </Routes>
+            <Outlet />
           </div>
         </Content>
       </Layout>
       <NotificationsDrawer />
     </Layout>
+  );
+}
+
+export default function App(): ReactElement {
+  const checkAuth = useAuthStore((state) => state.checkAuth);
+
+  useEffect((): void => {
+    void checkAuth();
+  }, [checkAuth]);
+
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Navigate to="/analytics" replace />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/operops" element={<OperopsPage />} />
+          <Route path="/chatops" element={<ChatopsPage />} />
+          <Route path="/agents" element={<AgentsOpsPage />} />
+          <Route path="/voice" element={<VoicePage />} />
+          <Route path="/finops" element={<PlanFactPage />} />
+          <Route path="/plan-fact" element={<Navigate to="/finops" replace />} />
+          <Route path="/finops/plan-fact" element={<Navigate to="/finops" replace />} />
+          <Route path="/desops" element={<DesopsPage />} />
+          <Route path="/devops" element={<Navigate to="/desops" replace />} />
+          <Route path="/guide" element={<DirectoriesPage />} />
+          <Route path="/guide/clients-projects-rates" element={<ClientsProjectsRatesPage />} />
+          <Route path="/guide/employees-salaries" element={<EmployeesSalariesPage />} />
+          <Route path="/guide/fx" element={<FxPage />} />
+          <Route path="/guide/agents" element={<AgentsPage />} />
+          <Route path="/directories" element={<Navigate to="/guide" replace />} />
+          <Route path="/directories/clients-projects-rates" element={<Navigate to="/guide/clients-projects-rates" replace />} />
+          <Route path="/directories/employees-salaries" element={<Navigate to="/guide/employees-salaries" replace />} />
+          <Route path="/directories/fx" element={<Navigate to="/guide/fx" replace />} />
+          <Route path="/directories/agents" element={<Navigate to="/guide/agents" replace />} />
+          {/* Backward-compatible deep links from the old /finops/* basename */}
+          <Route path="/finops/analytics" element={<Navigate to="/analytics" replace />} />
+          <Route path="/finops/operops" element={<Navigate to="/operops" replace />} />
+          <Route path="/finops/chatops" element={<Navigate to="/chatops" replace />} />
+          <Route path="/finops/agents" element={<Navigate to="/agents" replace />} />
+          <Route path="/finops/voice" element={<Navigate to="/voice" replace />} />
+          <Route path="/finops/devops" element={<Navigate to="/desops" replace />} />
+          <Route path="/finops/desops" element={<Navigate to="/desops" replace />} />
+          <Route path="/finops/guide" element={<Navigate to="/guide" replace />} />
+          <Route path="/finops/directories" element={<Navigate to="/guide" replace />} />
+          <Route path="/finops/directories/clients-projects-rates" element={<Navigate to="/guide/clients-projects-rates" replace />} />
+          <Route path="/finops/directories/employees-salaries" element={<Navigate to="/guide/employees-salaries" replace />} />
+          <Route path="/finops/directories/fx" element={<Navigate to="/guide/fx" replace />} />
+          <Route path="/finops/directories/agents" element={<Navigate to="/guide/agents" replace />} />
+          <Route path="/finops/projects/:projectId" element={<LegacyProjectRedirect />} />
+          <Route path="/projects/:projectId" element={<ProjectEditPage />} />
+          <Route path="*" element={<Navigate to="/analytics" replace />} />
+        </Route>
+      </Route>
+    </Routes>
   );
 }

@@ -9,7 +9,9 @@ export class AppError extends Error {
   constructor(message: string, status = 400, code?: string, details?: unknown) {
     super(message);
     this.status = status;
-    this.code = code;
+    if (code !== undefined) {
+      this.code = code;
+    }
     this.details = details;
   }
 }
@@ -21,11 +23,12 @@ export const errorMiddleware = (
   _next: NextFunction,
 ): void => {
   if (err instanceof AppError) {
-    sendError(
-      res,
-      { message: err.message, code: err.code, details: err.details },
-      err.status,
-    );
+    const payload = {
+      message: err.message,
+      details: err.details,
+      ...(err.code ? { code: err.code } : {}),
+    };
+    sendError(res, payload, err.status);
     return;
   }
 

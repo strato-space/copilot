@@ -64,3 +64,17 @@
 - KPI cards now include payroll + other expenses, FX-aware totals, and extra deltas derived from employee/expense stores.
 - Updated expense categories/seeds, analytics layout styles, and notification UI styling.
 - Host Nginx config now serves the FinOps build from `app/dist` with clean SPA routing.
+
+## 2026-01-27
+### PROBLEM SOLVED
+- Auth checks against `/api/auth/me` could fail with 502s and cookies were not shared across subdomains → frontend now checks Voicebot directly and backend sets a shared auth cookie for `.stratospace.fun`.
+- Tailwind utility classes were not compiling, so the login form could not be centered with utilities → enabled the Tailwind PostCSS pipeline and moved layout to Tailwind classes.
+
+### FEATURE IMPLEMENTED
+- Added a Voicebot-backed login page and global auth guard with a dedicated auth store.
+- Added backend auth proxy endpoints (`/api/try_login`, `/api/auth/me`, `/api/logout`) with shared cookie handling.
+
+### CHANGES
+- Introduced a Voicebot API client and ensured credentialed requests from the frontend.
+- Enabled Tailwind via `@tailwindcss/postcss` and `@import 'tailwindcss'`, updated Tailwind config.
+- Scoped backend TypeScript builds to `src/` and refined error middleware + CRM snapshot date parsing for strict type safety.

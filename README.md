@@ -25,5 +25,10 @@ Start the frontend and backend together:
 - Frontend: http://localhost:5173
 - Backend: http://localhost:3002/api/health
 
+## Authentication
+- Backend proxies Voicebot auth via `/api/try_login` and `/api/auth/me`; set `VOICEBOT_API_URL` in the backend environment.
+- Frontend auth checks call `https://voice.stratospace.fun/auth/me` by default; override with `VITE_VOICEBOT_BASE_URL` if needed.
+- Login relies on the shared `auth_token` http-only cookie for `.stratospace.fun`.
+
 ## Nginx
 The Finance Ops SPA is served by Nginx, and `/api` is proxied to the backend. For the public domain, see `deploy/nginx-host.conf` and `deploy/README.md`.
