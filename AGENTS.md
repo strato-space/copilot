@@ -1,27 +1,20 @@
 # Copilot Workspace Guidelines
 
-This repository is the umbrella workspace for three related modules:
-- **OperOps** (`operops/`)
-- **FinOps** (`finance-ops/`)
-- **ChatOps** (`chatops/`)
+This repository hosts the Finance Ops console. Deprecated modules are archived in `old_code/`.
 
-## Shared rules (apply to all modules)
-- Keep each module deployable and updateable independently.
-- Use the same visual language and tone across modules.
+## Shared rules
 - Document changes in the module itself; shared notes can live in this repo root.
 - Do not store build artifacts outside the module directories.
-- For `finance-ops/admin_app`, keep only TypeScript/TSX sources and avoid JS duplicates.
+- For `app/`, keep only TypeScript/TSX sources and avoid JS duplicates.
 
 ## FinOps notes
-- FX rates live in `finance-ops/admin_app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
+- FX rates live in `app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
 - The plan-fact grid keeps at least one pinned month; users can pin up to 3 and can unpin the active month if another month remains pinned.
-- Expense attachments are stored under `backend/app/data/uploads/expenses` and served from `/uploads/expenses`.
+- Expense attachments are served from `/uploads/expenses`.
 
 ## Deployment endpoints
-- `copilot.stratospace.fun` → FinOps shell served from `finance-ops/admin_app/dist` (host Nginx config in `deploy/nginx-host.conf`; the portal lives in `frontend/` for containerized runs).
-- `operops.stratospace.fun` → OperOps placeholder (`operops/site/`)
-- `finops.stratospace.fun` → FinOps frontend (`finance-ops/admin_app/dist`)
-- `chatops.stratospace.fun` → ChatOps placeholder (`chatops/site/`)
+- `copilot.stratospace.fun` → FinOps shell served from `app/dist` (host Nginx config in `deploy/nginx-host.conf`).
+- `finops.stratospace.fun` → FinOps frontend (`app/dist`)
 
 ## Portal auth
 - The Copilot portal uses `/api/try_login`, which proxies Voicebot `/try_login`; configure `VOICEBOT_API_URL` or `VOICEBOT_TRY_LOGIN_URL` for the backend.

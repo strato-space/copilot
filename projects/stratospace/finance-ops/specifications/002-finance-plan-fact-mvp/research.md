@@ -7,7 +7,7 @@
 
 ## Decision 2: Frontend stack
 - **Decision**: React + TypeScript + Ant Design + Zustand + Tailwind + React Router (Vite) + Axios.
-- **Rationale**: прямое соответствие MediaGen Constitution и практикам mediagen admin_app.
+- **Rationale**: прямое соответствие MediaGen Constitution и практикам mediagen app.
 - **Alternatives considered**: vanilla SPA — не покрывает требования модульности/стандарта UI.
 
 ## Decision 3: Storage

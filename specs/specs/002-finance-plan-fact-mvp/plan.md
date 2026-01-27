@@ -59,7 +59,7 @@ backend/
 │   └── utils/
 └── __tests__/
 
-admin_app/
+app/
 ├── src/
 │   ├── components/
 │   ├── pages/
@@ -72,7 +72,7 @@ docs/
     └── README.md
 ```
 
-**Structure Decision**: Web‑приложение с `backend/` (Express + TS) и `admin_app/` (React + TS) в стиле mediagen; добавляем `docs/finance-ops/` для соблюдения конституции по документации.
+**Structure Decision**: Web‑приложение с `backend/` (Express + TS) и `app/` (React + TS) в стиле mediagen; добавляем `docs/finance-ops/` для соблюдения конституции по документации.
 
 ## Complexity Tracking
 

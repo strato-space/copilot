@@ -9,11 +9,11 @@
 
 ## Phase 1: Setup (общая инфраструктура)
 
-- [ ] T001 Создать структуру `backend/` и `admin_app/` по плану (`backend/src`, `admin_app/src`, `docs/finance-ops/`)
+- [ ] T001 Создать структуру `backend/` и `app/` по плану (`backend/src`, `app/src`, `docs/finance-ops/`)
 - [ ] T002 Инициализировать backend (TypeScript + Express) и `tsconfig.json` со `strict: true` в `backend/`
-- [ ] T003 Инициализировать frontend (React + Vite + TS) и `tsconfig.json` со `strict: true` в `admin_app/`
+- [ ] T003 Инициализировать frontend (React + Vite + TS) и `tsconfig.json` со `strict: true` в `app/`
 - [ ] T004 [P] Настроить ESLint/Prettier для backend в `backend/`
-- [ ] T005 [P] Настроить ESLint/Prettier для frontend в `admin_app/`
+- [ ] T005 [P] Настроить ESLint/Prettier для frontend в `app/`
 - [ ] T006 [P] Создать `docs/finance-ops/README.md` с кратким обзором и ссылкой на `specs/`
 
 ---
@@ -46,9 +46,9 @@
 
 - [ ] T018 [P] Реализовать агрегацию plan‑fact grid в `backend/src/services/planFactService.ts`
 - [ ] T019 Реализовать endpoint `GET /api/plan-fact` в `backend/src/api/routes/planFact.ts`
-- [ ] T020 [P] Создать Zustand store для grid/KPI в `admin_app/src/store/planFactStore.ts`
-- [ ] T021 Реализовать страницу `PlanFactPage` в `admin_app/src/pages/PlanFactPage.tsx`
-- [ ] T022 [P] Реализовать компоненты `PlanFactGrid`, `KpiCards` в `admin_app/src/components/`
+- [ ] T020 [P] Создать Zustand store для grid/KPI в `app/src/store/planFactStore.ts`
+- [ ] T021 Реализовать страницу `PlanFactPage` в `app/src/pages/PlanFactPage.tsx`
+- [ ] T022 [P] Реализовать компоненты `PlanFactGrid`, `KpiCards` в `app/src/components/`
 
 **Checkpoint**: Plan‑Fact grid работает и показывает данные
 
@@ -65,8 +65,8 @@
 - [ ] T023 Реализовать endpoint `PUT /api/fact/{project_id}/{month}` в `backend/src/api/routes/fact.ts`
 - [ ] T024 [P] Реализовать пересчёт суммы/FX и валидации в `backend/src/services/factService.ts`
 - [ ] T025 [P] Реализовать вложения (multer upload/list) в `backend/src/api/routes/attachments.ts`
-- [ ] T026 Реализовать Drawer UI в `admin_app/src/components/ProjectMonthDrawer.tsx`
-- [ ] T027 [P] Добавить audit‑timeline компонент в `admin_app/src/components/AuditTimeline.tsx`
+- [ ] T026 Реализовать Drawer UI в `app/src/components/ProjectMonthDrawer.tsx`
+- [ ] T027 [P] Добавить audit‑timeline компонент в `app/src/components/AuditTimeline.tsx`
 
 **Checkpoint**: факт редактируется через Drawer, audit фиксируется
 
@@ -82,7 +82,7 @@
 
 - [ ] T028 Реализовать endpoint `POST /api/period/close` в `backend/src/api/routes/period.ts`
 - [ ] T029 [P] Реализовать проверки блокеров в `backend/src/services/periodService.ts`
-- [ ] T030 Добавить UI‑модалку закрытия месяца в `admin_app/src/components/CloseMonthModal.tsx`
+- [ ] T030 Добавить UI‑модалку закрытия месяца в `app/src/components/CloseMonthModal.tsx`
 
 **Checkpoint**: lock работает, редактирование факта запрещено
 
@@ -99,7 +99,7 @@
 - [ ] T031 Реализовать endpoints `GET/POST /api/forecast/versions` в `backend/src/api/routes/forecast.ts`
 - [ ] T032 Реализовать endpoint `POST /api/forecast/copy` в `backend/src/api/routes/forecast.ts`
 - [ ] T033 [P] Реализовать forecast‑service (пересчёт FX/ставок) в `backend/src/services/forecastService.ts`
-- [ ] T034 Реализовать UI селектор версии и Copy Forecast modal в `admin_app/src/components/ForecastControls.tsx`
+- [ ] T034 Реализовать UI селектор версии и Copy Forecast modal в `app/src/components/ForecastControls.tsx`
 
 **Checkpoint**: прогнозные версии и копирование работают
 
@@ -116,8 +116,8 @@
 - [ ] T035 Реализовать расчёт cost/margin в `backend/src/services/marginService.ts`
 - [ ] T036 Реализовать endpoint `GET /api/analytics` в `backend/src/api/routes/analytics.ts`
 - [ ] T037 [P] Реализовать alert‑engine в `backend/src/services/alertsService.ts`
-- [ ] T038 Реализовать страницу `AnalyticsPage` в `admin_app/src/pages/AnalyticsPage.tsx`
-- [ ] T039 [P] Реализовать графики и список внимания в `admin_app/src/components/AnalyticsWidgets.tsx`
+- [ ] T038 Реализовать страницу `AnalyticsPage` в `app/src/pages/AnalyticsPage.tsx`
+- [ ] T039 [P] Реализовать графики и список внимания в `app/src/components/AnalyticsWidgets.tsx`
 
 **Checkpoint**: аналитика показывает KPI и alerts
 
@@ -134,7 +134,7 @@
 - [ ] T040 Реализовать endpoint `POST /api/agent-requests` в `backend/src/api/routes/agent.ts`
 - [ ] T041 Реализовать endpoint `POST /api/agent-requests/{id}/apply` в `backend/src/api/routes/agent.ts`
 - [ ] T042 [P] Реализовать policy approve/apply + audit в `backend/src/services/agentService.ts`
-- [ ] T043 Реализовать UI форму запроса и apply‑flow в `admin_app/src/components/AgentRequestForm.tsx`
+- [ ] T043 Реализовать UI форму запроса и apply‑flow в `app/src/components/AgentRequestForm.tsx`
 
 **Checkpoint**: K2 workflow проходит с audit‑метками
 
