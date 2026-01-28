@@ -747,6 +747,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
             dataSource={drawerOperations}
             columns={drawerColumns}
             rowKey="id"
+            sticky
           />
         )}
       </Drawer>

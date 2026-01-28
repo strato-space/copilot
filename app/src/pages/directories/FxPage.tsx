@@ -5,6 +5,7 @@ import { type ReactElement, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import GuideSourceTag from '../../components/GuideSourceTag';
 import { useGuideStore } from '../../store/guideStore';
+import { formatDateLabel } from '../../utils/format';
 
 interface GuideFxRow {
   month?: string;
@@ -69,7 +70,8 @@ export default function FxPage(): ReactElement {
         if (overrideFilter === 'auto' && item.manual_override) {
           return false;
         }
-        if (query && !(item.month ?? '').toLowerCase().includes(query)) {
+        const formatted = formatDateLabel(item.month ?? '').toLowerCase();
+        if (query && !(item.month ?? '').toLowerCase().includes(query) && !formatted.includes(query)) {
           return false;
         }
         return true;
@@ -78,7 +80,7 @@ export default function FxPage(): ReactElement {
       .sort((a, b) => (a.month ?? '').localeCompare(b.month ?? ''))
       .map((item, index) => ({
         key: `${item.month ?? 'month'}-${index}`,
-        month: item.month ?? '—',
+        month: formatDateLabel(item.month ?? '—'),
         currency: item.currency ?? 'USD',
         fxAvg: item.fx_avg != null ? item.fx_avg.toFixed(2) : '—',
         fxManual: item.fx_manual != null ? item.fx_manual.toFixed(2) : '—',
@@ -150,6 +152,7 @@ export default function FxPage(): ReactElement {
           pagination={false}
           dataSource={fxRows}
           locale={{ emptyText: 'Нет данных' }}
+          sticky
           columns={[
             { title: 'Месяц', dataIndex: 'month', key: 'month' },
             { title: 'Валюта', dataIndex: 'currency', key: 'currency' },

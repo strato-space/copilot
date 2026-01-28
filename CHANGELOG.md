@@ -83,12 +83,20 @@
 ### PROBLEM SOLVED
 - Copilot dev could collide with other Vite servers on shared hosts → switched dev flow to static `build-dev` output served by Nginx.
 - OperOps/Voice sections were stubs with no unified navigation → added iframe embedding to load CRM/Voicebot inside Copilot.
+- Guide directories failed hard on missing API data → added mock fallback index/directories with clearer source tags.
+- Month labels were inconsistent across Guide tables → normalized date formatting to `DD.MM.YY` and enabled sticky headers.
+- OperOps/Voice showed raw embed error text when URLs were missing → now render consistent placeholder panels.
 
 ### FEATURE IMPLEMENTED
 - Added iframe embed bridge with route/height sync for Voicebot and CRM sections.
 - Added a dev build script and environment-driven embed URLs for dev/prod.
+- Rebuilt the Guide landing as a single table catalog with module filters and row navigation.
+- Added directory detail routing with tabbed sub-tables, plus inline project-rate summaries and a comment drawer.
+- Added a global Log sidebar and new SaleOps/HHOps shells with updated sidebar badges.
 
 ### CHANGES
 - Replaced OperOps and Voice stub pages with iframe shell integration and `/*` routes.
 - Added embed env files plus a reusable `EmbedFrame` component.
 - Updated directory/guide pages with refreshed layouts and structure changes.
+- Added guide mock datasets/config and wired fallback handling in `guideStore`.
+- Updated Agents, Employees/Salaries, and FX tables with sticky headers and revised columns/actions.

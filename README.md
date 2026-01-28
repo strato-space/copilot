@@ -8,6 +8,7 @@ Copilot is the workspace for the Finance Ops console. Deprecated code is archive
 - Plan-fact months can be pinned (up to 3), and the totals row stays visible under pinned months.
 - The Expenses tab combines payroll and other costs, with category-level operations and sticky totals.
 - Expense attachments are uploaded via `/api/uploads/expense-attachments` and served from `/uploads/expenses`.
+- Guide directories fall back to mock data when the automation API is unavailable, and the Guide header includes a global Log sidebar.
 
 ## What is included
 - `app/` React + Vite frontend for Finance Ops.

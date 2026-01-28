@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { apiClient } from '../services/api';
+import { GUIDE_MOCK_DIRECTORIES, GUIDE_MOCK_INDEX } from '../services/guideMock';
 
-export type GuideSource = 'automation' | 'manual' | 'unavailable' | 'unknown';
+export type GuideSource = 'automation' | 'manual' | 'unavailable' | 'unknown' | 'mock';
 
 export interface GuideIndexItem {
   name: string;
@@ -35,7 +36,7 @@ interface GuideState {
 }
 
 const normalizeSource = (value: unknown): GuideSource => {
-  if (value === 'automation' || value === 'manual' || value === 'unavailable' || value === 'unknown') {
+  if (value === 'automation' || value === 'manual' || value === 'unavailable' || value === 'unknown' || value === 'mock') {
     return value;
   }
   return 'unknown';
@@ -69,7 +70,10 @@ export const useGuideStore = create<GuideState>((set, get): GuideState => ({
       set({ index: items, indexLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      set({ indexError: message, indexLoading: false });
+      const fallback = Array.isArray(GUIDE_MOCK_INDEX)
+        ? (GUIDE_MOCK_INDEX as unknown as GuideIndexItem[])
+        : [];
+      set({ indexError: message, indexLoading: false, index: fallback });
     }
   },
   fetchDirectory: async (name: string): Promise<void> => {
@@ -107,8 +111,15 @@ export const useGuideStore = create<GuideState>((set, get): GuideState => ({
       }));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+      const fallback =
+        (GUIDE_MOCK_DIRECTORIES[name as keyof typeof GUIDE_MOCK_DIRECTORIES] as unknown as GuideDirectoryState | null) ??
+        null;
       set((state) => ({
-        directories: state.directories[name] ? state.directories : { ...state.directories, [name]: emptyDirectory() },
+        directories: fallback
+          ? { ...state.directories, [name]: fallback }
+          : state.directories[name]
+            ? state.directories
+            : { ...state.directories, [name]: emptyDirectory() },
         directoryError: { ...state.directoryError, [name]: message },
         directoryLoading: { ...state.directoryLoading, [name]: false },
       }));

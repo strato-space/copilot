@@ -7,6 +7,7 @@ const SOURCE_META: Record<GuideSource, { label: string; color: string }> = {
   manual: { label: 'manual', color: 'blue' },
   unavailable: { label: 'нет источника', color: 'red' },
   unknown: { label: 'неизвестно', color: 'default' },
+  mock: { label: 'mock', color: 'gold' },
 };
 
 interface GuideSourceTagProps {

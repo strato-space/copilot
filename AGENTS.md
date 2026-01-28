@@ -88,6 +88,7 @@ Socket.IO is the real-time layer for updates.
 - FX rates live in `app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
 - The plan-fact grid keeps at least one pinned month; users can pin up to 3 and can unpin the active month if another month remains pinned.
 - Expense attachments are served from `/uploads/expenses`.
+- Guide directories use mock fallback data when automation APIs fail and expose a global Log sidebar from the Guide header.
 
 ## Deployment Endpoints
 - `copilot.stratospace.fun` → FinOps shell served from `app/dist` (host Nginx config in `deploy/nginx-host.conf`).

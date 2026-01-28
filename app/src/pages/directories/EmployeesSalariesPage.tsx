@@ -55,10 +55,16 @@ export default function EmployeesSalariesPage(): ReactElement {
   const fetchDirectory = useGuideStore((state) => state.fetchDirectory);
   const peopleDirectory = useGuideStore((state) => state.directories.people);
   const salariesDirectory = useGuideStore((state) => state.directories['employee-month-cost']);
+  const teamsDirectory = useGuideStore((state) => state.directories.teams);
+  const rolesDirectory = useGuideStore((state) => state.directories.roles);
   const loadingPeople = useGuideStore((state) => state.directoryLoading.people);
   const loadingSalaries = useGuideStore((state) => state.directoryLoading['employee-month-cost']);
+  const loadingTeams = useGuideStore((state) => state.directoryLoading.teams);
+  const loadingRoles = useGuideStore((state) => state.directoryLoading.roles);
   const errorPeople = useGuideStore((state) => state.directoryError.people);
   const errorSalaries = useGuideStore((state) => state.directoryError['employee-month-cost']);
+  const errorTeams = useGuideStore((state) => state.directoryError.teams);
+  const errorRoles = useGuideStore((state) => state.directoryError.roles);
 
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -66,10 +72,33 @@ export default function EmployeesSalariesPage(): ReactElement {
   useEffect((): void => {
     void fetchDirectory('people');
     void fetchDirectory('employee-month-cost');
+    void fetchDirectory('teams');
+    void fetchDirectory('roles');
   }, [fetchDirectory]);
 
   const people = (peopleDirectory?.items ?? []) as GuidePerson[];
   const salaries = (salariesDirectory?.items ?? []) as GuideSalary[];
+  const teams = (teamsDirectory?.items ?? []) as Array<{ team_id?: string; name?: string }>;
+  const roles = (rolesDirectory?.items ?? []) as Array<{ role_id?: string; name?: string }>;
+
+  const teamNameById = useMemo(() => {
+    return new Map(teams.map((team) => [team.team_id ?? '', team.name ?? '—']));
+  }, [teams]);
+
+  const roleNameById = useMemo(() => {
+    return new Map(
+      roles.flatMap((role) => {
+        const entries: Array<[string, string]> = [];
+        if (role.role_id && role.name) {
+          entries.push([role.role_id.toLowerCase(), role.name]);
+        }
+        if (role.name) {
+          entries.push([role.name.toLowerCase(), role.name]);
+        }
+        return entries;
+      }),
+    );
+  }, [roles]);
 
   const latestSalaryByPerson = useMemo(() => {
     const map = new Map<string, GuideSalary>();
@@ -109,32 +138,36 @@ export default function EmployeesSalariesPage(): ReactElement {
           return false;
         }
         const name = person.full_name ?? person.real_name ?? person.name ?? '';
-        const roles = person.roles?.join(' ') ?? '';
-        const teams = person.team_ids?.join(' ') ?? '';
+        const rolesLabel = person.roles?.map((role) => roleNameById.get(role.toLowerCase()) ?? role).join(' ') ?? '';
+        const teamsLabel = person.team_ids?.map((teamId) => teamNameById.get(teamId) ?? teamId).join(' ') ?? '';
         const personId = person.person_id ?? person._id ?? '';
-        return matchesSearch(query, name, roles, teams, personId);
+        return matchesSearch(query, name, rolesLabel, teamsLabel, personId);
       })
       .map((person, index) => {
         const id = person.person_id ?? person._id ?? `person-${index}`;
         const name = person.full_name ?? person.real_name ?? person.name ?? '—';
-        const roles = person.roles?.length ? person.roles.join(', ') : '—';
-        const teams = person.team_ids?.length ? person.team_ids.join(', ') : '—';
+        const rolesLabel = person.roles?.length
+          ? person.roles.map((role) => roleNameById.get(role.toLowerCase()) ?? role).join(', ')
+          : '—';
+        const teamsLabel = person.team_ids?.length
+          ? person.team_ids.map((teamId) => teamNameById.get(teamId) ?? teamId).join(', ')
+          : '—';
         const salary = latestSalaryByPerson.get(id);
         return {
           key: id,
           name,
-          roles,
-          teams,
+          roles: rolesLabel,
+          teams: teamsLabel,
           personId: id,
           salary: salary?.salary_rub_month != null ? `${salary.salary_rub_month}` : '—',
           costRate: salary?.cost_rate_rub_per_hour != null ? `${salary.cost_rate_rub_per_hour}` : '—',
           isActive: person.is_active !== false,
         };
       });
-  }, [people, latestSalaryByPerson, query, statusFilter]);
+  }, [people, latestSalaryByPerson, query, roleNameById, statusFilter, teamNameById]);
 
-  const loading = Boolean(loadingPeople || loadingSalaries);
-  const errors = [errorPeople, errorSalaries].filter(Boolean) as string[];
+  const loading = Boolean(loadingPeople || loadingSalaries || loadingTeams || loadingRoles);
+  const errors = [errorPeople, errorSalaries, errorTeams, errorRoles].filter(Boolean) as string[];
 
   return (
     <div className="finops-page animate-fade-up">
@@ -195,6 +228,7 @@ export default function EmployeesSalariesPage(): ReactElement {
           pagination={false}
           dataSource={rows}
           locale={{ emptyText: 'Нет данных' }}
+          sticky
           columns={[
             {
               title: 'Исполнитель',
@@ -207,7 +241,14 @@ export default function EmployeesSalariesPage(): ReactElement {
                 </div>
               ),
             },
-            { title: 'Person ID', dataIndex: 'personId', key: 'personId' },
+            {
+              title: 'Person ID',
+              dataIndex: 'personId',
+              key: 'personId',
+              render: (value: string): ReactElement => (
+                <span className="text-xs text-slate-400">{value ?? '—'}</span>
+              ),
+            },
             { title: 'Оклад (₽)', dataIndex: 'salary', key: 'salary' },
             { title: 'Cost rate (₽/ч)', dataIndex: 'costRate', key: 'costRate' },
             {
