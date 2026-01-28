@@ -15,15 +15,16 @@ Copilot is the workspace for the Finance Ops console. Deprecated code is archive
 - `docs/`, `specs/`, `projects/` for product documentation and specs.
 - `deploy/` Host-level Nginx config and notes.
 
-## Development
-Start the frontend and backend together:
+## Development (p2)
+For shared dev on p2, serve a static build to avoid Vite port conflicts.
 
 ```bash
-./scripts/dev.sh
+cd backend && npm install && npm run dev
+cd app && npm install && npm run build-dev
 ```
 
-- Frontend: http://localhost:5173
-- Backend: http://localhost:3002/api/health
+- Dev URL: https://copilot-dev.stratospace.fun
+- Backend health: http://127.0.0.1:3002/api/health
 
 ## Authentication
 - Backend proxies Voicebot auth via `/api/try_login` and `/api/auth/me`; set `VOICEBOT_API_URL` in the backend environment.

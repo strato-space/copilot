@@ -178,10 +178,10 @@ export default function App(): ReactElement {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/analytics" replace />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/operops" element={<OperopsPage />} />
+          <Route path="/operops/*" element={<OperopsPage />} />
           <Route path="/chatops" element={<ChatopsPage />} />
           <Route path="/agents" element={<AgentsOpsPage />} />
-          <Route path="/voice" element={<VoicePage />} />
+          <Route path="/voice/*" element={<VoicePage />} />
           <Route path="/finops" element={<PlanFactPage />} />
           <Route path="/plan-fact" element={<Navigate to="/finops" replace />} />
           <Route path="/finops/plan-fact" element={<Navigate to="/finops" replace />} />

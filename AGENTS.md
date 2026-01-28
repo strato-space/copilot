@@ -72,6 +72,11 @@ Socket.IO is the real-time layer for updates.
 - Frontend build: `cd app && npm install && npm run build` (outputs to `app/dist`).
 - Backend build: `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
 
+### Dev version (p2)
+- Start backend: `cd backend && npm install && npm run dev` (listens on `127.0.0.1:3002`).
+- Build frontend after each change: `cd app && npm install && npm run build-dev` (outputs to `app/dist`).
+- View in browser: `https://copilot-dev.stratospace.fun` (nginx serves `app/dist`).
+
 ### Code Organization
 - Frontend code lives in `app/src/`.
 - Backend code lives in `backend/src/`.

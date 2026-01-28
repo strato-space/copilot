@@ -1,206 +1,140 @@
-import { Button, Card, Form, Input, InputNumber, Modal, Table, Tooltip, Typography, message } from 'antd';
-import { EditOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Input, Select, Table, Tag, Typography } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { type ReactElement, useMemo, useState } from 'react';
+import { type ReactElement, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
-import {
-  SALARY_MONTHS,
-  getEmployeeMonthlySalary,
-  type EmployeeDirectoryEntry,
-} from '../../services/employeeDirectory';
-import { useEmployeeStore } from '../../store/employeeStore';
+import GuideSourceTag from '../../components/GuideSourceTag';
+import { useGuideStore } from '../../store/guideStore';
 
-interface EmployeeUnifiedRow {
+interface GuidePerson {
+  person_id?: string;
+  _id?: string;
+  name?: string;
+  real_name?: string;
+  full_name?: string;
+  roles?: string[];
+  team_ids?: string[];
+  is_active?: boolean;
+}
+
+interface GuideSalary {
+  person_id?: string;
+  month?: string;
+  salary_rub_month?: number;
+  working_hours_month?: number;
+  cost_rate_rub_per_hour?: number;
+}
+
+interface EmployeeRow {
   key: string;
   name: string;
-  role: string;
-  team: string;
-  monthly: string;
+  roles: string;
+  teams: string;
+  personId: string;
+  salary: string;
   costRate: string;
+  isActive: boolean;
 }
 
-type ChatRole = 'user' | 'agent';
+type StatusFilter = 'all' | 'active' | 'inactive';
 
-interface ChatMessage {
-  id: string;
-  role: ChatRole;
-  text: string;
-}
+const buildActiveTag = (active: boolean): ReactElement => (
+  <Tag color={active ? 'green' : 'default'}>{active ? 'Active' : 'Inactive'}</Tag>
+);
+
+const normalizeText = (value: string): string => value.trim().toLowerCase();
+
+const matchesSearch = (query: string, ...fields: Array<string | undefined | null>): boolean => {
+  if (!query) {
+    return true;
+  }
+  return fields.some((field) => field && field.toLowerCase().includes(query));
+};
 
 export default function EmployeesSalariesPage(): ReactElement {
-  const employees = useEmployeeStore((state) => state.employees);
-  const updateEmployee = useEmployeeStore((state) => state.updateEmployee);
-  const addEmployee = useEmployeeStore((state) => state.addEmployee);
-  const [employeeModalOpen, setEmployeeModalOpen] = useState<boolean>(false);
-  const [editingEmployeeKey, setEditingEmployeeKey] = useState<string | null>(null);
-  const [employeeForm] = Form.useForm();
-  const [chatInput, setChatInput] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'intro',
-      role: 'agent',
-      text: 'Опишите исполнителя текстом. Я заполню форму и задам вопросы, если данных не хватает.',
-    },
-  ]);
-  const [draft, setDraft] = useState<Partial<Record<string, string | number>>>({});
+  const fetchDirectory = useGuideStore((state) => state.fetchDirectory);
+  const peopleDirectory = useGuideStore((state) => state.directories.people);
+  const salariesDirectory = useGuideStore((state) => state.directories['employee-month-cost']);
+  const loadingPeople = useGuideStore((state) => state.directoryLoading.people);
+  const loadingSalaries = useGuideStore((state) => state.directoryLoading['employee-month-cost']);
+  const errorPeople = useGuideStore((state) => state.directoryError.people);
+  const errorSalaries = useGuideStore((state) => state.directoryError['employee-month-cost']);
 
-  const primaryMonth = SALARY_MONTHS[0] ?? '2026-01';
-  const unifiedRows = useMemo(
-    (): EmployeeUnifiedRow[] =>
-      employees.map((employee) => {
-        const monthlyValue = getEmployeeMonthlySalary(employee, primaryMonth);
+  const [search, setSearch] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  useEffect((): void => {
+    void fetchDirectory('people');
+    void fetchDirectory('employee-month-cost');
+  }, [fetchDirectory]);
+
+  const people = (peopleDirectory?.items ?? []) as GuidePerson[];
+  const salaries = (salariesDirectory?.items ?? []) as GuideSalary[];
+
+  const latestSalaryByPerson = useMemo(() => {
+    const map = new Map<string, GuideSalary>();
+    salaries.forEach((salary) => {
+      const personId = salary.person_id;
+      if (!personId) {
+        return;
+      }
+      const current = map.get(personId);
+      if (!current) {
+        map.set(personId, salary);
+        return;
+      }
+      const currentMonth = current.month ?? '';
+      const nextMonth = salary.month ?? '';
+      if (nextMonth > currentMonth) {
+        map.set(personId, salary);
+      }
+    });
+    return map;
+  }, [salaries]);
+
+  const query = normalizeText(search);
+
+  const isStatusAllowed = (active: boolean): boolean => {
+    if (statusFilter === 'all') {
+      return true;
+    }
+    return statusFilter === 'active' ? active : !active;
+  };
+
+  const rows = useMemo((): EmployeeRow[] => {
+    return people
+      .filter((person) => {
+        const active = person.is_active !== false;
+        if (!isStatusAllowed(active)) {
+          return false;
+        }
+        const name = person.full_name ?? person.real_name ?? person.name ?? '';
+        const roles = person.roles?.join(' ') ?? '';
+        const teams = person.team_ids?.join(' ') ?? '';
+        const personId = person.person_id ?? person._id ?? '';
+        return matchesSearch(query, name, roles, teams, personId);
+      })
+      .map((person, index) => {
+        const id = person.person_id ?? person._id ?? `person-${index}`;
+        const name = person.full_name ?? person.real_name ?? person.name ?? '—';
+        const roles = person.roles?.length ? person.roles.join(', ') : '—';
+        const teams = person.team_ids?.length ? person.team_ids.join(', ') : '—';
+        const salary = latestSalaryByPerson.get(id);
         return {
-          key: employee.id,
-          name: employee.name,
-          role: employee.role,
-          team: employee.team,
-          monthly: `${monthlyValue} ₽`,
-          costRate: `${employee.costRate} ₽/ч`,
+          key: id,
+          name,
+          roles,
+          teams,
+          personId: id,
+          salary: salary?.salary_rub_month != null ? `${salary.salary_rub_month}` : '—',
+          costRate: salary?.cost_rate_rub_per_hour != null ? `${salary.cost_rate_rub_per_hour}` : '—',
+          isActive: person.is_active !== false,
         };
-      }),
-    [employees, primaryMonth],
-  );
-
-  const applyMonthlySalaryByMonth = (
-    employee: EmployeeDirectoryEntry | null,
-    monthly: number,
-  ): Record<string, number> => {
-    const next: Record<string, number> = { ...(employee?.monthlySalaryByMonth ?? {}) };
-    SALARY_MONTHS.forEach((month) => {
-      next[month] = monthly;
-    });
-    return next;
-  };
-
-  const handleSaveEmployee = async (): Promise<void> => {
-    const values = await employeeForm.validateFields();
-    if (editingEmployeeKey) {
-      const current = employees.find((employee) => employee.id === editingEmployeeKey) ?? null;
-      updateEmployee(editingEmployeeKey, {
-        name: values.name,
-        role: values.role,
-        team: values.team,
-        monthlySalary: values.monthly,
-        monthlySalaryByMonth: applyMonthlySalaryByMonth(current, values.monthly),
-        costRate: values.costRate,
       });
-      message.success('Исполнитель обновлён');
-    } else {
-      const key = `${Date.now()}-employee`;
-      addEmployee({
-        id: key,
-        name: values.name,
-        role: values.role,
-        team: values.team,
-        monthlySalary: values.monthly,
-        monthlySalaryByMonth: applyMonthlySalaryByMonth(null, values.monthly),
-        costRate: values.costRate,
-      });
-      message.success('Исполнитель добавлен');
-    }
-    employeeForm.resetFields();
-    setDraft({});
-    setEditingEmployeeKey(null);
-    setEmployeeModalOpen(false);
-  };
+  }, [people, latestSalaryByPerson, query, statusFilter]);
 
-  const requiredFields = useMemo(
-    () => [
-      { key: 'name', label: 'имя' },
-      { key: 'role', label: 'роль' },
-      { key: 'team', label: 'команда' },
-      { key: 'monthly', label: 'оклад' },
-      { key: 'costRate', label: 'ставка (₽/ч)' },
-    ],
-    [],
-  );
-
-  const parseFromText = (text: string): Partial<Record<string, string | number>> => {
-    const result: Partial<Record<string, string | number>> = {};
-    const extract = (pattern: RegExp): string | null => {
-      const match = text.match(pattern);
-      return match ? match[1]?.trim() ?? null : null;
-    };
-    const name = extract(/имя\s*[:\-]?\s*([^,\n]+)/i);
-    const role = extract(/роль\s*[:\-]?\s*([^,\n]+)/i);
-    const team = extract(/команда\s*[:\-]?\s*([^,\n]+)/i);
-    const monthly = extract(/(оклад|salary|зарплата)\s*[:\-]?\s*([\d\s]+)/i);
-    const costRate = extract(/(cost\s*rate|ставка|р\/ч|руб\/ч|₽\/ч)\s*[:\-]?\s*([\d\s]+)/i);
-    if (name) result.name = name;
-    if (role) result.role = role;
-    if (team) result.team = team;
-    if (monthly) result.monthly = Number(monthly.replace(/\s+/g, ''));
-    if (costRate) result.costRate = Number(costRate.replace(/\s+/g, ''));
-
-    const chunks = text
-      .split(/[\n,;]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const numbers = text.match(/\d+/g)?.map((item) => Number(item)) ?? [];
-
-    if (!result.name && chunks[0]) result.name = chunks[0];
-    if (!result.role && chunks[1]) result.role = chunks[1];
-    if (!result.team && chunks[2]) result.team = chunks[2];
-    if (!result.monthly && numbers[0]) result.monthly = numbers[0];
-    if (!result.costRate && numbers[1]) result.costRate = numbers[1];
-    return result;
-  };
-
-  const pushMessage = (role: ChatRole, text: string): void => {
-    setChatMessages((prev) => [
-      ...prev,
-      { id: `${Date.now()}-${role}`, role, text },
-    ]);
-  };
-
-  const handleChatSubmit = (): void => {
-    if (!chatInput.trim()) {
-      return;
-    }
-    const userText = chatInput.trim();
-    setChatInput('');
-    pushMessage('user', userText);
-    const extracted = parseFromText(userText);
-    const nextDraft = { ...draft, ...extracted };
-    setDraft(nextDraft);
-    employeeForm.setFieldsValue(nextDraft);
-
-    const missing = requiredFields.filter((field) => !nextDraft[field.key]);
-    employeeForm.setFields(
-      requiredFields.map((field) => ({
-        name: field.key,
-        errors: missing.some((item) => item.key === field.key) ? ['Нужно заполнить'] : [],
-      })),
-    );
-
-    setEmployeeModalOpen(true);
-
-    if (missing.length > 0) {
-      pushMessage(
-        'agent',
-        `Не хватает данных: ${missing.map((item) => item.label).join(', ')}. Напишите их в ответ.`,
-      );
-      return;
-    }
-    pushMessage('agent', 'Заполнил форму. Проверьте и нажмите «Сохранить».');
-  };
-
-  const handleEditEmployee = (row: EmployeeUnifiedRow): void => {
-    setEditingEmployeeKey(row.key);
-    const employee = employees.find((item) => item.id === row.key);
-    if (!employee) {
-      return;
-    }
-    const monthlyValue = getEmployeeMonthlySalary(employee, primaryMonth);
-    employeeForm.setFieldsValue({
-      name: employee.name,
-      role: employee.role,
-      team: employee.team,
-      monthly: monthlyValue,
-      costRate: employee.costRate,
-    });
-    setEmployeeModalOpen(true);
-  };
+  const loading = Boolean(loadingPeople || loadingSalaries);
+  const errors = [errorPeople, errorSalaries].filter(Boolean) as string[];
 
   return (
     <div className="finops-page animate-fade-up">
@@ -209,111 +143,82 @@ export default function EmployeesSalariesPage(): ReactElement {
       </Button>
       <PageHeader
         title="Исполнители"
-        description="База для расчёта себестоимости и маржи."
-        actions={
-          <Button type="primary" onClick={(): void => setEmployeeModalOpen(true)}>Добавить</Button>
-        }
+        description="Read‑only справочники людей и себестоимости."
+        actions={(
+          <Button icon={<ReloadOutlined />} onClick={(): void => {
+            void fetchDirectory('people');
+            void fetchDirectory('employee-month-cost');
+          }}>
+            Обновить данные
+          </Button>
+        )}
       />
       <Card className="mb-4">
-        <div className="flex flex-col gap-3">
-          <Typography.Text strong>Чат‑агент для добавления исполнителя</Typography.Text>
-          <div className="flex flex-col gap-2">
-            {chatMessages.map((message) => (
-              <div
-                key={message.id}
-                className={`rounded-lg px-3 py-2 text-sm max-w-[80%] ${
-                  message.role === 'user'
-                    ? 'bg-blue-50 text-slate-900 self-end'
-                    : 'bg-slate-100 text-slate-700'
-                }`}
-              >
-                {message.text}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-start gap-2">
-            <Input.TextArea
-              value={chatInput}
-              onChange={(event): void => setChatInput(event.target.value)}
-              placeholder="Например: Иван П., Senior Dev, Platform, оклад 320000, cost rate 2000"
-              autoSize={{ minRows: 2, maxRows: 4 }}
-            />
-            <Button type="primary" onClick={handleChatSubmit}>
-              Отправить
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="Поиск по людям, ролям, командам"
+            value={search}
+            onChange={(event): void => setSearch(event.target.value)}
+            className="min-w-[220px] flex-1"
+          />
+          <Select
+            value={statusFilter}
+            onChange={(value): void => setStatusFilter(value)}
+            options={[
+              { label: 'Все статусы', value: 'all' },
+              { label: 'Только active', value: 'active' },
+              { label: 'Только inactive', value: 'inactive' },
+            ]}
+            className="w-[180px]"
+          />
         </div>
       </Card>
-      <Table
-        size="small"
-        pagination={false}
-        dataSource={unifiedRows}
-        columns={[
-          {
-            title: 'Имя',
-            dataIndex: 'name',
-            key: 'name',
-            render: (_: unknown, row: EmployeeUnifiedRow): ReactElement => (
-              <div>
-                <div className="text-sm font-semibold text-slate-900">{row.name}</div>
-                <div className="text-xs text-slate-500">{row.team} • {row.role}</div>
-              </div>
-            ),
-          },
-          { title: 'Оклад', dataIndex: 'monthly', key: 'monthly' },
-          { title: 'Cost rate', dataIndex: 'costRate', key: 'costRate' },
-          {
-            title: '',
-            key: 'actions',
-            width: 48,
-            render: (_: unknown, row: EmployeeUnifiedRow): ReactElement => (
-              <div className="flex items-start justify-end">
-                <Tooltip title="Редактировать исполнителя">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    className="text-slate-400 hover:text-slate-900"
-                    onClick={(): void => handleEditEmployee(row)}
-                  />
-                </Tooltip>
-              </div>
-            ),
-          },
-        ]}
-      />
-
-      <Modal
-        title={editingEmployeeKey ? 'Редактировать исполнителя' : 'Добавить исполнителя'}
-        open={employeeModalOpen}
-        onCancel={(): void => {
-          employeeForm.resetFields();
-          setEditingEmployeeKey(null);
-          setEmployeeModalOpen(false);
-        }}
-        onOk={(): Promise<void> => handleSaveEmployee()}
-        okText="Сохранить"
-        cancelText="Отмена"
-      >
-        <Form form={employeeForm} layout="vertical">
-          <Form.Item name="name" label="Имя" rules={[{ required: true, message: 'Введите имя' }]}>
-            <Input placeholder="Например, Иван П." />
-          </Form.Item>
-          <Form.Item name="role" label="Роль" rules={[{ required: true, message: 'Введите роль' }]}>
-            <Input placeholder="Например, Senior Dev" />
-          </Form.Item>
-          <Form.Item name="team" label="Команда" rules={[{ required: true, message: 'Введите команду' }]}>
-            <Input placeholder="Например, Platform" />
-          </Form.Item>
-          <Form.Item name="monthly" label="Оклад (₽)" rules={[{ required: true, message: 'Введите сумму' }]}>
-            <InputNumber className="w-full" min={0} placeholder="320000" />
-          </Form.Item>
-          <Form.Item name="costRate" label="Cost rate (₽/ч)" rules={[{ required: true, message: 'Введите ставку' }]}>
-            <InputNumber className="w-full" min={0} placeholder="2000" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
+      {errors.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-4"
+          message="Не удалось загрузить часть данных"
+          description={errors.join(' / ')}
+        />
+      ) : null}
+      <Card loading={loading}>
+        <div className="flex items-center justify-between mb-3">
+          <Typography.Text strong>Справочник людей</Typography.Text>
+          <div className="flex items-center gap-2">
+            <GuideSourceTag source={peopleDirectory?.source ?? 'unknown'} />
+            <GuideSourceTag source={salariesDirectory?.source ?? 'unknown'} />
+          </div>
+        </div>
+        <Table
+          size="small"
+          pagination={false}
+          dataSource={rows}
+          locale={{ emptyText: 'Нет данных' }}
+          columns={[
+            {
+              title: 'Исполнитель',
+              dataIndex: 'name',
+              key: 'name',
+              render: (_: unknown, row: EmployeeRow): ReactElement => (
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">{row.name}</div>
+                  <div className="text-xs text-slate-500">{row.teams} • {row.roles}</div>
+                </div>
+              ),
+            },
+            { title: 'Person ID', dataIndex: 'personId', key: 'personId' },
+            { title: 'Оклад (₽)', dataIndex: 'salary', key: 'salary' },
+            { title: 'Cost rate (₽/ч)', dataIndex: 'costRate', key: 'costRate' },
+            {
+              title: 'Статус',
+              dataIndex: 'isActive',
+              key: 'isActive',
+              render: (value: boolean): ReactElement => buildActiveTag(value),
+            },
+          ]}
+        />
+      </Card>
     </div>
   );
 }

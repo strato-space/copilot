@@ -1,93 +1,169 @@
-import { Button, Card, DatePicker, Form, Input, InputNumber, Modal, Table, Typography, message } from 'antd';
+import { Alert, Button, Card, Input, Select, Table, Tag, Typography } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { type ReactElement, useMemo, useState } from 'react';
+import { type ReactElement, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
-import { useFxStore } from '../../store/fxStore';
+import GuideSourceTag from '../../components/GuideSourceTag';
+import { useGuideStore } from '../../store/guideStore';
+
+interface GuideFxRow {
+  month?: string;
+  currency?: string;
+  fx_avg?: number;
+  fx_manual?: number;
+  fx_forecast?: number;
+  manual_override?: boolean;
+}
 
 interface FxRow {
   key: string;
   month: string;
-  rate: string;
-  source: string;
+  currency: string;
+  fxAvg: string;
+  fxManual: string;
+  manualOverride: boolean;
 }
 
-export default function FxPage(): ReactElement {
-  const fxRates = useFxStore((state) => state.rates);
-  const setRate = useFxStore((state) => state.setRate);
-  const [modalOpen, setModalOpen] = useState<boolean>(false);
-  const [form] = Form.useForm();
-  const rows = useMemo((): FxRow[] => {
-    return Object.values(fxRates)
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .map((item) => ({
-        key: item.month,
-        month: item.month,
-        rate: item.rate.toFixed(2),
-        source: item.source,
-      }));
-  }, [fxRates]);
+type OverrideFilter = 'all' | 'manual' | 'auto';
 
-  const handleAddFx = async (): Promise<void> => {
-    const values = await form.validateFields();
-    const monthValue = values.month.format('YYYY-MM');
-    const rateValue = Number(values.rate);
-    setRate(monthValue, rateValue, values.source);
-    message.success('Курс обновлён, данные пересчитаны');
-    form.resetFields();
-    setModalOpen(false);
-  };
+const buildOverrideTag = (value: boolean): ReactElement => (
+  <Tag color={value ? 'orange' : 'default'}>{value ? 'Yes' : 'No'}</Tag>
+);
+
+export default function FxPage(): ReactElement {
+  const fetchDirectory = useGuideStore((state) => state.fetchDirectory);
+  const fxDirectory = useGuideStore((state) => state.directories.fx);
+  const loadingFx = useGuideStore((state) => state.directoryLoading.fx);
+  const errorFx = useGuideStore((state) => state.directoryError.fx);
+
+  const [search, setSearch] = useState<string>('');
+  const [currencyFilter, setCurrencyFilter] = useState<string>('all');
+  const [overrideFilter, setOverrideFilter] = useState<OverrideFilter>('all');
+
+  useEffect((): void => {
+    void fetchDirectory('fx');
+  }, [fetchDirectory]);
+
+  const items = (fxDirectory?.items ?? []) as GuideFxRow[];
+  const currencies = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((item) => {
+      if (item.currency) {
+        set.add(item.currency);
+      }
+    });
+    return Array.from(set);
+  }, [items]);
+
+  const query = search.trim().toLowerCase();
+
+  const fxRows = useMemo((): FxRow[] => {
+    return items
+      .filter((item) => {
+        if (currencyFilter !== 'all' && item.currency !== currencyFilter) {
+          return false;
+        }
+        if (overrideFilter === 'manual' && !item.manual_override) {
+          return false;
+        }
+        if (overrideFilter === 'auto' && item.manual_override) {
+          return false;
+        }
+        if (query && !(item.month ?? '').toLowerCase().includes(query)) {
+          return false;
+        }
+        return true;
+      })
+      .slice()
+      .sort((a, b) => (a.month ?? '').localeCompare(b.month ?? ''))
+      .map((item, index) => ({
+        key: `${item.month ?? 'month'}-${index}`,
+        month: item.month ?? '—',
+        currency: item.currency ?? 'USD',
+        fxAvg: item.fx_avg != null ? item.fx_avg.toFixed(2) : '—',
+        fxManual: item.fx_manual != null ? item.fx_manual.toFixed(2) : '—',
+        manualOverride: Boolean(item.manual_override),
+      }));
+  }, [items, currencyFilter, overrideFilter, query]);
 
   return (
     <div className="finops-page animate-fade-up">
       <PageHeader
         title="FX"
-        description="Курсы валют и ручные корректировки."
-        actions={
-          <Button type="link">
-            <Link to="/guide">← Назад к Guide</Link>
-          </Button>
-        }
+        description="Read‑only курсы валют и ручные корректировки."
+        actions={(
+          <div className="flex items-center gap-2">
+            <Button icon={<ReloadOutlined />} onClick={(): void => void fetchDirectory('fx')}>
+              Обновить данные
+            </Button>
+            <Button type="link">
+              <Link to="/guide">← Назад к Guide</Link>
+            </Button>
+          </div>
+        )}
       />
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <Typography.Text strong>Курсы USD → RUB</Typography.Text>
-          <Button size="small" type="primary" onClick={(): void => setModalOpen(true)}>Загрузить курс</Button>
+      <Card className="mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="Поиск по месяцу"
+            value={search}
+            onChange={(event): void => setSearch(event.target.value)}
+            className="min-w-[160px]"
+          />
+          <Select
+            value={currencyFilter}
+            onChange={(value): void => setCurrencyFilter(value)}
+            options={[
+              { label: 'Все валюты', value: 'all' },
+              ...currencies.map((currency) => ({ label: currency, value: currency })),
+            ]}
+            className="w-[160px]"
+          />
+          <Select
+            value={overrideFilter}
+            onChange={(value): void => setOverrideFilter(value)}
+            options={[
+              { label: 'Все', value: 'all' },
+              { label: 'Manual override', value: 'manual' },
+              { label: 'Без override', value: 'auto' },
+            ]}
+            className="w-[180px]"
+          />
+        </div>
+      </Card>
+      {errorFx ? (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-4"
+          message="Не удалось загрузить FX"
+          description={errorFx}
+        />
+      ) : null}
+      <Card loading={Boolean(loadingFx)}>
+        <div className="flex items-center justify-between mb-3">
+          <Typography.Text strong>Курсы валют</Typography.Text>
+          <GuideSourceTag source={fxDirectory?.source ?? 'unknown'} />
         </div>
         <Table
           size="small"
           pagination={false}
-          dataSource={rows}
+          dataSource={fxRows}
+          locale={{ emptyText: 'Нет данных' }}
           columns={[
             { title: 'Месяц', dataIndex: 'month', key: 'month' },
-            { title: 'Курс', dataIndex: 'rate', key: 'rate' },
-            { title: 'Источник', dataIndex: 'source', key: 'source' },
+            { title: 'Валюта', dataIndex: 'currency', key: 'currency' },
+            { title: 'FX avg', dataIndex: 'fxAvg', key: 'fxAvg' },
+            { title: 'FX manual', dataIndex: 'fxManual', key: 'fxManual' },
+            {
+              title: 'Manual override',
+              dataIndex: 'manualOverride',
+              key: 'manualOverride',
+              render: (value: boolean): ReactElement => buildOverrideTag(value),
+            },
           ]}
         />
       </Card>
-
-      <Modal
-        title="Добавить курс"
-        open={modalOpen}
-        onCancel={(): void => {
-          form.resetFields();
-          setModalOpen(false);
-        }}
-        onOk={(): Promise<void> => handleAddFx()}
-        okText="Сохранить"
-        cancelText="Отмена"
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item name="month" label="Месяц" rules={[{ required: true, message: 'Выберите месяц' }]}>
-            <DatePicker picker="month" className="w-full" />
-          </Form.Item>
-          <Form.Item name="rate" label="Курс" rules={[{ required: true, message: 'Введите курс' }]}>
-            <InputNumber className="w-full" min={0} step={0.01} placeholder="92.40" />
-          </Form.Item>
-          <Form.Item name="source" label="Источник" rules={[{ required: true, message: 'Укажите источник' }]}>
-            <Input placeholder="Например, ЦБ РФ" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 }

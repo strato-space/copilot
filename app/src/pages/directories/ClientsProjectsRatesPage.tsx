@@ -1,100 +1,264 @@
-import { Button, Card, Col, Form, Input, InputNumber, Modal, Row, Select, Table, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, Input, Row, Select, Table, Tag, Typography } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { type ReactElement, useState } from 'react';
+import { type ReactElement, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
+import GuideSourceTag from '../../components/GuideSourceTag';
+import { useGuideStore } from '../../store/guideStore';
+
+interface GuideClient {
+  client_id?: string;
+  _id?: string;
+  name?: string;
+  projects_ids?: string[];
+  aliases?: string[];
+  is_active?: boolean;
+}
+
+interface GuideProject {
+  project_id?: string;
+  _id?: string;
+  name?: string;
+  client_id?: string;
+  is_active?: boolean;
+  context?: {
+    description?: string;
+    goals?: string[];
+    decision_rules?: {
+      priorities?: string[];
+      definition_of_done?: string[];
+    };
+  };
+}
+
+interface GuideRate {
+  project_id?: string;
+  month?: string;
+  rate_rub_per_hour?: number;
+  comment?: string;
+}
 
 interface ClientRow {
   key: string;
   name: string;
-  contract: string;
+  aliases: string;
+  projectsCount: number;
+  isActive: boolean;
 }
 
 interface ProjectRow {
   key: string;
   name: string;
   client: string;
-  type: string;
+  projectId: string;
+  contextStatus: string;
+  isActive: boolean;
 }
 
 interface RateRow {
   key: string;
-  role: string;
+  project: string;
+  month: string;
   rate: string;
-  currency: string;
+  comment: string;
 }
 
-const clientData: ClientRow[] = [
-  { key: '1', name: 'Aurora Retail', contract: 'T&M' },
-  { key: '2', name: 'Northwind Labs', contract: 'Fix' },
-];
+type StatusFilter = 'all' | 'active' | 'inactive';
 
-const projectData: ProjectRow[] = [
-  { key: '1', name: 'Aurora Core', client: 'Aurora Retail', type: 'T&M' },
-  { key: '2', name: 'Northwind ML', client: 'Northwind Labs', type: 'T&M' },
-];
+type ContextStatus = 'Empty' | 'Partial' | 'Done';
 
-const rateData: RateRow[] = [
-  { key: '1', role: 'Senior Dev', rate: '3 500', currency: 'RUB/ч' },
-  { key: '2', role: 'Analyst', rate: '2 800', currency: 'RUB/ч' },
-];
+const buildActiveTag = (active: boolean): ReactElement => (
+  <Tag color={active ? 'green' : 'default'}>{active ? 'Active' : 'Inactive'}</Tag>
+);
+
+const buildContextTag = (status: ContextStatus): ReactElement => {
+  if (status === 'Done') {
+    return <Tag color="green">Done</Tag>;
+  }
+  if (status === 'Partial') {
+    return <Tag color="orange">Partial</Tag>;
+  }
+  return <Tag color="red">Empty</Tag>;
+};
+
+const normalizeText = (value: string): string => value.trim().toLowerCase();
+
+const matchesSearch = (query: string, ...fields: Array<string | undefined | null>): boolean => {
+  if (!query) {
+    return true;
+  }
+  return fields.some((field) => field && field.toLowerCase().includes(query));
+};
+
+const getContextStatus = (project: GuideProject): ContextStatus => {
+  const context = project.context;
+  if (!context) {
+    return 'Empty';
+  }
+  const hasDescription = Boolean(context.description?.trim());
+  const hasGoals = Boolean(context.goals?.length);
+  const hasPriorities = Boolean(context.decision_rules?.priorities?.length);
+  const hasDone = Boolean(context.decision_rules?.definition_of_done?.length);
+  const filled = [hasDescription, hasGoals, hasPriorities, hasDone].filter(Boolean).length;
+  if (filled === 0) {
+    return 'Empty';
+  }
+  if (filled === 4) {
+    return 'Done';
+  }
+  return 'Partial';
+};
 
 export default function ClientsProjectsRatesPage(): ReactElement {
-  const [clients, setClients] = useState<ClientRow[]>(clientData);
-  const [projects, setProjects] = useState<ProjectRow[]>(projectData);
-  const [rates, setRates] = useState<RateRow[]>(rateData);
-  const [clientModalOpen, setClientModalOpen] = useState<boolean>(false);
-  const [projectModalOpen, setProjectModalOpen] = useState<boolean>(false);
-  const [rateModalOpen, setRateModalOpen] = useState<boolean>(false);
-  const [clientForm] = Form.useForm();
-  const [projectForm] = Form.useForm();
-  const [rateForm] = Form.useForm();
+  const fetchDirectory = useGuideStore((state) => state.fetchDirectory);
+  const clientsDirectory = useGuideStore((state) => state.directories.clients);
+  const projectsDirectory = useGuideStore((state) => state.directories.projects);
+  const ratesDirectory = useGuideStore((state) => state.directories['project-rates']);
+  const loadingClients = useGuideStore((state) => state.directoryLoading.clients);
+  const loadingProjects = useGuideStore((state) => state.directoryLoading.projects);
+  const loadingRates = useGuideStore((state) => state.directoryLoading['project-rates']);
+  const errorClients = useGuideStore((state) => state.directoryError.clients);
+  const errorProjects = useGuideStore((state) => state.directoryError.projects);
+  const errorRates = useGuideStore((state) => state.directoryError['project-rates']);
 
-  const handleAddClient = async (): Promise<void> => {
-    const values = await clientForm.validateFields();
-    setClients((prev) => [
-      ...prev,
-      {
-        key: `${Date.now()}-client`,
-        name: values.name,
-        contract: values.contract,
-      },
-    ]);
-    message.success('Клиент добавлен');
-    clientForm.resetFields();
-    setClientModalOpen(false);
+  const [search, setSearch] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  useEffect((): void => {
+    void fetchDirectory('clients');
+    void fetchDirectory('projects');
+    void fetchDirectory('project-rates');
+  }, [fetchDirectory]);
+
+  const clients = (clientsDirectory?.items ?? []) as GuideClient[];
+  const projects = (projectsDirectory?.items ?? []) as GuideProject[];
+  const rates = (ratesDirectory?.items ?? []) as GuideRate[];
+
+  const query = normalizeText(search);
+
+  const clientNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    clients.forEach((client) => {
+      const id = client.client_id ?? client._id;
+      if (id) {
+        map.set(id, client.name ?? '—');
+      }
+    });
+    return map;
+  }, [clients]);
+
+  const clientByProjectId = useMemo(() => {
+    const map = new Map<string, string>();
+    clients.forEach((client) => {
+      const clientName = client.name ?? '—';
+      const ids = client.projects_ids ?? [];
+      ids.forEach((projectId) => map.set(projectId, clientName));
+    });
+    return map;
+  }, [clients]);
+
+  const projectNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    projects.forEach((project) => {
+      const id = project.project_id ?? project._id;
+      if (id) {
+        map.set(id, project.name ?? '—');
+      }
+    });
+    return map;
+  }, [projects]);
+
+  const clientProjectCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    projects.forEach((project) => {
+      const clientId = project.client_id;
+      if (!clientId) {
+        return;
+      }
+      counts.set(clientId, (counts.get(clientId) ?? 0) + 1);
+    });
+    return counts;
+  }, [projects]);
+
+  const isStatusAllowed = (active: boolean): boolean => {
+    if (statusFilter === 'all') {
+      return true;
+    }
+    return statusFilter === 'active' ? active : !active;
   };
 
-  const handleAddProject = async (): Promise<void> => {
-    const values = await projectForm.validateFields();
-    setProjects((prev) => [
-      ...prev,
-      {
-        key: `${Date.now()}-project`,
-        name: values.name,
-        client: values.client,
-        type: values.type,
-      },
-    ]);
-    message.success('Проект добавлен');
-    projectForm.resetFields();
-    setProjectModalOpen(false);
-  };
+  const clientRows = useMemo((): ClientRow[] => {
+    return clients
+      .filter((client) => {
+        const active = client.is_active !== false;
+        if (!isStatusAllowed(active)) {
+          return false;
+        }
+        const aliases = (client.aliases ?? []).join(' ');
+        return matchesSearch(query, client.name, aliases);
+      })
+      .map((client, index) => {
+        const id = client.client_id ?? client._id ?? `client-${index}`;
+        const projectsCount = client.projects_ids?.length ?? clientProjectCounts.get(id) ?? 0;
+        return {
+          key: id,
+          name: client.name ?? '—',
+          aliases: (client.aliases ?? []).join(', '),
+          projectsCount,
+          isActive: client.is_active !== false,
+        };
+      });
+  }, [clients, clientProjectCounts, query, statusFilter]);
 
-  const handleAddRate = async (): Promise<void> => {
-    const values = await rateForm.validateFields();
-    setRates((prev) => [
-      ...prev,
-      {
-        key: `${Date.now()}-rate`,
-        role: values.role,
-        rate: String(values.rate),
-        currency: values.currency,
-      },
-    ]);
-    message.success('Ставка добавлена');
-    rateForm.resetFields();
-    setRateModalOpen(false);
-  };
+  const projectRows = useMemo((): ProjectRow[] => {
+    return projects
+      .filter((project) => {
+        const active = project.is_active !== false;
+        if (!isStatusAllowed(active)) {
+          return false;
+        }
+        const projectId = project.project_id ?? project._id ?? '';
+        const clientName = project.client_id
+          ? clientNameById.get(project.client_id) ?? '—'
+          : clientByProjectId.get(projectId) ?? '—';
+        return matchesSearch(query, project.name, clientName, projectId);
+      })
+      .map((project, index) => {
+        const projectId = project.project_id ?? project._id ?? `project-${index}`;
+        const clientName = project.client_id
+          ? clientNameById.get(project.client_id) ?? '—'
+          : clientByProjectId.get(projectId) ?? '—';
+        return {
+          key: projectId,
+          name: project.name ?? '—',
+          client: clientName,
+          projectId: projectId,
+          contextStatus: getContextStatus(project),
+          isActive: project.is_active !== false,
+        };
+      });
+  }, [projects, clientNameById, clientByProjectId, query, statusFilter]);
+
+  const rateRows = useMemo((): RateRow[] => {
+    return rates
+      .filter((rate) => {
+        const projectName = rate.project_id ? projectNameById.get(rate.project_id) ?? '—' : '—';
+        return matchesSearch(query, projectName, rate.month, rate.comment);
+      })
+      .map((rate, index) => {
+        const projectName = rate.project_id ? projectNameById.get(rate.project_id) ?? '—' : '—';
+        return {
+          key: `${rate.project_id ?? 'project'}-${rate.month ?? index}`,
+          project: projectName,
+          month: rate.month ?? '—',
+          rate: typeof rate.rate_rub_per_hour === 'number' ? `${rate.rate_rub_per_hour}` : '—',
+          comment: rate.comment ?? '—',
+        };
+      });
+  }, [rates, projectNameById, query]);
+
+  const loading = Boolean(loadingClients || loadingProjects || loadingRates);
+  const errors = [errorClients, errorProjects, errorRates].filter(Boolean) as string[];
 
   return (
     <div className="finops-page animate-fade-up">
@@ -103,147 +267,124 @@ export default function ClientsProjectsRatesPage(): ReactElement {
       </Button>
       <PageHeader
         title="Клиенты, проекты и ставки"
-        description="Базовые справочники для расчёта выручки и прогноза."
+        description="Read‑only справочники из automation (master)."
+        actions={(
+          <Button icon={<ReloadOutlined />} onClick={(): void => {
+            void fetchDirectory('clients');
+            void fetchDirectory('projects');
+            void fetchDirectory('project-rates');
+          }}>
+            Обновить данные
+          </Button>
+        )}
       />
+      <Card className="mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="Поиск по клиентам / проектам / ID"
+            value={search}
+            onChange={(event): void => setSearch(event.target.value)}
+            className="min-w-[220px] flex-1"
+          />
+          <Select
+            value={statusFilter}
+            onChange={(value): void => setStatusFilter(value)}
+            options={[
+              { label: 'Все статусы', value: 'all' },
+              { label: 'Только active', value: 'active' },
+              { label: 'Только inactive', value: 'inactive' },
+            ]}
+            className="w-[180px]"
+          />
+        </div>
+      </Card>
+      {errors.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-4"
+          message="Не удалось загрузить часть данных"
+          description={errors.join(' / ')}
+        />
+      ) : null}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>
-          <Card>
-            <div className="flex items-center justify-between mb-4">
+          <Card loading={loading}>
+            <div className="flex items-center justify-between mb-3">
               <Typography.Text strong>Клиенты</Typography.Text>
-              <Button size="small" type="primary" onClick={(): void => setClientModalOpen(true)}>Добавить</Button>
+              <GuideSourceTag source={clientsDirectory?.source ?? 'unknown'} />
             </div>
             <Table
               size="small"
               pagination={false}
-              dataSource={clients}
+              dataSource={clientRows}
+              locale={{ emptyText: 'Нет данных' }}
               columns={[
                 { title: 'Клиент', dataIndex: 'name', key: 'name' },
-                { title: 'Контракт', dataIndex: 'contract', key: 'contract' },
+                { title: 'Проектов', dataIndex: 'projectsCount', key: 'projectsCount' },
+                { title: 'Aliases', dataIndex: 'aliases', key: 'aliases' },
+                {
+                  title: 'Статус',
+                  dataIndex: 'isActive',
+                  key: 'isActive',
+                  render: (value: boolean): ReactElement => buildActiveTag(value),
+                },
               ]}
             />
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card>
-            <div className="flex items-center justify-between mb-4">
+          <Card loading={loading}>
+            <div className="flex items-center justify-between mb-3">
               <Typography.Text strong>Проекты</Typography.Text>
-              <Button size="small" type="primary" onClick={(): void => setProjectModalOpen(true)}>Добавить</Button>
+              <GuideSourceTag source={projectsDirectory?.source ?? 'unknown'} />
             </div>
             <Table
               size="small"
               pagination={false}
-              dataSource={projects}
+              dataSource={projectRows}
+              locale={{ emptyText: 'Нет данных' }}
               columns={[
                 { title: 'Проект', dataIndex: 'name', key: 'name' },
                 { title: 'Клиент', dataIndex: 'client', key: 'client' },
-                { title: 'Тип', dataIndex: 'type', key: 'type' },
+                { title: 'Project ID', dataIndex: 'projectId', key: 'projectId' },
+                {
+                  title: 'Context',
+                  dataIndex: 'contextStatus',
+                  key: 'contextStatus',
+                  render: (value: ContextStatus): ReactElement => buildContextTag(value),
+                },
+                {
+                  title: 'Статус',
+                  dataIndex: 'isActive',
+                  key: 'isActive',
+                  render: (value: boolean): ReactElement => buildActiveTag(value),
+                },
               ]}
             />
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card>
-            <div className="flex items-center justify-between mb-4">
+          <Card loading={loading}>
+            <div className="flex items-center justify-between mb-3">
               <Typography.Text strong>Ставки</Typography.Text>
-              <Button size="small" type="primary" onClick={(): void => setRateModalOpen(true)}>Добавить</Button>
+              <GuideSourceTag source={ratesDirectory?.source ?? 'unknown'} />
             </div>
             <Table
               size="small"
               pagination={false}
-              dataSource={rates}
+              dataSource={rateRows}
+              locale={{ emptyText: 'Нет данных' }}
               columns={[
-                { title: 'Роль', dataIndex: 'role', key: 'role' },
-                { title: 'Ставка', dataIndex: 'rate', key: 'rate' },
-                { title: 'Валюта', dataIndex: 'currency', key: 'currency' },
+                { title: 'Проект', dataIndex: 'project', key: 'project' },
+                { title: 'Месяц', dataIndex: 'month', key: 'month' },
+                { title: 'Ставка (₽/ч)', dataIndex: 'rate', key: 'rate' },
+                { title: 'Комментарий', dataIndex: 'comment', key: 'comment' },
               ]}
             />
           </Card>
         </Col>
       </Row>
-
-      <Modal
-        title="Добавить клиента"
-        open={clientModalOpen}
-        onCancel={(): void => {
-          clientForm.resetFields();
-          setClientModalOpen(false);
-        }}
-        onOk={(): Promise<void> => handleAddClient()}
-        okText="Сохранить"
-        cancelText="Отмена"
-      >
-        <Form form={clientForm} layout="vertical">
-          <Form.Item name="name" label="Название клиента" rules={[{ required: true, message: 'Введите клиента' }]}>
-            <Input placeholder="Например, Aurora Retail" />
-          </Form.Item>
-          <Form.Item name="contract" label="Тип контракта" rules={[{ required: true, message: 'Выберите тип' }]}>
-            <Select
-              options={[
-                { label: 'T&M', value: 'T&M' },
-                { label: 'Fix', value: 'Fix' },
-              ]}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title="Добавить проект"
-        open={projectModalOpen}
-        onCancel={(): void => {
-          projectForm.resetFields();
-          setProjectModalOpen(false);
-        }}
-        onOk={(): Promise<void> => handleAddProject()}
-        okText="Сохранить"
-        cancelText="Отмена"
-      >
-        <Form form={projectForm} layout="vertical">
-          <Form.Item name="name" label="Название проекта" rules={[{ required: true, message: 'Введите проект' }]}>
-            <Input placeholder="Например, Aurora Core" />
-          </Form.Item>
-          <Form.Item name="client" label="Клиент" rules={[{ required: true, message: 'Укажите клиента' }]}>
-            <Input placeholder="Например, Aurora Retail" />
-          </Form.Item>
-          <Form.Item name="type" label="Тип контракта" rules={[{ required: true, message: 'Выберите тип' }]}>
-            <Select
-              options={[
-                { label: 'T&M', value: 'T&M' },
-                { label: 'Fix', value: 'Fix' },
-              ]}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title="Добавить ставку"
-        open={rateModalOpen}
-        onCancel={(): void => {
-          rateForm.resetFields();
-          setRateModalOpen(false);
-        }}
-        onOk={(): Promise<void> => handleAddRate()}
-        okText="Сохранить"
-        cancelText="Отмена"
-      >
-        <Form form={rateForm} layout="vertical">
-          <Form.Item name="role" label="Роль" rules={[{ required: true, message: 'Введите роль' }]}>
-            <Input placeholder="Например, Senior Dev" />
-          </Form.Item>
-          <Form.Item name="rate" label="Ставка" rules={[{ required: true, message: 'Введите ставку' }]}>
-            <InputNumber className="w-full" min={0} placeholder="3500" />
-          </Form.Item>
-          <Form.Item name="currency" label="Валюта" rules={[{ required: true, message: 'Выберите валюту' }]}>
-            <Select
-              options={[
-                { label: 'RUB/ч', value: 'RUB/ч' },
-                { label: 'USD/ч', value: 'USD/ч' },
-              ]}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 }

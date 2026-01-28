@@ -78,3 +78,17 @@
 - Introduced a Voicebot API client and ensured credentialed requests from the frontend.
 - Enabled Tailwind via `@tailwindcss/postcss` and `@import 'tailwindcss'`, updated Tailwind config.
 - Scoped backend TypeScript builds to `src/` and refined error middleware + CRM snapshot date parsing for strict type safety.
+
+## 2026-01-28
+### PROBLEM SOLVED
+- Copilot dev could collide with other Vite servers on shared hosts → switched dev flow to static `build-dev` output served by Nginx.
+- OperOps/Voice sections were stubs with no unified navigation → added iframe embedding to load CRM/Voicebot inside Copilot.
+
+### FEATURE IMPLEMENTED
+- Added iframe embed bridge with route/height sync for Voicebot and CRM sections.
+- Added a dev build script and environment-driven embed URLs for dev/prod.
+
+### CHANGES
+- Replaced OperOps and Voice stub pages with iframe shell integration and `/*` routes.
+- Added embed env files plus a reusable `EmbedFrame` component.
+- Updated directory/guide pages with refreshed layouts and structure changes.
