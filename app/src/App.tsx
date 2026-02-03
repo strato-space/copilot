@@ -1,16 +1,14 @@
 import { Layout, Menu, Spin, Tag } from 'antd';
 import {
   AppstoreOutlined,
-  BgColorsOutlined,
   MessageOutlined,
   LineChartOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   RobotOutlined,
-  ShoppingCartOutlined,
   SettingOutlined,
   SoundOutlined,
-  TeamOutlined,
+  ToolOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
 import { type ReactElement, useEffect, useState } from 'react';
@@ -43,10 +41,8 @@ const navItems = [
   { key: 'agents', label: 'Agents', to: '/agents', icon: <RobotOutlined />, badge: 'dev' },
   { key: 'operops', label: 'OperOps', to: '/operops', icon: <SettingOutlined />, badge: 'beta' },
   { key: 'finops', label: 'FinOps', to: '/finops', icon: <WalletOutlined />, badge: 'alpha' },
-  { key: 'saleops', label: 'SaleOps', to: '/saleops', icon: <ShoppingCartOutlined />, badge: 'dev' },
-  { key: 'hhops', label: 'HHOps', to: '/hhops', icon: <TeamOutlined />, badge: 'dev' },
   { key: 'chatops', label: 'ChatOps', to: '/chatops', icon: <MessageOutlined />, badge: 'dev' },
-  { key: 'devops', label: 'DesOps', to: '/desops', icon: <BgColorsOutlined />, badge: 'dev' },
+  { key: 'devops', label: 'DevOps', to: '/devops', icon: <ToolOutlined />, badge: 'dev' },
   { key: 'voice', label: 'Voice', to: '/voice', icon: <SoundOutlined />, badge: 'dev' },
   { key: 'guides', label: 'Guides', to: '/guide', icon: <AppstoreOutlined />, badge: 'alpha' },
 ];
@@ -54,7 +50,12 @@ const navItems = [
 function LegacyProjectRedirect(): ReactElement {
   const { projectId } = useParams();
 
-  return <Navigate to={projectId ? `/projects/${projectId}` : '/projects'} replace />;
+  return (
+    <Navigate
+      to={projectId ? `/guide/projects/${projectId}` : '/guide/clients-projects-rates'}
+      replace
+    />
+  );
 }
 
 function RequireAuth(): ReactElement {
@@ -100,11 +101,9 @@ function MainLayout(): ReactElement {
     : normalizedPath.startsWith('/agents')
     ? 'Agents'
     : normalizedPath.startsWith('/devops')
-    ? 'DesOps'
+    ? 'DevOps'
     : normalizedPath.startsWith('/desops')
-    ? 'DesOps'
-    : normalizedPath.startsWith('/projects')
-    ? 'Проект'
+    ? 'DevOps'
     : 'Analytic';
 
   useEffect((): void => {
@@ -193,6 +192,7 @@ export default function App(): ReactElement {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/analytics" replace />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/operops" element={<Navigate to="/operops/crm" replace />} />
           <Route path="/operops/*" element={<OperopsPage />} />
           <Route path="/chatops" element={<ChatopsPage />} />
           <Route path="/agents" element={<AgentsOpsPage />} />
@@ -202,13 +202,14 @@ export default function App(): ReactElement {
           <Route path="/hhops" element={<HhopsPage />} />
           <Route path="/plan-fact" element={<Navigate to="/finops" replace />} />
           <Route path="/finops/plan-fact" element={<Navigate to="/finops" replace />} />
-          <Route path="/desops" element={<DesopsPage />} />
-          <Route path="/devops" element={<Navigate to="/desops" replace />} />
+          <Route path="/devops" element={<DesopsPage />} />
+          <Route path="/desops" element={<Navigate to="/devops" replace />} />
           <Route path="/guide" element={<DirectoriesPage />} />
           <Route path="/guide/clients-projects-rates" element={<ClientsProjectsRatesPage />} />
           <Route path="/guide/employees-salaries" element={<EmployeesSalariesPage />} />
           <Route path="/guide/fx" element={<FxPage />} />
           <Route path="/guide/agents" element={<AgentsPage />} />
+          <Route path="/guide/projects/:projectId" element={<ProjectEditPage />} />
           <Route path="/guide/directory/:groupKey" element={<Navigate to="/guide/:groupKey" replace />} />
           <Route path="/guide/:groupKey" element={<DirectoryDetailPage />} />
           <Route path="/directories" element={<Navigate to="/guide" replace />} />
@@ -218,7 +219,7 @@ export default function App(): ReactElement {
           <Route path="/directories/agents" element={<Navigate to="/guide/agents" replace />} />
           {/* Backward-compatible deep links from the old /finops/* basename */}
           <Route path="/finops/analytics" element={<Navigate to="/analytics" replace />} />
-          <Route path="/finops/operops" element={<Navigate to="/operops" replace />} />
+          <Route path="/finops/operops" element={<Navigate to="/operops/crm" replace />} />
           <Route path="/finops/saleops" element={<Navigate to="/saleops" replace />} />
           <Route path="/finops/hhops" element={<Navigate to="/hhops" replace />} />
           <Route path="/finops/chatops" element={<Navigate to="/chatops" replace />} />
@@ -233,7 +234,8 @@ export default function App(): ReactElement {
           <Route path="/finops/directories/fx" element={<Navigate to="/guide/fx" replace />} />
           <Route path="/finops/directories/agents" element={<Navigate to="/guide/agents" replace />} />
           <Route path="/finops/projects/:projectId" element={<LegacyProjectRedirect />} />
-          <Route path="/projects/:projectId" element={<ProjectEditPage />} />
+          <Route path="/projects/:projectId" element={<LegacyProjectRedirect />} />
+          <Route path="/projects" element={<Navigate to="/guide/clients-projects-rates" replace />} />
           <Route path="*" element={<Navigate to="/analytics" replace />} />
         </Route>
       </Route>

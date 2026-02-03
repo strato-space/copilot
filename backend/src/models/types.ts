@@ -184,3 +184,10 @@ export interface AlertSettings {
   updated_at: Date;
   updated_by: string;
 }
+
+export interface FundComment {
+  month: MonthString;
+  comment: string;
+  updated_at: Date;
+  updated_by?: string | null;
+}

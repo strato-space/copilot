@@ -40,6 +40,7 @@ export default function EmbedFrame({ baseUrl, routeBase, title, className }: Emb
   const navigate = useNavigate();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const skipNavigateRef = useRef<string | null>(null);
+  const hasLoadedRef = useRef<boolean>(false);
   const [frameHeight, setFrameHeight] = useState<number>(DEFAULT_HEIGHT);
 
   const normalizedBaseUrl = useMemo(() => normalizeBase(baseUrl), [baseUrl]);
@@ -66,7 +67,7 @@ export default function EmbedFrame({ baseUrl, routeBase, title, className }: Emb
   const sendMessage = useCallback(
     (payload: Record<string, unknown>) => {
       const frameWindow = iframeRef.current?.contentWindow;
-      if (!frameWindow) return;
+      if (!frameWindow || !hasLoadedRef.current) return;
       frameWindow.postMessage(payload, frameOrigin || '*');
     },
     [frameOrigin]
@@ -121,6 +122,7 @@ export default function EmbedFrame({ baseUrl, routeBase, title, className }: Emb
   }, [relativePath, sendMessage]);
 
   const handleLoad = useCallback(() => {
+    hasLoadedRef.current = true;
     sendMessage({ type: 'NAVIGATE', path: relativePath, version: 1 });
   }, [relativePath, sendMessage]);
 

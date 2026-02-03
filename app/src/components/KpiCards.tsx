@@ -52,7 +52,7 @@ const SecondaryText = ({ children, tone }: { children: ReactNode; tone?: 'positi
 };
 
 const KpiTitle = ({ title, tooltip }: { title: string; tooltip: string }): ReactElement => (
-  <Typography.Text type="secondary" className="text-xs flex items-center gap-1">
+  <Typography.Text type="secondary" className="text-xs flex flex-wrap items-center gap-1 leading-tight">
     {title}
     <Tooltip title={tooltip}>
       <InfoCircleOutlined className="text-[12px] text-slate-400" />
@@ -61,17 +61,19 @@ const KpiTitle = ({ title, tooltip }: { title: string; tooltip: string }): React
 );
 
 const KpiCard = ({ title, tooltip, value, formatter, valueColor, lines }: KpiCardProps): ReactElement => (
-  <Card className="h-[120px] flex flex-col">
-    <div className="flex h-full flex-col">
+  <Card className="min-h-[120px]" bodyStyle={{ padding: '10px 16px 12px' }}>
+    <div className="flex min-h-[96px] min-w-0 flex-col gap-1">
       <KpiTitle title={title} tooltip={tooltip} />
       <Statistic
         value={value}
         formatter={(val: string | number): string => formatter(Number(val))}
         {...(valueColor ? { valueStyle: { color: valueColor } } : {})}
       />
-      <div className="mt-auto flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         {lines.map((line, index) => (
-          <div key={`${title}-line-${index}`}>{line}</div>
+          <div key={`${title}-line-${index}`} className="min-w-0 break-words">
+            {line}
+          </div>
         ))}
       </div>
     </div>

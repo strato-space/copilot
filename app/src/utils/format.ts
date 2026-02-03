@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 export const formatCurrency = (value: number): string => {
   const formatted = new Intl.NumberFormat('ru-RU', {
     maximumFractionDigits: 0,
-    useGrouping: false,
+    useGrouping: true,
   }).format(value);
   return `${formatted} ₽`;
 };

@@ -4,12 +4,19 @@ import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import PlanFactDrawer from '../components/PlanFactDrawer';
 import PlanFactGrid from '../components/PlanFactGrid';
 import ExpensesGrid, { type ExpensesGridHandle } from '../components/ExpensesGrid';
+import BonusesGrid from '../components/BonusesGrid';
+import FundGrid from '../components/FundGrid';
 import PageHeader from '../components/PageHeader';
 import { usePlanFactStore } from '../store/planFactStore';
 import { type PlanFactCellContext, type PlanFactMonthCell } from '../services/types';
 import { formatMonthLabel } from '../utils/format';
 import { useEmployeeStore } from '../store/employeeStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { convertToRub, fxRatesByMonth } from '../services/expenseDirectory';
+import { getEmployeeMonthlySalary } from '../services/employeeDirectory';
+import { useExpensesStore } from '../store/expensesStore';
+import { useMonthCloseStore } from '../store/monthCloseStore';
+import { apiClient } from '../services/api';
 
 const buildYearMonths = (year: number): string[] => {
   const start = dayjs(`${year}-01-01`);
@@ -27,6 +34,7 @@ export default function PlanFactPage(): ReactElement {
     dateRange,
     usingMock,
     year,
+    forecastVersionId,
     setFocusMonth,
     setDateRange,
     setYear,
@@ -36,12 +44,93 @@ export default function PlanFactPage(): ReactElement {
 
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [drawerContext, setDrawerContext] = useState<PlanFactCellContext | null>(null);
-  const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
+  const [activeTab, setActiveTab] = useState<'income' | 'expense' | 'bonus' | 'fund'>('income');
   const expensesRef = useRef<ExpensesGridHandle | null>(null);
   const triggerCheck = useNotificationStore((state) => state.triggerCheck);
   const employees = useEmployeeStore((state) => state.employees);
+  const expenseCategories = useExpensesStore((state) => state.categories);
+  const expenseOperations = useExpensesStore((state) => state.operations);
+  const isMonthClosed = useMonthCloseStore((state) => state.isClosed);
+  const toggleMonthClosed = useMonthCloseStore((state) => state.toggleMonth);
+
+  const bonusNameAliases = useMemo(
+    () => ['юрий кожевников', 'никита ренье', 'антон бастрыкин', 'антон б.', 'валерий сысик', 'валерий с.'],
+    [],
+  );
+  const expenseEmployees = useMemo(() => {
+    const normalize = (value: string): string => value.trim().toLowerCase();
+    return employees.filter((employee) => {
+      const name = normalize(employee.name);
+      return !bonusNameAliases.some((alias) => name.includes(alias));
+    });
+  }, [employees, bonusNameAliases]);
 
   const yearMonths = useMemo((): string[] => buildYearMonths(year), [year]);
+
+  const incomeTotals = useMemo((): Record<string, number> => {
+    const totals: Record<string, number> = {};
+    yearMonths.forEach((month) => {
+      totals[month] = 0;
+    });
+    if (!data) {
+      return totals;
+    }
+    data.clients.forEach((client) => {
+      client.projects.forEach((project) => {
+        yearMonths.forEach((month) => {
+          const cell = project.months[month];
+          if (!cell) {
+            return;
+          }
+          const isFix = project.contract_type === 'Fix';
+          const factRub = isFix ? Math.max(cell.fact_rub, cell.forecast_rub) : cell.fact_rub;
+          totals[month] = (totals[month] ?? 0) + (factRub ?? 0);
+        });
+      });
+    });
+    return totals;
+  }, [data, yearMonths]);
+
+  const expenseTotals = useMemo((): Record<string, number> => {
+    const totals: Record<string, number> = {};
+    yearMonths.forEach((month) => {
+      totals[month] = 0;
+    });
+    expenseEmployees.forEach((employee) => {
+      yearMonths.forEach((month) => {
+        totals[month] = (totals[month] ?? 0) + getEmployeeMonthlySalary(employee, month);
+      });
+    });
+    expenseCategories
+      .filter((category) => category.is_active || expenseOperations.some((op) => op.category_id === category.id))
+      .forEach((category) => {
+        yearMonths.forEach((month) => {
+          const monthOps = expenseOperations.filter(
+            (operation) => operation.category_id === category.id && operation.month === month,
+          );
+          const amount = monthOps.reduce((sum, op) => sum + convertToRub(op, fxRatesByMonth[month] ?? 0), 0);
+          totals[month] = (totals[month] ?? 0) + amount;
+        });
+      });
+    return totals;
+  }, [expenseEmployees, yearMonths, expenseCategories, expenseOperations]);
+
+  const fundDeltaByMonth = useMemo((): Record<string, number | undefined> => {
+    const totals: Record<string, number | undefined> = {};
+    yearMonths.forEach((month) => {
+      // Fund delta is calculated only for the current actual month (Jan 2026).
+      // If there are no фактические данные, we keep it empty ("—").
+      if (month === '2026-01') {
+        const income = incomeTotals[month] ?? 0;
+        const expense = expenseTotals[month] ?? 0;
+        const hasActuals = income !== 0 || expense !== 0;
+        totals[month] = hasActuals ? 0.1 * (income - expense) : undefined;
+        return;
+      }
+      totals[month] = undefined;
+    });
+    return totals;
+  }, [expenseTotals, incomeTotals, yearMonths]);
 
   useEffect((): void => {
     void fetchPlanFact();
@@ -96,6 +185,10 @@ export default function PlanFactPage(): ReactElement {
   }, [focusMonth, dateRange, setDateRange]);
 
   const handleOpenDrawer = (context: PlanFactCellContext): void => {
+    if (isMonthClosed(context.month)) {
+      message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
+      return;
+    }
     setDrawerContext(context);
     setDrawerOpen(true);
   };
@@ -106,9 +199,27 @@ export default function PlanFactPage(): ReactElement {
   };
 
   const handleApply = (context: PlanFactCellContext, values: PlanFactMonthCell): void => {
-    updateProjectMonth(context.client_id, context.project_id, context.month, values);
-    handleCloseDrawer();
-    message.success('Изменения сохранены локально');
+    const mode = context.edit_mode ?? 'forecast';
+    const payload = {
+      project_id: context.project_id,
+      month: context.month,
+      mode,
+      contract_type: context.contract_type,
+      hours: mode === 'fact' ? values.fact_hours : values.forecast_hours,
+      amount_rub: mode === 'fact' ? values.fact_rub : values.forecast_rub,
+      comment: mode === 'fact' ? values.fact_comment : values.forecast_comment,
+      forecast_version_id: mode === 'forecast' ? forecastVersionId : undefined,
+    };
+    void apiClient
+      .put('/plan-fact/entry', payload)
+      .then(() => {
+        updateProjectMonth(context.client_id, context.project_id, context.month, values);
+        handleCloseDrawer();
+        message.success('Изменения сохранены');
+      })
+      .catch(() => {
+        message.error('Не удалось сохранить изменения. Проверьте подключение к серверу.');
+      });
   };
 
   const handleFocusMonthChange = (month: string): void => {
@@ -162,15 +273,31 @@ export default function PlanFactPage(): ReactElement {
       <Card className="finops-table-card">
         <Tabs
           activeKey={activeTab}
-          onChange={(key): void => setActiveTab(key as 'income' | 'expense')}
+          onChange={(key): void => setActiveTab(key as 'income' | 'expense' | 'bonus' | 'fund')}
           tabBarExtraContent={
             activeTab === 'expense' ? (
               <Button
                 type="default"
                 className="border border-slate-300 text-slate-900"
-                onClick={(): void => expensesRef.current?.openAddExpense()}
+                onClick={(): void => {
+                  if (isMonthClosed(focusMonth)) {
+                    message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
+                    return;
+                  }
+                  expensesRef.current?.openAddExpense();
+                }}
               >
                 + Расход
+              </Button>
+            ) : activeTab === 'bonus' ? (
+              <Button
+                type="default"
+                className="border border-slate-300 text-slate-900"
+                onClick={(): void => toggleMonthClosed(focusMonth)}
+              >
+                {isMonthClosed(focusMonth)
+                  ? `Открыть ${formatMonthLabel(focusMonth)}`
+                  : `Закрыть ${formatMonthLabel(focusMonth)}`}
               </Button>
             ) : null
           }
@@ -194,10 +321,35 @@ export default function PlanFactPage(): ReactElement {
               children: (
                 <ExpensesGrid
                   ref={expensesRef}
+                  employees={expenseEmployees}
+                  months={yearMonths}
+                  focusMonth={focusMonth}
+                  onFocusMonthChange={handleFocusMonthChange}
+                  isMonthClosed={isMonthClosed}
+                />
+              ),
+            },
+            {
+              key: 'bonus',
+              label: 'Бонусы',
+              children: (
+                <BonusesGrid
                   employees={employees}
                   months={yearMonths}
                   focusMonth={focusMonth}
                   onFocusMonthChange={handleFocusMonthChange}
+                  incomeTotals={incomeTotals}
+                  isMonthClosed={isMonthClosed}
+                />
+              ),
+            },
+            {
+              key: 'fund',
+              label: 'Фонд',
+              children: (
+                <FundGrid
+                  months={yearMonths}
+                  fundDeltaByMonth={fundDeltaByMonth}
                 />
               ),
             },

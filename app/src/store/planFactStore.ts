@@ -53,7 +53,7 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
   data: null,
   loading: false,
   error: null,
-  usingMock: true,
+  usingMock: false,
   year: now.year(),
   focusMonth: now.format('YYYY-MM'),
   forecastVersionId: 'baseline',
@@ -79,7 +79,12 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
       set({ data: response.data.data, loading: false, usingMock: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      set({ error: message, loading: false, data: clonePlanFact(mockPlanFact), usingMock: true });
+      set((state) => ({
+        error: message,
+        loading: false,
+        // Keep the last known data instead of replacing with mock values.
+        data: state.data,
+      }));
     }
   },
   updateProjectMonth: (
@@ -100,11 +105,17 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
         if (project.project_id !== projectId) {
           return project;
         }
+        const prevCell = project.months[month] ?? emptyCell();
+        const nextCell: PlanFactMonthCell = {
+          ...prevCell,
+          ...values,
+        };
         return {
           ...project,
           months: {
             ...project.months,
-            [month]: values,
+            // Merge to avoid wiping sibling fields (e.g. fact_comment vs forecast_comment).
+            [month]: nextCell,
           },
         };
       });

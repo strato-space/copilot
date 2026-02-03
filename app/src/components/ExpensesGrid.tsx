@@ -19,7 +19,7 @@ import {
 } from 'antd';
 import type { UploadProps } from 'antd';
 import {
-  EllipsisOutlined,
+  ArrowRightOutlined,
   FilterOutlined,
   PlusOutlined,
   PushpinFilled,
@@ -43,13 +43,12 @@ import { type EmployeeDirectoryEntry, getEmployeeMonthlyHours, getEmployeeMonthl
 import { apiClient } from '../services/api';
 import {
   convertToRub,
-  expenseCategories as expenseCategoriesSeed,
-  expenseOperationsSeed,
   fxRatesByMonth,
   type ExpenseCategory,
   type ExpenseCurrency,
   type ExpenseOperation,
 } from '../services/expenseDirectory';
+import { useExpensesStore } from '../store/expensesStore';
 import { Link } from 'react-router-dom';
 
 interface ExpenseMonthCell {
@@ -90,6 +89,7 @@ interface Props {
   months: string[];
   focusMonth: string;
   onFocusMonthChange: (month: string) => void;
+  isMonthClosed: (month: string) => boolean;
 }
 
 type SummaryCellProps = TdHTMLAttributes<HTMLTableCellElement> & {
@@ -104,7 +104,7 @@ const PIN_STORAGE_KEY = 'finopsPinnedExpenseMonths';
 const TYPE_COL_WIDTH = 96;
 const NAME_COL_WIDTH = 240;
 const ACTION_COL_WIDTH = 32;
-const MONTH_COL_WIDTH = 128;
+const MONTH_COL_WIDTH = 112;
 
 const buildRows = (
   employees: EmployeeDirectoryEntry[],
@@ -184,6 +184,7 @@ const buildColumns = (
   onSearchChange: (value: string) => void,
   autoCompleteOptions: { label: string; options: { value: string }[] }[],
   onOpenCategoryMonth: (row: ExpenseRow, month: string) => void,
+  isMonthClosed: (month: string) => boolean,
 ): ColumnsType<ExpenseRow> => {
   const pinnedSet = new Set(pinnedMonths);
   const orderedMonths = [
@@ -284,7 +285,7 @@ const buildColumns = (
                 <Button
                   type="text"
                   size="small"
-                  icon={<EllipsisOutlined />}
+                  icon={<ArrowRightOutlined />}
                   className="text-slate-400 hover:text-slate-900"
                 />
               </Link>
@@ -329,6 +330,10 @@ const buildColumns = (
       onCell: (row: ExpenseRow): TdHTMLAttributes<HTMLTableCellElement> => ({
         onClick: (): void => {
           if (row.kind === 'other') {
+            if (isMonthClosed(month)) {
+              message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
+              return;
+            }
             onOpenCategoryMonth(row, month);
           }
         },
@@ -364,6 +369,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
   months,
   focusMonth,
   onFocusMonthChange,
+  isMonthClosed,
 }, ref): ReactElement => {
   const [searchValue, setSearchValue] = useState<string>('');
   const [pinnedMonths, setPinnedMonths] = useState<string[]>(() => {
@@ -385,8 +391,12 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
     }
     return [focusMonth];
   });
-  const [categories, setCategories] = useState<ExpenseCategory[]>(expenseCategoriesSeed);
-  const [operations, setOperations] = useState<ExpenseOperation[]>(expenseOperationsSeed);
+  const categories = useExpensesStore((state) => state.categories);
+  const operations = useExpensesStore((state) => state.operations);
+  const addCategory = useExpensesStore((state) => state.addCategory);
+  const addOperation = useExpensesStore((state) => state.addOperation);
+  const updateOperation = useExpensesStore((state) => state.updateOperation);
+  const deleteOperation = useExpensesStore((state) => state.deleteOperation);
   const [expenseModalOpen, setExpenseModalOpen] = useState<boolean>(false);
   const [editingOperation, setEditingOperation] = useState<ExpenseOperation | null>(null);
   const [categoryInput, setCategoryInput] = useState<string>('');
@@ -475,12 +485,17 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
       name: trimmed,
       is_active: true,
     };
-    setCategories((prev) => [...prev, newCategory]);
+    addCategory(newCategory);
     setCategoryInput('');
     form.setFieldValue('categoryId', newCategory.id);
   };
 
   const openExpenseModal = (categoryId?: string, month?: string, operation?: ExpenseOperation): void => {
+    const targetMonth = month ?? focusMonth;
+    if (isMonthClosed(targetMonth)) {
+      message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
+      return;
+    }
     setEditingOperation(operation ?? null);
     form.resetFields();
     const monthValue = month ? dayjs(`${month}-01`) : dayjs(`${focusMonth}-01`);
@@ -544,10 +559,10 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
       };
 
       if (editingOperation) {
-        setOperations((prev) => prev.map((item) => (item.id === editingOperation.id ? operationWithOptional : item)));
+        updateOperation(operationWithOptional);
         message.success('Расход обновлён');
       } else {
-        setOperations((prev) => [...prev, operationWithOptional]);
+        addOperation(operationWithOptional);
         message.success('Расход добавлен');
       }
       setExpenseModalOpen(false);
@@ -559,7 +574,12 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
   };
 
   const handleDeleteOperation = (operationId: string): void => {
-    setOperations((prev) => prev.filter((item) => item.id !== operationId));
+    const operation = operations.find((item) => item.id === operationId);
+    if (operation && isMonthClosed(operation.month)) {
+      message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
+      return;
+    }
+    deleteOperation(operationId);
     message.success('Операция удалена');
   };
 
@@ -583,6 +603,10 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
     if (row.kind !== 'other' || !row.category_id) {
       return;
     }
+    if (isMonthClosed(month)) {
+      message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
+      return;
+    }
     const category = categories.find((item) => item.id === row.category_id) ?? null;
     setDrawerCategory(category);
     setDrawerMonth(month);
@@ -600,6 +624,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
   const drawerOperations = operations.filter(
     (operation) => operation.category_id === drawerCategory?.id && operation.month === drawerMonth,
   );
+  const isDrawerMonthClosed = drawerMonth ? isMonthClosed(drawerMonth) : false;
 
   const drawerColumns: ColumnsType<ExpenseOperation> = [
     {
@@ -659,6 +684,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
           setSearchValue,
           autoCompleteOptions,
           handleOpenCategoryMonth,
+          isMonthClosed,
         )}
         rowClassName={(): string => 'finops-row-project'}
         scroll={{ x: scrollX }}
@@ -733,7 +759,11 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
         }
         width={520}
         extra={
-          <Button type="primary" onClick={(): void => openExpenseModal(drawerCategory?.id, drawerMonth)}>
+          <Button
+            type="primary"
+            disabled={isDrawerMonthClosed}
+            onClick={(): void => openExpenseModal(drawerCategory?.id, drawerMonth)}
+          >
             Добавить
           </Button>
         }

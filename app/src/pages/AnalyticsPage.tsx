@@ -34,6 +34,8 @@ import { useNotificationStore } from '../store/notificationStore';
 import { apiClient } from '../services/api';
 import { useEmployeeStore } from '../store/employeeStore';
 import { convertToRub, expenseOperationsSeed, fxRatesByMonth } from '../services/expenseDirectory';
+import { type PlanFactGridResponse } from '../services/types';
+import { mockPlanFact } from '../services/mockPlanFact';
 
 interface ProjectHighlight {
   key: string;
@@ -43,6 +45,14 @@ interface ProjectHighlight {
   profit: number;
   marginPct: number;
 }
+
+const formatSignedCurrency = (value: number): string => {
+  if (value === 0) {
+    return formatCurrency(0);
+  }
+  const sign = value > 0 ? '+' : '−';
+  return `${sign}${formatCurrency(Math.abs(value))}`;
+};
 
 interface EmployeeMargin {
   id: string;
@@ -247,12 +257,14 @@ export default function AnalyticsPage(): ReactElement {
       sum + employees.reduce((acc, employee) => acc + getEmployeeMonthlySalary(employee, month), 0),
     0);
   }, [activeMonths, focusMonth, employees]);
+  const chartData = useMemo((): PlanFactGridResponse | null => (data?.clients?.length ? data : mockPlanFact), [data]);
+
   const projectHighlights = useMemo((): ProjectHighlight[] => {
-    if (!data?.clients?.length) {
+    if (!chartData?.clients?.length) {
       return [];
     }
     const items: ProjectHighlight[] = [];
-    data.clients.forEach((client) => {
+    chartData.clients.forEach((client) => {
       client.projects.forEach((project) => {
         let revenue = 0;
         let hours = 0;
@@ -311,7 +323,7 @@ export default function AnalyticsPage(): ReactElement {
       }
     }
     return highlights;
-  }, [data?.clients, activeMonths, fxRates, averageCostRate]);
+  }, [chartData?.clients, activeMonths, fxRates, averageCostRate]);
   const employeeMargins = useMemo((): EmployeeMargin[] => {
     if (!employees.length) {
       return [];
@@ -334,11 +346,11 @@ export default function AnalyticsPage(): ReactElement {
   }, [activeMonths, focusMonth, totalExpenseCost, employees]);
 
   const pieData = useMemo((): { client: string; project: string; value: number }[] => {
-    if (!data?.clients?.length) {
+    if (!chartData?.clients?.length) {
       return [];
     }
     const items: { client: string; project: string; value: number }[] = [];
-    data.clients.forEach((client) => {
+    chartData.clients.forEach((client) => {
       client.projects.forEach((project) => {
         let sum = 0;
         activeMonths.forEach((month) => {
@@ -368,7 +380,7 @@ export default function AnalyticsPage(): ReactElement {
       }
       return a.client.localeCompare(b.client);
     });
-  }, [data?.clients, focusMonths, focusMonth, pieMetric, pieValueMode, fxRates]);
+  }, [chartData?.clients, activeMonths, pieMetric, pieValueMode, fxRates]);
 
   const pieTotal = useMemo(
     (): number => pieData.reduce((acc, item) => acc + item.value, 0),
@@ -456,15 +468,9 @@ export default function AnalyticsPage(): ReactElement {
   );
 
   const lineMonths = useMemo((): string[] => {
-    const start = dayjs('2026-01-01');
-    const months: string[] = [];
-    let cursor = start;
-    for (let i = 0; i < 12; i += 1) {
-      months.push(cursor.format('YYYY-MM'));
-      cursor = cursor.add(1, 'month');
-    }
-    return months;
-  }, []);
+    const base = activeMonths.length ? activeMonths : [focusMonth];
+    return base.slice(0, 4);
+  }, [activeMonths, focusMonth]);
   const monthlyExpenses = useMemo((): Record<string, number> => {
     const result: Record<string, number> = {};
     lineMonths.forEach((month) => {
@@ -480,93 +486,29 @@ export default function AnalyticsPage(): ReactElement {
     });
     return result;
   }, [employees, fxRates, lineMonths]);
-  const lineSeries = useMemo(
-    (): { key: 'forecast' | 'fact'; label: string; color: string; values: number[] }[] => {
-      const base = [
-        { key: 'forecast' as const, label: 'Прогноз', color: '#1677ff' },
-        { key: 'fact' as const, label: 'Факт', color: '#14b8a6' },
-      ];
-      return base.map((series) => {
-        const values = lineMonths.map((month) => {
-          let revenue = 0;
-          if (data?.clients?.length) {
-            data.clients.forEach((client) => {
-              const cell = client.totals_by_month[month];
-              if (!cell) {
-                return;
-              }
-              const fxFactor = getFxFactor(month);
-              revenue += (series.key === 'forecast' ? cell.forecast_rub : cell.fact_rub) * fxFactor;
-            });
+  const monthlyRevenue = useMemo((): Record<string, number> => {
+    const result: Record<string, number> = {};
+    lineMonths.forEach((month) => {
+      let revenue = 0;
+      if (chartData?.clients?.length) {
+        chartData.clients.forEach((client) => {
+          const cell = client.totals_by_month[month];
+          if (!cell) {
+            return;
           }
-          const expenses = monthlyExpenses[month] ?? 0;
-          return revenue - expenses;
+          const fxFactor = getFxFactor(month);
+          revenue += cell.fact_rub * fxFactor;
         });
-        return { ...series, values };
-      });
-    },
-    [data?.clients, lineMonths, fxRates, monthlyExpenses],
-  );
-  const lineRange = useMemo((): { min: number; max: number } => {
-    const values = lineSeries.flatMap((series) => series.values);
-    if (!values.length) {
-      return { min: 0, max: 0 };
-    }
-    return {
-      min: values.reduce((acc, item) => Math.min(acc, item), values[0] ?? 0),
-      max: values.reduce((acc, item) => Math.max(acc, item), values[0] ?? 0),
-    };
-  }, [lineSeries]);
-  const buildLinePath = (values: number[]): string => {
-    if (values.length === 0) {
-      return '';
-    }
-    const width = 360;
-    const height = 200;
-    const padding = 32;
-    const range = Math.max(lineRange.max - lineRange.min, 1);
-    const points = values.map((value, index) => {
-      const x = values.length === 1
-        ? width / 2
-        : padding + (index / (values.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((value - lineRange.min) / range) * (height - padding * 2);
-      return { x, y };
+      }
+      result[month] = revenue;
     });
-    const firstPoint = points[0] ?? { x: width / 2, y: height / 2 };
-    if (points.length === 1) {
-      return `M ${firstPoint.x} ${firstPoint.y}`;
-    }
-    const smoothing = 0.12;
-    let path = `M ${firstPoint.x} ${firstPoint.y}`;
-    for (let i = 0; i < points.length - 1; i += 1) {
-      const p0 = points[i - 1] ?? firstPoint;
-      const p1 = points[i] ?? firstPoint;
-      const p2 = points[i + 1] ?? firstPoint;
-      const p3 = points[i + 2] ?? p2;
-      const cp1x = p1.x + (p2.x - p0.x) * smoothing;
-      const cp1y = p1.y + (p2.y - p0.y) * smoothing;
-      const cp2x = p2.x - (p3.x - p1.x) * smoothing;
-      const cp2y = p2.y - (p3.y - p1.y) * smoothing;
-      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
-    }
-    return path;
-  };
-  const buildLinePoints = (values: number[]): { x: number; y: number }[] => {
-    if (values.length === 0) {
-      return [];
-    }
-    const width = 360;
-    const height = 200;
-    const padding = 32;
-    const range = Math.max(lineRange.max - lineRange.min, 1);
-    return values.map((value, index) => {
-      const x = values.length === 1
-        ? width / 2
-        : padding + (index / (values.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((value - lineRange.min) / range) * (height - padding * 2);
-      return { x, y };
-    });
-  };
+    return result;
+  }, [chartData?.clients, lineMonths, fxRates]);
+  const barMax = useMemo((): number => {
+    const values = lineMonths.flatMap((month) => [monthlyRevenue[month] ?? 0, monthlyExpenses[month] ?? 0]);
+    return values.reduce((acc, value) => Math.max(acc, value), 0);
+  }, [lineMonths, monthlyRevenue, monthlyExpenses]);
+  // Line chart helpers removed (switched to column chart).
 
   const describeArc = (startAngle: number, endAngle: number): string => {
     const radius = 90;
@@ -1003,83 +945,55 @@ export default function AnalyticsPage(): ReactElement {
                     <div className="finops-line-header">
                       <div className="text-[13px] font-semibold text-slate-900">Динамика по месяцам (доходы − расходы)</div>
                       <div className="finops-line-legend">
-                        {lineSeries.map((series) => (
-                          <div key={series.key} className="finops-line-legend-item">
-                            <span className="finops-line-legend-icon" style={{ color: series.color }}>
-                              ∿
-                            </span>
-                            <span className="text-[11px] text-slate-600">{series.label}</span>
-                          </div>
-                        ))}
+                        <div className="finops-line-legend-item">
+                          <span className="finops-line-legend-icon" style={{ color: '#1677ff' }}>
+                            ■
+                          </span>
+                          <span className="text-[11px] text-slate-600">Прибыль</span>
+                        </div>
+                        <div className="finops-line-legend-item">
+                          <span className="finops-line-legend-icon" style={{ color: '#f97316' }}>
+                            ■
+                          </span>
+                          <span className="text-[11px] text-slate-600">Расходы</span>
+                        </div>
                       </div>
                     </div>
-                    {lineSeries.every((series) => series.values.every((value) => value === 0)) ? (
-                      <Empty description="Нет данных для линии" />
+                    {lineMonths.every((month) => (monthlyRevenue[month] ?? 0) === 0 && (monthlyExpenses[month] ?? 0) === 0) ? (
+                      <Empty description="Нет данных для графика" />
                     ) : (
-                      <svg viewBox="0 0 360 200" className="finops-line-svg">
-                        {[0, 1, 2, 3].map((index) => {
-                          const y = 32 + (index / 3) * (200 - 64);
-                          const value = lineRange.max - (index / 3) * (lineRange.max - lineRange.min);
+                      <div className="flex items-end gap-4 pt-4">
+                        {lineMonths.map((month) => {
+                          const revenue = monthlyRevenue[month] ?? 0;
+                          const expenses = monthlyExpenses[month] ?? 0;
+                          const diff = revenue - expenses;
+                          const maxValue = barMax || 1;
+                          const revenueHeight = Math.round((revenue / maxValue) * 140);
+                          const expenseHeight = Math.round((expenses / maxValue) * 140);
                           return (
-                            <g key={`grid-${index}`}>
-                              <line
-                                x1="32"
-                                x2="328"
-                                y1={y}
-                                y2={y}
-                                stroke="#e2e8f0"
-                                strokeDasharray="4 6"
-                              />
-                              <text x="4" y={y + 4} fontSize="9" fill="#94a3b8">
-                                {formatCurrency(Math.round(value))}
-                              </text>
-                            </g>
-                          );
-                        })}
-                        {lineSeries.map((series) => {
-                          const points = buildLinePoints(series.values);
-                          return (
-                            <g key={series.key}>
-                              <path
-                                d={buildLinePath(series.values)}
-                                fill="none"
-                                stroke={series.color}
-                                strokeWidth="2.5"
-                              />
-                              {points.map((point, index) => (
-                                <Tooltip
-                                  key={`${series.key}-${index}`}
-                                  title={`${formatMonthLabel(lineMonths[index] ?? focusMonth)}: ${formatCurrency(
-                                    series.values[index] ?? 0,
-                                  )}`}
-                                >
-                                  <circle cx={point.x} cy={point.y} r="4" fill={series.color} />
+                            <div key={month} className="flex flex-1 flex-col items-center gap-2">
+                              <div className={`text-[11px] font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                {formatSignedCurrency(diff)}
+                              </div>
+                              <div className="flex items-end gap-2 h-[150px]">
+                                <Tooltip title={`Прибыль: ${formatCurrency(revenue)}`}>
+                                  <div
+                                    className="w-6 rounded-t-md bg-blue-500"
+                                    style={{ height: `${revenueHeight}px` }}
+                                  />
                                 </Tooltip>
-                              ))}
-                            </g>
+                                <Tooltip title={`Расходы: ${formatCurrency(expenses)}`}>
+                                  <div
+                                    className="w-6 rounded-t-md bg-orange-400"
+                                    style={{ height: `${expenseHeight}px` }}
+                                  />
+                                </Tooltip>
+                              </div>
+                              <div className="text-[10px] text-slate-500">{formatMonthLabel(month)}</div>
+                            </div>
                           );
                         })}
-                        {lineMonths.map((month, index) => {
-                          const x = lineMonths.length === 1
-                            ? 180
-                            : 32 + (index / (lineMonths.length - 1)) * (360 - 64);
-                          if (lineMonths.length > 8 && index % 2 === 1) {
-                            return null;
-                          }
-                          return (
-                            <text
-                              key={`${month}-label`}
-                              x={x}
-                              y={188}
-                              textAnchor="middle"
-                              fontSize="9"
-                              fill="#94a3b8"
-                            >
-                              {formatMonthLabel(month)}
-                            </text>
-                          );
-                        })}
-                      </svg>
+                      </div>
                     )}
                   </div>
                 </div>

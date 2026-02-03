@@ -58,7 +58,7 @@ export default function ProjectEditPage(): ReactElement {
         description="Редактирование параметров проекта."
         actions={
           <div className="flex items-center gap-2">
-            <Button onClick={(): void => void navigate('/plan-fact')}>Назад</Button>
+            <Button onClick={(): void => void navigate('/guide/clients-projects-rates')}>Назад</Button>
             <Button type="primary" onClick={(): void => void handleSave()}>
               Сохранить
             </Button>

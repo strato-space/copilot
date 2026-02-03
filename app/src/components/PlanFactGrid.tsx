@@ -1,5 +1,11 @@
 import { Button, Table, Tag, Tooltip, Typography } from 'antd';
-import { EditOutlined, EllipsisOutlined, FilterOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons';
+import {
+  ArrowRightOutlined,
+  EditOutlined,
+  FilterOutlined,
+  PushpinFilled,
+  PushpinOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { FilterValue } from 'antd/es/table/interface';
 import { type CSSProperties, type ReactElement, type TdHTMLAttributes, useEffect, useMemo, useState } from 'react';
@@ -67,11 +73,14 @@ const normalizeCell = (cell?: Partial<PlanFactMonthCell> | null): PlanFactMonthC
   fact_hours: toNumber(cell?.fact_hours),
   forecast_rub: toNumber(cell?.forecast_rub),
   forecast_hours: toNumber(cell?.forecast_hours),
+  // With exactOptionalPropertyTypes=true we must not set optional fields to `undefined`.
+  ...(typeof cell?.fact_comment === 'string' ? { fact_comment: cell.fact_comment } : {}),
+  ...(typeof cell?.forecast_comment === 'string' ? { forecast_comment: cell.forecast_comment } : {}),
 });
 
 const PIN_STORAGE_KEY = 'finopsPinnedMonths';
 const BASE_FIXED_WIDTH = 352;
-const MONTH_COL_WIDTH = 128;
+const MONTH_COL_WIDTH = 120;
 
 const normalizeMonths = (
   months: Record<string, PlanFactMonthCell>,
@@ -120,8 +129,10 @@ const buildTotalsFromRows = (
     months.forEach((month: string): void => {
       const cell = normalizeCell(row.months[month]);
       const current = totals[month] ?? emptyCell();
+      const isFix = row.contract_type === 'Fix';
+      const factRub = isFix ? cell.forecast_rub : cell.fact_rub;
       totals[month] = {
-        fact_rub: current.fact_rub + cell.fact_rub,
+        fact_rub: current.fact_rub + factRub,
         fact_hours: current.fact_hours + cell.fact_hours,
         forecast_rub: current.forecast_rub + cell.forecast_rub,
         forecast_hours: current.forecast_hours + cell.forecast_hours,
@@ -153,10 +164,10 @@ const ValueCell = ({
   const hasValue = valueRub !== 0 || valueHours !== 0;
   const content = (
     <div className="finops-cell-text">
-      <div className={hasValue ? 'text-[10px] font-semibold text-slate-900' : 'text-[10px] font-semibold text-slate-400'}>
+      <div className={hasValue ? 'text-[11px] font-semibold text-slate-900' : 'text-[11px] font-semibold text-slate-400'}>
         {hasValue ? formatCurrency(valueRub) : '—'}
       </div>
-      <div className={hasValue ? 'text-[8px] text-slate-500' : 'text-[8px] text-slate-400'}>
+      <div className={hasValue ? 'text-[9px] text-slate-500' : 'text-[9px] text-slate-400'}>
         {hasValue ? formatHours(valueHours) : '—'}
       </div>
     </div>
@@ -244,15 +255,15 @@ const buildColumns = (
       },
       render: (value: string | undefined, row: RowItem): ReactElement => (
         <div className={row.row_type === 'project' ? 'pl-2' : ''}>
-          <div className="text-sm font-semibold uppercase text-slate-900">
-            {value}
+          <div className="text-sm font-semibold uppercase text-slate-900 flex items-center gap-2">
+            <Tag className="!m-0" color={row.contract_type === 'Fix' ? 'volcano' : 'cyan'}>
+              {row.contract_type ?? '—'}
+            </Tag>
+            <span>{value}</span>
           </div>
           {row.subproject_name ? (
             <div className="text-xs uppercase text-slate-500">{row.subproject_name}</div>
           ) : null}
-          <Tag className="mt-2" color={row.contract_type === 'Fix' ? 'volcano' : 'cyan'}>
-            {row.contract_type ?? '—'}
-          </Tag>
         </div>
       ),
       width: 224,
@@ -269,14 +280,14 @@ const buildColumns = (
         <div className="flex items-start justify-end">
           <Tooltip title="Редактировать проект">
             <Link
-              to={`/projects/${row.project_id ?? ''}`}
+              to={`/guide/projects/${row.project_id ?? ''}`}
               className="finops-row-action"
               aria-label="Редактировать проект"
             >
               <Button
                 type="text"
                 size="small"
-                icon={<EllipsisOutlined />}
+                icon={<ArrowRightOutlined />}
                 className="text-slate-400 hover:text-slate-900"
               />
             </Link>
@@ -339,6 +350,7 @@ const buildColumns = (
                 contract_type: row.contract_type ?? 'T&M',
                 rate_rub_per_hour: row.rate_rub_per_hour ?? null,
                 month,
+                edit_mode: 'forecast',
                 values: cell,
               });
             };
@@ -373,12 +385,13 @@ const buildColumns = (
                 contract_type: row.contract_type ?? 'T&M',
                 rate_rub_per_hour: row.rate_rub_per_hour ?? null,
                 month,
+                edit_mode: 'fact',
                 values: cell,
               });
             };
             return (
               <ValueCell
-                valueRub={cell.fact_rub * fxFactor}
+                valueRub={(row.contract_type === 'Fix' ? cell.forecast_rub : cell.fact_rub) * fxFactor}
                 valueHours={cell.fact_hours}
                 onOpen={handleOpen}
                 ariaLabel={`Открыть ${row.project_name ?? 'проект'} за ${formatMonthLabel(month)} (факт)`}

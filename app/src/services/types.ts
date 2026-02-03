@@ -3,6 +3,8 @@ export interface PlanFactMonthCell {
   fact_hours: number;
   forecast_rub: number;
   forecast_hours: number;
+  fact_comment?: string;
+  forecast_comment?: string;
 }
 
 export interface PlanFactProjectRow {
@@ -36,5 +38,6 @@ export interface PlanFactCellContext {
   contract_type: string;
   rate_rub_per_hour?: number | null;
   month: string;
+  edit_mode?: 'fact' | 'forecast';
   values: PlanFactMonthCell;
 }

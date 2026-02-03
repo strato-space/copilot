@@ -84,6 +84,16 @@ Socket.IO is the real-time layer for updates.
 - For `app/`, keep only TypeScript/TSX sources and avoid JS duplicates.
 - Use `.env` files for environment-specific configuration; do not commit secrets.
 
+## PM2 Services (prod/dev)
+- PM2 runs the backend only; the frontend is a static build served from `app/dist` via Nginx.
+
+### PM2 services (prod) -> repo paths
+- `copilot-backend` — Finance Ops backend API; entrypoint: `backend/dist/index.js` (run `cd backend && npm run build` first).
+
+### PM2 services (dev) -> repo paths
+- Same backend entrypoint, but start with `NODE_ENV=development` (or `npm run dev` / `tsx src/index.ts`).
+- Ensure a dev frontend build exists before serving via Nginx: `cd app && npm run build-dev` (outputs to `app/dist`).
+
 ## Product Notes (FinOps)
 - FX rates live in `app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
 - The plan-fact grid keeps at least one pinned month; users can pin up to 3 and can unpin the active month if another month remains pinned.

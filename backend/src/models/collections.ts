@@ -15,4 +15,5 @@ export const COLLECTIONS = {
   AUDIT_EVENTS: 'audit_events',
   AGENT_REQUESTS: 'agent_requests',
   ALERT_SETTINGS: 'alert_settings',
+  FUND_COMMENTS: 'fund_comments',
 } as const;
