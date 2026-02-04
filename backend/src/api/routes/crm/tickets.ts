@@ -1,0 +1,399 @@
+import { Router, type Request, type Response } from 'express';
+import { ObjectId } from 'mongodb';
+import sanitizeHtml from 'sanitize-html';
+import _ from 'lodash';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat.js';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter.js';
+import weekOfYear from 'dayjs/plugin/weekOfYear.js';
+import { getDb } from '../../../services/db.js';
+import { getLogger } from '../../../utils/logger.js';
+import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
+
+dayjs.extend(customParseFormat);
+dayjs.extend(isSameOrAfter);
+dayjs.extend(weekOfYear);
+
+const router = Router();
+const logger = getLogger();
+
+/**
+ * Get all tickets
+ * POST /api/crm/tickets
+ */
+router.post('/', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const statuses = (req.body.statuses ?? req.body.satuses) as string[];
+
+        const archiveQuery =
+            statuses?.includes('ARCHIVE') ? {} : { task_status: { $ne: TASK_STATUSES.ARCHIVE } };
+
+        let data = await db
+            .collection(COLLECTIONS.TASKS)
+            .aggregate([
+                {
+                    $match: {
+                        is_deleted: { $ne: true },
+                        ...archiveQuery,
+                    },
+                },
+                {
+                    $lookup: {
+                        from: COLLECTIONS.WORK_HOURS,
+                        localField: 'id',
+                        foreignField: 'ticket_id',
+                        as: 'work_data',
+                    },
+                },
+                {
+                    $lookup: {
+                        from: COLLECTIONS.PROJECTS,
+                        localField: 'project_id',
+                        foreignField: '_id',
+                        as: 'project_data',
+                    },
+                },
+            ])
+            .toArray();
+
+        // Get tracks and clients for enrichment
+        const tracks = await db.collection(COLLECTIONS.TRACKS).find().toArray();
+        const clients = await db.collection(COLLECTIONS.CLIENTS).find().toArray();
+
+        const projectsClients: Record<string, string> = {};
+        for (const client of clients) {
+            if (client.projects_ids) {
+                for (const projectId of client.projects_ids) {
+                    projectsClients[projectId.toString()] = client.name;
+                }
+            }
+        }
+
+        const clientsTracks: Record<string, string> = {};
+        for (const track of tracks) {
+            if (track.clients) {
+                for (const client of track.clients) {
+                    clientsTracks[client] = track.name;
+                }
+            }
+        }
+
+        // Enrich tickets with client and track info
+        for (const ticket of data) {
+            try {
+                if (ticket.project_id && projectsClients[ticket.project_id.toString()]) {
+                    ticket.client = projectsClients[ticket.project_id.toString()];
+                    if (clientsTracks[ticket.client]) {
+                        ticket.track = clientsTracks[ticket.client];
+                    }
+                }
+            } catch {
+                // Skip if project not found
+            }
+        }
+
+        // Calculate total hours
+        data = data.map((t) => ({
+            ...t,
+            total_hours: t.work_data?.reduce(
+                (total: number, wh: { work_hours: number }) => total + wh.work_hours,
+                0
+            ),
+        }));
+
+        res.status(200).json(data);
+    } catch (error) {
+        logger.error('Error getting tickets:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Get ticket by ID
+ * POST /api/crm/tickets/get-by-id
+ */
+router.post('/get-by-id', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticketId = req.body.ticket_id as string;
+
+        if (!ticketId) {
+            res.status(400).json({ error: 'ticket_id is required' });
+            return;
+        }
+
+        const isValidObjectId = ObjectId.isValid(ticketId) && /^[0-9a-fA-F]{24}$/.test(ticketId);
+        const matchCondition = isValidObjectId
+            ? { $or: [{ _id: new ObjectId(ticketId) }, { id: ticketId }] }
+            : { id: ticketId };
+
+        const ticketData = await db
+            .collection(COLLECTIONS.TASKS)
+            .aggregate([
+                { $match: matchCondition },
+                {
+                    $lookup: {
+                        from: COLLECTIONS.WORK_HOURS,
+                        localField: 'id',
+                        foreignField: 'ticket_id',
+                        as: 'work_data',
+                    },
+                },
+                {
+                    $lookup: {
+                        from: COLLECTIONS.PROJECTS,
+                        localField: 'project_id',
+                        foreignField: '_id',
+                        as: 'project_data',
+                    },
+                },
+            ])
+            .toArray();
+
+        if (!ticketData || ticketData.length === 0) {
+            res.status(404).json({ error: 'Ticket not found' });
+            return;
+        }
+
+        const ticket = ticketData[0]!;
+        ticket.total_hours = ticket.work_data?.reduce(
+            (total: number, wh: { work_hours: number }) => total + wh.work_hours,
+            0
+        );
+
+        res.status(200).json({ ticket });
+    } catch (error) {
+        logger.error('Error getting ticket by id:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Update ticket by ID
+ * POST /api/crm/tickets/update
+ */
+router.post('/update', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticketId = req.body.ticket as string;
+        const updateProps = req.body.updateProps as Record<string, unknown>;
+
+        if (!ticketId) {
+            res.status(400).json({ error: 'ticket id is required' });
+            return;
+        }
+
+        // Sanitize description if present
+        if (updateProps.description !== undefined) {
+            updateProps.description = sanitizeHtml(updateProps.description as string, {
+                allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
+            });
+        }
+
+        // Convert ObjectId fields
+        if (updateProps.project_id) {
+            updateProps.project_id = new ObjectId(updateProps.project_id as string);
+        }
+        if (updateProps.epic) {
+            updateProps.epic = new ObjectId(updateProps.epic as string);
+        }
+
+        updateProps.updated_at = Date.now();
+
+        await db
+            .collection(COLLECTIONS.TASKS)
+            .updateOne({ _id: new ObjectId(ticketId) }, { $set: updateProps });
+
+        res.status(200).json({ result: 'ok' });
+    } catch (error) {
+        logger.error('Error updating ticket:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Create new ticket
+ * POST /api/crm/tickets/create
+ */
+router.post('/create', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticket = req.body.ticket as Record<string, unknown>;
+
+        if (!ticket) {
+            res.status(400).json({ error: 'ticket data is required' });
+            return;
+        }
+
+        const now = Date.now();
+        const newTicket: Record<string, unknown> = {
+            ...ticket,
+            created_at: now,
+            updated_at: now,
+            is_deleted: false,
+        };
+
+        // Convert ObjectId fields
+        if (newTicket.project_id) {
+            newTicket.project_id = new ObjectId(newTicket.project_id as string);
+        }
+        if (newTicket.epic) {
+            newTicket.epic = new ObjectId(newTicket.epic as string);
+        }
+
+        const dbRes = await db.collection(COLLECTIONS.TASKS).insertOne(newTicket);
+
+        res.status(200).json({ db_op_result: dbRes, ticket: { ...newTicket, _id: dbRes.insertedId } });
+    } catch (error) {
+        logger.error('Error creating ticket:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Bulk change status
+ * POST /api/crm/tickets/bulk-change-status
+ */
+router.post('/bulk-change-status', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticketIds = req.body.tickets as string[];
+        const newStatus = req.body.status as string;
+
+        if (!ticketIds || !Array.isArray(ticketIds) || !newStatus) {
+            res.status(400).json({ error: 'tickets array and status are required' });
+            return;
+        }
+
+        const objectIds = ticketIds.map((id) => new ObjectId(id));
+
+        const dbRes = await db.collection(COLLECTIONS.TASKS).updateMany(
+            { _id: { $in: objectIds } },
+            {
+                $set: {
+                    task_status: newStatus,
+                    updated_at: Date.now(),
+                },
+            }
+        );
+
+        res.status(200).json({ db_op_result: dbRes });
+    } catch (error) {
+        logger.error('Error bulk changing status:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Add comment to ticket
+ * POST /api/crm/tickets/add-comment
+ */
+router.post('/add-comment', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticketId = req.body.ticket_id as string;
+        const comment = req.body.comment as Record<string, unknown>;
+
+        if (!ticketId || !comment) {
+            res.status(400).json({ error: 'ticket_id and comment are required' });
+            return;
+        }
+
+        const now = Date.now();
+        const newComment = {
+            ...comment,
+            ticket_id: ticketId,
+            created_at: now,
+        };
+
+        const dbRes = await db.collection(COLLECTIONS.COMMENTS).insertOne(newComment);
+
+        res.status(200).json({ db_op_result: dbRes });
+    } catch (error) {
+        logger.error('Error adding comment:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Add work hours
+ * POST /api/crm/tickets/add-work-hours
+ */
+router.post('/add-work-hours', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const workHour = req.body.work_hour as Record<string, unknown>;
+
+        if (!workHour || !workHour.ticket_id) {
+            res.status(400).json({ error: 'work_hour with ticket_id is required' });
+            return;
+        }
+
+        const now = Date.now();
+        const newWorkHour = {
+            ...workHour,
+            created_at: now,
+        };
+
+        const dbRes = await db.collection(COLLECTIONS.WORK_HOURS).insertOne(newWorkHour);
+
+        res.status(200).json({ db_op_result: dbRes });
+    } catch (error) {
+        logger.error('Error adding work hours:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Edit work hour
+ * POST /api/crm/tickets/edit-work-hour
+ */
+router.post('/edit-work-hour', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const workHourId = req.body.work_hour_id as string;
+        const updateProps = req.body.updateProps as Record<string, unknown>;
+
+        if (!workHourId) {
+            res.status(400).json({ error: 'work_hour_id is required' });
+            return;
+        }
+
+        const dbRes = await db
+            .collection(COLLECTIONS.WORK_HOURS)
+            .updateOne({ _id: new ObjectId(workHourId) }, { $set: updateProps });
+
+        res.status(200).json({ db_op_result: dbRes });
+    } catch (error) {
+        logger.error('Error editing work hour:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Delete ticket (soft delete)
+ * POST /api/crm/tickets/delete
+ */
+router.post('/delete', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticketId = req.body.ticket as string;
+
+        if (!ticketId) {
+            res.status(400).json({ error: 'ticket id is required' });
+            return;
+        }
+
+        await db
+            .collection(COLLECTIONS.TASKS)
+            .updateOne({ _id: new ObjectId(ticketId) }, { $set: { is_deleted: true } });
+
+        res.status(200).json({ result: 'ok' });
+    } catch (error) {
+        logger.error('Error deleting ticket:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+export default router;

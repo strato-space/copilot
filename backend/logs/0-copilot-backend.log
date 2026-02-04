@@ -1,0 +1,108 @@
+2026-02-04 14:22:15 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-04 14:22:15 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-04 14:22:15 [info]: Copilot backend listening on port 3002 {"service":"copilot-backend","port":3002,"env":"development"}
+2026-02-04 14:22:15 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-04 14:22:29 [info]: Received SIGTERM, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-04 14:22:29 [info]: HTTP server closed {"service":"copilot-backend"}
+2026-02-04 14:22:29 [info]: MongoDB connection closed {"service":"copilot-backend"}
+2026-02-04 14:22:46 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-04 14:22:46 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-04 14:22:46 [info]: Copilot backend listening on port 3002 {"service":"copilot-backend","port":3002,"env":"development"}
+2026-02-04 14:22:46 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-04 14:22:49 [info]: ::1 - - [04/Feb/2026:07:22:49 +0000] "GET /api/health HTTP/1.1" 200 65 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:22:50 [info]: ::1 - - [04/Feb/2026:07:22:50 +0000] "GET /api/metrics HTTP/1.1" 200 - "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:22:50 [info]: Received SIGTERM, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-04 14:22:50 [info]: HTTP server closed {"service":"copilot-backend"}
+2026-02-04 14:22:50 [info]: MongoDB connection closed {"service":"copilot-backend"}
+2026-02-04 14:23:43 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-04 14:23:43 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-04 14:23:43 [info]: Copilot backend listening on port 3002 {"service":"copilot-backend","port":3002,"env":"development"}
+2026-02-04 14:23:43 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-04 14:23:49 [info]: Received SIGINT, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-04 14:23:49 [info]: HTTP server closed {"service":"copilot-backend"}
+2026-02-04 14:23:49 [info]: MongoDB connection closed {"service":"copilot-backend"}
+2026-02-04 14:23:51 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-04 14:23:51 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-04 14:23:51 [info]: Copilot backend listening on port 3002 {"service":"copilot-backend","port":3002,"env":"development"}
+2026-02-04 14:23:51 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-04 14:24:03 [info]: ::1 - - [04/Feb/2026:07:24:03 +0000] "GET /api/health HTTP/1.1" 200 65 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:24:12 [info]: ::1 - - [04/Feb/2026:07:24:12 +0000] "GET /api/metrics HTTP/1.1" 200 - "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:24:15 [error]: Error getting dictionary: Cannot read properties of undefined (reading 'show_inactive') {"service":"copilot-backend"}
+TypeError: Cannot read properties of undefined (reading 'show_inactive')
+    at <anonymous> (/Users/tony_bit/Documents/strato-space/copilot/backend/src/api/routes/crm/dictionary.ts:24:39)
+    at Layer.handleRequest (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/layer.js:152:17)
+    at next (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/route.js:157:13)
+    at Route.dispatch (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/route.js:117:3)
+    at handle (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:435:11)
+    at Layer.handleRequest (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/layer.js:152:17)
+    at /Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:295:15
+    at processParams (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:582:12)
+    at next (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:291:5)
+    at Function.handle (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:186:3)
+2026-02-04 14:24:15 [info]: ::1 - - [04/Feb/2026:07:24:15 +0000] "POST /api/crm/dictionary HTTP/1.1" 500 84 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:24:18 [error]: Error getting dictionary: Cannot read properties of undefined (reading 'show_inactive') {"service":"copilot-backend"}
+TypeError: Cannot read properties of undefined (reading 'show_inactive')
+    at <anonymous> (/Users/tony_bit/Documents/strato-space/copilot/backend/src/api/routes/crm/dictionary.ts:24:39)
+    at Layer.handleRequest (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/layer.js:152:17)
+    at next (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/route.js:157:13)
+    at Route.dispatch (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/route.js:117:3)
+    at handle (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:435:11)
+    at Layer.handleRequest (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/lib/layer.js:152:17)
+    at /Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:295:15
+    at processParams (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:582:12)
+    at next (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:291:5)
+    at Function.handle (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/router/index.js:186:3)
+2026-02-04 14:24:18 [info]: ::1 - - [04/Feb/2026:07:24:18 +0000] "POST /api/crm/dictionary HTTP/1.1" 500 84 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:24:33 [info]: Received SIGINT, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-04 14:24:33 [info]: HTTP server closed {"service":"copilot-backend"}
+2026-02-04 14:24:33 [info]: MongoDB connection closed {"service":"copilot-backend"}
+2026-02-04 14:24:35 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-04 14:24:35 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-04 14:24:35 [info]: Copilot backend listening on port 3002 {"service":"copilot-backend","port":3002,"env":"development"}
+2026-02-04 14:24:35 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-04 14:24:37 [info]: ::1 - - [04/Feb/2026:07:24:37 +0000] "POST /api/crm/dictionary HTTP/1.1" 200 61803 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:39:36 [info]: Received SIGINT, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-04 14:39:36 [info]: HTTP server closed {"service":"copilot-backend"}
+2026-02-04 14:39:36 [info]: MongoDB connection closed {"service":"copilot-backend"}
+2026-02-04 14:39:57 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-04 14:39:58 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-04 14:39:58 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-04 14:39:58 [info]: Copilot backend listening on port 3002 {"service":"copilot-backend","port":3002,"env":"development"}
+2026-02-04 14:39:58 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-04 14:40:13 [info]: ::1 - - [04/Feb/2026:07:40:13 +0000] "GET / HTTP/1.1" 200 413 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:40:14 [info]: ::1 - - [04/Feb/2026:07:40:14 +0000] "GET /assets/index-DEfhg00b.css HTTP/1.1" 200 22953 "http://localhost:3002/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:40:14 [info]: ::1 - - [04/Feb/2026:07:40:14 +0000] "GET /assets/index-CNSHtr_S.js HTTP/1.1" 200 1529951 "http://localhost:3002/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:40:14 [info]: ::1 - - [04/Feb/2026:07:40:14 +0000] "GET /favicon.ico HTTP/1.1" 200 413 "http://localhost:3002/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:40:14 [info]: ::1 - - [04/Feb/2026:07:40:14 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/login" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:43:03 [info]: Received SIGINT, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-04 14:43:03 [info]: HTTP server closed {"service":"copilot-backend"}
+2026-02-04 14:43:03 [info]: MongoDB connection closed {"service":"copilot-backend"}
+2026-02-04 14:43:04 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-04 14:43:05 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-04 14:43:05 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-04 14:43:05 [info]: Copilot backend listening on port 3002 {"service":"copilot-backend","port":3002,"env":"development"}
+2026-02-04 14:43:05 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-04 14:43:11 [info]: ::1 - - [04/Feb/2026:07:43:11 +0000] "GET /login HTTP/1.1" 200 413 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:43:11 [info]: ::1 - - [04/Feb/2026:07:43:11 +0000] "GET /assets/index-DEfhg00b.css HTTP/1.1" 200 22953 "http://localhost:3002/login" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:43:11 [info]: ::1 - - [04/Feb/2026:07:43:11 +0000] "GET /assets/index-BYVNwBzl.js HTTP/1.1" 200 1529895 "http://localhost:3002/login" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:43:11 [info]: ::1 - - [04/Feb/2026:07:43:11 +0000] "GET /auth/me HTTP/1.1" 200 413 "http://localhost:3002/login" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:43:11 [info]: ::1 - - [04/Feb/2026:07:43:11 +0000] "GET /favicon.ico HTTP/1.1" 200 413 "http://localhost:3002/login" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:22 [info]: ::1 - - [04/Feb/2026:07:44:22 +0000] "POST /api/try_login HTTP/1.1" 200 849 "http://localhost:3002/login" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:22 [info]: ::1 - - [04/Feb/2026:07:44:22 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/analytics" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:23 [info]: ::1 - - [04/Feb/2026:07:44:23 +0000] "GET /api/plan-fact?year=2026&focus_month=2026-02&forecast_version_id=baseline HTTP/1.1" 500 118 "http://localhost:3002/analytics" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:29 [info]: ::1 - - [04/Feb/2026:07:44:29 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/voice" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:29 [info]: ::1 - - [04/Feb/2026:07:44:29 +0000] "GET /embed/ HTTP/1.1" 200 413 "http://localhost:3002/voice" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:29 [info]: ::1 - - [04/Feb/2026:07:44:29 +0000] "GET /assets/index-BYVNwBzl.js HTTP/1.1" 304 - "http://localhost:3002/embed/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:29 [info]: ::1 - - [04/Feb/2026:07:44:29 +0000] "GET /assets/index-DEfhg00b.css HTTP/1.1" 304 - "http://localhost:3002/embed/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:29 [info]: ::1 - - [04/Feb/2026:07:44:29 +0000] "GET /auth/me HTTP/1.1" 304 - "http://localhost:3002/embed/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:32 [info]: ::1 - - [04/Feb/2026:07:44:32 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/operops/crm" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:34 [info]: ::1 - - [04/Feb/2026:07:44:34 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/devops" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:35 [info]: ::1 - - [04/Feb/2026:07:44:35 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/chatops" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:36 [info]: ::1 - - [04/Feb/2026:07:44:36 +0000] "GET /api/plan-fact?year=2026&focus_month=2026-02&forecast_version_id=baseline HTTP/1.1" 500 118 "http://localhost:3002/analytics" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:36 [info]: ::1 - - [04/Feb/2026:07:44:36 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/analytics" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:36 [info]: ::1 - - [04/Feb/2026:07:44:36 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/agents" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:38 [info]: ::1 - - [04/Feb/2026:07:44:38 +0000] "GET /api/plan-fact?year=2026&focus_month=2026-02&forecast_version_id=baseline HTTP/1.1" 500 118 "http://localhost:3002/analytics" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:38 [info]: ::1 - - [04/Feb/2026:07:44:38 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/analytics" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:40 [info]: ::1 - - [04/Feb/2026:07:44:40 +0000] "GET /api/plan-fact?year=2026&focus_month=2026-02&forecast_version_id=baseline HTTP/1.1" 500 118 "http://localhost:3002/finops" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:40 [info]: ::1 - - [04/Feb/2026:07:44:40 +0000] "GET /favicon.ico HTTP/1.1" 304 - "http://localhost:3002/finops" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
+2026-02-04 14:44:43 [info]: ::1 - - [04/Feb/2026:07:44:43 +0000] "GET /api/fund/comments HTTP/1.1" 200 24 "http://localhost:3002/finops" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}

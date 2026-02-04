@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "build-dev": "tsc -p tsconfig.json && vite build --mode development",
+    "build-local": "tsc -p tsconfig.json && vite build --mode localhost",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "jest --runInBand"
