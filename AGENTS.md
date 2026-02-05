@@ -72,6 +72,14 @@ Socket.IO is the real-time layer for updates.
 - Frontend build: `cd app && npm install && npm run build` (outputs to `app/dist`).
 - Backend build: `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
 
+### Service Execution Rules
+- All services (backend and frontend) MUST be started via PM2, NEVER using Vite dev server directly.
+- Before starting a service, rebuild it with the appropriate mode for the target environment:
+  - **production**: `npm run build` (default)
+  - **development**: `npm run build-dev`
+  - **localhost**: `npm run build-dev` with local env overrides
+- PM2 commands: `pm2 start <script> --name <service-name>`, `pm2 stop <name>`, `pm2 restart <name>`, `pm2 logs <name>`.
+
 ### Dev version (p2)
 - Start backend: `cd backend && npm install && npm run dev` (listens on `127.0.0.1:3002`).
 - Build frontend after each change: `cd app && npm install && npm run build-dev` (outputs to `app/dist`).
@@ -100,6 +108,13 @@ Socket.IO is the real-time layer for updates.
 - Expense attachments are served from `/uploads/expenses`.
 - Guide directories use mock fallback data when automation APIs fail and expose a global Log sidebar from the Guide header.
 
+## Product Notes (OperOps/CRM)
+- CRM components migrated from `automation/appkanban` live in `app/src/components/crm/`.
+- CRM pages live in `app/src/pages/operops/` (CRMPage, PerformersPage, FinancesPerformersPage, ProjectsTree, TaskPage).
+- CRM stores: `kanbanStore.ts` (tickets, epics, performers), `crmStore.ts` (UI state), `projectsStore.ts` (project tree), `requestStore.ts` (API).
+- Socket.IO events for CRM: TICKET_CREATED, TICKET_UPDATED, TICKET_DELETED, EPIC_UPDATED, COMMENT_ADDED, WORK_HOURS_UPDATED.
+- CRM routes accessible at `/operops/*` with OperOpsNav horizontal navigation.
+
 ## Deployment Endpoints
 - `copilot.stratospace.fun` → FinOps shell served from `app/dist` (host Nginx config in `deploy/nginx-host.conf`).
 - `finops.stratospace.fun` → FinOps frontend (`app/dist`).
@@ -108,3 +123,8 @@ Socket.IO is the real-time layer for updates.
 ## Portal Auth
 - The Copilot portal uses `/api/try_login`, which proxies Voicebot `/try_login`; configure `VOICEBOT_API_URL` in the backend environment.
 - Frontend auth checks call `https://voice.stratospace.fun/auth/me` (override with `VITE_VOICEBOT_BASE_URL`) and require the shared `auth_token` cookie for `.stratospace.fun`.
+
+## Testing
+- Unit tests: `npm run test` (Jest) in `app/` and `backend/`.
+- E2E tests: `npm run test:e2e` (Playwright) in `app/` — runs against local dev server.
+- E2E tests require running dev server or use `PLAYWRIGHT_BASE_URL` env var.

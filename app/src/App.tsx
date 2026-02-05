@@ -25,7 +25,14 @@ import ProjectEditPage from './pages/ProjectEditPage';
 import NotificationsDrawer from './components/NotificationsDrawer';
 import { useNotificationStore } from './store/notificationStore';
 import VoicePage from './pages/VoicePage';
-import OperopsPage from './pages/OperopsPage';
+import OperOpsLayout from './pages/OperOpsLayout';
+import {
+  CRMPage,
+  PerformersPage,
+  TaskPage,
+  ProjectsTree,
+  FinancesPerformersPage,
+} from './pages/operops';
 import ChatopsPage from './pages/ChatopsPage';
 import AgentsOpsPage from './pages/AgentsOpsPage';
 import DesopsPage from './pages/DesopsPage';
@@ -87,24 +94,24 @@ function MainLayout(): ReactElement {
   const contextLabel = normalizedPath.startsWith('/finops') || normalizedPath.startsWith('/plan-fact')
     ? 'FinOps'
     : normalizedPath.startsWith('/saleops')
-    ? 'SaleOps'
-    : normalizedPath.startsWith('/hhops')
-    ? 'HHOps'
-    : normalizedPath.startsWith('/guide')
-    ? 'Guides'
-    : normalizedPath.startsWith('/voice')
-    ? 'Voice'
-    : normalizedPath.startsWith('/operops')
-    ? 'OperOps'
-    : normalizedPath.startsWith('/chatops')
-    ? 'ChatOps'
-    : normalizedPath.startsWith('/agents')
-    ? 'Agents'
-    : normalizedPath.startsWith('/devops')
-    ? 'DevOps'
-    : normalizedPath.startsWith('/desops')
-    ? 'DevOps'
-    : 'Analytic';
+      ? 'SaleOps'
+      : normalizedPath.startsWith('/hhops')
+        ? 'HHOps'
+        : normalizedPath.startsWith('/guide')
+          ? 'Guides'
+          : normalizedPath.startsWith('/voice')
+            ? 'Voice'
+            : normalizedPath.startsWith('/operops')
+              ? 'OperOps'
+              : normalizedPath.startsWith('/chatops')
+                ? 'ChatOps'
+                : normalizedPath.startsWith('/agents')
+                  ? 'Agents'
+                  : normalizedPath.startsWith('/devops')
+                    ? 'DevOps'
+                    : normalizedPath.startsWith('/desops')
+                      ? 'DevOps'
+                      : 'Analytic';
 
   useEffect((): void => {
     setContextLabel(contextLabel);
@@ -158,8 +165,8 @@ function MainLayout(): ReactElement {
                   {item.badge === 'alpha'
                     ? '(alpha)'
                     : item.badge === 'beta'
-                    ? '(beta)'
-                    : '(dev)'}
+                      ? '(beta)'
+                      : '(dev)'}
                 </Tag>
               </NavLink>
             </Menu.Item>
@@ -192,8 +199,14 @@ export default function App(): ReactElement {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/analytics" replace />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/operops" element={<Navigate to="/operops/crm" replace />} />
-          <Route path="/operops/*" element={<OperopsPage />} />
+          <Route path="/operops" element={<OperOpsLayout />}>
+            <Route index element={<Navigate to="/operops/crm" replace />} />
+            <Route path="crm" element={<CRMPage />} />
+            <Route path="performers" element={<PerformersPage />} />
+            <Route path="finances-performers" element={<FinancesPerformersPage />} />
+            <Route path="projects-tree" element={<ProjectsTree />} />
+            <Route path="task/:taskId" element={<TaskPage />} />
+          </Route>
           <Route path="/chatops" element={<ChatopsPage />} />
           <Route path="/agents" element={<AgentsOpsPage />} />
           <Route path="/voice/*" element={<VoicePage />} />

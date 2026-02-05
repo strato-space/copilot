@@ -4,10 +4,26 @@
 export const SOCKET_EVENTS = {
   SUBSCRIBE: 'subscribe',
   UNSUBSCRIBE: 'unsubscribe',
+  // FinOps events
   PLAN_FACT_UPDATED: 'plan_fact_updated',
+  // CRM events
+  TICKET_CREATED: 'ticket_created',
+  TICKET_UPDATED: 'ticket_updated',
+  TICKET_DELETED: 'ticket_deleted',
+  EPIC_UPDATED: 'epic_updated',
+  COMMENT_ADDED: 'comment_added',
+  WORK_HOURS_UPDATED: 'work_hours_updated',
 } as const;
 
 export type SocketEvent = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
+
+// Socket Channels
+export const CHANNELS = {
+  CRM: 'crm',
+  FINOPS: 'finops',
+} as const;
+
+export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
 
 // =============================================================================
 // Queue Names (BullMQ)

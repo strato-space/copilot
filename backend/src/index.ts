@@ -6,7 +6,7 @@ import { existsSync } from 'fs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, '../.env') });
 
-import express, { type Request, type Response } from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -77,8 +77,11 @@ app.use(errorMiddleware);
 const frontendDistPath = process.env.FRONTEND_DIST_PATH ?? resolve(__dirname, '../../app/dist');
 if (existsSync(frontendDistPath)) {
   app.use(express.static(frontendDistPath));
-  // SPA fallback - serve index.html for all non-API routes (Express 5 syntax)
-  app.get(/^(?!\/api).*/, (_req: Request, res: Response) => {
+  // SPA fallback - serve index.html for all non-API routes
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
     res.sendFile(join(frontendDistPath, 'index.html'));
   });
   logger.info(`Serving frontend from: ${frontendDistPath}`);
@@ -151,10 +154,12 @@ const startServer = async () => {
     // Set health status to healthy
     setHealthStatus(true);
 
-    httpServer.listen(port, () => {
-      logger.info(`Copilot backend listening on port ${port}`, {
+    const host = process.env.API_HOST ?? '127.0.0.1';
+    httpServer.listen(port, host, () => {
+      logger.info(`Copilot backend listening on ${host}:${port}`, {
         service: serviceName,
         port,
+        host,
         env: process.env.NODE_ENV ?? 'development',
       });
     });

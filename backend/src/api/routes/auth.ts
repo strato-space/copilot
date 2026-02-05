@@ -97,10 +97,15 @@ const requestJson = async <T>(
 };
 
 const resolveCookieDomain = (req: Request): string | undefined => {
+  // Skip domain for localhost/127.0.0.1 to support local E2E tests
+  const host = req.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.')) {
+    return undefined;
+  }
   if (process.env.AUTH_COOKIE_DOMAIN) {
     return process.env.AUTH_COOKIE_DOMAIN;
   }
-  if (req.hostname.endsWith('.stratospace.fun')) {
+  if (host.endsWith('.stratospace.fun')) {
     return '.stratospace.fun';
   }
   return undefined;

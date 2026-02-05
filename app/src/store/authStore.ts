@@ -40,9 +40,10 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
   checkAuth: async (): Promise<void> => {
     set({ loading: true, error: null });
     try {
-      const response = await voicebotClient.get<{ user: AuthUser }>('/auth/me');
-      if (response.data?.user) {
-        set({ isAuth: true, user: response.data.user, loading: false, ready: true });
+      const response = await voicebotClient.get<{ data: { user: AuthUser } | null; error: unknown }>('/auth/me');
+      const user = response.data?.data?.user;
+      if (user) {
+        set({ isAuth: true, user, loading: false, ready: true });
         return;
       }
       set({ isAuth: false, user: null, loading: false, ready: true });
