@@ -13,19 +13,45 @@ import {
 } from '@ant-design/icons';
 
 const navItems = [
-    { key: 'crm', label: 'CRM', to: '/operops/crm', icon: <AppstoreOutlined /> },
-    { key: 'performers', label: 'Исполнители', to: '/operops/performers', icon: <TeamOutlined /> },
+    {
+        key: 'crm',
+        label: 'CRM',
+        to: '/operops/crm',
+        icon: (
+            <span className="inline-flex items-center justify-center w-4 h-4">
+                <AppstoreOutlined />
+            </span>
+        ),
+    },
+    {
+        key: 'performers',
+        label: 'Исполнители',
+        to: '/operops/performers',
+        icon: (
+            <span className="inline-flex items-center justify-center w-4 h-4">
+                <TeamOutlined />
+            </span>
+        ),
+    },
     {
         key: 'finances',
         label: 'Финансы исполнителей',
         to: '/operops/finances-performers',
-        icon: <DollarOutlined />,
+        icon: (
+            <span className="inline-flex items-center justify-center w-4 h-4">
+                <DollarOutlined />
+            </span>
+        ),
     },
     {
         key: 'projects',
         label: 'Дерево проектов',
         to: '/operops/projects-tree',
-        icon: <ApartmentOutlined />,
+        icon: (
+            <span className="inline-flex items-center justify-center w-4 h-4">
+                <ApartmentOutlined />
+            </span>
+        ),
     },
 ];
 

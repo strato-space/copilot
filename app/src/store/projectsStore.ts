@@ -33,6 +33,12 @@ interface ProjectsState {
 
 export const useProjectsStore = create<ProjectsState>((set, get) => {
     const api_request = useRequestStore.getState().api_request;
+    let isFetchingCustomers = false;
+    let lastCustomersFetchAt = 0;
+    let isFetchingProjectGroups = false;
+    let lastProjectGroupsFetchAt = 0;
+    let isFetchingProjects = false;
+    let lastProjectsFetchAt = 0;
 
     return {
         customers: [],
@@ -42,6 +48,10 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
         tree: [],
 
         fetchCustomers: async () => {
+            const now = Date.now();
+            if (isFetchingCustomers || now - lastCustomersFetchAt < 5000) return;
+            isFetchingCustomers = true;
+            lastCustomersFetchAt = now;
             set({ loading: true });
             try {
                 const res = await api_request<Customer[]>('customers/list', {});
@@ -49,10 +59,16 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             } catch (error) {
                 console.error('Error fetching customers:', error);
                 set({ loading: false });
+            } finally {
+                isFetchingCustomers = false;
             }
         },
 
         fetchProjectGroups: async () => {
+            const now = Date.now();
+            if (isFetchingProjectGroups || now - lastProjectGroupsFetchAt < 5000) return;
+            isFetchingProjectGroups = true;
+            lastProjectGroupsFetchAt = now;
             set({ loading: true });
             try {
                 const res = await api_request<ProjectGroup[]>('project_groups/list', {});
@@ -60,10 +76,16 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             } catch (error) {
                 console.error('Error fetching project groups:', error);
                 set({ loading: false });
+            } finally {
+                isFetchingProjectGroups = false;
             }
         },
 
         fetchProjects: async () => {
+            const now = Date.now();
+            if (isFetchingProjects || now - lastProjectsFetchAt < 5000) return;
+            isFetchingProjects = true;
+            lastProjectsFetchAt = now;
             set({ loading: true });
             try {
                 const res = await api_request<ProjectWithGroup[]>('projects/list', {});
@@ -71,6 +93,8 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             } catch (error) {
                 console.error('Error fetching projects:', error);
                 set({ loading: false });
+            } finally {
+                isFetchingProjects = false;
             }
         },
 

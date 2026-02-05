@@ -100,6 +100,10 @@ export const COLLECTIONS = {
   // Google Drive
   GOOGLE_DRIVE_EVENTS_CHANNELS: 'automation_google_drive_events_channels',
   GOOGLE_DRIVE_STRUCTURE: 'automation_google_drive_structure',
+
+  // Voicebot
+  VOICE_BOT_SESSIONS: 'automation_voice_bot_sessions',
+  VOICE_BOT_MESSAGES: 'automation_voice_bot_messages',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

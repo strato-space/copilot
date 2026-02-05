@@ -208,7 +208,12 @@ const CRMCreateTicket = () => {
                                         <Select
                                             allowClear
                                             placeholder="Выберите тип задачи"
-                                            options={Object.entries(_.groupBy(Object.values(task_types), 'supertype')).map(
+                                            options={Object.entries(
+                                                _.groupBy(
+                                                    Object.values(Array.isArray(task_types) ? task_types : []),
+                                                    'supertype'
+                                                )
+                                            ).map(
                                                 ([supertype, types]: [string, TaskType[]]) => ({
                                                     label: supertype,
                                                     title: supertype,

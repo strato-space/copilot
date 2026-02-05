@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button, ConfigProvider, Tabs, Tag, Spin, Table, Tooltip, message } from 'antd';
 import type { TableColumnType } from 'antd';
 import dayjs from 'dayjs';
@@ -65,14 +65,23 @@ const CRMPage = () => {
     const [restartCreateTasksId, setRestartCreateTasksId] = useState<string | null>(null);
 
     const { isAuth, loading: authLoading } = useAuthStore();
+    const initialDataLoadedRef = useRef(false);
 
     useEffect(() => {
-        if (isAuth) {
-            if (projects.length < 1) fetchDictionary();
-            fetchCustomers();
-            fetchProjectGroups();
-            fetchProjects();
+        if (!isAuth) {
+            initialDataLoadedRef.current = false;
         }
+    }, [isAuth]);
+
+    useEffect(() => {
+        if (!isAuth || initialDataLoadedRef.current) return;
+
+        if (projects.length < 1) fetchDictionary();
+        fetchCustomers();
+        fetchProjectGroups();
+        fetchProjects();
+
+        initialDataLoadedRef.current = true;
     }, [isAuth, projects.length, fetchDictionary, fetchCustomers, fetchProjectGroups, fetchProjects]);
 
     const fetchVoiceSessions = useCallback(async () => {
@@ -130,7 +139,7 @@ const CRMPage = () => {
         widgets[widget] = _.reduce(tickets ?? [], (result, ticket) => (statuses.includes(ticket.task_status as string) ? result + 1 : result), 0);
     }
 
-    const subTabConfigs: Record<string, SubTabConfig> = {
+    const subTabConfigs: Record<string, SubTabConfig> = useMemo(() => ({
         new: {
             key: 'new',
             label: 'New',
@@ -195,16 +204,16 @@ const CRMPage = () => {
             },
             columns: ['mark', 'created_at', 'updated_at', 'project', 'epic', 'order', 'title', 'performer', 'priority', 'task_status', 'task_type', 'shipment_date', 'estimated_time_edit', 'total_hours', 'dashboard_comment', 'edit_action', 'notification'],
         },
-    };
+    }), [savedFilters]);
 
-    const mainTabs = [
+    const mainTabs = useMemo(() => [
         { key: 'voice', label: 'Voice' },
         { key: 'plan', label: 'Plan', subTabs: ['new', 'plan'] },
         { key: 'backlog', label: 'Backlog', subTabs: ['work', 'review'] },
         { key: 'upload', label: 'Upload', configKey: 'upload' },
         { key: 'done', label: 'Done', configKey: 'done' },
         { key: 'archive', label: 'Archive', configKey: 'archive' },
-    ];
+    ], []);
 
     const mainTabKeys = mainTabs.map((tab) => tab.key);
     const resolvedMainTab = mainTabKeys.includes(savedTab) ? savedTab : 'plan';
@@ -222,7 +231,17 @@ const CRMPage = () => {
     const activeSubTab = activeMainTab === 'plan' ? subTabsState.plan : activeMainTab === 'backlog' ? subTabsState.backlog : null;
     const activeConfigKey = activeSubTab ?? mainTabs.find((tab) => tab.key === activeMainTab)?.configKey ?? null;
     const activeConfig = activeConfigKey ? subTabConfigs[activeConfigKey] : null;
-    const tabItems = mainTabs.map(({ key, label }) => ({ key, label }));
+    const tabItems = useMemo(() => mainTabs.map(({ key, label }) => ({ key, label })), [mainTabs]);
+
+    const crmFilter = useMemo(() => {
+        if (!activeConfigKey) return null;
+        const config = subTabConfigs[activeConfigKey];
+        if (!config?.filter) return null;
+        return {
+            task_status: config.filter.task_status?.filter((s): s is string => s !== null),
+            ...Object.fromEntries(Object.entries(config.filter).filter(([k]) => k !== 'task_status')),
+        };
+    }, [activeConfigKey, subTabConfigs]);
 
     const handleRefresh = () => {
         if (activeMainTab === 'voice') {
@@ -460,12 +479,7 @@ const CRMPage = () => {
                         ) : activeConfig ? (
                             <CRMKanban
                                 key={`${activeMainTab}-${activeConfigKey}`}
-                                filter={{
-                                    task_status: activeConfig.filter.task_status?.filter((s): s is string => s !== null),
-                                    ...Object.fromEntries(
-                                        Object.entries(activeConfig.filter).filter(([k]) => k !== 'task_status')
-                                    ),
-                                }}
+                                filter={crmFilter ?? { task_status: [] }}
                                 columns={activeConfig.columns}
                                 column_width={activeConfig.column_width}
                                 pagination={activeConfig.pagination}

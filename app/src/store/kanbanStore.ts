@@ -235,14 +235,30 @@ interface KanbanState {
 
 export const useKanbanStore = create<KanbanState>((set, get) => {
     const api_request = useRequestStore.getState().api_request;
+    let isFetchingTickets = false;
+    let lastTicketsFetchAt = 0;
+    let lastTicketsFetchKey = '';
 
     const fetchTickets = async (statuses?: string[]): Promise<void> => {
+        const key = JSON.stringify(statuses ?? []);
+        const now = Date.now();
+        const recentlyFetched = key === lastTicketsFetchKey && now - lastTicketsFetchAt < 5000;
+
+        if (isFetchingTickets && key === lastTicketsFetchKey) return;
+        if (recentlyFetched) return;
+
+        isFetchingTickets = true;
+        lastTicketsFetchKey = key;
+        lastTicketsFetchAt = now;
+
         try {
             const response = await api_request<Ticket[]>('tickets', { satuses: statuses });
             const handleData = response.map((item) => ({ ...item }));
             set({ tickets: handleData, tickets_updated_at: Date.now() });
         } catch (e) {
             console.error('Error fetching tickets:', e);
+        } finally {
+            isFetchingTickets = false;
         }
     };
 
@@ -467,7 +483,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
 
         uploadFile: async (file) => {
             const relative_url = await useRequestStore.getState().sendFile(file, { silent: true });
-            const backendUrl = import.meta.env.VITE_API_URL || '/api';
+            const backendUrl =
+                import.meta.env.VITE_CRM_API_URL ||
+                import.meta.env.VITE_API_URL ||
+                import.meta.env.VITE_API_BASE_URL ||
+                '/api/crm';
             return backendUrl + relative_url;
         },
 

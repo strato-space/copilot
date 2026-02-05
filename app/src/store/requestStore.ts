@@ -18,7 +18,7 @@ interface RequestState {
     sendFile: (file: File, opt?: RequestOptions) => Promise<string>;
 }
 
-// Get backend URL from environment or window
+// Get CRM backend URL from environment or window
 const getBackendUrl = (): string => {
     // Check window first (for runtime config)
     if (typeof window !== 'undefined') {
@@ -26,7 +26,12 @@ const getBackendUrl = (): string => {
         if (win.backend_url) return win.backend_url;
     }
     // Fall back to env
-    return import.meta.env.VITE_API_URL || '/api';
+    return (
+        import.meta.env.VITE_CRM_API_URL ||
+        import.meta.env.VITE_API_URL ||
+        import.meta.env.VITE_API_BASE_URL ||
+        '/api/crm'
+    );
 };
 
 // Check if proxy is configured

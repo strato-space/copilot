@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Table,
@@ -55,6 +55,12 @@ import WorkHoursSidebar from './WorkHoursSidebar';
 
 dayjs.extend(relativeTime);
 
+const roundTo = (value: number, precision = 0): number => {
+    if (!Number.isFinite(value)) return 0;
+    const factor = 10 ** precision;
+    return Math.round(value * factor) / factor;
+};
+
 interface CRMKanbanProps {
     filter: {
         task_status?: string[];
@@ -70,6 +76,7 @@ interface CRMKanbanProps {
 
 const CRMKanban = (props: CRMKanbanProps) => {
     const navigate = useNavigate();
+    const debugCRM = import.meta.env.VITE_DEBUG_CRM === 'true';
     const { isAuth, loading: authLoading } = useAuthStore();
     const {
         tickets,
@@ -143,28 +150,43 @@ const CRMKanban = (props: CRMKanbanProps) => {
     useEffect(() => {
         if (isAuth) {
             if (tickets.length < 1) {
+                if (debugCRM) {
+                    console.debug('[CRMKanban] fetchTickets on mount', {
+                        statusFilter: props.filter.task_status ?? [],
+                        ticketsLength: tickets.length,
+                    });
+                }
                 fetchTickets(props.filter.task_status ?? []);
             }
         }
     }, [isAuth, tickets.length, props.filter.task_status, fetchTickets]);
 
     useEffect(() => {
-        setStatusFilter(props.filter.task_status ?? []);
-    }, [props.filter.task_status, setStatusFilter]);
+        const nextStatusFilter = props.filter.task_status ?? [];
+        if (_.isEqual(statusFilter, nextStatusFilter)) return;
+        if (debugCRM) {
+            console.debug('[CRMKanban] setStatusFilter', {
+                prev: statusFilter,
+                next: nextStatusFilter,
+            });
+        }
+        setStatusFilter(nextStatusFilter);
+    }, [props.filter.task_status, statusFilter, setStatusFilter]);
 
-    const compareStrings = (a: string | undefined | null, b: string | undefined | null) => {
+    const compareStrings = useCallback((a: string | undefined | null, b: string | undefined | null) => {
         if (_.isEmpty(a) && _.isEmpty(b)) return 0;
         if (_.isEmpty(a) && !_.isEmpty(b)) return 1;
         if (!_.isEmpty(a) && _.isEmpty(b)) return -1;
         return (a ?? '').localeCompare(b ?? '');
-    };
+    }, []);
 
-    const getTaskType = (id: string | undefined): TaskType | undefined => {
+    const getTaskType = useCallback((id: string | undefined): TaskType | undefined => {
         if (!id) return undefined;
-        return task_types.find((t) => t._id === id || t.task_id === id);
-    };
+        const taskTypes = task_types ?? [];
+        return taskTypes.find((t) => t._id === id || t.task_id === id);
+    }, [task_types]);
 
-    const compareTaskTypes = (a: string | undefined, b: string | undefined) => {
+    const compareTaskTypes = useCallback((a: string | undefined, b: string | undefined) => {
         const ta = getTaskType(a);
         const tb = getTaskType(b);
         if (_.isEmpty(ta) && _.isEmpty(tb)) return 0;
@@ -173,7 +195,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         const na = `${ta?.supertype ?? ''}: ${ta?.name ?? ''}`;
         const nb = `${tb?.supertype ?? ''}: ${tb?.name ?? ''}`;
         return na.localeCompare(nb);
-    };
+    }, [getTaskType]);
 
     const rowSelection: TableProps<Ticket>['rowSelection'] = {
         selectedRowKeys: selectedRows,
@@ -182,7 +204,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         },
     };
 
-    const columns: TableColumnType<Ticket>[] = [
+    const columns = useMemo<TableColumnType<Ticket>[]>(() => [
         {
             title: 'Дата',
             key: 'created_at',
@@ -482,10 +504,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
             sorter: (a, b) => (parseFloat(String(a.total_hours)) || 0) - (parseFloat(String(b.total_hours)) || 0),
             render: (_, record) => {
                 const planValue = parseFloat(String(record.estimated_time)) || 0;
-                const factValue = _.round(parseFloat(String(record.total_hours)) || 0, 1);
+                const factValue = roundTo(parseFloat(String(record.total_hours)) || 0, 1);
                 const est = parseFloat(String(record.estimated_time));
                 const tot = parseFloat(String(record.total_hours));
-                const show_alert = _.isNumber(est) && _.isNumber(tot) && est > 0 && tot > 0 && tot - est > 0.5;
+                const show_alert = Number.isFinite(est) && Number.isFinite(tot) && est > 0 && tot > 0 && tot - est > 0.5;
 
                 return (
                     <div className="flex flex-col items-center justify-center gap-1">
@@ -530,7 +552,27 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 </div>
             ),
         },
-    ];
+    ], [
+        compareStrings,
+        compareTaskTypes,
+        getTaskType,
+        customers,
+        projectGroups,
+        projectGroupFilter,
+        projectsData,
+        performers,
+        epics,
+        task_types,
+        props.column_width,
+        props.filter,
+        setProjectFilter,
+        setProjectGroupFilter,
+        setEditingColumn,
+        setEditingTicket,
+        setEditingWorkHours,
+        setCommentedTicket,
+        setApproveModalOpen,
+    ]);
 
     const normalizeColumnKeys = (keys: string[]) => {
         const planKeys = ['estimated_time', 'estimated_time_edit', 'total_hours'];
@@ -546,9 +588,12 @@ const CRMKanban = (props: CRMKanbanProps) => {
         return result;
     };
 
-    const rawColumnKeys = props.columns ?? columns.map((column) => column.key as string);
-    const normalizedColumnKeys = normalizeColumnKeys(rawColumnKeys);
-    const filteredColumns = columns.filter((c) => normalizedColumnKeys.includes(c.key as string));
+    const rawColumnKeys = useMemo(() => props.columns ?? columns.map((column) => column.key as string), [props.columns, columns]);
+    const normalizedColumnKeys = useMemo(() => normalizeColumnKeys(rawColumnKeys), [rawColumnKeys]);
+    const filteredColumns = useMemo(
+        () => columns.filter((c) => normalizedColumnKeys.includes(c.key as string)),
+        [columns, normalizedColumnKeys]
+    );
 
     const recalulateStatusesStat = useCallback(() => {
         let true_filtered_data = tickets;
@@ -563,6 +608,12 @@ const CRMKanban = (props: CRMKanbanProps) => {
     }, [tickets, filteredColumns, calculateStatusesStat]);
 
     useEffect(() => {
+        if (debugCRM) {
+            console.debug('[CRMKanban] recalulateStatusesStat', {
+                ticketsLength: tickets.length,
+                filteredColumns: filteredColumns.map((c) => c.key),
+            });
+        }
         recalulateStatusesStat();
     }, [tickets, recalulateStatusesStat]);
 
@@ -627,6 +678,13 @@ const CRMKanban = (props: CRMKanbanProps) => {
                     pagination={props.pagination ? { pageSize: 100 } : false}
                     onChange={(pagination, filters, sorter, extra) => {
                         if (extra.action === 'filter') {
+                            if (debugCRM) {
+                                console.debug('[CRMKanban] table filter change', {
+                                    filters,
+                                    sorter,
+                                    pagination,
+                                });
+                            }
                             saveFilters(filters as Record<string, (string | boolean)[] | null>);
                             recalulateStatusesStat();
                         }

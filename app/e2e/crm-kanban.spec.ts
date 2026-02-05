@@ -10,7 +10,7 @@ test.describe('CRM Kanban @unauth', () => {
 test.describe('CRM Kanban', () => {
     test('should display CRM page content', async ({ page }) => {
         await page.goto('/operops/crm');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
 
         // Should show CRM page (tabs or table or spinner or menu)
         const content = page.locator('.ant-tabs, .ant-table, .ant-spin, .crm-header-tabs, .ant-menu');
@@ -19,7 +19,7 @@ test.describe('CRM Kanban', () => {
 
     test('should display main tabs', async ({ page }) => {
         await page.goto('/operops/crm');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
 
         // Wait for tabs to appear - CRM uses class crm-header-tabs or ant-tabs
         // The tabs show after data loads, so we check for any navigation or tabs
@@ -29,16 +29,29 @@ test.describe('CRM Kanban', () => {
 
     test('should display tickets table or loading state', async ({ page }) => {
         await page.goto('/operops/crm');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
 
-        // Wait for table or spinner
-        const tableOrSpinner = page.locator('.ant-table, .ant-spin');
-        await expect(tableOrSpinner.first()).toBeVisible({ timeout: 20000 });
+        // Wait for table, empty state, or spinner to be present
+        const table = page.locator('.ant-table');
+        const empty = page.locator('.ant-empty');
+        const spinner = page.locator('.ant-spin, .ant-spin-fullscreen-show');
+        await expect
+            .poll(async () => {
+                const [tableCount, emptyCount, spinnerCount] = await Promise.all([
+                    table.count(),
+                    empty.count(),
+                    spinner.count(),
+                ]);
+                return tableCount > 0 || emptyCount > 0 || spinnerCount > 0;
+            }, {
+                timeout: 20000,
+            })
+            .toBeTruthy();
     });
 
     test('should have refresh button', async ({ page }) => {
         await page.goto('/operops/crm');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
 
         // Look for sync/refresh button
         const refreshBtn = page.getByRole('button').filter({ has: page.locator('.anticon-sync, .anticon-reload') })
@@ -51,39 +64,96 @@ test.describe('CRM Kanban', () => {
 });
 
 test.describe('CRM Kanban Table Columns', () => {
-    // These tests depend on actual data loading which may take time or fail
-    // Skip them for now as they are flaky without real backend data
-    test.skip('should display table headers when data loads', async ({ page }) => {
-        await page.goto('/operops/crm');
-        await page.waitForLoadState('networkidle');
+    const mockDictionary = {
+        projects: [{ _id: 'proj-1', name: 'Demo Project' }],
+        performers: [],
+        clients: [],
+        tracks: [],
+        tree: [],
+        task_types: [],
+        task_supertypes: [],
+        task_types_tree: [],
+        epics: [],
+        income_types: [],
+    };
 
-        // Wait for table to appear (may take time to load data)
-        const table = page.locator('.ant-table');
-        await expect(table.first()).toBeVisible({ timeout: 25000 });
+    const mockTickets: Array<Record<string, unknown>> = [];
 
-        // Check for column headers
-        const headers = page.locator('.ant-table-thead th');
-        const count = await headers.count();
-        expect(count).toBeGreaterThan(0);
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/api/crm/dictionary', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(mockDictionary),
+            });
+        });
+        await page.route('**/api/crm/tickets', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(mockTickets),
+            });
+        });
     });
 
-    test.skip('should display Проект column', async ({ page }) => {
+    const setPlanTabCookie = async (page: import('@playwright/test').Page) => {
+        await page.context().addCookies([
+            {
+                name: 'crm-tab',
+                value: 'plan',
+                domain: '127.0.0.1',
+                path: '/',
+            },
+        ]);
+    };
+
+    test('should display table headers when data loads', async ({ page }) => {
+        await setPlanTabCookie(page);
         await page.goto('/operops/crm');
-        await page.waitForLoadState('networkidle');
-        await page.waitForSelector('.ant-table', { timeout: 25000 });
+        await page.waitForLoadState('domcontentloaded');
+
+        const table = page.locator('.ant-table');
+        await expect
+            .poll(async () => (await table.count()) > 0, { timeout: 30000 })
+            .toBeTruthy();
+
+        const headers = page.locator('.ant-table-thead th');
+        await expect
+            .poll(async () => (await headers.count()) > 0, { timeout: 10000 })
+            .toBeTruthy();
+    });
+
+    test('should display Проект column', async ({ page }) => {
+        await setPlanTabCookie(page);
+        await page.goto('/operops/crm');
+        await page.waitForLoadState('domcontentloaded');
+
+        const table = page.locator('.ant-table');
+        await expect
+            .poll(async () => (await table.count()) > 0, { timeout: 30000 })
+            .toBeTruthy();
 
         const projectColumn = page.getByRole('columnheader', { name: /Проект|Project/i })
             .or(page.locator('th').filter({ hasText: /Проект|Project/i }));
-        await expect(projectColumn.first()).toBeVisible();
+        await expect(projectColumn.first()).toBeVisible({ timeout: 10000 });
     });
 
-    test.skip('should display Задача column', async ({ page }) => {
+    test('should display Задача column', async ({ page }) => {
+        await setPlanTabCookie(page);
         await page.goto('/operops/crm');
-        await page.waitForLoadState('networkidle');
-        await page.waitForSelector('.ant-table', { timeout: 25000 });
+        await page.waitForLoadState('domcontentloaded');
 
-        const taskColumn = page.getByRole('columnheader', { name: /Задача|Task|Название/i })
+        // Wait for table or empty state to appear
+        const table = page.locator('.ant-table');
+        await expect
+            .poll(async () => (await table.count()) > 0, {
+                timeout: 30000,
+            })
+            .toBeTruthy();
+
+        const taskColumn = page
+            .getByRole('columnheader', { name: /Задача|Task|Название/i })
             .or(page.locator('th').filter({ hasText: /Задача|Task|Название/i }));
-        await expect(taskColumn.first()).toBeVisible();
+        await expect(taskColumn.first()).toBeVisible({ timeout: 10000 });
     });
 });
