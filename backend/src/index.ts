@@ -16,6 +16,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { registerSocketHandlers } from './api/socket.js';
 import apiRouter from './api/routes/index.js';
 import crmRouter from './api/routes/crm/index.js';
+import voicebotRouter from './api/routes/voicebot/index.js';
 import { errorMiddleware } from './api/middleware/error.js';
 import { sendOk } from './api/middleware/response.js';
 import { metricsMiddleware, metricsHandler, setHealthStatus } from './api/middleware/metrics.js';
@@ -69,6 +70,10 @@ app.use('/api', apiRouter);
 
 // CRM routes (migrated from automation)
 app.use('/api/crm', crmRouter);
+
+// VoiceBot routes (migrated from voicebot)
+// All voicebot routes require SUPER_ADMIN or ADMIN role
+app.use('/api/voicebot', voicebotRouter);
 
 // Error handling middleware
 app.use(errorMiddleware);

@@ -262,3 +262,188 @@ export const REDIS_KEYS = {
   VOICE_BOT_TRANSCRIBE: 'VOICE_BOT_TRANSCRIBE',
 } as const;
 
+// =============================================================================
+// VoiceBot Queue Names (BullMQ)
+// =============================================================================
+function resolveBetaTag(rawValue: string | undefined): string {
+  const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+  if (!value) return '';
+  const lower = value.toLowerCase();
+  if (lower === 'false') return '';
+  if (lower === 'true') return 'beta';
+  return value;
+}
+
+const BETA_TAG = resolveBetaTag(process.env.VOICE_BOT_IS_BETA);
+export const IS_BETA = BETA_TAG !== '';
+
+const baseVoiceBotQueues = {
+  COMMON: 'voicebot--common',
+  PROCESSORS: 'voicebot--processors',
+  POSTPROCESSORS: 'voicebot--postprocessors',
+  VOICE: 'voicebot--voice',
+  EVENTS: 'voicebot--events',
+  NOTIFIES: 'voicebot--notifies',
+} as const;
+
+// Apply beta suffix if configured
+export const VOICEBOT_QUEUES = Object.fromEntries(
+  Object.entries(baseVoiceBotQueues).map(([key, value]) => [
+    key,
+    IS_BETA ? `${value}-${BETA_TAG}` : value,
+  ])
+) as typeof baseVoiceBotQueues;
+
+// =============================================================================
+// VoiceBot Job Names
+// =============================================================================
+export const VOICEBOT_JOBS = {
+  common: {
+    HANDLE_VOICE: 'HANDLE_VOICE',
+    HANDLE_TEXT: 'HANDLE_TEXT',
+    START_MULTIPROMPT: 'START_MULTIPROMPT',
+    DONE_MULTIPROMPT: 'DONE_MULTIPROMPT',
+    PROCESSING: 'PROCESSING',
+    SAVE: 'SAVE',
+    CREATE_TASKS_FROM_CHUNKS: 'CREATE_TASKS_FROM_CHUNKS',
+  },
+  voice: {
+    TRANSCRIBE: 'TRANSCRIBE',
+    CATEGORIZE: 'CATEGORIZE',
+    SUMMARIZE: 'SUMMARIZE',
+    QUESTIONS: 'QUESTIONS',
+    CUSTOM_PROMPT: 'CUSTOM_PROMPT',
+  },
+  postprocessing: {
+    ALL_CUSTOM_PROMPTS: 'ALL_CUSTOM_PROMPTS',
+    ONE_CUSTOM_PROMPT: 'ONE_CUSTOM_PROMPT',
+    FINAL_CUSTOM_PROMPT: 'FINAL_CUSTOM_PROMPT',
+    AUDIO_MERGING: 'AUDIO_MERGING',
+    CREATE_TASKS: 'CREATE_TASKS',
+  },
+  events: {
+    SEND_TO_SOCKET: 'SEND_TO_SOCKET',
+  },
+  notifies: {
+    SESSION_START: 'session_start',
+    SESSION_DONE: 'session_done',
+    SESSION_CHANGED: 'session_changed',
+    SESSION_TRANSCRIPTION_DONE: 'session_transcription_done',
+    SESSION_CATEGORIZATION_DONE: 'session_categorization_done',
+    SESSION_TASKS_CREATED: 'session_tasks_created',
+    SESSION_PROJECT_ASSIGNED: 'session_project_assigned',
+  },
+} as const;
+
+// =============================================================================
+// VoiceBot Session Types
+// =============================================================================
+export const VOICEBOT_SESSION_TYPES = {
+  MULTIPROMPT_VOICE_SESSION: 'multiprompt_voice_session',
+} as const;
+
+export const VOICEBOT_SESSION_SOURCE = {
+  TELEGRAM: 'telegram',
+  API: 'api',
+  WEB: 'web',
+} as const;
+
+// =============================================================================
+// VoiceBot Processors
+// =============================================================================
+export const VOICEBOT_PROCESSORS = {
+  TRANSCRIPTION: 'transcription',
+  CATEGORIZATION: 'categorization',
+  SUMMARIZATION: 'summarization',
+  QUESTIONING: 'questioning',
+  FINALIZATION: 'finalization',
+  POSTPROCESSING_SUMMARY: 'postprocessing_summary',
+  POSTPROCESSING_DAILY: 'postprocessing_daily',
+  CUSTOM_PROCESSING: 'custom_processing',
+} as const;
+
+export const VOICE_MESSAGE_SOURCES = {
+  TELEGRAM: 'telegram',
+  WEB: 'web',
+} as const;
+
+// =============================================================================
+// VoiceBot Prompts
+// =============================================================================
+export const VOICEBOT_PROMPTS = {
+  CATEGORIZATION: 'CATEGORIZATION',
+  DAILY_PROCESSING: 'DAILY_PROCESSING',
+  SUMMARIZATION: 'SUMMARIZATION',
+  QUESTIONING: 'QUESTIONING',
+  QUESTIONS_DEDUPLICATION: 'QUESTIONS_DEDUPLICATION',
+  TASK_CREATION: 'TASK_CREATION',
+} as const;
+
+// =============================================================================
+// MCP Events
+// =============================================================================
+export const MCP_EVENTS = {
+  MCP_CALL: 'mcp_call',
+  MCP_CHUNK: 'mcp_chunk',
+  MCP_COMPLETE: 'mcp_complete',
+  MCP_NOTIFICATION: 'mcp_notification',
+  ERROR: 'mcp_error',
+} as const;
+
+// =============================================================================
+// VoiceBot Socket.IO Events
+// =============================================================================
+export const VOICEBOT_SOCKET_EVENTS = {
+  SUBSCRIBE_ON_SESSION: 'subscribe_on_session',
+  UNSUBSCRIBE_FROM_SESSION: 'unsubscribe_from_session',
+  SESSION_DONE: 'session_done',
+  POST_PROCESS_SESSION: 'post_process_session',
+  CREATE_TASKS_FROM_CHUNKS: 'create_tasks_from_chunks',
+  // Events emitted by server
+  SESSION_UPDATED: 'session_updated',
+  MESSAGE_UPDATED: 'message_updated',
+  TRANSCRIPTION_COMPLETE: 'transcription_complete',
+} as const;
+
+// =============================================================================
+// VoiceBot Session Access Levels
+// =============================================================================
+export const VOICE_BOT_SESSION_ACCESS = {
+  PUBLIC: 'public',       // Accessible to all project users
+  RESTRICTED: 'restricted', // Accessible to creator and allowed_users only
+  PRIVATE: 'private',     // Accessible to creator only
+} as const;
+
+// =============================================================================
+// VoiceBot Collections (additional)
+// =============================================================================
+export const VOICEBOT_COLLECTIONS = {
+  // Core VoiceBot
+  SESSIONS: 'automation_voice_bot_sessions',
+  MESSAGES: 'automation_voice_bot_messages',
+  TOPICS: 'automation_voice_bot_topics',
+  TG_VOICE_SESSIONS: 'automation_tg_voice_sessions',
+  // Tokens & Status
+  ONE_USE_TOKENS: 'automation_one_use_tokens',
+  PROMPTS_STATUSES: 'automation_prompts_status',
+  AGENTS_STATUSES: 'automation_agents_status',
+  AGENTS_RUN_RESULTS: 'automation_agents_run_results',
+  // Shared collections (also in COLLECTIONS)
+  PERFORMERS: 'automation_performers',
+  PROJECTS: 'automation_projects',
+  PERSONS: 'automation_persons',
+  PERMISSIONS_LOG: 'automation_permissions_log',
+  // Google Drive
+  GOOGLE_DRIVE_PROJECTS_FILES: 'automation_google_drive_projects_files',
+} as const;
+
+// =============================================================================
+// VoiceBot File Storage Configuration
+// =============================================================================
+export const VOICEBOT_FILE_STORAGE = {
+  uploadsDir: process.env.VOICEBOT_UPLOADS_DIR || 'uploads/voicebot',
+  audioDir: process.env.VOICEBOT_AUDIO_DIR || 'uploads/voicebot/audio',
+  tempDir: process.env.VOICEBOT_TEMP_DIR || 'uploads/voicebot/temp',
+  maxFileSize: 50 * 1024 * 1024, // 50MB
+} as const;
+

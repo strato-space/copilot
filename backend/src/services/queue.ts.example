@@ -1,0 +1,86 @@
+/**
+ * Queue Service (Example)
+ *
+ * This is an example of how to set up BullMQ queues for voicebot.
+ * Not included in the build - rename to queue.ts to enable.
+ *
+ * Prerequisites:
+ * - npm install bullmq ioredis
+ * - Configure Redis connection in .env
+ */
+
+import { Queue } from 'bullmq';
+import Redis from 'ioredis';
+import { VOICE_BOT_QUEUES } from '../constants.js';
+
+// Connection options from environment
+const connectionOptions = {
+  host: process.env.REDIS_CONNECTION_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_CONNECTION_PORT || '6379'),
+  password: process.env.REDIS_CONNECTION_PASSWORD || undefined,
+  db: parseInt(process.env.REDIS_DB_INDEX || '0'),
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+};
+
+// Shared Redis connection
+let connection: Redis | null = null;
+
+export function getRedisConnection(): Redis {
+  if (!connection) {
+    connection = new Redis(connectionOptions);
+    connection.on('error', (err) => {
+      console.error('[queue] Redis error:', err);
+    });
+  }
+  return connection;
+}
+
+// Queue instances
+const queues: Map<string, Queue> = new Map();
+
+export function getQueue(name: string): Queue {
+  if (!queues.has(name)) {
+    queues.set(name, new Queue(name, { connection: getRedisConnection() }));
+  }
+  return queues.get(name)!;
+}
+
+// Convenience getters for voicebot queues
+export const voicebotQueues = {
+  common: () => getQueue(VOICE_BOT_QUEUES.COMMON),
+  voice: () => getQueue(VOICE_BOT_QUEUES.VOICE),
+  processors: () => getQueue(VOICE_BOT_QUEUES.PROCESSORS),
+  postprocessors: () => getQueue(VOICE_BOT_QUEUES.POSTPROCESSORS),
+  events: () => getQueue(VOICE_BOT_QUEUES.EVENTS),
+  notifies: () => getQueue(VOICE_BOT_QUEUES.NOTIFIES),
+};
+
+/**
+ * Add a job to emit a socket event
+ */
+export async function emitVoicebotEvent(
+  sessionId: string,
+  event: string,
+  payload: unknown
+): Promise<void> {
+  await voicebotQueues.events().add('emit', {
+    session_id: sessionId,
+    event,
+    payload,
+  });
+}
+
+/**
+ * Clean up connections
+ */
+export async function closeQueues(): Promise<void> {
+  for (const queue of queues.values()) {
+    await queue.close();
+  }
+  queues.clear();
+  if (connection) {
+    await connection.quit();
+    connection = null;
+  }
+}

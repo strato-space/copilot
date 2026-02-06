@@ -32,3 +32,90 @@
 2026-02-05 17:57:44 [info]: 127.0.0.1 - - [05/Feb/2026:10:57:44 +0000] "POST /api/crm/voicebot/sessions_in_crm HTTP/1.1" 200 539 "http://127.0.0.1:3002/operops/crm" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
 2026-02-05 17:57:45 [info]: 127.0.0.1 - - [05/Feb/2026:10:57:45 +0000] "POST /api/crm/dictionary HTTP/1.1" 200 61803 "http://127.0.0.1:3002/operops/crm" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" {"service":"copilot-backend","component":"http"}
 2026-02-05 18:00:04 [info]: Received SIGINT, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-06 09:42:26 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 09:42:26 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 09:42:35 [info]: Received SIGTERM, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-06 09:42:59 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 09:42:59 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 09:43:29 [error]: Failed to start server {"service":"copilot-backend","error":"connection <monitor> to 92.63.177.46:27017 closed"}
+MongoServerSelectionError: connection <monitor> to 92.63.177.46:27017 closed
+    at Topology.selectServer (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/src/sdam/topology.ts:630:30)
+    at async Topology._connect (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/src/sdam/topology.ts:462:22)
+    at async Topology.connect (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/src/sdam/topology.ts:399:7)
+    at async topologyConnect (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/src/mongo_client.ts:662:9)
+    at async MongoClient._connect (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/src/mongo_client.ts:674:7)
+    at async MongoClient.connect (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/src/mongo_client.ts:586:7)
+    at async connectDb (/Users/tony_bit/Documents/strato-space/copilot/backend/src/services/db.ts:29:3)
+    at async startServer (/Users/tony_bit/Documents/strato-space/copilot/backend/src/index.ts:149:5)
+2026-02-06 09:48:19 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 09:48:19 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 09:48:20 [error]: Failed to start server {"service":"copilot-backend","error":"connection 1 to 92.63.177.46:27017 closed"}
+MongoNetworkError: connection 1 to 92.63.177.46:27017 closed
+    at Connection.onClose (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/lib/cmap/connection.js:134:22)
+    at Socket.emit (node:events:530:35)
+    at TCP.<anonymous> (node:net:346:12)
+2026-02-06 09:53:07 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 09:53:07 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 09:53:08 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-06 09:53:08 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-06 09:53:08 [info]: Copilot backend listening on 127.0.0.1:3002 {"service":"copilot-backend","port":3002,"host":"127.0.0.1","env":"development"}
+2026-02-06 09:53:08 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-06 09:53:24 [info]: Received SIGINT, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-06 09:53:54 [error]: Forced shutdown after timeout {"service":"copilot-backend"}
+2026-02-06 09:54:32 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 09:54:32 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 09:54:33 [error]: Failed to start server {"service":"copilot-backend","error":"connection 1 to 92.63.177.46:27017 closed"}
+MongoNetworkError: connection 1 to 92.63.177.46:27017 closed
+    at Connection.onClose (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/lib/cmap/connection.js:134:22)
+    at Socket.emit (node:events:530:35)
+    at TCP.<anonymous> (node:net:346:12)
+2026-02-06 10:02:21 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 10:02:21 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 10:02:22 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-06 10:02:22 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-06 10:02:22 [info]: Copilot backend listening on 127.0.0.1:3002 {"service":"copilot-backend","port":3002,"host":"127.0.0.1","env":"development"}
+2026-02-06 10:02:22 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-06 10:02:24 [info]: 127.0.0.1 - - [06/Feb/2026:03:02:24 +0000] "GET /api/health HTTP/1.1" 200 65 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:02:35 [info]: 127.0.0.1 - - [06/Feb/2026:03:02:35 +0000] "GET /api/health HTTP/1.1" 200 65 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:02:42 [info]: 127.0.0.1 - - [06/Feb/2026:03:02:42 +0000] "GET /api/voicebot/sessions HTTP/1.1" 401 40 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:02:49 [info]: 127.0.0.1 - - [06/Feb/2026:03:02:49 +0000] "GET /api/voicebot/sessions HTTP/1.1" 401 40 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:02:55 [info]: Received SIGTERM, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-06 10:03:25 [error]: Forced shutdown after timeout {"service":"copilot-backend"}
+2026-02-06 10:04:30 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 10:04:30 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 10:04:31 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-06 10:04:31 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-06 10:04:31 [info]: Copilot backend listening on 127.0.0.1:3002 {"service":"copilot-backend","port":3002,"host":"127.0.0.1","env":"development"}
+2026-02-06 10:04:31 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-06 10:05:09 [info]: 127.0.0.1 - - [06/Feb/2026:03:05:09 +0000] "POST /api/auth/try_login HTTP/1.1" 404 158 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:05:12 [info]: 127.0.0.1 - - [06/Feb/2026:03:05:12 +0000] "GET /api/auth/me HTTP/1.1" 401 70 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:05:16 [info]: 127.0.0.1 - - [06/Feb/2026:03:05:16 +0000] "POST /api/try_login HTTP/1.1" 401 86 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:06:24 [info]: 127.0.0.1 - - [06/Feb/2026:03:06:24 +0000] "GET /api/voicebot/sessions?limit=1 HTTP/1.1" 401 40 "-" "-" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:06:45 [info]: Received SIGTERM, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-06 10:07:15 [error]: Forced shutdown after timeout {"service":"copilot-backend"}
+2026-02-06 10:07:19 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-06 10:07:19 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-06 10:07:20 [info]: MongoDB connected {"service":"copilot-backend"}
+2026-02-06 10:07:20 [info]: Redis connection initialized {"service":"copilot-backend"}
+2026-02-06 10:07:20 [info]: Copilot backend listening on 127.0.0.1:3002 {"service":"copilot-backend","port":3002,"host":"127.0.0.1","env":"development"}
+2026-02-06 10:07:20 [info]: Redis connected {"service":"copilot-backend"}
+2026-02-06 10:07:27 [info]: 127.0.0.1 - - [06/Feb/2026:03:07:27 +0000] "POST /api/try_login HTTP/1.1" 200 849 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:07:40 [info]: 127.0.0.1 - - [06/Feb/2026:03:07:40 +0000] "GET /api/voicebot/sessions?limit=3 HTTP/1.1" 404 160 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:07:44 [info]: 127.0.0.1 - - [06/Feb/2026:03:07:44 +0000] "GET /api/voicebot/sessions?limit=3 HTTP/1.1" 404 160 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:03 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:03 +0000] "POST /api/voicebot/sessions/list HTTP/1.1" 200 1768409 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:10 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:10 +0000] "POST /api/voicebot/sessions/list HTTP/1.1" 200 1768409 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:18 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:18 +0000] "POST /api/voicebot/sessions/list HTTP/1.1" 200 1768409 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:23 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:23 +0000] "GET /api/auth/me HTTP/1.1" 200 849 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:30 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:30 +0000] "POST /api/voicebot/sessions/list HTTP/1.1" 200 1768409 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:35 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:35 +0000] "GET /api/voicebot/sessions/session/6873bb94597bcc5c117cfdc0 HTTP/1.1" 404 193 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:39 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:39 +0000] "GET /api/voicebot/sessions/session/6873bb94597bcc5c117cfdc0 HTTP/1.1" 404 193 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:08:54 [info]: 127.0.0.1 - - [06/Feb/2026:03:08:54 +0000] "POST /api/voicebot/sessions/get HTTP/1.1" 200 151481 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:01 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:01 +0000] "POST /api/voicebot/sessions/get HTTP/1.1" 200 151481 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:10 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:10 +0000] "POST /api/voicebot/persons/list HTTP/1.1" 200 14108 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:15 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:15 +0000] "POST /api/voicebot/permissions/performers/list HTTP/1.1" 404 180 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:20 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:20 +0000] "POST /api/voicebot/permissions/performers/list HTTP/1.1" 404 180 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:31 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:31 +0000] "POST /api/voicebot/permissions/users HTTP/1.1" 200 12188 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:39 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:39 +0000] "POST /api/voicebot/LLMGate/run_prompt HTTP/1.1" 400 57 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:44 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:44 +0000] "POST /api/voicebot/LLMGate/run_prompt HTTP/1.1" 503 128 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
+2026-02-06 10:09:49 [info]: Received SIGTERM, starting graceful shutdown... {"service":"copilot-backend"}
+2026-02-06 10:10:19 [error]: Forced shutdown after timeout {"service":"copilot-backend"}

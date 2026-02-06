@@ -115,6 +115,42 @@ Socket.IO is the real-time layer for updates.
 - Socket.IO events for CRM: TICKET_CREATED, TICKET_UPDATED, TICKET_DELETED, EPIC_UPDATED, COMMENT_ADDED, WORK_HOURS_UPDATED.
 - CRM routes accessible at `/operops/*` with OperOpsNav horizontal navigation.
 
+## Product Notes (VoiceBot)
+- VoiceBot backend routes live in `backend/src/api/routes/voicebot/`.
+- All voicebot routes are guarded by `authMiddleware` + `requireAdmin` (SUPER_ADMIN/ADMIN only).
+- Route modules:
+  - `sessions.ts` - Session CRUD, CRM integration, permissions
+  - `transcription.ts` - Get/update transcriptions
+  - `persons.ts` - Persons CRUD with permission guards
+  - `permissions.ts` - User roles and permissions management
+  - `llmgate.ts` - OpenAI prompt execution (stub - requires `openai` package)
+  - `uploads.ts` - Audio file upload with multer
+- Permission system: `backend/src/permissions/permission-manager.ts` (ported from voicebot).
+- Socket.IO namespace: `/voicebot` for real-time session updates.
+- MCP proxy stubs: `backend/src/services/mcp/` (requires `@modelcontextprotocol/sdk`).
+- Workers are NOT included - run as separate service (see `backend/src/workers/README.md`).
+- Agents are NOT included - run as separate Python service (see `backend/src/agents/README.md`).
+
+### VoiceBot Environment Variables
+```
+# Required for auth
+VOICEBOT_API_URL=https://voice.stratospace.fun
+
+# Optional for JWT socket auth
+APP_ENCRYPTION_KEY=your-secret-key
+
+# Optional for MCP proxy
+MCP_SERVER_URL=http://localhost:3001
+MCP_SESSION_TIMEOUT=1800000
+```
+
+### VoiceBot Socket.IO Events
+- `subscribe_on_session` - Subscribe to session updates
+- `unsubscribe_from_session` - Unsubscribe from session
+- `session_done` - Mark session as complete
+- `post_process_session` - Trigger post-processing
+- `session_status` - Broadcast session status changes
+
 ## Deployment Endpoints
 - `copilot.stratospace.fun` → FinOps shell served from `app/dist` (host Nginx config in `deploy/nginx-host.conf`).
 - `finops.stratospace.fun` → FinOps frontend (`app/dist`).
