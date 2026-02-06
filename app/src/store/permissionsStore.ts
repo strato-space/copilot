@@ -98,8 +98,8 @@ export const usePermissionsStore = create<PermissionsState>((set) => ({
     loadUsers: async () => {
         try {
             set({ loading: true, error: null });
-            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/permissions/users');
-            set({ users: data || [], loading: false });
+            const data = await voicebotRequest<{ users?: Array<Record<string, unknown>> }>('voicebot/permissions/users');
+            set({ users: data?.users || [], loading: false });
         } catch (err) {
             console.error('loadUsers: Error:', err);
             const errorMsg = 'Ошибка загрузки пользователей';

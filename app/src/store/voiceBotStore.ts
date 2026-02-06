@@ -524,7 +524,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchPerformersList: async () => {
         try {
-            const data = await voicebotRequest<Array<Record<string, unknown>>>('auth/list-users');
+            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/auth/list-users');
             if (data && Array.isArray(data)) {
                 set({ performers_list: data });
                 return data;
