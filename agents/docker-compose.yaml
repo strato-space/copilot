@@ -1,0 +1,8 @@
+services:
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    container_name: copilot-jaeger
+    ports:
+      - "16686:16686" # Web UI
+      - "4318:4318" # OTLP HTTP
+    restart: unless-stopped

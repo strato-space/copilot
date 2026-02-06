@@ -1,0 +1,100 @@
+# FastAgent Configuration File
+
+# Default Model Configuration:
+#
+# Takes format:
+#   <provider>.<model_string>.<reasoning_effort?> (e.g. anthropic.claude-3-5-sonnet-20241022 or openai.o3-mini.low)
+# Accepts aliases for Anthropic Models: haiku, haiku3, sonnet, sonnet35, opus, opus3
+# and OpenAI Models: gpt-4.1, gpt-4.1-mini, o1, o1-mini, o3-mini
+#
+# If not specified, defaults to "gpt-5-mini.low".
+# Can be overriden with a command line switch --model=<model>, or within the Agent constructor.
+
+default_model: gpt-4.1
+# mcp-ui support: disabled, enabled or auto. "auto" opens the web browser on the asset automatically
+# mcp_ui_output_dir: ".fast-agent/ui"  # Where to write MCP-UI HTML files (relative to CWD if not absolute)
+# mcp_ui_mode: enabled
+
+# MCP timeline display (adjust activity window/intervals in MCP UI + fast-agent check)
+mcp_timeline:
+  steps: 20 # number of timeline buckets to render
+  step_seconds: 15 # seconds per bucket (accepts values like "45s", "2m")
+
+#shell_execution:
+# length of time before terminating subprocess
+#  timeout_seconds: 20
+# warning interval if no output seen
+#  warning_seconds: 5
+
+# Logging and Console Configuration:
+logger:
+  # Reduce verbosity for execution logs
+  level: "info"
+  # Log to file in JSONL format for detailed analysis
+  type: "file"
+  # Store logs in the logs directory
+  path: "./logs/fastagent-execution.jsonl"
+
+  # Switch the progress display on or off
+  progress_display: true
+  # Show chat User/Assistant messages on the console
+  show_chat: true
+  # Show tool calls on the console
+  show_tools: true
+  # Truncate long tool responses on the console
+  truncate_tools: true
+  # Streaming renderer for assistant responses: "markdown", "plain", or "none"
+  streaming: markdown
+
+otel:
+  enabled: false
+  otlp_endpoint: "http://localhost:4318/v1/traces"  # This is the default value
+
+# MCP Servers
+mcp:
+  servers:
+    fetch:
+      command: "uvx"
+      args: ["mcp-server-fetch"]
+    huggingface:
+      url: "https://huggingface.co/mcp?login"
+    images:
+      transport: "http"
+      url: "https://images-mcp.stratospace.fun"
+      auth:
+        oauth: false
+    fs:
+      transport: "http"
+      url: "https://fs-mcp.stratospace.fun"
+      auth:
+        oauth: false
+    seq:
+      transport: "http"
+      url: "https://seq-mcp.stratospace.fun"
+      auth:
+        oauth: false
+    tm:
+      transport: "http"
+      url: "https://tm-mcp.stratospace.fun"
+      auth:
+        oauth: false
+    tg-ro:
+      transport: "http"
+      url: "https://tg-ro-mcp.stratospace.fun"
+      auth:
+        oauth: false
+    tgbot:
+      transport: "http"
+      url: "https://tgbot-mcp.stratospace.fun"
+      auth:
+        oauth: false
+    voice:
+      transport: "http"
+      url: "https://voice-mcp.stratospace.fun"
+      auth:
+        oauth: false
+    call:
+      transport: "http"
+      url: "https://call-mcp.stratospace.fun"
+      auth:
+        oauth: false

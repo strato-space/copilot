@@ -1,0 +1,23 @@
+[project]
+name = "copilot-agents"
+version = "0.1.0"
+description = "Copilot Fast-Agent application for intelligent dialogue processing"
+readme = "README.md"
+requires-python = "<3.14,>=3.13.5"
+dependencies = [
+  "fast-agent-mcp",
+]
+
+[tool.uv]
+package = true
+
+# Optional convenience entry point if you later package this app:
+[project.scripts]
+copilot-agents = "agent:main"
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["agent"]

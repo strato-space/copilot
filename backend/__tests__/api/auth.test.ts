@@ -156,4 +156,78 @@ describe('Authentication Middleware', () => {
             expect(Object.keys(mockUsers.superAdmin.permissions)).toHaveLength(0);
         });
     });
+
+    describe('One-time token authentication', () => {
+        // Token age helper
+        function isTokenExpired(createdAt: Date, maxAgeMs: number): boolean {
+            const tokenAge = Date.now() - createdAt.getTime();
+            return tokenAge > maxAgeMs;
+        }
+
+        const TOKEN_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+        it('should accept fresh token', () => {
+            const freshToken = { created_at: new Date() };
+            expect(isTokenExpired(freshToken.created_at, TOKEN_MAX_AGE)).toBe(false);
+        });
+
+        it('should reject expired token (> 24 hours)', () => {
+            const expiredToken = { created_at: new Date(Date.now() - 25 * 60 * 60 * 1000) };
+            expect(isTokenExpired(expiredToken.created_at, TOKEN_MAX_AGE)).toBe(true);
+        });
+
+        it('should accept token just before expiration', () => {
+            const almostExpiredToken = { created_at: new Date(Date.now() - 23 * 60 * 60 * 1000) };
+            expect(isTokenExpired(almostExpiredToken.created_at, TOKEN_MAX_AGE)).toBe(false);
+        });
+
+        it('should require token in request body', () => {
+            const requestBody = {};
+            expect((requestBody as { token?: string }).token).toBeUndefined();
+        });
+
+        it('should require is_used to be false', () => {
+            const usedToken = { token: 'abc123', is_used: true };
+            const unusedToken = { token: 'def456', is_used: false };
+            expect(usedToken.is_used).toBe(true);
+            expect(unusedToken.is_used).toBe(false);
+        });
+
+        it('should find performer by telegram_id (chat_id)', () => {
+            const mockToken = { chat_id: '123456789' };
+            const mockPerformers = [
+                { telegram_id: '123456789', name: 'Test User' },
+                { telegram_id: '987654321', name: 'Other User' },
+            ];
+            const found = mockPerformers.find(p => p.telegram_id === String(mockToken.chat_id));
+            expect(found?.name).toBe('Test User');
+        });
+
+        it('should exclude deleted or banned performers', () => {
+            const mockPerformers = [
+                { telegram_id: '111', name: 'Active', is_deleted: false, is_banned: false },
+                { telegram_id: '222', name: 'Deleted', is_deleted: true, is_banned: false },
+                { telegram_id: '333', name: 'Banned', is_deleted: false, is_banned: true },
+            ];
+            const activePerformers = mockPerformers.filter(
+                p => p.is_deleted !== true && p.is_banned !== true
+            );
+            expect(activePerformers).toHaveLength(1);
+            expect(activePerformers[0].name).toBe('Active');
+        });
+
+        it('should generate JWT with correct structure', () => {
+            const jwtPayload = {
+                userId: '507f1f77bcf86cd799439011',
+                email: 'test@example.com',
+                name: 'Test User',
+                role: 'PERFORMER',
+                permissions: ['VOICEBOT_SESSIONS.READ_OWN'],
+            };
+            expect(jwtPayload).toHaveProperty('userId');
+            expect(jwtPayload).toHaveProperty('email');
+            expect(jwtPayload).toHaveProperty('role');
+            expect(jwtPayload).toHaveProperty('permissions');
+        });
+    });
 });

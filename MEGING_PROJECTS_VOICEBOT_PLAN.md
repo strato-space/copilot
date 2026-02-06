@@ -681,16 +681,19 @@ TODO: Добавить заглушки для интеграции с voicebot-
 - [ ] Добавить PM2 конфиг для workers
 
 ### Auth
-- [ ] Обновить `backend/src/api/routes/auth.ts` (добавить /auth_token) - отложено
+- [x] Обновить `backend/src/api/routes/auth.ts` (добавить /auth_token) ✅
 
 ### Agents
-- [x] Создать `backend/src/agents/README.md` (documentation, agents run as separate Python service)
-- [ ] Перенести `agent-cards/` (отложено - запускается отдельно)
-- [ ] Перенести `fastagent.config.yaml`
-- [ ] Перенести `fastagent.secrets.yaml.example`
-- [ ] Перенести `ecosystem.config.cjs`
-- [ ] Перенести `pm2-agents.sh`
-- [ ] Перенести `pyproject.toml`
+- [x] Создать `agents/README.md` (полная документация)
+- [x] Перенести `agent-cards/create_tasks.md`
+- [x] Перенести `agent-cards/generate_session_title.md`
+- [x] Перенести `fastagent.config.yaml`
+- [x] Перенести `fastagent.secrets.yaml.example`
+- [x] Перенести `ecosystem.config.cjs` (порт 8722)
+- [x] Перенести `pm2-agents.sh`
+- [x] Перенести `pyproject.toml`
+- [x] Перенести `docker-compose.yaml` (Jaeger tracing)
+- [x] Добавить agents в `.gitignore`
 
 ### Main Entry Point
 - [x] Обновить `backend/src/index.ts`:
@@ -778,11 +781,11 @@ APP_ENCRYPTION_KEY=          # JWT secret key
 - [x] Фаза 2: VoiceBot Routes ✅
 - [x] Фаза 3: Socket.IO ✅
 - [x] Фаза 4: Workers (документация и примеры) ✅
-- [ ] Фаза 5: Auth (one-time token — отложено)
-- [x] Фаза 6: Agents (документация) ✅
+- [x] Фаза 5: Auth (one-time token) ✅
+- [x] Фаза 6: Agents (полный перенос) ✅
 - [x] Фаза 7: Entry Point ✅
 - [x] TypeScript Build ✅
-- [ ] Тестирование (runtime)
+- [x] Jest тесты (118 тестов) ✅
 - [ ] Production деплой
 
 ---
@@ -827,16 +830,39 @@ APP_ENCRYPTION_KEY=          # JWT secret key
 - `backend/src/index.ts` — Подключен voicebotRouter
 - `AGENTS.md` — Добавлена секция VoiceBot
 
+### Agents (перенесено 6 февраля 2026)
+- `agents/README.md` — Полная документация
+- `agents/agent-cards/create_tasks.md` — AgentCard для извлечения задач
+- `agents/agent-cards/generate_session_title.md` — AgentCard для генерации заголовков
+- `agents/fastagent.config.yaml` — Конфигурация Fast-Agent + MCP серверы
+- `agents/fastagent.secrets.yaml.example` — Шаблон секретов
+- `agents/ecosystem.config.cjs` — PM2 конфигурация (порт 8722)
+- `agents/pm2-agents.sh` — Скрипт управления PM2
+- `agents/pyproject.toml` — Python проект
+- `agents/docker-compose.yaml` — Jaeger tracing
+
+### Auth с One-Time Token (6 февраля 2026)
+- `backend/src/api/routes/auth.ts` — Добавлен POST /auth_token endpoint для авторизации через Telegram
+
+### Jest тесты (6 февраля 2026)
+- `backend/__tests__/voicebot/sessions.test.ts` — Тесты Sessions API
+- `backend/__tests__/voicebot/permissions.test.ts` — Тесты Permissions API
+- `backend/__tests__/voicebot/persons.test.ts` — Тесты Persons API
+- `backend/__tests__/voicebot/transcription.test.ts` — Тесты Transcription API
+- `backend/__tests__/voicebot/llmgate.test.ts` — Тесты LLMGate API
+- `backend/__tests__/api/health.test.ts` — Тесты Health endpoint
+- `backend/__tests__/api/auth.test.ts` — Тесты Auth middleware + One-Time Token (8 новых тестов)
+
 ---
 
 ## Следующие шаги
 
 ### Для полной функциональности необходимо:
 
-1. **Установить зависимости:**
+1. ~~**Установить зависимости:**~~ ✅ Выполнено
    ```bash
-   npm install jsonwebtoken openai @modelcontextprotocol/sdk
-   npm install -D @types/jsonwebtoken
+   npm install jsonwebtoken openai @modelcontextprotocol/sdk uuid
+   npm install -D @types/jsonwebtoken @types/uuid
    ```
 
 2. **Настроить environment:**
@@ -847,17 +873,21 @@ APP_ENCRYPTION_KEY=          # JWT secret key
    MCP_SERVER_URL=http://localhost:3001
    ```
 
-3. **Протестировать endpoints:**
-   - `GET /api/voicebot/sessions` — список сессий
-   - `GET /api/voicebot/session/:id` — детали сессии
-   - `POST /api/voicebot/upload` — загрузка аудио
+3. ~~**Протестировать endpoints:**~~ ✅ Выполнено
+   - `POST /api/voicebot/sessions/list` — список сессий
+   - `POST /api/voicebot/sessions/get` — детали сессии
+   - `POST /api/voicebot/LLMGate/run_prompt` — запуск промптов
 
 4. **Развернуть workers (если нужно):**
    - Переименовать `queue.ts.example` → `queue.ts`
    - Создать workers entry point
    - Запустить как отдельный PM2 сервис
 
-5. **Развернуть agents (если нужно):**
-   - Скопировать agent-cards из voicebot/agents/
-   - Настроить fastagent.config.yaml
-   - Запустить fast-agent serve
+5. **Развернуть agents:**
+   ```bash
+   cd agents
+   uv venv && uv pip install -e .
+   cp fastagent.secrets.yaml.example fastagent.secrets.yaml
+   # Настроить API ключи в fastagent.secrets.yaml
+   ./pm2-agents.sh start
+   ```

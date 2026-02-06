@@ -11,6 +11,13 @@ node_modules/
 dist/
 backend/logs/
 
+# Agents
+agents/.venv/
+agents/logs/
+agents/fastagent.secrets.yaml
+agents/*.egg-info/
+agents/uv.lock
+
 # Playwright
 .playwright/
 test-results/
