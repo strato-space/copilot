@@ -130,6 +130,7 @@ Socket.IO is the real-time layer for updates.
 - MCP proxy stubs: `backend/src/services/mcp/` (requires `@modelcontextprotocol/sdk`).
 - Workers are NOT included - run as separate service (see `backend/src/workers/README.md`).
 - Agents are NOT included - run as separate Python service (see `backend/src/agents/README.md`).
+- Voice UI is native in the Copilot app under `/voice/*` (no iframe embed).
 
 ### VoiceBot Environment Variables
 ```

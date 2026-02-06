@@ -13,6 +13,17 @@ export const SOCKET_EVENTS = {
     EPIC_UPDATED: 'epic_updated',
     COMMENT_ADDED: 'comment_added',
     WORK_HOURS_UPDATED: 'work_hours_updated',
+    // VoiceBot session events
+    SUBSCRIBE_ON_SESSION: 'subscribe_on_session',
+    UNSUBSCRIBE_FROM_SESSION: 'unsubscribe_from_session',
+    SESSION_DONE: 'session_done',
+    POST_PROCESS_SESSION: 'post_process_session',
+    CREATE_TASKS_FROM_CHUNKS: 'create_tasks_from_chunks',
+    // MCP events
+    MCP_CALL: 'mcp_call',
+    MCP_CHUNK: 'mcp_chunk',
+    MCP_COMPLETE: 'mcp_complete',
+    MCP_ERROR: 'mcp_error',
 } as const;
 
 export type SocketEvent = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
@@ -27,6 +38,7 @@ export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
 
 // Socket instance (singleton)
 let socket: Socket | null = null;
+let voicebotSocket: Socket | null = null;
 
 /**
  * Get or create socket connection
@@ -59,6 +71,44 @@ export const getSocket = (): Socket => {
     }
 
     return socket;
+};
+
+/**
+ * Get or create VoiceBot socket connection (uses auth token when provided)
+ */
+export const getVoicebotSocket = (authToken?: string | null): Socket => {
+    if (!voicebotSocket) {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
+        const socketUrl = baseUrl.startsWith('http')
+            ? new URL(baseUrl).origin
+            : window.location.origin;
+
+        const options: Parameters<typeof io>[1] = {
+            withCredentials: true,
+            transports: ['websocket', 'polling'],
+            autoConnect: true,
+        };
+
+        if (authToken) {
+            options.auth = { token: authToken };
+        }
+
+        voicebotSocket = io(socketUrl, options);
+
+        voicebotSocket.on('connect', () => {
+            console.log('[VoiceBot Socket] Connected:', voicebotSocket?.id);
+        });
+
+        voicebotSocket.on('disconnect', (reason) => {
+            console.log('[VoiceBot Socket] Disconnected:', reason);
+        });
+
+        voicebotSocket.on('connect_error', (error) => {
+            console.error('[VoiceBot Socket] Connection error:', error.message);
+        });
+    }
+
+    return voicebotSocket;
 };
 
 /**

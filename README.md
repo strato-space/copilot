@@ -17,6 +17,9 @@ Copilot is the workspace for the Finance Ops console. Deprecated code is archive
 - Socket.IO events: TICKET_CREATED, TICKET_UPDATED, TICKET_DELETED, EPIC_UPDATED, COMMENT_ADDED, WORK_HOURS_UPDATED.
 - Routes accessible at `/operops/*` with OperOpsNav horizontal navigation.
 
+## Voice notes
+- Voice UI is native in `app/` under `/voice/*` (no iframe embed).
+
 ## What is included
 - `app/` React + Vite frontend for Finance Ops and OperOps/CRM.
 - `backend/` Node/Express API for Finance Ops.

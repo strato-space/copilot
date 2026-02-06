@@ -450,6 +450,49 @@ router.post('/update_participants', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /sessions/update_allowed_users
+ * Update session allowed users (performers)
+ */
+router.post('/update_allowed_users', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { user } = vreq;
+    const db = getDb();
+
+    try {
+        const { session_id, allowed_user_ids } = req.body;
+        if (!session_id) {
+            return res.status(400).json({ error: "session_id is required" });
+        }
+        if (!Array.isArray(allowed_user_ids)) {
+            return res.status(400).json({ error: "allowed_user_ids must be an array" });
+        }
+
+        const validUserIds: ObjectId[] = [];
+        for (const id of allowed_user_ids) {
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).json({ error: `Invalid allowed_user_id: ${id}` });
+            }
+            validUserIds.push(new ObjectId(id));
+        }
+
+        const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+            { _id: new ObjectId(session_id) },
+            { $set: { allowed_users: validUserIds } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+
+        logger.info(`Updated session ${session_id} allowed_users for user: ${user?.email ?? 'unknown'}`);
+        res.status(200).json({ success: true });
+    } catch (error) {
+        logger.error('Error in sessions/update_allowed_users:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
  * POST /sessions/delete
  * Soft-delete a session
  */

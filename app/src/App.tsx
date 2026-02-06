@@ -24,7 +24,10 @@ import FxPage from './pages/directories/FxPage';
 import ProjectEditPage from './pages/ProjectEditPage';
 import NotificationsDrawer from './components/NotificationsDrawer';
 import { useNotificationStore } from './store/notificationStore';
-import VoicePage from './pages/VoicePage';
+import VoiceLayout from './pages/VoiceLayout';
+import { SessionsListPage, SessionPage } from './pages/voice';
+import AdminPage from './pages/AdminPage';
+import TGAuthPage from './pages/TGAuthPage';
 import OperOpsLayout from './pages/OperOpsLayout';
 import {
   CRMPage,
@@ -40,6 +43,8 @@ import HhopsPage from './pages/HhopsPage';
 import LoginPage from './pages/LoginPage';
 import SaleopsPage from './pages/SaleopsPage';
 import { useAuthStore } from './store/authStore';
+import { useAppInit } from './hooks/useAppInit';
+import { useMCPWebSocket } from './hooks/useMCPWebSocket';
 
 const { Sider, Content } = Layout;
 
@@ -51,6 +56,7 @@ const navItems = [
   { key: 'chatops', label: 'ChatOps', to: '/chatops', icon: <MessageOutlined />, badge: 'dev' },
   { key: 'devops', label: 'DevOps', to: '/devops', icon: <ToolOutlined />, badge: 'dev' },
   { key: 'voice', label: 'Voice', to: '/voice', icon: <SoundOutlined />, badge: 'dev' },
+  { key: 'admin', label: 'Admin', to: '/admin', icon: <SettingOutlined />, badge: 'beta' },
   { key: 'guides', label: 'Guides', to: '/guide', icon: <AppstoreOutlined />, badge: 'alpha' },
 ];
 
@@ -101,17 +107,19 @@ function MainLayout(): ReactElement {
           ? 'Guides'
           : normalizedPath.startsWith('/voice')
             ? 'Voice'
-            : normalizedPath.startsWith('/operops')
-              ? 'OperOps'
-              : normalizedPath.startsWith('/chatops')
-                ? 'ChatOps'
-                : normalizedPath.startsWith('/agents')
-                  ? 'Agents'
-                  : normalizedPath.startsWith('/devops')
-                    ? 'DevOps'
-                    : normalizedPath.startsWith('/desops')
+            : normalizedPath.startsWith('/admin')
+              ? 'Admin'
+              : normalizedPath.startsWith('/operops')
+                ? 'OperOps'
+                : normalizedPath.startsWith('/chatops')
+                  ? 'ChatOps'
+                  : normalizedPath.startsWith('/agents')
+                    ? 'Agents'
+                    : normalizedPath.startsWith('/devops')
                       ? 'DevOps'
-                      : 'Analytic';
+                      : normalizedPath.startsWith('/desops')
+                        ? 'DevOps'
+                        : 'Analytic';
 
   useEffect((): void => {
     setContextLabel(contextLabel);
@@ -188,6 +196,9 @@ function MainLayout(): ReactElement {
 export default function App(): ReactElement {
   const checkAuth = useAuthStore((state) => state.checkAuth);
 
+  useAppInit();
+  useMCPWebSocket();
+
   useEffect((): void => {
     void checkAuth();
   }, [checkAuth]);
@@ -195,6 +206,7 @@ export default function App(): ReactElement {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/tg_auth" element={<TGAuthPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/analytics" replace />} />
@@ -209,7 +221,12 @@ export default function App(): ReactElement {
           </Route>
           <Route path="/chatops" element={<ChatopsPage />} />
           <Route path="/agents" element={<AgentsOpsPage />} />
-          <Route path="/voice/*" element={<VoicePage />} />
+          <Route path="/voice" element={<VoiceLayout />}>
+            <Route index element={<SessionsListPage />} />
+            <Route path="sessions" element={<SessionsListPage />} />
+            <Route path="session/:sessionId" element={<SessionPage />} />
+          </Route>
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="/finops" element={<PlanFactPage />} />
           <Route path="/saleops" element={<SaleopsPage />} />
           <Route path="/hhops" element={<HhopsPage />} />
@@ -238,6 +255,7 @@ export default function App(): ReactElement {
           <Route path="/finops/chatops" element={<Navigate to="/chatops" replace />} />
           <Route path="/finops/agents" element={<Navigate to="/agents" replace />} />
           <Route path="/finops/voice" element={<Navigate to="/voice" replace />} />
+          <Route path="/finops/admin" element={<Navigate to="/admin" replace />} />
           <Route path="/finops/devops" element={<Navigate to="/desops" replace />} />
           <Route path="/finops/desops" element={<Navigate to="/desops" replace />} />
           <Route path="/finops/guide" element={<Navigate to="/guide" replace />} />

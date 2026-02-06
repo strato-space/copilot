@@ -31,11 +31,11 @@ setup('authenticate', async ({ page }) => {
     await page.waitForLoadState('networkidle');
 
     // Fill in login form
-    await page.locator('input[type="email"], input#login').fill(email);
-    await page.locator('input[type="password"]').fill(password);
+    await page.getByPlaceholder(/corporate email/i).fill(email);
+    await page.getByPlaceholder(/password/i).fill(password);
 
     // Submit form
-    await page.getByRole('button', { name: /войти|sign in|login|submit|enter/i }).click();
+    await page.getByRole('button', { name: /enter|sign in|login|войти/i }).click();
 
     // Wait for redirect after successful login
     await expect(page).not.toHaveURL(/\/login/, { timeout: 15000 });
