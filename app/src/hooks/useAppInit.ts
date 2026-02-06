@@ -10,7 +10,7 @@ export const useAppInit = (): { initComplete: boolean } => {
 
     useEffect(() => {
         if (isAuth) {
-            refreshUserData();
+            refreshUserData({ silent: true });
         }
     }, [isAuth, refreshUserData]);
 

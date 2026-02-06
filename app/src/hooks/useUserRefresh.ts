@@ -8,7 +8,7 @@ export const usePeriodicUserRefresh = (intervalMs = 5 * 60 * 1000): { forceRefre
     useEffect(() => {
         if (isAuth) {
             intervalRef.current = setInterval(() => {
-                refreshUserData();
+                refreshUserData({ silent: true });
             }, intervalMs);
 
             return () => {
@@ -22,7 +22,7 @@ export const usePeriodicUserRefresh = (intervalMs = 5 * 60 * 1000): { forceRefre
 
     const forceRefresh = (): void => {
         if (isAuth) {
-            refreshUserData();
+            refreshUserData({ silent: true });
         }
     };
 
@@ -35,7 +35,7 @@ export const useRefreshOnFocus = (): void => {
     useEffect(() => {
         const handleFocus = (): void => {
             if (isAuth) {
-                refreshUserData();
+                refreshUserData({ silent: true });
             }
         };
 

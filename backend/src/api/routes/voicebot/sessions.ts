@@ -45,11 +45,7 @@ interface VoicebotRequest extends Request {
     // queues?: Record<string, Queue>;
 }
 
-/**
- * GET /sessions/list
- * Get list of voicebot sessions with message counts
- */
-router.post('/list', async (req: Request, res: Response) => {
+const listSessions = async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
     const db = getDb();
@@ -142,7 +138,19 @@ router.post('/list', async (req: Request, res: Response) => {
         logger.error('Error in sessions/list:', error);
         res.status(500).json({ error: String(error) });
     }
-});
+};
+
+/**
+ * POST /sessions
+ * Backward-compatible list endpoint
+ */
+router.post('/', listSessions);
+
+/**
+ * POST /sessions/list
+ * Get list of voicebot sessions with message counts
+ */
+router.post('/list', listSessions);
 
 /**
  * POST /sessions/get

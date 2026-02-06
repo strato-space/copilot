@@ -60,20 +60,36 @@ export default function WebrtcFabLoader() {
             return () => cleanupInjectedFab();
         }
 
-        const script = document.createElement('script');
-        script.id = SCRIPT_ID;
-        script.src = '/webrtc/webrtc-voicebot-lib.js';
-        script.async = true;
-        script.dataset.voicebotFab = '1';
+        const scriptUrl = import.meta.env.VITE_WEBRTC_VOICEBOT_SCRIPT_URL || 'https://voice.stratospace.fun/webrtc/webrtc-voicebot-lib.js';
+        let cancelled = false;
 
-        document.body.appendChild(script);
-
-        return () => {
+        const injectScript = async (): Promise<void> => {
             try {
-                script.remove();
+                const headResponse = await fetch(scriptUrl, { method: 'HEAD', cache: 'no-cache' });
+                const contentType = headResponse.headers.get('content-type') || '';
+                if (!headResponse.ok || contentType.includes('text/html')) {
+                    return;
+                }
+
+                if (cancelled) return;
+
+                const script = document.createElement('script');
+                script.id = SCRIPT_ID;
+                script.src = scriptUrl;
+                script.async = true;
+                script.dataset.voicebotFab = '1';
+                script.onerror = () => cleanupInjectedFab();
+
+                document.body.appendChild(script);
             } catch {
                 // ignore
             }
+        };
+
+        void injectScript();
+
+        return () => {
+            cancelled = true;
             cleanupInjectedFab();
         };
     }, []);

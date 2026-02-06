@@ -22,7 +22,7 @@ interface AuthState {
   checkAuth: () => Promise<void>;
   tryLogin: (login: string, password: string) => Promise<boolean>;
   tryTokenAuth: (token: string) => Promise<boolean>;
-  refreshUserData: () => Promise<boolean>;
+  refreshUserData: (options?: { silent?: boolean }) => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
@@ -160,21 +160,63 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
       return false;
     }
   },
-  refreshUserData: async (): Promise<boolean> => {
-    set({ loading: true, error: null });
+  refreshUserData: async (options): Promise<boolean> => {
+    const silent = options?.silent === true;
+    if (!silent) {
+      set({ loading: true, error: null });
+    } else {
+      set((state) => ({ error: state.error }));
+    }
     try {
       const response = await voicebotClient.get('/auth/me');
       const { user } = extractUserFromResponse(response.data);
       if (user) {
         const authToken = readCookieToken();
-        set({ isAuth: true, user, permissions: user.permissions ?? [], authToken, loading: false, ready: true });
+        set((state) => ({
+          isAuth: true,
+          user,
+          permissions: user.permissions ?? [],
+          authToken,
+          loading: silent ? state.loading : false,
+          ready: true,
+          error: null,
+        }));
         saveAuthToCookies(user, authToken);
         return true;
       }
-      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, ready: true });
+      set((state) => ({
+        isAuth: false,
+        user: null,
+        permissions: [],
+        authToken: null,
+        loading: silent ? state.loading : false,
+        ready: true,
+        error: null,
+      }));
       return false;
     } catch (err) {
-      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, error: getErrorMessage(err), ready: true });
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        set((state) => ({
+          isAuth: false,
+          user: null,
+          permissions: [],
+          authToken: null,
+          loading: silent ? state.loading : false,
+          error: getErrorMessage(err),
+          ready: true,
+        }));
+        return false;
+      }
+
+      set((state) => ({
+        isAuth: state.isAuth,
+        user: state.user,
+        permissions: state.permissions,
+        authToken: state.authToken,
+        loading: silent ? state.loading : false,
+        error: getErrorMessage(err),
+        ready: true,
+      }));
       return false;
     }
   },
