@@ -8,7 +8,7 @@ export interface CrmSnapshotMeta {
   mtimeMs: number;
 }
 
-const SNAPSHOT_DIR = '/home/strato-space/voicebot/downloads';
+const SNAPSHOT_DIR = process.env.CRM_SNAPSHOT_DIR ?? '/home/strato-space/voicebot/downloads';
 const DATE_RE = /(\d{4}-\d{2}-\d{2})/;
 
 const parseSnapshotDate = (fileName: string): string => {
@@ -17,7 +17,19 @@ const parseSnapshotDate = (fileName: string): string => {
 };
 
 export const findLatestSnapshot = async (): Promise<CrmSnapshotMeta | null> => {
-  const entries = await readdir(SNAPSHOT_DIR);
+  let entries: string[];
+  try {
+    entries = await readdir(SNAPSHOT_DIR);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        return null;
+      }
+    }
+    throw error;
+  }
+
   const csvFiles = entries.filter((name) => name.endsWith('.csv'));
   if (csvFiles.length === 0) {
     return null;
@@ -26,7 +38,12 @@ export const findLatestSnapshot = async (): Promise<CrmSnapshotMeta | null> => {
   let latest: CrmSnapshotMeta | null = null;
   for (const fileName of csvFiles) {
     const filePath = path.join(SNAPSHOT_DIR, fileName);
-    const stats = await stat(filePath);
+    let stats;
+    try {
+      stats = await stat(filePath);
+    } catch {
+      continue;
+    }
     const snapshotDate = parseSnapshotDate(fileName);
     const meta: CrmSnapshotMeta = {
       filePath,

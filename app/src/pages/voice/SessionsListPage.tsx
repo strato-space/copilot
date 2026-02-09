@@ -79,7 +79,7 @@ export default function SessionsListPage() {
         updateSessionDialogueTag,
         getSessionData,
         restartCorruptedSession,
-        sendSessionToCrm,
+        sendSessionToCrmWithMcp,
     } = useVoiceBotStore();
     const { sendMCPCall, waitForCompletion } = useMCPRequestStore();
     const { generateSessionTitle } = useSessionsUIStore();
@@ -212,11 +212,13 @@ export default function SessionsListPage() {
         if (!sessionId) return;
         setSendingToCrmId(sessionId);
         try {
-            await sendSessionToCrm(sessionId);
-            message.success('Сессия отправлена в CRM');
+            await sendSessionToCrmWithMcp(sessionId);
         } catch (error) {
             console.error('Ошибка при отправке сессии в CRM:', error);
-            message.error('Ошибка при отправке в CRM');
+            message.open({
+                type: 'error',
+                content: 'Ошибка при отправке в CRM',
+            });
         } finally {
             setSendingToCrmId(null);
         }

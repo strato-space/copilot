@@ -7,6 +7,7 @@ import type { Socket } from 'socket.io-client';
 
 import { useAuthStore } from './authStore';
 import { useSessionsUIStore } from './sessionsUIStore';
+import { useMCPRequestStore } from './mcpRequestStore';
 import type {
     VoiceBotMessage,
     VoiceBotSession,
@@ -38,6 +39,7 @@ interface VoiceBotState {
     updateSessionName: (sessionId: string, newName: string) => Promise<void>;
     updateSessionDialogueTag: (sessionId: string, dialogueTag: string) => Promise<void>;
     sendSessionToCrm: (sessionId: string) => Promise<boolean>;
+    sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
     fetchVoiceBotSession: (sessionId: string) => Promise<void>;
     getMessageDataById: (messageId: string) => VoiceBotMessage | null;
     updateSessionProject: (sessionId: string, projectId: string | null) => Promise<void>;
@@ -90,6 +92,32 @@ const getProxyConfig = (): { url: string; auth: string } | null => {
         }
     }
     return null;
+};
+
+const resolveAgentsMcpServerUrl = (): string | null => {
+    if (typeof window !== 'undefined') {
+        const win = window as { agents_api_url?: string };
+        if (win.agents_api_url) return win.agents_api_url;
+    }
+    const envUrl = import.meta.env.VITE_AGENTS_API_URL as string | undefined;
+    return envUrl || null;
+};
+
+const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
+    const lines = messages
+        .map((msg) => {
+            const rawText = typeof msg.transcription_text === 'string' ? msg.transcription_text.trim() : '';
+            if (rawText) return rawText;
+            if (Array.isArray(msg.categorization)) {
+                const chunks = msg.categorization
+                    .map((chunk) => (typeof chunk.text === 'string' ? chunk.text.trim() : ''))
+                    .filter(Boolean);
+                if (chunks.length > 0) return chunks.join(' ');
+            }
+            return '';
+        })
+        .filter(Boolean);
+    return lines.join('\n');
 };
 
 const voicebotRequest = async <T = unknown>(url: string, data: unknown = {}, silent = false): Promise<T> => {
@@ -241,6 +269,75 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         } catch (e) {
             console.error('Ошибка при отправке сессии в CRM', e);
             throw e;
+        }
+    },
+
+    sendSessionToCrmWithMcp: async (sessionId) => {
+        const processingKey = `crm-processing-${sessionId}`;
+        try {
+            await get().sendSessionToCrm(sessionId);
+            message.open({
+                key: processingKey,
+                type: 'loading',
+                content: 'Сессия обрабатывается',
+                duration: 0,
+            });
+
+            const agentsMcpServerUrl = resolveAgentsMcpServerUrl();
+            if (!agentsMcpServerUrl) {
+                message.open({
+                    key: processingKey,
+                    type: 'error',
+                    content: 'Не настроен MCP URL агента',
+                    duration: 4,
+                });
+                return;
+            }
+
+            const sessionData = await get().getSessionData(sessionId);
+            const sessionMessages = sessionData?.session_messages || [];
+            const transcriptionText = buildTranscriptionText(sessionMessages as VoiceBotMessage[]);
+            if (!transcriptionText) {
+                message.open({
+                    key: processingKey,
+                    type: 'error',
+                    content: 'Нет текста для обработки агентом',
+                    duration: 4,
+                });
+                return;
+            }
+
+            const { sendMCPCall, waitForCompletion } = useMCPRequestStore.getState();
+            const requestId = sendMCPCall(
+                agentsMcpServerUrl,
+                'create_tasks_send',
+                { message: transcriptionText },
+                false
+            );
+            const result = await waitForCompletion(requestId, 15 * 60 * 1000);
+            if (!result || result.status !== 'complete') {
+                throw new Error(result?.error ?? 'Не удалось завершить обработку');
+            }
+
+            const final = result.result as { isError?: boolean; content?: Array<{ text?: string }>; error?: string } | undefined;
+            if (final?.isError) {
+                const errorText = final.content?.[0]?.text || final.error || 'Ошибка обработки';
+                throw new Error(errorText);
+            }
+
+            message.open({
+                key: processingKey,
+                type: 'success',
+                content: 'Обработка завершена',
+                duration: 2,
+            });
+        } catch (error) {
+            console.error('Ошибка при отправке сессии в CRM:', error);
+            message.open({
+                key: processingKey,
+                type: 'error',
+                content: 'Ошибка при отправке в CRM',
+            });
         }
     },
 

@@ -219,7 +219,7 @@
 
 **Q7.1**: Как объединить навигацию?
 
-**copilot**: Sidebar с секциями (Analytic, Agents, OperOps, FinOps, ChatOps, DevOps, Voice, Guides)
+**copilot**: Sidebar с секциями (Analytic, Agents, OperOps, FinOps, ChatOps, DesOps, Voice, Guides)
 **appkanban**: Navigation с пунктами (CRM, Performers, Sync, Reports, Roadmaps, Task Types, Projects Tree, Finances Performers)
 
 - [x] a) OperOps → подменю с CRM страницами

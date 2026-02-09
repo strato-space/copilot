@@ -54,7 +54,7 @@ const navItems = [
   { key: 'operops', label: 'OperOps', to: '/operops', icon: <SettingOutlined />, badge: 'beta' },
   { key: 'finops', label: 'FinOps', to: '/finops', icon: <WalletOutlined />, badge: 'alpha' },
   { key: 'chatops', label: 'ChatOps', to: '/chatops', icon: <MessageOutlined />, badge: 'dev' },
-  { key: 'devops', label: 'DevOps', to: '/devops', icon: <ToolOutlined />, badge: 'dev' },
+  { key: 'desops', label: 'DesOps', to: '/desops', icon: <ToolOutlined />, badge: 'dev' },
   { key: 'voice', label: 'Voice', to: '/voice', icon: <SoundOutlined />, badge: 'dev' },
   { key: 'admin', label: 'Admin', to: '/admin', icon: <SettingOutlined />, badge: 'beta' },
   { key: 'guides', label: 'Guides', to: '/guide', icon: <AppstoreOutlined />, badge: 'alpha' },
@@ -115,10 +115,10 @@ function MainLayout(): ReactElement {
                   ? 'ChatOps'
                   : normalizedPath.startsWith('/agents')
                     ? 'Agents'
-                    : normalizedPath.startsWith('/devops')
-                      ? 'DevOps'
+                    : normalizedPath.startsWith('/desops')
+                      ? 'DesOps'
                       : normalizedPath.startsWith('/desops')
-                        ? 'DevOps'
+                        ? 'DesOps'
                         : 'Analytic';
 
   useEffect((): void => {
@@ -232,8 +232,8 @@ export default function App(): ReactElement {
           <Route path="/hhops" element={<HhopsPage />} />
           <Route path="/plan-fact" element={<Navigate to="/finops" replace />} />
           <Route path="/finops/plan-fact" element={<Navigate to="/finops" replace />} />
-          <Route path="/devops" element={<DesopsPage />} />
-          <Route path="/desops" element={<Navigate to="/devops" replace />} />
+          <Route path="/desops" element={<DesopsPage />} />
+          <Route path="/desops" element={<Navigate to="/desops" replace />} />
           <Route path="/guide" element={<DirectoriesPage />} />
           <Route path="/guide/clients-projects-rates" element={<ClientsProjectsRatesPage />} />
           <Route path="/guide/employees-salaries" element={<EmployeesSalariesPage />} />
@@ -256,7 +256,7 @@ export default function App(): ReactElement {
           <Route path="/finops/agents" element={<Navigate to="/agents" replace />} />
           <Route path="/finops/voice" element={<Navigate to="/voice" replace />} />
           <Route path="/finops/admin" element={<Navigate to="/admin" replace />} />
-          <Route path="/finops/devops" element={<Navigate to="/desops" replace />} />
+          <Route path="/finops/desops" element={<Navigate to="/desops" replace />} />
           <Route path="/finops/desops" element={<Navigate to="/desops" replace />} />
           <Route path="/finops/guide" element={<Navigate to="/guide" replace />} />
           <Route path="/finops/directories" element={<Navigate to="/guide" replace />} />
