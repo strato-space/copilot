@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { type Collection } from 'mongodb';
 import { getDb } from './db.js';
-import { COLLECTIONS } from '../models/collections.js';
+import { COLLECTIONS } from '../constants.js';
 import { type ActorType, type AuditEvent } from '../models/types.js';
 
 export interface AuditEventInput {

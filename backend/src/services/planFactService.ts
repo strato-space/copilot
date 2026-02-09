@@ -1,6 +1,6 @@
 import { type Collection } from 'mongodb';
 import { connectDb } from './db.js';
-import { COLLECTIONS } from '../models/collections.js';
+import { COLLECTIONS } from '../constants.js';
 import { type Client, type FactProjectMonth, type ForecastProjectMonth, type Project } from '../models/types.js';
 import { loadCrmSnapshotMeta } from './crmIngest.js';
 

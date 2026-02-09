@@ -1,6 +1,6 @@
 import { type Collection, type Filter, type UpdateFilter } from 'mongodb';
 import { connectDb } from './db.js';
-import { COLLECTIONS } from '../models/collections.js';
+import { COLLECTIONS } from '../constants.js';
 import { type FundComment, type MonthString } from '../models/types.js';
 
 const getFundCommentsCollection = async (): Promise<Collection<FundComment>> => {

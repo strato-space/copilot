@@ -1,6 +1,6 @@
 import { type Collection, type Filter, type UpdateFilter } from 'mongodb';
 import { getDb } from './db.js';
-import { COLLECTIONS } from '../models/collections.js';
+import { COLLECTIONS } from '../constants.js';
 import { type Currency, type FxMonthly, type MonthString } from '../models/types.js';
 
 const getFxCollection = (): Collection<FxMonthly> => {
