@@ -33,7 +33,8 @@ import { getEmployeeMonthlyHours, getEmployeeMonthlySalary } from '../services/e
 import { useNotificationStore } from '../store/notificationStore';
 import { apiClient } from '../services/api';
 import { useEmployeeStore } from '../store/employeeStore';
-import { convertToRub, expenseOperationsSeed, fxRatesByMonth } from '../services/expenseDirectory';
+import { convertToRub } from '../services/expenseDirectory';
+import { useExpensesStore } from '../store/expensesStore';
 import { type PlanFactGridResponse } from '../services/types';
 import { mockPlanFact } from '../services/mockPlanFact';
 
@@ -176,6 +177,8 @@ export default function AnalyticsPage(): ReactElement {
     setYear,
   } = usePlanFactStore();
   const fxRates = useFxStore((state) => state.rates);
+  const expenseOperations = useExpensesStore((state) => state.operations);
+  const fxRatesByMonth = useExpensesStore((state) => state.fxRatesByMonth);
   const getFxFactor = (month: string): number => {
     const item = fxRates[month];
     if (!item || !item.base) {
@@ -255,7 +258,7 @@ export default function AnalyticsPage(): ReactElement {
     const months = activeMonths.length ? activeMonths : [focusMonth];
     return months.reduce((sum, month) =>
       sum + employees.reduce((acc, employee) => acc + getEmployeeMonthlySalary(employee, month), 0),
-    0);
+      0);
   }, [activeMonths, focusMonth, employees]);
   const chartData = useMemo((): PlanFactGridResponse | null => (data?.clients?.length ? data : mockPlanFact), [data]);
 
@@ -475,7 +478,7 @@ export default function AnalyticsPage(): ReactElement {
     const result: Record<string, number> = {};
     lineMonths.forEach((month) => {
       const payroll = employees.reduce((sum, employee) => sum + getEmployeeMonthlySalary(employee, month), 0);
-      const other = expenseOperationsSeed.reduce((sum, operation) => {
+      const other = expenseOperations.reduce((sum, operation) => {
         if (operation.month !== month) {
           return sum;
         }
@@ -485,7 +488,7 @@ export default function AnalyticsPage(): ReactElement {
       result[month] = payroll + other;
     });
     return result;
-  }, [employees, fxRates, lineMonths]);
+  }, [employees, expenseOperations, fxRates, fxRatesByMonth, lineMonths]);
   const monthlyRevenue = useMemo((): Record<string, number> => {
     const result: Record<string, number> = {};
     lineMonths.forEach((month) => {
@@ -788,9 +791,8 @@ export default function AnalyticsPage(): ReactElement {
                       type="info"
                       showIcon
                       message={`approve_id: ${operopsApprovePackage.approve_id}`}
-                      description={`status: ${operopsApprovePackage.status}${
-                        operopsApprovePackage.approved_by ? ` • approved_by: ${operopsApprovePackage.approved_by}` : ''
-                      }`}
+                      description={`status: ${operopsApprovePackage.status}${operopsApprovePackage.approved_by ? ` • approved_by: ${operopsApprovePackage.approved_by}` : ''
+                        }`}
                       className="mb-3"
                     />
                   ) : null}
@@ -856,233 +858,232 @@ export default function AnalyticsPage(): ReactElement {
       />
       {moduleTab === 'finance' ? (
         <Row gutter={[16, 16]} className="finops-analytics-layout">
-        <Col xs={24} xl={24}>
-          <div className="finops-analytics-stack">
-            <KpiCards data={data} months={activeMonths} />
-            <Card>
-              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                <div>
-                  <Typography.Title level={5} className="!mb-0">
-                    Распределение по проектам
-                  </Typography.Title>
-                  <Typography.Text type="secondary">Период: {rangeLabel}</Typography.Text>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Select<'forecast' | 'fact'>
-                    value={pieValueMode}
-                    onChange={(value): void => handlePieValueModeChange(value)}
-                    options={[
-                      { value: 'forecast', label: 'Прогноз' },
-                      { value: 'fact', label: 'Факт' },
-                    ]}
-                    className="min-w-[120px]"
-                  />
-                  <Select<'rub' | 'hours'>
-                    value={pieMetric}
-                    onChange={(value): void => handlePieMetricChange(value)}
-                    options={[
-                      { value: 'rub', label: 'Выручка, ₽' },
-                      { value: 'hours', label: 'Часы' },
-                    ]}
-                    className="min-w-[160px]"
-                  />
-                </div>
-              </div>
-              {pieData.length === 0 || pieTotal === 0 ? (
-                <Empty description="Нет данных для графика" />
-              ) : (
-                <div className="finops-chart-grid">
-                  <div className="finops-pie-layout">
-                    <div className="finops-pie">
-                      <svg viewBox="0 0 200 200" className="finops-pie-svg">
-                        {pieSlices.map((slice, index) => (
-                          <Tooltip
-                            key={`${slice.client}-${slice.name}`}
-                            title={`${slice.client} • ${slice.name}: ${
-                              pieMetric === 'rub' ? formatCurrency(slice.value) : formatHours(slice.value)
-                            } (${Math.round(slice.percent)}%)`}
-                          >
-                            <path
-                              d={describeArc(slice.start, slice.end)}
-                              fill={hoveredSlice === index ? darkenColor(slice.color, 0.2) : slice.color}
-                              onMouseEnter={(): void => setHoveredSlice(index)}
-                              onMouseLeave={(): void => setHoveredSlice(null)}
-                            />
-                          </Tooltip>
-                        ))}
-                      </svg>
-                      <div className="finops-pie-center">
-                        <div className="text-[10px] text-slate-500">Итого</div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          {pieMetric === 'rub' ? formatCurrency(pieTotal) : formatHours(pieTotal)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="finops-pie-legend">
-                      {legendSegments.map((segment, index) => {
-                        const prev = legendSegments[index - 1];
-                        const showClient = !prev || prev.client !== segment.client;
-                        return (
-                          <div key={`${segment.client}-${segment.name}`} className="finops-pie-legend-item">
-                            <span className="finops-pie-swatch" style={{ background: segment.color }} />
-                            <div>
-                              {showClient && (
-                                <div className="text-[10px] uppercase text-slate-400">{segment.client}</div>
-                              )}
-                              <div className="text-[12px] font-medium text-slate-900">{segment.name}</div>
-                              <div className="text-[10px] text-slate-500">
-                                {pieMetric === 'rub' ? formatCurrency(segment.value) : formatHours(segment.value)}
-                                {' • '}
-                                {Math.round(segment.percent)}%
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+          <Col xs={24} xl={24}>
+            <div className="finops-analytics-stack">
+              <KpiCards data={data} months={activeMonths} />
+              <Card>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                  <div>
+                    <Typography.Title level={5} className="!mb-0">
+                      Распределение по проектам
+                    </Typography.Title>
+                    <Typography.Text type="secondary">Период: {rangeLabel}</Typography.Text>
                   </div>
-                  <div className="finops-line-card">
-                    <div className="finops-line-header">
-                      <div className="text-[13px] font-semibold text-slate-900">Динамика по месяцам (доходы − расходы)</div>
-                      <div className="finops-line-legend">
-                        <div className="finops-line-legend-item">
-                          <span className="finops-line-legend-icon" style={{ color: '#1677ff' }}>
-                            ■
-                          </span>
-                          <span className="text-[11px] text-slate-600">Прибыль</span>
-                        </div>
-                        <div className="finops-line-legend-item">
-                          <span className="finops-line-legend-icon" style={{ color: '#f97316' }}>
-                            ■
-                          </span>
-                          <span className="text-[11px] text-slate-600">Расходы</span>
+                  <div className="flex items-center gap-2">
+                    <Select<'forecast' | 'fact'>
+                      value={pieValueMode}
+                      onChange={(value): void => handlePieValueModeChange(value)}
+                      options={[
+                        { value: 'forecast', label: 'Прогноз' },
+                        { value: 'fact', label: 'Факт' },
+                      ]}
+                      className="min-w-[120px]"
+                    />
+                    <Select<'rub' | 'hours'>
+                      value={pieMetric}
+                      onChange={(value): void => handlePieMetricChange(value)}
+                      options={[
+                        { value: 'rub', label: 'Выручка, ₽' },
+                        { value: 'hours', label: 'Часы' },
+                      ]}
+                      className="min-w-[160px]"
+                    />
+                  </div>
+                </div>
+                {pieData.length === 0 || pieTotal === 0 ? (
+                  <Empty description="Нет данных для графика" />
+                ) : (
+                  <div className="finops-chart-grid">
+                    <div className="finops-pie-layout">
+                      <div className="finops-pie">
+                        <svg viewBox="0 0 200 200" className="finops-pie-svg">
+                          {pieSlices.map((slice, index) => (
+                            <Tooltip
+                              key={`${slice.client}-${slice.name}`}
+                              title={`${slice.client} • ${slice.name}: ${pieMetric === 'rub' ? formatCurrency(slice.value) : formatHours(slice.value)
+                                } (${Math.round(slice.percent)}%)`}
+                            >
+                              <path
+                                d={describeArc(slice.start, slice.end)}
+                                fill={hoveredSlice === index ? darkenColor(slice.color, 0.2) : slice.color}
+                                onMouseEnter={(): void => setHoveredSlice(index)}
+                                onMouseLeave={(): void => setHoveredSlice(null)}
+                              />
+                            </Tooltip>
+                          ))}
+                        </svg>
+                        <div className="finops-pie-center">
+                          <div className="text-[10px] text-slate-500">Итого</div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {pieMetric === 'rub' ? formatCurrency(pieTotal) : formatHours(pieTotal)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    {lineMonths.every((month) => (monthlyRevenue[month] ?? 0) === 0 && (monthlyExpenses[month] ?? 0) === 0) ? (
-                      <Empty description="Нет данных для графика" />
-                    ) : (
-                      <div className="flex items-end gap-4 pt-4">
-                        {lineMonths.map((month) => {
-                          const revenue = monthlyRevenue[month] ?? 0;
-                          const expenses = monthlyExpenses[month] ?? 0;
-                          const diff = revenue - expenses;
-                          const maxValue = barMax || 1;
-                          const revenueHeight = Math.round((revenue / maxValue) * 140);
-                          const expenseHeight = Math.round((expenses / maxValue) * 140);
+                      <div className="finops-pie-legend">
+                        {legendSegments.map((segment, index) => {
+                          const prev = legendSegments[index - 1];
+                          const showClient = !prev || prev.client !== segment.client;
                           return (
-                            <div key={month} className="flex flex-1 flex-col items-center gap-2">
-                              <div className={`text-[11px] font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {formatSignedCurrency(diff)}
+                            <div key={`${segment.client}-${segment.name}`} className="finops-pie-legend-item">
+                              <span className="finops-pie-swatch" style={{ background: segment.color }} />
+                              <div>
+                                {showClient && (
+                                  <div className="text-[10px] uppercase text-slate-400">{segment.client}</div>
+                                )}
+                                <div className="text-[12px] font-medium text-slate-900">{segment.name}</div>
+                                <div className="text-[10px] text-slate-500">
+                                  {pieMetric === 'rub' ? formatCurrency(segment.value) : formatHours(segment.value)}
+                                  {' • '}
+                                  {Math.round(segment.percent)}%
+                                </div>
                               </div>
-                              <div className="flex items-end gap-2 h-[150px]">
-                                <Tooltip title={`Прибыль: ${formatCurrency(revenue)}`}>
-                                  <div
-                                    className="w-6 rounded-t-md bg-blue-500"
-                                    style={{ height: `${revenueHeight}px` }}
-                                  />
-                                </Tooltip>
-                                <Tooltip title={`Расходы: ${formatCurrency(expenses)}`}>
-                                  <div
-                                    className="w-6 rounded-t-md bg-orange-400"
-                                    style={{ height: `${expenseHeight}px` }}
-                                  />
-                                </Tooltip>
-                              </div>
-                              <div className="text-[10px] text-slate-500">{formatMonthLabel(month)}</div>
                             </div>
                           );
                         })}
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </Card>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} lg={14}>
-                <Card>
-                  <div className="flex items-center justify-between mb-4">
-                    <Typography.Title level={5} className="!mb-0">
-                      Топ прибыльных и убыточных проектов
-                    </Typography.Title>
-                    <Typography.Text type="secondary">Период: {rangeLabel}</Typography.Text>
-                  </div>
-                  {projectHighlights.length === 0 ? (
-                    <Empty description="Нет данных по проектам" />
-                  ) : (
-                    <List
-                      dataSource={projectHighlights}
-                      renderItem={(item): ReactElement => (
-                        <List.Item>
-                          <div className="finops-list-row">
-                            <div>
-                              <div className="text-sm font-medium text-slate-900">{item.project}</div>
-                              {item.client && <div className="text-xs text-slate-500">{item.client}</div>}
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className="text-right">
-                                <div className={item.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                                  {formatCurrency(item.profit)}
+                    </div>
+                    <div className="finops-line-card">
+                      <div className="finops-line-header">
+                        <div className="text-[13px] font-semibold text-slate-900">Динамика по месяцам (доходы − расходы)</div>
+                        <div className="finops-line-legend">
+                          <div className="finops-line-legend-item">
+                            <span className="finops-line-legend-icon" style={{ color: '#1677ff' }}>
+                              ■
+                            </span>
+                            <span className="text-[11px] text-slate-600">Прибыль</span>
+                          </div>
+                          <div className="finops-line-legend-item">
+                            <span className="finops-line-legend-icon" style={{ color: '#f97316' }}>
+                              ■
+                            </span>
+                            <span className="text-[11px] text-slate-600">Расходы</span>
+                          </div>
+                        </div>
+                      </div>
+                      {lineMonths.every((month) => (monthlyRevenue[month] ?? 0) === 0 && (monthlyExpenses[month] ?? 0) === 0) ? (
+                        <Empty description="Нет данных для графика" />
+                      ) : (
+                        <div className="flex items-end gap-4 pt-4">
+                          {lineMonths.map((month) => {
+                            const revenue = monthlyRevenue[month] ?? 0;
+                            const expenses = monthlyExpenses[month] ?? 0;
+                            const diff = revenue - expenses;
+                            const maxValue = barMax || 1;
+                            const revenueHeight = Math.round((revenue / maxValue) * 140);
+                            const expenseHeight = Math.round((expenses / maxValue) * 140);
+                            return (
+                              <div key={month} className="flex flex-1 flex-col items-center gap-2">
+                                <div className={`text-[11px] font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {formatSignedCurrency(diff)}
                                 </div>
+                                <div className="flex items-end gap-2 h-[150px]">
+                                  <Tooltip title={`Прибыль: ${formatCurrency(revenue)}`}>
+                                    <div
+                                      className="w-6 rounded-t-md bg-blue-500"
+                                      style={{ height: `${revenueHeight}px` }}
+                                    />
+                                  </Tooltip>
+                                  <Tooltip title={`Расходы: ${formatCurrency(expenses)}`}>
+                                    <div
+                                      className="w-6 rounded-t-md bg-orange-400"
+                                      style={{ height: `${expenseHeight}px` }}
+                                    />
+                                  </Tooltip>
+                                </div>
+                                <div className="text-[10px] text-slate-500">{formatMonthLabel(month)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Card>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} lg={14}>
+                  <Card>
+                    <div className="flex items-center justify-between mb-4">
+                      <Typography.Title level={5} className="!mb-0">
+                        Топ прибыльных и убыточных проектов
+                      </Typography.Title>
+                      <Typography.Text type="secondary">Период: {rangeLabel}</Typography.Text>
+                    </div>
+                    {projectHighlights.length === 0 ? (
+                      <Empty description="Нет данных по проектам" />
+                    ) : (
+                      <List
+                        dataSource={projectHighlights}
+                        renderItem={(item): ReactElement => (
+                          <List.Item>
+                            <div className="finops-list-row">
+                              <div>
+                                <div className="text-sm font-medium text-slate-900">{item.project}</div>
+                                {item.client && <div className="text-xs text-slate-500">{item.client}</div>}
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <div className={item.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                                    {formatCurrency(item.profit)}
+                                  </div>
+                                  <div className="text-xs text-slate-500">
+                                    {Math.round(item.marginPct)}%
+                                  </div>
+                                </div>
+                                <div className="w-[120px]">
+                                  <Progress
+                                    percent={Math.min(Math.abs(item.marginPct), 100)}
+                                    showInfo={false}
+                                    strokeColor={item.profit >= 0 ? '#16a34a' : '#ef4444'}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </List.Item>
+                        )}
+                      />
+                    )}
+                  </Card>
+                </Col>
+                <Col xs={24} lg={10}>
+                  <Card>
+                    <div className="flex items-center justify-between mb-4">
+                      <Typography.Title level={5} className="!mb-0">
+                        Маржа по исполнителям
+                      </Typography.Title>
+                      <Typography.Text type="secondary">Период: {rangeLabel}</Typography.Text>
+                    </div>
+                    {employeeMargins.length === 0 ? (
+                      <Empty description="Нет данных по исполнителям" />
+                    ) : (
+                      <List
+                        dataSource={employeeMargins}
+                        renderItem={(item): ReactElement => (
+                          <List.Item>
+                            <div className="finops-list-row">
+                              <div>
+                                <div className="text-sm font-medium text-slate-900">{item.name}</div>
+                                <div className="text-xs text-slate-500">
+                                  {item.team} • {item.role}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-slate-900">{formatCurrency(item.profit)}</div>
                                 <div className="text-xs text-slate-500">
                                   {Math.round(item.marginPct)}%
                                 </div>
                               </div>
-                              <div className="w-[120px]">
-                                <Progress
-                                  percent={Math.min(Math.abs(item.marginPct), 100)}
-                                  showInfo={false}
-                                  strokeColor={item.profit >= 0 ? '#16a34a' : '#ef4444'}
-                                />
-                              </div>
                             </div>
-                          </div>
-                        </List.Item>
-                      )}
-                    />
-                  )}
-                </Card>
-              </Col>
-              <Col xs={24} lg={10}>
-                <Card>
-                  <div className="flex items-center justify-between mb-4">
-                    <Typography.Title level={5} className="!mb-0">
-                      Маржа по исполнителям
-                    </Typography.Title>
-                    <Typography.Text type="secondary">Период: {rangeLabel}</Typography.Text>
-                  </div>
-                  {employeeMargins.length === 0 ? (
-                    <Empty description="Нет данных по исполнителям" />
-                  ) : (
-                    <List
-                      dataSource={employeeMargins}
-                      renderItem={(item): ReactElement => (
-                        <List.Item>
-                          <div className="finops-list-row">
-                            <div>
-                              <div className="text-sm font-medium text-slate-900">{item.name}</div>
-                              <div className="text-xs text-slate-500">
-                                {item.team} • {item.role}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-slate-900">{formatCurrency(item.profit)}</div>
-                              <div className="text-xs text-slate-500">
-                                {Math.round(item.marginPct)}%
-                              </div>
-                            </div>
-                          </div>
-                        </List.Item>
-                      )}
-                    />
-                  )}
-                </Card>
-              </Col>
-            </Row>
-          </div>
-        </Col>
-      </Row>
+                          </List.Item>
+                        )}
+                      />
+                    )}
+                  </Card>
+                </Col>
+              </Row>
+            </div>
+          </Col>
+        </Row>
       ) : null}
     </div>
   );

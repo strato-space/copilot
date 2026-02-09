@@ -4,13 +4,13 @@ import dayjs from 'dayjs';
 import { type ReactElement, type ReactNode } from 'react';
 import {
   convertToRub,
-  expenseOperationsSeed,
-  fxRatesByMonth,
 } from '../services/expenseDirectory';
+import { type ExpenseOperation } from '../services/expenseDirectory';
 import { type EmployeeDirectoryEntry, getEmployeeMonthlySalary } from '../services/employeeDirectory';
 import { type PlanFactClientRow, type PlanFactGridResponse } from '../services/types';
 import { useFxStore } from '../store/fxStore';
 import { useEmployeeStore } from '../store/employeeStore';
+import { useExpensesStore } from '../store/expensesStore';
 import { formatCurrency, formatHours, formatNumber } from '../utils/format';
 
 interface Props {
@@ -135,6 +135,8 @@ const buildExpenseTotals = (
   months: string[],
   fxRates: Record<string, { rate: number; base: number } | undefined>,
   employees: EmployeeDirectoryEntry[],
+  operations: ExpenseOperation[],
+  fxRatesByMonth: Record<string, number>,
 ): { fact: number; forecast: number; payroll: number; other: number } => {
   if (months.length === 0) {
     return { fact: 0, forecast: 0, payroll: 0, other: 0 };
@@ -143,7 +145,7 @@ const buildExpenseTotals = (
     const monthPayroll = employees.reduce((acc, employee) => acc + getEmployeeMonthlySalary(employee, month), 0);
     return sum + monthPayroll;
   }, 0);
-  const other = expenseOperationsSeed.reduce((sum, operation) => {
+  const other = operations.reduce((sum, operation) => {
     if (!months.includes(operation.month)) {
       return sum;
     }
@@ -157,12 +159,14 @@ const buildExpenseTotals = (
 export default function KpiCards({ data, months }: Props): ReactElement {
   const fxRates = useFxStore((state) => state.rates);
   const employees = useEmployeeStore((state) => state.employees);
+  const expenseOperations = useExpensesStore((state) => state.operations);
+  const fxRatesByMonth = useExpensesStore((state) => state.fxRatesByMonth);
 
   const revenueTotals = sumRevenueByMonths(data, months, fxRates);
   const revenueFact = revenueTotals.fact;
   const revenueForecast = revenueTotals.forecast;
 
-  const expenseTotals = buildExpenseTotals(months, fxRates, employees);
+  const expenseTotals = buildExpenseTotals(months, fxRates, employees, expenseOperations, fxRatesByMonth);
   const expenseFact = expenseTotals.fact;
   const expenseForecast = expenseTotals.forecast;
 
@@ -180,7 +184,9 @@ export default function KpiCards({ data, months }: Props): ReactElement {
   const singleMonth = months.length === 1 ? months[0] : null;
   const prevMonth = singleMonth ? dayjs(`${singleMonth}-01`).subtract(1, 'month').format('YYYY-MM') : null;
   const prevRevenue = prevMonth ? sumRevenueByMonths(data, [prevMonth], fxRates).fact : 0;
-  const prevExpense = prevMonth ? buildExpenseTotals([prevMonth], fxRates, employees).fact : 0;
+  const prevExpense = prevMonth
+    ? buildExpenseTotals([prevMonth], fxRates, employees, expenseOperations, fxRatesByMonth).fact
+    : 0;
   const prevProfit = prevRevenue - prevExpense;
 
   const revenueDelta = revenueFact - revenueForecast;

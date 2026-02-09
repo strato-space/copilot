@@ -97,7 +97,25 @@ const toRows = (clients: PlanFactClientRow[], months: string[]): RowItem[] => {
   const rows: RowItem[] = [];
 
   clients.forEach((client: PlanFactClientRow): void => {
+    if (!Array.isArray(client.projects)) {
+      return;
+    }
     client.projects.forEach((project: PlanFactProjectRow): void => {
+      const normalized = normalizeMonths(project.months, months);
+      const hasAnyValue = months.some((month) => {
+        const cell = normalized[month] ?? emptyCell();
+        return Boolean(
+          cell.fact_rub ||
+          cell.fact_hours ||
+          cell.forecast_rub ||
+          cell.forecast_hours ||
+          cell.fact_comment ||
+          cell.forecast_comment,
+        );
+      });
+      if (!hasAnyValue) {
+        return;
+      }
       rows.push({
         key: `project-${client.client_id}-${project.project_id}`,
         row_type: 'project',
@@ -109,7 +127,7 @@ const toRows = (clients: PlanFactClientRow[], months: string[]): RowItem[] => {
         subproject_name: project.subproject_name,
         contract_type: project.contract_type,
         rate_rub_per_hour: project.rate_rub_per_hour ?? null,
-        months: normalizeMonths(project.months, months),
+        months: normalized,
       });
     });
   });
@@ -143,10 +161,17 @@ const buildTotalsFromRows = (
 };
 
 
-const abbreviateClient = (name: string): string => {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+const abbreviateClient = (name?: string): string => {
+  if (!name) {
+    return '—';
+  }
+  const normalized = name.trim();
+  if (!normalized) {
+    return '—';
+  }
+  const words = normalized.split(/\s+/).filter(Boolean);
   const initials = words.map((word) => word[0]).join('');
-  const base = initials.length >= 2 ? initials : name.replace(/[^A-Za-zА-Яа-я0-9]/g, '');
+  const base = initials.length >= 2 ? initials : normalized.replace(/[^A-Za-zА-Яа-я0-9]/g, '');
   return base.toUpperCase().slice(0, 8);
 };
 
@@ -217,7 +242,7 @@ const buildColumns = (
         <FilterOutlined className={filtered ? 'text-blue-600' : 'text-slate-400'} />
       ),
       onFilter: (value, row): boolean => row.client_name === value,
-      render: (value: string, row: RowItem): ReactElement => (
+      render: (value: string | undefined, row: RowItem): ReactElement => (
         <div>
           <Tooltip title={row.client_full}>
             <Tag
@@ -532,7 +557,7 @@ export default function PlanFactGrid({
     <Table
       size="small"
       pagination={false}
-      dataSource={rows}
+      dataSource={filteredRows}
       columns={buildColumns(
         months,
         focusMonth,

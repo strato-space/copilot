@@ -16,7 +16,6 @@ import {
 } from '../services/employeeDirectory';
 import {
   convertToRub,
-  fxRatesByMonth,
   type ExpenseCategory,
   type ExpenseOperation,
 } from '../services/expenseDirectory';
@@ -96,6 +95,7 @@ const buildExpenseTotals = (
   categories: ExpenseCategory[],
   operations: ExpenseOperation[],
   months: string[],
+  fxRatesByMonth: Record<string, number>,
 ): Record<string, number> => {
   const totals: Record<string, number> = {};
   months.forEach((month) => {
@@ -139,9 +139,9 @@ const buildBonusRows = (
   const baseByMonth: Record<string, number> = {};
 
   months.forEach((month) => {
-      if (month >= BONUS_START_MONTH) {
-        const income = incomeTotals[month] ?? 0;
-        const expense = expenseTotals[month] ?? 0;
+    if (month >= BONUS_START_MONTH) {
+      const income = incomeTotals[month] ?? 0;
+      const expense = expenseTotals[month] ?? 0;
       if (isMonthClosed(month) && income > 0) {
         const fund = 0.1 * (income - expense);
         fundByMonth[month] = fund;
@@ -248,10 +248,11 @@ const BonusesGrid = ({
 
   const categories = useExpensesStore((state) => state.categories);
   const operations = useExpensesStore((state) => state.operations);
+  const fxRatesByMonth = useExpensesStore((state) => state.fxRatesByMonth);
 
   const expenseTotals = useMemo(
-    () => buildExpenseTotals(employees, categories, operations, months),
-    [employees, categories, operations, months],
+    () => buildExpenseTotals(employees, categories, operations, months, fxRatesByMonth),
+    [employees, categories, operations, months, fxRatesByMonth],
   );
 
   const rows = useMemo(
