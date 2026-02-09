@@ -12,8 +12,8 @@ import { type PlanFactCellContext, type PlanFactMonthCell } from '../services/ty
 import { formatMonthLabel } from '../utils/format';
 import { useEmployeeStore } from '../store/employeeStore';
 import { useNotificationStore } from '../store/notificationStore';
-import { convertToRub, fxRatesByMonth } from '../services/expenseDirectory';
-import { getEmployeeMonthlySalary } from '../services/employeeDirectory';
+import { convertToRub } from '../services/expenseDirectory';
+import { type EmployeeDirectoryEntry, getEmployeeMonthlySalary } from '../services/employeeDirectory';
 import { useExpensesStore } from '../store/expensesStore';
 import { useMonthCloseStore } from '../store/monthCloseStore';
 import { apiClient } from '../services/api';
@@ -50,8 +50,14 @@ export default function PlanFactPage(): ReactElement {
   const employees = useEmployeeStore((state) => state.employees);
   const expenseCategories = useExpensesStore((state) => state.categories);
   const expenseOperations = useExpensesStore((state) => state.operations);
+  const fxRatesByMonth = useExpensesStore((state) => state.fxRatesByMonth);
+  const setExpenseCategories = useExpensesStore((state) => state.setCategories);
+  const setExpenseOperations = useExpensesStore((state) => state.setOperations);
+  const setFxRatesByMonth = useExpensesStore((state) => state.setFxRatesByMonth);
   const isMonthClosed = useMonthCloseStore((state) => state.isClosed);
-  const toggleMonthClosed = useMonthCloseStore((state) => state.toggleMonth);
+  const closedMonths = useMonthCloseStore((state) => state.closedMonths);
+  const setClosedMonths = useMonthCloseStore((state) => state.setClosedMonths);
+  const setEmployees = useEmployeeStore((state) => state.setEmployees);
 
   const bonusNameAliases = useMemo(
     () => ['юрий кожевников', 'никита ренье', 'антон бастрыкин', 'антон б.', 'валерий сысик', 'валерий с.'],
@@ -113,7 +119,7 @@ export default function PlanFactPage(): ReactElement {
         });
       });
     return totals;
-  }, [expenseEmployees, yearMonths, expenseCategories, expenseOperations]);
+  }, [expenseEmployees, yearMonths, expenseCategories, expenseOperations, fxRatesByMonth]);
 
   const fundDeltaByMonth = useMemo((): Record<string, number | undefined> => {
     const totals: Record<string, number | undefined> = {};
@@ -135,6 +141,73 @@ export default function PlanFactPage(): ReactElement {
   useEffect((): void => {
     void fetchPlanFact();
   }, [fetchPlanFact, year, usingMock]);
+
+  useEffect((): void => {
+    const from = yearMonths[0];
+    const to = yearMonths[yearMonths.length - 1];
+    if (!from || !to) {
+      return;
+    }
+
+    const loadExpenses = async (): Promise<void> => {
+      try {
+        const [categoriesRes, operationsRes, fxRes, closuresRes, employeesRes] = await Promise.all([
+          apiClient.get('/finops/expenses/categories'),
+          apiClient.get('/finops/expenses/operations', { params: { from, to } }),
+          apiClient.get('/finops/fx-rates', { params: { from, to } }),
+          apiClient.get('/finops/month-closures', { params: { from, to } }),
+          apiClient.get('/finops/employees', { params: { from, to } }),
+        ]);
+
+        const categories = (categoriesRes.data?.data ?? []).map((item: { category_id: string; name: string; is_active: boolean }) => ({
+          id: item.category_id,
+          name: item.name,
+          is_active: item.is_active,
+        }));
+        setExpenseCategories(categories);
+
+        const operations = (operationsRes.data?.data ?? []).map((item: {
+          operation_id: string;
+          category_id: string;
+          month: string;
+          amount: number;
+          currency: 'RUB' | 'USD';
+          fx_used?: number | null;
+          vendor?: string | null;
+          comment?: string | null;
+          attachments?: string[];
+        }) => ({
+          id: item.operation_id,
+          category_id: item.category_id,
+          month: item.month,
+          amount: item.amount,
+          currency: item.currency,
+          ...(typeof item.fx_used === 'number' ? { fx_used: item.fx_used } : {}),
+          ...(item.vendor ? { vendor: item.vendor } : {}),
+          ...(item.comment ? { comment: item.comment } : {}),
+          ...(item.attachments ? { attachments: item.attachments } : {}),
+        }));
+        setExpenseOperations(operations);
+
+        const fxRatesData = (fxRes.data?.data ?? []) as { month: string; rate: number }[];
+        const fxRates = fxRatesData.reduce((acc, rate) => {
+          acc[rate.month] = rate.rate;
+          return acc;
+        }, {} as Record<string, number>);
+        setFxRatesByMonth(fxRates);
+
+        const closures = (closuresRes.data?.data ?? []) as { month: string; is_closed: boolean }[];
+        setClosedMonths(closures.filter((item) => item.is_closed).map((item) => item.month));
+
+        const employees = (employeesRes.data?.data ?? []) as EmployeeDirectoryEntry[];
+        setEmployees(employees);
+      } catch {
+        message.error('Не удалось загрузить данные по затратам');
+      }
+    };
+
+    void loadExpenses();
+  }, [setExpenseCategories, setExpenseOperations, setFxRatesByMonth, setClosedMonths, setEmployees, yearMonths]);
 
   const snapshotAgeHours = useMemo((): number | null => {
     if (!data?.snapshot_date) {
@@ -222,6 +295,22 @@ export default function PlanFactPage(): ReactElement {
       });
   };
 
+  const handleToggleMonthClosed = async (): Promise<void> => {
+    const isClosed = isMonthClosed(focusMonth);
+    const nextClosed = isClosed
+      ? closedMonths.filter((item) => item !== focusMonth)
+      : [...closedMonths, focusMonth];
+    try {
+      await apiClient.post('/finops/month-closures', {
+        month: focusMonth,
+        is_closed: !isClosed,
+      });
+      setClosedMonths(nextClosed);
+    } catch {
+      message.error('Не удалось изменить статус месяца');
+    }
+  };
+
   const handleFocusMonthChange = (month: string): void => {
     const start = dayjs(`${month}-01`);
     const monthsCount =
@@ -293,7 +382,9 @@ export default function PlanFactPage(): ReactElement {
               <Button
                 type="default"
                 className="border border-slate-300 text-slate-900"
-                onClick={(): void => toggleMonthClosed(focusMonth)}
+                onClick={(): void => {
+                  void handleToggleMonthClosed();
+                }}
               >
                 {isMonthClosed(focusMonth)
                   ? `Открыть ${formatMonthLabel(focusMonth)}`

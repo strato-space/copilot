@@ -191,3 +191,58 @@ export interface FundComment {
   updated_at: Date;
   updated_by?: string | null;
 }
+
+export interface ExpenseCategory {
+  category_id: string;
+  name: string;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  created_by?: string | null;
+  updated_by?: string | null;
+}
+
+export interface ExpenseOperation {
+  operation_id: string;
+  category_id: string;
+  month: MonthString;
+  amount: number;
+  currency: Currency;
+  fx_used?: number | null;
+  vendor?: string | null;
+  comment?: string | null;
+  attachments?: string[];
+  created_at: Date;
+  updated_at: Date;
+  created_by?: string | null;
+  updated_by?: string | null;
+  is_deleted: boolean;
+}
+
+export interface ExpenseOperationLog {
+  log_id: string;
+  operation_id: string;
+  action: 'create' | 'update' | 'delete';
+  before?: ExpenseOperation | null;
+  after?: ExpenseOperation | null;
+  changed_by?: string | null;
+  changed_at: Date;
+  comment?: string | null;
+}
+
+export interface FinopsFxRate {
+  month: MonthString;
+  pair: 'USD/RUB';
+  rate: number;
+  source: 'manual' | 'import';
+  created_at: Date;
+  created_by?: string | null;
+}
+
+export interface FinopsMonthClosure {
+  month: MonthString;
+  is_closed: boolean;
+  closed_by?: string | null;
+  closed_at?: Date | null;
+  comment?: string | null;
+}

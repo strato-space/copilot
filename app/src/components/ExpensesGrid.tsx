@@ -43,7 +43,6 @@ import { type EmployeeDirectoryEntry, getEmployeeMonthlyHours, getEmployeeMonthl
 import { apiClient } from '../services/api';
 import {
   convertToRub,
-  fxRatesByMonth,
   type ExpenseCategory,
   type ExpenseCurrency,
   type ExpenseOperation,
@@ -111,6 +110,7 @@ const buildRows = (
   categories: ExpenseCategory[],
   operations: ExpenseOperation[],
   months: string[],
+  fxRatesByMonth: Record<string, number>,
 ): ExpenseRow[] => {
   const salaryRows: ExpenseRow[] = employees.map((employee, index) => {
     const monthCells: Record<string, ExpenseMonthCell> = {};
@@ -136,13 +136,13 @@ const buildRows = (
     .filter((category) => category.is_active || operations.some((op) => op.category_id === category.id))
     .map((category) => {
       const monthCells: Record<string, ExpenseMonthCell> = {};
-    months.forEach((month) => {
-      const monthOps = operations.filter(
-        (operation) => operation.category_id === category.id && operation.month === month,
-      );
-      const amount = monthOps.reduce((sum, op) => sum + convertToRub(op, fxRatesByMonth[month] ?? 0), 0);
-      monthCells[month] = { amount, count: monthOps.length };
-    });
+      months.forEach((month) => {
+        const monthOps = operations.filter(
+          (operation) => operation.category_id === category.id && operation.month === month,
+        );
+        const amount = monthOps.reduce((sum, op) => sum + convertToRub(op, fxRatesByMonth[month] ?? 0), 0);
+        monthCells[month] = { amount, count: monthOps.length };
+      });
       return {
         key: `other-${category.id}`,
         kind: 'other',
@@ -397,6 +397,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
   const addOperation = useExpensesStore((state) => state.addOperation);
   const updateOperation = useExpensesStore((state) => state.updateOperation);
   const deleteOperation = useExpensesStore((state) => state.deleteOperation);
+  const fxRatesByMonth = useExpensesStore((state) => state.fxRatesByMonth);
   const [expenseModalOpen, setExpenseModalOpen] = useState<boolean>(false);
   const [editingOperation, setEditingOperation] = useState<ExpenseOperation | null>(null);
   const [categoryInput, setCategoryInput] = useState<string>('');
@@ -405,9 +406,37 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
   const [drawerMonth, setDrawerMonth] = useState<string>('');
   const [form] = Form.useForm<ExpenseFormValues>();
 
+  const mapCategory = (payload: { category_id: string; name: string; is_active: boolean }): ExpenseCategory => ({
+    id: payload.category_id,
+    name: payload.name,
+    is_active: payload.is_active,
+  });
+
+  const mapOperation = (payload: {
+    operation_id: string;
+    category_id: string;
+    month: string;
+    amount: number;
+    currency: ExpenseCurrency;
+    fx_used?: number | null;
+    vendor?: string | null;
+    comment?: string | null;
+    attachments?: string[];
+  }): ExpenseOperation => ({
+    id: payload.operation_id,
+    category_id: payload.category_id,
+    month: payload.month,
+    amount: payload.amount,
+    currency: payload.currency,
+    ...(typeof payload.fx_used === 'number' ? { fx_used: payload.fx_used } : {}),
+    ...(payload.vendor ? { vendor: payload.vendor } : {}),
+    ...(payload.comment ? { comment: payload.comment } : {}),
+    ...(payload.attachments ? { attachments: payload.attachments } : {}),
+  });
+
   const rows = useMemo(
-    (): ExpenseRow[] => buildRows(employees, categories, operations, months),
-    [employees, categories, operations, months],
+    (): ExpenseRow[] => buildRows(employees, categories, operations, months, fxRatesByMonth),
+    [employees, categories, operations, months, fxRatesByMonth],
   );
 
   const autoCompleteOptions = useMemo(
@@ -474,20 +503,28 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
     });
   };
 
-  const handleAddCategory = (): void => {
+  const handleAddCategory = async (): Promise<void> => {
     const trimmed = categoryInput.trim();
     if (!trimmed) {
       return;
     }
-    const idBase = trimmed.toLowerCase().replace(/[^a-z0-9]+/gi, '-');
-    const newCategory: ExpenseCategory = {
-      id: `${idBase}-${Date.now()}`,
-      name: trimmed,
-      is_active: true,
-    };
-    addCategory(newCategory);
-    setCategoryInput('');
-    form.setFieldValue('categoryId', newCategory.id);
+    try {
+      const response = await apiClient.post('/finops/expenses/categories', {
+        name: trimmed,
+        is_active: true,
+      });
+      const payload = response.data?.data as { category_id: string; name: string; is_active: boolean } | undefined;
+      if (!payload) {
+        throw new Error('Invalid response');
+      }
+      const newCategory = mapCategory(payload);
+      addCategory(newCategory);
+      setCategoryInput('');
+      form.setFieldValue('categoryId', newCategory.id);
+      message.success('Категория добавлена');
+    } catch {
+      message.error('Не удалось добавить категорию');
+    }
   };
 
   const openExpenseModal = (categoryId?: string, month?: string, operation?: ExpenseOperation): void => {
@@ -541,15 +578,11 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
       const month = values.month.format('YYYY-MM');
       const fxAuto = fxRatesByMonth[month];
       const fxUsed = values.currency === 'USD' ? (fxAuto ?? values.fxManual ?? 0) : undefined;
-      const baseOperation: ExpenseOperation = {
-        id: editingOperation?.id ?? `op-${Date.now()}`,
+      const payload = {
         category_id: values.categoryId,
         month,
         amount: values.amount,
         currency: values.currency,
-      };
-      const operationWithOptional: ExpenseOperation = {
-        ...baseOperation,
         ...(typeof fxUsed === 'number' ? { fx_used: fxUsed } : {}),
         ...(values.vendor ? { vendor: values.vendor } : {}),
         ...(values.comment ? { comment: values.comment } : {}),
@@ -559,10 +592,14 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
       };
 
       if (editingOperation) {
-        updateOperation(operationWithOptional);
+        const response = await apiClient.patch(`/finops/expenses/operations/${editingOperation.id}`, payload);
+        const updated = mapOperation(response.data?.data);
+        updateOperation(updated);
         message.success('Расход обновлён');
       } else {
-        addOperation(operationWithOptional);
+        const response = await apiClient.post('/finops/expenses/operations', payload);
+        const created = mapOperation(response.data?.data);
+        addOperation(created);
         message.success('Расход добавлен');
       }
       setExpenseModalOpen(false);
@@ -573,14 +610,19 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
     }
   };
 
-  const handleDeleteOperation = (operationId: string): void => {
+  const handleDeleteOperation = async (operationId: string): Promise<void> => {
     const operation = operations.find((item) => item.id === operationId);
     if (operation && isMonthClosed(operation.month)) {
       message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
       return;
     }
-    deleteOperation(operationId);
-    message.success('Операция удалена');
+    try {
+      await apiClient.delete(`/finops/expenses/operations/${operationId}`);
+      deleteOperation(operationId);
+      message.success('Операция удалена');
+    } catch {
+      message.error('Не удалось удалить операцию');
+    }
   };
 
   const handleUpload: UploadProps['customRequest'] = async (options) => {
@@ -591,7 +633,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
       const response = await apiClient.post('/uploads/expense-attachments', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      onSuccess?.(response.data);
+      onSuccess?.(response.data?.data ?? response.data);
       message.success('Файл загружен');
     } catch (error) {
       onError?.(error as Error);
@@ -660,7 +702,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
           <Button size="small" type="link" onClick={(): void => openExpenseModal(operation.category_id, operation.month, operation)}>
             Редактировать
           </Button>
-          <Button size="small" type="link" danger onClick={(): void => handleDeleteOperation(operation.id)}>
+          <Button size="small" type="link" danger onClick={(): void => { void handleDeleteOperation(operation.id); }}>
             Удалить
           </Button>
         </Space>

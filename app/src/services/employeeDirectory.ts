@@ -1,4 +1,8 @@
-import { fxRatesByMonth } from './expenseDirectory';
+const FX_RATES_BY_MONTH: Record<string, number> = {
+  '2026-01': 92.4,
+  '2026-02': 93.1,
+  '2026-03': 94.2,
+};
 
 export interface EmployeeDirectoryEntry {
   id: string;
@@ -49,7 +53,7 @@ const toRub = (amount: number, currency: 'RUB' | 'USD', month: string): number =
   if (currency === 'RUB') {
     return amount;
   }
-  const rate = fxRatesByMonth[month] ?? 0;
+  const rate = FX_RATES_BY_MONTH[month] ?? 0;
   if (!rate) {
     return 0;
   }

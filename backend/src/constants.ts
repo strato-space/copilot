@@ -79,9 +79,14 @@ export const COLLECTIONS = {
   EXECUTION_PLANS_ITEMS: 'automation_execution_plans_items',
 
   // Finance
-  FINANCES_EXPENSES: 'automation_finances_expenses',
-  FINANCES_INCOME: 'automation_finances_income',
-  FINANCES_INCOME_TYPES: 'automation_finances_income_types',
+  FINANCES_EXPENSES: 'finops_finances_expenses',
+  FINANCES_INCOME: 'finops_finances_income',
+  FINANCES_INCOME_TYPES: 'finops_finances_income_types',
+  FINOPS_EXPENSE_CATEGORIES: 'finops_expense_categories',
+  FINOPS_EXPENSE_OPERATIONS: 'finops_expense_operations',
+  FINOPS_EXPENSE_OPERATIONS_LOG: 'finops_expense_operations_log',
+  FINOPS_FX_RATES: 'finops_fx_rates',
+  FINOPS_MONTH_CLOSURES: 'finops_month_closures',
 
   // Design & Integration
   DESIGN_DATA: 'automation_design_data',
