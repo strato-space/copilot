@@ -119,3 +119,6 @@ MongoNetworkError: connection 1 to 92.63.177.46:27017 closed
 2026-02-06 10:09:44 [info]: 127.0.0.1 - - [06/Feb/2026:03:09:44 +0000] "POST /api/voicebot/LLMGate/run_prompt HTTP/1.1" 503 128 "-" "curl/8.7.1" {"service":"copilot-backend","component":"http"}
 2026-02-06 10:09:49 [info]: Received SIGTERM, starting graceful shutdown... {"service":"copilot-backend"}
 2026-02-06 10:10:19 [error]: Forced shutdown after timeout {"service":"copilot-backend"}
+2026-02-09 12:24:37 [info]: Serving frontend from: /Users/tony_bit/Documents/strato-space/copilot/app/dist {"service":"copilot-backend"}
+2026-02-09 12:24:37 [info]: [voicebot-socket] Registered /voicebot namespace {"service":"copilot-backend"}
+2026-02-09 12:24:38 [info]: MongoDB connected {"service":"copilot-backend"}
