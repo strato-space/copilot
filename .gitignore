@@ -5,6 +5,8 @@ __pycache__/
 *.sqlite3
 .env
 .env.test
+backend/.env.development
+backend/.env.production
 .venv/
 .DS_Store
 node_modules/
