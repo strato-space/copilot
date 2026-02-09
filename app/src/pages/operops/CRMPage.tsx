@@ -154,8 +154,8 @@ const CRMPage = () => {
             key: 'plan',
             label: 'Plan',
             filter: {
-                task_status: ['PLANNED_10', 'PLANNED_20'],
                 ...savedFilters,
+                task_status: ['PLANNED_10', 'PLANNED_20'],
             },
             columns: ['mark', 'created_at', 'updated_at', 'project', 'epic', 'order', 'title', 'performer', 'priority', 'task_status', 'task_type', 'shipment_date', 'estimated_time_edit', 'dashboard_comment', 'edit_action', 'notification'],
         },
@@ -210,6 +210,7 @@ const CRMPage = () => {
         { key: 'voice', label: 'Voice' },
         { key: 'plan', label: 'Plan', subTabs: ['new', 'plan'] },
         { key: 'backlog', label: 'Backlog', subTabs: ['work', 'review'] },
+        { key: 'work', label: 'Work', configKey: 'work' },
         { key: 'upload', label: 'Upload', configKey: 'upload' },
         { key: 'done', label: 'Done', configKey: 'done' },
         { key: 'archive', label: 'Archive', configKey: 'archive' },

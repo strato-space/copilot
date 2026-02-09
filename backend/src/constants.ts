@@ -171,6 +171,16 @@ export const TASK_STATUSES = {
 export type TaskStatus = (typeof TASK_STATUSES)[keyof typeof TASK_STATUSES];
 
 // =============================================================================
+// Task Classes
+// =============================================================================
+export const TASK_CLASSES = {
+  TASK: 'TASK',
+  FUNCTIONALITY: 'FUNCTIONALITY',
+} as const;
+
+export type TaskClass = (typeof TASK_CLASSES)[keyof typeof TASK_CLASSES];
+
+// =============================================================================
 // Notion <-> CRM Status Mapping
 // =============================================================================
 export const NOTION_TICKET_STATUSES = {
@@ -227,12 +237,8 @@ export const NOTION_TO_CRM_STATUSES: Record<string, string> = {
 };
 
 // =============================================================================
-// Task Classes & Types
+// Task Types
 // =============================================================================
-export const TASK_CLASSES = {
-  TASK: 'TASK',
-  FUNCTIONALITY: 'FUNCTIONALITY',
-} as const;
 
 export const NOTION_TICKET_TYPES = [
   'Research',

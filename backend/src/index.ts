@@ -4,7 +4,14 @@ import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: resolve(__dirname, '../.env') });
+const baseEnvPath = resolve(__dirname, '../.env');
+dotenv.config({ path: baseEnvPath });
+
+const envName = process.env.NODE_ENV ?? 'development';
+const envOverridePath = resolve(__dirname, `../.env.${envName}`);
+if (existsSync(envOverridePath)) {
+  dotenv.config({ path: envOverridePath, override: true });
+}
 
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
