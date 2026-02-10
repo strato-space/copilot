@@ -7,6 +7,8 @@ __pycache__/
 .env.test
 backend/.env.development
 backend/.env.production
+miniapp/.env.development
+miniapp/.env.production
 .venv/
 .DS_Store
 node_modules/
