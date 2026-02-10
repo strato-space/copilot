@@ -68,9 +68,11 @@ Socket.IO is the real-time layer for updates.
 ## Development Workflow
 
 ### Build & Run
-- Dev (frontend + backend): `./scripts/dev.sh` from repo root.
-- Frontend build: `cd app && npm install && npm run build` (outputs to `app/dist`).
-- Backend build: `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
+- Preferred (PM2): `./scripts/pm2-backend.sh <dev|prod>` from repo root.
+  - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` via `npm run dev`.
+  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` via `npm run start`.
+- Frontend build (manual): `cd app && npm install && npm run build` (outputs to `app/dist`).
+- Backend build (manual): `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
 
 ### Service Execution Rules
 - All services (backend and frontend) MUST be started via PM2, NEVER using Vite dev server directly.
@@ -81,7 +83,7 @@ Socket.IO is the real-time layer for updates.
 - PM2 commands: `pm2 start <script> --name <service-name>`, `pm2 stop <name>`, `pm2 restart <name>`, `pm2 logs <name>`.
 
 ### Dev version (p2)
-- Start backend: `cd backend && npm install && npm run dev` (listens on `127.0.0.1:3002`).
+- Start backend + build assets: `./scripts/pm2-backend.sh dev`.
 - Build frontend after each change: `cd app && npm install && npm run build-dev` (outputs to `app/dist`).
 - View in browser: `https://copilot-dev.stratospace.fun` (nginx serves `app/dist`).
 
