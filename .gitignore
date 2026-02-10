@@ -25,3 +25,5 @@ agents/uv.lock
 .playwright/
 test-results/
 playwright-report/
+
+tools/
