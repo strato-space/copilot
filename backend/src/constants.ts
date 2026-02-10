@@ -111,6 +111,9 @@ export const COLLECTIONS = {
   GOOGLE_DRIVE_EVENTS_CHANNELS: 'automation_google_drive_events_channels',
   GOOGLE_DRIVE_STRUCTURE: 'automation_google_drive_structure',
 
+  // Reports
+  REPORTS_LOG: 'automation_reports_log',
+
   // Voicebot
   VOICE_BOT_SESSIONS: 'automation_voice_bot_sessions',
   VOICE_BOT_MESSAGES: 'automation_voice_bot_messages',

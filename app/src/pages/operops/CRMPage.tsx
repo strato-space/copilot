@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Button, ConfigProvider, Tabs, Tag, Spin, Table, Tooltip, message } from 'antd';
+import { Button, ConfigProvider, Tabs, Tag, Spin, Table, Tooltip, message, Modal, Form, DatePicker, Select } from 'antd';
 import type { TableColumnType } from 'antd';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { FileExcelOutlined, SyncOutlined, ReloadOutlined } from '@ant-design/icons';
 import _ from 'lodash';
 
@@ -39,6 +40,17 @@ interface VoiceTask {
     dialogue_reference?: string;
 }
 
+interface ReportResult {
+    url: string;
+    documentId: string;
+    sheetId: number;
+}
+
+interface ReportResponse {
+    data: ReportResult | null;
+    error: { message?: string } | null;
+}
+
 interface SubTabConfig {
     key: string;
     label: string;
@@ -53,8 +65,8 @@ interface SubTabConfig {
 
 const CRMPage = () => {
     const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew } = useCRMStore();
-    const { tickets, projects, fetchDictionary, fetchTickets, tickets_updated_at } = useKanbanStore();
-    const { fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
+    const { tickets, projects, performers, fetchDictionary, fetchTickets, tickets_updated_at } = useKanbanStore();
+    const { projects: projectsList, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
 
     // Socket.IO for real-time CRM updates
@@ -63,6 +75,13 @@ const CRMPage = () => {
     const [voiceSessions, setVoiceSessions] = useState<VoiceSession[]>([]);
     const [voiceLoading, setVoiceLoading] = useState(false);
     const [restartCreateTasksId, setRestartCreateTasksId] = useState<string | null>(null);
+    const [jiraModalOpen, setJiraModalOpen] = useState(false);
+    const [performerModalOpen, setPerformerModalOpen] = useState(false);
+    const [resultModalOpen, setResultModalOpen] = useState(false);
+    const [reportResult, setReportResult] = useState<ReportResult | null>(null);
+    const [reportLoading, setReportLoading] = useState(false);
+    const [jiraForm] = Form.useForm();
+    const [performerForm] = Form.useForm();
 
     const { isAuth, loading: authLoading } = useAuthStore();
     const initialDataLoadedRef = useRef(false);
@@ -114,6 +133,62 @@ const CRMPage = () => {
             message.error('Не удалось перезапустить создание задач');
         } finally {
             setRestartCreateTasksId(null);
+        }
+    };
+
+    const openResult = (result: ReportResult) => {
+        setReportResult(result);
+        setResultModalOpen(true);
+        window.open(result.url, '_blank', 'noopener');
+    };
+
+    const handleJiraReportSubmit = async () => {
+        try {
+            const values = await jiraForm.validateFields();
+            const range = values.range as [Dayjs, Dayjs];
+            setReportLoading(true);
+            const response = await api_request<ReportResponse>('reports/jira-style', {
+                projectId: values.projectId,
+                startDate: range[0].toISOString(),
+                endDate: range[1].toISOString(),
+            });
+            if (response?.data?.url) {
+                message.success('Отчет готов');
+                setJiraModalOpen(false);
+                openResult(response.data);
+            } else {
+                message.error(response?.error?.message ?? 'Не удалось сформировать отчет');
+            }
+        } catch (error) {
+            console.error('Ошибка при создании Jira-style отчета:', error);
+            message.error('Не удалось сформировать отчет');
+        } finally {
+            setReportLoading(false);
+        }
+    };
+
+    const handlePerformerReportSubmit = async () => {
+        try {
+            const values = await performerForm.validateFields();
+            const range = values.range as [Dayjs, Dayjs];
+            setReportLoading(true);
+            const response = await api_request<ReportResponse>('reports/performer-weeks', {
+                performerId: values.performerId,
+                startDate: range[0].toISOString(),
+                endDate: range[1].toISOString(),
+            });
+            if (response?.data?.url) {
+                message.success('Отчет готов');
+                setPerformerModalOpen(false);
+                openResult(response.data);
+            } else {
+                message.error(response?.error?.message ?? 'Не удалось сформировать отчет');
+            }
+        } catch (error) {
+            console.error('Ошибка при создании отчета по исполнителю:', error);
+            message.error('Не удалось сформировать отчет');
+        } finally {
+            setReportLoading(false);
         }
     };
 
@@ -392,6 +467,99 @@ const CRMPage = () => {
                             },
                         }}
                     >
+                        <Modal
+                            title="Jira-style отчет"
+                            open={jiraModalOpen}
+                            onCancel={() => setJiraModalOpen(false)}
+                            onOk={handleJiraReportSubmit}
+                            okText="Создать отчет"
+                            cancelText="Отмена"
+                            confirmLoading={reportLoading}
+                        >
+                            <Form form={jiraForm} layout="vertical">
+                                <Form.Item
+                                    label="Проект"
+                                    name="projectId"
+                                    rules={[{ required: true, message: 'Выберите проект' }]}
+                                >
+                                    <Select
+                                        showSearch
+                                        placeholder="Выберите проект"
+                                        options={projectsList.map((project) => ({
+                                            value: project._id,
+                                            label: project.name,
+                                        }))}
+                                        filterOption={(input, option) =>
+                                            (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                                        }
+                                    />
+                                </Form.Item>
+                                <Form.Item
+                                    label="Период"
+                                    name="range"
+                                    rules={[{ required: true, message: 'Выберите период' }]}
+                                >
+                                    <DatePicker.RangePicker className="w-full" />
+                                </Form.Item>
+                            </Form>
+                        </Modal>
+
+                        <Modal
+                            title="Отчет по исполнителю"
+                            open={performerModalOpen}
+                            onCancel={() => setPerformerModalOpen(false)}
+                            onOk={handlePerformerReportSubmit}
+                            okText="Создать отчет"
+                            cancelText="Отмена"
+                            confirmLoading={reportLoading}
+                        >
+                            <Form form={performerForm} layout="vertical">
+                                <Form.Item
+                                    label="Исполнитель"
+                                    name="performerId"
+                                    rules={[{ required: true, message: 'Выберите исполнителя' }]}
+                                >
+                                    <Select
+                                        showSearch
+                                        placeholder="Выберите исполнителя"
+                                        options={performers.map((performer) => ({
+                                            value: performer.id ?? performer._id,
+                                            label: performer.real_name ?? performer.name ?? performer.id ?? performer._id,
+                                        }))}
+                                        filterOption={(input, option) =>
+                                            (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                                        }
+                                    />
+                                </Form.Item>
+                                <Form.Item
+                                    label="Период"
+                                    name="range"
+                                    rules={[{ required: true, message: 'Выберите период' }]}
+                                >
+                                    <DatePicker.RangePicker className="w-full" />
+                                </Form.Item>
+                            </Form>
+                        </Modal>
+
+                        <Modal
+                            title="Отчет готов"
+                            open={resultModalOpen}
+                            onCancel={() => setResultModalOpen(false)}
+                            onOk={() => reportResult?.url && window.open(reportResult.url, '_blank', 'noopener')}
+                            okText="Открыть"
+                            cancelText="Закрыть"
+                        >
+                            {reportResult?.url ? (
+                                <div className="text-sm">
+                                    <div className="mb-2">Ссылка на отчет:</div>
+                                    <a href={reportResult.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                                        {reportResult.url}
+                                    </a>
+                                </div>
+                            ) : (
+                                <div className="text-sm">Ссылка на отчет недоступна.</div>
+                            )}
+                        </Modal>
                         <div className="bg-white border border-[#E6EBF3] rounded-2xl px-4 py-4 sm:px-6 sm:py-5 shadow-sm">
                             <div className="flex flex-wrap items-center gap-4">
                                 <div className="text-[26px] sm:text-[30px] font-semibold text-[#1F2937]">OperOps</div>
@@ -412,6 +580,12 @@ const CRMPage = () => {
                                     ))}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                    <Button icon={<FileExcelOutlined />} onClick={() => setJiraModalOpen(true)}>
+                                        Jira-style отчет
+                                    </Button>
+                                    <Button icon={<FileExcelOutlined />} onClick={() => setPerformerModalOpen(true)}>
+                                        Отчет по исполнителю
+                                    </Button>
                                     <Button type="primary" onClick={() => setEditingTicketToNew()}>
                                         + Задачу
                                     </Button>

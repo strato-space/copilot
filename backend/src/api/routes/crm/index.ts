@@ -14,6 +14,7 @@ import projectGroupsRouter from './project-groups.js';
 import importRouter from './import.js';
 import uploadsRouter from './uploads.js';
 import voicebotRouter from './voicebot.js';
+import reportsRouter from './reports.js';
 
 const router = Router();
 
@@ -33,5 +34,6 @@ router.use('/project_groups', projectGroupsRouter);
 router.use('/import', importRouter);
 router.use('/upload', uploadsRouter);
 router.use('/voicebot', voicebotRouter);
+router.use('/reports', reportsRouter);
 
 export default router;
