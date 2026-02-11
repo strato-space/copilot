@@ -81,6 +81,7 @@ Socket.IO is the real-time layer for updates.
   - **development**: `npm run build-dev`
   - **localhost**: `npm run build-dev` with local env overrides
 - PM2 commands: `pm2 start <script> --name <service-name>`, `pm2 stop <name>`, `pm2 restart <name>`, `pm2 logs <name>`.
+- When working from sandboxed Codex sessions, run shell scripts and PM2 commands through SSH on the target server (for example, `ssh p2 'cd /home/strato-space/copilot && ./scripts/pm2-backend.sh dev'`) to avoid local sandbox restrictions.
 
 ### Dev version (p2)
 - Start backend + build assets: `./scripts/pm2-backend.sh dev`.
