@@ -31,7 +31,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     } = useVoiceBotStore();
 
     const { openParticipantModal, openAccessUsersModal, generateSessionTitle } = useSessionsUIStore();
-    const { sendMCPCall, waitForCompletion } = useMCPRequestStore();
+    const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
 
     const [isEditing, setIsEditing] = useState(false);
     const [localSessionName, setLocalSessionName] = useState(voiceBotSession?.session_name || '');
@@ -109,7 +109,8 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
             getSessionData,
             updateSessionName,
             sendMCPCall,
-            waitForCompletion
+            waitForCompletion,
+            connectionState
         );
 
         messageApi.destroy('generating-title');

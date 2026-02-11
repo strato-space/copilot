@@ -81,7 +81,7 @@ export default function SessionsListPage() {
         restartCorruptedSession,
         sendSessionToCrmWithMcp,
     } = useVoiceBotStore();
-    const { sendMCPCall, waitForCompletion } = useMCPRequestStore();
+    const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
     const { generateSessionTitle } = useSessionsUIStore();
 
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -176,7 +176,14 @@ export default function SessionsListPage() {
         event?.stopPropagation();
         setGeneratingTitleSessionId(sessionId);
         try {
-            await generateSessionTitle(sessionId, getSessionData, updateSessionName, sendMCPCall, waitForCompletion);
+            await generateSessionTitle(
+                sessionId,
+                getSessionData,
+                updateSessionName,
+                sendMCPCall,
+                waitForCompletion,
+                connectionState
+            );
         } catch (error) {
             console.error('Ошибка при генерации заголовка:', error);
             message.error('Ошибка при генерации заголовка');
@@ -198,7 +205,7 @@ export default function SessionsListPage() {
                 const errorText = (result as { error?: string } | null)?.error || 'Не удалось перезапустить обработку';
                 message.warning(errorText);
             }
-            await fetchVoiceBotSessionsList();
+            await fetchVoiceBotSessionsList({ force: true });
         } catch (error) {
             console.error('Ошибка при перезапуске обработки сессии:', error);
             message.error('Ошибка при перезапуске обработки');

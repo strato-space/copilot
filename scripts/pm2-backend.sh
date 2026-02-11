@@ -10,7 +10,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/pm2-backend.sh <dev|prod|local>
 
-Builds app, miniapp, and backend, then starts the backend with PM2.
+Builds app, miniapp, and backend, then starts the backend and agents with PM2.
 EOF
 }
 
@@ -65,6 +65,8 @@ if [[ ! -f "$PM2_ECOSYSTEM" ]]; then
   exit 1
 fi
 
+AGENTS_SCRIPT="$ROOT_DIR/agents/pm2-agents.sh"
+
 ( cd "$FRONT_DIR" && npm run "$APP_BUILD_SCRIPT" )
 ( cd "$MINI_DIR" && npm run "$MINI_BUILD_SCRIPT" )
 ( cd "$BACK_DIR" && npm run build )
@@ -73,4 +75,10 @@ if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
   pm2 restart "$PM2_ECOSYSTEM" --only "$PM2_NAME" --update-env
 else
   pm2 start "$PM2_ECOSYSTEM" --only "$PM2_NAME" --update-env
+fi
+
+if [[ -f "$AGENTS_SCRIPT" ]]; then
+  ( cd "$ROOT_DIR/agents" && "$AGENTS_SCRIPT" start )
+else
+  echo "Agents script not found: $AGENTS_SCRIPT" >&2
 fi
