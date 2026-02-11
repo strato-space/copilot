@@ -21,6 +21,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@types/sanitize-html": "^2.16.0",
+    "bcrypt": "^5.1.1",
     "bullmq": "^5.7.13",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -36,6 +37,7 @@
     "mongodb": "^7.0.0",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
+    "number-to-words-ru": "^2.1.0",
     "openai": "^6.17.0",
     "prom-client": "^15.1.0",
     "sanitize-html": "^2.17.0",
@@ -44,6 +46,7 @@
     "winston": "^3.13.0"
   },
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",

@@ -3,7 +3,7 @@
  * Migrated from appkanban/src/pages/FinancesPerformersPage.jsx
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button, ConfigProvider, Select, InputNumber, Spin, Tree, FloatButton } from 'antd';
 import {
     FileTextOutlined,
@@ -50,7 +50,10 @@ interface Performer {
 }
 
 // Helper to find node in tree
-function findNodeByKey(tree: PerformerNode[], targetKey: Key): PerformerNode | null {
+function findNodeByKey<T extends { key?: string; children?: T[] }>(
+    tree: T[],
+    targetKey: Key
+): T | null {
     for (const node of tree) {
         if (node.key === targetKey) {
             return node;
@@ -68,51 +71,65 @@ function findNodeByKey(tree: PerformerNode[], targetKey: Key): PerformerNode | n
 const FinancesPerformersPage: React.FC = () => {
     const [selectedNode, setSelectedNode] = useState<PerformerNode | null>(null);
 
-    const { metricsMonth, setMetricMonth, metricsYear, setMetricYear } = useCRMStore();
+    const {
+        metricsMonth,
+        setMetricMonth,
+        metricsYear,
+        setMetricYear,
+        isMonthWorkHoursChanged,
+        setIsMonthWorkHoursChanged,
+    } = useCRMStore();
 
     // Use selectors to get only needed state
     const monthWorkHours = useKanbanStore((state) => state.monthWorkHours);
     const setMonthWorkHours = useKanbanStore((state) => state.setMonthWorkHours);
     const projects = useKanbanStore((state) => state.projects);
     const fetchDictionary = useKanbanStore((state) => state.fetchDictionary);
+    const fetchMonthWorkHours = useKanbanStore((state) => state.fetchMonthWorkHours);
+    const saveMonthWorkHours = useKanbanStore((state) => state.saveMonthWorkHours);
+    const performersPaymentsTree = useKanbanStore((state) => state.performersPaymentsTree);
+    const fetchPerformersPaymentsTree = useKanbanStore((state) => state.fetchPerformersPaymentsTree);
+    const performersData = useKanbanStore((state) => state.performersData) as Performer[];
+    const fetchPerformersData = useKanbanStore((state) => state.fetchPerformersData);
 
     const isAuth = useAuthStore((state) => state.isAuth);
 
-    // Placeholder for performers data - will need proper store integration
-    const [isMonthWorkHoursChanged, setIsMonthWorkHoursChanged] = useState(false);
-    const [performersPaymentsTree, setPerformersPaymentsTree] = useState<PerformerNode[]>([]);
-    const [performersData, setPerformersData] = useState<Performer[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const initialLoadRef = useRef(false);
 
     // Fetch data on mount
     useEffect(() => {
-        if (isAuth) {
-            if (projects.length < 1) {
-                fetchDictionary();
-            }
-            // TODO: Implement fetchPerformersPaymentsTree and fetchPerformersData
-            // For now, set loading to false after a delay
-            setTimeout(() => setLoading(false), 1000);
+        if (!isAuth) return;
+        if (initialLoadRef.current) return;
+        initialLoadRef.current = true;
+
+        if (projects.length < 1) {
+            fetchDictionary();
         }
-    }, [isAuth, projects.length, fetchDictionary]);
+        fetchPerformersPaymentsTree();
+        fetchPerformersData();
+
+        setTimeout(() => setLoading(false), 300);
+    }, [isAuth, projects.length, fetchDictionary, fetchPerformersPaymentsTree, fetchPerformersData]);
 
     // Refetch on month/year change
     useEffect(() => {
         fetchDictionary();
-        // TODO: fetchMonthWorkHours()
-    }, [metricsMonth, metricsYear, fetchDictionary]);
+        fetchMonthWorkHours();
+    }, [metricsMonth, metricsYear, fetchDictionary, fetchMonthWorkHours]);
 
     const handleSaveMonthWorkHours = () => {
-        // TODO: Implement save
-        console.log('Saving month work hours:', monthWorkHours);
+        saveMonthWorkHours();
         setIsMonthWorkHoursChanged(false);
     };
 
     const handleSelectNode = (selectedKeys: Key[]) => {
         const key = selectedKeys[0];
         if (key) {
-            const node = findNodeByKey(performersPaymentsTree, key);
-            setSelectedNode(node as PerformerNode);
+            const treeData = performersPaymentsTree ?? [];
+            const node = findNodeByKey(treeData, key);
+            setSelectedNode(node ? (node as PerformerNode) : null);
         }
     };
 
@@ -226,7 +243,7 @@ const FinancesPerformersPage: React.FC = () => {
         }
     };
 
-    if (loading || projects.length < 1) {
+    if (loading || projects.length < 1 || performersPaymentsTree === null) {
         return <Spin spinning size="large" fullscreen />;
     }
 

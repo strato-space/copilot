@@ -39,3 +39,8 @@ MongoNetworkError: connection 1 to 92.63.177.46:27017 closed
 2026-02-09 17:39:32 [error]: Uncaught Exception {"service":"copilot-backend","error":{"code":"EADDRINUSE","errno":-48,"syscall":"listen","address":"::","port":8084}}
 2026-02-09 17:39:34 [error]: Uncaught Exception {"service":"copilot-backend","error":{"code":"EADDRINUSE","errno":-48,"syscall":"listen","address":"::","port":8084}}
 2026-02-09 17:39:35 [error]: Uncaught Exception {"service":"copilot-backend","error":{"code":"EADDRINUSE","errno":-48,"syscall":"listen","address":"::","port":8084}}
+2026-02-11 17:11:52 [error]: Failed to start server {"service":"copilot-backend","error":"connection 1 to 92.63.177.46:27017 timed out"}
+MongoNetworkTimeoutError: connection 1 to 92.63.177.46:27017 timed out
+    at Timeout._onTimeout (/Users/tony_bit/Documents/strato-space/copilot/backend/node_modules/mongodb/src/cmap/connection.ts:326:20)
+    at listOnTimeout (node:internal/timers:588:17)
+    at process.processTimers (node:internal/timers:523:7)
