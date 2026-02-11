@@ -45,7 +45,7 @@ export default function WebrtcFabLoader() {
     useEffect(() => {
         const onSessionCreated = () => {
             try {
-                void fetchVoiceBotSessionsList();
+                void fetchVoiceBotSessionsList({ force: true });
             } catch {
                 // ignore
             }

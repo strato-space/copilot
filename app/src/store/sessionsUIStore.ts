@@ -101,7 +101,8 @@ interface SessionsUIState {
         ) => Promise<{ session_messages?: Array<Record<string, unknown>> | VoiceBotMessage[] }>,
         updateSessionName: (sessionId: string, name: string) => Promise<void>,
         sendMCPCall: (mcpServer: string, tool: string, args: unknown, stream?: boolean) => string,
-        waitForCompletion: (requestId: string, timeoutMs?: number) => Promise<{ status: string; result?: unknown } | null>
+        waitForCompletion: (requestId: string, timeoutMs?: number) => Promise<{ status: string; result?: unknown } | null>,
+        connectionState: 'connecting' | 'connected' | 'disconnected'
     ) => Promise<void>;
 }
 
@@ -401,10 +402,53 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
             },
         })),
     resetTicketEdits: () => set((state) => ({ ticketsModal: { ...state.ticketsModal, editingTickets: {} } })),
-    generateSessionTitle: async (sessionId, getSessionData, updateSessionName, sendMCPCall, waitForCompletion) => {
+    generateSessionTitle: async (
+        sessionId,
+        getSessionData,
+        updateSessionName,
+        sendMCPCall,
+        waitForCompletion,
+        connectionState
+    ) => {
         try {
+            if (connectionState !== 'connected') {
+                message.warning(
+                    connectionState === 'connecting'
+                        ? 'Соединение с MCP устанавливается, попробуйте еще раз'
+                        : 'Нет соединения с MCP'
+                );
+                return;
+            }
+
+            const agentsMcpServerUrl = (() => {
+                if (typeof window !== 'undefined') {
+                    const win = window as { agents_api_url?: string };
+                    if (win.agents_api_url) return win.agents_api_url;
+                }
+                return (import.meta.env.VITE_AGENTS_API_URL as string | undefined) ?? null;
+            })();
+
+            if (!agentsMcpServerUrl) {
+                message.error('Не настроен MCP URL агента');
+                return;
+            }
+
             const sessionData = await getSessionData(sessionId);
             const sessionMessages = sessionData?.session_messages || [];
+            const messageText = (sessionMessages as VoiceBotMessage[])
+                .map((msg) => {
+                    if (!msg || typeof msg !== 'object') return '';
+                    const transcription = typeof msg.transcription_text === 'string' ? msg.transcription_text.trim() : '';
+                    if (transcription) return transcription;
+                    const categ = Array.isArray(msg.categorization) ? msg.categorization : [];
+                    if (categ.length === 0) return '';
+                    const chunks = categ
+                        .map((chunk) => (typeof chunk.text === 'string' ? chunk.text.trim() : ''))
+                        .filter(Boolean);
+                    return chunks.join(' ');
+                })
+                .filter(Boolean)
+                .join('\n');
             const hasCategorizationData = sessionMessages.some((msg) => {
                 if (!msg || typeof msg !== 'object') return false;
                 if ('categorization' in msg) {
@@ -419,8 +463,8 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
                 return;
             }
 
-            const requestId = sendMCPCall('prompt_flow', 'generate_session_title', {
-                session_messages: sessionMessages,
+            const requestId = sendMCPCall(agentsMcpServerUrl, 'generate_session_title', {
+                message: messageText,
             });
 
             const result = await waitForCompletion(requestId, 120000);
@@ -429,7 +473,8 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
                 return;
             }
 
-            const title = (result.result as { title?: string }).title;
+            const finalResult = result.result as { title?: string; content?: Array<{ text?: string }> } | undefined;
+            const title = finalResult?.title || finalResult?.content?.[0]?.text;
             if (!title) {
                 message.error('Пустой результат генерации');
                 return;

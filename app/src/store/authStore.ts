@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import axios from 'axios';
 import Cookies from 'universal-cookie';
-import { apiClient, voicebotClient } from '../services/api';
+import { apiClient } from '../services/api';
 
 export interface AuthUser {
   id: string;
@@ -90,7 +90,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
   checkAuth: async (): Promise<void> => {
     set({ loading: true, error: null });
     try {
-      const response = await voicebotClient.get('/auth/me');
+      const response = await apiClient.get('/auth/me');
       const { user } = extractUserFromResponse(response.data);
       if (user) {
         const authToken = readCookieToken();
@@ -138,7 +138,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
   tryTokenAuth: async (token: string): Promise<boolean> => {
     set({ loading: true, error: null });
     try {
-      const response = await voicebotClient.post('/auth_token', { token });
+      const response = await apiClient.post('/auth_token', { token });
       const { user, authToken } = extractUserFromResponse(response.data);
       if (user) {
         set({
@@ -168,7 +168,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
       set((state) => ({ error: state.error }));
     }
     try {
-      const response = await voicebotClient.get('/auth/me');
+      const response = await apiClient.get('/auth/me');
       const { user } = extractUserFromResponse(response.data);
       if (user) {
         const authToken = readCookieToken();

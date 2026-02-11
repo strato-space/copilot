@@ -171,8 +171,19 @@ router.post('/margin-projects', async (req: Request, res: Response) => {
 router.post('/month-work-hours', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const data = await db.collection(COLLECTIONS.CALENDAR_MONTH_WORK_HOURS).find({}).toArray();
-        res.status(200).json(data);
+        const month = Number(req.body.month);
+        const year = Number(req.body.year);
+
+        if (!month || !year) {
+            res.status(400).json({ error: 'month and year are required' });
+            return;
+        }
+
+        const month_work_hours = await db
+            .collection(COLLECTIONS.CALENDAR_MONTH_WORK_HOURS)
+            .findOne({ month, year });
+
+        res.status(200).json(month_work_hours ? month_work_hours.hours : null);
     } catch (error) {
         logger.error('Error getting month work hours:', error);
         res.status(500).json({ error: String(error) });
@@ -186,24 +197,22 @@ router.post('/month-work-hours', async (req: Request, res: Response) => {
 router.post('/save-month-work-hours', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const monthData = req.body.month as Record<string, unknown>;
+        const month = Number(req.body.month);
+        const year = Number(req.body.year);
+        const month_work_hours = Number(req.body.month_work_hours);
 
-        if (!monthData) {
-            res.status(400).json({ error: 'month data is required' });
+        if (!month || !year || Number.isNaN(month_work_hours)) {
+            res.status(400).json({ error: 'month, year, month_work_hours are required' });
             return;
         }
 
-        if (monthData._id) {
-            const monthId = monthData._id as string;
-            delete monthData._id;
-            await db
-                .collection(COLLECTIONS.CALENDAR_MONTH_WORK_HOURS)
-                .updateOne({ _id: new ObjectId(monthId) }, { $set: monthData });
-        } else {
-            await db.collection(COLLECTIONS.CALENDAR_MONTH_WORK_HOURS).insertOne(monthData);
-        }
+        const op_res = await db.collection(COLLECTIONS.CALENDAR_MONTH_WORK_HOURS).updateOne(
+            { month, year },
+            { $set: { hours: month_work_hours } },
+            { upsert: true }
+        );
 
-        res.status(200).json({ result: 'ok' });
+        res.status(200).json(op_res);
     } catch (error) {
         logger.error('Error saving month work hours:', error);
         res.status(500).json({ error: String(error) });

@@ -12,6 +12,7 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useRequestStore } from '../../store/requestStore';
+import { useMCPRequestStore } from '../../store/mcpRequestStore';
 import { TASK_STATUSES } from '../../constants/crm';
 import { useCRMSocket } from '../../hooks/useCRMSocket';
 
@@ -68,6 +69,7 @@ const CRMPage = () => {
     const { tickets, projects, performers, fetchDictionary, fetchTickets, tickets_updated_at } = useKanbanStore();
     const { projects: projectsList, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
+    const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
 
     // Socket.IO for real-time CRM updates
     useCRMSocket();
@@ -117,20 +119,97 @@ const CRMPage = () => {
         }
     }, [isAuth]);
 
+    const buildTranscriptionText = (messages: Array<Record<string, unknown>>): string => {
+        return messages
+            .map((msg) => {
+                const transcription = typeof msg.transcription_text === 'string' ? msg.transcription_text.trim() : '';
+                if (transcription) return transcription;
+                const categorization = Array.isArray(msg.categorization) ? msg.categorization : [];
+                if (categorization.length === 0) return '';
+                const chunks = categorization
+                    .map((chunk: Record<string, unknown>) => (typeof chunk.text === 'string' ? chunk.text.trim() : ''))
+                    .filter(Boolean);
+                return chunks.join(' ');
+            })
+            .filter(Boolean)
+            .join('\n');
+    };
+
     const handleRestartCreateTasks = async (sessionId: string) => {
         if (!sessionId) return;
         setRestartCreateTasksId(sessionId);
         try {
-            const result = await api_request<{ success?: boolean }>('voicebot/restart_create_tasks', { session_id: sessionId }, { silent: true });
-            if (result?.success) {
-                message.success('Запуск создания задач выполнен');
-                fetchVoiceSessions();
-            } else {
-                message.error('Не удалось перезапустить создание задач');
+            if (connectionState !== 'connected') {
+                message.warning(
+                    connectionState === 'connecting'
+                        ? 'Соединение с MCP устанавливается, попробуйте еще раз'
+                        : 'Нет соединения с MCP'
+                );
+                return;
             }
+
+            const agentsMcpServerUrl = (() => {
+                if (typeof window !== 'undefined') {
+                    const win = window as { agents_api_url?: string };
+                    if (win.agents_api_url) return win.agents_api_url;
+                }
+                return (import.meta.env.VITE_AGENTS_API_URL as string | undefined) ?? null;
+            })();
+
+            if (!agentsMcpServerUrl) {
+                message.error('Не настроен MCP URL агента');
+                return;
+            }
+
+            message.open({ key: `restart-create-tasks-${sessionId}`, type: 'loading', content: 'Сессия обрабатывается', duration: 0 });
+
+            const sessionData = await api_request<{ session_messages?: Array<Record<string, unknown>> }>(
+                'voicebot/sessions/get',
+                { session_id: sessionId },
+                { silent: true }
+            );
+            const sessionMessages = sessionData?.session_messages || [];
+            const transcriptionText = buildTranscriptionText(sessionMessages);
+            if (!transcriptionText) {
+                message.open({ key: `restart-create-tasks-${sessionId}`, type: 'error', content: 'Нет текста для обработки агентом', duration: 4 });
+                return;
+            }
+
+            const requestId = sendMCPCall(agentsMcpServerUrl, 'create_tasks', { message: transcriptionText }, false);
+            const result = await waitForCompletion(requestId, 15 * 60 * 1000);
+            if (!result || result.status !== 'complete') {
+                throw new Error(result?.error ?? 'Не удалось завершить обработку');
+            }
+
+            const final = result.result as { isError?: boolean; content?: Array<{ text?: string }>; error?: string } | undefined;
+            if (final?.isError) {
+                const errorText = final.content?.[0]?.text || final.error || 'Ошибка обработки';
+                throw new Error(errorText);
+            }
+
+            const tasksText = final?.content?.[0]?.text || '';
+            let tasks: Array<Record<string, unknown>> = [];
+            if (typeof tasksText === 'string' && tasksText.trim() !== '') {
+                const parsed = JSON.parse(tasksText);
+                if (!Array.isArray(parsed)) {
+                    throw new Error('create_tasks result is not an array');
+                }
+                tasks = parsed as Array<Record<string, unknown>>;
+            } else {
+                throw new Error('Пустой результат агента');
+            }
+
+            await api_request(
+                'voicebot/sessions/save_create_tasks',
+                { session_id: sessionId, tasks },
+                { silent: true }
+            );
+
+            message.open({ key: `restart-create-tasks-${sessionId}`, type: 'success', content: 'Обработка завершена', duration: 2 });
+            fetchVoiceSessions();
         } catch (error) {
             console.error('Ошибка при запуске создания задач:', error);
-            message.error('Не удалось перезапустить создание задач');
+            message.open({ key: `restart-create-tasks-${sessionId}`, type: 'error', content: 'Не удалось перезапустить создание задач', duration: 4 });
         } finally {
             setRestartCreateTasksId(null);
         }

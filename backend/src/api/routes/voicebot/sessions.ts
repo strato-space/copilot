@@ -397,6 +397,68 @@ router.post('/update_dialogue_tag', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /sessions/save_create_tasks
+ * Save create_tasks agent results into agent_results.create_tasks
+ */
+router.post('/save_create_tasks', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const { session_id, tasks } = req.body;
+        if (!session_id) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+        if (!Array.isArray(tasks)) {
+            return res.status(400).json({ error: 'tasks must be an array' });
+        }
+
+        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+            _id: new ObjectId(session_id),
+            is_deleted: { $ne: true },
+        });
+
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        const userPermissions = await PermissionManager.getUserPermissions(performer, db);
+        let hasAccess = false;
+
+        if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.UPDATE)) {
+            hasAccess = true;
+        } else if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN)) {
+            hasAccess = session.chat_id === Number(performer.telegram_id) ||
+                (session.user_id && performer._id.toString() === session.user_id.toString());
+        }
+
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Access denied to update this session' });
+        }
+
+        const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+            { _id: new ObjectId(session_id) },
+            {
+                $set: {
+                    'agent_results.create_tasks': tasks,
+                    updated_at: new Date(),
+                },
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        logger.error('Error in sessions/save_create_tasks:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
  * POST /sessions/update_participants
  * Update session participants (persons)
  */

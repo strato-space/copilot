@@ -24,8 +24,8 @@ Frontend and backend MUST communicate via documented REST endpoints.
 
 **Rules:**
 - API responses follow a `{ data, error }` envelope from middleware.
-- Authentication uses http-only cookies set by backend proxies to Voicebot.
-- `VOICEBOT_API_URL` is required for login/`/auth/me` validation.
+- Authentication uses http-only cookies set by the Copilot backend.
+- Auth is validated locally against `automation_performers` with `password_hash` and JWT.
 
 ### IV. Component Modularity & UI System
 React components MUST be functional and organized by domain.
@@ -68,9 +68,10 @@ Socket.IO is the real-time layer for updates.
 ## Development Workflow
 
 ### Build & Run
-- Preferred (PM2): `./scripts/pm2-backend.sh <dev|prod>` from repo root.
-  - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` via `npm run dev`.
-  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` via `npm run start`.
+- Preferred (PM2): `./scripts/pm2-backend.sh <dev|prod|local>` from repo root.
+  - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` via PM2.
+  - `local`: builds `app` with `build-dev-local`, `miniapp` with `build-dev`, builds backend, starts `copilot-backend-local` via PM2.
+  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` via PM2.
 - Frontend build (manual): `cd app && npm install && npm run build` (outputs to `app/dist`).
 - Backend build (manual): `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
 
@@ -79,7 +80,7 @@ Socket.IO is the real-time layer for updates.
 - Before starting a service, rebuild it with the appropriate mode for the target environment:
   - **production**: `npm run build` (default)
   - **development**: `npm run build-dev`
-  - **localhost**: `npm run build-dev` with local env overrides
+  - **localhost**: `npm run build-dev-local` with local env overrides
 - PM2 commands: `pm2 start <script> --name <service-name>`, `pm2 stop <name>`, `pm2 restart <name>`, `pm2 logs <name>`.
 - When working from sandboxed Codex sessions, run shell scripts and PM2 commands through SSH on the target server (for example, `ssh p2 'cd /home/strato-space/copilot && ./scripts/pm2-backend.sh dev'`) to avoid local sandbox restrictions.
 
@@ -97,6 +98,7 @@ Socket.IO is the real-time layer for updates.
 
 ## PM2 Services (prod/dev)
 - PM2 runs the backend only; the frontend is a static build served from `app/dist` via Nginx.
+- PM2 startup uses [scripts/pm2-backend.ecosystem.cjs](scripts/pm2-backend.ecosystem.cjs) with per-mode `env_file`.
 
 ### PM2 services (prod) -> repo paths
 - `copilot-backend` — Finance Ops backend API; entrypoint: `backend/dist/index.js` (run `cd backend && npm run build` first).
@@ -137,9 +139,6 @@ Socket.IO is the real-time layer for updates.
 
 ### VoiceBot Environment Variables
 ```
-# Required for auth
-VOICEBOT_API_URL=https://voice.stratospace.fun
-
 # Optional for JWT socket auth
 APP_ENCRYPTION_KEY=your-secret-key
 
@@ -161,8 +160,8 @@ MCP_SESSION_TIMEOUT=1800000
 - Current server config mirrors `deploy/nginx-host.conf`: `/api` → `http://127.0.0.1:3002`, SPA root → `/home/strato-space/copilot/app/dist`.
 
 ## Portal Auth
-- The Copilot portal uses `/api/try_login`, which proxies Voicebot `/try_login`; configure `VOICEBOT_API_URL` in the backend environment.
-- Frontend auth checks call `https://voice.stratospace.fun/auth/me` (override with `VITE_VOICEBOT_BASE_URL`) and require the shared `auth_token` cookie for `.stratospace.fun`.
+- The Copilot portal uses `/api/try_login` and `/api/auth/me` on the Copilot backend.
+- Frontend auth checks call the same-origin `/api/auth/me` and rely on the `auth_token` cookie.
 
 ## Testing
 - Unit tests: `npm run test` (Jest) in `app/` and `backend/`.

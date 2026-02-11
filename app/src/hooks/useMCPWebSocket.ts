@@ -1,34 +1,50 @@
 import { useEffect } from 'react';
 import { useMCPRequestStore, setSocketInstance } from '../store/mcpRequestStore';
 import { useAuthStore } from '../store/authStore';
-import { getVoicebotSocket, SOCKET_EVENTS } from '../services/socket';
+import { getSocket, SOCKET_EVENTS } from '../services/socket';
 
 export const useMCPWebSocket = (): void => {
     const { setConnectionState, handleMCPChunk, handleMCPComplete, handleError } = useMCPRequestStore();
-    const { authToken } = useAuthStore();
+    const { isAuth, ready } = useAuthStore();
 
     useEffect(() => {
-        if (!authToken) {
+        if (!ready || !isAuth) {
+            setConnectionState('disconnected');
             return;
         }
 
-        const socket = getVoicebotSocket(authToken);
+        const socket = getSocket();
         setSocketInstance(socket);
         setConnectionState('connecting');
 
-        socket.on('connect', () => {
+        const handleConnect = () => {
             setConnectionState('connected');
-        });
+            console.info('[MCP] Socket connected');
+        };
 
-        socket.on('disconnect', () => {
+        const handleDisconnect = () => {
             setConnectionState('disconnected');
+            console.warn('[MCP] Socket disconnected');
             const { requests } = useMCPRequestStore.getState();
             requests.forEach((request, requestId) => {
                 if (request.status === 'pending' || request.status === 'streaming') {
                     handleError(requestId, 'Connection lost during request');
                 }
             });
-        });
+        };
+
+        const handleConnectError = (error?: Error) => {
+            setConnectionState('disconnected');
+            if (error) {
+                console.error('[MCP] Socket connect error', error.message);
+            } else {
+                console.error('[MCP] Socket connect error');
+            }
+        };
+
+        socket.on('connect', handleConnect);
+        socket.on('disconnect', handleDisconnect);
+        socket.on('connect_error', handleConnectError);
 
         socket.on(SOCKET_EVENTS.MCP_CHUNK, (message: { requestId?: string; chunk?: unknown }) => {
             if (message.requestId && message.chunk !== undefined) {
@@ -55,10 +71,13 @@ export const useMCPWebSocket = (): void => {
         });
 
         return () => {
+            socket.off('connect', handleConnect);
+            socket.off('disconnect', handleDisconnect);
+            socket.off('connect_error', handleConnectError);
             socket.off(SOCKET_EVENTS.MCP_CHUNK);
             socket.off(SOCKET_EVENTS.MCP_COMPLETE);
             socket.off(SOCKET_EVENTS.MCP_ERROR);
             socket.off('error');
         };
-    }, [authToken, handleMCPChunk, handleMCPComplete, handleError, setConnectionState]);
+    }, [isAuth, ready, handleMCPChunk, handleMCPComplete, handleError, setConnectionState]);
 };

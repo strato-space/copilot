@@ -35,6 +35,8 @@ interface VoiceBotState {
     persons_list: VoicebotPerson[] | null;
     performers_list: Array<Record<string, unknown>> | null;
     performers_for_tasks_list: Array<Record<string, unknown>> | null;
+    isSessionsListLoading: boolean;
+    sessionsListLoadedAt: number | null;
 
     updateSessionName: (sessionId: string, newName: string) => Promise<void>;
     updateSessionDialogueTag: (sessionId: string, dialogueTag: string) => Promise<void>;
@@ -48,7 +50,7 @@ interface VoiceBotState {
     restartCorruptedSession: (sessionId: string) => Promise<unknown>;
     setHighlightedMessageId: (messageId: string | null) => void;
     getSessionData: (sessionId: string) => Promise<VoiceBotSessionResponse>;
-    fetchVoiceBotSessionsList: () => Promise<void>;
+    fetchVoiceBotSessionsList: (options?: { force?: boolean }) => Promise<void>;
     postProcessSession: (sessionId: string) => Promise<void>;
     createTasksFromChunks: (sessionId: string, chunks: CreateTaskChunk[]) => void;
     createTasksFromRows: (sessionId: string, rows: Array<{ text?: string }>) => void;
@@ -227,6 +229,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     persons_list: null,
     performers_list: null,
     performers_for_tasks_list: null,
+    isSessionsListLoading: false,
+    sessionsListLoadedAt: null,
 
     updateSessionName: async (sessionId, newName) => {
         try {
@@ -275,7 +279,6 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     sendSessionToCrmWithMcp: async (sessionId) => {
         const processingKey = `crm-processing-${sessionId}`;
         try {
-            await get().sendSessionToCrm(sessionId);
             message.open({
                 key: processingKey,
                 type: 'loading',
@@ -310,7 +313,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             const { sendMCPCall, waitForCompletion } = useMCPRequestStore.getState();
             const requestId = sendMCPCall(
                 agentsMcpServerUrl,
-                'create_tasks_send',
+                'create_tasks',
                 { message: transcriptionText },
                 false
             );
@@ -324,6 +327,29 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 const errorText = final.content?.[0]?.text || final.error || 'Ошибка обработки';
                 throw new Error(errorText);
             }
+
+            const tasksText = final?.content?.[0]?.text || '';
+            let tasks: Array<Record<string, unknown>> = [];
+            if (typeof tasksText === 'string' && tasksText.trim() !== '') {
+                try {
+                    const parsed = JSON.parse(tasksText);
+                    if (!Array.isArray(parsed)) {
+                        throw new Error('create_tasks result is not an array');
+                    }
+                    tasks = parsed as Array<Record<string, unknown>>;
+                } catch (parseError) {
+                    throw new Error('Не удалось распарсить результат агента');
+                }
+            } else {
+                throw new Error('Пустой результат агента');
+            }
+
+            await voicebotRequest('voicebot/sessions/save_create_tasks', {
+                session_id: sessionId,
+                tasks,
+            });
+
+            await get().sendSessionToCrm(sessionId);
 
             message.open({
                 key: processingKey,
@@ -473,17 +499,27 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         }
     },
 
-    fetchVoiceBotSessionsList: async () => {
-        const response = await voicebotRequest<VoiceBotSession[]>('voicebot/sessions/list');
-        if (response && Array.isArray(response)) {
-            const sorted = [...response].sort((a, b) => {
-                const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-                const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-                return bTime - aTime;
-            });
-            set({ voiceBotSessionsList: sorted });
-        } else {
-            console.error('Ошибка при получении списка сессий:', response);
+    fetchVoiceBotSessionsList: async (options) => {
+        const { force = false } = options ?? {};
+        const { isSessionsListLoading, sessionsListLoadedAt } = get();
+        if (isSessionsListLoading) return;
+        if (!force && sessionsListLoadedAt) return;
+
+        set({ isSessionsListLoading: true });
+        try {
+            const response = await voicebotRequest<VoiceBotSession[]>('voicebot/sessions/list');
+            if (response && Array.isArray(response)) {
+                const sorted = [...response].sort((a, b) => {
+                    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return bTime - aTime;
+                });
+                set({ voiceBotSessionsList: sorted, sessionsListLoadedAt: Date.now() });
+            } else {
+                console.error('Ошибка при получении списка сессий:', response);
+            }
+        } finally {
+            set({ isSessionsListLoading: false });
         }
     },
 
@@ -723,7 +759,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     deleteSession: async (sessionId) => {
         try {
             await voicebotRequest('voicebot/sessions/delete', { session_id: sessionId }, true);
-            await get().fetchVoiceBotSessionsList();
+            await get().fetchVoiceBotSessionsList({ force: true });
             return true;
         } catch (e) {
             console.error('Ошибка при удалении сессии:', e);

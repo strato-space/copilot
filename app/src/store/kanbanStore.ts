@@ -238,6 +238,8 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
     let isFetchingTickets = false;
     let lastTicketsFetchAt = 0;
     let lastTicketsFetchKey = '';
+    let isFetchingPaymentsTree = false;
+    let lastPaymentsTreeFetchAt = 0;
 
     const fetchTickets = async (statuses?: string[]): Promise<void> => {
         const key = JSON.stringify(statuses ?? []);
@@ -1034,107 +1036,117 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
 
         performersPaymentsTree: null,
         fetchPerformersPaymentsTree: async () => {
-            const response = await api_request<{ payments_tree: unknown }>('performers-payments/payments-tree');
+            const now = Date.now();
+            if (isFetchingPaymentsTree) return;
+            if (now - lastPaymentsTreeFetchAt < 60000) return;
 
-            const transformPaymentsTreeToTreeData = (payments_tree: Record<string, unknown>): PaymentTreeNode[] => {
-                const tree: PaymentTreeNode[] = [];
-                let performerIndex = 0;
+            isFetchingPaymentsTree = true;
+            lastPaymentsTreeFetchAt = now;
+            try {
+                const response = await api_request<{ payments_tree: unknown }>('performers-payments/payments-tree');
 
-                for (const performerId in payments_tree) {
-                    const performerData = payments_tree[performerId] as {
-                        performer: Performer;
-                        templates?: Array<{ name: string; webViewLink: string }>;
-                        payments?: Record<string, Record<string, unknown[]>>;
-                    };
-                    const performer = performerData.performer;
-                    const templates = performerData.templates ?? [];
-                    const payments = performerData.payments ?? {};
+                const transformPaymentsTreeToTreeData = (payments_tree: Record<string, unknown>): PaymentTreeNode[] => {
+                    const tree: PaymentTreeNode[] = [];
+                    let performerIndex = 0;
 
-                    const performerNode: PaymentTreeNode = {
-                        type: 'performer',
-                        title: performer.real_name ?? performer.name,
-                        performer_id: performer.id,
-                        key: `0-${performerIndex}`,
-                        children: [],
-                    };
+                    for (const performerId in payments_tree) {
+                        const performerData = payments_tree[performerId] as {
+                            performer: Performer;
+                            templates?: Array<{ name: string; webViewLink: string }>;
+                            payments?: Record<string, Record<string, unknown[]>>;
+                        };
+                        const performer = performerData.performer;
+                        const templates = performerData.templates ?? [];
+                        const payments = performerData.payments ?? {};
 
-                    // Templates
-                    performerNode.children?.push({
-                        type: 'folder',
-                        title: 'Шаблоны',
-                        key: `0-${performerIndex}-0`,
-                        children: templates.map((tpl, tplIdx) => ({
-                            type: 'document',
-                            title: tpl.name,
-                            document_url: tpl.webViewLink,
-                            edit_url: tpl.webViewLink,
-                            key: `0-${performerIndex}-0-${tplIdx}`,
-                        })),
-                    });
-
-                    // Payments
-                    const paymentsFolder: PaymentTreeNode = {
-                        type: 'folder',
-                        title: 'Выплаты',
-                        key: `0-${performerIndex}-1`,
-                        children: [],
-                    };
-
-                    let yearIdx = 0;
-                    for (const year in payments) {
-                        const yearNode: PaymentTreeNode = {
-                            type: 'year',
-                            title: year,
-                            key: `0-${performerIndex}-1-${yearIdx}`,
+                        const performerNode: PaymentTreeNode = {
+                            type: 'performer',
+                            title: performer.real_name ?? performer.name,
                             performer_id: performer.id,
+                            key: `0-${performerIndex}`,
                             children: [],
-                            parent_title: performerNode.title,
                         };
 
-                        let paymentFolderIdx = 0;
-                        for (const paymentFolder in payments[year]) {
-                            const paymentFolderData = payments[year][paymentFolder] as Array<{
-                                title?: string;
-                                name?: string;
-                                document_url?: string;
-                                webViewLink?: string;
-                                edit_url?: string;
-                            }>;
-                            const paymentFolderNode: PaymentTreeNode = {
-                                type: 'folder',
-                                title: paymentFolder,
-                                key: `0-${performerIndex}-1-${yearIdx}-${paymentFolderIdx}`,
+                        // Templates
+                        performerNode.children?.push({
+                            type: 'folder',
+                            title: 'Шаблоны',
+                            key: `0-${performerIndex}-0`,
+                            children: templates.map((tpl, tplIdx) => ({
+                                type: 'document',
+                                title: tpl.name,
+                                document_url: tpl.webViewLink,
+                                edit_url: tpl.webViewLink,
+                                key: `0-${performerIndex}-0-${tplIdx}`,
+                            })),
+                        });
+
+                        // Payments
+                        const paymentsFolder: PaymentTreeNode = {
+                            type: 'folder',
+                            title: 'Выплаты',
+                            key: `0-${performerIndex}-1`,
+                            children: [],
+                        };
+
+                        let yearIdx = 0;
+                        for (const year in payments) {
+                            const yearNode: PaymentTreeNode = {
+                                type: 'year',
+                                title: year,
+                                key: `0-${performerIndex}-1-${yearIdx}`,
+                                performer_id: performer.id,
                                 children: [],
-                                parent_title: yearNode.title,
+                                parent_title: performerNode.title,
                             };
 
-                            if (Array.isArray(paymentFolderData)) {
-                                paymentFolderData.forEach((doc, docIdx) => {
-                                    paymentFolderNode.children?.push({
-                                        type: 'document',
-                                        title: doc.title ?? doc.name ?? `Документ ${docIdx + 1}`,
-                                        document_url: doc.document_url ?? doc.webViewLink,
-                                        edit_url: doc.edit_url ?? doc.webViewLink,
-                                        key: `0-${performerIndex}-1-${yearIdx}-${paymentFolderIdx}-${docIdx}`,
-                                        parent_title: paymentFolderNode.title,
-                                    });
-                                });
-                            }
-                            yearNode.children?.push(paymentFolderNode);
-                            paymentFolderIdx++;
-                        }
-                        paymentsFolder.children?.push(yearNode);
-                        yearIdx++;
-                    }
-                    performerNode.children?.push(paymentsFolder);
-                    tree.push(performerNode);
-                    performerIndex++;
-                }
-                return tree;
-            };
+                            let paymentFolderIdx = 0;
+                            for (const paymentFolder in payments[year]) {
+                                const paymentFolderData = payments[year][paymentFolder] as Array<{
+                                    title?: string;
+                                    name?: string;
+                                    document_url?: string;
+                                    webViewLink?: string;
+                                    edit_url?: string;
+                                }>;
+                                const paymentFolderNode: PaymentTreeNode = {
+                                    type: 'folder',
+                                    title: paymentFolder,
+                                    key: `0-${performerIndex}-1-${yearIdx}-${paymentFolderIdx}`,
+                                    children: [],
+                                    parent_title: yearNode.title,
+                                };
 
-            const paymentsTreeData = transformPaymentsTreeToTreeData(response.payments_tree as Record<string, unknown>);
-            set({ performersPaymentsTree: paymentsTreeData });
+                                if (Array.isArray(paymentFolderData)) {
+                                    paymentFolderData.forEach((doc, docIdx) => {
+                                        paymentFolderNode.children?.push({
+                                            type: 'document',
+                                            title: doc.title ?? doc.name ?? `Документ ${docIdx + 1}`,
+                                            document_url: doc.document_url ?? doc.webViewLink,
+                                            edit_url: doc.edit_url ?? doc.webViewLink,
+                                            key: `0-${performerIndex}-1-${yearIdx}-${paymentFolderIdx}-${docIdx}`,
+                                            parent_title: paymentFolderNode.title,
+                                        });
+                                    });
+                                }
+                                yearNode.children?.push(paymentFolderNode);
+                                paymentFolderIdx++;
+                            }
+                            paymentsFolder.children?.push(yearNode);
+                            yearIdx++;
+                        }
+                        performerNode.children?.push(paymentsFolder);
+                        tree.push(performerNode);
+                        performerIndex++;
+                    }
+                    return tree;
+                };
+
+                const paymentsTreeData = transformPaymentsTreeToTreeData(response.payments_tree as Record<string, unknown>);
+                set({ performersPaymentsTree: paymentsTreeData });
+            } finally {
+                isFetchingPaymentsTree = false;
+            }
         },
 
         calculateBonus: (stats, paymentData) => {
