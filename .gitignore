@@ -25,6 +25,7 @@ agents/logs/
 agents/fastagent.secrets.yaml
 agents/*.egg-info/
 agents/uv.lock
+agents/.fast-agent/
 
 # Playwright
 .playwright/
