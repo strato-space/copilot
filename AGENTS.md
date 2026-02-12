@@ -69,43 +69,51 @@ Socket.IO is the real-time layer for updates.
 
 ### Build & Run
 - Preferred (PM2): `./scripts/pm2-backend.sh <dev|prod|local>` from repo root.
-  - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` via PM2.
-  - `local`: builds `app` with `build-dev-local`, `miniapp` with `build-dev`, builds backend, starts `copilot-backend-local` via PM2.
-  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` via PM2.
+  - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` and `copilot-miniapp-backend-dev`, then starts agents via `agents/pm2-agents.sh` when available.
+  - `local`: builds `app` with `build-local`, `miniapp` with `build-dev`, builds backend, starts `copilot-backend-local` and `copilot-miniapp-backend-local`, then starts agents when available.
+  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` and `copilot-miniapp-backend-prod`, then starts agents when available.
+- Validate environment files before startup: `./scripts/check-envs.sh`.
 - Frontend build (manual): `cd app && npm install && npm run build` (outputs to `app/dist`).
+- Miniapp build (manual): `cd miniapp && npm install && npm run build` (outputs to `miniapp/dist`).
 - Backend build (manual): `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
 
 ### Service Execution Rules
-- All services (backend and frontend) MUST be started via PM2, NEVER using Vite dev server directly.
+- All long-running services (backend, miniapp backend, agents) MUST be started via PM2, NEVER using Vite dev server directly.
 - Before starting a service, rebuild it with the appropriate mode for the target environment:
   - **production**: `npm run build` (default)
   - **development**: `npm run build-dev`
-  - **localhost**: `npm run build-dev-local` with local env overrides
+  - **localhost**: `npm run build-local` with local env overrides
 - PM2 commands: `pm2 start <script> --name <service-name>`, `pm2 stop <name>`, `pm2 restart <name>`, `pm2 logs <name>`.
 - When working from sandboxed Codex sessions, run shell scripts and PM2 commands through SSH on the target server (for example, `ssh p2 'cd /home/strato-space/copilot && ./scripts/pm2-backend.sh dev'`) to avoid local sandbox restrictions.
 
 ### Dev version (p2)
-- Start backend + build assets: `./scripts/pm2-backend.sh dev`.
+- Check env layout: `./scripts/check-envs.sh`.
+- Start backend + miniapp backend + build assets: `./scripts/pm2-backend.sh dev`.
 - Build frontend after each change: `cd app && npm install && npm run build-dev` (outputs to `app/dist`).
+- Build miniapp after each change: `cd miniapp && npm install && npm run build-dev` (outputs to `miniapp/dist`).
 - View in browser: `https://copilot-dev.stratospace.fun` (nginx serves `app/dist`).
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
+- Miniapp code lives in `miniapp/src/`.
 - Backend code lives in `backend/src/`.
+- Agents code lives in `agents/`.
 - Do not store build artifacts outside module directories.
 - For `app/`, keep only TypeScript/TSX sources and avoid JS duplicates.
 - Use `.env` files for environment-specific configuration; do not commit secrets.
 
 ## PM2 Services (prod/dev)
-- PM2 runs the backend only; the frontend is a static build served from `app/dist` via Nginx.
-- PM2 startup uses [scripts/pm2-backend.ecosystem.cjs](scripts/pm2-backend.ecosystem.cjs) with per-mode `env_file`.
+- PM2 runs the backend API and miniapp backend; frontend builds are served statically via Nginx.
+- PM2 startup uses [scripts/pm2-backend.ecosystem.config.js](scripts/pm2-backend.ecosystem.config.js) with per-mode `env_file`.
 
 ### PM2 services (prod) -> repo paths
-- `copilot-backend` — Finance Ops backend API; entrypoint: `backend/dist/index.js` (run `cd backend && npm run build` first).
+- `copilot-backend-prod` — Finance Ops backend API (`npm run start` with `backend/.env.production`).
+- `copilot-miniapp-backend-prod` — Miniapp backend API (`npm run start:miniapp` with `backend/.env.production`).
 
 ### PM2 services (dev) -> repo paths
-- Same backend entrypoint, but start with `NODE_ENV=development` (or `npm run dev` / `tsx src/index.ts`).
-- Ensure a dev frontend build exists before serving via Nginx: `cd app && npm run build-dev` (outputs to `app/dist`).
+- `copilot-backend-dev` / `copilot-backend-local` — backend API (`npm run dev` with `backend/.env.development`).
+- `copilot-miniapp-backend-dev` / `copilot-miniapp-backend-local` — miniapp backend API (`npm run dev:miniapp` with `backend/.env.development`).
+- Ensure dev frontend builds exist before serving via Nginx: `cd app && npm run build-dev` and `cd miniapp && npm run build-dev`.
 
 ## Product Notes (FinOps)
 - FX rates live in `app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.

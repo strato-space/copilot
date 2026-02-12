@@ -1,6 +1,6 @@
 # Copilot
 
-Copilot is the workspace for the Finance Ops console. Deprecated code is archived in `old_code/`.
+Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfaces. Deprecated code is archived in `old_code/`.
 
 ## FinOps notes
 - FX rates are managed in `app/src/store/fxStore.ts` and recalculate RUB values in analytics, KPIs, and plan-fact tables.
@@ -20,22 +20,33 @@ Copilot is the workspace for the Finance Ops console. Deprecated code is archive
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
 
+## Miniapp notes
+- Miniapp frontend sources live in `miniapp/src/` and build to `miniapp/dist`.
+- Miniapp backend is served by the Copilot backend runtime (`npm run dev:miniapp` / `npm run start:miniapp`).
+- PM2 mode scripts start both backend APIs (`copilot-backend-*` and `copilot-miniapp-backend-*`) together.
+
 ## What is included
 - `app/` React + Vite frontend for Finance Ops and OperOps/CRM.
-- `backend/` Node/Express API for Finance Ops.
+- `miniapp/` React + Vite miniapp frontend.
+- `backend/` Node/Express API for FinOps, CRM, VoiceBot, and miniapp backend routes.
+- `agents/` Python-based agents service and PM2 helper scripts.
+- `scripts/` deployment helpers (`pm2-backend.sh`, `check-envs.sh`).
 - `docs/`, `specs/`, `projects/` for product documentation and specs.
 - `deploy/` Host-level Nginx config and notes.
 
 ## Development (p2)
-For shared dev on p2, serve a static build to avoid Vite port conflicts.
+For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port conflicts.
 
 ```bash
-cd backend && npm install && npm run dev
-cd app && npm install && npm run build-dev
+./scripts/check-envs.sh
+./scripts/pm2-backend.sh dev
 ```
 
 - Dev URL: https://copilot-dev.stratospace.fun
 - Backend health: http://127.0.0.1:3002/api/health
+- Manual frontend builds:
+  - `cd app && npm install && npm run build-dev`
+  - `cd miniapp && npm install && npm run build-dev`
 
 ## Authentication
 - Backend proxies Voicebot auth via `/api/try_login` and `/api/auth/me`; set `VOICEBOT_API_URL` in the backend environment.
@@ -61,4 +72,3 @@ To run authenticated tests:
 Projects:
 - `chromium-unauth`: Tests without authentication (login page, redirects)
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
-
