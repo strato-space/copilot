@@ -10,7 +10,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/pm2-backend.sh <dev|prod|local>
 
-Builds app, miniapp, and backend, then starts the backend and agents with PM2.
+Builds app, miniapp, and backend, then starts the backend and miniapp backend with PM2.
 EOF
 }
 
@@ -46,18 +46,21 @@ fi
 APP_BUILD_SCRIPT="build"
 MINI_BUILD_SCRIPT="build"
 PM2_NAME="copilot-backend-prod"
+PM2_MINI_NAME="copilot-miniapp-backend-prod"
 PM2_ECOSYSTEM="$ROOT_DIR/scripts/pm2-backend.ecosystem.config.js"
 
 if [[ "$MODE" == "dev" ]]; then
   APP_BUILD_SCRIPT="build-dev"
   MINI_BUILD_SCRIPT="build-dev"
   PM2_NAME="copilot-backend-dev"
+  PM2_MINI_NAME="copilot-miniapp-backend-dev"
 fi
 
 if [[ "$MODE" == "local" ]]; then
   APP_BUILD_SCRIPT="build-local"
   MINI_BUILD_SCRIPT="build-dev"
   PM2_NAME="copilot-backend-local"
+  PM2_MINI_NAME="copilot-miniapp-backend-local"
 fi
 
 if [[ ! -f "$PM2_ECOSYSTEM" ]]; then
@@ -75,6 +78,12 @@ if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
   pm2 restart "$PM2_ECOSYSTEM" --only "$PM2_NAME" --update-env
 else
   pm2 start "$PM2_ECOSYSTEM" --only "$PM2_NAME" --update-env
+fi
+
+if pm2 describe "$PM2_MINI_NAME" >/dev/null 2>&1; then
+  pm2 restart "$PM2_ECOSYSTEM" --only "$PM2_MINI_NAME" --update-env
+else
+  pm2 start "$PM2_ECOSYSTEM" --only "$PM2_MINI_NAME" --update-env
 fi
 
 if [[ -f "$AGENTS_SCRIPT" ]]; then
