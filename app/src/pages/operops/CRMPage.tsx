@@ -41,6 +41,43 @@ interface VoiceTask {
     dialogue_reference?: string;
 }
 
+const coerceString = (value: unknown): string | undefined => {
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed !== '' ? trimmed : undefined;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    return undefined;
+};
+
+const normalizeVoiceTask = (raw: VoiceTask): VoiceTask => {
+    // Backend may store agent output as objects with human keys like "Task Title", "Task ID", etc.
+    // Normalize it into the fields used by the table columns below.
+    const anyTask = raw as VoiceTask & Record<string, unknown>;
+
+    const taskId = coerceString(anyTask.task_id_from_ai) ?? coerceString(anyTask['Task ID']);
+    const name =
+        coerceString(anyTask.name) ??
+        coerceString(anyTask['Task Title']) ??
+        coerceString(anyTask['Title']);
+    const description = coerceString(anyTask.description) ?? coerceString(anyTask['Description']);
+    const priority = coerceString(anyTask.priority) ?? coerceString(anyTask['Priority']);
+    const upload_date = coerceString(anyTask.upload_date) ?? coerceString(anyTask['Deadline']);
+    const dialogue_reference = coerceString(anyTask.dialogue_reference) ?? coerceString(anyTask['Dialogue Reference']);
+
+    // With `exactOptionalPropertyTypes`, omit optional keys instead of setting them to `undefined`.
+    const normalized: VoiceTask = {};
+    const id = coerceString(anyTask.id);
+    if (id) normalized.id = id;
+    if (taskId) normalized.task_id_from_ai = taskId;
+    if (name) normalized.name = name;
+    if (description) normalized.description = description;
+    if (priority) normalized.priority = priority;
+    if (upload_date) normalized.upload_date = upload_date;
+    if (dialogue_reference) normalized.dialogue_reference = dialogue_reference;
+    return normalized;
+};
+
 interface ReportResult {
     url: string;
     documentId: string;
@@ -713,7 +750,7 @@ const CRMPage = () => {
                                     pagination={{ pageSize: 20 }}
                                     expandable={{
                                         expandedRowRender: (record) => {
-                                            const tasks = record?.agent_results?.create_tasks ?? [];
+                                            const tasks = (record?.agent_results?.create_tasks ?? []).map(normalizeVoiceTask);
                                             return (
                                                 <Table
                                                     columns={taskColumns}

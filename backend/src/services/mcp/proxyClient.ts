@@ -75,6 +75,8 @@ export class MCPProxyClient {
                     targetUrl.pathname = `${targetUrl.pathname.replace(/\/$/, '')}/sse`;
                 }
             } else if (!hasExplicitPath) {
+                // Many Streamable HTTP MCP servers (including fast-agent) are exposed under /mcp.
+                // If a server is mounted elsewhere, pass an explicit path in mcpServerUrl.
                 targetUrl.pathname = '/mcp';
             }
 

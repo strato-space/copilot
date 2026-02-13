@@ -44,6 +44,7 @@ For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port
 
 - Dev URL: https://copilot-dev.stratospace.fun
 - Backend health: http://127.0.0.1:3002/api/health
+- Agents MCP (fast-agent): http://copilot-dev.stratospace.fun:8722 (plain HTTP; MCP endpoint is `/mcp`)
 - Manual frontend builds:
   - `cd app && npm install && npm run build-dev`
   - `cd miniapp && npm install && npm run build-dev`

@@ -92,6 +92,7 @@ Socket.IO is the real-time layer for updates.
 - Build frontend after each change: `cd app && npm install && npm run build-dev` (outputs to `app/dist`).
 - Build miniapp after each change: `cd miniapp && npm install && npm run build-dev` (outputs to `miniapp/dist`).
 - View in browser: `https://copilot-dev.stratospace.fun` (nginx serves `app/dist`).
+- `VITE_AGENTS_API_URL` must use plain HTTP for `:8722` (fast-agent runs without TLS); using `https://` can fail with `ERR_SSL_PACKET_LENGTH_TOO_LONG`.
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
