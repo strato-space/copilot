@@ -256,7 +256,7 @@ router.post('/client', async (req: Request, res: Response) => {
         }
 
         const client = await db
-            .collection(COLLECTIONS.CLIENTS)
+            .collection(COLLECTIONS.CUSTOMERS)
             .findOne({ _id: new ObjectId(clientId) });
 
         res.status(200).json(client);

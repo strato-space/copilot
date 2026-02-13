@@ -27,11 +27,14 @@ const emptyForm: WorkFormValues = {
 };
 
 const WorkHoursSidebar = () => {
-    const { performers, addWorkHours, editWorkHour } = useKanbanStore();
+    const { performers, addWorkHours, editWorkHour, getCustomerByProject, getProjectGroupByProject } = useKanbanStore();
     const { editingWorkHours, setEditingWorkHours } = useCRMStore();
     const [editingData, setEditingData] = useState<WorkFormValues>(emptyForm);
     const [form] = Form.useForm<WorkFormValues>();
     const formRef = useRef(form);
+
+    const customerName = editingWorkHours ? getCustomerByProject(editingWorkHours.project) : '';
+    const projectGroupName = editingWorkHours ? getProjectGroupByProject(editingWorkHours.project) : '';
 
     useEffect(() => {
         setEditingData(emptyForm);
@@ -66,7 +69,7 @@ const WorkHoursSidebar = () => {
                             <div className="text-[16px] w-[324px]">{editingWorkHours.name}</div>
                             <div className="text-[14px] text-slate-500">{editingWorkHours.project}</div>
                             <div className="text-[12px] text-slate-400">
-                                {editingWorkHours.track} / {editingWorkHours.client}
+                                {projectGroupName || '—'} / {customerName || '—'}
                             </div>
                         </div>
                     ) : (

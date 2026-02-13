@@ -16,9 +16,9 @@ export interface PlanFactProjectRow {
   months: Record<string, PlanFactMonthCell>;
 }
 
-export interface PlanFactClientRow {
-  client_id: string;
-  client_name: string;
+export interface PlanFactCustomerRow {
+  customer_id: string;
+  customer_name: string;
   totals_by_month: Record<string, PlanFactMonthCell>;
   projects: PlanFactProjectRow[];
 }
@@ -26,12 +26,12 @@ export interface PlanFactClientRow {
 export interface PlanFactGridResponse {
   snapshot_date: string | null;
   forecast_version_id: string;
-  clients: PlanFactClientRow[];
+  customers: PlanFactCustomerRow[];
 }
 
 export interface PlanFactCellContext {
-  client_id: string;
-  client_name: string;
+  customer_id: string;
+  customer_name: string;
   project_id: string;
   project_name: string;
   subproject_name: string;

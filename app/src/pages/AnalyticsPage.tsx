@@ -40,7 +40,7 @@ import { mockPlanFact } from '../services/mockPlanFact';
 
 interface ProjectHighlight {
   key: string;
-  client: string;
+  customer: string;
   project: string;
   revenue: number;
   profit: number;
@@ -260,15 +260,15 @@ export default function AnalyticsPage(): ReactElement {
       sum + employees.reduce((acc, employee) => acc + getEmployeeMonthlySalary(employee, month), 0),
       0);
   }, [activeMonths, focusMonth, employees]);
-  const chartData = useMemo((): PlanFactGridResponse | null => (data?.clients?.length ? data : mockPlanFact), [data]);
+  const chartData = useMemo((): PlanFactGridResponse | null => (data?.customers?.length ? data : mockPlanFact), [data]);
 
   const projectHighlights = useMemo((): ProjectHighlight[] => {
-    if (!chartData?.clients?.length) {
+    if (!chartData?.customers?.length) {
       return [];
     }
     const items: ProjectHighlight[] = [];
-    chartData.clients.forEach((client) => {
-      client.projects.forEach((project) => {
+    chartData.customers.forEach((customer) => {
+      customer.projects.forEach((project) => {
         let revenue = 0;
         let hours = 0;
         activeMonths.forEach((month) => {
@@ -286,8 +286,8 @@ export default function AnalyticsPage(): ReactElement {
         const profit = revenue - cost;
         const marginPct = revenue ? (profit / revenue) * 100 : 0;
         items.push({
-          key: `${client.client_id}-${project.project_id}`,
-          client: client.client_name,
+          key: `${customer.customer_id}-${project.project_id}`,
+          customer: customer.customer_name,
           project: project.project_name,
           revenue,
           profit,
@@ -317,7 +317,7 @@ export default function AnalyticsPage(): ReactElement {
         );
         highlights.push({
           key: 'others',
-          client: '',
+          customer: '',
           project: 'Остальные',
           revenue: aggregate.revenue,
           profit: aggregate.profit,
@@ -326,7 +326,7 @@ export default function AnalyticsPage(): ReactElement {
       }
     }
     return highlights;
-  }, [chartData?.clients, activeMonths, fxRates, averageCostRate]);
+  }, [chartData?.customers, activeMonths, fxRates, averageCostRate]);
   const employeeMargins = useMemo((): EmployeeMargin[] => {
     if (!employees.length) {
       return [];
@@ -348,13 +348,13 @@ export default function AnalyticsPage(): ReactElement {
       .sort((a, b) => b.profit - a.profit);
   }, [activeMonths, focusMonth, totalExpenseCost, employees]);
 
-  const pieData = useMemo((): { client: string; project: string; value: number }[] => {
-    if (!chartData?.clients?.length) {
+  const pieData = useMemo((): { customer: string; project: string; value: number }[] => {
+    if (!chartData?.customers?.length) {
       return [];
     }
-    const items: { client: string; project: string; value: number }[] = [];
-    chartData.clients.forEach((client) => {
-      client.projects.forEach((project) => {
+    const items: { customer: string; project: string; value: number }[] = [];
+    chartData.customers.forEach((customer) => {
+      customer.projects.forEach((project) => {
         let sum = 0;
         activeMonths.forEach((month) => {
           const cell = project.months[month];
@@ -370,7 +370,7 @@ export default function AnalyticsPage(): ReactElement {
         });
         if (sum > 0) {
           items.push({
-            client: client.client_name,
+            customer: customer.customer_name,
             project: project.project_name,
             value: sum,
           });
@@ -378,12 +378,12 @@ export default function AnalyticsPage(): ReactElement {
       });
     });
     return items.sort((a, b) => {
-      if (a.client === b.client) {
+      if (a.customer === b.customer) {
         return b.value - a.value;
       }
-      return a.client.localeCompare(b.client);
+      return a.customer.localeCompare(b.customer);
     });
-  }, [chartData?.clients, activeMonths, pieMetric, pieValueMode, fxRates]);
+  }, [chartData?.customers, activeMonths, pieMetric, pieValueMode, fxRates]);
 
   const pieTotal = useMemo(
     (): number => pieData.reduce((acc, item) => acc + item.value, 0),
@@ -408,22 +408,22 @@ export default function AnalyticsPage(): ReactElement {
     return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
   };
   const pieSegments = useMemo(
-    (): { color: string; percent: number; name: string; value: number; client: string }[] => {
+    (): { color: string; percent: number; name: string; value: number; customer: string }[] => {
       if (!pieTotal) {
         return [];
       }
-      const byClient = new Map<string, { project: string; value: number }[]>();
-      const clientOrder: string[] = [];
+      const byCustomer = new Map<string, { project: string; value: number }[]>();
+      const customerOrder: string[] = [];
       pieData.forEach((item) => {
-        if (!byClient.has(item.client)) {
-          byClient.set(item.client, []);
-          clientOrder.push(item.client);
+        if (!byCustomer.has(item.customer)) {
+          byCustomer.set(item.customer, []);
+          customerOrder.push(item.customer);
         }
-        byClient.get(item.client)?.push({ project: item.project, value: item.value });
+        byCustomer.get(item.customer)?.push({ project: item.project, value: item.value });
       });
-      return clientOrder.flatMap((client, clientIndex) => {
-        const projects = (byClient.get(client) ?? []).sort((a, b) => b.value - a.value);
-        const base = pieColors[clientIndex % pieColors.length] ?? '#94a3b8';
+      return customerOrder.flatMap((customer, customerIndex) => {
+        const projects = (byCustomer.get(customer) ?? []).sort((a, b) => b.value - a.value);
+        const base = pieColors[customerIndex % pieColors.length] ?? '#94a3b8';
         const total = projects.length;
         return projects.map((project, index) => {
           const tone = total <= 1 ? 0.2 : 0.15 + (0.5 - 0.15) * (index / (total - 1));
@@ -432,7 +432,7 @@ export default function AnalyticsPage(): ReactElement {
             percent: (project.value / pieTotal) * 100,
             name: project.project,
             value: project.value,
-            client,
+            customer,
           };
         });
       });
@@ -441,7 +441,7 @@ export default function AnalyticsPage(): ReactElement {
   );
 
   const pieSlices = useMemo(
-    (): Array<{ start: number; end: number; color: string; client: string; name: string; value: number; percent: number }> => {
+    (): Array<{ start: number; end: number; color: string; customer: string; name: string; value: number; percent: number }> => {
       if (!pieTotal) {
         return [];
       }
@@ -455,7 +455,7 @@ export default function AnalyticsPage(): ReactElement {
           start,
           end,
           color: segment.color,
-          client: segment.client,
+          customer: segment.customer,
           name: segment.name,
           value: segment.value,
           percent: segment.percent,
@@ -493,9 +493,9 @@ export default function AnalyticsPage(): ReactElement {
     const result: Record<string, number> = {};
     lineMonths.forEach((month) => {
       let revenue = 0;
-      if (chartData?.clients?.length) {
-        chartData.clients.forEach((client) => {
-          const cell = client.totals_by_month[month];
+      if (chartData?.customers?.length) {
+        chartData.customers.forEach((customer) => {
+          const cell = customer.totals_by_month[month];
           if (!cell) {
             return;
           }
@@ -506,7 +506,7 @@ export default function AnalyticsPage(): ReactElement {
       result[month] = revenue;
     });
     return result;
-  }, [chartData?.clients, lineMonths, fxRates]);
+  }, [chartData?.customers, lineMonths, fxRates]);
   const barMax = useMemo((): number => {
     const values = lineMonths.flatMap((month) => [monthlyRevenue[month] ?? 0, monthlyExpenses[month] ?? 0]);
     return values.reduce((acc, value) => Math.max(acc, value), 0);
@@ -899,8 +899,8 @@ export default function AnalyticsPage(): ReactElement {
                         <svg viewBox="0 0 200 200" className="finops-pie-svg">
                           {pieSlices.map((slice, index) => (
                             <Tooltip
-                              key={`${slice.client}-${slice.name}`}
-                              title={`${slice.client} • ${slice.name}: ${pieMetric === 'rub' ? formatCurrency(slice.value) : formatHours(slice.value)
+                              key={`${slice.customer}-${slice.name}`}
+                              title={`${slice.customer} • ${slice.name}: ${pieMetric === 'rub' ? formatCurrency(slice.value) : formatHours(slice.value)
                                 } (${Math.round(slice.percent)}%)`}
                             >
                               <path
@@ -922,13 +922,13 @@ export default function AnalyticsPage(): ReactElement {
                       <div className="finops-pie-legend">
                         {legendSegments.map((segment, index) => {
                           const prev = legendSegments[index - 1];
-                          const showClient = !prev || prev.client !== segment.client;
+                          const showCustomer = !prev || prev.customer !== segment.customer;
                           return (
-                            <div key={`${segment.client}-${segment.name}`} className="finops-pie-legend-item">
+                            <div key={`${segment.customer}-${segment.name}`} className="finops-pie-legend-item">
                               <span className="finops-pie-swatch" style={{ background: segment.color }} />
                               <div>
-                                {showClient && (
-                                  <div className="text-[10px] uppercase text-slate-400">{segment.client}</div>
+                                {showCustomer && (
+                                  <div className="text-[10px] uppercase text-slate-400">{segment.customer}</div>
                                 )}
                                 <div className="text-[12px] font-medium text-slate-900">{segment.name}</div>
                                 <div className="text-[10px] text-slate-500">
@@ -1019,7 +1019,7 @@ export default function AnalyticsPage(): ReactElement {
                             <div className="finops-list-row">
                               <div>
                                 <div className="text-sm font-medium text-slate-900">{item.project}</div>
-                                {item.client && <div className="text-xs text-slate-500">{item.client}</div>}
+                                {item.customer && <div className="text-xs text-slate-500">{item.customer}</div>}
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="text-right">

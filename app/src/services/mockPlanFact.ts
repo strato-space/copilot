@@ -3,10 +3,10 @@ import { type PlanFactGridResponse } from './types';
 export const mockPlanFact: PlanFactGridResponse = {
   snapshot_date: '2026-01-22T09:00:00+03:00',
   forecast_version_id: 'baseline',
-  clients: [
+  customers: [
     {
-      client_id: 'c-dbi',
-      client_name: 'DBI',
+      customer_id: 'c-dbi',
+      customer_name: 'DBI',
       totals_by_month: {
         '2026-01': { fact_rub: 0, fact_hours: 0, forecast_rub: 651100, forecast_hours: 383 },
         '2026-02': { fact_rub: 0, fact_hours: 0, forecast_rub: 1281800, forecast_hours: 734 },
@@ -100,8 +100,8 @@ export const mockPlanFact: PlanFactGridResponse = {
       ],
     },
     {
-      client_id: 'c-1x',
-      client_name: '1x',
+      customer_id: 'c-1x',
+      customer_name: '1x',
       totals_by_month: {
         '2026-01': { fact_rub: 0, fact_hours: 0, forecast_rub: 75000, forecast_hours: 0 },
         '2026-02': { fact_rub: 0, fact_hours: 0, forecast_rub: 75000, forecast_hours: 0 },
@@ -123,8 +123,8 @@ export const mockPlanFact: PlanFactGridResponse = {
       ],
     },
     {
-      client_id: 'c-sha',
-      client_name: 'Sha',
+      customer_id: 'c-sha',
+      customer_name: 'Sha',
       totals_by_month: {
         '2026-01': { fact_rub: 0, fact_hours: 0, forecast_rub: 359700, forecast_hours: 48 },
         '2026-02': { fact_rub: 0, fact_hours: 0, forecast_rub: 212500, forecast_hours: 60 },
@@ -170,8 +170,8 @@ export const mockPlanFact: PlanFactGridResponse = {
       ],
     },
     {
-      client_id: 'c-ezo',
-      client_name: 'EZO',
+      customer_id: 'c-ezo',
+      customer_name: 'EZO',
       totals_by_month: {
         '2026-01': { fact_rub: 0, fact_hours: 0, forecast_rub: 95200, forecast_hours: 56 },
         '2026-02': { fact_rub: 0, fact_hours: 0, forecast_rub: 238000, forecast_hours: 140 },
@@ -193,8 +193,8 @@ export const mockPlanFact: PlanFactGridResponse = {
       ],
     },
     {
-      client_id: 'c-titan',
-      client_name: 'Titan',
+      customer_id: 'c-titan',
+      customer_name: 'Titan',
       totals_by_month: {
         '2026-01': { fact_rub: 0, fact_hours: 0, forecast_rub: 0, forecast_hours: 0 },
         '2026-02': { fact_rub: 0, fact_hours: 0, forecast_rub: 748000, forecast_hours: 0 },

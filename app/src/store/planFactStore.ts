@@ -19,7 +19,7 @@ interface PlanFactState {
   dateRange: [string, string];
   fetchPlanFact: () => Promise<void>;
   updateProjectMonth: (
-    clientId: string,
+    customerId: string,
     projectId: string,
     month: string,
     values: PlanFactMonthCell,
@@ -88,7 +88,7 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
     }
   },
   updateProjectMonth: (
-    clientId: string,
+    customerId: string,
     projectId: string,
     month: string,
     values: PlanFactMonthCell,
@@ -97,11 +97,11 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
     if (!current) {
       return;
     }
-    const nextClients = current.clients.map((client): PlanFactGridResponse['clients'][number] => {
-      if (client.client_id !== clientId) {
-        return client;
+    const nextCustomers = current.customers.map((customer): PlanFactGridResponse['customers'][number] => {
+      if (customer.customer_id !== customerId) {
+        return customer;
       }
-      const nextProjects = client.projects.map((project): PlanFactProjectRow => {
+      const nextProjects = customer.projects.map((project): PlanFactProjectRow => {
         if (project.project_id !== projectId) {
           return project;
         }
@@ -132,10 +132,10 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
         emptyCell(),
       );
       return {
-        ...client,
+        ...customer,
         projects: nextProjects,
         totals_by_month: {
-          ...client.totals_by_month,
+          ...customer.totals_by_month,
           [month]: totals,
         },
       };
@@ -143,7 +143,7 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
     set({
       data: {
         ...current,
-        clients: nextClients,
+        customers: nextCustomers,
       },
     });
   },

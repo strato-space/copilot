@@ -1,7 +1,7 @@
 import { type Collection } from 'mongodb';
 import { connectDb } from './db.js';
 import { COLLECTIONS } from '../constants.js';
-import { type Client, type FactProjectMonth, type ForecastProjectMonth, type Project } from '../models/types.js';
+import { type ContractType, type FactProjectMonth, type ForecastProjectMonth } from '../models/types.js';
 import { loadCrmSnapshotMeta } from './crmIngest.js';
 
 export interface PlanFactMonthCell {
@@ -22,9 +22,9 @@ export interface PlanFactProjectRow {
   months: Record<string, PlanFactMonthCell>;
 }
 
-export interface PlanFactClientRow {
-  client_id: string;
-  client_name: string;
+export interface PlanFactCustomerRow {
+  customer_id: string;
+  customer_name: string;
   totals_by_month: Record<string, PlanFactMonthCell>;
   projects: PlanFactProjectRow[];
 }
@@ -32,7 +32,7 @@ export interface PlanFactClientRow {
 export interface PlanFactGridResponse {
   snapshot_date: string | null;
   forecast_version_id: string;
-  clients: PlanFactClientRow[];
+  customers: PlanFactCustomerRow[];
 }
 
 export interface UpsertFactParams {
@@ -54,15 +54,40 @@ export interface UpsertForecastParams {
   comment?: string | null;
 }
 
-const getClients = async (): Promise<Client[]> => {
+type CustomerDoc = {
+  _id: { toString(): string };
+  name?: string;
+  project_groups_ids?: Array<{ toString(): string }>;
+};
+
+type ProjectGroupDoc = {
+  _id: { toString(): string };
+  name?: string;
+  projects_ids?: Array<{ toString(): string }>;
+};
+
+type ProjectDoc = {
+  _id: { toString(): string };
+  name?: string;
+  subproject_name?: string;
+  contract_type?: ContractType;
+};
+
+const getCustomers = async (): Promise<CustomerDoc[]> => {
   const db = await connectDb();
-  const collection: Collection<Client> = db.collection(COLLECTIONS.CLIENTS);
+  const collection: Collection<CustomerDoc> = db.collection(COLLECTIONS.CUSTOMERS);
   return collection.find({}).toArray();
 };
 
-const getProjects = async (): Promise<Project[]> => {
+const getProjectGroups = async (): Promise<ProjectGroupDoc[]> => {
   const db = await connectDb();
-  const collection: Collection<Project> = db.collection(COLLECTIONS.PROJECTS);
+  const collection: Collection<ProjectGroupDoc> = db.collection(COLLECTIONS.PROJECT_GROUPS);
+  return collection.find({}).toArray();
+};
+
+const getProjects = async (): Promise<ProjectDoc[]> => {
+  const db = await connectDb();
+  const collection: Collection<ProjectDoc> = db.collection(COLLECTIONS.PROJECTS);
   return collection.find({}).toArray();
 };
 
@@ -93,8 +118,9 @@ export const buildPlanFactGrid = async (
   forecastVersionId: string,
   months: string[],
 ): Promise<PlanFactGridResponse> => {
-  const [clients, projects, snapshotMeta, facts, forecasts] = await Promise.all([
-    getClients(),
+  const [customers, projectGroups, projects, snapshotMeta, facts, forecasts] = await Promise.all([
+    getCustomers(),
+    getProjectGroups(),
     getProjects(),
     loadCrmSnapshotMeta(),
     getFactsByMonth(months),
@@ -110,46 +136,66 @@ export const buildPlanFactGrid = async (
     forecastsMap.set(`${forecast.project_id}__${forecast.month}`, forecast);
   });
 
-  const projectsByClient = new Map<string, Project[]>();
-  for (const project of projects) {
-    if (!projectsByClient.has(project.client_id)) {
-      projectsByClient.set(project.client_id, []);
-    }
-    projectsByClient.get(project.client_id)?.push(project);
-  }
+  const projectsById = new Map<string, ProjectDoc>();
+  projects.forEach((project) => {
+    projectsById.set(project._id.toString(), project);
+  });
 
-  const clientRows: PlanFactClientRow[] = clients.map((client) => {
-    const clientProjects = projectsByClient.get(client.client_id) ?? [];
+  const projectGroupsById = new Map<string, ProjectGroupDoc>();
+  projectGroups.forEach((group) => {
+    projectGroupsById.set(group._id.toString(), group);
+  });
 
-    const projectRows: PlanFactProjectRow[] = clientProjects.map((project) => {
-      const monthsMap: Record<string, PlanFactMonthCell> = {};
-      months.forEach((month) => {
-        const fact = factsMap.get(`${project.project_id}__${month}`);
-        const forecast = forecastsMap.get(`${project.project_id}__${month}`);
-        const isFix = project.contract_type === 'Fix';
-        const factRub = fact?.billed_amount_rub ?? 0;
-        const forecastRub = forecast?.forecast_amount_rub ?? 0;
-        const fixedRub = isFix ? Math.max(factRub, forecastRub) : 0;
+  const customerRows: PlanFactCustomerRow[] = customers.map((customer) => {
+    const groupIds = (customer.project_groups_ids ?? []).map((id) => id.toString());
+    const projectIds = new Set<string>();
 
-        monthsMap[month] = {
-          fact_rub: isFix ? fixedRub : factRub,
-          fact_hours: fact?.billed_hours ?? 0,
-          forecast_rub: isFix ? fixedRub : forecastRub,
-          forecast_hours: forecast?.forecast_hours ?? 0,
-          ...(fact?.comment ? { fact_comment: fact.comment } : {}),
-          ...(forecast?.comment ? { forecast_comment: forecast.comment } : {}),
-        };
+    groupIds.forEach((groupId) => {
+      const group = projectGroupsById.get(groupId);
+      if (!group || !Array.isArray(group.projects_ids)) {
+        return;
+      }
+      group.projects_ids.forEach((projectId) => {
+        projectIds.add(projectId.toString());
       });
-
-      return {
-        project_id: project.project_id,
-        project_name: project.project_name,
-        subproject_name: project.subproject_name,
-        contract_type: project.contract_type,
-        rate_rub_per_hour: null,
-        months: monthsMap,
-      };
     });
+
+    const projectRows: PlanFactProjectRow[] = Array.from(projectIds)
+      .map((projectId): PlanFactProjectRow | null => {
+        const project = projectsById.get(projectId);
+        if (!project) {
+          return null;
+        }
+        const contractType = project.contract_type ?? 'T&M';
+        const isFix = contractType === 'Fix';
+        const monthsMap: Record<string, PlanFactMonthCell> = {};
+        months.forEach((month) => {
+          const fact = factsMap.get(`${projectId}__${month}`);
+          const forecast = forecastsMap.get(`${projectId}__${month}`);
+          const factRub = fact?.billed_amount_rub ?? 0;
+          const forecastRub = forecast?.forecast_amount_rub ?? 0;
+          const fixedRub = isFix ? Math.max(factRub, forecastRub) : 0;
+
+          monthsMap[month] = {
+            fact_rub: isFix ? fixedRub : factRub,
+            fact_hours: fact?.billed_hours ?? 0,
+            forecast_rub: isFix ? fixedRub : forecastRub,
+            forecast_hours: forecast?.forecast_hours ?? 0,
+            ...(fact?.comment ? { fact_comment: fact.comment } : {}),
+            ...(forecast?.comment ? { forecast_comment: forecast.comment } : {}),
+          };
+        });
+
+        return {
+          project_id: projectId,
+          project_name: project.name ?? '—',
+          subproject_name: project.subproject_name ?? '',
+          contract_type: contractType,
+          rate_rub_per_hour: null,
+          months: monthsMap,
+        };
+      })
+      .filter((row): row is PlanFactProjectRow => Boolean(row));
 
     const totalsByMonth: Record<string, PlanFactMonthCell> = {};
     months.forEach((month) => {
@@ -157,8 +203,8 @@ export const buildPlanFactGrid = async (
     });
 
     return {
-      client_id: client.client_id,
-      client_name: client.client_name,
+      customer_id: customer._id.toString(),
+      customer_name: customer.name ?? '—',
       totals_by_month: totalsByMonth,
       projects: projectRows,
     };
@@ -167,7 +213,7 @@ export const buildPlanFactGrid = async (
   return {
     snapshot_date: snapshotMeta?.snapshotDate ?? null,
     forecast_version_id: forecastVersionId,
-    clients: clientRows,
+    customers: customerRows,
   };
 };
 

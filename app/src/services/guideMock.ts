@@ -1,7 +1,5 @@
 export const GUIDE_MOCK_INDEX = [
   { name: 'teams', title: 'Teams', module: 'core', count: 3, source: 'mock', updated_at: '2026-01-28' },
-  { name: 'tracks', title: 'Tracks', module: 'core', count: 2, source: 'mock', updated_at: '2026-01-28' },
-  { name: 'clients', title: 'Clients', module: 'core', count: 3, source: 'mock', updated_at: '2026-01-28' },
   { name: 'projects', title: 'Projects', module: 'core', count: 4, source: 'mock', updated_at: '2026-01-28' },
   { name: 'people', title: 'People', module: 'core', count: 3, source: 'mock', updated_at: '2026-01-28' },
   { name: 'roles', title: 'Roles', module: 'core', count: 4, source: 'mock', updated_at: '2026-01-28' },
@@ -15,8 +13,8 @@ export const GUIDE_MOCK_INDEX = [
   { name: 'expense-categories', title: 'Expense Categories', module: 'finops', count: 3, source: 'mock', updated_at: '2026-01-28' },
   { name: 'income-types', title: 'Income Types', module: 'finops', count: 2, source: 'mock', updated_at: '2026-01-28' },
   { name: 'alerts', title: 'Alert Rules', module: 'finops', count: 2, source: 'mock', updated_at: '2026-01-28' },
-  { name: 'customers', title: 'Customers', module: 'crm-compat', count: 2, source: 'mock', updated_at: '2026-01-28' },
-  { name: 'project-groups', title: 'Project Groups', module: 'crm-compat', count: 2, source: 'mock', updated_at: '2026-01-28' },
+  { name: 'customers', title: 'Customers', module: 'crm-compat', count: 3, source: 'mock', updated_at: '2026-01-28' },
+  { name: 'project-groups', title: 'Project Groups', module: 'crm-compat', count: 3, source: 'mock', updated_at: '2026-01-28' },
   { name: 'leads', title: 'Leads', module: 'saleops', count: 2, source: 'mock', updated_at: '2026-01-28' },
   { name: 'offers', title: 'Offers', module: 'saleops', count: 2, source: 'mock', updated_at: '2026-01-28' },
   { name: 'leave-schedule', title: 'Leave Schedule', module: 'hhops', count: 2, source: 'mock', updated_at: '2026-01-28' },
@@ -32,23 +30,6 @@ export const GUIDE_MOCK_DIRECTORIES = {
       { team_id: 'team-qa', name: 'QA Team', is_active: false },
     ],
   },
-  tracks: {
-    source: 'mock',
-    updated_at: '2026-01-28',
-    items: [
-      { track_id: 'track-design', name: 'Design', client_ids: ['client-acme', 'client-northwind'], is_active: true },
-      { track_id: 'track-product', name: 'Product', client_ids: ['client-orion'], is_active: true },
-    ],
-  },
-  clients: {
-    source: 'mock',
-    updated_at: '2026-01-28',
-    items: [
-      { client_id: 'client-acme', name: 'Acme Corp', track_id: 'track-design', aliases: ['Acme'], is_active: true },
-      { client_id: 'client-northwind', name: 'Northwind Labs', track_id: 'track-design', aliases: ['NW'], is_active: true },
-      { client_id: 'client-orion', name: 'Orion Studio', track_id: 'track-product', aliases: [], is_active: false },
-    ],
-  },
   projects: {
     source: 'mock',
     updated_at: '2026-01-28',
@@ -56,8 +37,8 @@ export const GUIDE_MOCK_DIRECTORIES = {
       {
         project_id: 'proj-acme-app',
         name: 'Acme Mobile App',
-        client_id: 'client-acme',
-        track_id: 'track-design',
+        customer_id: 'cust-acme',
+        project_group_id: 'pg-acme',
         is_active: true,
         context: {
           description: 'Мобильное приложение для клиентов',
@@ -68,8 +49,8 @@ export const GUIDE_MOCK_DIRECTORIES = {
       {
         project_id: 'proj-nw-ml',
         name: 'Northwind ML',
-        client_id: 'client-northwind',
-        track_id: 'track-design',
+        customer_id: 'cust-northwind',
+        project_group_id: 'pg-northwind',
         is_active: true,
         context: {
           description: '',
@@ -80,15 +61,15 @@ export const GUIDE_MOCK_DIRECTORIES = {
       {
         project_id: 'proj-orion-brand',
         name: 'Orion Rebrand',
-        client_id: 'client-orion',
-        track_id: 'track-product',
+        customer_id: 'cust-orion',
+        project_group_id: 'pg-orion',
         is_active: false,
       },
       {
         project_id: 'proj-acme-web',
         name: 'Acme Web Portal',
-        client_id: 'client-acme',
-        track_id: 'track-design',
+        customer_id: 'cust-acme',
+        project_group_id: 'pg-acme',
         is_active: true,
       },
     ],
@@ -118,7 +99,7 @@ export const GUIDE_MOCK_DIRECTORIES = {
     updated_at: '2026-01-28',
     items: [
       { entity_type: 'PROJECT', canonical_name: 'Acme Mobile App', aliases: ['Acme App', 'Mobile'] },
-      { entity_type: 'CLIENT', canonical_name: 'Acme Corp', aliases: ['Acme'] },
+      { entity_type: 'CUSTOMER', canonical_name: 'Acme Corp', aliases: ['Acme'] },
       { entity_type: 'PERFORMER', canonical_name: 'Иван Петров', aliases: ['Иван П.'] },
       { entity_type: 'CUSTOMER', canonical_name: 'Northwind Holding', aliases: ['NW Holding'] },
     ],
@@ -261,16 +242,18 @@ export const GUIDE_MOCK_DIRECTORIES = {
     source: 'mock',
     updated_at: '2026-01-28',
     items: [
-      { customer_id: 'cust-nw', name: 'Northwind Holding', project_groups_count: 2, is_active: true },
-      { customer_id: 'cust-orion', name: 'Orion Group', project_groups_count: 1, is_active: false },
+      { customer_id: 'cust-acme', name: 'Acme Corp', project_groups_count: 1, is_active: true },
+      { customer_id: 'cust-northwind', name: 'Northwind Labs', project_groups_count: 1, is_active: true },
+      { customer_id: 'cust-orion', name: 'Orion Studio', project_groups_count: 1, is_active: false },
     ],
   },
   'project-groups': {
     source: 'mock',
     updated_at: '2026-01-28',
     items: [
-      { project_group_id: 'pg-enterprise', name: 'Enterprise', customer_id: 'cust-nw', projects_count: 4, is_active: true },
-      { project_group_id: 'pg-smb', name: 'SMB', customer_id: 'cust-orion', projects_count: 2, is_active: true },
+      { project_group_id: 'pg-acme', name: 'Design', customer_id: 'cust-acme', projects_count: 2, is_active: true },
+      { project_group_id: 'pg-northwind', name: 'Design', customer_id: 'cust-northwind', projects_count: 1, is_active: true },
+      { project_group_id: 'pg-orion', name: 'Product', customer_id: 'cust-orion', projects_count: 1, is_active: true },
     ],
   },
   leads: {

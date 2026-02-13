@@ -11,14 +11,14 @@ export default function ProjectEditPage(): ReactElement {
   const { projectId } = useParams();
   const { data, fetchPlanFact } = usePlanFactStore();
 
-  const projectContext = useMemo((): { clientName: string; project: PlanFactProjectRow } | null => {
+  const projectContext = useMemo((): { customerName: string; project: PlanFactProjectRow } | null => {
     if (!data || !projectId) {
       return null;
     }
-    for (const client of data.clients) {
-      const project = client.projects.find((item) => item.project_id === projectId);
+    for (const customer of data.customers) {
+      const project = customer.projects.find((item) => item.project_id === projectId);
       if (project) {
-        return { clientName: client.client_name, project };
+        return { customerName: customer.customer_name, project };
       }
     }
     return null;
@@ -34,7 +34,7 @@ export default function ProjectEditPage(): ReactElement {
       return;
     }
     form.setFieldsValue({
-      clientName: projectContext.clientName,
+      customerName: projectContext.customerName,
       projectName: projectContext.project.project_name ?? '',
       subprojectName: projectContext.project.subproject_name ?? '',
       contractType: projectContext.project.contract_type ?? 'T&M',
@@ -70,7 +70,7 @@ export default function ProjectEditPage(): ReactElement {
           <Form form={form} layout="vertical">
             <Row gutter={[16, 16]}>
               <Col xs={24} md={12}>
-                <Form.Item label="Клиент" name="clientName">
+                <Form.Item label="Заказчик" name="customerName">
                   <Input disabled />
                 </Form.Item>
               </Col>

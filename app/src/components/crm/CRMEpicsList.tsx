@@ -10,7 +10,7 @@ import type { Epic, TreeNode } from '../../types/crm';
 
 const CRMEpicsList = () => {
     const { isAuth, loading: authLoading } = useAuthStore();
-    const { epics, fetchDictionary, getClientByProject, projects, tree } = useKanbanStore();
+    const { epics, fetchDictionary, getCustomerByProject, projects, tree } = useKanbanStore();
     const { setEditingEpicToNew, setEditingEpic, selectedProject, setSelectedProject } = useCRMStore();
 
     useEffect(() => {
@@ -26,7 +26,7 @@ const CRMEpicsList = () => {
             title: 'Проект',
             key: 'project',
             render: (_: unknown, record: Epic) =>
-                `${record.project_name ?? ''} / ${getClientByProject(record.project_name ?? '')}`,
+                `${record.project_name ?? ''} / ${getCustomerByProject(record.project_name ?? '')}`,
         },
         {
             title: 'Эпик',

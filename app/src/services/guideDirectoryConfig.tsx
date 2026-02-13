@@ -14,12 +14,12 @@ export interface DirectoryGroup {
 export const DIRECTORY_GROUPS: DirectoryGroup[] = [
   {
     key: 'clients-projects-rates',
-    title: 'Клиенты / Проекты / Ставки',
+    title: 'Заказчики / Группы / Проекты / Ставки',
     module: 'Guides',
-    description: 'Треки, клиенты, проекты и ставки.',
+    description: 'Заказчики, группы проектов, проекты и ставки.',
     directories: [
-      { name: 'tracks', label: 'Треки' },
-      { name: 'clients', label: 'Клиенты' },
+      { name: 'customers', label: 'Заказчики' },
+      { name: 'project-groups', label: 'Группы проектов' },
       { name: 'projects', label: 'Проекты' },
       { name: 'project-rates', label: 'Ставки' },
     ],
@@ -135,142 +135,40 @@ export const buildDirectoryTable = (
         data: items,
         emptyText: 'Нет команд',
       };
-    case 'tracks':
-      {
-        const clients = (directories.clients?.items ?? []) as Array<{ client_id?: string; name?: string }>;
-        const clientMap = new Map<string, string>();
-        const clientTrackMap = new Map<string, string>();
-        clients.forEach((client) => {
-          if (client.client_id && client.name) {
-            clientMap.set(client.client_id, client.name);
-          }
-          if (client.client_id && (client as { track_id?: string }).track_id) {
-            clientTrackMap.set(client.client_id, (client as { track_id?: string }).track_id as string);
-          }
-        });
-        return {
-          columns: [
-            {
-              title: 'Трек',
-              dataIndex: 'name',
-              key: 'name',
-              render: (value: string, row: { track_id?: string }) => (
-                <div>
-                  <div>{value ?? '—'}</div>
-                  {row.track_id ? <div className="text-xs text-slate-400">{row.track_id}</div> : null}
-                </div>
-              ),
-            },
-            {
-              title: 'Клиенты',
-              key: 'clients',
-              render: (_: unknown, row: { client_ids?: string[]; clients?: string[] }) => {
-                const ids = row.client_ids ?? row.clients ?? [];
-                const names = ids.map((value) => clientMap.get(value) ?? value);
-                return names.length > 0 ? names.join(', ') : '—';
-              },
-            },
-            { title: 'Active', dataIndex: 'is_active', key: 'is_active', render: (value: boolean) => (value ? 'Yes' : 'No') },
-          ],
-          data: items,
-          emptyText: 'Нет треков',
-        };
-      }
-    case 'clients':
-      {
-        const tracks = (directories.tracks?.items ?? []) as Array<{ track_id?: string; name?: string }>;
-        const trackMap = new Map<string, string>();
-        tracks.forEach((track) => {
-          if (track.track_id && track.name) {
-            trackMap.set(track.track_id, track.name);
-          }
-        });
-        const projects = (directories.projects?.items ?? []) as Array<{ project_id?: string; client_id?: string }>;
-        const projectToClient = new Map<string, string>();
-        projects.forEach((project) => {
-          if (project.project_id && project.client_id) {
-            projectToClient.set(project.project_id, project.client_id);
-          }
-        });
-        const rates = (directories['project-rates']?.items ?? []) as Array<{
-          project_id?: string;
-          month?: string;
-          rate_rub_per_hour?: number;
-        }>;
-        const rateByClient = new Map<string, { month: string; rates: number[] }>();
-        rates.forEach((rate) => {
-          if (!rate.project_id || typeof rate.rate_rub_per_hour !== 'number') {
-            return;
-          }
-          const clientId = projectToClient.get(rate.project_id);
-          if (!clientId) {
-            return;
-          }
-          const month = rate.month ?? '';
-          const existing = rateByClient.get(clientId);
-          if (!existing || month > existing.month) {
-            rateByClient.set(clientId, { month, rates: [rate.rate_rub_per_hour] });
-            return;
-          }
-          if (month === existing.month) {
-            existing.rates.push(rate.rate_rub_per_hour);
-          }
-        });
-        return {
-          columns: [
-            {
-              title: 'Клиент',
-              dataIndex: 'name',
-              key: 'name',
-              render: (value: string, row: { client_id?: string }) => (
-                <div>
-                  <div>{value ?? '—'}</div>
-                  {row.client_id ? <div className="text-xs text-slate-400">{row.client_id}</div> : null}
-                </div>
-              ),
-            },
-            {
-              title: 'Трек',
-              dataIndex: 'track_id',
-              key: 'track_id',
-              render: (value: string) => trackMap.get(value) ?? value ?? '—',
-            },
-            {
-              title: 'Ставка (₽/ч)',
-              key: 'rate',
-              render: (_: unknown, row: { client_id?: string }) => {
-                const clientId = row.client_id ?? '';
-                const entry = clientId ? rateByClient.get(clientId) : undefined;
-                if (!entry || entry.rates.length === 0) {
-                  return '—';
-                }
-                const min = Math.min(...entry.rates);
-                const max = Math.max(...entry.rates);
-                return min === max ? `${min}` : `${min}–${max}`;
-              },
-            },
-            { title: 'Псевдонимы', dataIndex: 'aliases', key: 'aliases', render: (value: string[]) => value?.join(', ') ?? '—' },
-            { title: 'Active', dataIndex: 'is_active', key: 'is_active', render: (value: boolean) => (value ? 'Yes' : 'No') },
-          ],
-          data: items,
-          emptyText: 'Нет клиентов',
-        };
-      }
     case 'projects':
       {
-        const clients = (directories.clients?.items ?? []) as Array<{ client_id?: string; name?: string }>;
-        const clientMap = new Map<string, string>();
-        clients.forEach((client) => {
-          if (client.client_id && client.name) {
-            clientMap.set(client.client_id, client.name);
+        const customers = (directories.customers?.items ?? []) as Array<{ customer_id?: string; _id?: string; name?: string }>;
+        const customerMap = new Map<string, string>();
+        customers.forEach((customer) => {
+          const customerId = customer.customer_id ?? customer._id;
+          if (customerId && customer.name) {
+            customerMap.set(customerId, customer.name);
           }
         });
-        const tracks = (directories.tracks?.items ?? []) as Array<{ track_id?: string; name?: string }>;
-        const trackMap = new Map<string, string>();
-        tracks.forEach((track) => {
-          if (track.track_id && track.name) {
-            trackMap.set(track.track_id, track.name);
+        const projectGroups = (directories['project-groups']?.items ?? []) as Array<{
+          project_group_id?: string;
+          _id?: string;
+          name?: string;
+          customer_id?: string;
+          projects_ids?: string[];
+        }>;
+        const projectGroupMap = new Map<string, string>();
+        const projectGroupCustomerMap = new Map<string, string>();
+        const projectGroupByProject = new Map<string, string>();
+        projectGroups.forEach((group) => {
+          const groupId = group.project_group_id ?? group._id;
+          if (groupId && group.name) {
+            projectGroupMap.set(groupId, group.name);
           }
+          if (groupId && group.customer_id) {
+            projectGroupCustomerMap.set(groupId, group.customer_id);
+          }
+          const projectIds = group.projects_ids ?? [];
+          projectIds.forEach((projectId) => {
+            if (groupId) {
+              projectGroupByProject.set(projectId, groupId);
+            }
+          });
         });
         const rates = (directories['project-rates']?.items ?? []) as Array<{
           project_id?: string;
@@ -306,16 +204,29 @@ export const buildDirectoryTable = (
               ),
             },
             {
-              title: 'Клиент',
-              dataIndex: 'client_id',
-              key: 'client_id',
-              render: (value: string) => clientMap.get(value) ?? value ?? '—',
+              title: 'Заказчик',
+              dataIndex: 'customer_id',
+              key: 'customer_id',
+              render: (_: unknown, row: { customer_id?: string; project_group_id?: string; project_id?: string }) => {
+                const groupId = row.project_group_id ?? (row.project_id ? projectGroupByProject.get(row.project_id) : undefined);
+                const customerId = row.customer_id ?? (groupId ? projectGroupCustomerMap.get(groupId) : undefined);
+                if (!customerId) {
+                  return '—';
+                }
+                return customerMap.get(customerId) ?? customerId;
+              },
             },
             {
-              title: 'Трек',
-              dataIndex: 'track_id',
-              key: 'track_id',
-              render: (value: string) => trackMap.get(value) ?? value ?? '—',
+              title: 'Группа',
+              dataIndex: 'project_group_id',
+              key: 'project_group_id',
+              render: (value: string, row: { project_id?: string }) => {
+                const groupId = value ?? (row.project_id ? projectGroupByProject.get(row.project_id) : undefined);
+                if (!groupId) {
+                  return '—';
+                }
+                return projectGroupMap.get(groupId) ?? groupId;
+              },
             },
             {
               title: 'Ставка (₽/ч)',
@@ -471,8 +382,8 @@ export const buildDirectoryTable = (
           const modules = Array.isArray(item.module)
             ? item.module
             : item.module
-            ? [item.module]
-            : item.scope ?? [];
+              ? [item.module]
+              : item.scope ?? [];
           modules.forEach((value) => {
             if (value) {
               moduleSet.add(value);
@@ -494,16 +405,16 @@ export const buildDirectoryTable = (
                 const modules = Array.isArray(row.module)
                   ? row.module
                   : row.module
-                  ? [row.module]
-                  : row.scope ?? [];
+                    ? [row.module]
+                    : row.scope ?? [];
                 return modules.length ? modules.join(', ') : '—';
               },
               onFilter: (value: string | number | boolean, record: { module?: string | string[]; scope?: string[] }) => {
                 const modules = Array.isArray(record.module)
                   ? record.module
                   : record.module
-                  ? [record.module]
-                  : record.scope ?? [];
+                    ? [record.module]
+                    : record.scope ?? [];
                 return modules.includes(value as string);
               },
             },
@@ -664,10 +575,12 @@ export const buildDirectoryTable = (
             title: 'Customer',
             dataIndex: 'name',
             key: 'name',
-            render: (value: string, row: { customer_id?: string }) => (
+            render: (value: string, row: { customer_id?: string; _id?: string }) => (
               <div>
                 <div>{value ?? '—'}</div>
-                {row.customer_id ? <div className="text-xs text-slate-400">{row.customer_id}</div> : null}
+                {row.customer_id || row._id ? (
+                  <div className="text-xs text-slate-400">{row.customer_id ?? row._id}</div>
+                ) : null}
               </div>
             ),
           },
@@ -679,11 +592,12 @@ export const buildDirectoryTable = (
       };
     case 'project-groups':
       {
-        const customers = (directories.customers?.items ?? []) as Array<{ customer_id?: string; name?: string }>;
+        const customers = (directories.customers?.items ?? []) as Array<{ customer_id?: string; _id?: string; name?: string }>;
         const customerMap = new Map<string, string>();
         customers.forEach((customer) => {
-          if (customer.customer_id && customer.name) {
-            customerMap.set(customer.customer_id, customer.name);
+          const customerId = customer.customer_id ?? customer._id;
+          if (customerId && customer.name) {
+            customerMap.set(customerId, customer.name);
           }
         });
         return {
@@ -692,10 +606,12 @@ export const buildDirectoryTable = (
               title: 'Group',
               dataIndex: 'name',
               key: 'name',
-              render: (value: string, row: { project_group_id?: string }) => (
+              render: (value: string, row: { project_group_id?: string; _id?: string }) => (
                 <div>
                   <div>{value ?? '—'}</div>
-                  {row.project_group_id ? <div className="text-xs text-slate-400">{row.project_group_id}</div> : null}
+                  {row.project_group_id || row._id ? (
+                    <div className="text-xs text-slate-400">{row.project_group_id ?? row._id}</div>
+                  ) : null}
                 </div>
               ),
             },

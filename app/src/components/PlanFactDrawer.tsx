@@ -111,7 +111,7 @@ export default function PlanFactDrawer({ open, context, onClose, onApply }: Prop
             {context?.project_name ?? 'Проект'}
           </Typography.Text>
           <div className="text-xs text-slate-500">
-            {context?.client_name} • {context ? formatMonthLabel(context.month) : ''}
+            {context?.customer_name} • {context ? formatMonthLabel(context.month) : ''}
           </div>
         </div>
       }

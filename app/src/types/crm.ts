@@ -14,22 +14,9 @@ export interface Performer {
     _payments_changed?: boolean;
 }
 
-export interface Client {
-    _id: string;
-    name: string;
-    projects: string[];
-}
-
-export interface Track {
-    _id: string;
-    name: string;
-    clients: string[];
-}
-
 export interface Project {
     _id: string;
     name: string;
-    client?: string;
     epics?: Epic[];
     is_active?: boolean;
     figma_dev_url?: string;
@@ -103,8 +90,6 @@ export interface Ticket {
         _id: string;
         name: string;
     };
-    client?: string;
-    track?: string;
     task_type?: string;
     task_status?: string;
     performer?: Performer | string;
@@ -131,8 +116,8 @@ export interface TreeNode {
     title?: string;
     name?: string;
     _id?: string;
-    type: 'track' | 'client' | 'project' | 'customer' | 'group' | 'unassigned-category';
-    data?: Track | Client | Project | Customer | ProjectGroup | ProjectWithGroup;
+    type: 'project' | 'customer' | 'group' | 'unassigned-category';
+    data?: Project | Customer | ProjectGroup | ProjectWithGroup;
     children?: TreeNode[];
 }
 
@@ -140,12 +125,14 @@ export interface TreeNode {
 export interface Customer {
     _id: string;
     name: string;
+    project_groups_ids?: string[];
 }
 
 export interface ProjectGroup {
     _id: string;
     name: string;
-    customer: string;
+    customer?: string;
+    projects_ids?: string[];
 }
 
 export interface ProjectWithGroup {
@@ -269,8 +256,8 @@ export interface BotCommand {
 export interface DictionaryResponse {
     projects: Project[];
     performers: Performer[];
-    clients: Client[];
-    tracks: Track[];
+    customers: Customer[];
+    projectGroups: ProjectGroup[];
     tree: TreeNode[];
     task_types: TaskType[];
     task_supertypes: TaskSupertype[];

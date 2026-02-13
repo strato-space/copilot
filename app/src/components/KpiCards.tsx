@@ -7,7 +7,7 @@ import {
 } from '../services/expenseDirectory';
 import { type ExpenseOperation } from '../services/expenseDirectory';
 import { type EmployeeDirectoryEntry, getEmployeeMonthlySalary } from '../services/employeeDirectory';
-import { type PlanFactClientRow, type PlanFactGridResponse } from '../services/types';
+import { type PlanFactCustomerRow, type PlanFactGridResponse } from '../services/types';
 import { useFxStore } from '../store/fxStore';
 import { useEmployeeStore } from '../store/employeeStore';
 import { useExpensesStore } from '../store/expensesStore';
@@ -98,9 +98,9 @@ const sumRevenueByMonths = (
     const fx = fxRates[month];
     return fx?.base ? fx.rate / fx.base : 1;
   };
-  data.clients.forEach((client: PlanFactClientRow): void => {
+  data.customers.forEach((customer: PlanFactCustomerRow): void => {
     months.forEach((month) => {
-      const cell = client.totals_by_month[month];
+      const cell = customer.totals_by_month[month];
       if (!cell) {
         return;
       }
@@ -118,9 +118,9 @@ const sumHoursByMonths = (data: PlanFactGridResponse | null, months: string[]): 
   }
   let fact = 0;
   let forecast = 0;
-  data.clients.forEach((client) => {
+  data.customers.forEach((customer) => {
     months.forEach((month) => {
-      const cell = client.totals_by_month[month];
+      const cell = customer.totals_by_month[month];
       if (!cell) {
         return;
       }

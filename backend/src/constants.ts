@@ -71,7 +71,6 @@ export const COLLECTIONS = {
   PERFORMERS_ROLES: 'automation_performers_roles',
   PERFORMER_PAYMENTS: 'automation_performer_payments',
   CUSTOMERS: 'automation_customers',
-  CLIENTS: 'automation_clients',
 
   // Time Tracking
   WORK_HOURS: 'automation_work_hours',

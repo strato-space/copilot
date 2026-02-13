@@ -12,8 +12,11 @@ interface CommentFormValues {
 }
 
 const CommentsSidebar = () => {
-    const { saveComment } = useKanbanStore();
+    const { saveComment, getCustomerByProject, getProjectGroupByProject } = useKanbanStore();
     const { commentedTicket, setCommentedTicket } = useCRMStore();
+
+    const customerName = commentedTicket ? getCustomerByProject(commentedTicket.project) : '';
+    const projectGroupName = commentedTicket ? getProjectGroupByProject(commentedTicket.project) : '';
 
     const formRef = useRef<ReturnType<typeof Form.useForm>[0]>(null);
 
@@ -35,7 +38,7 @@ const CommentsSidebar = () => {
                         <div className="text-[16px] w-[324px]">{commentedTicket.name}</div>
                         <div className="text-[14px] text-slate-500">{commentedTicket.project}</div>
                         <div className="text-[12px] text-slate-400">
-                            {commentedTicket.track} / {commentedTicket.client}
+                            {projectGroupName || '—'} / {customerName || '—'}
                         </div>
                     </div>
                 ) : (

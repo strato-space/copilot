@@ -87,7 +87,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         massiveChangeStatus,
         fetchTickets,
         fetchDictionary,
-        getClientByProject,
+        getCustomerByProject,
         getProjectEpics,
         getProjectByName,
         epics,

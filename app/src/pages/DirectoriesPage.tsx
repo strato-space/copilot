@@ -28,7 +28,7 @@ const LOG_ITEMS = [
     id: 'log-2',
     date: '27.01.26',
     module: 'Guides',
-    text: 'Клиенты: добавлен Orion Studio',
+    text: 'Заказчики: добавлен Orion Studio',
   },
   {
     id: 'log-3',

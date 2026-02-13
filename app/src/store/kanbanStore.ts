@@ -16,8 +16,8 @@ import type {
     Ticket,
     Performer,
     Project,
-    Client,
-    Track,
+    Customer,
+    ProjectGroup,
     TreeNode,
     TaskType,
     TaskSupertype,
@@ -94,15 +94,15 @@ interface KanbanState {
     setStatusesFilter: (statuses: string[]) => void;
 
     // Helpers
-    getClientByProject: (project: string) => string;
-    getTrackByClient: (client: string) => string;
+    getCustomerByProject: (project: string) => string;
+    getProjectGroupByProject: (project: string) => string;
 
     // Data
     tickets: Ticket[];
     tickets_updated_at: number | null;
     boards: string[];
-    clients: Client[];
-    tracks: Track[];
+    customers: Customer[];
+    projectGroups: ProjectGroup[];
     income_types: IncomeType[];
     task_types: TaskType[];
     task_supertypes: TaskSupertype[];
@@ -122,9 +122,9 @@ interface KanbanState {
 
     // CRUD operations
     moveNode: (node: TreeNode, destination: TreeNode) => void;
-    saveProject: (project: Project, client: string) => Promise<void>;
-    saveClient: (client: Client, track: string) => Promise<void>;
-    saveTrack: (track: Track) => Promise<void>;
+    saveProject: (project: Project, projectGroup: string) => Promise<void>;
+    saveCustomer: (customer: Customer) => Promise<void>;
+    saveProjectGroup: (projectGroup: ProjectGroup, customer?: string) => Promise<void>;
 
     updateTicket: (ticket: Ticket, updateProps: Partial<Ticket>, opt?: { silent?: boolean }) => Promise<void>;
     editTicketData: (ticket: Ticket) => Promise<void>;
@@ -281,8 +281,8 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             projects: data.projects.map((p) => p.name),
             performers: data.performers,
             projectsData: data.projects,
-            clients: data.clients,
-            tracks: data.tracks,
+            customers: data.customers,
+            projectGroups: data.projectGroups,
             tree: data.tree,
             task_types: data.task_types,
             task_supertypes: data.task_supertypes,
@@ -296,27 +296,53 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         statusesFilter: ['READY_TO_GO', 'IN_PROGRESS'],
         setStatusesFilter: (statuses) => set({ statusesFilter: statuses }),
 
-        getClientByProject: (project) => {
-            const clients = get().clients;
-            for (const client of clients) {
-                if (client.projects.includes(project)) return client.name;
+        getCustomerByProject: (project) => {
+            if (!project) {
+                return '';
             }
-            return '';
+            const { customers, projectGroups, projectsData } = get();
+            const projectDoc = projectsData.find((item) => item.name === project);
+            if (!projectDoc?._id) {
+                return '';
+            }
+            const projectGroup = projectGroups.find((group) => {
+                if (group._id && projectDoc.project_group && group._id.toString() === projectDoc.project_group.toString()) {
+                    return true;
+                }
+                return (group.projects_ids ?? []).some((id) => id.toString() === projectDoc._id);
+            });
+            if (!projectGroup?._id) {
+                return '';
+            }
+            const customer = customers.find((item) =>
+                (item.project_groups_ids ?? []).some((id) => id.toString() === projectGroup._id)
+            );
+            return customer?.name ?? '';
         },
 
-        getTrackByClient: (client) => {
-            const tracks = get().tracks;
-            for (const track of tracks) {
-                if (track.clients.includes(client)) return track.name;
+        getProjectGroupByProject: (project) => {
+            if (!project) {
+                return '';
             }
-            return '';
+            const { projectGroups, projectsData } = get();
+            const projectDoc = projectsData.find((item) => item.name === project);
+            if (!projectDoc?._id) {
+                return '';
+            }
+            const projectGroup = projectGroups.find((group) => {
+                if (group._id && projectDoc.project_group && group._id.toString() === projectDoc.project_group.toString()) {
+                    return true;
+                }
+                return (group.projects_ids ?? []).some((id) => id.toString() === projectDoc._id);
+            });
+            return projectGroup?.name ?? '';
         },
 
         tickets: [],
         tickets_updated_at: null,
         boards: [],
-        clients: [],
-        tracks: [],
+        customers: [],
+        projectGroups: [],
         income_types: [],
         task_types: [],
         task_supertypes: [],
@@ -327,44 +353,61 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         moveNode: (node, destination) => {
             switch (node.type) {
                 case 'project': {
-                    const source_client = get().getClientByProject(node.title ?? '');
-                    if (source_client === (destination.title ?? '')) return;
-                    api_request('projects/move', { source_client, dest_client: destination, project: node });
+                    if (destination.type !== 'group') {
+                        return;
+                    }
+                    const projectId = node.key ?? node._id ?? '';
+                    const sourceProjectGroup = get().projectGroups.find((group) =>
+                        (group.projects_ids ?? []).some((id) => id.toString() === projectId)
+                    );
+                    api_request('projects/move', {
+                        project: node,
+                        source_project_group: sourceProjectGroup ?? null,
+                        dest_project_group: destination,
+                    });
                     break;
                 }
-                case 'client': {
-                    const source_track = get().getTrackByClient(node.title ?? '');
-                    if (source_track === (destination.title ?? '')) return;
-                    api_request('clients/move', { source_track, dest_track: destination, client: node });
+                case 'group': {
+                    if (destination.type !== 'customer') {
+                        return;
+                    }
+                    const groupId = node.key ?? node._id ?? '';
+                    const sourceCustomer = get().customers.find((customer) =>
+                        (customer.project_groups_ids ?? []).some((id) => id.toString() === groupId)
+                    );
+                    api_request('project_groups/move', {
+                        project_group: node,
+                        source_customer: sourceCustomer ?? null,
+                        dest_customer: destination,
+                    });
                     break;
                 }
             }
         },
 
-        saveProject: async (project, client) => {
+        saveProject: async (project, projectGroup) => {
             if (project._id) {
                 await api_request('projects/update', { project });
             } else {
-                await api_request('projects/create', { project, client });
+                await api_request('projects/create', { project, project_group: projectGroup });
                 await get().fetchDictionary();
             }
         },
 
-        saveClient: async (client, track) => {
-            if (client._id) {
-                await api_request('clients/update', client);
+        saveCustomer: async (customer) => {
+            if (customer._id) {
+                await api_request('customers/update', { customer });
             } else {
-                client.projects = [];
-                await api_request('clients/create', { client, track });
+                await api_request('customers/create', { customer });
                 await get().fetchDictionary();
             }
         },
 
-        saveTrack: async (track) => {
-            if (track._id) {
-                await api_request('tracks/update', track);
+        saveProjectGroup: async (projectGroup, customer) => {
+            if (projectGroup._id) {
+                await api_request('project_groups/update', { project_group: projectGroup, customer });
             } else {
-                await api_request('tracks/create', { track });
+                await api_request('project_groups/create', { project_group: projectGroup, customer });
                 await get().fetchDictionary();
             }
         },
@@ -449,9 +492,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
 
             const response = await api_request<{ ticket_db: Ticket }>('tickets/create', { data: values });
             const new_ticket = response.ticket_db;
-
-            new_ticket.client = get().getClientByProject(new_ticket.project);
-            new_ticket.track = get().getTrackByClient(new_ticket.client ?? '');
 
             const performer = _.find(get().performers, { _id: values.performer as string });
             if (performer) {
@@ -835,7 +875,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             const filtered_projects = projects_data.filter((d) => d.income !== 0 || d.expenses !== 0);
             const actual_projects = filtered_projects.map((p) => ({
                 name: p.project,
-                full_name: `${p.project} (${get().getClientByProject(p.project)})`,
+                full_name: `${p.project} (${get().getCustomerByProject(p.project)})`,
             }));
 
             set({

@@ -12,7 +12,7 @@ import { type CSSProperties, type ReactElement, type TdHTMLAttributes, useEffect
 import { Link } from 'react-router-dom';
 import {
   type PlanFactCellContext,
-  type PlanFactClientRow,
+  type PlanFactCustomerRow,
   type PlanFactMonthCell,
   type PlanFactProjectRow,
 } from '../services/types';
@@ -22,9 +22,9 @@ import { formatCurrency, formatHours, formatMonthLabel } from '../utils/format';
 interface RowItem {
   key: string;
   row_type: 'project';
-  client_id: string;
-  client_name: string;
-  client_full: string;
+  customer_id: string;
+  customer_name: string;
+  customer_full: string;
   project_id: string;
   project_name: string;
   subproject_name: string;
@@ -34,7 +34,7 @@ interface RowItem {
 }
 
 interface Props {
-  clients: PlanFactClientRow[];
+  customers: PlanFactCustomerRow[];
   months: string[];
   focusMonth: string;
   onFocusMonthChange: (month: string) => void;
@@ -93,14 +93,14 @@ const normalizeMonths = (
   return normalized;
 };
 
-const toRows = (clients: PlanFactClientRow[], months: string[]): RowItem[] => {
+const toRows = (customers: PlanFactCustomerRow[], months: string[]): RowItem[] => {
   const rows: RowItem[] = [];
 
-  clients.forEach((client: PlanFactClientRow): void => {
-    if (!Array.isArray(client.projects)) {
+  customers.forEach((customer: PlanFactCustomerRow): void => {
+    if (!Array.isArray(customer.projects)) {
       return;
     }
-    client.projects.forEach((project: PlanFactProjectRow): void => {
+    customer.projects.forEach((project: PlanFactProjectRow): void => {
       const normalized = normalizeMonths(project.months, months);
       const hasAnyValue = months.some((month) => {
         const cell = normalized[month] ?? emptyCell();
@@ -117,11 +117,11 @@ const toRows = (clients: PlanFactClientRow[], months: string[]): RowItem[] => {
         return;
       }
       rows.push({
-        key: `project-${client.client_id}-${project.project_id}`,
+        key: `project-${customer.customer_id}-${project.project_id}`,
         row_type: 'project',
-        client_id: client.client_id,
-        client_name: client.client_name,
-        client_full: client.client_name,
+        customer_id: customer.customer_id,
+        customer_name: customer.customer_name,
+        customer_full: customer.customer_name,
         project_id: project.project_id,
         project_name: project.project_name,
         subproject_name: project.subproject_name,
@@ -161,7 +161,7 @@ const buildTotalsFromRows = (
 };
 
 
-const abbreviateClient = (name?: string): string => {
+const abbreviateCustomer = (name?: string): string => {
   if (!name) {
     return '—';
   }
@@ -222,7 +222,7 @@ const buildColumns = (
   focusMonth: string,
   onFocusMonthChange: (month: string) => void,
   onOpenDrawer: (context: PlanFactCellContext) => void,
-  clientFilters: { text: string; value: string }[],
+  customerFilters: { text: string; value: string }[],
   pinnedMonths: string[],
   onTogglePin: (month: string) => void,
   getFxFactor: (month: string) => number,
@@ -234,23 +234,23 @@ const buildColumns = (
   ];
   const base: ColumnsType<RowItem> = [
     {
-      title: 'Клиент',
-      dataIndex: 'client_name',
-      key: 'client_name',
-      filters: clientFilters,
+      title: 'Заказчик',
+      dataIndex: 'customer_name',
+      key: 'customer_name',
+      filters: customerFilters,
       filterIcon: (filtered: boolean): ReactElement => (
         <FilterOutlined className={filtered ? 'text-blue-600' : 'text-slate-400'} />
       ),
-      onFilter: (value, row): boolean => row.client_name === value,
+      onFilter: (value, row): boolean => row.customer_name === value,
       render: (value: string | undefined, row: RowItem): ReactElement => (
         <div>
-          <Tooltip title={row.client_full}>
+          <Tooltip title={row.customer_full}>
             <Tag
               color="blue"
               className="!m-0 text-xs font-semibold uppercase"
               style={{ maxWidth: 90 }}
             >
-              <span className="inline-block max-w-[80px] truncate">{abbreviateClient(value)}</span>
+              <span className="inline-block max-w-[80px] truncate">{abbreviateCustomer(value)}</span>
             </Tag>
           </Tooltip>
         </div>
@@ -367,8 +367,8 @@ const buildColumns = (
             const fxFactor = getFxFactor(month);
             const handleOpen = (): void => {
               onOpenDrawer({
-                client_id: row.client_id,
-                client_name: row.client_name,
+                customer_id: row.customer_id,
+                customer_name: row.customer_name,
                 project_id: row.project_id ?? '',
                 project_name: row.project_name ?? '',
                 subproject_name: row.subproject_name ?? '',
@@ -402,8 +402,8 @@ const buildColumns = (
             const fxFactor = getFxFactor(month);
             const handleOpen = (): void => {
               onOpenDrawer({
-                client_id: row.client_id,
-                client_name: row.client_name,
+                customer_id: row.customer_id,
+                customer_name: row.customer_name,
                 project_id: row.project_id ?? '',
                 project_name: row.project_name ?? '',
                 subproject_name: row.subproject_name ?? '',
@@ -432,7 +432,7 @@ const buildColumns = (
 };
 
 export default function PlanFactGrid({
-  clients,
+  customers,
   months,
   focusMonth,
   onFocusMonthChange,
@@ -467,40 +467,40 @@ export default function PlanFactGrid({
     return [focusMonth];
   });
 
-  const rows = useMemo((): RowItem[] => toRows(clients, months), [clients, months]);
-  const clientFilters = useMemo(
+  const rows = useMemo((): RowItem[] => toRows(customers, months), [customers, months]);
+  const customerFilters = useMemo(
     () =>
       Array.from(
-        new Set(clients.map((client) => client.client_name)),
+        new Set(customers.map((customer) => customer.customer_name)),
       ).map((name) => ({ text: name, value: name })),
-    [clients],
+    [customers],
   );
 
   const normalizedFilters = useMemo((): {
-    selectedClients: string[];
+    selectedCustomers: string[];
     selectedTypes: string[];
     hasAllTypes: boolean;
   } => {
     const normalize = (value: FilterValue | null | undefined): string[] =>
       Array.isArray(value) ? value.map((item) => String(item)) : [];
-    const selectedClients = normalize(tableFilters.client_name);
+    const selectedCustomers = normalize(tableFilters.customer_name);
     const selectedTypes = normalize(tableFilters.project_name);
     const hasAllTypes = selectedTypes.includes('all');
-    return { selectedClients, selectedTypes, hasAllTypes };
+    return { selectedCustomers, selectedTypes, hasAllTypes };
   }, [tableFilters]);
 
   const filteredRows = useMemo((): RowItem[] => {
-    const { selectedClients, selectedTypes, hasAllTypes } = normalizedFilters;
+    const { selectedCustomers, selectedTypes, hasAllTypes } = normalizedFilters;
     return rows.filter((row) => {
-      const matchClient = selectedClients.length === 0 || selectedClients.includes(row.client_name);
+      const matchCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(row.customer_name);
       const matchType =
         selectedTypes.length === 0 || hasAllTypes || selectedTypes.includes(row.contract_type);
-      return matchClient && matchType;
+      return matchCustomer && matchType;
     });
   }, [rows, normalizedFilters]);
 
   const hasActiveFilters =
-    normalizedFilters.selectedClients.length > 0 ||
+    normalizedFilters.selectedCustomers.length > 0 ||
     (normalizedFilters.selectedTypes.length > 0 && !normalizedFilters.hasAllTypes);
 
   const totalsByMonth = useMemo(
@@ -563,7 +563,7 @@ export default function PlanFactGrid({
         focusMonth,
         onFocusMonthChange,
         onOpenDrawer,
-        clientFilters,
+        customerFilters,
         pinnedMonths,
         handleTogglePin,
         getFxFactor,

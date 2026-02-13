@@ -57,24 +57,40 @@ router.post('/', async (req: Request, res: Response) => {
             ])
             .toArray();
 
-        // Get tracks and clients for enrichment
-        const tracks = await db.collection(COLLECTIONS.TRACKS).find().toArray();
-        const clients = await db.collection(COLLECTIONS.CLIENTS).find().toArray();
+        // Get project groups and customers for enrichment
+        const projectGroups = await db.collection(COLLECTIONS.PROJECT_GROUPS).find().toArray();
+        const customers = await db.collection(COLLECTIONS.CUSTOMERS).find().toArray();
 
-        const projectsClients: Record<string, string> = {};
-        for (const client of clients) {
-            if (client.projects_ids) {
-                for (const projectId of client.projects_ids) {
-                    projectsClients[projectId.toString()] = client.name;
+        const projectGroupsById = _.keyBy(projectGroups, (group) => group._id.toString());
+        const projectsCustomers = new Map<string, string>();
+        const projectsGroups = new Map<string, string>();
+
+        for (const group of projectGroups) {
+            if (!group.projects_ids || !Array.isArray(group.projects_ids)) {
+                continue;
+            }
+            for (const projectId of group.projects_ids) {
+                const projectKey = projectId.toString();
+                if (!projectsGroups.has(projectKey) && typeof group.name === 'string') {
+                    projectsGroups.set(projectKey, group.name);
                 }
             }
         }
 
-        const clientsTracks: Record<string, string> = {};
-        for (const track of tracks) {
-            if (track.clients) {
-                for (const client of track.clients) {
-                    clientsTracks[client] = track.name;
+        for (const customer of customers) {
+            const groupIds = Array.isArray(customer.project_groups_ids)
+                ? customer.project_groups_ids
+                : [];
+            for (const groupId of groupIds) {
+                const group = projectGroupsById[groupId.toString()];
+                if (!group || !Array.isArray(group.projects_ids)) {
+                    continue;
+                }
+                for (const projectId of group.projects_ids) {
+                    const projectKey = projectId.toString();
+                    if (!projectsCustomers.has(projectKey) && typeof customer.name === 'string') {
+                        projectsCustomers.set(projectKey, customer.name);
+                    }
                 }
             }
         }
@@ -82,10 +98,15 @@ router.post('/', async (req: Request, res: Response) => {
         // Enrich tickets with client and track info
         for (const ticket of data) {
             try {
-                if (ticket.project_id && projectsClients[ticket.project_id.toString()]) {
-                    ticket.client = projectsClients[ticket.project_id.toString()];
-                    if (clientsTracks[ticket.client]) {
-                        ticket.track = clientsTracks[ticket.client];
+                const projectKey = ticket.project_id?.toString();
+                if (projectKey) {
+                    const customerName = projectsCustomers.get(projectKey);
+                    const groupName = projectsGroups.get(projectKey);
+                    if (customerName) {
+                        ticket.client = customerName;
+                    }
+                    if (groupName) {
+                        ticket.track = groupName;
                     }
                 }
             } catch {

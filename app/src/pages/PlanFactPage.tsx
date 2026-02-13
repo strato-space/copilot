@@ -81,8 +81,8 @@ export default function PlanFactPage(): ReactElement {
     if (!data) {
       return totals;
     }
-    data.clients.forEach((client) => {
-      client.projects.forEach((project) => {
+    data.customers.forEach((customer) => {
+      customer.projects.forEach((project) => {
         yearMonths.forEach((month) => {
           const cell = project.months[month];
           if (!cell) {
@@ -286,7 +286,7 @@ export default function PlanFactPage(): ReactElement {
     void apiClient
       .put('/plan-fact/entry', payload)
       .then(() => {
-        updateProjectMonth(context.client_id, context.project_id, context.month, values);
+        updateProjectMonth(context.customer_id, context.project_id, context.month, values);
         handleCloseDrawer();
         message.success('Изменения сохранены');
       })
@@ -398,7 +398,7 @@ export default function PlanFactPage(): ReactElement {
               label: 'Доход',
               children: (
                 <PlanFactGrid
-                  clients={data?.clients ?? []}
+                  customers={data?.customers ?? []}
                   months={yearMonths}
                   focusMonth={focusMonth}
                   onFocusMonthChange={handleFocusMonthChange}

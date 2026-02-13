@@ -7,27 +7,30 @@ import GuideSourceTag from '../../components/GuideSourceTag';
 import { useGuideStore } from '../../store/guideStore';
 import { formatDateLabel } from '../../utils/format';
 
-interface GuideClient {
-  client_id?: string;
+interface GuideCustomer {
+  customer_id?: string;
   _id?: string;
   name?: string;
-  track_id?: string;
-  projects_ids?: string[];
+  project_groups_ids?: string[];
   aliases?: string[];
   is_active?: boolean;
 }
 
-interface GuideTrack {
-  track_id?: string;
+interface GuideProjectGroup {
+  project_group_id?: string;
+  _id?: string;
   name?: string;
+  customer_id?: string;
+  projects_ids?: string[];
+  is_active?: boolean;
 }
 
 interface GuideProject {
   project_id?: string;
   _id?: string;
   name?: string;
-  client_id?: string;
-  track_id?: string;
+  customer_id?: string;
+  project_group_id?: string;
   is_active?: boolean;
   context?: {
     description?: string;
@@ -46,11 +49,11 @@ interface GuideRate {
   comment?: string;
 }
 
-interface ClientRow {
+interface CustomerRow {
   key: string;
   name: string;
-  track: string;
-  clientId: string;
+  group: string;
+  customerId: string;
   aliases: string;
   projectsCount: number;
   isActive: boolean;
@@ -59,8 +62,8 @@ interface ClientRow {
 interface ProjectRow {
   key: string;
   name: string;
-  client: string;
-  track: string;
+  customer: string;
+  group: string;
   projectId: string;
   rateMonth: string;
   rate: string;
@@ -104,74 +107,125 @@ const getContextStatus = (project: GuideProject): ContextStatus => {
 
 export default function ClientsProjectsRatesPage(): ReactElement {
   const fetchDirectory = useGuideStore((state) => state.fetchDirectory);
-  const clientsDirectory = useGuideStore((state) => state.directories.clients);
+  const customersDirectory = useGuideStore((state) => state.directories.customers);
+  const projectGroupsDirectory = useGuideStore((state) => state.directories['project-groups']);
   const projectsDirectory = useGuideStore((state) => state.directories.projects);
   const ratesDirectory = useGuideStore((state) => state.directories['project-rates']);
-  const tracksDirectory = useGuideStore((state) => state.directories.tracks);
-  const loadingClients = useGuideStore((state) => state.directoryLoading.clients);
+  const loadingCustomers = useGuideStore((state) => state.directoryLoading.customers);
+  const loadingProjectGroups = useGuideStore((state) => state.directoryLoading['project-groups']);
   const loadingProjects = useGuideStore((state) => state.directoryLoading.projects);
   const loadingRates = useGuideStore((state) => state.directoryLoading['project-rates']);
-  const loadingTracks = useGuideStore((state) => state.directoryLoading.tracks);
-  const errorClients = useGuideStore((state) => state.directoryError.clients);
+  const errorCustomers = useGuideStore((state) => state.directoryError.customers);
+  const errorProjectGroups = useGuideStore((state) => state.directoryError['project-groups']);
   const errorProjects = useGuideStore((state) => state.directoryError.projects);
   const errorRates = useGuideStore((state) => state.directoryError['project-rates']);
-  const errorTracks = useGuideStore((state) => state.directoryError.tracks);
   const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
   const [activeCommentProject, setActiveCommentProject] = useState<ProjectRow | null>(null);
 
   useEffect((): void => {
-    void fetchDirectory('clients');
+    void fetchDirectory('customers');
+    void fetchDirectory('project-groups');
     void fetchDirectory('projects');
     void fetchDirectory('project-rates');
-    void fetchDirectory('tracks');
   }, [fetchDirectory]);
 
-  const clients = (clientsDirectory?.items ?? []) as GuideClient[];
+  const customers = (customersDirectory?.items ?? []) as GuideCustomer[];
+  const projectGroups = (projectGroupsDirectory?.items ?? []) as GuideProjectGroup[];
   const projects = (projectsDirectory?.items ?? []) as GuideProject[];
   const rates = (ratesDirectory?.items ?? []) as GuideRate[];
-  const tracks = (tracksDirectory?.items ?? []) as GuideTrack[];
-
-  const clientNameById = useMemo(() => {
+  const customerNameById = useMemo(() => {
     const map = new Map<string, string>();
-    clients.forEach((client) => {
-      const id = client.client_id ?? client._id;
+    customers.forEach((customer) => {
+      const id = customer.customer_id ?? customer._id;
       if (id) {
-        map.set(id, client.name ?? '—');
+        map.set(id, customer.name ?? '—');
       }
     });
     return map;
-  }, [clients]);
+  }, [customers]);
 
-  const clientTrackById = useMemo(() => {
+  const projectGroupNameById = useMemo(() => {
     const map = new Map<string, string>();
-    clients.forEach((client) => {
-      const id = client.client_id ?? client._id;
-      if (id && client.track_id) {
-        map.set(id, client.track_id);
+    projectGroups.forEach((group) => {
+      const id = group.project_group_id ?? group._id;
+      if (id) {
+        map.set(id, group.name ?? '—');
       }
     });
     return map;
-  }, [clients]);
+  }, [projectGroups]);
 
-  const trackNameById = useMemo(() => {
+  const projectGroupCustomerById = useMemo(() => {
     const map = new Map<string, string>();
-    tracks.forEach((track) => {
-      if (track.track_id) {
-        map.set(track.track_id, track.name ?? '—');
+    projectGroups.forEach((group) => {
+      const id = group.project_group_id ?? group._id;
+      if (id && group.customer_id) {
+        map.set(id, group.customer_id);
       }
     });
     return map;
-  }, [tracks]);
+  }, [projectGroups]);
 
-  const clientByProjectId = useMemo(() => {
+  const projectGroupByProjectId = useMemo(() => {
     const map = new Map<string, string>();
-    clients.forEach((client) => {
-      const clientName = client.name ?? '—';
-      const ids = client.projects_ids ?? [];
-      ids.forEach((projectId) => map.set(projectId, clientName));
+    projectGroups.forEach((group) => {
+      const groupId = group.project_group_id ?? group._id;
+      if (!groupId) {
+        return;
+      }
+      const ids = group.projects_ids ?? [];
+      ids.forEach((projectId) => map.set(projectId, groupId));
+    });
+    projects.forEach((project) => {
+      const projectId = project.project_id ?? project._id;
+      if (!projectId) {
+        return;
+      }
+      if (project.project_group_id) {
+        map.set(projectId, project.project_group_id);
+      }
     });
     return map;
-  }, [clients]);
+  }, [projectGroups, projects]);
+
+  const customerByProjectId = useMemo(() => {
+    const map = new Map<string, string>();
+    projects.forEach((project) => {
+      const projectId = project.project_id ?? project._id;
+      if (!projectId) {
+        return;
+      }
+      let customerId = project.customer_id;
+      if (!customerId) {
+        const groupId = project.project_group_id ?? projectGroupByProjectId.get(projectId);
+        if (groupId) {
+          customerId = projectGroupCustomerById.get(groupId);
+        }
+      }
+      if (customerId) {
+        map.set(projectId, customerNameById.get(customerId) ?? customerId);
+      }
+    });
+    return map;
+  }, [projects, projectGroupByProjectId, projectGroupCustomerById, customerNameById]);
+
+  const projectGroupsByCustomerId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    projectGroups.forEach((group) => {
+      const customerId = group.customer_id;
+      const groupId = group.project_group_id ?? group._id;
+      if (!customerId || !groupId) {
+        return;
+      }
+      const list = map.get(customerId) ?? [];
+      const label = group.name ?? groupId;
+      if (!list.includes(label)) {
+        list.push(label);
+      }
+      map.set(customerId, list);
+    });
+    return map;
+  }, [projectGroups]);
 
 
   const rateByProject = useMemo(() => {
@@ -201,45 +255,53 @@ export default function ClientsProjectsRatesPage(): ReactElement {
     return map;
   }, [rates]);
 
-  const clientProjectCounts = useMemo(() => {
+  const customerProjectCounts = useMemo(() => {
     const counts = new Map<string, number>();
     projects.forEach((project) => {
-      const clientId = project.client_id;
-      if (!clientId) {
+      const projectId = project.project_id ?? project._id;
+      if (!projectId) {
         return;
       }
-      counts.set(clientId, (counts.get(clientId) ?? 0) + 1);
+      let customerId = project.customer_id;
+      if (!customerId) {
+        const groupId = project.project_group_id ?? projectGroupByProjectId.get(projectId);
+        if (groupId) {
+          customerId = projectGroupCustomerById.get(groupId);
+        }
+      }
+      if (!customerId) {
+        return;
+      }
+      counts.set(customerId, (counts.get(customerId) ?? 0) + 1);
     });
     return counts;
-  }, [projects]);
+  }, [projects, projectGroupByProjectId, projectGroupCustomerById]);
 
-  const clientRows = useMemo((): ClientRow[] => {
-    return clients
-      .map((client, index) => {
-        const id = client.client_id ?? client._id ?? `client-${index}`;
-        const projectsCount = client.projects_ids?.length ?? clientProjectCounts.get(id) ?? 0;
-        const track = client.track_id ? trackNameById.get(client.track_id) ?? client.track_id : '—';
-        return {
-          key: id,
-          name: client.name ?? '—',
-          track,
-          clientId: id,
-          aliases: (client.aliases ?? []).join(', '),
-          projectsCount,
-          isActive: client.is_active !== false,
-        };
-      });
-  }, [clients, clientProjectCounts, trackNameById]);
+  const customerRows = useMemo((): CustomerRow[] => {
+    return customers.map((customer, index) => {
+      const id = customer.customer_id ?? customer._id ?? `customer-${index}`;
+      const groupNames = projectGroupsByCustomerId.get(id) ?? [];
+      return {
+        key: id,
+        name: customer.name ?? '—',
+        group: groupNames.length ? groupNames.join(', ') : '—',
+        customerId: id,
+        aliases: (customer.aliases ?? []).join(', '),
+        projectsCount: customerProjectCounts.get(id) ?? 0,
+        isActive: customer.is_active !== false,
+      };
+    });
+  }, [customers, projectGroupsByCustomerId, customerProjectCounts]);
 
   const projectRows = useMemo((): ProjectRow[] => {
     return projects
       .map((project, index) => {
         const projectId = project.project_id ?? project._id ?? `project-${index}`;
-        const clientName = project.client_id
-          ? clientNameById.get(project.client_id) ?? '—'
-          : clientByProjectId.get(projectId) ?? '—';
-        const trackId = project.track_id ?? (project.client_id ? clientTrackById.get(project.client_id) : undefined);
-        const trackName = trackId ? trackNameById.get(trackId) ?? trackId : '—';
+        const customerName = project.customer_id
+          ? customerNameById.get(project.customer_id) ?? '—'
+          : customerByProjectId.get(projectId) ?? '—';
+        const groupId = project.project_group_id ?? projectGroupByProjectId.get(projectId);
+        const groupName = groupId ? projectGroupNameById.get(groupId) ?? groupId : '—';
         const entry = projectId ? rateByProject.get(projectId) : undefined;
         const rateLabel = entry?.rates?.length
           ? (() => {
@@ -252,8 +314,8 @@ export default function ClientsProjectsRatesPage(): ReactElement {
         return {
           key: projectId,
           name: project.name ?? '—',
-          client: clientName,
-          track: trackName,
+          customer: customerName,
+          group: groupName,
           projectId: projectId,
           rateMonth: formatDateLabel(entry?.month),
           rate: rateLabel,
@@ -263,10 +325,10 @@ export default function ClientsProjectsRatesPage(): ReactElement {
           isActive: project.is_active !== false,
         };
       });
-  }, [projects, clientNameById, clientByProjectId, clientTrackById, rateByProject, trackNameById]);
+  }, [projects, customerNameById, customerByProjectId, projectGroupByProjectId, projectGroupNameById, rateByProject]);
 
-  const loading = Boolean(loadingClients || loadingProjects || loadingRates || loadingTracks);
-  const errors = [errorClients, errorProjects, errorRates, errorTracks].filter(Boolean) as string[];
+  const loading = Boolean(loadingCustomers || loadingProjectGroups || loadingProjects || loadingRates);
+  const errors = [errorCustomers, errorProjectGroups, errorProjects, errorRates].filter(Boolean) as string[];
 
   const openComments = (row: ProjectRow): void => {
     setActiveCommentProject(row);
@@ -279,11 +341,12 @@ export default function ClientsProjectsRatesPage(): ReactElement {
         <Link to="/guide">← Назад к Guide</Link>
       </Button>
       <PageHeader
-        title="Клиенты, проекты и ставки"
+        title="Заказчики, группы, проекты и ставки"
         description="Read‑only справочники из automation (master)."
         actions={(
           <Button icon={<ReloadOutlined />} onClick={(): void => {
-            void fetchDirectory('clients');
+            void fetchDirectory('customers');
+            void fetchDirectory('project-groups');
             void fetchDirectory('projects');
             void fetchDirectory('project-rates');
           }}>
@@ -303,31 +366,31 @@ export default function ClientsProjectsRatesPage(): ReactElement {
       <Tabs
         items={[
           {
-            key: 'clients',
-            label: 'Клиенты',
+            key: 'customers',
+            label: 'Заказчики',
             children: (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Typography.Text strong>Клиенты</Typography.Text>
-                  <GuideSourceTag source={clientsDirectory?.source ?? 'unknown'} />
+                  <Typography.Text strong>Заказчики</Typography.Text>
+                  <GuideSourceTag source={customersDirectory?.source ?? 'unknown'} />
                 </div>
                 <Table
                   size="small"
                   pagination={false}
-                  dataSource={clientRows}
+                  dataSource={customerRows}
                   locale={{ emptyText: 'Нет данных' }}
                   sticky
                   loading={loading}
                   columns={[
-                    { title: 'Трек', dataIndex: 'track', key: 'track' },
+                    { title: 'Группы', dataIndex: 'group', key: 'group' },
                     {
-                      title: 'Клиент',
+                      title: 'Заказчик',
                       dataIndex: 'name',
                       key: 'name',
-                      render: (value: string, row: ClientRow): ReactElement => (
+                      render: (value: string, row: CustomerRow): ReactElement => (
                         <div>
                           <div className="text-sm font-semibold text-slate-900">{value}</div>
-                          <div className="text-xs text-slate-400">{row.clientId}</div>
+                          <div className="text-xs text-slate-400">{row.customerId}</div>
                         </div>
                       ),
                     },
@@ -379,7 +442,7 @@ export default function ClientsProjectsRatesPage(): ReactElement {
                   sticky
                   loading={loading}
                   columns={[
-                    { title: 'Трек', dataIndex: 'track', key: 'track' },
+                    { title: 'Группа', dataIndex: 'group', key: 'group' },
                     {
                       title: 'Проект',
                       dataIndex: 'name',
@@ -391,7 +454,7 @@ export default function ClientsProjectsRatesPage(): ReactElement {
                         </div>
                       ),
                     },
-                    { title: 'Клиент', dataIndex: 'client', key: 'client' },
+                    { title: 'Заказчик', dataIndex: 'customer', key: 'customer' },
                     { title: 'Ставка (₽/ч)', dataIndex: 'rate', key: 'rate' },
                     {
                       title: 'Комментарий',
