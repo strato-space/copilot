@@ -49,6 +49,15 @@ For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port
   - `cd app && npm install && npm run build-dev`
   - `cd miniapp && npm install && npm run build-dev`
 
+## Repository Sync (bd)
+This repo uses `bd` (Beads) and the `beads-sync` branch to keep repository metadata consistent.
+
+```bash
+bd sync
+```
+
+See `AGENTS.md` for the full workflow (including `bd doctor` guidance).
+
 ## Authentication
 - Backend proxies Voicebot auth via `/api/try_login` and `/api/auth/me`; set `VOICEBOT_API_URL` in the backend environment.
 - Frontend auth checks call `https://voice.stratospace.fun/auth/me` by default; override with `VITE_VOICEBOT_BASE_URL` if needed.
