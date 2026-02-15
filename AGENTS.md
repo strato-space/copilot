@@ -177,6 +177,17 @@ MCP_SESSION_TIMEOUT=1800000
 - E2E tests: `npm run test:e2e` (Playwright) in `app/` — runs against local dev server.
 - E2E tests require running dev server or use `PLAYWRIGHT_BASE_URL` env var.
 
+## Beads (bd) Integration
+
+- `bd` is already initialized in this repository and configured to use the `beads-sync` branch.
+- Required setup for future repos (if cloning elsewhere):
+  1. Install `bd` and Go once in environment.
+  2. Run `bd init` in repo root.
+  3. Run `bd config set beads.role maintainer`.
+  4. Set `sync-branch: "beads-sync"` in `.beads/config.yaml`.
+  5. Run `bd sync` and `bd doctor --fix --yes`.
+  6. Commit `.beads/*` files and `.gitattributes` (and `AGENTS.md` updates when present).
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
