@@ -233,13 +233,27 @@
 
 ## 2026-02-13
 ### PROBLEM SOLVED
-- OperOps Voice session tasks rendered as dashes because agent output used human-friendly keys (for example, "Task Title", "Deadline", "Dialogue Reference") instead of the UI field names → normalized task objects before rendering the nested table so all columns display values.
-- MCP calls to Copilot Agent Services on `:8722` failed with `ERR_SSL_PACKET_LENGTH_TOO_LONG` when the server URL used `https://` even though the service is plain HTTP → updated dev env to use `http://` for `VITE_AGENTS_API_URL`.
+- **11:12** OperOps Voice session tasks rendered as dashes because agent output used human-friendly keys (for example, "Task Title", "Deadline", "Dialogue Reference") instead of the UI field names → normalized task objects before rendering the nested table so all columns display values.
+- **11:12** MCP calls to Copilot Agent Services on `:8722` failed with `ERR_SSL_PACKET_LENGTH_TOO_LONG` when the server URL used `https://` even though the service is plain HTTP → updated dev env to use `http://` for `VITE_AGENTS_API_URL`.
+- **16:17** Copilot still referenced the legacy `automation_clients` collection, which drifted from the actual `customers -> project_groups -> projects` DB relationship → removed `automation_clients` usage across backend/frontend and normalized types/contracts.
 
 ### FEATURE IMPLEMENTED
 - None.
 
 ### CHANGES
-- Added task normalization in `app/src/pages/operops/CRMPage.tsx` while keeping compatibility with `exactOptionalPropertyTypes`.
-- Documented `/mcp` default path behavior for Streamable HTTP MCP servers in `backend/src/services/mcp/proxyClient.ts`.
-- Updated `app/.env.development` to point the agents MCP URL to plain HTTP.
+- **11:12** Added task normalization in `app/src/pages/operops/CRMPage.tsx` while keeping compatibility with `exactOptionalPropertyTypes`.
+- **11:12** Documented `/mcp` default path behavior for Streamable HTTP MCP servers in `backend/src/services/mcp/proxyClient.ts`.
+- **11:12** Updated `app/.env.development` to point the agents MCP URL to plain HTTP.
+- **14:49** Added `docs/FIXING_COLLECTIONS_MESS_PLAN.md` to document the customers/project-groups/projects relationship and the migration plan off `automation_clients`.
+- **16:17** Removed `COLLECTIONS.CLIENTS` (`automation_clients`) from `backend/src/constants.ts` and updated CRM dictionary + related stores/services to use `automation_customers` and `automation_project_groups`.
+
+## 2026-02-15
+### PROBLEM SOLVED
+- None.
+
+### FEATURE IMPLEMENTED
+- **10:08** Initialized `bd` (Beads) integration for repository sync automation (branch: `beads-sync`).
+
+### CHANGES
+- **10:08** Added `.beads/*` config and `.gitattributes` for `bd` integration.
+- **10:10** Documented `bd` usage and required setup in `AGENTS.md`.
