@@ -42,6 +42,27 @@ Socket.IO is the real-time layer for updates.
 - Event names are defined in `backend/src/constants.ts`.
 - Clients should explicitly subscribe/unsubscribe to channels.
 
+### VI. Coding Principles (TypeScript)
+Preferred engineering principles for this repo:
+- Favor KISS: keep solutions straightforward, remove dead fallbacks.
+- Apply SOLID: explicit interfaces, dependency injection over global mutable state.
+- Keep functions small and cohesive; extract utilities instead of growing branch-heavy handlers.
+- Avoid hidden fallback paths that obscure control flow.
+- Make failures explicit with structured errors; no silent recovery.
+- Never suppress exceptions silently (`catch {}` without logging is forbidden in backend paths).
+- Log I/O and external integration errors even when execution continues.
+
+### VII. API Type Discipline
+- Validate public API payloads with Zod at route boundaries.
+- Derive TypeScript callback/input types from schemas (`z.input<typeof schema>`).
+- Do not rely on untyped `any` payloads for voice/finops/crm route contracts.
+
+### VIII. Versioning & Dependency Policy
+- Follow SemVer (`MAJOR.MINOR.PATCH`) for externally visible changes.
+- `MAJOR`: breaking API/contract changes; `MINOR`: backward-compatible features; `PATCH`: fixes/refactors.
+- Keep dependencies aligned with current stable releases; avoid opportunistic downgrades unless explicitly required.
+- For runtime-scoped data paths, treat missing `runtime_tag` as `prod` only.
+
 ## Technology Stack Constraints
 
 **Backend:**

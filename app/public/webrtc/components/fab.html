@@ -1,0 +1,105 @@
+<div id="fab-wrap" class="fab-wrap" data-state="idle">
+  <div id="fab-menu" class="fab-menu" role="menu">
+    <div class="fab-dock">
+    <div class="fab-dock-status" role="status" aria-live="polite">
+      <div class="fab-status-row">
+        <span class="fab-status-dot" aria-hidden="true"></span>
+        <span id="fab-status" class="fab-status-pill" title="Recorder state">State: Ready</span>
+        <span class="fab-dock-spacer" aria-hidden="true"></span>
+        <button class="fab-gear" data-action="settings" data-panel-target="settings" type="button" aria-label="Open Settings" title="Open Settings">⚙️</button>
+      </div>
+      <div class="fab-mini-inline" aria-hidden="true">
+        <div class="fab-mini-row" id="fab-mic-1-row">
+          <div class="fab-mini-bar" title="Mic 1 level">
+            <div id="bar-mic-1-level" class="fab-mini-fill"></div>
+            <div id="tick-mic-1-noise" class="fab-mini-tick" title="Noise floor"></div>
+            <div id="tick-mic-1-gate" class="fab-mini-tick gate" title="Speech threshold"></div>
+          </div>
+        </div>
+        <div class="fab-mini-row" id="fab-mic-2-row">
+          <div class="fab-mini-bar" title="Mic 2 level">
+            <div id="bar-mic-2-level" class="fab-mini-fill"></div>
+            <div id="tick-mic-2-noise" class="fab-mini-tick" title="Noise floor"></div>
+            <div id="tick-mic-2-gate" class="fab-mini-tick gate" title="Speech threshold"></div>
+          </div>
+        </div>
+        <div class="fab-mini-time" title="Mic 1 speech time / Mic 2 speech time / chunk total time"><span id="fab-chunk-mic1-speech">00:00.0</span><span id="fab-chunk-mic2-sep">/</span><span id="fab-chunk-mic2-speech">00:00.0</span><span id="fab-chunk-total-sep">/</span><span id="fab-chunk-total">00:00.0</span></div>
+        <div class="fab-mini-time" title="Session speech time / session total time"><span id="fab-session-speech">00:00.0</span>/<span id="fab-session-total">00:00.0</span></div>
+      </div>
+    </div>
+
+    <div class="fab-session-card" role="group" aria-label="Session">
+      <div class="fab-session-row">
+        <input id="fab-session-id" class="fab-session-input" type="text" placeholder="Session ID" aria-label="Session ID" title="Current session ID (read-only until created)." />
+        <button id="fab-open-session-link" class="fab-session-btn" type="button" data-action="open-session" title="Open public session link">↗</button>
+      </div>
+      <div class="fab-session-row fab-session-name-row">
+        <input id="fab-session-name" class="fab-session-input" type="text" placeholder="Session name" aria-label="Session name" title="Session display name (editable)." readonly />
+        <button id="fab-edit-session-name" class="fab-session-btn fab-session-edit-btn" type="button" title="Edit session name">✎</button>
+      </div>
+      <div class="fab-session-row">
+        <select id="fab-session-project" class="fab-session-input" aria-label="Project" title="Project for active session (editable).">
+          <option value="">Project</option>
+        </select>
+      </div>
+    </div>
+
+      <div class="fab-dock-actions" role="group" aria-label="Recording controls">
+        <button class="fab-dock-btn action-new" data-action="new" type="button" title="Create a new session and record">▶ New</button>
+        <button class="fab-dock-btn action-rec" data-action="rec" type="button" title="Record into active session">⏺ Rec</button>
+        <button class="fab-dock-btn action-cut" data-action="cut" type="button" title="Cut current chunk">✂️ Cut</button>
+        <button class="fab-dock-btn action-pause" data-action="pause" type="button" title="Pause recording">⏸️ Pause</button>
+        <button class="fab-dock-btn action-done" data-action="done" type="button" title="Finish recording">✅ Done</button>
+      </div>
+
+      <div class="fab-dock-nav" role="group" aria-label="Navigation">
+        <button class="fab-chip" data-action="monitoring" data-panel-target="monitoring" type="button" title="Open Monitoring panel">📈 Monitoring</button>
+        <button class="fab-chip" data-action="settings" data-panel-target="settings" type="button" title="Open Settings panel">⚙️ Settings</button>
+      </div>
+    </div>
+  </div>
+  <button id="fab-call" class="fab-call" aria-label="Call" type="button">
+    <span class="fab-orbit" aria-hidden="true">
+      <canvas class="fab-orbit-canvas" width="1" height="1"></canvas>
+    </span>
+    <svg class="fab-icon fab-icon-phone" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24 11.36 11.36 0 003.56.57 1 1 0 011 1v3.5a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1 11.36 11.36 0 00.57 3.56 1 1 0 01-.24 1.02l-2.2 2.21z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      <path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.02-.24 11.36 11.36 0 003.56.57 1 1 0 011 1v3.5a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1 11.36 11.36 0 00.57 3.56 1 1 0 01-.24 1.02l-2.2 2.21z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" transform="translate(12 12) scale(0.78) translate(-12 -12)"/>
+    </svg>
+    <svg class="fab-icon fab-icon-lock" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6.5" y="10" width="11" height="9" rx="2" fill="currentColor"/>
+      <path d="M8.5 10V7.8c0-2.2 1.7-3.8 3.5-3.8s3.5 1.6 3.5 3.8V10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <svg class="fab-icon fab-icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/>
+      <rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/>
+    </svg>
+    <svg class="fab-icon fab-icon-stop" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>
+    </svg>
+    <span class="fab-cut-icon" aria-hidden="true">✂️</span>
+  </button>
+</div>
+<div id="fab-toast" class="fab-toast" role="status" aria-live="polite"></div>
+
+<div id="side-backdrop" class="side-backdrop" aria-hidden="true"></div>
+<aside id="side-panel" class="side-panel" aria-hidden="true">
+  <div class="panel-head">
+    <div class="panel-tabs" role="tablist">
+      <button class="panel-tab" data-panel="settings" type="button" title="Open Settings tab">Settings</button>
+      <button class="panel-tab" data-panel="monitoring" type="button" title="Open Monitoring tab">Monitoring</button>
+    </div>
+    <div class="panel-actions">
+      <button id="panel-gear" class="panel-gear" type="button" aria-label="Open Settings" title="Open Settings">⚙️</button>
+      <button id="panel-close" class="panel-close" type="button" aria-label="Close" title="Close panel">✕</button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="panel-view" data-panel-view="settings">
+      <iframe class="panel-iframe" data-src="settings.html" title="Settings"></iframe>
+    </div>
+    <div class="panel-view" data-panel-view="monitoring">
+      <iframe class="panel-iframe" data-src="monitoring.html" title="Monitoring"></iframe>
+    </div>
+  </div>
+</aside>

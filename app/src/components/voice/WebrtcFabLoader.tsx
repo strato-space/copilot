@@ -60,7 +60,7 @@ export default function WebrtcFabLoader() {
             return () => cleanupInjectedFab();
         }
 
-        const scriptUrl = import.meta.env.VITE_WEBRTC_VOICEBOT_SCRIPT_URL || 'https://voice.stratospace.fun/webrtc/webrtc-voicebot-lib.js';
+        const scriptUrl = import.meta.env.VITE_WEBRTC_VOICEBOT_SCRIPT_URL || '/webrtc/webrtc-voicebot-lib.js';
         let cancelled = false;
 
         const injectScript = async (): Promise<void> => {

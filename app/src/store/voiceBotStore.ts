@@ -17,6 +17,8 @@ import type {
     VoicebotPerson,
     CreateTaskChunk,
     VoiceBotSessionResponse,
+    VoiceSessionAttachment,
+    VoiceSessionLogEvent,
 } from '../types/voice';
 import { getVoicebotSocket, SOCKET_EVENTS } from '../services/socket';
 
@@ -25,6 +27,8 @@ interface VoiceBotState {
     voiceBotSession: VoiceBotSession | null;
     voiceBotMessages: VoiceBotMessage[];
     voiceMesagesData: VoiceMessageGroup[];
+    sessionAttachments: VoiceSessionAttachment[];
+    sessionLogEvents: VoiceSessionLogEvent[];
     socketToken: string | null;
     socketPort: number | null;
     socket: Socket | null;
@@ -43,6 +47,27 @@ interface VoiceBotState {
     sendSessionToCrm: (sessionId: string) => Promise<boolean>;
     sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
     fetchVoiceBotSession: (sessionId: string) => Promise<void>;
+    fetchSessionLog: (sessionId: string, options?: { silent?: boolean }) => Promise<void>;
+    editTranscriptChunk: (
+        payload: { session_id: string; message_id: string; segment_oid: string; new_text: string; reason?: string },
+        options?: { silent?: boolean }
+    ) => Promise<void>;
+    deleteTranscriptChunk: (
+        payload: { session_id: string; message_id: string; segment_oid: string; reason?: string },
+        options?: { silent?: boolean }
+    ) => Promise<void>;
+    rollbackSessionEvent: (
+        payload: { session_id: string; event_oid: string; reason?: string },
+        options?: { silent?: boolean }
+    ) => Promise<void>;
+    resendNotifyEvent: (
+        payload: { session_id: string; event_oid: string; reason?: string },
+        options?: { silent?: boolean }
+    ) => Promise<void>;
+    retryCategorizationEvent: (
+        payload: { session_id: string; event_oid: string; reason?: string },
+        options?: { silent?: boolean }
+    ) => Promise<void>;
     getMessageDataById: (messageId: string) => VoiceBotMessage | null;
     updateSessionProject: (sessionId: string, projectId: string | null) => Promise<void>;
     finishSession: (sessionId: string) => void;
@@ -203,12 +228,127 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     }));
 };
 
+const normalizeAttachmentUri = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('/api/voicebot/')) return trimmed;
+    if (trimmed.startsWith('/voicebot/')) return `/api${trimmed}`;
+    return trimmed;
+};
+
+const toFiniteNumber = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeSessionAttachment = (value: unknown): VoiceSessionAttachment | null => {
+    if (!value || typeof value !== 'object') return null;
+    const item = value as Record<string, unknown>;
+    const uri = normalizeAttachmentUri(item.uri);
+    const url = normalizeAttachmentUri(item.url) ?? uri;
+    const directUri = normalizeAttachmentUri(item.direct_uri);
+    return {
+        _id: String(item._id ?? `${item.message_oid ?? 'msg'}::${item.file_id ?? item.name ?? Math.random().toString(36).slice(2)}`),
+        message_id: item.message_id != null ? String(item.message_id) : null,
+        message_oid: item.message_oid != null ? String(item.message_oid) : null,
+        message_timestamp: item.message_timestamp != null ? Number(item.message_timestamp) : null,
+        message_type: item.message_type != null ? String(item.message_type) : null,
+        kind: item.kind != null ? String(item.kind) : null,
+        source: item.source != null ? String(item.source) : null,
+        source_type: item.source_type != null ? String(item.source_type) : null,
+        uri,
+        url,
+        name: item.name != null ? String(item.name) : null,
+        mimeType: item.mimeType != null ? String(item.mimeType) : (item.mime_type != null ? String(item.mime_type) : null),
+        size: toFiniteNumber(item.size),
+        width: toFiniteNumber(item.width),
+        height: toFiniteNumber(item.height),
+        caption: item.caption != null ? String(item.caption) : null,
+        file_id: item.file_id != null ? String(item.file_id) : null,
+        file_unique_id: item.file_unique_id != null ? String(item.file_unique_id) : null,
+        direct_uri: directUri,
+    };
+};
+
+const buildSessionAttachmentsFromMessages = (messages: VoiceBotMessage[]): VoiceSessionAttachment[] => {
+    const attachments: VoiceSessionAttachment[] = [];
+    for (const message of messages) {
+        const messageRecord = message as unknown as Record<string, unknown>;
+        const messageAttachments = Array.isArray(messageRecord.attachments) ? messageRecord.attachments : [];
+        if (messageAttachments.length === 0) continue;
+
+        const messageTimestamp = message.message_timestamp != null ? Number(message.message_timestamp) : 0;
+        const messageId = message.message_id != null ? String(message.message_id) : null;
+        const messageObjectId = message._id != null ? String(message._id) : null;
+        const messageSessionId = messageRecord.session_id != null ? String(messageRecord.session_id) : null;
+        const sourceType = message.source_type != null ? String(message.source_type) : null;
+        const messageType = messageRecord.message_type != null ? String(messageRecord.message_type) : null;
+        const fallbackFileId = messageRecord.file_id != null ? String(messageRecord.file_id) : null;
+        const captionFallback = typeof (messageRecord.text) === 'string' ? String(messageRecord.text) : '';
+        for (let attachmentIndex = 0; attachmentIndex < messageAttachments.length; attachmentIndex++) {
+            const attachment = messageAttachments[attachmentIndex];
+            if (!attachment || typeof attachment !== 'object') continue;
+            const item = attachment as Record<string, unknown>;
+            const fileId = item.file_id != null ? String(item.file_id) : fallbackFileId;
+            const isTelegram = (item.source != null ? String(item.source) : null) === 'telegram' || sourceType === 'telegram';
+            let uri = normalizeAttachmentUri(item.uri ?? item.url);
+            let url = normalizeAttachmentUri(item.url ?? item.uri) ?? uri;
+            let directUri = normalizeAttachmentUri(item.direct_uri);
+            if (isTelegram && messageObjectId && fileId) {
+                uri = `/api/voicebot/message_attachment/${messageObjectId}/${attachmentIndex}`;
+                url = uri;
+                if (messageSessionId && item.file_unique_id != null) {
+                    directUri = `/api/voicebot/public_attachment/${messageSessionId}/${String(item.file_unique_id)}`;
+                }
+            }
+            if (!uri && !url && !fileId) continue;
+            attachments.push({
+                _id: `${messageObjectId || messageId || 'unknown'}::${String(item.uri ?? item.name ?? fileId ?? attachmentIndex)}`,
+                message_id: messageId,
+                message_oid: messageObjectId,
+                message_timestamp: Number.isFinite(messageTimestamp) ? messageTimestamp : 0,
+                message_type: messageType,
+                kind: item.kind != null ? String(item.kind) : messageType,
+                source: item.source != null ? String(item.source) : null,
+                source_type: sourceType,
+                uri,
+                url,
+                name: item.name != null ? String(item.name) : (item.filename != null ? String(item.filename) : null),
+                mimeType: item.mimeType != null ? String(item.mimeType) : (item.mime_type != null ? String(item.mime_type) : null),
+                size: toFiniteNumber(item.size),
+                width: toFiniteNumber(item.width),
+                height: toFiniteNumber(item.height),
+                caption: item.caption != null ? String(item.caption) : captionFallback,
+                file_id: fileId,
+                file_unique_id: item.file_unique_id != null ? String(item.file_unique_id) : null,
+                direct_uri: directUri,
+            });
+        }
+    }
+    attachments.sort((left, right) => {
+        const leftTs = Number(left.message_timestamp ?? 0);
+        const rightTs = Number(right.message_timestamp ?? 0);
+        if (leftTs !== rightTs) return leftTs - rightTs;
+        return `${left.message_id ?? ''}`.localeCompare(`${right.message_id ?? ''}`);
+    });
+    return attachments;
+};
+
 const normalizeSessionResponse = (response: unknown): VoiceBotSessionResponse => {
     const payload = response as Record<string, unknown>;
     const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
+    const messages = (data.session_messages as VoiceBotMessage[]) || [];
+    const explicitAttachments = Array.isArray(data.session_attachments)
+        ? data.session_attachments.map(normalizeSessionAttachment).filter((item): item is VoiceSessionAttachment => item !== null)
+        : [];
+    const sessionAttachments = explicitAttachments.length > 0
+        ? explicitAttachments
+        : buildSessionAttachmentsFromMessages(messages);
     return {
         voice_bot_session: data.voice_bot_session as VoiceBotSession,
-        session_messages: (data.session_messages as VoiceBotMessage[]) || [],
+        session_messages: messages,
+        session_attachments: sessionAttachments,
         socket_token: (data.socket_token as string | null) ?? null,
         socket_port: (data.socket_port as number | null) ?? null,
     };
@@ -219,6 +359,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     voiceBotSession: null,
     voiceBotMessages: [],
     voiceMesagesData: [],
+    sessionAttachments: [],
+    sessionLogEvents: [],
     socketToken: null,
     socketPort: null,
     socket: null,
@@ -377,6 +519,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             voiceBotSession: normalized.voice_bot_session,
             voiceBotMessages: normalized.session_messages,
             voiceMesagesData: processed,
+            sessionAttachments: normalized.session_attachments ?? [],
+            sessionLogEvents: [],
             socketToken: normalized.socket_token ?? null,
             socketPort: normalized.socket_port ?? null,
             currentSessionId: sessionId,
@@ -400,7 +544,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                         msg.message_id === data.message_id || msg._id === data.message?._id ? (data.message ?? msg) : msg
                     );
                     const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups([...updatedMessages]);
-                    return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData };
+                    const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
+                    return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };
                 });
             });
 
@@ -413,7 +558,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 set((state) => {
                     const updatedMessages = update(state.voiceBotMessages, { $push: [data] });
                     const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups([...updatedMessages]);
-                    return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData };
+                    const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
+                    return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };
                 });
             });
 
@@ -438,6 +584,90 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
         if (!get().performers_list) {
             void get().fetchPerformersList();
+        }
+    },
+
+    fetchSessionLog: async (sessionId, options) => {
+        try {
+            const response = await voicebotRequest<{ events?: VoiceSessionLogEvent[] }>('voicebot/session_log', { session_id: sessionId });
+            const events = Array.isArray(response?.events) ? response.events : [];
+            set({ sessionLogEvents: events });
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка при загрузке лога сессии:', error);
+            }
+            if (!options?.silent) {
+                message.error('Не удалось загрузить лог сессии');
+            }
+            set({ sessionLogEvents: [] });
+            throw error;
+        }
+    },
+
+    editTranscriptChunk: async (payload, options) => {
+        const body = {
+            session_id: payload.session_id,
+            message_id: payload.message_id,
+            segment_oid: payload.segment_oid,
+            text: payload.new_text,
+            reason: payload.reason,
+        };
+        try {
+            await voicebotRequest('voicebot/edit_transcript_chunk', body, Boolean(options?.silent));
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка при изменении сегмента транскрипции:', error);
+                message.error('Не удалось обновить сегмент');
+            }
+            throw error;
+        }
+    },
+
+    deleteTranscriptChunk: async (payload, options) => {
+        try {
+            await voicebotRequest('voicebot/delete_transcript_chunk', payload, Boolean(options?.silent));
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка при удалении сегмента транскрипции:', error);
+                message.error('Не удалось удалить сегмент');
+            }
+            throw error;
+        }
+    },
+
+    rollbackSessionEvent: async (payload, options) => {
+        try {
+            await voicebotRequest('voicebot/rollback_event', payload, Boolean(options?.silent));
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка rollback_event:', error);
+                message.error('Rollback не выполнен');
+            }
+            throw error;
+        }
+    },
+
+    resendNotifyEvent: async (payload, options) => {
+        try {
+            await voicebotRequest('voicebot/resend_notify_event', payload, Boolean(options?.silent));
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка resend_notify_event:', error);
+                message.error('Resend не выполнен');
+            }
+            throw error;
+        }
+    },
+
+    retryCategorizationEvent: async (payload, options) => {
+        try {
+            await voicebotRequest('voicebot/retry_categorization_event', payload, Boolean(options?.silent));
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка retry_categorization_event:', error);
+                message.error('Retry не выполнен');
+            }
+            throw error;
         }
     },
 
@@ -517,7 +747,11 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 set({ voiceBotSessionsList: sorted, sessionsListLoadedAt: Date.now() });
             } else {
                 console.error('Ошибка при получении списка сессий:', response);
+                set({ voiceBotSessionsList: [] });
             }
+        } catch (error) {
+            console.error('Ошибка при получении списка сессий:', error);
+            set({ voiceBotSessionsList: [] });
         } finally {
             set({ isSessionsListLoading: false });
         }
@@ -570,11 +804,17 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     },
 
     fetchPreparedProjects: async () => {
-        const data = await voicebotRequest<VoiceBotProject[]>('voicebot/permissions/projects/all');
-        if (data && Array.isArray(data)) {
-            set({ prepared_projects: data });
-        } else {
-            console.error('Ошибка при получении подготовленных проектов:', data);
+        try {
+            const data = await voicebotRequest<VoiceBotProject[]>('voicebot/projects');
+            if (data && Array.isArray(data)) {
+                set({ prepared_projects: data });
+            } else {
+                console.error('Ошибка при получении подготовленных проектов:', data);
+                set({ prepared_projects: [] });
+            }
+        } catch (error) {
+            console.error('Ошибка при получении подготовленных проектов:', error);
+            set({ prepared_projects: [] });
         }
     },
 
@@ -586,9 +826,11 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 return data;
             }
             console.error('Ошибка при получении списка персон:', data);
+            set({ persons_list: [] });
             return [];
         } catch (e) {
             console.error('Ошибка при получении списка персон:', e);
+            set({ persons_list: [] });
             return [];
         }
     },

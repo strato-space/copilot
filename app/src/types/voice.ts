@@ -37,10 +37,31 @@ export interface VoiceBotMessage {
     _id?: string;
     message_id?: string;
     message_timestamp?: string | number;
+    session_id?: string;
+    message_type?: string;
+    text?: string;
+    file_id?: string;
     transcription_text?: string;
+    transcription?: {
+        segments?: Array<{
+            id?: string;
+            start?: number;
+            end?: number;
+            speaker?: string | null;
+            text?: string;
+            is_deleted?: boolean;
+        }>;
+    };
+    transcription_chunks?: Array<{
+        id?: string;
+        text?: string;
+        speaker?: string | null;
+        is_deleted?: boolean;
+    }>;
     is_transcribed?: boolean;
     is_finalized?: boolean;
     categorization?: CategorizationChunk[];
+    attachments?: Array<Record<string, unknown>>;
     processors_data?: Record<string, unknown> & {
         summarization?: { data?: Array<{ summary?: string }> };
         questioning?: { data?: unknown[] };
@@ -89,8 +110,52 @@ export interface VoiceMessageGroup {
 export interface VoiceBotSessionResponse {
     voice_bot_session: VoiceBotSession;
     session_messages: VoiceBotMessage[];
+    session_attachments?: VoiceSessionAttachment[];
     socket_token?: string | null;
     socket_port?: number | null;
+}
+
+export interface VoiceSessionAttachment {
+    _id: string;
+    message_id?: string | null;
+    message_oid?: string | null;
+    message_timestamp?: string | number | null;
+    message_type?: string | null;
+    kind?: string | null;
+    source?: string | null;
+    source_type?: string | null;
+    uri?: string | null;
+    url?: string | null;
+    name?: string | null;
+    mimeType?: string | null;
+    size?: number | null;
+    width?: number | null;
+    height?: number | null;
+    caption?: string | null;
+    file_id?: string | null;
+    file_unique_id?: string | null;
+    direct_uri?: string | null;
+}
+
+export interface VoiceSessionLogEvent {
+    _id?: string;
+    oid?: string;
+    event_group?: string;
+    event_name?: string;
+    event_time?: string | number;
+    status?: string;
+    reason?: string;
+    target?: {
+        entity_oid?: string;
+    } | null;
+    diff?: {
+        old_value?: unknown;
+        new_value?: unknown;
+    } | null;
+    action?: {
+        available?: boolean;
+        type?: string;
+    } | null;
 }
 
 export interface TaskTypeNode {

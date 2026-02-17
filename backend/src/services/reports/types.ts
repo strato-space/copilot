@@ -5,7 +5,7 @@ export interface ReportResult {
 }
 
 export interface JiraStyleReportParams {
-    projectId: string;
+    customerId: string;
     startDate: string;
     endDate: string;
 }

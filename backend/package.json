@@ -12,7 +12,9 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest --runInBand",
     "test:watch": "NODE_OPTIONS='--experimental-vm-modules' jest --watch",
-    "test:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage"
+    "test:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
+    "runtime:backfill:dry": "tsx scripts/runtime-tag-backfill.ts",
+    "runtime:backfill:apply": "tsx scripts/runtime-tag-backfill.ts --apply"
   },
   "keywords": [],
   "author": "",

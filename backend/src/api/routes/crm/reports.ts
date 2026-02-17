@@ -24,16 +24,16 @@ const logReport = async (req: AuthenticatedRequest, payload: Record<string, unkn
 
 router.post('/jira-style', async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
-    const { projectId, startDate, endDate } = req.body as JiraStyleReportParams;
+    const { customerId, startDate, endDate } = req.body as JiraStyleReportParams;
 
-    if (!projectId || !startDate || !endDate) {
+    if (!customerId || !startDate || !endDate) {
         sendError(res, { message: 'Missing required parameters' }, 400);
         return;
     }
 
     const logBase = {
         reportType: 'jira_style',
-        params: { projectId, startDate, endDate },
+        params: { customerId, startDate, endDate },
         createdAt: new Date(),
         createdBy: {
             userId: authReq.user?.userId,
@@ -44,7 +44,7 @@ router.post('/jira-style', async (req: Request, res: Response) => {
     };
 
     try {
-        const result = await generateJiraStyleReport({ projectId, startDate, endDate }, authReq.db, logger);
+        const result = await generateJiraStyleReport({ customerId, startDate, endDate }, authReq.db, logger);
         await logReport(authReq, {
             ...logBase,
             status: 'success',

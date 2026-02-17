@@ -271,7 +271,7 @@ export default function SessionsListPage() {
         return filtered;
     }, [voiceBotSessionsList, prepared_projects]);
 
-    if (!voiceBotSessionsList || !prepared_projects || !persons_list || voiceBotSessionsList.length === 0) {
+    if (!voiceBotSessionsList || !prepared_projects || !persons_list) {
         return (
             <div
                 style={{

@@ -42,19 +42,19 @@ type PerformerRecord = {
 };
 
 type CustomerRecord = {
-    _id: ObjectId | string;
+    _id: ObjectId;
     name: string;
+};
+
+type ProjectGroupRecord = {
+    _id: ObjectId;
+    customer?: ObjectId | string;
 };
 
 type ProjectRecord = {
     _id: ObjectId;
     name: string;
     project_group?: ObjectId | string;
-};
-
-type ProjectGroupRecord = {
-    _id: ObjectId | string;
-    customer?: ObjectId | string;
 };
 
 const JIRA_REPORTS_FOLDER_ID = process.env.REPORTS_JIRA_FOLDER_ID ?? '1Y8KaMhqi9HeiNUgiJtvYsdzOvMQvS8KD';
@@ -84,45 +84,37 @@ export const generateJiraStyleReport = async (
 ): Promise<ReportResult> => {
     setWeekStart();
 
-    if (!params.projectId || !params.startDate || !params.endDate) {
+    if (!params.customerId || !params.startDate || !params.endDate) {
         throw new Error('Missing required parameters');
     }
 
     const reportStart = dayjs(params.startDate).startOf('day');
     const reportEnd = dayjs(params.endDate).endOf('day');
 
-    const project = await db.collection<ProjectRecord>(COLLECTIONS.PROJECTS).findOne({
-        _id: new ObjectId(params.projectId),
+    if (!ObjectId.isValid(params.customerId)) {
+        throw new Error('Invalid customer id');
+    }
+
+    const customer = await db.collection<CustomerRecord>(COLLECTIONS.CUSTOMERS).findOne({
+        _id: new ObjectId(params.customerId),
     });
-    if (!project) {
-        throw new Error('Project not found');
-    }
-
-    const projectGroupId: ObjectId | string | null = project.project_group
-        ? (typeof project.project_group === 'string' && ObjectId.isValid(project.project_group)
-            ? new ObjectId(project.project_group)
-            : project.project_group)
-        : null;
-    const projectGroup = projectGroupId
-        ? await db.collection<ProjectGroupRecord>(COLLECTIONS.PROJECT_GROUPS).findOne({ _id: projectGroupId })
-        : null;
-    const customerId: ObjectId | string | null = projectGroup?.customer
-        ? (typeof projectGroup.customer === 'string' && ObjectId.isValid(projectGroup.customer)
-            ? new ObjectId(projectGroup.customer)
-            : projectGroup.customer)
-        : null;
-    const customer = customerId
-        ? await db.collection<CustomerRecord>(COLLECTIONS.CUSTOMERS).findOne({ _id: customerId })
-        : null;
-
     if (!customer) {
-        throw new Error('Customer not found for project');
+        throw new Error('Customer not found');
     }
+
+    const projectGroups = await db.collection<ProjectGroupRecord>(COLLECTIONS.PROJECT_GROUPS).find({
+        customer: customer._id,
+    }).toArray();
+    const projects = await db.collection<ProjectRecord>(COLLECTIONS.PROJECTS).find({
+        project_group: { $in: projectGroups.map((group) => group._id) },
+    }).toArray();
+    const projectIds = projects.map((project) => project._id);
 
     const auth = createServiceAccountAuth();
     const sheetsClient = createSheetsClient(auth);
 
-    const fileTitle = `Отчет_задачи_по_клиенту_jira_format_${customer.name.replaceAll(' ', '_')}_${reportStart.format('DD.MM')}_${reportEnd.format('DD.MM')}_${Date.now()}`;
+    const customerName = customer.name.replaceAll(' ', '_');
+    const fileTitle = `Отчет_задачи_по_клиенту_jira_format_${customerName}_${reportStart.format('DD.MM')}_${reportEnd.format('DD.MM')}_${Date.now()}`;
 
     const spreadsheetId = await createSpreadsheet(JIRA_REPORTS_FOLDER_ID, fileTitle, auth);
     const doc = await loadSpreadsheet(spreadsheetId, auth);
@@ -134,7 +126,7 @@ export const generateJiraStyleReport = async (
     logger.info('Sheet url:', buildSpreadsheetUrl(spreadsheetId));
 
     const ticketsData = await db.collection<TicketRecord>(COLLECTIONS.TASKS).find({
-        project_id: { $in: [project._id, params.projectId] },
+        project_id: { $in: projectIds },
     }).toArray();
 
     const works = await db.collection<WorkHourRecord>(COLLECTIONS.WORK_HOURS).find({

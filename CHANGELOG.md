@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-02-17
+### PROBLEM SOLVED
+- **21:49** Voice migration after 2026-02-05 required strict runtime isolation in shared Mongo/Redis to avoid dev/prod cross-processing.
+- **21:49** `/voicebot` socket auth trusted too much client-side context and did not enforce explicit session resolution consistently.
+- **21:58** Flat Voice API compatibility for WebRTC/FAB flows (`/create_session`, `/upload_audio`, `/active_session`, etc.) and active-session resolution remained incomplete.
+- **21:58** Voice session UI lacked session-log and Screenshort parity for attachment-centric debugging/review.
+
+### FEATURE IMPLEMENTED
+- **21:49** Added runtime-scope foundation for backend: `runtime_tag` helpers (`backend/src/services/runtimeScope.ts`) and runtime-aware DB proxy (`backend/src/services/db.ts`) with auto-filtering for scoped collections.
+- **21:49** Hardened `/voicebot` socket contract with explicit authz resolution per `session_id`, explicit `session_done` ack `{ok,error}`, and shared session access policy helper (`backend/src/services/session-socket-auth.ts`).
+- **21:58** Expanded Voice API parity with flat + legacy route mounting (`backend/src/api/routes/voicebot/index.ts`), active-session/create/activate flows (`backend/src/api/routes/voicebot/sessions.ts`), and upload/attachment runtime-mismatch handling (`backend/src/api/routes/voicebot/uploads.ts`).
+- **21:58** Added Voice UI parity pieces: active-session resolver page, session attachments normalization in store, Screenshort tab, and session-log tab with action wiring.
+
+### CHANGES
+- **21:49** Added runtime backfill script `backend/scripts/runtime-tag-backfill.ts` and npm scripts `runtime:backfill:dry` / `runtime:backfill:apply`.
+- **21:58** Added Voice backend helper/services for message and session actions: `backend/src/api/routes/voicebot/messageHelpers.ts`, `backend/src/services/voicebotSessionLog.ts`, `backend/src/services/voicebotOid.ts`, `backend/src/services/voicebotObjectLocator.ts`, `backend/src/services/transcriptionTimeline.ts`.
+- **21:58** Added Voice frontend/runtime assets: `app/src/components/voice/Screenshort.tsx`, `app/src/components/voice/SessionLog.tsx`, `app/src/pages/voice/SessionResolverPage.tsx`, and same-origin WebRTC bundle under `app/public/webrtc/*`.
+- **22:04** Updated BD task tracking for ongoing migration work (`copilot-2rk`, `copilot-d8s`, `copilot-z9j.2`) to `in_progress` with implementation notes.
+- **21:49** Updated migration spec and project policies/docs (`docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`, `AGENTS.md`, `README.md`).
+
+### TESTS
+- **21:55** `cd backend && npm run build`
+- **21:56** `cd backend && npm test` (`11 suites`, `133 tests`, all passed)
+- **22:02** `cd app && npm run build-dev`
+
 ## 2026-01-22
 ### PROBLEM SOLVED
 - UI changes for FinOps could be ignored because JS duplicates shadowed TSX sources → removed JS duplicates so updates always apply.

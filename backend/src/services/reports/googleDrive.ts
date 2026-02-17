@@ -25,11 +25,16 @@ const getCredentials = (): ServiceAccountCredentials => {
     return JSON.parse(raw) as ServiceAccountCredentials;
 };
 
+const normalizePrivateKey = (value: string): string => value
+    .replace(/\\r/g, '')
+    .replace(/\\n/g, '\n')
+    .trim();
+
 export const createServiceAccountAuth = (): JWT => {
     const creds = getCredentials();
     return new JWT({
         email: creds.client_email,
-        key: creds.private_key,
+        key: normalizePrivateKey(creds.private_key),
         scopes: [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive',

@@ -1,5 +1,94 @@
 # План слияния проектов voicebot и copilot
 
+## Ревизия 2026-02-17+ (source-of-truth)
+
+Этот блок фиксирует актуальный план после изменений в `voicebot` и `webrtc` (active-session contract, runtime isolation, FAB lifecycle, TG bot команды).
+
+### Scope (обновлено)
+- Полная замена `/voice` в `copilot` на актуальный контур из `voicebot + webrtc`.
+- Прямой cutover `@strato_voice_bot` на `copilot` после `dev -> smoke -> prod`.
+- Runtime isolation для **всего copilot** на общей Mongo/Redis через `runtime_tag`.
+- Voice flat API contract под `/api/voicebot/*` с временными legacy alias.
+
+### Прогресс текущей сессии
+- Сделан runtime foundation:
+  - `backend/src/services/runtimeScope.ts`
+  - runtime-aware DB proxy в `backend/src/services/db.ts`
+  - `RUNTIME_TAG` / `IS_PROD_RUNTIME` в `backend/src/constants.ts`
+- Усилен socket `/voicebot`:
+  - `backend/src/services/session-socket-auth.ts`
+  - переписан `backend/src/api/socket/voicebot.ts` (explicit `session_done`, authz, ack `{ok,error}`)
+- Начата API parity:
+  - flat mounting + legacy aliases в `backend/src/api/routes/voicebot/index.ts`
+  - расширение `backend/src/api/routes/voicebot/sessions.ts` (`active_session`, `activate_session`, `create_session`, `projects`, `add_text`, `add_attachment`, aliases)
+  - `backend/src/api/routes/voicebot/uploads.ts` переписан под `upload_audio` + attachment endpoints.
+- Закрыты advanced voice endpoints parity:
+  - в `backend/src/api/routes/voicebot/sessions.ts` реализованы `rollback_event`, `resend_notify_event`, `retry_categorization_event`, `retry_categorization_chunk` (без `501` placeholders).
+  - добавлен `backend/src/api/routes/voicebot/messageHelpers.ts` (канонизация сегментов, reset categorization, cleanup payload).
+  - добавлены сервисы `backend/src/services/voicebotOid.ts`, `backend/src/services/voicebotSessionLog.ts`, `backend/src/services/voicebotObjectLocator.ts`, `backend/src/services/transcriptionTimeline.ts`.
+- Исправлен runtime/web smoke blocker:
+  - добавлен endpoint `POST /api/voicebot/auth/list-users` в `backend/src/api/routes/voicebot/sessions.ts` (убран `404` в FAB/settings на `/voice`).
+- Проверки:
+  - `backend`: `npm run build` — OK
+  - `backend`: `npm test -- --runInBand` — OK (`11 suites`, `133 tests`)
+  - `app`: `npm run build` — OK
+  - `app`: `PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth` — OK (`6 passed`)
+  - MCP Chrome smoke: `https://copilot.stratospace.fun/voice` и `https://copilot-dev.stratospace.fun/voice` открываются без console/network errors.
+
+### Повторный gap-аудит (история `voicebot` с 2026-02-05)
+- Источник ревизии: `git log --since=2026-02-05` в `/home/strato-space/voicebot` + route/component diff against `/home/strato-space/copilot`.
+- Зафиксированные незакрытые дельты:
+  - Frontend parity: в copilot пока отсутствует контур `Screenshort` + `SessionLog` и полный attachment-preview контракт (`session_attachments`, `direct_uri`, `message_attachment` fallback, MIME-safe blob preview).
+  - Frontend parity: в copilot не доведены segment actions уровня voicebot (hover Copy/Edit/Delete + rollback UX + синхронизация с Categorization после edit/delete).
+  - Backend parity: отсутствует группа utility endpoints из voicebot (`task_types/topics/project-files/upload-progress/summarize-trigger/custom-prompt-result/...`).
+  - Runtime execution parity: в copilot пока нет переноса voice workers runtime (`processing_loop`, `voice_jobs`, `common_jobs`, notifies/events), поэтому cutover TG bot остается неполным.
+  - TG bot parity: не перенесен полный контракт команд `/start /session /done /login /help` и формат 4-line сообщений.
+
+### BD декомпозиция и ссылки
+Источник задач: `../.beads/issues.jsonl`
+
+| ID | Задача | Статус | Как открыть |
+|---|---|---|---|
+| `copilot-37l` | Voicebot gap-audit + sync matrix + migration spec refresh | open | `bd show copilot-37l` |
+| `copilot-xh5` | Runtime foundation: RUNTIME_TAG + runtimeScope helpers | in_progress | `bd show copilot-xh5` |
+| `copilot-au9` | Runtime isolation: Voice domain data paths | in_progress | `bd show copilot-au9` |
+| `copilot-2s0` | Runtime isolation: CRM/OperOps domain data paths | open | `bd show copilot-2s0` |
+| `copilot-3h6` | Runtime isolation: FinOps/reports/miniapp data paths | open | `bd show copilot-3h6` |
+| `copilot-lru` | Voice API parity + Zod schemas + legacy aliases | in_progress | `bd show copilot-lru` |
+| `copilot-2rk` | Socket `/voicebot` authz parity + explicit `session_done` | in_progress | `bd show copilot-2rk` |
+| `copilot-z9j` | Frontend `/voice` source-sync + `New/Rec/Cut/Pause/Done` | open | `bd show copilot-z9j` |
+| `copilot-d8s` | WebRTC local runtime integration in copilot | open | `bd show copilot-d8s` |
+| `copilot-6pl` | TG bot migration to copilot + direct cutover | open | `bd show copilot-6pl` |
+| `copilot-b13` | Test hardening: unit/integration/playwright/mcp-chrome smoke | in_progress | `bd show copilot-b13` |
+| `copilot-cs8` | Dev deploy -> smoke -> prod deploy + rollback | open | `bd show copilot-cs8` |
+| `copilot-z9j.1` | Voice UI parity: Screenshort + SessionLog tabs with attachment preview contract | open | `bd show copilot-z9j.1` |
+| `copilot-z9j.2` | Voice UI parity: transcription segment actions + rollback UX | open | `bd show copilot-z9j.2` |
+| `copilot-lru.1` | Voice API parity: port remaining utility endpoints from voicebot | open | `bd show copilot-lru.1` |
+| `copilot-6pl.1` | Voice runtime workers in copilot: processing_loop + transcribe/categorize/finalization | open | `bd show copilot-6pl.1` |
+| `copilot-6pl.2` | TG bot parity: commands contract + 4-line event formatter | open | `bd show copilot-6pl.2` |
+
+### Чеклист задач (обновляемый, маркер `[v]` = требует обновления/повторной проверки)
+
+- [v] `copilot-37l` Обновить spec matrix `voicebot -> copilot`, отметить дельты после 2026-02-05.
+- [v] `copilot-xh5` Проверить покрытие runtime filter во всех runtime-scoped коллекциях.
+- [v] `copilot-au9` Довести voice endpoints до flat контракта (`session`, `sessions`, `active_session`, `activate_session`, `create_session`, `upload_audio`, `add_text`, `add_attachment`, `message_attachment`, `public_attachment`).
+- [v] `copilot-2rk` Проверить `session_done` (explicit `session_id`, backend performer from JWT, no client trust).
+- [v] `copilot-lru` Добавить/доработать Zod-схемы на voice API входах и совместимость legacy aliases.
+- [v] `copilot-z9j` Реализовать `/voice/session` resolver + runtime-mismatch error screen (без infinite loader).
+- [v] `copilot-z9j.1` Довести tabs `Screenshort` + `Log` и attachment preview контракт (`session_attachments`, `direct_uri`, auth-fallback).
+- [v] `copilot-z9j.2` Довести segment-level UX (copy/edit/delete/rollback) + sync с Categorization после мутаций.
+- [v] `copilot-d8s` Подключить локальный WebRTC runtime (`app/public/webrtc/*`, same-origin script).
+- [v] `copilot-6pl` Перенести TG bot команды `/start /session /done /login /help` + 4-line output format.
+- [v] `copilot-lru.1` Добрать utility endpoints parity (`task_types/topics/project-files/upload-progress/summarize-trigger/custom-prompt-result/...`).
+- [v] `copilot-6pl.1` Перенести worker runtime voicebot (queues/jobs/retry guards/runtime isolation).
+- [v] `copilot-6pl.2` Реализовать TG command/output parity (4-line formatter + `/login` one-time tg_auth).
+- [v] `copilot-b13` Добавить глубокие unit/integration/Playwright сценарии T1-T18 из плана.
+- [v] `copilot-cs8` Провести dev smoke, затем prod deploy и post-deploy checks.
+
+### Финальная структура проекта
+
+Используется существующий раздел ниже: `## Финальная структура проекта` (оставлен без удаления; все новые runtime/voice блоки добавляются инкрементально).
+
 ## Общая информация
 **Дата:** 5 февраля 2026  
 **Автор:** AI Assistant  
@@ -633,7 +722,7 @@ TODO: Добавить заглушки для интеграции с voicebot-
 
 ---
 
-## Чеклист задач
+## Чеклист задач (архив от 2026-02-05)
 
 ### Инфраструктура
 - [x] Обновить `backend/src/constants.ts` (VoiceBot константы, коллекции, очереди)

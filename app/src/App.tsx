@@ -25,7 +25,7 @@ import ProjectEditPage from './pages/ProjectEditPage';
 import NotificationsDrawer from './components/NotificationsDrawer';
 import { useNotificationStore } from './store/notificationStore';
 import VoiceLayout from './pages/VoiceLayout';
-import { SessionsListPage, SessionPage } from './pages/voice';
+import { SessionsListPage, SessionPage, SessionResolverPage } from './pages/voice';
 import AdminPage from './pages/AdminPage';
 import TGAuthPage from './pages/TGAuthPage';
 import OperOpsLayout from './pages/OperOpsLayout';
@@ -224,6 +224,7 @@ export default function App(): ReactElement {
           <Route path="/voice" element={<VoiceLayout />}>
             <Route index element={<SessionsListPage />} />
             <Route path="sessions" element={<SessionsListPage />} />
+            <Route path="session" element={<SessionResolverPage />} />
             <Route path="session/:sessionId" element={<SessionPage />} />
           </Route>
           <Route path="/admin" element={<AdminPage />} />

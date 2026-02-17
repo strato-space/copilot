@@ -15,3 +15,5 @@ export { default as CustomPromptModal } from './CustomPromptModal';
 export { default as CustomPromptResult } from './CustomPromptResult';
 export { default as AddParticipantModal } from './AddParticipantModal';
 export { default as AccessUsersModal } from './AccessUsersModal';
+export { default as Screenshort } from './Screenshort';
+export { default as SessionLog } from './SessionLog';

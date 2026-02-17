@@ -1,279 +1,401 @@
-/**
- * VoiceBot Socket.IO handlers
- *
- * Handles real-time communication for voicebot sessions:
- * - Session subscriptions (subscribe_on_session, unsubscribe_from_session)
- * - Session events (session_done, post_process_session)
- * - Event broadcasting to subscribed clients
- */
-
-import { type Server, type Socket } from 'socket.io';
+import { type Namespace, type Server, type Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { ObjectId } from 'mongodb';
+import {
+  VOICEBOT_COLLECTIONS,
+  VOICEBOT_JOBS,
+  VOICEBOT_QUEUES,
+} from '../../constants.js';
 import { getDb } from '../../services/db.js';
-import { VOICEBOT_COLLECTIONS } from '../../constants.js';
 import { getLogger } from '../../utils/logger.js';
+import { PermissionManager, type Performer } from '../../permissions/permission-manager.js';
+import { computeSessionAccess } from '../../services/session-socket-auth.js';
+import { mergeWithRuntimeFilter } from '../../services/runtimeScope.js';
 
 const logger = getLogger();
 
-// Session subscription maps
-// socket.id -> Set of session_ids
 const socketSessionMap = new Map<string, Set<string>>();
-// session_id -> Set of socket ids
 const sessionSocketMap = new Map<string, Set<string>>();
 
-interface VoicebotUser {
-    user_id: string;
-    chat_id?: string;
-    session_id?: string;
-    role?: string;
-    exp?: number;
-    iat?: number;
-}
+type SocketUser = {
+  userId: string;
+  email?: string;
+  role?: string;
+  permissions?: string[];
+  iat?: number;
+  exp?: number;
+};
 
-interface VoicebotSocket extends Socket {
-    user?: VoicebotUser;
-}
+type VoicebotSocket = Socket & {
+  user?: SocketUser;
+};
 
-/**
- * Emit event to all sockets subscribed to a session
- */
-export function emitToSession(io: Server, sessionId: string, event: string, payload: unknown): void {
-    const sockets = sessionSocketMap.get(sessionId);
-    if (sockets && sockets.size > 0) {
-        for (const socketId of sockets) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-                socket.emit(event, payload);
-            }
+type AckReply = (payload: { ok: boolean; error?: string; [key: string]: unknown }) => void;
+type QueueLike = { add: (name: string, payload: unknown, opts?: unknown) => Promise<unknown> };
+
+const getAckResponder = (ack?: AckReply): AckReply =>
+  typeof ack === 'function'
+    ? (body) => {
+        try {
+          ack(body);
+        } catch {
+          // no-op
         }
-    }
-}
+      }
+    : () => {};
 
-/**
- * Emit event to a specific socket
- */
-export function emitToSocket(io: Server, socketId: string, event: string, payload: unknown): boolean {
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
-        socket.emit(event, payload);
-        return true;
+const replyError = (reply: AckReply, error?: string): void => {
+  if (typeof error === 'string' && error.trim() !== '') {
+    reply({ ok: false, error });
+    return;
+  }
+  reply({ ok: false, error: 'internal_error' });
+};
+
+const emitToSession = (
+  io: Namespace,
+  sessionId: string,
+  event: string,
+  payload: Record<string, unknown>
+): void => {
+  const sockets = sessionSocketMap.get(sessionId);
+  if (!sockets || sockets.size === 0) return;
+
+  for (const socketId of sockets) {
+    const socket = io.sockets.get(socketId);
+    if (socket) socket.emit(event, payload);
+  }
+};
+
+const removeSocketFromSessionMaps = (socketId: string): void => {
+  const sessions = socketSessionMap.get(socketId);
+  if (!sessions) return;
+  for (const sessionId of sessions) {
+    const socketIds = sessionSocketMap.get(sessionId);
+    if (!socketIds) continue;
+    socketIds.delete(socketId);
+    if (socketIds.size === 0) {
+      sessionSocketMap.delete(sessionId);
     }
+  }
+  socketSessionMap.delete(socketId);
+};
+
+const verifySocketToken = (socket: VoicebotSocket): boolean => {
+  const token = socket.handshake.auth?.token as string | undefined;
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    logger.warn(`[voicebot-socket] Missing token for socket=${socket.id}`);
     return false;
-}
+  }
 
-/**
- * Register voicebot socket handlers on a namespace or main io
- */
-export function registerVoicebotSocketHandlers(io: Server): void {
-    // Create /voicebot namespace for dedicated voicebot connections
-    const voicebotNamespace = io.of('/voicebot');
+  const secret = process.env.APP_ENCRYPTION_KEY;
+  if (!secret) {
+    logger.error('[voicebot-socket] APP_ENCRYPTION_KEY is not configured');
+    return false;
+  }
 
-    voicebotNamespace.on('connection', async (socket: VoicebotSocket) => {
-        const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address || 'unknown';
+  try {
+    const decoded = jwt.verify(token, secret) as SocketUser;
+    if (!decoded?.userId) return false;
+    socket.user = decoded;
+    return true;
+  } catch (error) {
+    logger.warn(
+      `[voicebot-socket] JWT verification failed for socket=${socket.id}:`,
+      (error as Error).message
+    );
+    return false;
+  }
+};
 
-        // Authenticate via JWT token
-        const token = socket.handshake.auth?.token as string | undefined;
+const resolveAuthorizedSessionForSocket = async ({
+  socket,
+  session_id,
+  requireUpdate = false,
+}: {
+  socket: VoicebotSocket;
+  session_id: string;
+  requireUpdate?: boolean;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  performer?: Performer;
+  session?: Record<string, unknown>;
+}> => {
+  const normalizedSessionId = String(session_id || '').trim();
+  if (!normalizedSessionId || !ObjectId.isValid(normalizedSessionId)) {
+    return { ok: false, error: 'invalid_session_id' };
+  }
 
-        if (!token || typeof token !== 'string' || token.trim() === '') {
-            logger.warn(`[voicebot-socket] Invalid token for connection ${socket.id}, IP: ${ip}`);
-            socket.disconnect();
-            return;
+  const userId = String(socket.user?.userId || '').trim();
+  if (!userId || !ObjectId.isValid(userId)) {
+    return { ok: false, error: 'unauthorized' };
+  }
+
+  const db = getDb();
+  const performer = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).findOne({
+    _id: new ObjectId(userId),
+    is_deleted: { $ne: true },
+    is_banned: { $ne: true },
+  });
+  if (!performer) return { ok: false, error: 'unauthorized' };
+
+  const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+    mergeWithRuntimeFilter(
+      {
+        _id: new ObjectId(normalizedSessionId),
+        is_deleted: { $ne: true },
+      },
+      { field: 'runtime_tag' }
+    )
+  );
+  if (!session) return { ok: false, error: 'session_not_found' };
+
+  const userPermissions = await PermissionManager.getUserPermissions(
+    performer as Performer,
+    db
+  );
+  const { hasAccess, canUpdateSession } = computeSessionAccess({
+    session: session as Record<string, unknown>,
+    performer: performer as Record<string, unknown>,
+    userPermissions,
+  });
+
+  if (!hasAccess) return { ok: false, error: 'forbidden' };
+  if (requireUpdate && !canUpdateSession) return { ok: false, error: 'forbidden' };
+
+  return {
+    ok: true,
+    performer: performer as Performer,
+    session: session as Record<string, unknown>,
+  };
+};
+
+const handleSessionDone = async ({
+  io,
+  socket,
+  payload,
+  queues,
+  ack,
+}: {
+  io: Namespace;
+  socket: VoicebotSocket;
+  payload: { session_id?: string };
+  queues?: Record<string, QueueLike>;
+  ack?: AckReply;
+}): Promise<void> => {
+  const reply = getAckResponder(ack);
+  const session_id = String(payload?.session_id || '').trim();
+  try {
+    const access = await resolveAuthorizedSessionForSocket({
+      socket,
+      session_id,
+      requireUpdate: true,
+    });
+    if (!access.ok) {
+      replyError(reply, access.error);
+      return;
+    }
+
+    const session = access.session as { chat_id?: unknown; _id?: ObjectId | string };
+    const chat_id = session?.chat_id;
+    const commonQueue = queues?.[VOICEBOT_QUEUES.COMMON];
+    if (!chat_id && commonQueue) {
+      reply({ ok: false, error: 'chat_id_missing' });
+      return;
+    }
+
+    if (commonQueue) {
+      await commonQueue.add(VOICEBOT_JOBS.common.DONE_MULTIPROMPT, {
+        session_id,
+        chat_id,
+      });
+    } else {
+      // Fallback for Copilot runtime where workers may run outside this process.
+      const db = getDb();
+      await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+        mergeWithRuntimeFilter(
+          { _id: new ObjectId(session_id) },
+          { field: 'runtime_tag' }
+        ),
+        {
+          $set: {
+            is_active: false,
+            to_finalize: true,
+            done_at: new Date(),
+            updated_at: new Date(),
+          },
+          $inc: {
+            done_count: 1,
+          },
         }
+      );
+    }
 
-        // JWT should have 3 parts
-        if (token.split('.').length !== 3) {
-            logger.warn(`[voicebot-socket] Malformed JWT for connection ${socket.id}, IP: ${ip}`);
-            socket.disconnect();
+    emitToSession(io, session_id, 'session_status', {
+      session_id,
+      status: 'done_queued',
+      timestamp: Date.now(),
+    });
+    reply({ ok: true });
+  } catch (error) {
+    logger.error('[voicebot-socket] Error handling session_done:', error);
+    reply({ ok: false, error: 'internal_error' });
+  }
+};
+
+export function registerVoicebotSocketHandlers(
+  io: Server,
+  options: {
+    queues?: Record<string, QueueLike>;
+  } = {}
+): void {
+  const voicebotNamespace = io.of('/voicebot');
+
+  voicebotNamespace.on('connection', async (socket: VoicebotSocket) => {
+    if (!verifySocketToken(socket)) {
+      socket.disconnect(true);
+      return;
+    }
+
+    logger.info(`[voicebot-socket] User connected socket=${socket.id}`);
+
+    socket.on(
+      'subscribe_on_session',
+      async (payload: { session_id?: string }, ack?: AckReply) => {
+        const reply = getAckResponder(ack);
+        const session_id = String(payload?.session_id || '').trim();
+        try {
+          const access = await resolveAuthorizedSessionForSocket({
+            socket,
+            session_id,
+            requireUpdate: false,
+          });
+          if (!access.ok) {
+            replyError(reply, access.error);
             return;
+          }
+
+          if (!socketSessionMap.has(socket.id)) {
+            socketSessionMap.set(socket.id, new Set());
+          }
+          socketSessionMap.get(socket.id)?.add(session_id);
+
+          if (!sessionSocketMap.has(session_id)) {
+            sessionSocketMap.set(session_id, new Set());
+          }
+          sessionSocketMap.get(session_id)?.add(socket.id);
+          reply({ ok: true });
+        } catch (error) {
+          logger.error('[voicebot-socket] Error handling subscribe_on_session:', error);
+          reply({ ok: false, error: 'internal_error' });
+        }
+      }
+    );
+
+    socket.on('unsubscribe_from_session', (payload: { session_id?: string }, ack?: AckReply) => {
+      const reply = getAckResponder(ack);
+      const session_id = String(payload?.session_id || '').trim();
+      if (!session_id) {
+        reply({ ok: false, error: 'invalid_session_id' });
+        return;
+      }
+
+      socketSessionMap.get(socket.id)?.delete(session_id);
+      if (socketSessionMap.get(socket.id)?.size === 0) {
+        socketSessionMap.delete(socket.id);
+      }
+      sessionSocketMap.get(session_id)?.delete(socket.id);
+      if (sessionSocketMap.get(session_id)?.size === 0) {
+        sessionSocketMap.delete(session_id);
+      }
+      reply({ ok: true });
+    });
+
+    socket.on('session_done', async (payload: { session_id?: string }, ack?: AckReply) => {
+      await handleSessionDone({
+        io: voicebotNamespace,
+        socket,
+        payload,
+        ...(options.queues ? { queues: options.queues } : {}),
+        ...(ack ? { ack } : {}),
+      });
+    });
+
+    socket.on(
+      'post_process_session',
+      async (payload: { session_id?: string }, ack?: AckReply) => {
+        const reply = getAckResponder(ack);
+        const session_id = String(payload?.session_id || '').trim();
+        try {
+          const access = await resolveAuthorizedSessionForSocket({
+            socket,
+            session_id,
+            requireUpdate: true,
+          });
+          if (!access.ok) {
+            replyError(reply, access.error);
+            return;
+          }
+          emitToSession(voicebotNamespace, session_id, 'session_status', {
+            session_id,
+            status: 'post_process_requested',
+            timestamp: Date.now(),
+          });
+          reply({ ok: true });
+        } catch (error) {
+          logger.error('[voicebot-socket] Error handling post_process_session:', error);
+          reply({ ok: false, error: 'internal_error' });
+        }
+      }
+    );
+
+    socket.on(
+      'create_tasks_from_chunks',
+      async (
+        payload: { session_id?: string; chunks_to_process?: Array<Record<string, unknown>> },
+        ack?: AckReply
+      ) => {
+        const reply = getAckResponder(ack);
+        const session_id = String(payload?.session_id || '').trim();
+        const chunks_to_process = Array.isArray(payload?.chunks_to_process)
+          ? payload.chunks_to_process
+          : [];
+
+        if (!chunks_to_process.length) {
+          reply({ ok: false, error: 'invalid_chunks' });
+          return;
         }
 
         try {
-            const secret = process.env.APP_ENCRYPTION_KEY;
-            if (!secret) {
-                logger.error('[voicebot-socket] APP_ENCRYPTION_KEY not configured');
-                socket.disconnect();
-                return;
-            }
-
-            // Verify JWT with jsonwebtoken
-            const decoded = jwt.verify(token, secret) as VoicebotUser;
-            socket.user = decoded;
-        } catch (err) {
-            logger.warn(`[voicebot-socket] JWT verification failed for ${socket.id}:`, (err as Error).message);
-            socket.disconnect();
+          const access = await resolveAuthorizedSessionForSocket({
+            socket,
+            session_id,
+            requireUpdate: true,
+          });
+          if (!access.ok) {
+            replyError(reply, access.error);
             return;
+          }
+          emitToSession(voicebotNamespace, session_id, 'session_status', {
+            session_id,
+            status: 'tasks_requested',
+            timestamp: Date.now(),
+            chunks_count: chunks_to_process.length,
+          });
+          reply({ ok: true });
+        } catch (error) {
+          logger.error('[voicebot-socket] Error handling create_tasks_from_chunks:', error);
+          reply({ ok: false, error: 'internal_error' });
         }
+      }
+    );
 
-        logger.info(`[voicebot-socket] User connected: ${socket.id}`);
-
-        // Subscribe to session updates
-        socket.on('subscribe_on_session', ({ session_id }: { session_id: string }) => {
-            if (!session_id) return;
-
-            // TODO: Verify user has permission to access this session
-
-            // Add to socketSessionMap
-            if (!socketSessionMap.has(socket.id)) {
-                socketSessionMap.set(socket.id, new Set());
-            }
-            socketSessionMap.get(socket.id)!.add(session_id);
-
-            // Add to sessionSocketMap
-            if (!sessionSocketMap.has(session_id)) {
-                sessionSocketMap.set(session_id, new Set());
-            }
-            sessionSocketMap.get(session_id)!.add(socket.id);
-
-            logger.info(`[voicebot-socket] Socket ${socket.id} subscribed to session ${session_id}`);
-        });
-
-        // Unsubscribe from session
-        socket.on('unsubscribe_from_session', ({ session_id }: { session_id: string }) => {
-            if (!session_id) return;
-
-            // Remove from socketSessionMap
-            if (socketSessionMap.has(socket.id)) {
-                socketSessionMap.get(socket.id)!.delete(session_id);
-                if (socketSessionMap.get(socket.id)!.size === 0) {
-                    socketSessionMap.delete(socket.id);
-                }
-            }
-
-            // Remove from sessionSocketMap
-            if (sessionSocketMap.has(session_id)) {
-                sessionSocketMap.get(session_id)!.delete(socket.id);
-                if (sessionSocketMap.get(session_id)!.size === 0) {
-                    sessionSocketMap.delete(session_id);
-                }
-            }
-
-            logger.info(`[voicebot-socket] Socket ${socket.id} unsubscribed from session ${session_id}`);
-        });
-
-        // Handle session completion
-        socket.on('session_done', async ({ session_id }: { session_id: string }) => {
-            if (!session_id) return;
-
-            try {
-                const db = getDb();
-                const session = await db
-                    .collection(VOICEBOT_COLLECTIONS.SESSIONS)
-                    .findOne({ _id: new ObjectId(session_id) });
-
-                if (!session) {
-                    logger.warn(`[voicebot-socket] Session not found for session_done: ${session_id}`);
-                    return;
-                }
-
-                // TODO: Queue DONE_MULTIPROMPT job when BullMQ is integrated
-                // await queues[VOICE_BOT_QUEUES.COMMON].add(
-                //   VOICE_BOT_JOBS.common.DONE_MULTIPROMPT,
-                //   { session_id, chat_id: session.chat_id }
-                // );
-
-                logger.info(`[voicebot-socket] Session done event received for ${session_id}`);
-
-                // Broadcast to all subscribers
-                emitToSession(io, session_id, 'session_status', {
-                    session_id,
-                    status: 'done',
-                    timestamp: Date.now()
-                });
-            } catch (err) {
-                logger.error('[voicebot-socket] Error handling session_done:', err);
-            }
-        });
-
-        // Handle post-processing request
-        socket.on('post_process_session', async ({ session_id }: { session_id: string }) => {
-            if (!session_id) return;
-
-            try {
-                const db = getDb();
-                const session = await db
-                    .collection(VOICEBOT_COLLECTIONS.SESSIONS)
-                    .findOne({ _id: new ObjectId(session_id) });
-
-                if (!session) {
-                    logger.warn(`[voicebot-socket] Session not found for post_process_session: ${session_id}`);
-                    return;
-                }
-
-                if (session.is_postprocessing) {
-                    logger.info(`[voicebot-socket] Session ${session_id} already postprocessing`);
-                    return;
-                }
-
-                await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-                    { _id: new ObjectId(session_id) },
-                    {
-                        $set: {
-                            is_postprocessing: true,
-                            postprocessing_job_queued_timestamp: Date.now()
-                        }
-                    }
-                );
-
-                // TODO: Queue postprocessing job when BullMQ is integrated
-                // await queues[VOICE_BOT_QUEUES.POSTPROCESSORS].add(
-                //   'postprocess',
-                //   { session_id }
-                // );
-
-                logger.info(`[voicebot-socket] Post-process started for session ${session_id}`);
-
-                // Broadcast status update
-                emitToSession(io, session_id, 'session_status', {
-                    session_id,
-                    status: 'postprocessing',
-                    timestamp: Date.now()
-                });
-            } catch (err) {
-                logger.error('[voicebot-socket] Error handling post_process_session:', err);
-            }
-        });
-
-        // Cleanup on disconnect
-        socket.on('disconnect', () => {
-            logger.info(`[voicebot-socket] User disconnected: ${socket.id}`);
-
-            // Remove from all session subscriptions
-            if (socketSessionMap.has(socket.id)) {
-                const sessions = socketSessionMap.get(socket.id)!;
-                for (const sessionId of sessions) {
-                    if (sessionSocketMap.has(sessionId)) {
-                        sessionSocketMap.get(sessionId)!.delete(socket.id);
-                        if (sessionSocketMap.get(sessionId)!.size === 0) {
-                            sessionSocketMap.delete(sessionId);
-                        }
-                    }
-                }
-                socketSessionMap.delete(socket.id);
-            }
-        });
+    socket.on('disconnect', () => {
+      removeSocketFromSessionMaps(socket.id);
+      logger.info(`[voicebot-socket] User disconnected socket=${socket.id}`);
     });
+  });
 
-    logger.info('[voicebot-socket] Registered /voicebot namespace');
-}
-
-/**
- * Get active session subscriptions (for debugging)
- */
-export function getSessionSubscriptions(): {
-    socketSessions: Record<string, string[]>;
-    sessionSockets: Record<string, string[]>;
-} {
-    const socketSessions: Record<string, string[]> = {};
-    const sessionSockets: Record<string, string[]> = {};
-
-    for (const [socketId, sessions] of socketSessionMap) {
-        socketSessions[socketId] = Array.from(sessions);
-    }
-
-    for (const [sessionId, sockets] of sessionSocketMap) {
-        sessionSockets[sessionId] = Array.from(sockets);
-    }
-
-    return { socketSessions, sessionSockets };
+  logger.info('[voicebot-socket] Registered /voicebot namespace');
 }

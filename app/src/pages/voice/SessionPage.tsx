@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { Tabs } from 'antd';
 import { useParams } from 'react-router-dom';
 
@@ -8,23 +9,65 @@ import MeetingCard from '../../components/voice/MeetingCard';
 import Transcription from '../../components/voice/Transcription';
 import Categorization from '../../components/voice/Categorization';
 import CustomPromptResult from '../../components/voice/CustomPromptResult';
+import Screenshort from '../../components/voice/Screenshort';
+import SessionLog from '../../components/voice/SessionLog';
 
 export default function SessionPage() {
     const { sessionId } = useParams();
-    const { fetchVoiceBotSession, voiceBotSession } = useVoiceBotStore();
+    const { fetchVoiceBotSession, voiceBotSession, sessionAttachments } = useVoiceBotStore();
     const [customPromptResult, setCustomPromptResult] = useState<unknown>(null);
     const [activeTab, setActiveTab] = useState('2');
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (sessionId) {
-            void fetchVoiceBotSession(sessionId);
+        let disposed = false;
+        if (!sessionId) {
+            setIsLoading(false);
+            setLoadError('Session id is missing');
+            return;
         }
+
+        setIsLoading(true);
+        setLoadError(null);
+        void fetchVoiceBotSession(sessionId)
+            .catch((error: unknown) => {
+                if (disposed) return;
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                    setLoadError('Сессия недоступна в текущем runtime (prod/dev mismatch)');
+                    return;
+                }
+                setLoadError('Не удалось загрузить сессию');
+            })
+            .finally(() => {
+                if (!disposed) setIsLoading(false);
+            });
+
+        return () => {
+            disposed = true;
+        };
     }, [sessionId, fetchVoiceBotSession]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-[300px] flex items-center justify-center">
+                Загрузка...
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="min-h-[300px] flex items-center justify-center text-center px-6">
+                {loadError}
+            </div>
+        );
+    }
 
     if (!voiceBotSession) {
         return (
             <div className="min-h-[300px] flex items-center justify-center">
-                Загрузка...
+                Сессия не найдена
             </div>
         );
     }
@@ -40,6 +83,11 @@ export default function SessionPage() {
             label: 'Категоризация',
             children: <Categorization />,
         },
+        {
+            key: 'screenshort',
+            label: 'Screenshort',
+            children: <Screenshort attachments={sessionAttachments} />,
+        },
         ...(customPromptResult
             ? [
                 {
@@ -49,6 +97,11 @@ export default function SessionPage() {
                 },
             ]
             : []),
+        {
+            key: 'log',
+            label: 'Log',
+            children: <SessionLog />,
+        },
     ];
 
     return (

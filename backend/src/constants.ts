@@ -1,3 +1,9 @@
+import {
+  IS_PROD_RUNTIME,
+  RUNTIME_TAG,
+  resolveBetaTag,
+} from './services/runtimeScope.js';
+
 // =============================================================================
 // Socket Events
 // =============================================================================
@@ -283,17 +289,9 @@ export const REDIS_KEYS = {
 // =============================================================================
 // VoiceBot Queue Names (BullMQ)
 // =============================================================================
-function resolveBetaTag(rawValue: string | undefined): string {
-  const value = typeof rawValue === 'string' ? rawValue.trim() : '';
-  if (!value) return '';
-  const lower = value.toLowerCase();
-  if (lower === 'false') return '';
-  if (lower === 'true') return 'beta';
-  return value;
-}
-
 const BETA_TAG = resolveBetaTag(process.env.VOICE_BOT_IS_BETA);
 export const IS_BETA = BETA_TAG !== '';
+export { RUNTIME_TAG, IS_PROD_RUNTIME };
 
 const baseVoiceBotQueues = {
   COMMON: 'voicebot--common',
@@ -451,6 +449,8 @@ export const VOICEBOT_COLLECTIONS = {
   PROJECTS: 'automation_projects',
   PERSONS: 'automation_persons',
   PERMISSIONS_LOG: 'automation_permissions_log',
+  SESSION_LOG: 'automation_voice_bot_session_log',
+  OBJECT_LOCATOR: 'automation_object_locator',
   // Google Drive
   GOOGLE_DRIVE_PROJECTS_FILES: 'automation_google_drive_projects_files',
 } as const;
@@ -464,4 +464,3 @@ export const VOICEBOT_FILE_STORAGE = {
   tempDir: process.env.VOICEBOT_TEMP_DIR || 'uploads/voicebot/temp',
   maxFileSize: 50 * 1024 * 1024, // 50MB
 } as const;
-

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>WebRTC Audio Capture with Silence Detection</title>
+    <link rel="icon" href="data:," />
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 12px; background:#f8fafc; color:#0f172a; overflow-x: hidden; }
+      h1 { font-size: 20px; line-height: 1.15; margin: 4px 0 6px; white-space: normal; overflow-wrap: anywhere; color: #0f172a; }
+      .card { background:#fff; border-radius:10px; padding:8px 10px; box-shadow:0 2px 10px rgba(0,0,0,0.05); border:1px solid #eee; max-width:100%; }
+      #app { max-width: 100%; }
+      .stack { display:flex; flex-direction:column; gap:6px; }
+      .row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:0; }
+      .session-row-1, .session-row-2 { flex-wrap: nowrap; }
+      .toolbar { flex-wrap: nowrap; align-items: center; }
+      .toolbar .btn { white-space: nowrap; }
+      /* Modern "control dock" look for action buttons */
+      .toolbar {
+        border-radius: 18px;
+        padding: 10px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      }
+      .toolbar .btn {
+        border-radius: 999px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(15, 23, 42, 0.04);
+        color: #0f172a;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        transition: transform 120ms ease, background 160ms ease, border-color 160ms ease;
+      }
+      .toolbar .btn:hover { background: rgba(15, 23, 42, 0.06); }
+      .toolbar .btn:active { transform: translateY(1px); }
+      .toolbar .btn:disabled { box-shadow: none; }
+
+      /* Action accents (only when enabled; disabled must look disabled) */
+      #start-btn:not(:disabled) { background: rgba(59, 130, 246, 0.10); border-color: rgba(59, 130, 246, 0.22); color: #1d4ed8; }
+      #record-btn:not(:disabled) { background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.22); color: #b91c1c; }
+      #chunk-btn:not(:disabled) { background: rgba(15, 23, 42, 0.04); }
+      #pause-btn:not(:disabled) { background: rgba(234, 179, 8, 0.10); border-color: rgba(234, 179, 8, 0.22); color: #a16207; }
+      #btn-done-button:not(:disabled) { background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.24); color: #047857; }
+      #btn-choose-file:not(:disabled) { background: rgba(59, 130, 246, 0.06); border-color: rgba(59, 130, 246, 0.16); color: #2563eb; }
+      #btn-reset:not(:disabled) { background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.22); color: #334155; }
+      #btn-logout-app:not(:disabled) { background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.24); color: #b91c1c; }
+      #btn-logout,
+      #btn-logout-app { display: none !important; }
+      .settings-row-label { min-width: 220px; display: inline-block; }
+      /* MacBook-sized screens: tighten labels and allow wrapping to avoid overflow */
+      @media (max-width: 1440px) {
+        .settings-row-label { min-width: 180px; }
+        .session-row-1, .session-row-2 { flex-wrap: wrap; }
+        .toolbar { gap: 6px; }
+      }
+      @media (max-width: 640px) {
+        .settings-row-label { min-width: 140px; }
+        .form-grid { grid-template-columns: 1fr 2fr; }
+      }
+      .settings-row-value { color: #64748b; }
+      /* Small screens: condense toolbar buttons and show icons only for marked buttons */
+      @media (max-width: 480px) {
+        .toolbar .btn { padding: 6px 6px; }
+        .btn.icon-on-small { position: relative; }
+        .btn.icon-on-small span.lbl { display: none; }
+        .btn.icon-on-small::before { content: attr(data-icon); font-size: 16px; display: inline-block; }
+      }
+      .form-grid { display:grid; grid-template-columns: 1fr 3fr; column-gap:6px; row-gap:4px; align-items:center; width: 100%; max-width: 100%; }
+      .bar { width: 100%; height:8px; background:#f1f5f9; border-radius:999px; overflow:hidden; border:1px solid #e2e8f0; position: relative; }
+      .bar-tick { position:absolute; top:-2px; bottom:-2px; width:2px; background:#f59e0b; opacity:0.9; left:0%; }
+      .bar-tick.gate { background:#2563eb; opacity:0.9; }
+      .noise-label { color:#475569; font-size:12px; }
+      .fill { height:100%; width:0%; transition: width 120ms linear; }
+      .fill.chunk { background: linear-gradient(90deg, #34d399, #10b981); }
+      .fill.speech { background: linear-gradient(90deg, #60a5fa, #3b82f6); opacity: 0.75; }
+      .fill.sil { background: linear-gradient(90deg, #60a5fa, #3b82f6); }
+      .fill.target { background: linear-gradient(90deg, #f59e0b, #f97316); }
+      .btn { border:1px solid #d4d4d8; border-radius:8px; padding:6px 8px; background:#fff; cursor:pointer; }
+      /* Compact icon-only buttons (emoji size) */
+      .btn.icon { padding:4px 6px; min-width:auto; width:auto; height:32px; display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:18px; }
+      /* Compact input fields: keep single line and truncate */
+      input.btn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* Inline toast bubble */
+      .toast-inline { position: fixed; background: rgba(17,24,39,.96); color:#fff; padding:4px 8px; border-radius:8px; font-size:12px; line-height:1.2; box-shadow:0 2px 10px rgba(0,0,0,.2); opacity:0; transform: translate(-50%, -6px); transition: opacity .18s ease, transform .18s ease; z-index: 2147483000; pointer-events: none; }
+      .toast-inline.show { opacity:.98; transform: translate(-50%, -12px); }
+      .btn:disabled { opacity:.6; cursor:not-allowed; }
+      .title-grad { color: #0f172a; }
+      /* Settings visibility: strong default hide; explicit show when settings-open */
+      .settings-only { display: none !important; }
+      #app.settings-open .settings-only { display: block !important; }
+      #app.settings-open .row.settings-only { display: flex !important; }
+      #app.settings-open select.settings-only,
+      #app.settings-open input.settings-only,
+      #app.settings-open label.settings-only { display: block !important; }
+      /* Hide/show the whole Settings card via CSS to avoid JS desync */
+      #params { display: none !important; }
+      #app.settings-open #params { display: block !important; }
+
+      /* iPhone XR / small-screen optimizations */
+      :root {
+        /* allow the page to extend under the notch and home indicator */
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+      }
+      body { padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left)); }
+
+      /* Prevent iOS zoom on inputs: keep font-size >= 16px */
+      input, select, button { font-size: 16px; }
+
+      @media (max-width: 480px) {
+        h1 { font-size: 18px; white-space: normal; }
+        .row { gap: 8px; }
+        .btn, input.btn, select.btn { min-height: 44px; padding: 10px 12px; width: 100%; }
+        /* Do not stretch icon buttons on mobile */
+        .btn.icon { min-height: 36px; height: 36px; width: auto; padding: 6px; }
+        .session-row-1 .btn.icon, .session-row-2 .btn.icon { width:auto; flex:0 0 auto; }
+        /* turn forms and settings to single-column */
+        .form-grid { grid-template-columns: 1fr; row-gap: 8px; }
+        /* Ensure items manually placed into col 2 span full width on mobile */
+        .form-grid > *[style*="grid-column:2"] { grid-column: 1 / -1 !important; }
+        /* Make meters a bit taller for touch visibility */
+        .bar { height: 10px; }
+        /* Audio element full width */
+        #audio-chunks audio { max-width: 100%; }
+        /* Space for iOS bottom bar */
+        #app { padding-bottom: calc(10px + var(--safe-bottom)); }
+        /* Auth card controls stack nicely */
+        #auth-card .row .btn { flex: 1 1 auto; }
+      }
+    </style>
+</head>
+    <body data-app-version="3.0.103" data-page-mode="settings">
+    <!-- Auth Card -->
+    <div id="auth-card" class="card stack" style="margin-bottom:10px;">
+      <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap;">
+        <b class="title-grad">Authorization</b>
+        <span id="srv-name" style="color:#475569;">&nbsp;(<span id="srv-host"></span>)</span>
+      </div>
+      <div class="form-grid">
+        <label for="base-url">API URL</label>
+        <input id="base-url" class="btn" type="text" placeholder="https://voice.stratospace.fun" />
+        <label for="login">Login</label>
+        <input id="login" class="btn" type="text" placeholder="user@example.com" />
+        <label for="password">Password</label>
+        <input id="password" class="btn" type="password" placeholder="••••••••" />
+      </div>
+      <div class="row" style="gap:8px;">
+        <button id="btn-login" class="btn">🔐 Login</button>
+        <button id="btn-logout" class="btn">🚪 Logout</button>
+        <small id="auth-status" style="color:#475569;"></small>
+      </div>
+    </div>
+
+    <div id="app" class="settings-open" style="display:none;">
+    <h1 id="app-title">WebRTC Audio Capture with Silence Detection</h1>
+    <!-- Rainbow header with user and status above buttons -->
+    <div class="row" style="justify-content:space-between; align-items:center; margin:4px 0 2px 0;">
+      <small id="current-user" class="rainbow-text" style="margin-right:8px;"></small>
+      <small id="rec-status" class="rainbow-text" aria-live="polite">Idle</small>
+    </div>
+    <!-- Toolbar -->
+      <div class="row toolbar" style="gap:10px; margin:6px 0; flex-wrap: wrap;">
+        <button id="start-btn" class="btn icon-on-small" data-icon="▶" aria-label="New" title="Create new session and record"><span class="lbl">▶ New</span></button>
+        <button id="record-btn" class="btn icon-on-small" data-icon="⏺" aria-label="Rec" title="Record into active session"><span class="lbl">⏺ Rec</span></button>
+        <button id="chunk-btn" class="btn icon-on-small" data-icon="✂️" aria-label="Cut" title="Cut" disabled><span class="lbl">✂️ Cut</span></button>
+        <button id="pause-btn" class="btn icon-on-small" data-icon="⏸️" aria-label="Pause" title="Pause" disabled><span class="lbl">⏸️ Pause</span></button>
+        <button id="btn-done-button" class="btn icon-on-small" data-icon="✅" aria-label="Done" title="Finish recording and close session"><span class="lbl">✅ Done</span></button>
+        <button id="btn-choose-file" class="btn icon-on-small" data-icon="⬆" aria-label="Upload" title="Upload"><span class="lbl">⬆ Upload</span></button>
+        <button id="btn-reset" class="btn icon-on-small" data-icon="↻" aria-label="Reset" title="Reset settings to default"><span class="lbl">↻ Reset</span></button>
+        <button id="btn-logout-app" class="btn icon-on-small" data-icon="⎋" title="Logout"><span class="lbl">⎋ Logout</span></button>
+        <span style="flex:1 1 auto;"></span>
+      </div>
+	    <style>
+      .mic-monitor-ctl .monitor-label { display:inline; font-size:12px; color:#475569; }
+      .mic-group { grid-template-columns: minmax(70px, 90px) 1fr; }
+      .mic-group .row { flex-wrap: wrap !important; }
+      .mic-group select { min-width: 0; flex: 1 1 220px; max-width: 100%; }
+      .mic-monitor-ctl { flex: 1 1 100%; }
+      #spk-group { grid-template-columns: minmax(70px, 90px) 1fr; }
+	      /* Mobile tweaks: emoji-only labels and tighter spacing */
+	      @media (max-width: 640px) {
+	        .icon-on-small .lbl { display: none !important; }
+	        /* When labels are hidden on small/medium widths, show emoji via data-icon */
+        .btn.icon-on-small::before { content: attr(data-icon); font-size: 18px; display: inline-block; line-height: 1; }
+        /* Keep toolbar in one line on iPhone XR */
+        .toolbar { gap: 4px !important; flex-wrap: nowrap !important; align-items: center; }
+        .toolbar .btn { padding: 6px 6px !important; font-size: 14px !important; }
+        .toolbar .btn[data-icon] { min-width: 34px; }
+        /* Compact session block */
+        #session-card .session-row-1, #session-card .session-row-2 { gap: 6px !important; flex-wrap: nowrap !important; }
+        #session-card label { min-width: auto; }
+        #session-id, #session-name { min-width: 0 !important; flex: 1 1 auto; }
+        /* Make action buttons in session row tiny emoji-only */
+        #session-card .session-row-1 .btn { padding: 6px !important; min-width: 34px !important; }
+      }
+	    </style>
+	    <!-- Hidden native input to avoid 'No file chosen' text; triggered by Upload in toolbar -->
+	    <input id="file-input" class="btn" type="file" accept="audio/*" style="display:none;" />
+	    <div id="mic-basics" class="card stack settings-only" style="margin:6px 0;">
+	      <div class="row settings-only" style="gap:8px; align-items:center; flex-wrap:wrap;">
+        <label for="mic-count" title="How many microphone inputs are shown/used (1–9)."><b>Microphones count</b></label>
+        <select id="mic-count" class="btn" style="width:120px;" title="How many microphone inputs are shown/used (1–9).">
+	          <option value="1">1</option>
+	          <option value="2" selected>2</option>
+	          <option value="3">3</option>
+	          <option value="4">4</option>
+	          <option value="5">5</option>
+	          <option value="6">6</option>
+	          <option value="7">7</option>
+	          <option value="8">8</option>
+	          <option value="9">9</option>
+	        </select>
+	        <small style="color:#64748b;">UI supports 1–9 microphones</small>
+	      </div>
+	      <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
+	        <label class="row" style="gap:6px; align-items:center;" title="Record separate tracks per microphone instead of a single mixed track.">
+	          <input id="tog-separate-tracks" type="checkbox" />
+	          <span>Record separate tracks (per source)</span>
+	        </label>
+	      </div>
+	    </div>
+	    <div id="mic-1-group" class="form-grid mic-group" data-mic-index="1" style="margin-bottom:6px;">
+	      <label id="lbl-mic-1" for="mic-1-select"><b class="title-grad">Mic 1:</b></label>
+      <div class="row" style="grid-column:2/span 1; gap:8px; align-items:center;">
+	        <select id="mic-1-select" class="btn" style="flex:1 1 auto; width:auto;" title="Mic 1 input device.
+Select OFF to disable Mic 1.
+Tip: use a physical microphone OR the output of your noise suppression system (e.g., &quot;NVIDIA Noise Removal&quot;/&quot;Krisp&quot;).
+Tip: for app audio (Google Meet/Telegram) choose a virtual cable device here.">
+	          <option value="OFF">OFF</option>
+	        </select>
+	        <label class="row mic-monitor-ctl" style="gap:6px; align-items:center; margin:0;" title="Audio monitor: when enabled, copies this mic to Speaker output. Use headphones to avoid echo.">
+	          <input type="checkbox" id="mic-1-monitor" />
+	          <span class="monitor-label">Audio monitor</span>
+	        </label>
+	        <label class="row mic-aec-ctl settings-only" style="gap:6px; align-items:center; margin:0;" title="Enable AEC/NS/AGC for this mic (echo cancellation, noise suppression, auto gain).">
+	          <input type="checkbox" id="mic-1-aec" />
+	          <span class="monitor-label">Enable AEC/NS/AGC</span>
+	        </label>
+	      </div>
+	      <div id="mic-1-meter-wrap" class="row" style="grid-column:2/span 1; gap:8px; margin:6px 0 0 0;">
+	        <div class="bar">
+            <div id="bar-mic-1-level" class="fill" style="background:linear-gradient(90deg,#22c55e,#16a34a);"></div>
+            <div id="tick-mic-1-noise" class="bar-tick"></div>
+            <div id="tick-mic-1-gate" class="bar-tick gate"></div>
+          </div>
+	      </div>
+        <div class="row settings-only" style="grid-column:2/span 1; gap:8px; margin:2px 0 0 0;">
+          <small id="mic-1-noise-label" class="noise-label">Noise: — dB · Gate: — dB</small>
+        </div>
+	      <div id="mic-1-vol-row" class="row settings-only" style="grid-column:2/span 1; gap:8px; margin:6px 0 0 0; align-items:center;">
+	        <small style="color:#475569;">Mic 1 level:</small>
+	        <input id="mic-1-vol" class="btn" type="range" min="0" max="200" step="1" value="100" style="flex:1; min-width:140px;" title="Mic 1 gain (0–200%). Affects monitoring and recordings." />
+	        <small id="mic-1-vol-label" style="width:48px; text-align:right; color:#475569;">100%</small>
+	      </div>
+	    </div>
+	    <div id="mic-2-group" class="form-grid mic-group" data-mic-index="2" style="margin-bottom:6px; display:none;">
+	      <label id="lbl-mic-2" for="mic-2-select"><b class="title-grad">Mic 2:</b></label>
+      <div class="row" style="grid-column:2/span 1; gap:8px; align-items:center;">
+	        <select id="mic-2-select" class="btn" style="flex:1 1 auto; width:auto;" title="Mic 2 input device.
+Select OFF to disable Mic 2.
+Tip: use a physical microphone OR the output of your noise suppression system (e.g., &quot;NVIDIA Noise Removal&quot;/&quot;Krisp&quot;).
+Tip: for app audio (Google Meet/Telegram) choose a virtual cable device here.">
+	          <option value="OFF">OFF</option>
+	        </select>
+	        <label class="row mic-monitor-ctl" style="gap:6px; align-items:center; margin:0;" title="Audio monitor: when enabled, copies this mic to Speaker output. Use headphones to avoid echo.">
+	          <input type="checkbox" id="mic-2-monitor" />
+	          <span class="monitor-label">Audio monitor</span>
+	        </label>
+	        <label class="row mic-aec-ctl settings-only" style="gap:6px; align-items:center; margin:0;" title="Enable AEC/NS/AGC for this mic (echo cancellation, noise suppression, auto gain).">
+	          <input type="checkbox" id="mic-2-aec" />
+	          <span class="monitor-label">Enable AEC/NS/AGC</span>
+	        </label>
+	      </div>
+	      <div id="mic-2-meter-wrap" class="row" style="grid-column:2/span 1; gap:8px; margin:6px 0 0 0;">
+	        <div class="bar">
+            <div id="bar-mic-2-level" class="fill" style="background:linear-gradient(90deg,#84cc16,#4d7c0f);"></div>
+            <div id="tick-mic-2-noise" class="bar-tick"></div>
+            <div id="tick-mic-2-gate" class="bar-tick gate"></div>
+          </div>
+	      </div>
+        <div class="row settings-only" style="grid-column:2/span 1; gap:8px; margin:2px 0 0 0;">
+          <small id="mic-2-noise-label" class="noise-label">Noise: — dB · Gate: — dB</small>
+        </div>
+	      <div id="mic-2-vol-row" class="row settings-only" style="grid-column:2/span 1; gap:8px; margin:6px 0 0 0; align-items:center;">
+	        <small style="color:#475569;">Mic 2 level:</small>
+	        <input id="mic-2-vol" class="btn" type="range" min="0" max="200" step="1" value="100" style="flex:1; min-width:140px;" title="Mic 2 gain (0–200%). Affects monitoring and recordings." />
+	        <small id="mic-2-vol-label" style="width:48px; text-align:right; color:#475569;">100%</small>
+	      </div>
+	    </div>
+	    <div id="mics-extra"></div>
+	    <div id="spk-group" class="form-grid settings-only" style="margin-bottom:6px;">
+	      <label id="lbl-spk" class="settings-only" for="spk-select"><b class="title-grad">Speaker:</b></label>
+	      <select id="spk-select" class="btn settings-only" style="width:100%;" title="Speaker/output device used for Audio monitor."></select>
+      <div id="out-meter-wrap" class="row" style="grid-column:2/span 1; gap:8px; margin:6px 0 0 0;">
+        <div class="bar"><div id="bar-out" class="fill" style="background:linear-gradient(90deg,#60a5fa,#2563eb);"></div></div>
+      </div>
+	      <div id="spk-tip-row" class="row settings-only" style="grid-column:2/span 1; gap:8px; margin:6px 0 0 0; color:#64748b;">
+	        <small>Tip: choose your output device for monitoring or route to a virtual cable if you plan to capture app audio; headphones are preferred to avoid echo</small>
+	      </div>
+	    </div>
+	    <div id="params" class="card stack" style="margin-top:6px; display:none;">
+	      <div id="settings-body" class="stack">
+	      <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
+	        <span title="Chunk length range in minutes. Between min and max, silence threshold decreases; at max chunk length, chunk is force-cut.">chunk:</span>
+	        <input id="inp-min-chunk" type="number" class="btn" style="width:90px;" min="3" max="7" step="0.5" />
+	        <span>–</span>
+	        <input id="inp-max-chunk" type="number" class="btn" style="width:90px;" min="3" max="7" step="0.5" />
+	        <span>minutes</span>
+	      </div>
+	      <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
+	        <span title="Silence threshold range in seconds. At min chunk length required silence is near max; at max chunk length required silence is near min.">silence:</span>
+	        <input id="inp-sil-min" type="number" class="btn" style="width:90px;" min="0" step="1" />
+	        <span>–</span>
+	        <input id="inp-sil-max" type="number" class="btn" style="width:90px;" min="0" step="1" />
+	        <span>seconds</span>
+	      </div>
+	      <small style="color:#64748b;">*) required silence decreases as it approaches the maximum chunk length (max value is used near min chunk; min value is used near max chunk)</small>
+	      <hr style="border:none; border-top:1px solid #e5e7eb; margin:8px 0;" />
+	      <div class="row" style="gap:8px; align-items:center;">
+	        <label class="row" style="gap:6px; align-items:center;" title="Automatically upload each chunk after it is cut.">
+	          <input id="auto-upload" type="checkbox" />
+	          <span>Auto-upload chunks</span>
+	        </label>
+	      </div>
+      <div class="row settings-only" style="gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+        <label class="row" style="gap:6px; align-items:center;" title="Reduce CPU usage for monitoring (lower meter update rate and FFT sizes).">
+          <input id="low-cpu-mode" type="checkbox" />
+          <span>Low CPU mode (monitor)</span>
+        </label>
+      </div>
+      <div id="auto-close-row" class="row settings-only" style="gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+        <label class="settings-row-label" title="After N hours since session creation, the app auto-clicks Done (closes the page session). Set 0 to disable.">Auto close session:</label>
+        <input id="inp-auto-close-hours" type="number" class="btn" style="width:90px;" min="0" step="0.5" />
+        <span>hours</span>
+      </div>
+      <div class="row settings-only" style="gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <button id="btn-test-mode" class="btn" title="Enable testing mode (monitoring only, no recording).">Test audio</button>
+        <small style="color:#64748b;">Monitoring only (no recording)</small>
+      </div>
+      </div>
+    </div>
+    <div id="session-card" class="card stack settings-only" style="margin-top:10px;">
+      <div><b class="title-grad">Session</b></div>
+      <div class="row session-row-1" style="gap:8px; align-items:center;">
+        <input id="session-id" class="btn" type="text" placeholder="Session ID" aria-label="Session ID" title="Current session ID (read-only until created)." style="min-width:0; flex: 1 1 auto;" />
+        <button id="btn-open-session-link" class="btn icon" title="Open public session link">↗</button>
+      </div>
+      <div class="row session-row-2" style="gap:8px; align-items:center;">
+        <div class="row" style="gap:6px; align-items:center; flex:1 1 auto; flex-wrap:nowrap;">
+          <input id="session-name" class="btn" type="text" placeholder="Session name" aria-label="Session name" title="Session display name (editable)." style="min-width:0; flex:1 1 auto;" />
+          <button id="btn-copy-session-name" class="btn icon" title="Copy session name">⿻</button>
+          <small id="session-name-status" style="min-width:12px;color:#475569;" aria-live="polite"></small>
+        </div>
+      </div>
+      <div class="row" style="gap:8px; align-items:center;">
+        <small id="session-opened-at" style="color:#64748b;" aria-live="polite"></small>
+      </div>
+    </div>
+    <!-- Per-mic monitor controls are now inside each mic group -->
+    
+    <!-- Settings panel moved near the controls above -->
+    <style>
+      .rainbow-text { color: #1f2937; font-weight: 600; }
+      .mini-bar { width: 120px; height: 8px; border-radius: 999px; background: #e5e7eb; overflow: hidden; }
+      .mini-bar .mini-fill { height: 100%; width: 0%; background: linear-gradient(90deg,#22c55e,#16a34a); }
+      .mini-bar.mic2 .mini-fill { background: linear-gradient(90deg,#84cc16,#4d7c0f); }
+      .mini-bar.chunk .mini-fill { background: linear-gradient(90deg,#60a5fa,#2563eb); }
+      #compact-mini-row { display:flex; gap:12px; align-items:center; margin:6px 0; }
+    
+      /* compact list styling for Telegram Mini App */
+      #audio-chunks { list-style: none; padding-left: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+      #audio-chunks li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 1px 6px rgba(0,0,0,0.04); }
+      #audio-chunks audio { width: 100%; max-width: 360px; }
+    </style>
+
+    <!-- Mini meters removed by request -->
+
+    </div> <!-- /#app -->
+    
+	    <script src="webrtc-voicebot-lib.js"></script>
+</body>
+</html>

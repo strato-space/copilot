@@ -20,12 +20,16 @@ const router = Router();
 router.use(authMiddleware);
 router.use(requireAdmin);
 
-// Mount sub-routers
+// Flat voicebot API contract (source-of-truth, matches voicebot/webRTC clients)
+router.use('/', sessionsRouter);
+router.use('/', uploadsRouter);
+
+// Legacy aliases (kept for compatibility during migration window)
 router.use('/sessions', sessionsRouter);
+router.use('/uploads', uploadsRouter);
 router.use('/transcription', transcriptionRouter);
 router.use('/persons', personsRouter);
 router.use('/permissions', permissionsRouter);
 router.use('/LLMGate', llmgateRouter);
-router.use('/uploads', uploadsRouter);
 
 export default router;

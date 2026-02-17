@@ -19,6 +19,9 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
+- Voice API source of truth is local: `/api/voicebot/*` (flat contract + legacy aliases during migration).
+- Runtime isolation is enforced via `runtime_tag` for operational collections; legacy records without `runtime_tag` are treated as `prod`.
+- WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
 
 ## Miniapp notes
 - Miniapp frontend sources live in `miniapp/src/` and build to `miniapp/dist`.
@@ -33,6 +36,21 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - `scripts/` deployment helpers (`pm2-backend.sh`, `check-envs.sh`).
 - `docs/`, `specs/`, `projects/` for product documentation and specs.
 - `deploy/` Host-level Nginx config and notes.
+
+## Versioning And Dependencies
+- SemVer policy: `MAJOR.MINOR.PATCH`.
+- `MAJOR`: breaking API or behavior contract changes.
+- `MINOR`: backward-compatible features/endpoints.
+- `PATCH`: bugfixes/refactors without intentional behavior change.
+- Dependency policy:
+  - Prefer current stable TypeScript/Node LTS and keep strict typecheck green.
+  - Prefer current stable `zod` 4.x for API schema/runtime validation.
+  - Review lockfile changes in PRs; avoid silent transitive upgrades during hotfixes.
+
+## Typed Contracts
+- Backend voice handlers must validate request payloads with Zod at route boundaries.
+- Keep callback/input types derived from schemas (`z.input<typeof schema>`) for compile-time safety.
+- Do not bypass schema validation with ad-hoc parsing for public API endpoints.
 
 ## Development (p2)
 For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port conflicts.

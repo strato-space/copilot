@@ -104,7 +104,7 @@ interface SubTabConfig {
 const CRMPage = () => {
     const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew } = useCRMStore();
     const { tickets, projects, performers, fetchDictionary, fetchTickets, tickets_updated_at } = useKanbanStore();
-    const { projects: projectsList, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
+    const { customers, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
     const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
 
@@ -264,7 +264,7 @@ const CRMPage = () => {
             const range = values.range as [Dayjs, Dayjs];
             setReportLoading(true);
             const response = await api_request<ReportResponse>('reports/jira-style', {
-                projectId: values.projectId,
+                customerId: values.customerId,
                 startDate: range[0].toISOString(),
                 endDate: range[1].toISOString(),
             });
@@ -402,7 +402,7 @@ const CRMPage = () => {
         { key: 'plan', label: 'Plan', subTabs: ['new', 'plan'] },
         { key: 'backlog', label: 'Backlog', subTabs: ['work', 'review'] },
         { key: 'work', label: 'Work', configKey: 'work' },
-        { key: 'upload', label: 'Upload', configKey: 'upload' },
+        { key: 'review', label: 'Review', configKey: 'review' },
         { key: 'done', label: 'Done', configKey: 'done' },
         { key: 'archive', label: 'Archive', configKey: 'archive' },
     ], []);
@@ -594,16 +594,16 @@ const CRMPage = () => {
                         >
                             <Form form={jiraForm} layout="vertical">
                                 <Form.Item
-                                    label="Проект"
-                                    name="projectId"
-                                    rules={[{ required: true, message: 'Выберите проект' }]}
+                                    label="Клиент"
+                                    name="customerId"
+                                    rules={[{ required: true, message: 'Выберите клиента' }]}
                                 >
                                     <Select
                                         showSearch
-                                        placeholder="Выберите проект"
-                                        options={projectsList.map((project) => ({
-                                            value: project._id,
-                                            label: project.name,
+                                        placeholder="Выберите клиента"
+                                        options={customers.map((customer) => ({
+                                            value: customer._id,
+                                            label: customer.name,
                                         }))}
                                         filterOption={(input, option) =>
                                             (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())

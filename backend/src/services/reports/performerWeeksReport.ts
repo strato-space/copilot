@@ -75,11 +75,13 @@ export const generatePerformerWeeksReport = async (
     const reportStart = dayjs(params.startDate).startOf('day');
     const reportEnd = dayjs(params.endDate).endOf('day');
 
+    const performerLookup: Array<{ id: string } | { _id: ObjectId }> = [{ id: params.performerId }];
+    if (ObjectId.isValid(params.performerId)) {
+        performerLookup.push({ _id: new ObjectId(params.performerId) });
+    }
+
     const performer = await db.collection<PerformerRecord>(COLLECTIONS.PERFORMERS).findOne({
-        $or: [
-            { id: params.performerId },
-            { _id: new ObjectId(params.performerId) },
-        ],
+        $or: performerLookup,
     });
 
     if (!performer) {
