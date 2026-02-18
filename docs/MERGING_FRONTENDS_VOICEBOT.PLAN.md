@@ -25,6 +25,19 @@
 **Текущая интеграция Voice**:
 - Нативный Voice UI под `/voice/*` (iframe/EmbedFrame удален)
 
+### Интеграция `copilot/agents` с фронтом (`/voice`)
+- Fast-Agent сервис поднимается через `/home/strato-space/copilot/agents/pm2-agents.sh` и слушает `http://127.0.0.1:8722/mcp`.
+- Фронт не ходит в MCP напрямую из браузера; вызовы идут через Socket.IO backend MCP proxy:
+  - Front: `sendMCPCall(...)` в `app/src/store/sessionsUIStore.ts`, `app/src/store/voiceBotStore.ts`, `app/src/pages/operops/CRMPage.tsx`.
+  - Backend: `backend/src/services/mcp/*` + socket handler `backend/src/api/socket/voicebot.ts`.
+- Разрешение MCP URL на фронте:
+  1. `window.agents_api_url`
+  2. `VITE_AGENTS_API_URL`
+  3. fallback `http://127.0.0.1:8722` (для prod-сборки)
+- Используемые tools:
+  - `generate_session_title` -> `agents/agent-cards/generate_session_title.md`
+  - `create_tasks` -> `agents/agent-cards/create_tasks.md`
+
 **Stores (Zustand)**:
 - authStore, employeeStore, expensesStore, fundStore
 - fxStore, guideStore, monthCloseStore, notificationStore, planFactStore

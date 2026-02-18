@@ -6644,9 +6644,36 @@
             try {
                 const result = await reconcileStoredSessionState('boot');
                 const action = result?.action || 'idle';
+                const hasMicPermissionForPassiveRestore = async () => {
+                    try {
+                        if (navigator.permissions?.query) {
+                            const status = await navigator.permissions.query({ name: 'microphone' });
+                            const state = String(status?.state || '').toLowerCase();
+                            if (state === 'granted') return true;
+                            return false;
+                        }
+                    } catch {}
+                    try {
+                        const devs = await navigator.mediaDevices?.enumerateDevices?.();
+                        if (Array.isArray(devs)) {
+                            return devs.some((d) => d?.kind === 'audioinput' && String(d?.label || '').trim());
+                        }
+                    } catch {}
+                    return false;
+                };
                 const restoreAudioMonitor = async (reason) => {
                     try {
                         if (IS_EMBEDDED) return;
+                        const hasPermission = await hasMicPermissionForPassiveRestore();
+                        if (!hasPermission) {
+                            try {
+                                logUi('session.restore.monitor.skip', {
+                                    reason,
+                                    cause: 'mic-permission-not-granted',
+                                });
+                            } catch {}
+                            return;
+                        }
                         allowMonitoringInit = true;
                         try { await ensureMonitoring(`restore-monitor:${reason || 'boot'}`); } catch {}
                     } catch {}

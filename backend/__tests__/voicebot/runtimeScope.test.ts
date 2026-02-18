@@ -16,17 +16,19 @@ describe('runtimeScope helpers', () => {
         expect(resolveBetaTag('gamma')).toBe('gamma');
     });
 
-    it('buildRuntimeFilter includes legacy records for prod runtime', () => {
+    it('buildRuntimeFilter includes legacy records for prod runtime family', () => {
         const filter = buildRuntimeFilter({
             field: 'runtime_tag',
-            runtimeTag: 'prod',
+            runtimeTag: 'prod-p2',
+            runtimeFamily: 'prod',
             prodRuntime: true,
+            familyMatch: true,
             includeLegacyInProd: true,
         });
 
         expect(filter).toEqual({
             $or: [
-                { runtime_tag: 'prod' },
+                { runtime_tag: { $regex: '^prod(?:-|$)' } },
                 { runtime_tag: { $exists: false } },
                 { runtime_tag: null },
                 { runtime_tag: '' },
@@ -61,16 +63,28 @@ describe('runtimeScope helpers', () => {
         });
     });
 
-    it('recordMatchesRuntime supports prod legacy and strict non-prod checks', () => {
-        expect(recordMatchesRuntime({ runtime_tag: 'prod' }, {
-            runtimeTag: 'prod',
+    it('recordMatchesRuntime supports prod family and strict non-prod checks', () => {
+        expect(recordMatchesRuntime({ runtime_tag: 'prod-p2' }, {
+            runtimeTag: 'prod-p2',
+            runtimeFamily: 'prod',
             prodRuntime: true,
+            familyMatch: true,
+            includeLegacyInProd: true,
+        })).toBe(true);
+
+        expect(recordMatchesRuntime({ runtime_tag: 'prod-main' }, {
+            runtimeTag: 'prod-p2',
+            runtimeFamily: 'prod',
+            prodRuntime: true,
+            familyMatch: true,
             includeLegacyInProd: true,
         })).toBe(true);
 
         expect(recordMatchesRuntime({}, {
-            runtimeTag: 'prod',
+            runtimeTag: 'prod-p2',
+            runtimeFamily: 'prod',
             prodRuntime: true,
+            familyMatch: true,
             includeLegacyInProd: true,
         })).toBe(true);
 

@@ -1,7 +1,7 @@
 import {
   IS_PROD_RUNTIME,
   RUNTIME_TAG,
-  resolveBetaTag,
+  RUNTIME_FAMILY,
 } from './services/runtimeScope.js';
 
 // =============================================================================
@@ -289,9 +289,8 @@ export const REDIS_KEYS = {
 // =============================================================================
 // VoiceBot Queue Names (BullMQ)
 // =============================================================================
-const BETA_TAG = resolveBetaTag(process.env.VOICE_BOT_IS_BETA);
-export const IS_BETA = BETA_TAG !== '';
-export { RUNTIME_TAG, IS_PROD_RUNTIME };
+export const IS_BETA = RUNTIME_FAMILY !== 'prod';
+export { RUNTIME_TAG, IS_PROD_RUNTIME, RUNTIME_FAMILY };
 
 const baseVoiceBotQueues = {
   COMMON: 'voicebot--common',
@@ -302,13 +301,13 @@ const baseVoiceBotQueues = {
   NOTIFIES: 'voicebot--notifies',
 } as const;
 
-// Apply beta suffix if configured
+// Queue suffix always includes runtime tag to isolate shared Redis across instances.
 export const VOICEBOT_QUEUES = Object.fromEntries(
   Object.entries(baseVoiceBotQueues).map(([key, value]) => [
     key,
-    IS_BETA ? `${value}-${BETA_TAG}` : value,
+    `${value}-${RUNTIME_TAG}`,
   ])
-) as typeof baseVoiceBotQueues;
+) as Record<keyof typeof baseVoiceBotQueues, string>;
 
 // =============================================================================
 // VoiceBot Job Names

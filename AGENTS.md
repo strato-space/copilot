@@ -131,6 +131,7 @@ Preferred engineering principles for this repo:
 ### PM2 services (prod) -> repo paths
 - `copilot-backend-prod` — Finance Ops backend API (`npm run start` with `backend/.env.production`).
 - `copilot-miniapp-backend-prod` — Miniapp backend API (`npm run start:miniapp` with `backend/.env.production`).
+- `copilot-voicebot-tgbot-prod` — Voice workers + TG bot runtime (`voicebot_runtime/voicebot-tgbot.js`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; always keep `DOTENV_CONFIG_PATH=/home/strato-space/copilot/voicebot_runtime/.env.prod-cutover` and override enabled.
 
 ### PM2 services (dev) -> repo paths
 - `copilot-backend-dev` / `copilot-backend-local` — backend API (`npm run dev` with `backend/.env.development`).
@@ -162,6 +163,7 @@ Preferred engineering principles for this repo:
   - `uploads.ts` - Audio file upload with multer
 - Permission system: `backend/src/permissions/permission-manager.ts` (ported from voicebot).
 - Socket.IO namespace: `/voicebot` for real-time session updates.
+- Voice upload path must broadcast `new_message` and `session_update` into room `voicebot:session:<session_id>` immediately after successful upload.
 - MCP proxy stubs: `backend/src/services/mcp/` (requires `@modelcontextprotocol/sdk`).
 - Workers are NOT included - run as separate service (see `backend/src/workers/README.md`).
 - Agents are NOT included - run as separate Python service (see `backend/src/agents/README.md`).

@@ -2,18 +2,6 @@ require("dotenv-expand").expand(require("dotenv").config());
 const config = process.env;
 const _ = require("lodash");
 
-function resolveBetaTag(rawValue) {
-    const value = typeof rawValue === "string" ? rawValue.trim() : "";
-    if (!value) return "";
-    const lower = value.toLowerCase();
-    if (lower === "false") return "";
-    if (lower === "true") return "beta";
-    return value;
-}
-
-const BETA_TAG = resolveBetaTag(config.VOICE_BOT_IS_BETA);
-const IS_BETA = BETA_TAG !== "";
-
 const { JWT } = require('google-auth-library');
 const { GoogleSpreadsheet } = require("google-spreadsheet");
 const google_creds = require('../../google_service_account.json');
@@ -65,7 +53,7 @@ const job_handler = async (job_data, queues, apis) => {
         const fileMetadata = {
             name: `Transcription ${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
             mimeType: 'application/vnd.google-apps.spreadsheet',
-            parents: [IS_BETA ? config.TRANSCRIPTIONS_TEST_FOLDER_ID : config.TRANSCRIPTIONS_FOLDER_ID]
+            parents: [constants.IS_PROD_RUNTIME ? config.TRANSCRIPTIONS_FOLDER_ID : config.TRANSCRIPTIONS_TEST_FOLDER_ID]
         };
         logger.info('Creating new Google Spreadsheet for transcription...');
         const file = await drive.files.create({

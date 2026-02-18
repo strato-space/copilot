@@ -132,4 +132,105 @@ describe('POST /voicebot/upload_audio', () => {
     expect(persisted.runtime_tag).toBeDefined();
     expect((persisted.file_metadata as Record<string, unknown>)?.duration).toBe(123.456);
   });
+  it('pushes new_message and session_update to the socket room after upload', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439012');
+    const insertedMessages: Array<Record<string, unknown>> = [];
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: sessionId,
+              chat_id: 777,
+              user_id: performerId.toString(),
+              access_level: 'private',
+              is_deleted: false,
+              runtime_tag: 'prod-p2',
+            })),
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            insertOne: jest.fn(async (doc: Record<string, unknown>) => {
+              insertedMessages.push(doc);
+              return { insertedId: new ObjectId('507f1f77bcf86cd799439099') };
+            }),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const emitMock = jest.fn();
+    const toMock = jest.fn(() => ({ emit: emitMock }));
+    const ofMock = jest.fn(() => ({ to: toMock }));
+
+    const app = express();
+    app.use(express.json());
+    app.set('io', { of: ofMock });
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '777',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'audio/webm',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(insertedMessages).toHaveLength(1);
+
+    const persisted = insertedMessages[0] ?? {};
+    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
+    if (storedPath) uploadedFilePaths.add(storedPath);
+
+    expect(ofMock).toHaveBeenCalledWith('/voicebot');
+    expect(toMock).toHaveBeenNthCalledWith(1, `voicebot:session:${sessionId.toString()}`);
+    expect(toMock).toHaveBeenNthCalledWith(2, `voicebot:session:${sessionId.toString()}`);
+
+    expect(emitMock).toHaveBeenNthCalledWith(
+      1,
+      'new_message',
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        runtime_tag: 'prod-p2',
+        is_transcribed: false,
+      })
+    );
+    expect(emitMock).toHaveBeenNthCalledWith(
+      2,
+      'session_update',
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        runtime_tag: 'prod-p2',
+        is_messages_processed: false,
+      })
+    );
+  });
+
 });

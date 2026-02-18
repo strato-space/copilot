@@ -126,10 +126,16 @@ const getProxyConfig = (): { url: string; auth: string } | null => {
 const resolveAgentsMcpServerUrl = (): string | null => {
     if (typeof window !== 'undefined') {
         const win = window as { agents_api_url?: string };
-        if (win.agents_api_url) return win.agents_api_url;
+        if (typeof win.agents_api_url === 'string' && win.agents_api_url.trim()) {
+            return win.agents_api_url.trim();
+        }
     }
     const envUrl = import.meta.env.VITE_AGENTS_API_URL as string | undefined;
-    return envUrl || null;
+    if (typeof envUrl === 'string' && envUrl.trim()) return envUrl.trim();
+
+    // Fallback for prod builds where VITE_AGENTS_API_URL was not injected.
+    // This URL is consumed by backend MCP proxy (not direct browser fetch).
+    return 'http://127.0.0.1:8722';
 };
 
 const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {

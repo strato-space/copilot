@@ -108,7 +108,7 @@ function setupMCPProxy(io, options = {}, logger = console) {
                     message.options || {}
                 );
                 logger.info(`📥 MCP tool response received for ${message.tool}`);
-                if (message.tool === 'generate_session_title_send') {
+                if (message.tool === 'generate_session_title_send' || message.tool === 'generate_session_title') {
                     try {
                         const preview = JSON.stringify(result?.data ?? null);
                         logger.info(`🧾 MCP response preview (${message.tool}): ${preview?.slice(0, 1000)}`);

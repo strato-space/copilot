@@ -10,7 +10,7 @@ import { getDb } from '../../services/db.js';
 import { getLogger } from '../../utils/logger.js';
 import { PermissionManager, type Performer } from '../../permissions/permission-manager.js';
 import { computeSessionAccess } from '../../services/session-socket-auth.js';
-import { mergeWithRuntimeFilter } from '../../services/runtimeScope.js';
+import { mergeWithRuntimeFilter, IS_PROD_RUNTIME } from '../../services/runtimeScope.js';
 import {
   buildDoneNotifyPreview,
   writeDoneNotifyRequestedLog,
@@ -24,6 +24,9 @@ const logger = getLogger();
 
 const socketSessionMap = new Map<string, Set<string>>();
 const sessionSocketMap = new Map<string, Set<string>>();
+
+export const getVoicebotSessionRoom = (sessionId: string): string =>
+  `voicebot:session:${sessionId}`;
 
 type SocketUser = {
   userId: string;
@@ -154,7 +157,11 @@ const resolveAuthorizedSessionForSocket = async ({
         _id: new ObjectId(normalizedSessionId),
         is_deleted: { $ne: true },
       },
-      { field: 'runtime_tag' }
+      {
+        field: 'runtime_tag',
+        familyMatch: IS_PROD_RUNTIME,
+        includeLegacyInProd: IS_PROD_RUNTIME,
+      }
     )
   );
   if (!session) return { ok: false, error: 'session_not_found' };
@@ -232,7 +239,11 @@ const handleSessionDone = async ({
       await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
         mergeWithRuntimeFilter(
           { _id: new ObjectId(session_id) },
-          { field: 'runtime_tag' }
+          {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+          }
         ),
         {
           $set: {
@@ -331,6 +342,7 @@ export function registerVoicebotSocketHandlers(
             sessionSocketMap.set(session_id, new Set());
           }
           sessionSocketMap.get(session_id)?.add(socket.id);
+          socket.join(getVoicebotSessionRoom(session_id));
           reply({ ok: true });
         } catch (error) {
           logger.error('[voicebot-socket] Error handling subscribe_on_session:', error);
@@ -355,6 +367,7 @@ export function registerVoicebotSocketHandlers(
       if (sessionSocketMap.get(session_id)?.size === 0) {
         sessionSocketMap.delete(session_id);
       }
+      socket.leave(getVoicebotSessionRoom(session_id));
       reply({ ok: true });
     });
 

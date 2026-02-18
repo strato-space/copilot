@@ -2,7 +2,7 @@ import { Queue } from 'bullmq';
 import { Redis, type RedisOptions } from 'ioredis';
 import { Telegraf, type Context } from 'telegraf';
 import {
-  IS_BETA,
+  IS_PROD_RUNTIME,
   RUNTIME_TAG,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
@@ -28,9 +28,9 @@ type SerializedError = {
 const logger = initLogger('copilot-voicebot-tgbot');
 
 const resolveToken = (): string => {
-  const token = IS_BETA ? process.env.TG_VOICE_BOT_BETA_TOKEN : process.env.TG_VOICE_BOT_TOKEN;
+  const token = IS_PROD_RUNTIME ? process.env.TG_VOICE_BOT_TOKEN : process.env.TG_VOICE_BOT_BETA_TOKEN;
   if (!token) {
-    throw new Error('Missing Telegram token: set TG_VOICE_BOT_TOKEN (or TG_VOICE_BOT_BETA_TOKEN for beta).');
+    throw new Error('Missing Telegram token: set TG_VOICE_BOT_TOKEN for prod runtime or TG_VOICE_BOT_BETA_TOKEN for dev runtime.');
   }
   return token;
 };

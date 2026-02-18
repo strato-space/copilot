@@ -1,17 +1,9 @@
-require("dotenv-expand").expand(require("dotenv").config());
+const dotenv = require("dotenv");
+const dotenvPath = process.env.DOTENV_CONFIG_PATH || ".env";
+const dotenvOverride =
+    String(process.env.DOTENV_CONFIG_OVERRIDE || "true").trim().toLowerCase() === "true";
+require("dotenv-expand").expand(dotenv.config({ path: dotenvPath, override: dotenvOverride }));
 const config = process.env;
-
-function resolveBetaTag(rawValue) {
-    const value = typeof rawValue === "string" ? rawValue.trim() : "";
-    if (!value) return "";
-    const lower = value.toLowerCase();
-    if (lower === "false") return "";
-    if (lower === "true") return "beta";
-    return value;
-}
-
-const BETA_TAG = resolveBetaTag(config.VOICE_BOT_IS_BETA);
-const IS_BETA = BETA_TAG !== "";
 
 const { Queue, Worker } = require("bullmq");
 const Redis = require('ioredis');
@@ -109,7 +101,7 @@ const { RedisMonitor } = require('./voicebot/redis_monitor');
         const m_client = await mongoClient.connect();
         const db = m_client.db();
 
-        tgbot = new Telegraf(IS_BETA ? config.TG_VOICE_BOT_BETA_TOKEN : config.TG_VOICE_BOT_TOKEN);
+        tgbot = new Telegraf(constants.IS_PROD_RUNTIME ? config.TG_VOICE_BOT_TOKEN : config.TG_VOICE_BOT_BETA_TOKEN);
 
         const tgRawLogEnabled = String(config.TG_RAW_LOG_ENABLED || "true").trim().toLowerCase() !== "false";
         const tgRawMaxCharsParsed = Number.parseInt(config.TG_RAW_LOG_MAX_CHARS || "20000", 10);

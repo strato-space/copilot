@@ -22,6 +22,25 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Voice API source of truth is local: `/api/voicebot/*` (flat contract + legacy aliases during migration).
 - Runtime isolation is enforced via `runtime_tag` for operational collections; legacy records without `runtime_tag` are treated as `prod`.
 - WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
+- Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
+- `copilot-voicebot-tgbot-prod` bootstraps env from `voicebot_runtime/.env.prod-cutover` via `DOTENV_CONFIG_PATH` with dotenv override to avoid inheriting stale shell keys.
+
+### Voice agents integration (frontend -> agents)
+- Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
+- Frontend trigger points:
+  - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
+  - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.
+- Frontend MCP endpoint resolution order:
+  1. `window.agents_api_url` (if set at runtime),
+  2. `VITE_AGENTS_API_URL`,
+  3. fallback `http://127.0.0.1:8722` (prod safety fallback).
+- MCP transport path:
+  - browser opens Socket.IO to backend (`/socket.io`),
+  - frontend emits `mcp_call`,
+  - backend MCP proxy (`backend/src/services/mcp/*`) calls Fast-Agent MCP endpoint.
+- Required tool names in agent cards:
+  - `generate_session_title` (`agents/agent-cards/generate_session_title.md`)
+  - `create_tasks` (`agents/agent-cards/create_tasks.md`)
 
 ## Miniapp notes
 - Miniapp frontend sources live in `miniapp/src/` and build to `miniapp/dist`.

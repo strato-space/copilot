@@ -111,6 +111,7 @@ const io = new SocketIOServer(httpServer, {
     credentials: true,
   },
 });
+app.set('io', io);
 
 registerSocketHandlers(io);
 

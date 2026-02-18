@@ -1,7 +1,7 @@
 import { Db, ObjectId } from 'mongodb';
 import type { Logger } from 'winston';
 import type { Request } from 'express';
-import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
+import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { VOICEBOT_COLLECTIONS, VOICEBOT_PROCESSORS } from '../../../constants.js';
 import { buildSegmentsFromChunks, resolveMessageDurationSeconds } from '../../../services/transcriptionTimeline.js';
 
@@ -51,9 +51,17 @@ export const normalizeSegmentsText = (segments: VoiceBotSegment[] | undefined): 
 };
 
 export const runtimeMessageQuery = (query: Record<string, unknown> = {}) =>
-  mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+  mergeWithRuntimeFilter(query, {
+    field: 'runtime_tag',
+    familyMatch: IS_PROD_RUNTIME,
+    includeLegacyInProd: IS_PROD_RUNTIME,
+  });
 export const runtimeSessionQuery = (query: Record<string, unknown> = {}) =>
-  mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+  mergeWithRuntimeFilter(query, {
+    field: 'runtime_tag',
+    familyMatch: IS_PROD_RUNTIME,
+    includeLegacyInProd: IS_PROD_RUNTIME,
+  });
 
 const toSecondsNumber = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;

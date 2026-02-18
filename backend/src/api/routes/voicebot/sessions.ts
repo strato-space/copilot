@@ -19,8 +19,8 @@ import {
 } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
-import { getDb } from '../../../services/db.js';
-import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
+import { getDb, getRawDb } from '../../../services/db.js';
+import { buildRuntimeFilter, IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 import { z } from 'zod';
 import { insertSessionLogEvent, mapEventForApi } from '../../../services/voicebotSessionLog.js';
@@ -125,6 +125,17 @@ const toObjectIdArray = (value: unknown): ObjectId[] => {
     return result;
 };
 
+const buildProdAwareRuntimeFilter = (): Record<string, unknown> =>
+    buildRuntimeFilter({
+        field: 'runtime_tag',
+        familyMatch: IS_PROD_RUNTIME,
+        includeLegacyInProd: IS_PROD_RUNTIME,
+    });
+
+const mergeWithProdAwareRuntimeFilter = (query: Record<string, unknown>): Record<string, unknown> => ({
+    $and: [query, buildProdAwareRuntimeFilter()],
+});
+
 const resolveTelegramUserId = (performer: VoicebotRequest['performer']): string | null => {
     const fromPerformer = performer?.telegram_id ? String(performer.telegram_id).trim() : '';
     if (fromPerformer) return fromPerformer;
@@ -146,14 +157,12 @@ const resolveSessionAccess = async ({
     if (!ObjectId.isValid(sessionId)) {
         return { session: null, hasAccess: false };
     }
-    const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
-        mergeWithRuntimeFilter(
-            {
-                _id: new ObjectId(sessionId),
-                is_deleted: { $ne: true },
-            },
-            { field: 'runtime_tag' }
-        )
+    const rawDb = getRawDb();
+    const session = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+        mergeWithProdAwareRuntimeFilter({
+            _id: new ObjectId(sessionId),
+            is_deleted: { $ne: true },
+        })
     );
     if (!session) return { session: null, hasAccess: false };
 
@@ -362,14 +371,25 @@ const listSessions = async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
     const db = getDb();
+    const rawDb = getRawDb();
 
     try {
         // Generate access filter based on user permissions
         const dataFilter = await PermissionManager.generateDataFilter(performer, db);
+        const sessionsRuntimeFilter = buildRuntimeFilter({
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        });
+        const messagesRuntimeFilter = buildRuntimeFilter({
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        });
 
-        const sessions = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).aggregate([
+        const sessions = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).aggregate([
             // Apply access filter
-            { $match: dataFilter },
+            { $match: { $and: [dataFilter, sessionsRuntimeFilter] } },
             {
                 $addFields: {
                     chat_id_str: { $toString: "$chat_id" }
@@ -421,7 +441,14 @@ const listSessions = async (req: Request, res: Response) => {
                     from: VOICEBOT_COLLECTIONS.MESSAGES,
                     let: { sessionId: "$_id" },
                     pipeline: [
-                        { $match: { $expr: { $eq: ["$session_id", "$$sessionId"] } } },
+                        {
+                            $match: {
+                                $and: [
+                                    { $expr: { $eq: ["$session_id", "$$sessionId"] } },
+                                    messagesRuntimeFilter,
+                                ],
+                            },
+                        },
                         { $count: "count" }
                     ],
                     as: "message_count_arr"
@@ -474,6 +501,7 @@ const getSession = async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
     const db = getDb();
+    const rawDb = getRawDb();
 
     try {
         const parsedBody = activeSessionInputSchema.safeParse(req.body || {});
@@ -499,8 +527,8 @@ const getSession = async (req: Request, res: Response) => {
         }
 
         // Get session messages
-        const session_messages = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(
-            runtimeMessageQuery({
+        const session_messages = await rawDb.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(
+            mergeWithProdAwareRuntimeFilter({
                 session_id: new ObjectId(session_id),
             })
         ).toArray();

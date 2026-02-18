@@ -451,7 +451,7 @@ export const useSessionsUI = create((set, get) => ({
             // Send MCP request to generate session title
             const requestId = sendMCPCall(
                 agentsMcpServerUrl,
-                'generate_session_title_send',
+                'generate_session_title',
                 {
                     message: JSON.stringify(allCategorizations)
                 },

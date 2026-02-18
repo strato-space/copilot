@@ -423,9 +423,13 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
             const agentsMcpServerUrl = (() => {
                 if (typeof window !== 'undefined') {
                     const win = window as { agents_api_url?: string };
-                    if (win.agents_api_url) return win.agents_api_url;
+                    if (typeof win.agents_api_url === 'string' && win.agents_api_url.trim()) {
+                        return win.agents_api_url.trim();
+                    }
                 }
-                return (import.meta.env.VITE_AGENTS_API_URL as string | undefined) ?? null;
+                const envUrl = import.meta.env.VITE_AGENTS_API_URL as string | undefined;
+                if (typeof envUrl === 'string' && envUrl.trim()) return envUrl.trim();
+                return 'http://127.0.0.1:8722';
             })();
 
             if (!agentsMcpServerUrl) {

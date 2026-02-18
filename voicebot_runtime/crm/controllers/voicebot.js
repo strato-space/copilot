@@ -322,18 +322,8 @@ const normalizeSegmentsText = (segments) => {
         .join(' ');
 };
 
-const resolveBetaTag = (rawValue) => {
-    const value = typeof rawValue === "string" ? rawValue.trim() : "";
-    if (!value) return "";
-    const lower = value.toLowerCase();
-    if (lower === "false") return "";
-    if (lower === "true") return "beta";
-    return value;
-};
-
 const getTelegramBotToken = () => {
-    const betaTag = resolveBetaTag(config.VOICE_BOT_IS_BETA);
-    return betaTag !== "" ? config.TG_VOICE_BOT_BETA_TOKEN : config.TG_VOICE_BOT_TOKEN;
+    return constants.IS_PROD_RUNTIME ? config.TG_VOICE_BOT_TOKEN : config.TG_VOICE_BOT_BETA_TOKEN;
 };
 
 const findSessionAttachmentByUniqueId = async ({ db, logger, sessionObjectId, fileUniqueId }) => {
@@ -1706,7 +1696,11 @@ controller.session_list = async (req, res) => {
         // console.dir(dataFilter, { depth: null });
         // console.log("--------------------------");
 
-        const runtimeFilter = buildRuntimeFilter({ field: "runtime_tag" });
+        const runtimeFilter = buildRuntimeFilter({
+            field: "runtime_tag",
+            familyMatch: Boolean(constants.IS_PROD_RUNTIME),
+            includeLegacyInProd: Boolean(constants.IS_PROD_RUNTIME),
+        });
         const sessions = await db.collection(constants.collections.VOICE_BOT_SESSIONS).aggregate([
             // Добавляем фильтр доступа + текущий runtime
             { $match: { $and: [dataFilter, runtimeFilter] } },
@@ -1859,7 +1853,11 @@ controller.sessions_in_crm = async (req, res) => {
     const { db, logger, performer } = req;
     try {
         const dataFilter = await PermissionManager.generateDataFilter(performer, db);
-        const runtimeFilter = buildRuntimeFilter({ field: "runtime_tag" });
+        const runtimeFilter = buildRuntimeFilter({
+            field: "runtime_tag",
+            familyMatch: Boolean(constants.IS_PROD_RUNTIME),
+            includeLegacyInProd: Boolean(constants.IS_PROD_RUNTIME),
+        });
 
         const sessions = await db.collection(constants.collections.VOICE_BOT_SESSIONS).aggregate([
             {

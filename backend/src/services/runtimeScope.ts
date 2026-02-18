@@ -1,8 +1,14 @@
+import os from 'node:os';
+
+export type RuntimeFamily = 'prod' | 'dev';
+
 export type RuntimeScopeOptions = {
   field?: string;
   strict?: boolean;
   includeLegacyInProd?: boolean;
+  familyMatch?: boolean;
   runtimeTag?: string;
+  runtimeFamily?: RuntimeFamily;
   prodRuntime?: boolean;
 };
 
@@ -15,9 +21,47 @@ export function resolveBetaTag(rawValue: string | undefined): string {
   return value;
 }
 
-const BETA_TAG = resolveBetaTag(process.env.VOICE_BOT_IS_BETA);
-export const RUNTIME_TAG = BETA_TAG ? BETA_TAG : 'prod';
-export const IS_PROD_RUNTIME = RUNTIME_TAG === 'prod';
+const normalizeToken = (value: string | undefined | null): string => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  const normalized = raw.replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return normalized;
+};
+
+const resolveRuntimeFamily = (): RuntimeFamily => {
+  const explicit = normalizeToken(process.env.VOICE_RUNTIME_ENV);
+  if (explicit === 'prod' || explicit === 'dev') return explicit;
+
+  const nodeEnv = normalizeToken(process.env.NODE_ENV);
+  if (nodeEnv === 'production' || nodeEnv === 'prod') return 'prod';
+
+  const legacy = normalizeToken(resolveBetaTag(process.env.VOICE_BOT_IS_BETA));
+  if (legacy.startsWith('prod')) return 'prod';
+  return 'dev';
+};
+
+const resolveRuntimeServerName = (): string => {
+  const explicit = normalizeToken(process.env.VOICE_RUNTIME_SERVER_NAME);
+  if (explicit) return explicit;
+
+  const host = normalizeToken(process.env.HOSTNAME || os.hostname());
+  if (host) return host;
+
+  return 'unknown-host';
+};
+
+const resolveRuntimeTag = (): string => {
+  const explicit = normalizeToken(process.env.VOICE_RUNTIME_TAG);
+  if (explicit) return explicit;
+  return `${resolveRuntimeFamily()}-${resolveRuntimeServerName()}`;
+};
+
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const RUNTIME_FAMILY = resolveRuntimeFamily();
+export const RUNTIME_SERVER_NAME = resolveRuntimeServerName();
+export const RUNTIME_TAG = resolveRuntimeTag();
+export const IS_PROD_RUNTIME = RUNTIME_FAMILY === 'prod';
 
 const LEGACY_VALUES = [null, ''] as const;
 
@@ -72,22 +116,31 @@ export const isRuntimeScopedCollection = (name: string): boolean =>
 export const buildRuntimeFilter = ({
   field = 'runtime_tag',
   strict = false,
-  includeLegacyInProd = true,
+  includeLegacyInProd = false,
+  familyMatch = false,
   runtimeTag = RUNTIME_TAG,
+  runtimeFamily = RUNTIME_FAMILY,
   prodRuntime = IS_PROD_RUNTIME,
 }: RuntimeScopeOptions = {}): Record<string, unknown> => {
   if (strict) {
     return { [field]: runtimeTag };
   }
 
-  if (prodRuntime && includeLegacyInProd) {
-    return {
-      $or: [
-        { [field]: runtimeTag },
-        { [field]: { $exists: false } },
-        ...LEGACY_VALUES.map((legacyValue) => ({ [field]: legacyValue })),
-      ],
-    };
+  if (familyMatch) {
+    const familyFilter: Array<Record<string, unknown>> = [
+      { [field]: { $regex: `^${escapeRegex(runtimeFamily)}(?:-|$)` } },
+    ];
+
+    if (prodRuntime && includeLegacyInProd) {
+      familyFilter.push({ [field]: { $exists: false } });
+      for (const legacyValue of LEGACY_VALUES) {
+        familyFilter.push({ [field]: legacyValue });
+      }
+    }
+
+    return familyFilter.length === 1
+      ? (familyFilter[0] as Record<string, unknown>)
+      : { $or: familyFilter };
   }
 
   return { [field]: runtimeTag };
@@ -109,8 +162,10 @@ export const recordMatchesRuntime = (
   {
     field = 'runtime_tag',
     strict = false,
-    includeLegacyInProd = true,
+    includeLegacyInProd = false,
+    familyMatch = false,
     runtimeTag = RUNTIME_TAG,
+    runtimeFamily = RUNTIME_FAMILY,
     prodRuntime = IS_PROD_RUNTIME,
   }: RuntimeScopeOptions = {}
 ): boolean => {
@@ -120,6 +175,19 @@ export const recordMatchesRuntime = (
   const normalized = typeof value === 'string' ? value.trim() : value;
 
   if (strict) return normalized === runtimeTag;
+
+  if (familyMatch) {
+    if (typeof normalized !== 'string') {
+      return prodRuntime && includeLegacyInProd && (normalized === undefined || normalized === null || normalized === '');
+    }
+    if (normalized === runtimeFamily || normalized.startsWith(`${runtimeFamily}-`)) {
+      return true;
+    }
+    if (prodRuntime && includeLegacyInProd) {
+      return normalized === '';
+    }
+    return false;
+  }
 
   if (prodRuntime && includeLegacyInProd) {
     if (normalized === undefined || normalized === null || normalized === '') {

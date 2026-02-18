@@ -1,19 +1,44 @@
 require("dotenv-expand").expand(require("dotenv").config());
+const os = require("node:os");
 const config = process.env;
 
-function resolveBetaTag(rawValue) {
-    const value = typeof rawValue === "string" ? rawValue.trim() : "";
-    if (!value) return "";
-    const lower = value.toLowerCase();
-    if (lower === "false") return "";
-    if (lower === "true") return "beta";
-    return value;
-}
+const normalizeToken = (value) => {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return "";
+    return raw.replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+};
 
-const BETA_TAG = resolveBetaTag(config.VOICE_BOT_IS_BETA);
-const IS_BETA = BETA_TAG !== "";
-const RUNTIME_TAG = IS_BETA ? BETA_TAG : "prod";
-const IS_PROD_RUNTIME = RUNTIME_TAG === "prod";
+const resolveRuntimeFamily = () => {
+    const explicit = normalizeToken(config.VOICE_RUNTIME_ENV);
+    if (explicit === "prod" || explicit === "dev") return explicit;
+
+    const nodeEnv = normalizeToken(config.NODE_ENV);
+    if (nodeEnv === "production" || nodeEnv === "prod") return "prod";
+
+    const legacy = normalizeToken(config.VOICE_BOT_IS_BETA);
+    if (legacy.startsWith("prod")) return "prod";
+    return "dev";
+};
+
+const resolveRuntimeServerName = () => {
+    const explicit = normalizeToken(config.VOICE_RUNTIME_SERVER_NAME);
+    if (explicit) return explicit;
+    const hostname = normalizeToken(config.HOSTNAME || os.hostname());
+    if (hostname) return hostname;
+    return "unknown-host";
+};
+
+const resolveRuntimeTag = () => {
+    const explicit = normalizeToken(config.VOICE_RUNTIME_TAG);
+    if (explicit) return explicit;
+    return `${RUNTIME_FAMILY}-${RUNTIME_SERVER_NAME}`;
+};
+
+const RUNTIME_FAMILY = resolveRuntimeFamily();
+const RUNTIME_SERVER_NAME = resolveRuntimeServerName();
+const RUNTIME_TAG = resolveRuntimeTag();
+const IS_PROD_RUNTIME = RUNTIME_FAMILY === "prod";
+const IS_BETA = !IS_PROD_RUNTIME;
 
 const constants = {
     voice_bot_queues: {
@@ -240,15 +265,15 @@ const constants = {
     },
     RUNTIME_TAG,
     IS_PROD_RUNTIME,
+    RUNTIME_FAMILY,
+    RUNTIME_SERVER_NAME,
 
 };
 
 const fixed_constants = constants
 for (const q of Object.keys(constants.voice_bot_queues)) {
     if (constants.voice_bot_queues[q]) {
-        fixed_constants.voice_bot_queues[q] = IS_BETA
-            ? `${constants.voice_bot_queues[q]}-${BETA_TAG}`
-            : constants.voice_bot_queues[q];
+        fixed_constants.voice_bot_queues[q] = `${constants.voice_bot_queues[q]}-${RUNTIME_TAG}`;
     }
 }
 

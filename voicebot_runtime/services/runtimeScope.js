@@ -1,28 +1,41 @@
 const constants = require("../constants");
 
 const getRuntimeTag = () => String(constants.RUNTIME_TAG || "prod").trim() || "prod";
-const isProdRuntime = () => constants.IS_PROD_RUNTIME === true || getRuntimeTag() === "prod";
+const getRuntimeFamily = () => {
+    const fromConstants = String(constants.RUNTIME_FAMILY || "").trim().toLowerCase();
+    if (fromConstants === "prod" || fromConstants === "dev") return fromConstants;
+
+    const runtimeTag = getRuntimeTag().toLowerCase();
+    if (runtimeTag === "prod" || runtimeTag === "production" || runtimeTag.startsWith("prod-")) {
+        return "prod";
+    }
+    return "dev";
+};
+const isProdRuntime = () => constants.IS_PROD_RUNTIME === true || getRuntimeFamily() === "prod";
 
 const buildRuntimeFilter = ({
     field = "runtime_tag",
     strict = false,
-    includeLegacyInProd = true,
+    includeLegacyInProd = false,
+    familyMatch = false,
     runtimeTag = getRuntimeTag(),
+    runtimeFamily = getRuntimeFamily(),
     prodRuntime = isProdRuntime(),
 } = {}) => {
     if (strict) {
         return { [field]: runtimeTag };
     }
 
-    if (prodRuntime && includeLegacyInProd) {
-        return {
-            $or: [
-                { [field]: runtimeTag },
-                { [field]: { $exists: false } },
-                { [field]: null },
-                { [field]: "" },
-            ],
-        };
+    if (familyMatch) {
+        const familyFilter = [
+            { [field]: { $regex: `^${runtimeFamily}(?:-|$)` } },
+        ];
+        if (prodRuntime && includeLegacyInProd) {
+            familyFilter.push({ [field]: { $exists: false } });
+            familyFilter.push({ [field]: null });
+            familyFilter.push({ [field]: "" });
+        }
+        return familyFilter.length === 1 ? familyFilter[0] : { $or: familyFilter };
     }
 
     return { [field]: runtimeTag };
@@ -41,8 +54,10 @@ const recordMatchesRuntime = (
     {
         field = "runtime_tag",
         strict = false,
-        includeLegacyInProd = true,
+        includeLegacyInProd = false,
+        familyMatch = false,
         runtimeTag = getRuntimeTag(),
+        runtimeFamily = getRuntimeFamily(),
         prodRuntime = isProdRuntime(),
     } = {}
 ) => {
@@ -54,6 +69,19 @@ const recordMatchesRuntime = (
         return normalized === runtimeTag;
     }
 
+    if (familyMatch) {
+        if (typeof normalized === "string") {
+            if (normalized === runtimeFamily || normalized.startsWith(`${runtimeFamily}-`)) {
+                return true;
+            }
+            if (prodRuntime && includeLegacyInProd && normalized === "") {
+                return true;
+            }
+            return false;
+        }
+        return prodRuntime && includeLegacyInProd && (normalized === undefined || normalized === null);
+    }
+
     if (prodRuntime && includeLegacyInProd) {
         if (normalized === undefined || normalized === null || normalized === "") return true;
     }
@@ -63,9 +91,9 @@ const recordMatchesRuntime = (
 
 module.exports = {
     getRuntimeTag,
+    getRuntimeFamily,
     isProdRuntime,
     buildRuntimeFilter,
     mergeWithRuntimeFilter,
     recordMatchesRuntime,
 };
-

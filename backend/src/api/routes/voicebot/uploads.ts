@@ -10,6 +10,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { ObjectId } from 'mongodb';
+import type { Server as SocketIOServer } from 'socket.io';
 import {
     VOICEBOT_COLLECTIONS,
     VOICEBOT_FILE_STORAGE,
@@ -18,7 +19,13 @@ import {
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
-import { mergeWithRuntimeFilter, recordMatchesRuntime, RUNTIME_TAG } from '../../../services/runtimeScope.js';
+import {
+    IS_PROD_RUNTIME,
+    mergeWithRuntimeFilter,
+    recordMatchesRuntime,
+    RUNTIME_TAG
+} from '../../../services/runtimeScope.js';
+import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
 import { getLogger } from '../../../utils/logger.js';
 import { getAudioDurationFromFile } from '../../../utils/audioUtils.js';
 
@@ -26,10 +33,18 @@ const router = Router();
 const logger = getLogger();
 
 const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> =>
-    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+    mergeWithRuntimeFilter(query, {
+        field: 'runtime_tag',
+        familyMatch: IS_PROD_RUNTIME,
+        includeLegacyInProd: IS_PROD_RUNTIME,
+    });
 
 const runtimeMessageQuery = (query: Record<string, unknown>): Record<string, unknown> =>
-    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+    mergeWithRuntimeFilter(query, {
+        field: 'runtime_tag',
+        familyMatch: IS_PROD_RUNTIME,
+        includeLegacyInProd: IS_PROD_RUNTIME,
+    });
 
 const uploadsDir = VOICEBOT_FILE_STORAGE.uploadsDir;
 if (!existsSync(uploadsDir)) {
@@ -100,6 +115,22 @@ const resolveMessageFilePath = (message: Record<string, unknown>, attachment?: R
     return isAbsolute(raw) ? raw : resolve(raw);
 };
 
+const resolveMessageRuntimeTag = (session: Record<string, unknown>): string => {
+    const sessionRuntimeTag = typeof session.runtime_tag === 'string' ? session.runtime_tag.trim() : '';
+    if (sessionRuntimeTag.length > 0) return sessionRuntimeTag;
+    return RUNTIME_TAG;
+};
+
+const isProdFamilyRuntimeTag = (runtimeTag: string): boolean =>
+    runtimeTag === 'prod' || runtimeTag.startsWith('prod-');
+
+const resolveUploadRuntimeTag = (session: Record<string, unknown>): string => {
+    const sessionRuntimeTag = resolveMessageRuntimeTag(session);
+    if (!IS_PROD_RUNTIME) return sessionRuntimeTag;
+    if (!isProdFamilyRuntimeTag(sessionRuntimeTag)) return sessionRuntimeTag;
+    return RUNTIME_TAG;
+};
+
 const checkSessionAccess = async ({
     sessionId,
     req,
@@ -131,7 +162,11 @@ const checkSessionAccess = async ({
             _id: new ObjectId(sessionId),
             is_deleted: { $ne: true },
         }) as Record<string, unknown> | null;
-        if (rawSession && !recordMatchesRuntime(rawSession, { field: 'runtime_tag' })) {
+        if (rawSession && !recordMatchesRuntime(rawSession, {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        })) {
             return { status: 409, error: 'runtime_mismatch' };
         }
         return { status: 404, error: 'Session not found' };
@@ -191,13 +226,16 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         }
         const session = sessionCheck.session as Record<string, unknown>;
         const chatId = Number(session.chat_id);
+        const uploadRuntimeTag = resolveUploadRuntimeTag(session);
 
         const results: Array<Record<string, unknown>> = [];
+        const socketMessages: Array<Record<string, unknown>> = [];
         for (const file of filesArray) {
             const createdAt = new Date();
+            const absoluteFilePath = resolve(file.path);
             let duration = 0;
             try {
-                duration = await getAudioDurationFromFile(file.path);
+                duration = await getAudioDurationFromFile(absoluteFilePath);
             } catch (error) {
                 logger.warn('Could not determine uploaded audio duration:', error);
             }
@@ -206,7 +244,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 type: 'voice',
                 source_type: 'web',
                 message_type: 'voice',
-                file_path: file.path,
+                file_path: absoluteFilePath,
                 file_name: file.originalname,
                 file_size: file.size,
                 mime_type: file.mimetype,
@@ -228,12 +266,33 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 is_transcribed: false,
                 transcription_text: '',
                 is_deleted: false,
-                runtime_tag: RUNTIME_TAG,
+                runtime_tag: uploadRuntimeTag,
                 created_at: createdAt,
                 updated_at: createdAt,
             };
 
             const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
+            socketMessages.push({
+                _id: String(op.insertedId),
+                session_id,
+                message_id: messageDoc.message_id,
+                message_timestamp: messageDoc.message_timestamp,
+                source_type: messageDoc.source_type,
+                message_type: messageDoc.message_type,
+                type: messageDoc.type,
+                chat_id: messageDoc.chat_id,
+                file_path: absoluteFilePath,
+                file_name: messageDoc.file_name,
+                file_size: messageDoc.file_size,
+                mime_type: messageDoc.mime_type,
+                duration: messageDoc.duration,
+                to_transcribe: true,
+                is_transcribed: false,
+                transcription_text: '',
+                runtime_tag: uploadRuntimeTag,
+                created_at: createdAt.toISOString(),
+                updated_at: createdAt.toISOString(),
+            });
             results.push({
                 success: true,
                 message_id: String(op.insertedId),
@@ -254,11 +313,28 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                     last_voice_timestamp: new Date(),
                     updated_at: new Date(),
                     is_messages_processed: false,
+                    runtime_tag: uploadRuntimeTag,
                 },
             }
         );
 
         logger.info(`Audio uploaded for session ${session_id}: files=${filesArray.length}`);
+
+        const io = req.app.get('io') as SocketIOServer | undefined;
+        if (io) {
+            const room = getVoicebotSessionRoom(session_id);
+            const namespace = io.of('/voicebot');
+            for (const payload of socketMessages) {
+                namespace.to(room).emit('new_message', payload);
+            }
+            namespace.to(room).emit('session_update', {
+                _id: session_id,
+                session_id,
+                is_messages_processed: false,
+                updated_at: new Date().toISOString(),
+                runtime_tag: uploadRuntimeTag,
+            });
+        }
 
         if (results.length === 1) {
             return res.status(200).json({

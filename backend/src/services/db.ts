@@ -40,7 +40,8 @@ const runtimeFilterForCollection = <TSchema extends Document>(
 ): Filter<TSchema> =>
   mergeWithRuntimeFilter(filter as Record<string, unknown>, {
     field: 'runtime_tag',
-    includeLegacyInProd: true,
+    familyMatch: IS_PROD_RUNTIME,
+    includeLegacyInProd: IS_PROD_RUNTIME,
     runtimeTag: RUNTIME_TAG,
     prodRuntime: IS_PROD_RUNTIME,
   }) as Filter<TSchema>;
