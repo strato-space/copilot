@@ -278,6 +278,22 @@ test.describe('Voice FAB lifecycle parity', () => {
     await page.goto(`/voice/session/${SESSION_ID}`);
     await attachFabControlRecorder(page, { state: 'recording' });
 
+    await page.evaluate((sessionId) => {
+      const win = window as unknown as {
+        __voicebotState?: { get?: () => { state?: string } };
+      };
+      win.__voicebotState = { get: () => ({ state: 'recording' }) };
+      window.localStorage.setItem('VOICEBOT_ACTIVE_SESSION_ID', sessionId);
+      window.dispatchEvent(
+        new CustomEvent('voicebot:active-session-updated', {
+          detail: {
+            session_id: sessionId,
+            source: 'playwright-test-force-recording',
+          },
+        })
+      );
+    }, SESSION_ID);
+
     await expect(actionButton(page, 'New')).toBeDisabled();
     await expect(actionButton(page, 'Rec')).toBeDisabled();
     await expect(actionButton(page, 'Cut')).toBeEnabled();

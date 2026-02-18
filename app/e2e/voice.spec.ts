@@ -70,6 +70,39 @@ const mockSessionGet = async (page: Page, sessionId = SESSION_ID): Promise<void>
 };
 
 test.describe('Voice UI', () => {
+    test('@unauth does not request microphone on initial /voice load', async ({ page }) => {
+        await page.addInitScript(() => {
+            const win = window as unknown as { __gumCalls?: number };
+            win.__gumCalls = 0;
+
+            const nav = navigator as Navigator & {
+                mediaDevices?: {
+                    getUserMedia?: (...args: unknown[]) => Promise<MediaStream>;
+                };
+            };
+
+            if (!nav.mediaDevices) {
+                nav.mediaDevices = {};
+            }
+
+            nav.mediaDevices.getUserMedia = async () => {
+                win.__gumCalls = (win.__gumCalls || 0) + 1;
+                throw new Error('playwright-gum-blocked');
+            };
+        });
+
+        await mockAuth(page);
+        await mockCommonVoiceListApis(page, []);
+
+        await page.goto('/voice');
+        await expect(page.getByRole('columnheader', { name: 'Дата' })).toBeVisible();
+        await expect
+            .poll(async () =>
+                page.evaluate(() => ((window as unknown as { __gumCalls?: number }).__gumCalls || 0))
+            )
+            .toBe(0);
+    });
+
     test('@unauth loads /voice sessions table', async ({ page }) => {
         await mockAuth(page);
         await mockCommonVoiceListApis(page, [

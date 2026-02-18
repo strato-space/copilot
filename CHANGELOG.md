@@ -528,3 +528,4 @@
 - **01:25** Re-ran targeted TG suites and backend build (`tgCommandHandlers`, `tgIngressHandlers`, `runtimeNonCommandHandlers`, `npm run build`).
 - **01:35** Added `backend/__tests__/voicebot/workerIngressHandlers.test.ts` to validate TS worker wrapper delegation for `HANDLE_VOICE`, `HANDLE_TEXT`, `HANDLE_ATTACHMENT` and payload normalization.
 - **01:50** Updated `scripts/pm2-voicebot-cutover.ecosystem.config.js` to launch `copilot-voicebot-tgbot-prod` from backend TypeScript runtime (`npm run start:voicebot-tgbot`) with merged env (`backend/.env.production` + `voicebot_runtime/.env.prod-cutover`) instead of legacy `voicebot_runtime/voicebot-tgbot.js`.
+- **02:05** Added Playwright guard `@unauth does not request microphone on initial /voice load` in `app/e2e/voice.spec.ts` and stabilized FAB recording-state e2e setup in `app/e2e/voice-fab-lifecycle.spec.ts`; verified local unauth suite (`13 passed`) on `http://127.0.0.1:3002`.
