@@ -59,18 +59,18 @@ Queue names are defined in `src/constants.ts`:
 
 4. For full worker functionality, use the original voicebot service.
 
-## Current Scaffold in Copilot
+## Current Worker Coverage in Copilot
 
-Copilot now includes a minimal worker scaffold to unblock migration work:
+Copilot now includes runtime-safe TS handlers for core VoiceBot jobs:
 
 - `src/workers/voicebot/manifest.ts` - typed job-name -> handler map
 - `src/workers/voicebot/handlers/doneMultiprompt.ts` - queue-handler skeleton for `DONE_MULTIPROMPT`
-- `src/workers/voicebot/handlers/processingLoop.ts` - runtime-scoped queue snapshot for pending work
+- `src/workers/voicebot/handlers/processingLoop.ts` - runtime-safe processing loop (quota recovery, stale categorization lock reset, transcribe requeue gating, finalize toggles)
 - `src/workers/voicebot/handlers/transcribe.ts` - runtime-safe transcribe handler (OpenAI Whisper direct path for local uploaded audio + quota diagnostics)
 - `src/workers/voicebot/handlers/categorize.ts` - runtime-safe categorize handler (OpenAI Responses path + retry/backoff + quota handling)
 - `src/workers/voicebot/handlers/finalization.ts` - runtime-safe finalization handler (OpenAI Responses dedup for custom processor outputs + no-custom-data short-circuit)
 
-This scaffold is intentionally minimal:
+Remaining gaps:
 - no long-running worker process is started from API runtime,
 - Telegram voice-link download path is not ported yet (handler currently expects local file_path),
 - full session-level postprocessing fanout and long-running worker bootstrap are still external to API runtime.

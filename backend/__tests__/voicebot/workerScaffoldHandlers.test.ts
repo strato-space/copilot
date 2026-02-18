@@ -89,25 +89,39 @@ describe('voicebot worker scaffold handlers', () => {
     expect(result.reason).toBe('no_custom_data');
   });
 
-  it('processing loop handler returns runtime snapshot counters', async () => {
-    const find = jest.fn(() => ({
-      limit: () => ({
-        toArray: async () => [{ _id: new ObjectId() }, { _id: new ObjectId() }],
+  it('processing loop handler returns runtime counters', async () => {
+    const find = jest
+      .fn()
+      .mockImplementationOnce(() => ({
+        limit: () => ({
+          toArray: async () => [{ _id: new ObjectId() }, { _id: new ObjectId() }],
+        }),
+      }))
+      .mockImplementationOnce(() => ({
+        limit: () => ({
+          toArray: async () => [],
+        }),
+      }));
+
+    const messagesFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [],
       }),
     }));
+
     const countDocuments = jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(2);
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
-        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { find };
-        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { countDocuments };
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { find, updateOne: jest.fn() };
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { find: messagesFind, countDocuments, updateOne: jest.fn() };
         return {};
       },
     });
 
     const result = await handleProcessingLoopJob({ limit: 20 });
     expect(result.ok).toBe(true);
-    expect(result.mode).toBe('skeleton');
+    expect(result.mode).toBe('runtime');
     expect(result.scanned_sessions).toBe(2);
     expect(result.pending_transcriptions).toBe(4);
     expect(result.pending_categorizations).toBe(2);
