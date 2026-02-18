@@ -27,6 +27,8 @@ describe("RedisMonitor safety rails", () => {
         expect(queue.clean).toHaveBeenCalledWith(3600000, 1000, "completed");
         expect(queue.clean).toHaveBeenCalledWith(86400000, 500, "failed");
         expect(queue.clean).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "wait");
+        expect(queue.clean).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "active");
+        expect(queue.clean).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "delayed");
         expect(queue.trimEvents).toHaveBeenCalledWith(10000);
     });
 
@@ -63,6 +65,8 @@ describe("RedisMonitor safety rails", () => {
             expect(q.clean).toHaveBeenCalledWith(0, 10000, "completed");
             expect(q.clean).toHaveBeenCalledWith(0, 5000, "failed");
             expect(q.clean).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "wait");
+            expect(q.clean).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "active");
+            expect(q.clean).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "delayed");
             expect(q.trimEvents).toHaveBeenCalledWith(2000);
         }
     });
