@@ -46,15 +46,18 @@ describe('voicebot worker scaffold handlers', () => {
 
   it('categorize handler skips when transcription text is absent', async () => {
     const messageId = new ObjectId();
-    const findOne = jest.fn(async () => ({
+    const sessionId = new ObjectId();
+    const messageFindOne = jest.fn(async () => ({
       _id: messageId,
-      session_id: new ObjectId(),
+      session_id: sessionId,
       transcription_text: '',
     }));
+    const sessionFindOne = jest.fn(async () => ({ _id: sessionId }));
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
-        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne };
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne: messageFindOne };
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { findOne: sessionFindOne };
         return {};
       },
     });
