@@ -150,6 +150,7 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-v0b` и `copilot-3u9`: подтверждён real-time upload feedback (file name + uploaded MB/total MB) и отсутствие forced multipart Content-Type (boundary by axios/browser); test `app/__tests__/voice/audioUploadProgress.test.ts`.
 - [v] Закрыты changelog-gap `copilot-4jr` и `copilot-fo9`: подтверждены axios upload progress + error hints (413/network/timeout) в Copilot voice uploader и docs по locations/duration backfill (ffprobe fallback) в voicebot_runtime/AGENTS.md; tests `app/__tests__/voice/audioUploadProgress.test.ts`, `voicebot_runtime/__tests__/docs/duration_backfill_docs_smoke.test.js`.
 - [v] Закрыты changelog-gap `copilot-bs3` и `copilot-baj`: подтверждено, что done handler не создаёт новую сессию (close-only + emits update/notify), и ops upload limits/timeouts для Copilot host соответствуют 600MB cap (700m + 600s); tests `voicebot_runtime/__tests__/common_jobs/done_multiprompt.test.js`, `backend/__tests__/voicebot/doneNotifyService.test.ts`, `backend/__tests__/deploy/nginxUploadLimits.test.ts`.
+- [v] Закрыты changelog-gap `copilot-ddl` и `copilot-dwl`: портированы hover-only Copy/Edit/Delete действия сегментов (no overlap, safe padding/wrap) и упрощён header Transcription (без standalone Time column); test `app/__tests__/voice/transcriptionRowActions.test.ts`.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
