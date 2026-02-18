@@ -174,6 +174,9 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-4qs` и `copilot-sve`: подтверждена parity-политика загрузок в closed session (inactivity не блокирует upload, блокировка только для `is_deleted=true`) на backend+UI; tests `backend/__tests__/voicebot/uploadAudioRoute.test.ts` (inactive session upload accepted) и `app/__tests__/voice/sessionStatusWidgetUploadPolicy.test.ts` (disable only by `is_deleted`).
 - [v] Закрыт changelog-gap `copilot-7l7`: подтверждён `.gitignore` parity для fast-agent локальных артефактов (`agents/.venv/`, `agents/logs/`) с docs smoke guard `voicebot_runtime/__tests__/docs/gitignore_fastagent_artifacts.test.js`.
 
+- [v] Закрыты changelog-gap `copilot-ap6` и `copilot-ziw`: восстановлен frontend-контракт ручного `Summarize (∑)` рядом с AI title (MeetingCard + store endpoint `trigger_session_ready_to_summarize`) с 3-минутным cooldown и явным success/error UX. Tests: `app/__tests__/voice/meetingCardSummarizeAndIconContract.test.ts`, `app/__tests__/voice/voiceBotStoreSummarizeContract.test.ts`.
+- [v] Закрыты changelog-gap `copilot-jfi` и `copilot-g68`: session-header action buttons переведены на circle-icon layout с центрированными glyph wrappers (`inline-flex items-center justify-center`) для устранения baseline drift; test `app/__tests__/voice/meetingCardSummarizeAndIconContract.test.ts`.
+
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
 - [x] T2 `POST /api/voicebot/create_session` создает и активирует новую сессию.

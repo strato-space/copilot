@@ -32,6 +32,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         voiceBotMessages,
         activateSession,
         finishSession,
+        triggerSessionReadyToSummarize,
     } = useVoiceBotStore();
 
     const { openParticipantModal, openAccessUsersModal, generateSessionTitle } = useSessionsUIStore();
@@ -43,6 +44,8 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const [customPromptModalVisible, setCustomPromptModalVisible] = useState(false);
     const [messageApi, contextHolder] = message.useMessage();
     const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
+    const [isSummarizing, setIsSummarizing] = useState(false);
+    const [summarizeDisabledUntil, setSummarizeDisabledUntil] = useState<number | null>(null);
     const [fabSessionState, setFabSessionState] = useState('idle');
     const [fabActiveSessionId, setFabActiveSessionId] = useState('');
     const [isNewStarting, setIsNewStarting] = useState(false);
@@ -60,6 +63,22 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
             void fetchPreparedProjects();
         }
     }, [prepared_projects, fetchPreparedProjects]);
+
+    useEffect(() => {
+        setSummarizeDisabledUntil(null);
+        setIsSummarizing(false);
+    }, [voiceBotSession?._id]);
+
+    useEffect(() => {
+        if (typeof summarizeDisabledUntil !== 'number') return;
+        const remainingMs = summarizeDisabledUntil - Date.now();
+        if (remainingMs <= 0) {
+            setSummarizeDisabledUntil(null);
+            return;
+        }
+        const timer = window.setTimeout(() => setSummarizeDisabledUntil(null), remainingMs);
+        return () => window.clearTimeout(timer);
+    }, [summarizeDisabledUntil]);
 
     useEffect(() => {
         const syncFromGlobals = (): void => {
@@ -168,6 +187,44 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         setIsGeneratingTitle(false);
     };
 
+    const triggerSummarize = async (): Promise<void> => {
+        if (!voiceBotSession?._id) return;
+
+        // Enforce 3-minute UI cooldown between manual summarize triggers.
+        setSummarizeDisabledUntil(Date.now() + 3 * 60 * 1000);
+        setIsSummarizing(true);
+        messageApi.open({
+            key: 'summarize',
+            type: 'loading',
+            content: 'Запускаю Summarize...',
+            duration: 0,
+        });
+
+        try {
+            const result = await triggerSessionReadyToSummarize(voiceBotSession._id);
+            const projectAssigned = Boolean((result as { project_assigned?: unknown }).project_assigned);
+            messageApi.open({
+                key: 'summarize',
+                type: 'success',
+                content: projectAssigned ? 'Summarize запущен (проект PMO назначен).' : 'Summarize запущен.',
+                duration: 4,
+            });
+        } catch (error) {
+            console.error('Ошибка при запуске Summarize:', error);
+            messageApi.open({
+                key: 'summarize',
+                type: 'error',
+                content: `Ошибка запуска Summarize: ${String(error)}`,
+                duration: 4,
+            });
+        } finally {
+            setIsSummarizing(false);
+        }
+    };
+
+    const circleIconButtonClassName = 'inline-flex items-center justify-center border border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100';
+    const centeredIconClassName = 'inline-flex items-center justify-center leading-none';
+
     const runFabControlAction = async ({
         action,
         ensurePageSessionActive = false,
@@ -213,6 +270,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const normalizedFabState = String(fabSessionState || '').trim().toLowerCase();
     const isThisSessionActiveInFab = Boolean(currentSessionId && fabActiveSessionId && currentSessionId === fabActiveSessionId);
     const hasAuthToken = Boolean(authToken);
+    const isSummarizeCooldownActive = typeof summarizeDisabledUntil === 'number' && Date.now() < summarizeDisabledUntil;
     const fabIsRecording = normalizedFabState === 'recording' || normalizedFabState === 'cutting';
     const fabIsPaused = normalizedFabState === 'paused';
     const fabIsFinalUploading = normalizedFabState === 'final_uploading';
@@ -265,18 +323,39 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                     ) : (
                         <div className="flex items-center gap-2">
                             <h3 className="text-base font-semibold m-0">{voiceBotSession?.session_name || 'Без названия'}</h3>
-                            <Button size="small" icon={<EditOutlined />} onClick={() => setIsEditing(true)} />
+                            <Tooltip title="Редактировать">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    className={circleIconButtonClassName}
+                                    icon={<span className={centeredIconClassName}><EditOutlined /></span>}
+                                    onClick={() => setIsEditing(true)}
+                                />
+                            </Tooltip>
+                            <Tooltip title="AI заголовок">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    className={circleIconButtonClassName}
+                                    icon={<span className={centeredIconClassName}><RobotOutlined /></span>}
+                                    loading={isGeneratingTitle}
+                                    onClick={handleGenerateTitle}
+                                    disabled={!voiceBotSession?._id}
+                                />
+                            </Tooltip>
+                            <Tooltip title="Summarize">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    className={circleIconButtonClassName}
+                                    icon={<span className={`${centeredIconClassName} text-sm font-semibold`}>∑</span>}
+                                    loading={isSummarizing}
+                                    onClick={triggerSummarize}
+                                    disabled={!voiceBotSession?._id || isSummarizing || isSummarizeCooldownActive}
+                                />
+                            </Tooltip>
                         </div>
                     )}
-
-                    <Button
-                        icon={<RobotOutlined />}
-                        loading={isGeneratingTitle}
-                        onClick={handleGenerateTitle}
-                        disabled={!voiceBotSession?._id}
-                    >
-                        AI заголовок
-                    </Button>
 
                     <Button icon={<DownloadOutlined />} onClick={() => voiceBotSession?._id && downloadTranscription(voiceBotSession._id)}>
                         Скачать транскрипцию

@@ -49,6 +49,7 @@ interface VoiceBotState {
     fetchVoiceBotSession: (sessionId: string) => Promise<void>;
     fetchActiveSession: () => Promise<Record<string, unknown> | null>;
     activateSession: (sessionId: string) => Promise<boolean>;
+    triggerSessionReadyToSummarize: (sessionId: string) => Promise<Record<string, unknown>>;
     fetchSessionLog: (sessionId: string, options?: { silent?: boolean }) => Promise<void>;
     editTranscriptChunk: (
         payload: { session_id: string; message_id: string; segment_oid: string; new_text: string; reason?: string },
@@ -657,6 +658,17 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         } catch (error) {
             console.error('Ошибка при активации сессии:', error);
             return false;
+        }
+    },
+
+    triggerSessionReadyToSummarize: async (sessionId) => {
+        try {
+            return await voicebotRequest<Record<string, unknown>>('voicebot/trigger_session_ready_to_summarize', {
+                session_id: sessionId,
+            });
+        } catch (error) {
+            console.error('Ошибка при ручном запуске Summarize:', error);
+            throw error;
         }
     },
 
