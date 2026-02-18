@@ -1,17 +1,22 @@
+const path = require('path');
+
+const rootDir = path.resolve(__dirname, '..');
+const backendDir = path.join(rootDir, 'backend');
+
 module.exports = {
   apps: [
     {
-      name: "copilot-voicebot-tgbot-prod",
-      cwd: "/home/strato-space/copilot/voicebot_runtime",
-      script: "voicebot-tgbot.js",
-      env_file: "/home/strato-space/copilot/voicebot_runtime/.env.prod-cutover",
+      name: 'copilot-voicebot-tgbot-prod',
+      cwd: backendDir,
+      script: 'npm',
+      args: 'run start:voicebot-tgbot',
+      env_file: path.join(backendDir, '.env.production'),
       env: {
-        DOTENV_CONFIG_PATH: "/home/strato-space/copilot/voicebot_runtime/.env.prod-cutover",
-        DOTENV_CONFIG_OVERRIDE: "true"
+        NODE_ENV: 'production',
       },
       autorestart: true,
       max_restarts: 10,
-      min_uptime: "10s"
-    }
-  ]
+      min_uptime: '10s',
+    },
+  ],
 };

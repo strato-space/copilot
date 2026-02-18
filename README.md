@@ -27,7 +27,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Full-track recording segments are represented as `full_track` in chunk metadata and UI, with duration and timestamp information persisted in upload metadata.
 - Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).
 - Voice task creation in Copilot runtime no longer requires `task_type_id`; missing type is no longer a hard blocker in ticket/task generation.
-- `copilot-voicebot-tgbot-prod` bootstraps env from `voicebot_runtime/.env.prod-cutover` via `DOTENV_CONFIG_PATH` with dotenv override to avoid inheriting stale shell keys.
+- `copilot-voicebot-tgbot-prod` runs TypeScript runtime from `backend/dist/voicebot_tgbot/runtime.js` using `backend/.env.production` (same env source as prod backend).
 
 
 ### Voice runtime: key configuration map
@@ -49,7 +49,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
   - `VOICEBOT_TASK_CREATION_MODEL` (default `gpt-4.1`)
   - Transcription errors persist diagnostics (`openai_key_mask`, `openai_key_source`, `openai_api_key_env_file`, `server_name`) for quota/file-path incident analysis.
 - Storage and services:
-  - `OPENAI_*` keys are loaded by the runtime that executes the call (`copilot-backend-*` and `copilot-voicebot-tgbot-*` are separated by service/PM2 files).
+  - `OPENAI_*` keys are loaded from `backend/.env.production` for both `copilot-backend-*` and `copilot-voicebot-tgbot-*` services.
   - `MONGO_*`, `REDIS_*`, `MAX_FILE_SIZE`, `UPLOADS_DIR` remain service-specific.
 
 ### Voice agents integration (frontend -> agents)
