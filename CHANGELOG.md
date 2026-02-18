@@ -130,6 +130,9 @@
 - **00:28** Added finalization worker regression suite `backend/__tests__/voicebot/workerFinalizationHandler.test.ts` and updated scaffold coverage in `backend/__tests__/voicebot/workerScaffoldHandlers.test.ts`.
 - **00:38** Upgraded `backend/src/workers/voicebot/handlers/processingLoop.ts` from snapshot scaffold to TS runtime loop: quota-blocked session unblock, stale categorization lock recovery, transcribe retry gating (`transcription_next_attempt_at` + hard max attempts), and finalize-state toggles with runtime-family filters.
 - **00:38** Added processing-loop regression suite `backend/__tests__/voicebot/workerProcessingLoopHandler.test.ts` and updated scaffold contract coverage in `backend/__tests__/voicebot/workerScaffoldHandlers.test.ts`.
+- **00:50** Started `copilot-f1g` non-command Telegram ingress migration: added `backend/src/voicebot_tgbot/ingressHandlers.ts` (session resolution, active-session routing, text/voice/attachment persistence) and wired runtime handlers in `backend/src/voicebot_tgbot/runtime.ts` for `voice/text/photo/document/audio`.
+- **00:50** Extended worker manifest parity with `HANDLE_VOICE`, `HANDLE_TEXT`, `HANDLE_ATTACHMENT` mappings and added wrapper handlers (`backend/src/workers/voicebot/handlers/handleVoice.ts`, `handleText.ts`, `handleAttachment.ts`).
+- **00:50** Added ingress regression coverage `backend/__tests__/voicebot/tgIngressHandlers.test.ts` and updated scaffold manifest assertions for new common jobs.
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -223,6 +226,8 @@
 - **00:28** `cd backend && npm run build`
 - **00:38** `cd backend && npm test -- --runInBand __tests__/voicebot/workerProcessingLoopHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts __tests__/voicebot/workerFinalizationHandler.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts __tests__/voicebot/workerCategorizeHandler.test.ts`
 - **00:38** `cd backend && npm run build`
+- **00:50** `cd backend && npm test -- --runInBand __tests__/voicebot/tgIngressHandlers.test.ts __tests__/voicebot/tgCommandHandlers.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts __tests__/voicebot/workerProcessingLoopHandler.test.ts`
+- **00:50** `cd backend && npm run build`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

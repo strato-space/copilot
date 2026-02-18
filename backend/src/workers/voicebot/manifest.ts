@@ -19,6 +19,18 @@ import {
   handleProcessingLoopJob,
   type ProcessingLoopJobData,
 } from './handlers/processingLoop.js';
+import {
+  handleVoiceJob,
+  type HandleVoiceJobData,
+} from './handlers/handleVoice.js';
+import {
+  handleTextJob,
+  type HandleTextJobData,
+} from './handlers/handleText.js';
+import {
+  handleAttachmentJob,
+  type HandleAttachmentJobData,
+} from './handlers/handleAttachment.js';
 
 export type VoicebotWorkerHandler = (payload: unknown) => Promise<unknown>;
 
@@ -27,6 +39,12 @@ export const VOICEBOT_WORKER_MANIFEST: Record<string, VoicebotWorkerHandler> = {
     handleDoneMultipromptJob(payload as DoneMultipromptJobData),
   [VOICEBOT_JOBS.common.PROCESSING]: async (payload: unknown) =>
     handleProcessingLoopJob(payload as ProcessingLoopJobData),
+  [VOICEBOT_JOBS.common.HANDLE_VOICE]: async (payload: unknown) =>
+    handleVoiceJob(payload as HandleVoiceJobData),
+  [VOICEBOT_JOBS.common.HANDLE_TEXT]: async (payload: unknown) =>
+    handleTextJob(payload as HandleTextJobData),
+  [VOICEBOT_JOBS.common.HANDLE_ATTACHMENT]: async (payload: unknown) =>
+    handleAttachmentJob(payload as HandleAttachmentJobData),
   [VOICEBOT_JOBS.voice.TRANSCRIBE]: async (payload: unknown) =>
     handleTranscribeJob(payload as TranscribeJobData),
   [VOICEBOT_JOBS.voice.CATEGORIZE]: async (payload: unknown) =>

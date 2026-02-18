@@ -66,6 +66,9 @@ Copilot now includes runtime-safe TS handlers for core VoiceBot jobs:
 - `src/workers/voicebot/manifest.ts` - typed job-name -> handler map
 - `src/workers/voicebot/handlers/doneMultiprompt.ts` - queue-handler skeleton for `DONE_MULTIPROMPT`
 - `src/workers/voicebot/handlers/processingLoop.ts` - runtime-safe processing loop (quota recovery, stale categorization lock reset, transcribe requeue gating, finalize toggles)
+- `src/workers/voicebot/handlers/handleVoice.ts` - TS ingress handler for Telegram voice payloads
+- `src/workers/voicebot/handlers/handleText.ts` - TS ingress handler for Telegram text payloads
+- `src/workers/voicebot/handlers/handleAttachment.ts` - TS ingress handler for Telegram photo/document/audio payloads
 - `src/workers/voicebot/handlers/transcribe.ts` - runtime-safe transcribe handler (OpenAI Whisper direct path for local uploaded audio + quota diagnostics)
 - `src/workers/voicebot/handlers/categorize.ts` - runtime-safe categorize handler (OpenAI Responses path + retry/backoff + quota handling)
 - `src/workers/voicebot/handlers/finalization.ts` - runtime-safe finalization handler (OpenAI Responses dedup for custom processor outputs + no-custom-data short-circuit)
@@ -74,3 +77,7 @@ Remaining gaps:
 - no long-running worker process is started from API runtime,
 - Telegram voice-link download path is not ported yet (handler currently expects local file_path),
 - full session-level postprocessing fanout and long-running worker bootstrap are still external to API runtime.
+
+
+Additional migration note:
+- `backend/src/voicebot_tgbot/runtime.ts` now wires non-command ingress handlers (`voice`, `text`, `photo`, `document`, `audio`) through `backend/src/voicebot_tgbot/ingressHandlers.ts`.
