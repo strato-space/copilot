@@ -225,4 +225,84 @@ describe('voicebot tgbot ingress handlers', () => {
     expect(Array.isArray(inserted.attachments)).toBe(true);
     expect(setActiveVoiceSessionMock).toHaveBeenCalledTimes(1);
   });
+
+  it('resolves explicit session from reply_text reference for text ingress', async () => {
+    const performerId = new ObjectId();
+    const explicitSessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue(null);
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '1004' },
+      explicitSession: {
+        _id: explicitSessionId,
+        session_type: 'multiprompt_voice_session',
+        user_id: performerId,
+      },
+    });
+
+    const result = await handleTextIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 1004,
+        chat_id: 1004,
+        username: 'reply-user',
+        message_id: 99,
+        message_timestamp: 1770500300,
+        text: 'follow up answer',
+        reply_text: `context: /session/${explicitSessionId.toHexString()}`,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.created_session).toBe(false);
+    expect(spies.sessionsInsertOne).not.toHaveBeenCalled();
+
+    const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect((inserted.session_id as ObjectId).toHexString()).toBe(explicitSessionId.toHexString());
+    expect(setActiveVoiceSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores forwarded_context for forwarded text ingress', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '1005' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+      },
+    });
+
+    const forwardedContext = {
+      forward_origin: {
+        type: 'channel',
+        chat: { id: -1001234567890, title: 'Forward Source' },
+      },
+      forward_from_message_id: 741,
+    };
+
+    const result = await handleTextIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 1005,
+        chat_id: 1005,
+        username: 'forward-user',
+        message_id: 101,
+        message_timestamp: 1770500400,
+        text: 'forwarded block text',
+        forwarded_context: forwardedContext,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(inserted.forwarded_context).toEqual(forwardedContext);
+  });
 });

@@ -33,6 +33,7 @@ const ingressBaseSchema = z.object({
   text: z.string().optional().nullable(),
   caption: z.string().optional().nullable(),
   reply_text: z.string().optional().nullable(),
+  forwarded_context: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 export const ingressVoiceSchema = ingressBaseSchema.extend({
@@ -92,6 +93,7 @@ type NormalizedIngressContext = {
   text: string;
   caption: string;
   reply_text: string;
+  forwarded_context: Record<string, unknown> | null;
 };
 
 type IngressDeps = {
@@ -124,6 +126,11 @@ const normalizeChatId = (value: unknown): number | null => {
 };
 
 const normalizeString = (value: unknown): string => String(value ?? '').trim();
+
+const normalizeRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
 
 const toObjectIdOrNull = (value: unknown): ObjectId | null => {
   if (value instanceof ObjectId) return value;
@@ -255,6 +262,7 @@ const normalizeIngressContext = (input: z.infer<typeof ingressBaseSchema>): Norm
     text: String(input.text || ''),
     caption: String(input.caption || ''),
     reply_text: String(input.reply_text || ''),
+    forwarded_context: normalizeRecord(input.forwarded_context),
   };
 };
 
@@ -409,6 +417,7 @@ export const handleVoiceIngress = async ({
     telegram_user_id: context.telegram_user_id,
     username: context.username,
     user_id: performer._id,
+    ...(context.forwarded_context ? { forwarded_context: context.forwarded_context } : {}),
     message_type: 'voice',
     attachments: [],
     runtime_tag: RUNTIME_TAG,
@@ -491,6 +500,7 @@ export const handleTextIngress = async ({
     telegram_user_id: context.telegram_user_id,
     username: context.username,
     user_id: performer._id,
+    ...(context.forwarded_context ? { forwarded_context: context.forwarded_context } : {}),
     message_type: 'text',
     attachments: [],
     runtime_tag: RUNTIME_TAG,
@@ -566,6 +576,7 @@ export const handleAttachmentIngress = async ({
     telegram_user_id: context.telegram_user_id,
     username: context.username,
     user_id: performer._id,
+    ...(context.forwarded_context ? { forwarded_context: context.forwarded_context } : {}),
     message_type: normalizeString(parsed.data.message_type) || 'screenshot',
     attachments,
     runtime_tag: RUNTIME_TAG,

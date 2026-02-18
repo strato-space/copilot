@@ -252,6 +252,47 @@ const installAuthorizationMiddleware = (bot: Telegraf<Context>) => {
 };
 
 
+const extractForwardedContext = (message: Record<string, unknown>): Record<string, unknown> | null => {
+  const context: Record<string, unknown> = {};
+
+  const legacyKeys = [
+    'forward_date',
+    'forward_sender_name',
+    'forward_from_message_id',
+  ] as const;
+
+  for (const key of legacyKeys) {
+    if (message[key] != null) context[key] = message[key];
+  }
+
+  const forwardFrom = message.forward_from as Record<string, unknown> | undefined;
+  if (forwardFrom && typeof forwardFrom === 'object') {
+    context.forward_from = {
+      id: forwardFrom.id ?? null,
+      username: forwardFrom.username ?? null,
+      first_name: forwardFrom.first_name ?? null,
+      last_name: forwardFrom.last_name ?? null,
+    };
+  }
+
+  const forwardFromChat = message.forward_from_chat as Record<string, unknown> | undefined;
+  if (forwardFromChat && typeof forwardFromChat === 'object') {
+    context.forward_from_chat = {
+      id: forwardFromChat.id ?? null,
+      type: forwardFromChat.type ?? null,
+      title: forwardFromChat.title ?? null,
+      username: forwardFromChat.username ?? null,
+    };
+  }
+
+  const forwardOrigin = message.forward_origin as Record<string, unknown> | undefined;
+  if (forwardOrigin && typeof forwardOrigin === 'object') {
+    context.forward_origin = forwardOrigin;
+  }
+
+  return Object.keys(context).length > 0 ? context : null;
+};
+
 const buildCommonIngressContext = (ctx: Context): Record<string, unknown> => {
   const message = (ctx.message || {}) as unknown as Record<string, unknown>;
   const reply = (message.reply_to_message || {}) as Record<string, unknown>;
@@ -269,6 +310,7 @@ const buildCommonIngressContext = (ctx: Context): Record<string, unknown> => {
       (typeof reply.text === 'string' && reply.text) ||
       (typeof reply.caption === 'string' && reply.caption) ||
       null,
+    forwarded_context: extractForwardedContext(message),
   };
 };
 

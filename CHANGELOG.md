@@ -133,6 +133,7 @@
 - **00:50** Started `copilot-f1g` non-command Telegram ingress migration: added `backend/src/voicebot_tgbot/ingressHandlers.ts` (session resolution, active-session routing, text/voice/attachment persistence) and wired runtime handlers in `backend/src/voicebot_tgbot/runtime.ts` for `voice/text/photo/document/audio`.
 - **00:50** Extended worker manifest parity with `HANDLE_VOICE`, `HANDLE_TEXT`, `HANDLE_ATTACHMENT` mappings and added wrapper handlers (`backend/src/workers/voicebot/handlers/handleVoice.ts`, `handleText.ts`, `handleAttachment.ts`).
 - **00:50** Added ingress regression coverage `backend/__tests__/voicebot/tgIngressHandlers.test.ts` and updated scaffold manifest assertions for new common jobs.
+- **00:55** Extended TG ingress parity for edge-cases: explicit session resolution from `reply_text` and forwarded metadata passthrough (`forwarded_context`) in TS ingress pipeline (`ingressHandlers` + runtime context extraction).
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -228,6 +229,8 @@
 - **00:38** `cd backend && npm run build`
 - **00:50** `cd backend && npm test -- --runInBand __tests__/voicebot/tgIngressHandlers.test.ts __tests__/voicebot/tgCommandHandlers.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts __tests__/voicebot/workerProcessingLoopHandler.test.ts`
 - **00:50** `cd backend && npm run build`
+- **00:55** `cd backend && npm test -- --runInBand __tests__/voicebot/tgIngressHandlers.test.ts __tests__/voicebot/tgCommandHandlers.test.ts __tests__/voicebot/tgSessionRef.test.ts __tests__/voicebot/sessionTelegramMessage.test.ts __tests__/voicebot/doneNotifyService.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts __tests__/voicebot/workerProcessingLoopHandler.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts __tests__/voicebot/workerCategorizeHandler.test.ts __tests__/voicebot/workerFinalizationHandler.test.ts`
+- **00:55** `cd backend && npm run build`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
