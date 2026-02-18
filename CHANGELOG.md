@@ -67,8 +67,11 @@
 - **15:55** Closed changelog-gap verification tasks `copilot-328` and `copilot-wxa` after validating session attachments end-to-end contract and Screenshort UI parity.
 - **16:00** Closed changelog-gap verification tasks `copilot-xhb` and `copilot-emo` after adding smoke coverage for Telegram attachment proxy flow and validating normalized TG command/event responses with public host URLs.
 - **16:08** Closed changelog-gap verification tasks `copilot-2nj` and `copilot-mwg` after adding runtime unit coverage for quota-stall recovery and Redis enqueue-failure rollback (`voicebot_runtime`).
+- **16:17** Closed changelog-gap verification tasks `copilot-l20` and `copilot-0g1` after validating Redis cleanup safety rails (history-only + trimEvents) and categorization cost controls (skip trivial commands/short texts).
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
+
+- **16:16** Added voicebot_runtime unit coverage for RedisMonitor history-only cleanup + trimEvents and categorization short-text/command skip guards to keep LLM spend bounded.
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -97,6 +100,7 @@
 - **15:43** `cd app && npm test -- --runInBand __tests__/voice/sessionPageRequestDiagnostics.test.ts __tests__/voice/screenshortDirectUri.test.ts`
 - **15:59** `cd backend && npm test -- --runInBand __tests__/smoke/voicebotAttachmentSmoke.test.ts __tests__/voicebot/sessionTelegramMessage.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
 - **16:07** `cd voicebot_runtime && npx jest --runInBand __tests__/common_jobs/processing_loop_quota_recovery.test.js __tests__/voicebot/categorization_enqueue_failure.test.js`
+- **16:16** `cd voicebot_runtime && npx jest --runInBand __tests__/services/redis_monitor_safety.test.js __tests__/voicebot/categorization_cost_controls.test.js`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
