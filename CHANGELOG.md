@@ -10,6 +10,8 @@
 - **11:40** `Done` flow could repeatedly auto-retry previously failed uploads, especially full-track chunks, making recovery ambiguous.
 - **13:52** Runtime-scoped aggregate pipelines could still pull cross-runtime rows through `$lookup` joins, creating hidden data-leak vectors in composed reporting/session queries.
 - **13:53** Quota/file errors in transcription did not include key-source/server diagnostics, slowing root-cause analysis when multiple runtimes used different env files.
+- **14:08** Session toolbar state icon parity and FAB-sync semantics still lacked explicit regression tests in Copilot, leaving room for unnoticed UI contract drift.
+- **14:10** Playwright migration task for controller-level voice flows remained open because `trigger_session_ready_to_summarize` had no dedicated e2e coverage entry.
 
 ### FEATURE IMPLEMENTED
 - **11:03** Hardened Voice runtime bootstrap: `voicebot_runtime/voicebot-tgbot.js` now loads dotenv via explicit path/override (`DOTENV_CONFIG_PATH`, `DOTENV_CONFIG_OVERRIDE`) so cutover runtime always applies `voicebot_runtime/.env.prod-cutover` values.
@@ -24,6 +26,8 @@
 - **13:53** Added runtime-aware aggregate lookup scoping and dedicated coverage to keep runtime isolation intact beyond top-level collection filters.
 - **13:54** Added explicit socket-auth unit coverage for `session_done` authorization path via exported `resolveAuthorizedSessionForSocket` helper.
 - **13:54** Extended transcription error context with masked OpenAI key source + env file + runtime server identity for fast production diagnostics.
+- **14:08** Added dedicated MeetingCard contract tests for state-badge mapping, control order, and active-session sync wiring (`localStorage` + event channel).
+- **14:10** Extended Playwright voice-log coverage with ready-to-summarize API trigger scenario and refreshed migration matrix status.
 
 ### CHANGES
 - **11:03** Extended backend socket integration in upload pipeline (`backend/src/api/routes/voicebot/uploads.ts`, `backend/src/api/socket/voicebot.ts`, `backend/src/index.ts`) to emit session-scoped updates immediately after insert/update.
@@ -47,6 +51,8 @@
 - **13:59** Closed changelog-gap verification tasks `copilot-sm0` and `copilot-orh` with explicit test evidence for Telegram 4-line output and `/login` one-time `tg_auth` behavior (active-session independent).
 - **14:00** Closed changelog-gap verification tasks `copilot-ueu` and `copilot-szo` with Playwright evidence for runtime-mismatch error screen and page/FAB lifecycle control parity (`New/Rec/Cut/Pause/Done`).
 - **14:01** Closed changelog-gap verification tasks `copilot-ajg` and `copilot-qkd` with backend route-contract evidence for active-session Web API/UI controls and session lifecycle parity.
+- **14:10** Closed a 5-iteration verification wave (10 tasks): `copilot-ris`, `copilot-3tx`, `copilot-2mo`, `copilot-yud`, `copilot-e2o`, `copilot-r75`, `copilot-amj`, `copilot-1he`, `copilot-9x8`, `copilot-602`.
+- **14:10** Updated docs to capture completed migration evidence: `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`, `docs/PLAYWRIGHT_MIGRATION_MATRIX.md`, and `README.md` voice toolbar/state contract notes.
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -62,6 +68,10 @@
 - **14:00** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth -g "runtime mismatch screen on 404 session fetch"`
 - **14:00** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-fab-lifecycle.spec.ts --project=chromium-unauth`
 - **14:01** `cd backend && npm test -- --runInBand __tests__/voicebot/sessions.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
+- **14:08** `cd app && npm test -- --runInBand __tests__/voice/meetingCardStateMapping.test.ts __tests__/voice/meetingCardFabSync.test.ts`
+- **14:08** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-fab-lifecycle.spec.ts --project=chromium-unauth`
+- **14:09** `cd backend && npm test -- --runInBand __tests__/voicebot/runtimeScope.test.ts __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/sessions.test.ts`
+- **14:10** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-log.spec.ts e2e/voice.spec.ts --project=chromium-unauth`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

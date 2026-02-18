@@ -30,6 +30,8 @@ Date: 2026-02-18
 | `[v]` | `New` routes to FAB control | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth New button routes action into FAB control` |
 | `[v]` | `Done` routes to FAB control | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth Done button routes action into FAB control` |
 | `[v]` | recording-state button enablement parity | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth button enablement follows recording state contract` |
+| `[v]` | trigger session ready-to-summarize API flow | `app/e2e/voice-log.spec.ts` `@unauth triggers session ready-to-summarize endpoint payload` |
+| `[v]` | transcript edit/delete + rollback/resend/retry log actions | `app/e2e/voice-log.spec.ts` `@unauth submits transcript segment edit and delete payloads`, `@unauth triggers rollback, resend and retry actions with proper payloads` |
 | `[x] not yet migrated` | `Cut` must route into FAB control (`cut`) | planned `app/e2e/voice-fab-lifecycle.spec.ts` |
 | `[x] not yet migrated` | `Pause` must route into FAB control (`pause`) | planned `app/e2e/voice-fab-lifecycle.spec.ts` |
 | `[x] not yet migrated` | pause waits for all non-silent pending uploads | planned integration e2e (requires real monitoring chunk list) |
@@ -46,5 +48,5 @@ PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voic
 ```
 
 Latest result:
-- `11 passed`
+- `10 passed` (voice.spec + voice-log.spec run: runtime mismatch, log actions, transcript edit/delete, trigger summarize)
 

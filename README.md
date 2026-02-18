@@ -25,6 +25,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - Full-track recording segments are represented as `full_track` in chunk metadata and UI, with duration and timestamp information persisted in upload metadata.
+- Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).
 - Voice task creation in Copilot runtime no longer requires `task_type_id`; missing type is no longer a hard blocker in ticket/task generation.
 - `copilot-voicebot-tgbot-prod` bootstraps env from `voicebot_runtime/.env.prod-cutover` via `DOTENV_CONFIG_PATH` with dotenv override to avoid inheriting stale shell keys.
 

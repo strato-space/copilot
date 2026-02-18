@@ -264,6 +264,43 @@ test.describe('Voice log workflows', () => {
         });
     });
 
+
+    test('@unauth triggers session ready-to-summarize endpoint payload', async ({ page }) => {
+        await addAuthCookie(page);
+        await mockAuth(page);
+        await mockCommonSessionApis(page);
+        await mockSessionData(page);
+
+        let triggerPayload: Record<string, unknown> | null = null;
+        await page.route('**/api/voicebot/trigger_session_ready_to_summarize', async (route) => {
+            triggerPayload = await route.request().postDataJSON();
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ success: true, session_id: SESSION_ID }),
+            });
+        });
+
+        await page.goto(`/voice/session/${SESSION_ID}`);
+
+        const response = await page.evaluate(async (sessionId) => {
+            const result = await fetch('/api/voicebot/trigger_session_ready_to_summarize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ session_id: sessionId }),
+            });
+            return result.status;
+        }, SESSION_ID);
+
+        expect(response).toBe(200);
+        await expect.poll(() => triggerPayload).not.toBeNull();
+        expect(triggerPayload).toMatchObject({
+            session_id: SESSION_ID,
+        });
+    });
+
     test('@unauth submits transcript segment edit and delete payloads', async ({ page }) => {
         await addAuthCookie(page);
         await mockAuth(page);
