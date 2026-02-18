@@ -185,6 +185,8 @@ Source of truth: см. раздел `## Финальная структура п
 
 - [v] Закрыт changelog-gap `copilot-tyz`: добавлено deterministic speaker-display mapping в Transcription UI — технические raw labels (`spk_*`, single-letter, numeric, `Unknown`) отображаются как `Спикер 1/2/...`, при этом raw labels сохраняются в данных/контракте. Tests: `app/__tests__/voice/speakerDisplayContract.test.ts`.
 
+- [v] Прогресс `copilot-lcf`: `backend/src/workers/voicebot/handlers/transcribe.ts` переведен из scaffold в TS runtime-handler для локальных web/audio файлов (`file_path`), с retry/backoff, quota-aware веткой (`insufficient_quota`), runtime-family filters (`prod/prod-*`) и расширенным `transcription_error_context` (`server_name`, `openai_key_source`, `openai_key_mask`, `openai_api_key_env_file`, `file_path`, `error_code`). Добавлены тесты `backend/__tests__/voicebot/workerTranscribeHandler.test.ts` и адаптирован `backend/__tests__/voicebot/workerScaffoldHandlers.test.ts`.
+
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
 - [x] T2 `POST /api/voicebot/create_session` создает и активирует новую сессию.

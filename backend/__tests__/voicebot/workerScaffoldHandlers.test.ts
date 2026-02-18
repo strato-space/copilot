@@ -22,15 +22,18 @@ describe('voicebot worker scaffold handlers', () => {
 
   it('transcribe handler returns scaffold skip for existing message', async () => {
     const messageId = new ObjectId();
-    const findOne = jest.fn(async () => ({
+    const sessionId = new ObjectId();
+    const messageFindOne = jest.fn(async () => ({
       _id: messageId,
-      session_id: new ObjectId(),
+      session_id: sessionId,
       is_transcribed: false,
     }));
+    const sessionFindOne = jest.fn(async () => ({ _id: sessionId }));
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
-        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne };
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne: messageFindOne };
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { findOne: sessionFindOne };
         return {};
       },
     });
@@ -38,7 +41,7 @@ describe('voicebot worker scaffold handlers', () => {
     const result = await handleTranscribeJob({ message_id: messageId.toString() });
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
-    expect(result.reason).toBe('engine_not_integrated');
+    expect(result.reason).toBe('missing_file_path');
   });
 
   it('categorize handler skips when transcription text is absent', async () => {
