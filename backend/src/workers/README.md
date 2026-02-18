@@ -1,83 +1,37 @@
 # VoiceBot Workers
 
-This directory is a placeholder for VoiceBot BullMQ workers.
+TypeScript VoiceBot workers live under `backend/src/workers/voicebot`.
 
-## Overview
+## Runtime Entrypoint
+- `src/workers/voicebot/runtime.ts` - process bootstrap + signal-safe shutdown.
+- `src/workers/voicebot/runner.ts` - BullMQ worker factory for all VoiceBot queues.
+- `src/workers/voicebot/manifest.ts` - typed `job_name -> handler` map.
 
-VoiceBot uses BullMQ workers for background processing:
+## Start Commands
+- Dev: `npm run dev:voicebot-workers`
+- Prod: `npm run start:voicebot-workers`
 
-- **voice_jobs/** - Audio transcription and processing
-- **common_jobs/** - Session lifecycle management
-- **processors/** - Message processors (categorization, NER, etc.)
-- **postprocessing/** - Session post-processors (create_tasks, etc.)
+## Queue Coverage
+Workers are started for all runtime-scoped queue names from `VOICEBOT_QUEUES`:
+- `COMMON`
+- `VOICE`
+- `PROCESSORS`
+- `POSTPROCESSORS`
+- `EVENTS`
+- `NOTIFIES`
 
-## Current Status
+Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly (`voicebot_worker_handler_not_found:*`) and are logged with queue/job context.
 
-**These workers are NOT included in the copilot backend.**
+## Implemented TS Handlers
+- `handlers/doneMultiprompt.ts`
+- `handlers/processingLoop.ts`
+- `handlers/handleVoice.ts`
+- `handlers/handleText.ts`
+- `handlers/handleAttachment.ts`
+- `handlers/transcribe.ts`
+- `handlers/categorize.ts`
+- `handlers/finalization.ts`
 
-The voicebot workers run as a separate service (`voicebot-tgbot.js`) because:
-
-1. They require heavy dependencies (OpenAI Whisper, Google APIs)
-2. They need dedicated Redis connections for BullMQ
-3. They process long-running jobs that should not block the API
-
-## Integration Points
-
-The copilot backend integrates with voicebot workers through:
-
-1. **BullMQ Queues** - Jobs are added to queues from the API
-2. **Socket.IO Events** - Workers emit events that the API broadcasts
-3. **MongoDB** - Shared session/message state
-
-## Queue Names
-
-Queue names are defined in `src/constants.ts`:
-
-- `voicebot--common` - Session lifecycle
-- `voicebot--voice` - Audio transcription
-- `voicebot--processors` - Message processing
-- `voicebot--postprocessors` - Session finalization
-- `voicebot--events` - Socket event broadcasting
-- `voicebot--notifies` - External notifications
-
-## To Enable BullMQ
-
-1. Install dependencies:
-   \`\`\`bash
-   npm install bullmq ioredis
-   \`\`\`
-
-2. Configure Redis connection in `.env`:
-   \`\`\`
-   REDIS_CONNECTION_HOST=localhost
-   REDIS_CONNECTION_PORT=6379
-   REDIS_CONNECTION_PASSWORD=
-   REDIS_DB_INDEX=0
-   \`\`\`
-
-3. Create queue instances in the API (see `src/services/queue.ts.example`)
-
-4. For full worker functionality, use the original voicebot service.
-
-## Current Worker Coverage in Copilot
-
-Copilot now includes runtime-safe TS handlers for core VoiceBot jobs:
-
-- `src/workers/voicebot/manifest.ts` - typed job-name -> handler map
-- `src/workers/voicebot/handlers/doneMultiprompt.ts` - queue-handler skeleton for `DONE_MULTIPROMPT`
-- `src/workers/voicebot/handlers/processingLoop.ts` - runtime-safe processing loop (quota recovery, stale categorization lock reset, transcribe requeue gating, finalize toggles)
-- `src/workers/voicebot/handlers/handleVoice.ts` - TS ingress handler for Telegram voice payloads
-- `src/workers/voicebot/handlers/handleText.ts` - TS ingress handler for Telegram text payloads
-- `src/workers/voicebot/handlers/handleAttachment.ts` - TS ingress handler for Telegram photo/document/audio payloads
-- `src/workers/voicebot/handlers/transcribe.ts` - runtime-safe transcribe handler (OpenAI Whisper direct path for local uploaded audio + quota diagnostics)
-- `src/workers/voicebot/handlers/categorize.ts` - runtime-safe categorize handler (OpenAI Responses path + retry/backoff + quota handling)
-- `src/workers/voicebot/handlers/finalization.ts` - runtime-safe finalization handler (OpenAI Responses dedup for custom processor outputs + no-custom-data short-circuit)
-
-Remaining gaps:
-- no long-running worker process is started from API runtime,
-- Telegram voice-link download path is not ported yet (handler currently expects local file_path),
-- full session-level postprocessing fanout and long-running worker bootstrap are still external to API runtime.
-
-
-Additional migration note:
-- `backend/src/voicebot_tgbot/runtime.ts` now wires non-command ingress handlers (`voice`, `text`, `photo`, `document`, `audio`) through `backend/src/voicebot_tgbot/ingressHandlers.ts`.
+## Remaining Gaps
+- `EVENTS` and `NOTIFIES` queue job handlers are not fully ported yet (jobs without manifest handler fail explicitly and stay visible for retry/diagnostics).
+- Telegram voice-file download path remains pending in transcribe pipeline (current TS transcribe path expects local `file_path`).

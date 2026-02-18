@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-02-19
+### PROBLEM SOLVED
+- **01:39** Telegram `/start` in `copilot-voicebot-tgbot-prod` failed with Mongo update conflict (`Updating the path 'runtime_tag' would create a conflict`) during active-session upsert.
+
+### FEATURE IMPLEMENTED
+- **01:41** Hardened runtime-scoped upserts in TS backend:
+  - `backend/src/voicebot_tgbot/activeSessionMapping.ts` now writes `runtime_tag` via `$setOnInsert` (not `$set`) for `setActiveVoiceSession` upserts.
+  - `backend/src/services/db.ts` adds `patchRuntimeTagIntoSetOnInsert(...)` to avoid injecting `runtime_tag` into `$setOnInsert` when update already sets it in `$set`.
+- **01:44** Added TypeScript voice worker runtime scaffold (`backend/src/workers/voicebot/{runner.ts,runtime.ts}`) plus npm scripts `dev:voicebot-workers` / `start:voicebot-workers` for separate worker process bring-up.
+
+### CHANGES
+- Added regression test `backend/__tests__/voicebot/activeSessionMapping.test.ts`.
+- Extended `backend/__tests__/services/dbAggregateRuntimeScope.test.ts` with upsert runtime-tag conflict coverage.
+- Added worker-runner regression coverage `backend/__tests__/voicebot/workerRunner.test.ts` (manifest routing, explicit handler-not-found error, queue concurrency defaults).
+- PM2 trial for workers detected missing handlers (`START_MULTIPROMPT`, `SEND_TO_SOCKET`, `session_*` notifies); worker runtime remains manual-only and is not enabled in cutover PM2 config yet.
+- Live smoke confirmed via PM2 raw Telegram logs after restart:
+  - `/help`, `/session`, `/login`, `/start`, `/done` processed by copilot runtime.
+  - `/start` created session `69963fb37d45b98d3fbc0344`; `/done` closed it.
+
+### TESTS
+- `cd backend && npm test -- --runInBand __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/activeSessionMapping.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
+- `cd backend && npm run build`
+
 ## 2026-02-18
 ### PROBLEM SOLVED
 - **11:02** Session `69953b9207290561f6e9c96a` accepted new WebRTC chunks but transcription stayed empty because `copilot-voicebot-tgbot-prod` inherited a stale OpenAI key from process env, producing `insufficient_quota` retries.

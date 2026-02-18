@@ -170,7 +170,7 @@ Preferred engineering principles for this repo:
 - Full-track archive chunks are tracked as `trackKind='full_track'` with metadata (`sessionId`, `mic`, `duration/start/end`) in voicebot runtime.
 - Voice task creation UI accepts missing `task_type_id` in task/ticket entry points (`TasksTable`, `TicketsPreviewModal`).
 - MCP proxy stubs: `backend/src/services/mcp/` (requires `@modelcontextprotocol/sdk`).
-- Workers are NOT included - run as separate service (see `backend/src/workers/README.md`).
+- Workers run as a separate TypeScript service (`npm run start:voicebot-workers` / `npm run dev:voicebot-workers`); see `backend/src/workers/README.md`.
 - Agents are NOT included - run as separate Python service (see `backend/src/agents/README.md`).
 - Voice UI is native in the Copilot app under `/voice/*` (no iframe embed).
 

@@ -58,10 +58,10 @@ export const setActiveVoiceSession = async ({
         chat_id: normalizeChatId(chat_id),
         username: typeof username === 'string' ? username : null,
         active_session_id: sessionObjectId,
-        runtime_tag: RUNTIME_TAG,
         updated_at: new Date(),
       },
       $setOnInsert: {
+        runtime_tag: RUNTIME_TAG,
         created_at: new Date(),
       },
     },

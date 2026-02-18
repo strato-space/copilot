@@ -1,7 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
 
 import { IS_PROD_RUNTIME, RUNTIME_FAMILY, RUNTIME_TAG } from '../../src/services/runtimeScope.js';
-import { applyRuntimeScopeToAggregatePipeline } from '../../src/services/db.js';
+import {
+  applyRuntimeScopeToAggregatePipeline,
+  patchRuntimeTagIntoSetOnInsert,
+} from '../../src/services/db.js';
 
 describe('db aggregate runtime scope', () => {
   const expectedRuntimeFilterExpr = {
@@ -86,6 +89,32 @@ describe('db aggregate runtime scope', () => {
         },
       },
     });
+  });
+
+
+  it('injects runtime_tag into $setOnInsert for upserts when update does not set runtime_tag', () => {
+    const patched = patchRuntimeTagIntoSetOnInsert({
+      $set: {
+        active_session_id: 'abc',
+      },
+    });
+
+    expect(Array.isArray(patched)).toBe(false);
+    expect((patched as { $setOnInsert?: Record<string, unknown> }).$setOnInsert).toEqual({
+      runtime_tag: RUNTIME_TAG,
+    });
+  });
+
+  it('does not inject $setOnInsert runtime_tag when update already sets runtime_tag', () => {
+    const patched = patchRuntimeTagIntoSetOnInsert({
+      $set: {
+        runtime_tag: RUNTIME_TAG,
+        active_session_id: 'abc',
+      },
+    });
+
+    expect(Array.isArray(patched)).toBe(false);
+    expect((patched as { $setOnInsert?: Record<string, unknown> }).$setOnInsert).toBeUndefined();
   });
 
   it('does not touch non-runtime lookup stages', () => {

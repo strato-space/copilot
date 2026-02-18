@@ -145,18 +145,29 @@ const withRuntimeTag = <TSchema extends Document>(
   } as unknown as OptionalUnlessRequiredId<TSchema>;
 };
 
-const patchUpdateSetOnInsert = <TSchema extends Document>(
+export const patchRuntimeTagIntoSetOnInsert = <TSchema extends Document>(
   update: UpdateFilter<TSchema> | Document[]
 ): UpdateFilter<TSchema> | Document[] => {
   if (Array.isArray(update)) return update;
   if (!update || typeof update !== 'object') return update;
 
   const typed = update as UpdateFilter<TSchema> & {
+    $set?: Record<string, unknown>;
     $setOnInsert?: Record<string, unknown>;
   };
+
   const setOnInsert = { ...(typed.$setOnInsert || {}) };
-  if (!Object.prototype.hasOwnProperty.call(setOnInsert, 'runtime_tag')) {
+  const set = { ...(typed.$set || {}) };
+
+  const runtimeTagAlreadySetOnInsert = Object.prototype.hasOwnProperty.call(setOnInsert, 'runtime_tag');
+  const runtimeTagAlreadySet = Object.prototype.hasOwnProperty.call(set, 'runtime_tag');
+
+  if (!runtimeTagAlreadySetOnInsert && !runtimeTagAlreadySet) {
     setOnInsert.runtime_tag = RUNTIME_TAG;
+  }
+
+  if (Object.keys(setOnInsert).length === 0 && !typed.$setOnInsert) {
+    return typed;
   }
 
   return {
@@ -215,7 +226,7 @@ const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
           options?: Record<string, unknown>
         ): Promise<UpdateResult<TSchema>> => {
           const scopedFilter = runtimeFilterForCollection(filter);
-          const withSetOnInsert = options?.upsert ? patchUpdateSetOnInsert(update) : update;
+          const withSetOnInsert = options?.upsert ? patchRuntimeTagIntoSetOnInsert(update) : update;
           return (target as Collection<TSchema>).updateOne(
             scopedFilter,
             withSetOnInsert,
@@ -231,7 +242,7 @@ const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
           options?: Record<string, unknown>
         ): Promise<UpdateResult<TSchema>> => {
           const scopedFilter = runtimeFilterForCollection(filter);
-          const withSetOnInsert = options?.upsert ? patchUpdateSetOnInsert(update) : update;
+          const withSetOnInsert = options?.upsert ? patchRuntimeTagIntoSetOnInsert(update) : update;
           return (target as Collection<TSchema>).updateMany(
             scopedFilter,
             withSetOnInsert,
@@ -270,7 +281,7 @@ const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
           options?: Record<string, unknown>
         ) => {
           const scopedFilter = runtimeFilterForCollection(filter);
-          const nextUpdate = options?.upsert ? patchUpdateSetOnInsert(update) : update;
+          const nextUpdate = options?.upsert ? patchRuntimeTagIntoSetOnInsert(update) : update;
           if (options) {
             return (target as any).findOneAndUpdate(scopedFilter, nextUpdate, options);
           }
