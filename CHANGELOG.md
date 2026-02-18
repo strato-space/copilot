@@ -92,6 +92,7 @@
 - **23:03** Updated `app/__tests__/voice/audioUploadProgress.test.ts` for the new progress wiring contract (`requestConfig.onUploadProgress` assignment).
 - **23:03** Closed bug `copilot-ad4` after runtime recovery verification for session `69953b9207290561f6e9c96a` (`is_messages_processed=true`, `transcribed=21/21`, no transcription errors).
 - **23:03** Closed changelog-gap verification tasks `copilot-d9l` and `copilot-g44` as non-functional version-bump bookkeeping (copilot keeps independent app semver).
+- **23:12** Closed changelog-gap verification tasks `copilot-t85`, `copilot-2tr`, `copilot-6av` with doc-smoke evidence for synced event-log and diarization planning artifacts in `docs/voicebot-plan-sync/*` (including immutable `transcription_raw -> transcription` contract).
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -160,6 +161,7 @@
 - **22:58** `cd /home/strato-space/copilot && bd list --all | rg "voicebot-changelog-gap" | wc -l` (expected `133`)
 - **23:02** `cd app && npm run build`
 - **23:03** `cd app && npm test -- --runInBand __tests__/voice/transcriptionRowActions.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts __tests__/voice/audioUploadProgress.test.ts`
+- **23:11** `cd voicebot_runtime && npx jest --runInBand __tests__/docs/event_log_plan_sync_docs_smoke.test.js`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
