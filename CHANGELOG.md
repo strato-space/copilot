@@ -69,6 +69,7 @@
 - **16:08** Closed changelog-gap verification tasks `copilot-2nj` and `copilot-mwg` after adding runtime unit coverage for quota-stall recovery and Redis enqueue-failure rollback (`voicebot_runtime`).
 - **16:17** Closed changelog-gap verification tasks `copilot-l20` and `copilot-0g1` after validating Redis cleanup safety rails (history-only + trimEvents) and categorization cost controls (skip trivial commands/short texts).
 - **16:27** Closed changelog-gap verification tasks `copilot-7vb` and `copilot-6lv` after validating attachment-aware LLM context blocks and processing_loop quota auto-recovery behaviors.
+- **16:41** Closed changelog-gap verification tasks `copilot-e7y` and `copilot-6ym` after validating retry/backoff gating (`*_next_attempt_at` + max attempts) and BullMQ bounded retention + enqueue rollback under Redis OOM/noeviction (voicebot_runtime tests).
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -106,6 +107,7 @@
 - **16:16** `cd voicebot_runtime && npx jest --runInBand __tests__/services/redis_monitor_safety.test.js __tests__/voicebot/categorization_cost_controls.test.js`
 - **16:26** `cd voicebot_runtime && npx jest --runInBand __tests__/services/voicebot_ai_context_attachments.test.js __tests__/common_jobs/processing_loop_quota_recovery.test.js`
 
+- **16:41** `cd voicebot_runtime && npx jest --runInBand __tests__/common_jobs/processing_loop_retry_gating.test.js __tests__/processors/categorization_retry_gating.test.js __tests__/processors/questioning_enqueue_failure_rollback.test.js __tests__/bullmq_default_job_options_retention.test.js`
 ## 2026-02-17
 ### PROBLEM SOLVED
 - **21:49** Voice migration after 2026-02-05 required strict runtime isolation in shared Mongo/Redis to avoid dev/prod cross-processing.
