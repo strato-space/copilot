@@ -171,6 +171,9 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-a9z`, `copilot-97r`, `copilot-jzk`: подтвержден backend manual summarize trigger `POST /voicebot/trigger_session_ready_to_summarize` (PMO fallback при пустом `project_id` + `SESSION_READY_TO_SUMMARIZE` notify metadata) и UI request path; tests `backend/__tests__/voicebot/triggerSummarizeRoute.test.ts`, `backend/__tests__/smoke/voicebotApiSmoke.test.ts`, e2e `app/e2e/voice-log.spec.ts` (session ready-to-summarize).
 - [v] Закрыты changelog-gap `copilot-itr` и `copilot-tdt`: обновлены `AGENTS.md`/`README.md` для явной фиксации planning-artifact placement (`docs/voicebot-plan-sync/implementation-draft-v1.md`, event-log/diarization specs) и close-session documentation outcomes; test `voicebot_runtime/__tests__/docs/planning_references_docs_smoke.test.js`.
 
+- [v] Закрыты changelog-gap `copilot-4qs` и `copilot-sve`: подтверждена parity-политика загрузок в closed session (inactivity не блокирует upload, блокировка только для `is_deleted=true`) на backend+UI; tests `backend/__tests__/voicebot/uploadAudioRoute.test.ts` (inactive session upload accepted) и `app/__tests__/voice/sessionStatusWidgetUploadPolicy.test.ts` (disable only by `is_deleted`).
+- [v] Закрыт changelog-gap `copilot-7l7`: подтверждён `.gitignore` parity для fast-agent локальных артефактов (`agents/.venv/`, `agents/logs/`) с docs smoke guard `voicebot_runtime/__tests__/docs/gitignore_fastagent_artifacts.test.js`.
+
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
 - [x] T2 `POST /api/voicebot/create_session` создает и активирует новую сессию.

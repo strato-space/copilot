@@ -99,6 +99,8 @@
 - **23:19** Closed changelog-gap verification tasks `copilot-pim` and `copilot-8h6` with backend/e2e evidence for session-log storage/action endpoints (edit/delete/rollback/retry/resend) and replay-friendly metadata contract.
 - **23:24** Closed changelog-gap verification tasks `copilot-a9z`, `copilot-97r`, `copilot-jzk` with backend+e2e evidence for manual summarize trigger (`POST /voicebot/trigger_session_ready_to_summarize`), PMO fallback assignment, and session_ready_to_summarize notify metadata path.
 - **23:26** Closed changelog-gap verification tasks `copilot-itr` and `copilot-tdt` after updating `AGENTS.md`/`README.md` planning references (implementation draft + transcript-versioning specs) and documenting close-session outcomes in the core docs set.
+- **23:31** Closed changelog-gap verification tasks `copilot-4qs` and `copilot-sve` with parity evidence for closed-session upload policy: backend accepts uploads when `is_active=false` (unless deleted), and UI keeps upload button enabled unless `is_deleted=true` (`backend/__tests__/voicebot/uploadAudioRoute.test.ts`, `app/__tests__/voice/sessionStatusWidgetUploadPolicy.test.ts`).
+- **23:31** Closed changelog-gap verification task `copilot-7l7` by confirming `.gitignore` includes `agents/.venv/` and `agents/logs/`, with docs smoke guard `voicebot_runtime/__tests__/docs/gitignore_fastagent_artifacts.test.js`.
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -176,6 +178,9 @@
 - **23:23** `cd backend && npm test -- --runInBand __tests__/voicebot/triggerSummarizeRoute.test.ts __tests__/smoke/voicebotApiSmoke.test.ts`
 - **23:23** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-log.spec.ts --project=chromium-unauth -g "session ready-to-summarize"`
 - **23:25** `cd voicebot_runtime && npx jest --runInBand __tests__/docs/planning_references_docs_smoke.test.js`
+- **23:30** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts`
+- **23:31** `cd app && npm test -- --runInBand __tests__/voice/sessionStatusWidgetUploadPolicy.test.ts __tests__/voice/audioUploadProgress.test.ts`
+- **23:31** `cd voicebot_runtime && npx jest --runInBand __tests__/docs/gitignore_fastagent_artifacts.test.js __tests__/docs/planning_references_docs_smoke.test.js`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
