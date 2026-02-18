@@ -159,6 +159,8 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыт changelog-gap `copilot-7v2`: исходный пункт (`Rec/Activate/Done`) отмечен как superseded; в Copilot подтверждён усиленный контракт `New/Rec/Cut/Pause/Done` с FAB-sync и визуальными state markers; test `app/__tests__/voice/meetingCardStateMapping.test.ts`.
 - [v] Закрыт changelog-gap `copilot-nrv`: подтверждён quota-retry контракт (`insufficient_quota` как retryable без terminal corruption) в runtime processing loop/processors; tests `voicebot_runtime/__tests__/common_jobs/processing_loop_quota_recovery.test.js`, `voicebot_runtime/__tests__/common_jobs/processing_loop_retry_gating.test.js`, `voicebot_runtime/__tests__/processors/categorization_retry_gating.test.js`.
 - [v] Закрыт changelog-gap `copilot-zhd`: подтверждена runtime isolation защита от cross-runtime leakage в shared Mongo/Redis (runtime filters + aggregate lookup scoping + prod-family compatibility); tests `backend/__tests__/voicebot/runtimeScope.test.ts`, `backend/__tests__/services/dbAggregateRuntimeScope.test.ts`, `backend/__tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`.
+- [v] Закрыта задача `copilot-fko`: матрица миграции Playwright (`voicebot/webrtc -> copilot`) зафиксирована в `docs/PLAYWRIGHT_MIGRATION_MATRIX.md` со статусами `[v]/[x]/[~]` и подтверждена e2e smoke-run (`e2e/voice.spec.ts`, chromium-unauth).
+- [v] Закрыта задача `copilot-7bm`: сформирована и поддерживается 1:1 матрица проверок changelog (`133` BD задач с label `voicebot-changelog-gap`) на базе `docs/VOICEBOT_CHANGELOG_GAP_MATRIX_2026-02-05.{md,json}`.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.

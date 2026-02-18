@@ -87,6 +87,7 @@
 - **22:52** Updated migration evidence notes in `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`.
 - **22:57** Closed changelog-gap verification tasks `copilot-9qu` and `copilot-7v2` with evidence for 4-line done/notify Telegram output and session control/state-marker parity (source `Rec/Activate/Done` treated as superseded by current `New/Rec/Cut/Pause/Done` contract).
 - **22:56** Closed changelog-gap verification tasks `copilot-nrv` and `copilot-zhd` with evidence for quota-retry recovery semantics (`insufficient_quota` stays retryable) and runtime isolation across shared Mongo/Redis (including aggregate lookup scoping + prod-family compatibility).
+- **22:58** Closed tracking tasks `copilot-fko` and `copilot-7bm`: finalized Playwright migration matrix (`voicebot/webrtc -> copilot`) and completed 1:1 changelog verification registration (133 `voicebot-changelog-gap` tasks).
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -151,6 +152,8 @@
 - **22:54** `cd app && npm test -- --runInBand __tests__/voice/meetingCardStateMapping.test.ts`
 - **22:55** `cd voicebot_runtime && npx jest --runInBand __tests__/common_jobs/processing_loop_quota_recovery.test.js __tests__/common_jobs/processing_loop_retry_gating.test.js __tests__/processors/categorization_retry_gating.test.js`
 - **22:56** `cd backend && npm test -- --runInBand __tests__/voicebot/runtimeScope.test.ts __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
+- **22:58** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth --grep "@unauth loads /voice sessions table|@unauth resolves /voice/session to active-session"`
+- **22:58** `cd /home/strato-space/copilot && bd list --all | rg "voicebot-changelog-gap" | wc -l` (expected `133`)
 
 ## 2026-02-17
 ### PROBLEM SOLVED
