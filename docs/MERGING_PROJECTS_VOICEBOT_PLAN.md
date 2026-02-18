@@ -164,6 +164,7 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыт bug `copilot-ad4`: восстановлена сессия `69953b9207290561f6e9c96a` после runtime-изоляции/cutover фиксов; операционная проверка Mongo подтвердила `is_messages_processed=true`, `transcribed=21/21`, `transcription_error=0`.
 - [v] Закрыты changelog-gap `copilot-d9l` и `copilot-g44`: пункты о bump `app/package.json` (`0.0.38/0.0.39`) отмечены как repo-local version bookkeeping (в copilot независимая semver линия `1.0.2`), функционального gap нет.
 - [v] Закрыты changelog-gap `copilot-t85`, `copilot-2tr`, `copilot-6av`: подтверждена синхронизация planning-артефактов event-log/rollback/diarization в `docs/voicebot-plan-sync/*` (raw requirements, draft spec, `transcription_raw -> transcription` canonical contract); test `voicebot_runtime/__tests__/docs/event_log_plan_sync_docs_smoke.test.js`.
+- [v] Закрыты changelog-gap `copilot-be3` и `copilot-8zy`: подтверждено, что обновления `gpt-4o-transcribe-diarize-plan` + `edit-event-log-plan` синхронизированы как docs-only изменения (без runtime/API drift), что дополнительно подтверждено backend smoke `backend/__tests__/smoke/voicebotApiSmoke.test.ts`.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
