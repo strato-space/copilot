@@ -27,4 +27,14 @@ describe('Transcription row actions + header parity', () => {
     expect(rowSource).toContain('editTranscriptChunk');
     expect(rowSource).toContain('deleteTranscriptChunk');
   });
+
+  it('keeps inline editing with optional reason (no modal requirement)', () => {
+    expect(rowSource).toContain('placeholder="Reason (optional)"');
+    expect(rowSource).toContain('await editTranscriptChunk(payload, { silent: true });');
+    expect(rowSource).toContain('...(draftReason.trim() ? { reason: draftReason.trim() } : {})');
+
+    // Regression: transcription segment editing should stay inline in row component.
+    expect(rowSource).not.toContain('Modal');
+  });
+
 });
