@@ -526,3 +526,4 @@
 - **01:25** Added `backend/src/voicebot_tgbot/runtimeNonCommandHandlers.ts` and rewired `backend/src/voicebot_tgbot/runtime.ts` to use it.
 - **01:25** Added `backend/__tests__/voicebot/runtimeNonCommandHandlers.test.ts` for command-text filtering, forwarded/reply context extraction, and attachment ingress routing.
 - **01:25** Re-ran targeted TG suites and backend build (`tgCommandHandlers`, `tgIngressHandlers`, `runtimeNonCommandHandlers`, `npm run build`).
+- **01:35** Added `backend/__tests__/voicebot/workerIngressHandlers.test.ts` to validate TS worker wrapper delegation for `HANDLE_VOICE`, `HANDLE_TEXT`, `HANDLE_ATTACHMENT` and payload normalization.
