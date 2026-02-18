@@ -236,4 +236,86 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
       })
     );
   });
+
+
+  it('POST /voicebot/session returns both legacy uri and direct_uri for telegram attachments', async () => {
+    const sessionId = new ObjectId();
+    const messageObjectId = new ObjectId();
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: sessionId,
+              chat_id: 123456,
+              user_id: performerId.toString(),
+              session_name: 'Attachment parity',
+              runtime_tag: 'prod-p2',
+              is_active: true,
+              participants: [],
+              allowed_users: [],
+            })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: jest.fn(() => ({
+              toArray: async () => [
+                {
+                  _id: messageObjectId,
+                  session_id: sessionId,
+                  message_id: 'telegram-msg-1',
+                  message_timestamp: 1700000000,
+                  source_type: 'telegram',
+                  message_type: 'document',
+                  attachments: [
+                    {
+                      source: 'telegram',
+                      kind: 'document',
+                      file_id: 'file-id-1',
+                      file_unique_id: 'uniq-file-1',
+                      name: 'note.pdf',
+                      mimeType: 'application/pdf',
+                    },
+                  ],
+                },
+              ],
+            })),
+          };
+        }
+
+        return {
+          findOne: jest.fn(async () => null),
+          find: jest.fn(() => ({ toArray: async () => [] })),
+        };
+      },
+    };
+
+    const dbStub = {
+      collection: (_name: string) => ({
+        find: jest.fn(() => ({ project: () => ({ toArray: async () => [] }) })),
+        findOne: jest.fn(async () => null),
+      }),
+    };
+
+    getRawDbMock.mockReturnValue(rawDbStub);
+    getDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session')
+      .send({ session_id: sessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    const attachments = response.body.session_attachments as Array<Record<string, unknown>>;
+    expect(Array.isArray(attachments)).toBe(true);
+    expect(attachments).toHaveLength(1);
+
+    const [attachment] = attachments;
+    expect(attachment.uri).toBe(`/api/voicebot/message_attachment/${messageObjectId.toHexString()}/0`);
+    expect(attachment.url).toBe(`/api/voicebot/message_attachment/${messageObjectId.toHexString()}/0`);
+    expect(attachment.direct_uri).toBe(`/api/voicebot/public_attachment/${sessionId.toHexString()}/uniq-file-1`);
+  });
+
 });

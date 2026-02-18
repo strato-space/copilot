@@ -127,6 +127,15 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-e2o` и `copilot-r75`: подтвержден unified Telegram formatter path + `/login` one-time token flow в copilot (`sessionTelegramMessage`, `commandHandlers`, `doneNotifyService`).
 - [v] Закрыты changelog-gap `copilot-amj` и `copilot-1he`: подтверждены runtime-isolation implementation и API/routes/frontend integration parity по backend+Playwright тестам.
 - [v] Закрыты changelog-gap `copilot-9x8` и `copilot-602`: дополнена Playwright matrix + e2e-покрытие для `trigger_session_ready_to_summarize`, transcript edit/delete и rollback/resend/retry log flows (`app/e2e/voice-log.spec.ts`, `app/e2e/voice.spec.ts`, `docs/PLAYWRIGHT_MIGRATION_MATRIX.md`).
+- [v] Закрыты changelog-gap `copilot-6jv` и `copilot-f4f`: подтверждены `/login` one-time semantics (независимо от active-session) и UX/диагностика загрузки сессии (404 runtime-mismatch vs generic error) в `SessionPage` + `voiceBotStore`; тесты `backend/__tests__/voicebot/tgCommandHandlers.test.ts`, `app/__tests__/voice/sessionPageRequestDiagnostics.test.ts`, `app/e2e/voice.spec.ts`.
+- [v] Закрыты changelog-gap `copilot-dmw`, `copilot-jte`, `copilot-csk`, `copilot-9gj`: подтвержден стабильный public attachment контракт без auth-gate для внешних consumers (`/public_attachment` и legacy `/uploads/public_attachment`) и dual-link payload `session_attachments` (`uri` + `direct_uri`); тесты `backend/__tests__/voicebot/publicAttachmentRoute.test.ts` и `backend/__tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`.
+- [v] Закрыты changelog-gap `copilot-yup`, `copilot-aqt`, `copilot-0da`, `copilot-97q`: подтверждены frontend `direct_uri` rendering/normalization (`Screenshort` + `voiceBotStore`) и backend auth-gate parity для unauth `/voicebot/public_attachment/*`.
+- [v] Закрыты changelog-gap `copilot-n5l` и `copilot-dep`: подтверждены docs/tests parity по public attachment delivery и детерминированная TG session handoff модель (`/start` create+activate, `/session` strict active lookup, `/done` close+clear).
+- [v] Закрыты changelog-gap `copilot-wca` и `copilot-gvq`: подтверждены правила выбора сессии для TG flow (strict active-session без fallback) и операторская discoverability команд (`/help` + `/login`).
+- [v] Закрыты changelog-gap `copilot-g4v` и `copilot-xqt`: подтвержден token-safe attachment read model (без Telegram token URL в UI) и канонический формат `/session`/`/login` ответов с metadata.
+- [v] Закрыты changelog-gap `copilot-8qn` и `copilot-3y0`: подтверждено, что migration-spec в copilot покрывает lifecycle/session-routing модель и полный операторский набор TG-команд (`/start` `/session` `/done` `/login`).
+- [v] Закрыты changelog-gap `copilot-328` и `copilot-wxa`: подтверждена end-to-end цепочка session attachments и UI-вкладка `Screenshort` (preview/caption/timestamp).
+- [v] Закрыты changelog-gap `copilot-xhb` и `copilot-emo`: подтверждены Jest smoke tests для Telegram attachment flow/proxy endpoints и нормализация TG response формата на public-host links + metadata.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
@@ -140,7 +149,7 @@ Source of truth: см. раздел `## Финальная структура п
 - [x] T9 TG `/session` без аргумента возвращает только active или “не найдена”.
 - [x] T10 TG `/session <id|url>` активирует при доступе.
 - [x] T11 TG `/done` закрывает active и очищает mapping.
-- [x] T12 TG `/login` отдает one-time tg_auth URL независимо от active-session.
+- [v] T12 TG `/login` отдает one-time tg_auth URL независимо от active-session.
 - [x] T13 TG event message format = 4 строки (`event/url/session/project`).
 - [x] T14 Runtime leakage check (dev/prod изоляция end-to-end).
 - [x] T15 Upload в чужой runtime -> `409 runtime_mismatch`.

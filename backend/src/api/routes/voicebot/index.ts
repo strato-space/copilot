@@ -10,11 +10,15 @@ import transcriptionRouter from './transcription.js';
 import personsRouter from './persons.js';
 import permissionsRouter from './permissions.js';
 import llmgateRouter from './llmgate.js';
-import uploadsRouter from './uploads.js';
+import uploadsRouter, { publicAttachmentHandler } from './uploads.js';
 import { requireAdmin } from '../../middleware/roleGuard.js';
 import { authMiddleware } from '../../middleware/auth.js';
 
 const router = Router();
+
+// Keep stable attachment URLs publicly accessible for external processors and legacy direct links.
+router.get('/public_attachment/:session_id/:file_unique_id', publicAttachmentHandler);
+router.get('/uploads/public_attachment/:session_id/:file_unique_id', publicAttachmentHandler);
 
 // All voicebot routes require authentication and admin role
 router.use(authMiddleware);

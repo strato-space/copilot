@@ -53,6 +53,19 @@
 - **14:01** Closed changelog-gap verification tasks `copilot-ajg` and `copilot-qkd` with backend route-contract evidence for active-session Web API/UI controls and session lifecycle parity.
 - **14:10** Closed a 5-iteration verification wave (10 tasks): `copilot-ris`, `copilot-3tx`, `copilot-2mo`, `copilot-yud`, `copilot-e2o`, `copilot-r75`, `copilot-amj`, `copilot-1he`, `copilot-9x8`, `copilot-602`.
 - **14:10** Updated docs to capture completed migration evidence: `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`, `docs/PLAYWRIGHT_MIGRATION_MATRIX.md`, and `README.md` voice toolbar/state contract notes.
+- **15:06** Added voice session fetch diagnostics parity in `app/src/store/voiceBotStore.ts`: structured error logging now includes endpoint/target/status/runtimeMismatch/response payload for faster 404 runtime-mismatch triage.
+- **15:07** Closed changelog-gap verification tasks `copilot-6jv` and `copilot-f4f` with explicit `/login` one-time semantics and SessionPage 404-vs-generic UX coverage; updated migration plan evidence (`docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`).
+- **15:24** Exposed public attachment endpoints before auth middleware in `backend/src/api/routes/voicebot/index.ts` (`/public_attachment/:session_id/:file_unique_id` and legacy `/uploads/public_attachment/...`) to preserve external processor access while keeping other voice routes protected.
+- **15:25** Added session attachment contract parity coverage for simultaneous `uri` (legacy protected path) and `direct_uri` (stable public path) in `backend/__tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`.
+- **15:27** Closed changelog-gap verification tasks `copilot-dmw`, `copilot-jte`, `copilot-csk`, `copilot-9gj` after public attachment auth-bypass parity and `session_attachments` dual-link contract checks.
+- **15:34** Closed changelog-gap verification tasks `copilot-yup` and `copilot-aqt` after confirming Screenshort `direct_uri` rendering fallback contract and backend public attachment route registration parity.
+- **15:36** Closed changelog-gap verification tasks `copilot-0da` and `copilot-97q` after auth-gate parity validation for unauth `/voicebot/public_attachment/*` and direct_uri-safe frontend normalization checks.
+- **15:41** Closed changelog-gap verification tasks `copilot-n5l` and `copilot-dep` after confirming public attachment docs/test parity and deterministic TG active-session handoff semantics (`/start`/`/session`/`/done`).
+- **15:46** Closed changelog-gap verification tasks `copilot-wca` and `copilot-gvq` after validating strict session selection behavior for TG routing and command discoverability (`/help` + `/login`).
+- **15:49** Closed changelog-gap verification tasks `copilot-g4v` and `copilot-xqt` after validating token-safe attachment UI links and canonical `/session`/`/login` response formatting with public URLs.
+- **15:52** Closed changelog-gap verification tasks `copilot-8qn` and `copilot-3y0` after validating TG session lifecycle documentation parity and explicit `/start` `/session` `/done` `/login` operator contract.
+- **15:55** Closed changelog-gap verification tasks `copilot-328` and `copilot-wxa` after validating session attachments end-to-end contract and Screenshort UI parity.
+- **16:00** Closed changelog-gap verification tasks `copilot-xhb` and `copilot-emo` after adding smoke coverage for Telegram attachment proxy flow and validating normalized TG command/event responses with public host URLs.
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -72,6 +85,14 @@
 - **14:08** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-fab-lifecycle.spec.ts --project=chromium-unauth`
 - **14:09** `cd backend && npm test -- --runInBand __tests__/voicebot/runtimeScope.test.ts __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/sessions.test.ts`
 - **14:10** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-log.spec.ts e2e/voice.spec.ts --project=chromium-unauth`
+- **15:05** `cd app && npm test -- --runInBand __tests__/voice/sessionPageRequestDiagnostics.test.ts`
+- **15:05** `cd backend && npm test -- --runInBand __tests__/voicebot/tgCommandHandlers.test.ts`
+- **15:06** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth -g "runtime mismatch screen on 404 session fetch"`
+- **15:23** `cd backend && npm test -- --runInBand __tests__/voicebot/publicAttachmentRoute.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
+- **15:33** `cd app && npm test -- --runInBand __tests__/voice/screenshortDirectUri.test.ts __tests__/voice/sessionPageRequestDiagnostics.test.ts`
+- **15:42** `cd backend && npm test -- --runInBand __tests__/voicebot/publicAttachmentRoute.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
+- **15:43** `cd app && npm test -- --runInBand __tests__/voice/sessionPageRequestDiagnostics.test.ts __tests__/voice/screenshortDirectUri.test.ts`
+- **15:59** `cd backend && npm test -- --runInBand __tests__/smoke/voicebotAttachmentSmoke.test.ts __tests__/voicebot/sessionTelegramMessage.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

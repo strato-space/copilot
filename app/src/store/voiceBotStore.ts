@@ -155,30 +155,67 @@ const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
     return lines.join('\n');
 };
 
+
+const logVoicebotRequestError = (endpoint: string, targetUrl: string, error: unknown): void => {
+    if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        console.error('[voicebot] request failed', {
+            endpoint,
+            targetUrl,
+            status: status ?? null,
+            code: error.code ?? null,
+            runtimeMismatch: status === 404,
+            response: error.response?.data ?? null,
+            message: error.message,
+        });
+        return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[voicebot] request failed', {
+        endpoint,
+        targetUrl,
+        runtimeMismatch: false,
+        message,
+    });
+};
+
 const voicebotRequest = async <T = unknown>(url: string, data: unknown = {}, silent = false): Promise<T> => {
     const backendUrl = getBackendUrl();
     const proxyConfig = getProxyConfig();
     const { authToken } = useAuthStore.getState();
+    const targetUrl = `${backendUrl}/${url}`;
 
     if (proxyConfig) {
-        const response = await axios.post<T>(proxyConfig.url, data, {
+        try {
+            const response = await axios.post<T>(proxyConfig.url, data, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Proxy-Auth': proxyConfig.auth,
+                    'X-Proxy-Target-URL': targetUrl,
+                    'X-Authorization': authToken ?? '',
+                },
+                withCredentials: true,
+            });
+            return response.data;
+        } catch (error) {
+            logVoicebotRequestError(url, targetUrl, error);
+            throw error;
+        }
+    }
+
+    let response;
+    try {
+        response = await axios.post<T>(targetUrl, data, {
             headers: {
-                'Content-Type': 'application/json',
-                'X-Proxy-Auth': proxyConfig.auth,
-                'X-Proxy-Target-URL': `${backendUrl}/${url}`,
                 'X-Authorization': authToken ?? '',
             },
             withCredentials: true,
         });
-        return response.data;
+    } catch (error) {
+        logVoicebotRequestError(url, targetUrl, error);
+        throw error;
     }
-
-    const response = await axios.post<T>(`${backendUrl}/${url}`, data, {
-        headers: {
-            'X-Authorization': authToken ?? '',
-        },
-        withCredentials: true,
-    });
 
     if (!silent && response.status >= 400) {
         throw new Error('Failed to fetch! Try again.');

@@ -507,7 +507,7 @@ router.get(
 );
 
 // Public endpoint by stable id pair (session_id + file_unique_id), mirrors voicebot behavior.
-router.get('/public_attachment/:session_id/:file_unique_id', async (req: Request, res: Response) => {
+export const publicAttachmentHandler = async (req: Request, res: Response) => {
     const db = getDb();
     try {
         const session_id = String(req.params?.session_id || '').trim();
@@ -518,9 +518,9 @@ router.get('/public_attachment/:session_id/:file_unique_id', async (req: Request
 
         const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne({
             ...runtimeMessageQuery({
-            session_id: new ObjectId(session_id),
-            'attachments.file_unique_id': fileUniqueId,
-            is_deleted: { $ne: true },
+                session_id: new ObjectId(session_id),
+                'attachments.file_unique_id': fileUniqueId,
+                is_deleted: { $ne: true },
             }),
         }) as Record<string, unknown> | null;
         if (!messageDoc) {
@@ -543,6 +543,8 @@ router.get('/public_attachment/:session_id/:file_unique_id', async (req: Request
         logger.error('Error in public_attachment:', error);
         return res.status(500).json({ error: String(error) });
     }
-});
+};
+
+router.get('/public_attachment/:session_id/:file_unique_id', publicAttachmentHandler);
 
 export default router;
