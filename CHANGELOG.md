@@ -97,6 +97,7 @@
 - **23:15** Closed changelog-gap verification tasks `copilot-b24` and `copilot-89c`: validated inline/hover transcript editing UX plus optional `reason` contract on session-log action endpoints (frontend + backend parity).
 - **23:17** Closed changelog-gap verification tasks `copilot-io6` and `copilot-3vx` with e2e evidence for Transcription/Log tabs, segment edit-delete wiring, and rollback/resend/retry session-log actions.
 - **23:19** Closed changelog-gap verification tasks `copilot-pim` and `copilot-8h6` with backend/e2e evidence for session-log storage/action endpoints (edit/delete/rollback/retry/resend) and replay-friendly metadata contract.
+- **23:24** Closed changelog-gap verification tasks `copilot-a9z`, `copilot-97r`, `copilot-jzk` with backend+e2e evidence for manual summarize trigger (`POST /voicebot/trigger_session_ready_to_summarize`), PMO fallback assignment, and session_ready_to_summarize notify metadata path.
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -171,6 +172,8 @@
 - **23:14** `cd backend && npm test -- --runInBand __tests__/voicebot/reasonOptionalRouteContract.test.ts`
 - **23:16** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-log.spec.ts --project=chromium-unauth`
 - **23:18** `cd backend && npm test -- --runInBand __tests__/voicebot/sessionLogRouteContract.test.ts`
+- **23:23** `cd backend && npm test -- --runInBand __tests__/voicebot/triggerSummarizeRoute.test.ts __tests__/smoke/voicebotApiSmoke.test.ts`
+- **23:23** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-log.spec.ts --project=chromium-unauth -g "session ready-to-summarize"`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
