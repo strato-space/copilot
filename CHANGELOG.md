@@ -83,6 +83,9 @@
 - **20:08** Closed changelog-gap verification tasks `copilot-ddl` and `copilot-dwl` after porting TranscriptionTableRow hover actions (Copy/Edit/Delete) and removing standalone Time column from header (test-backed).
 - **20:42** Closed changelog-gap verification tasks `copilot-mub` and `copilot-bix` after porting timeline labels (HH:mm, mm:ss - mm:ss) into Copilot Transcription UI and confirming transcriptionTimeline normalization coverage via unit tests.
 - **21:06** Closed changelog-gap verification tasks `copilot-kqt` and `copilot-s8z` after adding a CLI smoke test for recalc_session_duration and re-running unit coverage for timeline normalization + session-close behavior.
+- **22:52** Closed changelog-gap verification tasks `copilot-dw8` and `copilot-ot2` with test evidence for duration/timeline parity and operator edit/delete segment UI actions (tests: `backend/__tests__/voicebot/audioUtils.test.ts`, `voicebot_runtime/__tests__/services/transcriptionTimeline.test.js`, `app/__tests__/voice/transcriptionRowActions.test.ts`).
+- **22:52** Updated migration evidence notes in `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`.
+- **22:57** Closed changelog-gap verification tasks `copilot-9qu` and `copilot-7v2` with evidence for 4-line done/notify Telegram output and session control/state-marker parity (source `Rec/Activate/Done` treated as superseded by current `New/Rec/Cut/Pause/Done` contract).
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -141,8 +144,10 @@
 - **20:08** `cd app && npm test -- --runInBand __tests__/voice/transcriptionRowActions.test.ts`
 - **20:42** `cd app && npm test -- --runInBand __tests__/voice/transcriptionRowActions.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts`
 - **20:42** `cd voicebot_runtime && npx jest --runInBand __tests__/services/transcriptionTimeline.test.js`
-- **21:06** `cd voicebot_runtime && npx jest --runInBand __tests__/services/transcriptionTimeline.test.js __tests__/common_jobs/done_multiprompt.test.js __tests__/cli/recalc_session_duration_cli_smoke.test.js`- **22:52** Closed changelog-gap verification tasks `copilot-dw8` and `copilot-ot2` with test evidence for duration/timeline parity and operator edit/delete segment UI actions (tests: `backend/__tests__/voicebot/audioUtils.test.ts`, `voicebot_runtime/__tests__/services/transcriptionTimeline.test.js`, `app/__tests__/voice/transcriptionRowActions.test.ts`).
-- **22:52** Updated migration evidence notes in `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`.
+- **21:06** `cd voicebot_runtime && npx jest --runInBand __tests__/services/transcriptionTimeline.test.js __tests__/common_jobs/done_multiprompt.test.js __tests__/cli/recalc_session_duration_cli_smoke.test.js`
+- **22:53** `cd voicebot_runtime && npx jest --runInBand __tests__/common_jobs/done_multiprompt.test.js`
+- **22:53** `cd backend && npm test -- --runInBand __tests__/voicebot/doneNotifyService.test.ts __tests__/voicebot/sessionTelegramMessage.test.ts`
+- **22:54** `cd app && npm test -- --runInBand __tests__/voice/meetingCardStateMapping.test.ts`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
