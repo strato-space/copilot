@@ -1510,6 +1510,92 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
     }
 });
 
+router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const sessionId = String(req.body?.session_id || '').trim();
+        if (!sessionId) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess } = await resolveSessionAccess({
+            db,
+            performer,
+            sessionId,
+        });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        let projectIdToUse = session.project_id ? String(session.project_id) : '';
+        let projectAssigned = false;
+        if (!projectIdToUse) {
+            let pmoProject = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne({
+                is_deleted: { $ne: true },
+                is_active: true,
+                $or: [
+                    { name: { $regex: /^pmo$/i } },
+                    { title: { $regex: /^pmo$/i } },
+                ],
+            });
+            if (!pmoProject) {
+                pmoProject = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne({
+                    is_deleted: { $ne: true },
+                    is_active: true,
+                    $or: [
+                        { name: { $regex: /\bpmo\b/i } },
+                        { title: { $regex: /\bpmo\b/i } },
+                    ],
+                });
+            }
+            if (!pmoProject || !pmoProject._id) {
+                return res.status(500).json({ error: 'Default project PMO not found' });
+            }
+
+            await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+                runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+                { $set: { project_id: pmoProject._id, updated_at: new Date() } }
+            );
+            projectIdToUse = String(pmoProject._id);
+            projectAssigned = true;
+        }
+
+        const actor = buildActorFromPerformer(performer);
+        const source = buildWebSource(req);
+        const logEvent = await insertSessionLogEvent({
+            db,
+            session_id: new ObjectId(sessionId),
+            project_id: ObjectId.isValid(projectIdToUse) ? new ObjectId(projectIdToUse) : null,
+            event_name: 'notify_requested',
+            status: 'done',
+            actor,
+            source,
+            action: { available: true, type: 'resend' },
+            metadata: {
+                notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+                notify_payload: { project_id: projectIdToUse },
+                source: 'manual_trigger',
+            },
+        });
+
+        return res.status(200).json({
+            success: true,
+            project_id: projectIdToUse,
+            project_assigned: projectAssigned,
+            event_oid: logEvent?._id ? formatOid('evt', logEvent._id as ObjectId) : null,
+            notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+        });
+    } catch (error) {
+        logger.error('Error in trigger_session_ready_to_summarize:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
 router.post('/session_log', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
@@ -1529,13 +1615,20 @@ router.post('/session_log', async (req: Request, res: Response) => {
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const events = await db.collection(VOICEBOT_COLLECTIONS.PERMISSIONS_LOG)
-            .find({ session_id: new ObjectId(session_id) })
-            .sort({ created_at: -1 })
+        const events = await db.collection(VOICEBOT_COLLECTIONS.SESSION_LOG)
+            .find(
+                mergeWithRuntimeFilter(
+                    { session_id: new ObjectId(session_id) },
+                    { field: 'runtime_tag' }
+                )
+            )
+            .sort({ event_time: -1, _id: -1 })
             .limit(500)
             .toArray();
 
-        return res.status(200).json({ events });
+        return res.status(200).json({
+            events: events.map((event) => mapEventForApi(event as Record<string, unknown> as never)),
+        });
     } catch (error) {
         logger.error('Error in session_log:', error);
         return res.status(500).json({ error: String(error) });

@@ -9,10 +9,14 @@ import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS, ROLES } from '../../../permissions/permissions-config.js';
 import { getDb } from '../../../services/db.js';
+import { mergeWithRuntimeFilter, RUNTIME_TAG } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const router = Router();
 const logger = getLogger();
+
+const runtimePermissionsLogQuery = (query: Record<string, unknown> = {}): Record<string, unknown> =>
+    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
 
 interface PermissionsRequest extends Request {
     user: {
@@ -136,6 +140,7 @@ router.post('/users/role',
                 action: 'ROLE_UPDATE',
                 target_user_id: new ObjectId(user_id),
                 performed_by: new ObjectId(preq.user.userId),
+                runtime_tag: RUNTIME_TAG,
                 timestamp: new Date(),
                 details: {
                     old_role: null, // Could fetch old role if needed
@@ -193,6 +198,7 @@ router.post('/users/permission/add',
                 action: 'PERMISSION_ADD',
                 target_user_id: new ObjectId(user_id),
                 performed_by: new ObjectId(preq.user.userId),
+                runtime_tag: RUNTIME_TAG,
                 timestamp: new Date(),
                 details: { permission }
             });
@@ -240,6 +246,7 @@ router.post('/users/permission/remove',
                 action: 'PERMISSION_REMOVE',
                 target_user_id: new ObjectId(user_id),
                 performed_by: new ObjectId(preq.user.userId),
+                runtime_tag: RUNTIME_TAG,
                 timestamp: new Date(),
                 details: { permission }
             });
@@ -306,7 +313,7 @@ router.post('/log',
             const { limit = 100, skip = 0 } = req.body;
 
             const logs = await db.collection(VOICEBOT_COLLECTIONS.PERMISSIONS_LOG)
-                .find({})
+                .find(runtimePermissionsLogQuery({}))
                 .sort({ timestamp: -1 })
                 .skip(skip)
                 .limit(limit)

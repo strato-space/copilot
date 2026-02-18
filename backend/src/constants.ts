@@ -348,6 +348,7 @@ export const VOICEBOT_JOBS = {
     SESSION_CATEGORIZATION_DONE: 'session_categorization_done',
     SESSION_TASKS_CREATED: 'session_tasks_created',
     SESSION_PROJECT_ASSIGNED: 'session_project_assigned',
+    SESSION_READY_TO_SUMMARIZE: 'session_ready_to_summarize',
   },
 } as const;
 

@@ -11,6 +11,14 @@ import { getLogger } from '../../utils/logger.js';
 import { PermissionManager, type Performer } from '../../permissions/permission-manager.js';
 import { computeSessionAccess } from '../../services/session-socket-auth.js';
 import { mergeWithRuntimeFilter } from '../../services/runtimeScope.js';
+import {
+  buildDoneNotifyPreview,
+  writeDoneNotifyRequestedLog,
+} from '../../services/voicebotDoneNotify.js';
+import {
+  clearActiveVoiceSessionBySessionId,
+  clearActiveVoiceSessionForUser,
+} from '../../voicebot_tgbot/activeSessionMapping.js';
 
 const logger = getLogger();
 
@@ -198,8 +206,15 @@ const handleSessionDone = async ({
     }
 
     const session = access.session as { chat_id?: unknown; _id?: ObjectId | string };
+    const performer = access.performer as Performer | undefined;
     const chat_id = session?.chat_id;
     const commonQueue = queues?.[VOICEBOT_QUEUES.COMMON];
+    const db = getDb();
+    const notifyPreview = await buildDoneNotifyPreview({
+      db,
+      session: session as Record<string, unknown>,
+      eventName: 'Сессия завершена',
+    });
     if (!chat_id && commonQueue) {
       reply({ ok: false, error: 'chat_id_missing' });
       return;
@@ -209,10 +224,11 @@ const handleSessionDone = async ({
       await commonQueue.add(VOICEBOT_JOBS.common.DONE_MULTIPROMPT, {
         session_id,
         chat_id,
+        telegram_user_id: performer?.telegram_id ? String(performer.telegram_id) : null,
+        notify_preview: notifyPreview,
       });
     } else {
       // Fallback for Copilot runtime where workers may run outside this process.
-      const db = getDb();
       await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
         mergeWithRuntimeFilter(
           { _id: new ObjectId(session_id) },
@@ -232,12 +248,42 @@ const handleSessionDone = async ({
       );
     }
 
+    await clearActiveVoiceSessionBySessionId({ db, session_id });
+    if (performer?.telegram_id) {
+      await clearActiveVoiceSessionForUser({ db, telegram_user_id: performer.telegram_id });
+    }
+
+    await writeDoneNotifyRequestedLog({
+      db,
+      session_id: new ObjectId(session_id),
+      session: session as Record<string, unknown>,
+      actor: performer
+        ? {
+            type: 'performer',
+            performer_id: performer._id?.toString?.() || '',
+            telegram_id: performer.telegram_id ? String(performer.telegram_id) : '',
+          }
+        : null,
+      source: {
+        type: 'socket',
+        namespace: '/voicebot',
+        event: 'session_done',
+        mode: commonQueue ? 'queued' : 'fallback',
+      },
+      preview: notifyPreview,
+    });
+
     emitToSession(io, session_id, 'session_status', {
       session_id,
       status: 'done_queued',
       timestamp: Date.now(),
     });
-    reply({ ok: true });
+    reply({
+      ok: true,
+      notify_preview: {
+        event_name: notifyPreview.event_name,
+      },
+    });
   } catch (error) {
     logger.error('[voicebot-socket] Error handling session_done:', error);
     reply({ ok: false, error: 'internal_error' });

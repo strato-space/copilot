@@ -1,0 +1,116 @@
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { ObjectId } from 'mongodb';
+
+import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS } from '../../src/constants.js';
+
+const getDbMock = jest.fn();
+
+jest.unstable_mockModule('../../src/services/db.js', () => ({
+  getDb: getDbMock,
+}));
+
+const { handleTranscribeJob } = await import('../../src/workers/voicebot/handlers/transcribe.js');
+const { handleCategorizeJob } = await import('../../src/workers/voicebot/handlers/categorize.js');
+const { handleFinalizationJob } = await import('../../src/workers/voicebot/handlers/finalization.js');
+const { handleProcessingLoopJob } = await import('../../src/workers/voicebot/handlers/processingLoop.js');
+const { VOICEBOT_WORKER_MANIFEST } = await import('../../src/workers/voicebot/manifest.js');
+
+describe('voicebot worker scaffold handlers', () => {
+  beforeEach(() => {
+    getDbMock.mockReset();
+  });
+
+  it('transcribe handler returns scaffold skip for existing message', async () => {
+    const messageId = new ObjectId();
+    const findOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: new ObjectId(),
+      is_transcribed: false,
+    }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne };
+        return {};
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.reason).toBe('engine_not_integrated');
+  });
+
+  it('categorize handler skips when transcription text is absent', async () => {
+    const messageId = new ObjectId();
+    const findOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: new ObjectId(),
+      transcription_text: '',
+    }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne };
+        return {};
+      },
+    });
+
+    const result = await handleCategorizeJob({ message_id: messageId.toString() });
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.reason).toBe('missing_transcription_text');
+  });
+
+  it('finalization handler returns deferred scaffold result', async () => {
+    const sessionId = new ObjectId();
+    const findOne = jest.fn(async () => ({
+      _id: sessionId,
+      is_messages_processed: true,
+    }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { findOne };
+        return {};
+      },
+    });
+
+    const result = await handleFinalizationJob({ session_id: sessionId.toString() });
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.reason).toBe('engine_not_integrated');
+  });
+
+  it('processing loop handler returns runtime snapshot counters', async () => {
+    const find = jest.fn(() => ({
+      limit: () => ({
+        toArray: async () => [{ _id: new ObjectId() }, { _id: new ObjectId() }],
+      }),
+    }));
+    const countDocuments = jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(2);
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { find };
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { countDocuments };
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob({ limit: 20 });
+    expect(result.ok).toBe(true);
+    expect(result.mode).toBe('skeleton');
+    expect(result.scanned_sessions).toBe(2);
+    expect(result.pending_transcriptions).toBe(4);
+    expect(result.pending_categorizations).toBe(2);
+  });
+
+  it('manifest includes processing/transcribe/categorize/finalization handlers', () => {
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.PROCESSING]).toBeDefined();
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.voice.TRANSCRIBE]).toBeDefined();
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.voice.CATEGORIZE]).toBeDefined();
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.postprocessing.FINAL_CUSTOM_PROMPT]).toBeDefined();
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.postprocessing.CREATE_TASKS]).toBeDefined();
+  });
+});

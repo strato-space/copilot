@@ -198,16 +198,99 @@ MCP_SESSION_TIMEOUT=1800000
 - E2E tests: `npm run test:e2e` (Playwright) in `app/` — runs against local dev server.
 - E2E tests require running dev server or use `PLAYWRIGHT_BASE_URL` env var.
 
-## Beads (bd) Integration
+<!-- BEGIN BEADS INTEGRATION -->
+## Issue Tracking with bd (beads)
 
-- `bd` is already initialized in this repository and configured to use the `beads-sync` branch.
-- Required setup for future repos (if cloning elsewhere):
-  1. Install `bd` and Go once in environment.
-  2. Run `bd init` in repo root.
-  3. Run `bd config set beads.role maintainer`.
-  4. Set `sync-branch: "beads-sync"` in `.beads/config.yaml`.
-  5. Run `bd sync` and `bd doctor --fix --yes`.
-  6. Commit `.beads/*` files and `.gitattributes` (and `AGENTS.md` updates when present).
+**IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or comment-based checklists.
+
+### Why bd?
+
+- Dependency-aware: Track blockers and relationships between issues
+- Git-friendly: Auto-syncs to JSONL for version control
+- Agent-optimized: JSON output, ready work detection, discovered-from links
+- Prevents duplicate tracking systems and confusion
+
+### Quick Start
+
+Issue IDs in this repo look like `copilot-<hash>`.
+
+**Check for ready work:**
+
+```bash
+bd ready --json
+```
+
+**Create new issues:**
+
+```bash
+bd create "Issue title" --description="Detailed context" --type task --priority 2 --json
+bd create "Issue title" --description="Follow-up found while working" --type bug --priority 1 --deps discovered-from:<issue-id> --json
+```
+
+**Claim and update:**
+
+```bash
+bd update <issue-id> --status in_progress --json
+bd update <issue-id> --priority 1 --json
+```
+
+**Complete work:**
+
+```bash
+bd close <issue-id> --reason "Completed" --json
+```
+
+### Issue Types
+
+- `bug` - Something broken
+- `feature` - New functionality
+- `task` - Work item (tests, docs, refactoring)
+- `epic` - Large feature with subtasks
+- `chore` - Maintenance (dependencies, tooling)
+
+### Priorities
+
+- `0` - Critical (security, data loss, broken builds)
+- `1` - High (major features, important bugs)
+- `2` - Medium (default, nice-to-have)
+- `3` - Low (polish, optimization)
+- `4` - Backlog (future ideas)
+
+### Workflow for AI Agents
+
+1. **Check ready work**: `bd ready` shows unblocked issues
+2. **Claim your task**: `bd update <id> --status in_progress`
+3. **Work on it**: Implement, test, document
+4. **Discover new work?** Create linked issue:
+   - `bd create "Found bug" --description="Details about what was found" --priority 1 --deps discovered-from:<parent-id>`
+5. **Complete**: `bd close <id> --reason "Done"`
+
+### Auto-Sync
+
+bd keeps `.beads/issues.jsonl` in sync with your local DB:
+
+- Exports to `.beads/issues.jsonl` after changes (5s debounce)
+- Imports from JSONL when newer (e.g., after `git pull`)
+
+Notes:
+- `bd sync` updates JSONL but does **not** commit/push.
+- With hooks installed (`bd hooks install`), `pre-commit` exports and stages `.beads/*.jsonl` automatically.
+- `bd doctor --fix` may set `skip-worktree` flags for `.beads/*.jsonl`, so they might not appear in `git status` until staged by the hook; that's expected.
+- Git hooks won't push for you; you still need `git push`.
+
+### Important Rules
+
+- ✅ Use bd for ALL task tracking
+- ✅ Always use `--json` flag for programmatic use
+- ✅ Link discovered work with `discovered-from` dependencies
+- ✅ Check `bd ready` before asking "what should I work on?"
+- ❌ Do NOT create markdown TODO lists
+- ❌ Do NOT use external issue trackers
+- ❌ Do NOT duplicate tracking systems
+
+For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help`.
+
+<!-- END BEADS INTEGRATION -->
 
 ## Landing the Plane (Session Completion)
 

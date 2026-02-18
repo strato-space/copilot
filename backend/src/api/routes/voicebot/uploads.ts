@@ -18,11 +18,18 @@ import {
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
-import { recordMatchesRuntime } from '../../../services/runtimeScope.js';
+import { mergeWithRuntimeFilter, recordMatchesRuntime, RUNTIME_TAG } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
+import { getAudioDurationFromFile } from '../../../utils/audioUtils.js';
 
 const router = Router();
 const logger = getLogger();
+
+const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> =>
+    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+
+const runtimeMessageQuery = (query: Record<string, unknown>): Record<string, unknown> =>
+    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
 
 const uploadsDir = VOICEBOT_FILE_STORAGE.uploadsDir;
 if (!existsSync(uploadsDir)) {
@@ -111,8 +118,10 @@ const checkSessionAccess = async ({
     const performer = req.performer;
 
     const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+        ...runtimeSessionQuery({
         _id: new ObjectId(sessionId),
         is_deleted: { $ne: true },
+        }),
     }) as Record<string, unknown> | null;
 
     if (!session) {
@@ -186,6 +195,12 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         const results: Array<Record<string, unknown>> = [];
         for (const file of filesArray) {
             const createdAt = new Date();
+            let duration = 0;
+            try {
+                duration = await getAudioDurationFromFile(file.path);
+            } catch (error) {
+                logger.warn('Could not determine uploaded audio duration:', error);
+            }
             const messageDoc: Record<string, unknown> = {
                 session_id: new ObjectId(session_id),
                 type: 'voice',
@@ -195,10 +210,12 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 file_name: file.originalname,
                 file_size: file.size,
                 mime_type: file.mimetype,
+                duration,
                 file_metadata: {
                     original_filename: file.originalname,
                     file_size: file.size,
                     mime_type: file.mimetype,
+                    duration,
                     upload_timestamp: createdAt,
                 },
                 uploaded_by: performer._id,
@@ -211,6 +228,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 is_transcribed: false,
                 transcription_text: '',
                 is_deleted: false,
+                runtime_tag: RUNTIME_TAG,
                 created_at: createdAt,
                 updated_at: createdAt,
             };
@@ -220,6 +238,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 success: true,
                 message_id: String(op.insertedId),
                 file_info: {
+                    duration,
                     file_size: file.size,
                     mime_type: file.mimetype,
                     original_filename: file.originalname,
@@ -229,7 +248,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         }
 
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(session_id) },
+            runtimeSessionQuery({ _id: new ObjectId(session_id) }),
             {
                 $set: {
                     last_voice_timestamp: new Date(),
@@ -299,6 +318,7 @@ router.post(
                 is_active: true,
                 is_deleted: false,
                 is_messages_processed: false,
+                runtime_tag: RUNTIME_TAG,
                 created_at: now,
                 updated_at: now,
             };
@@ -339,7 +359,7 @@ router.post(
             }
 
             await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-                { _id: new ObjectId(session_id) },
+                runtimeSessionQuery({ _id: new ObjectId(session_id) }),
                 {
                     $set: {
                         is_active: false,
@@ -377,8 +397,10 @@ router.get(
             }
 
             const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne({
+                ...runtimeMessageQuery({
                 _id: new ObjectId(message_id),
                 is_deleted: { $ne: true },
+                }),
             }) as Record<string, unknown> | null;
             if (!messageDoc) {
                 return res.status(404).json({ error: 'Message not found' });
@@ -419,9 +441,11 @@ router.get('/public_attachment/:session_id/:file_unique_id', async (req: Request
         }
 
         const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne({
+            ...runtimeMessageQuery({
             session_id: new ObjectId(session_id),
             'attachments.file_unique_id': fileUniqueId,
             is_deleted: { $ne: true },
+            }),
         }) as Record<string, unknown> | null;
         if (!messageDoc) {
             return res.status(404).json({ error: 'Attachment not found' });

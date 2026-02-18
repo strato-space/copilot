@@ -1,0 +1,310 @@
+import { test, expect, type Page } from '@playwright/test';
+
+const SESSION_ID = '507f1f77bcf86cd799439011';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3002';
+
+const mockAuth = async (page: Page): Promise<void> => {
+  await page.route('**/api/auth/me', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          user: {
+            id: '507f1f77bcf86cd799439099',
+            email: 'test@stratospace.fun',
+            role: 'ADMIN',
+            permissions: [],
+          },
+        },
+      }),
+    });
+  });
+};
+
+const addAuthCookie = async (page: Page): Promise<void> => {
+  const target = new URL(BASE_URL);
+  await page.context().addCookies([
+    {
+      name: 'auth_token',
+      value: 'playwright-auth-token',
+      url: `${target.protocol}//${target.host}`,
+      secure: target.protocol === 'https:',
+      sameSite: 'Lax',
+    },
+  ]);
+};
+
+const mockSessionApis = async (page: Page): Promise<void> => {
+  await page.route('**/api/voicebot/projects', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route('**/api/voicebot/persons/list', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route('**/api/voicebot/auth/list-users', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route('**/api/voicebot/sessions/get', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        voice_bot_session: {
+          _id: SESSION_ID,
+          session_name: 'FAB Lifecycle Session',
+          is_active: true,
+          access_level: 'private',
+          participants: [],
+          allowed_users: [],
+        },
+        session_messages: [],
+        session_attachments: [],
+        socket_token: null,
+        socket_port: null,
+      }),
+    });
+  });
+};
+
+const installFabControlMock = async (
+  page: Page,
+  options: { state?: string; sessionId?: string } = {}
+): Promise<void> => {
+  const state = options.state ?? 'paused';
+  const sessionId = options.sessionId ?? SESSION_ID;
+  await page.addInitScript(({ sessionId: sid, state: initialState }) => {
+    const w = window as unknown as {
+      __voicebotControlCalls?: string[];
+      __voicebotControl?: (action: string) => void;
+      __voicebotState?: { get?: () => { state?: string } };
+    };
+    w.__voicebotControlCalls = [];
+    w.__voicebotControl = (action: string) => {
+      w.__voicebotControlCalls?.push(action);
+    };
+    w.__voicebotState = {
+      get: () => ({ state: initialState }),
+    };
+    window.localStorage.setItem('VOICEBOT_ACTIVE_SESSION_ID', sid);
+  }, { sessionId, state });
+};
+
+const attachFabControlRecorder = async (
+  page: Page,
+  options: { state?: string; sessionId?: string } = {}
+): Promise<void> => {
+  const state = options.state ?? 'paused';
+  const sessionId = options.sessionId ?? SESSION_ID;
+  await page.evaluate(({ sessionId: sid, state: nextState }) => {
+    const w = window as unknown as {
+      __voicebotControlCalls?: string[];
+      __voicebotControl?: (action: string) => Promise<void> | void;
+      __voicebotState?: { get?: () => { state?: string } };
+    };
+    w.__voicebotControlCalls = [];
+    const original = typeof w.__voicebotControl === 'function' ? w.__voicebotControl.bind(window) : null;
+    const recorder = async (action: string) => {
+      w.__voicebotControlCalls?.push(action);
+      if (original) {
+        await Promise.resolve(original(action));
+      }
+    };
+    Object.defineProperty(window, '__voicebotControl', {
+      configurable: false,
+      writable: false,
+      value: recorder,
+    });
+    w.__voicebotState = { get: () => ({ state: nextState }) };
+    window.localStorage.setItem('VOICEBOT_ACTIVE_SESSION_ID', sid);
+    window.dispatchEvent(
+      new CustomEvent('voicebot:active-session-updated', {
+        detail: {
+          session_id: sid,
+          source: 'playwright-test',
+        },
+      })
+    );
+  }, { sessionId, state });
+};
+
+const getFabCalls = async (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    const w = window as unknown as { __voicebotControlCalls?: string[] };
+    return w.__voicebotControlCalls ?? [];
+  });
+
+const controlsRow = (page: Page) =>
+  page
+    .locator('div.flex.flex-wrap.items-center.gap-2')
+    .filter({ has: page.getByRole('button', { name: /^Done$/ }) })
+    .first();
+
+const actionButton = (page: Page, name: string) =>
+  controlsRow(page).getByRole('button', { name: new RegExp(`^${name}$`) });
+
+const mockFabScriptAsset = async (page: Page): Promise<void> => {
+  await page.route('**/webrtc/webrtc-voicebot-lib.js', async (route) => {
+    const method = route.request().method().toUpperCase();
+    if (method === 'HEAD') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/javascript',
+        body: '',
+        headers: {
+          'content-type': 'application/javascript',
+        },
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: `
+        (function () {
+          window.__voicebotFabInjectedCount = (window.__voicebotFabInjectedCount || 0) + 1;
+          if (!document.getElementById('fab-wrap')) {
+            const el = document.createElement('div');
+            el.id = 'fab-wrap';
+            el.textContent = 'FAB';
+            document.body.appendChild(el);
+          }
+          window.__voicebotFabCleanup = function () {
+            const el = document.getElementById('fab-wrap');
+            if (el) el.remove();
+          };
+        })();
+      `,
+    });
+  });
+};
+
+test.describe('Voice FAB lifecycle parity', () => {
+  test('@unauth session action order is New / Rec / Cut / Pause / Done', async ({ page }) => {
+    await installFabControlMock(page);
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await page.goto(`/voice/session/${SESSION_ID}`);
+
+    const expected = ['New', 'Rec', 'Cut', 'Pause', 'Done'];
+    const boxes = [];
+    for (const name of expected) {
+      const button = actionButton(page, name);
+      await expect(button).toBeVisible();
+      boxes.push(await button.boundingBox());
+    }
+
+    expect(boxes.every((box) => Boolean(box))).toBeTruthy();
+    const xPositions = boxes.map((box) => box!.x);
+    expect([...xPositions].sort((a, b) => a - b)).toEqual(xPositions);
+  });
+
+  test('@unauth New button routes action into FAB control', async ({ page }) => {
+    await installFabControlMock(page);
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await page.goto(`/voice/session/${SESSION_ID}`);
+    await attachFabControlRecorder(page);
+
+    await actionButton(page, 'New').click();
+    await expect(page).toHaveURL(new RegExp(`/voice/session/${SESSION_ID}$`));
+    const calls = await getFabCalls(page);
+    expect(calls).toContain('new');
+  });
+
+  test('@unauth FAB stays mounted after navigation from Voice to Analytic', async ({ page }) => {
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await mockFabScriptAsset(page);
+
+    await page.goto('/voice');
+    await expect(page.locator('#fab-wrap')).toBeVisible();
+
+    await page.getByRole('link', { name: /Analytic/i }).click();
+    await expect(page).toHaveURL(/\/analytics$/);
+    await expect(page.locator('#fab-wrap')).toBeVisible();
+
+    const injectedCount = await page.evaluate(() => (window as { __voicebotFabInjectedCount?: number }).__voicebotFabInjectedCount ?? 0);
+    expect(injectedCount).toBe(1);
+  });
+
+  test('@unauth Rec on session page activates page session then calls FAB control', async ({ page }) => {
+    await installFabControlMock(page);
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+
+    let activatePayload: Record<string, unknown> | null = null;
+    await page.route('**/api/voicebot/activate_session', async (route) => {
+      activatePayload = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+
+    await page.goto(`/voice/session/${SESSION_ID}`);
+    await attachFabControlRecorder(page);
+    await expect(actionButton(page, 'Rec')).toBeVisible();
+    await actionButton(page, 'Rec').click();
+
+    await expect.poll(() => activatePayload?.session_id).toBe(SESSION_ID);
+    const calls = await getFabCalls(page);
+    expect(calls).toContain('rec');
+  });
+
+  test('@unauth button enablement follows recording state contract', async ({ page }) => {
+    await installFabControlMock(page, { state: 'recording' });
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await page.goto(`/voice/session/${SESSION_ID}`);
+    await attachFabControlRecorder(page, { state: 'recording' });
+
+    await expect(actionButton(page, 'New')).toBeDisabled();
+    await expect(actionButton(page, 'Rec')).toBeDisabled();
+    await expect(actionButton(page, 'Cut')).toBeEnabled();
+    await expect(actionButton(page, 'Pause')).toBeEnabled();
+    await expect(actionButton(page, 'Done')).toBeEnabled();
+  });
+
+  test('@unauth Done button routes action into FAB control', async ({ page }) => {
+    await installFabControlMock(page);
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await page.route('**/api/voicebot/activate_session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+
+    await page.goto(`/voice/session/${SESSION_ID}`);
+    await attachFabControlRecorder(page);
+    await expect(actionButton(page, 'New')).toBeVisible();
+    await expect(actionButton(page, 'Done')).toBeVisible();
+    await actionButton(page, 'Done').click();
+
+    const calls = await getFabCalls(page);
+    expect(calls).toContain('done');
+  });
+});

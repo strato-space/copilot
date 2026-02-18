@@ -8,6 +8,7 @@ import { getDb } from '../../services/db.js';
 import { COLLECTIONS, VOICEBOT_COLLECTIONS } from '../../constants.js';
 import { PermissionManager, type Performer } from '../../permissions/permission-manager.js';
 import { getLogger } from '../../utils/logger.js';
+import { mergeWithRuntimeFilter } from '../../services/runtimeScope.js';
 
 const COOKIE_NAME = 'auth_token';
 const TOKEN_MAX_AGE = 90 * 24 * 60 * 60 * 1000;
@@ -161,10 +162,15 @@ router.post('/auth_token', async (req: Request, res: Response) => {
   logger.info(`Looking for token in database: ${token.substring(0, 8)}...`);
   const oneTimeToken = await db
     .collection<OneTimeToken>(VOICEBOT_COLLECTIONS.ONE_USE_TOKENS)
-    .findOne({
-      token: token,
-      is_used: false,
-    });
+    .findOne(
+      mergeWithRuntimeFilter(
+        {
+          token: token,
+          is_used: false,
+        },
+        { field: 'runtime_tag' }
+      )
+    );
 
   if (!oneTimeToken) {
     logger.warn(`Invalid or used one-time token: ${token.substring(0, 8)}...`);
@@ -183,7 +189,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
     await db
       .collection<OneTimeToken>(VOICEBOT_COLLECTIONS.ONE_USE_TOKENS)
       .updateOne(
-        { _id: oneTimeToken._id },
+        mergeWithRuntimeFilter({ _id: oneTimeToken._id }, { field: 'runtime_tag' }),
         { $set: { is_used: true, used_at: new Date(), expired: true } }
       );
     throw new AppError('Token has expired', 401, 'TOKEN_EXPIRED');
@@ -210,7 +216,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
   await db
     .collection<OneTimeToken>(VOICEBOT_COLLECTIONS.ONE_USE_TOKENS)
     .updateOne(
-      { _id: oneTimeToken._id },
+      mergeWithRuntimeFilter({ _id: oneTimeToken._id }, { field: 'runtime_tag' }),
       { $set: { is_used: true, used_at: new Date() } }
     );
 

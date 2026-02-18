@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/src/assets/ss-logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <title>VoiceBot UI</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        function normalizeVite(value) {
+          if (typeof value !== 'string') return '';
+          if (value.startsWith('%VITE_') && value.endsWith('%')) return '';
+          return value;
+        }
+
+        const envBackend = normalizeVite('%VITE_API_URL%');
+        const envAgents = normalizeVite('%VITE_AGENTS_API_URL%');
+        const envProxyUrl = normalizeVite('%VITE_PROXY_URL%');
+        const envProxyAuth = normalizeVite('%VITE_PROXY_AUTH%');
+
+        window.backend_url = envBackend;
+        window.agents_api_url = envAgents;
+        window.proxy_url = envProxyUrl;
+        window.proxy_auth = envProxyAuth;
+
+        const hostname = window.location.hostname;
+        const origin = window.location.origin;
+        const isStratoVoiceHost = hostname.endsWith('.stratospace.fun');
+
+        if (isStratoVoiceHost) {
+          // When served from *.stratospace.fun behind nginx, use same-origin to avoid mixed content.
+          window.backend_url = '';
+          window.agents_api_url = origin + '/agents';
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

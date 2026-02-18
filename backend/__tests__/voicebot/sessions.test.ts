@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import type { Request, Response } from 'express';
+import { VOICEBOT_JOBS } from '../../src/constants.js';
 
 // Mock data
 const mockSession = {
@@ -112,6 +113,34 @@ describe('VoiceBot Sessions API', () => {
             // session_id can be UUID-like or ObjectId-like
             const validSessionId = mockSession.session_id;
             expect(validSessionId).toMatch(/^[a-zA-Z0-9-]+$/);
+        });
+    });
+
+    describe('Upload session contract', () => {
+        it('should allow upload to inactive but non-deleted session', () => {
+            const inactiveSession = {
+                ...mockSession,
+                is_active: false,
+                is_deleted: false,
+            };
+            const canUpload = inactiveSession.is_deleted !== true;
+            expect(canUpload).toBe(true);
+        });
+
+        it('should reject upload only for deleted session', () => {
+            const deletedSession = {
+                ...mockSession,
+                is_active: false,
+                is_deleted: true,
+            };
+            const canUpload = deletedSession.is_deleted !== true;
+            expect(canUpload).toBe(false);
+        });
+    });
+
+    describe('Notify contracts', () => {
+        it('should expose session_ready_to_summarize notify event constant', () => {
+            expect(VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE).toBe('session_ready_to_summarize');
         });
     });
 });

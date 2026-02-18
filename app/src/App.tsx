@@ -45,6 +45,7 @@ import SaleopsPage from './pages/SaleopsPage';
 import { useAuthStore } from './store/authStore';
 import { useAppInit } from './hooks/useAppInit';
 import { useMCPWebSocket } from './hooks/useMCPWebSocket';
+import WebrtcFabLoader from './components/voice/WebrtcFabLoader';
 
 const { Sider, Content } = Layout;
 
@@ -188,6 +189,7 @@ function MainLayout(): ReactElement {
           </div>
         </Content>
       </Layout>
+      <WebrtcFabLoader />
       <NotificationsDrawer />
     </Layout>
   );

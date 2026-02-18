@@ -1,0 +1,1767 @@
+{
+  "session": {
+    "_id": "697b75eabebd2e48576bc6ed",
+    "chat_id": 3045664,
+    "session_name": "хрум-хрум тесты",
+    "session_type": "multiprompt_voice_session",
+    "user_id": "6863eab6a6d7b324e2df310a",
+    "is_active": false,
+    "created_at": "2026-01-29T14:59:54.912Z",
+    "updated_at": "2026-01-29T14:59:54.912Z",
+    "is_messages_processed": true,
+    "processors": [
+      "transcription",
+      "categorization",
+      "finalization"
+    ],
+    "session_processors": [
+      "CREATE_TASKS"
+    ],
+    "is_waiting": false,
+    "last_message_id": "cb482876-a103-4e69-bfe4-7cb3b706c84e",
+    "last_message_timestamp": 1769699529,
+    "last_voice_timestamp":   1769699529847,
+    "finished_at": "2026-01-29T15:12:10.625Z",
+    "is_finalized": false
+  },
+  "messages_count_objectId": 23,
+  "messages_objectId": [
+    {
+      "_id": "697b761ebebd2e48576bc6ee",
+      "timestamp": 1769698846671,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769698855510,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:00:46.671Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "d160981d957ce787",
+      "chat_id": 3045664,
+      "message_id": "5f6a62bf-c575-4866-b6ef-3897f875b20c",
+      "message_timestamp": 1769698846,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698846671_d160981d957ce787.webm",
+      "original_filename": "001-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "001-1.webm",
+        "file_size": 828787,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:00:46.671Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698850184,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "You Так, и что нам надо сказать? Открывать по умолчанию транскрипцию вместо категоризации.",
+          "timestamp": "2026-01-29T15:00:50.184Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "You Так, и что нам надо сказать? Открывать по умолчанию транскрипцию вместо категоризации.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Так, и что нам надо сказать?",
+          "related_goal": "",
+          "segment_type": "question",
+          "new_pattern_detected": "Смешение языков: артефакт 'You' в начале фразы",
+          "quality_flag": "incomplete",
+          "topic_keywords": "вопрос, инструкция, уточнение",
+          "keywords_grouped": "{\"clarification\":[\"что сказать\",\"уточнение\"],\"conversation\":[\"обсуждение\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:02",
+          "end": "00:00:05",
+          "speaker": "Speaker 1",
+          "text": "Открывать по умолчанию транскрипцию вместо категоризации.",
+          "related_goal": "",
+          "segment_type": "suggestion",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "транскрипция, категоризация, по умолчанию",
+          "keywords_grouped": "{\"ui_behavior\":[\"по умолчанию\",\"открывать\"],\"features\":[\"транскрипция\",\"категоризация\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7656bebd2e48576bc6ef",
+      "timestamp": 1769698902104,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769698916972,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:01:42.104Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "95face07ae3ed6ed",
+      "chat_id": 3045664,
+      "message_id": "f3b44a57-41a2-407a-a9aa-420b9b0db546",
+      "message_timestamp": 1769698902,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698902104_95face07ae3ed6ed.webm",
+      "original_filename": "002-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "002-1.webm",
+        "file_size": 911654,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:01:42.104Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698905268,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Да, тут потеплее, я тут, пожалуй, посижу Да холодно, я сколько ночей ночью подряд мёрз Кошмар, много, сначала зимы На улице не мёрзнешь, там минус 20, а дома ты мёрзнешь Минус один слой одежды всего На улице мне весело и интересно, погуляли с собакой, побегали Нет, почему-то дома не холодно, и сплю ненормально под тоньшим одеялом, чем ты, а на улице мёрзну",
+          "timestamp": "2026-01-29T15:01:45.268Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Да, тут потеплее, я тут, пожалуй, посижу Да холодно, я сколько ночей ночью подряд мёрз Кошмар, много, сначала зимы На улице не мёрзнешь, там минус 20, а дома ты мёрзнешь Минус один слой одежды всего На улице мне весело и интересно, погуляли с собакой, побегали Нет, почему-то дома не холодно, и сплю ненормально под тоньшим одеялом, чем ты, а на улице мёрзну",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:03",
+          "speaker": "Speaker A",
+          "text": "Тут теплее, посижу здесь.",
+          "related_goal": "",
+          "segment_type": "decision",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "тепло, сидеть, место",
+          "keywords_grouped": "{\"temperature\":[\"теплее\"],\"location\":[\"здесь\"],\"activity\":[\"сидеть\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:03",
+          "end": "00:00:07",
+          "speaker": "Speaker A",
+          "text": "Дома холодно, я мёрз несколько ночей подряд.",
+          "related_goal": "",
+          "segment_type": "issue",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "дом, холод, сон",
+          "keywords_grouped": "{\"temperature\":[\"холодно\",\"мёрз\"],\"location\":[\"дом\"],\"time\":[\"несколько ночей подряд\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:07",
+          "end": "00:00:09",
+          "speaker": "Speaker A",
+          "text": "Так продолжается с начала зимы.",
+          "related_goal": "",
+          "segment_type": "reflection",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "зима, период, регулярность",
+          "keywords_grouped": "{\"time\":[\"с начала зимы\"],\"pattern\":[\"продолжается\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:09",
+          "end": "00:00:14",
+          "speaker": "Speaker A",
+          "text": "На улице при −20 не мёрзну, а дома мёрзну.",
+          "related_goal": "",
+          "segment_type": "reflection",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "улица, дом, контраст",
+          "keywords_grouped": "{\"temperature\":[\"−20\",\"мёрзну\",\"не мёрзну\"],\"location\":[\"улица\",\"дом\"],\"contrast\":[\"улица теплее ощущается, чем дом\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:14",
+          "end": "00:00:16",
+          "speaker": "Speaker A",
+          "text": "Разница — всего минус один слой одежды.",
+          "related_goal": "",
+          "segment_type": "reflection",
+          "new_pattern_detected": "Неполный контекст: неясно, где именно снят слой одежды.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "одежда, слои, разница",
+          "keywords_grouped": "{\"clothing\":[\"минус один слой\"],\"comparison\":[\"разница\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:16",
+          "end": "00:00:20",
+          "speaker": "Speaker A",
+          "text": "На улице весело: гуляли с собакой, бегали.",
+          "related_goal": "",
+          "segment_type": "reflection",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "активность, собака, улица",
+          "keywords_grouped": "{\"activity\":[\"гуляли\",\"бегали\"],\"companions\":[\"собака\"],\"location\":[\"улица\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:20",
+          "end": "00:00:25",
+          "speaker": "Speaker B",
+          "text": "Дома у меня не холодно; сплю под более тонким одеялом, чем ты.",
+          "related_goal": "",
+          "segment_type": "reflection",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "дом, одеяло, комфорт",
+          "keywords_grouped": "{\"temperature\":[\"не холодно\"],\"home\":[\"дом\"],\"bedding\":[\"тонкое одеяло\"],\"comparison\":[\"чем ты\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:25",
+          "end": "00:00:28",
+          "speaker": "Speaker B",
+          "text": "На улице мёрзну.",
+          "related_goal": "",
+          "segment_type": "issue",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "улица, холод",
+          "keywords_grouped": "{\"temperature\":[\"мёрзну\"],\"location\":[\"улица\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7663bebd2e48576bc6f0",
+      "timestamp": 1769698915472,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699025694,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:01:55.472Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "1b7b711a43b0955e",
+      "chat_id": 3045664,
+      "message_id": "a1e876e2-4e33-40fb-9296-20dbb5b055ef",
+      "message_timestamp": 1769698915,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698915472_1b7b711a43b0955e.webm",
+      "original_filename": "003-2.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "003-2.webm",
+        "file_size": 8655,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:01:55.472Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698917049,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "you",
+          "timestamp": "2026-01-29T15:01:57.049Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "you",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "User",
+          "text": "you",
+          "related_goal": "",
+          "segment_type": "meta",
+          "new_pattern_detected": "Non-informative single-word input; no transcript or goals provided.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "addressing, incomplete",
+          "keywords_grouped": "{\"meta\":[\"addressing assistant\",\"no context\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7663bebd2e48576bc6f1",
+      "timestamp": 1769698915754,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769698989213,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:01:55.754Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "62b87d202f412410",
+      "chat_id": 3045664,
+      "message_id": "6e4a4a29-67db-4e63-a318-c834948700ec",
+      "message_timestamp": 1769698915,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698915754_62b87d202f412410.webm",
+      "original_filename": "003-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "003-1.webm",
+        "file_size": 225471,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:01:55.754Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698917744,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Hi.",
+          "timestamp": "2026-01-29T15:01:57.744Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Hi.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "User",
+          "text": "Hi.",
+          "related_goal": "",
+          "segment_type": "greeting",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "greeting",
+          "keywords_grouped": "{\"greeting\":[\"hi\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7667bebd2e48576bc6f2",
+      "timestamp": 1769698919416,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699065403,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:01:59.416Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "d7de0e99584b4012",
+      "chat_id": 3045664,
+      "message_id": "1272f3cc-e111-45d3-8974-0ec08468e73e",
+      "message_timestamp": 1769698919,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698919416_d7de0e99584b4012.webm",
+      "original_filename": "005-2.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "005-2.webm",
+        "file_size": 1771,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:01:59.416Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698920565,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "you",
+          "timestamp": "2026-01-29T15:02:00.565Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "you",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "User",
+          "text": "you",
+          "related_goal": "",
+          "segment_type": "incomplete",
+          "new_pattern_detected": "Single-word utterance without context; likely an address or fragment.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "you, fragment, unclear",
+          "keywords_grouped": "{\"structure\":[\"fragment\",\"single_word\"],\"misc\":[\"you\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7667bebd2e48576bc6f3",
+      "timestamp": 1769698919601,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699101225,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:01:59.601Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "25953b92b571c110",
+      "chat_id": 3045664,
+      "message_id": "408aaf62-9fa4-4650-87fd-44c939cd29d8",
+      "message_timestamp": 1769698919,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698919601_25953b92b571c110.webm",
+      "original_filename": "005-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "005-1.webm",
+        "file_size": 37769,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:01:59.601Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698920973,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Thank you for watching.",
+          "timestamp": "2026-01-29T15:02:00.973Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Thank you for watching.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Thank you for watching.",
+          "related_goal": "",
+          "segment_type": "gratitude",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "thanks, closing",
+          "keywords_grouped": "{\"gratitude\":[\"thank you\"],\"context\":[\"watching\",\"audience\",\"closing\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "audience",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7668bebd2e48576bc6f4",
+      "timestamp": 1769698920425,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699136049,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:02:00.425Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "25953b92b571c110",
+      "chat_id": 3045664,
+      "message_id": "8e6a96d7-7c74-4170-93ea-616be8988125",
+      "message_timestamp": 1769698920,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698920424_25953b92b571c110.webm",
+      "original_filename": "006-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "006-1.webm",
+        "file_size": 37769,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:02:00.425Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698922105,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Thank you for watching.",
+          "timestamp": "2026-01-29T15:02:02.105Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Thank you for watching.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Thank you for watching.",
+          "related_goal": "",
+          "segment_type": "closing",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "thank you, watching, closing",
+          "keywords_grouped": "{\"gratitude\":[\"thank you\"],\"audience_engagement\":[\"watching\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b766cbebd2e48576bc6f5",
+      "timestamp": 1769698924034,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699170664,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:02:04.034Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "2850b5314fcad44a",
+      "chat_id": 3045664,
+      "message_id": "df473bef-638b-4cec-8028-2d3006176bae",
+      "message_timestamp": 1769698924,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698924034_2850b5314fcad44a.webm",
+      "original_filename": "007-2.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "007-2.webm",
+        "file_size": 1987,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:02:04.034Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698925136,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "you",
+          "timestamp": "2026-01-29T15:02:05.136Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "you",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "User",
+          "text": "You.",
+          "related_goal": "",
+          "segment_type": "incomplete",
+          "new_pattern_detected": "Single-word utterance without context.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "you, addressing",
+          "keywords_grouped": "{\"misc\":[\"pronoun\",\"address\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7688bebd2e48576bc6f6",
+      "timestamp": 1769698952081,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699260591,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:02:32.081Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "fe4ba18cda02ece5",
+      "chat_id": 3045664,
+      "message_id": "d8ec3809-955a-4bce-a4fb-4a38c85afd01",
+      "message_timestamp": 1769698952,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698952081_fe4ba18cda02ece5.webm",
+      "original_filename": "009-2.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "009-2.webm",
+        "file_size": 16541,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:02:32.081Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698953541,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "you",
+          "timestamp": "2026-01-29T15:02:33.541Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "you",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "User",
+          "text": "you",
+          "related_goal": "",
+          "segment_type": "other",
+          "new_pattern_detected": "Single-word utterance without context; unable to infer purpose or goal.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "addressing, pronoun",
+          "keywords_grouped": "{\"meta\":[\"you\",\"addressing\",\"pronoun\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7688bebd2e48576bc6f7",
+      "timestamp": 1769698952335,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699204717,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:02:32.335Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "de16f630e36921b3",
+      "chat_id": 3045664,
+      "message_id": "87ec56af-c4af-4228-aeb9-2a63d5e85156",
+      "message_timestamp": 1769698952,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698952335_de16f630e36921b3.webm",
+      "original_filename": "009-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "009-1.webm",
+        "file_size": 432652,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:02:32.335Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698954310,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "да ну нафиг",
+          "timestamp": "2026-01-29T15:02:34.310Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "да ну нафиг",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Негативная эмоциональная реакция; выражение отказа/недовольства.",
+          "related_goal": "",
+          "segment_type": "reaction",
+          "new_pattern_detected": "Эмоциональная реплика без контекста и информативных деталей",
+          "quality_flag": "low_quality",
+          "topic_keywords": "реакция, отказ, эмоции",
+          "keywords_grouped": "{\"sentiment\":[\"негативная реакция\",\"эмоциональная реплика\"],\"intent\":[\"отказ\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b76a0bebd2e48576bc6f8",
+      "timestamp": 1769698976961,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699297722,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:02:56.961Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "d6ed2af2d1813629",
+      "chat_id": 3045664,
+      "message_id": "3a37c19c-dd34-437c-a1e7-572e6f297aea",
+      "message_timestamp": 1769698976,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769698976961_d6ed2af2d1813629.webm",
+      "original_filename": "011-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "011-1.webm",
+        "file_size": 371554,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:02:56.961Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769698979116,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Да ну нафиг, а че она так? Отщелкивает все. Ну, хотя, в общем, как заказывали. Отрезать, значит отрезать. Морг, значит. Морг.",
+          "timestamp": "2026-01-29T15:02:59.116Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Да ну нафиг, а че она так? Отщелкивает все. Ну, хотя, в общем, как заказывали. Отрезать, значит отрезать. Морг, значит. Морг.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Почему она так?",
+          "related_goal": "",
+          "segment_type": "question",
+          "new_pattern_detected": "Неопределённый референт «она»; удалены междометия.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "вопрос, поведение, неопределённость",
+          "keywords_grouped": "{\"problem\":[\"непонятное поведение\"],\"reference\":[\"неопределённый объект «она»\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:02",
+          "end": "00:00:04",
+          "speaker": "Speaker 1",
+          "text": "Отщёлкивает всё.",
+          "related_goal": "",
+          "segment_type": "issue",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "отщёлкивание, сбой, механизм",
+          "keywords_grouped": "{\"behavior\":[\"отщёлкивает\"],\"scope\":[\"всё\"],\"problem\":[\"возможная неисправность\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:04",
+          "end": "00:00:06",
+          "speaker": "Speaker 1",
+          "text": "Как заказывали.",
+          "related_goal": "",
+          "segment_type": "reflection",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "соответствие, заказ, ожидания",
+          "keywords_grouped": "{\"status\":[\"соответствует заказу\"],\"context\":[\"ожидания\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:06",
+          "end": "00:00:08",
+          "speaker": "Speaker 1",
+          "text": "Отрезать — значит отрезать.",
+          "related_goal": "",
+          "segment_type": "decision",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "решение, отрезать, исполнение",
+          "keywords_grouped": "{\"decision\":[\"принятое действие\"],\"action\":[\"отрезать без изменений\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:08",
+          "end": "00:00:10",
+          "speaker": "Speaker 1",
+          "text": "Морг.",
+          "related_goal": "",
+          "segment_type": "statement",
+          "new_pattern_detected": "Повтор слова «Морг» без контекста, вероятное указание на локацию.",
+          "quality_flag": "low_quality",
+          "topic_keywords": "морг, локация, уточнение",
+          "keywords_grouped": "{\"location\":[\"морг\"],\"clarification\":[\"повтор без деталей\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b76bbbebd2e48576bc6f9",
+      "timestamp": 1769699003215,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699374058,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:03:23.215Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "704a86e6385f27f5",
+      "chat_id": 3045664,
+      "message_id": "cf7a428b-73d0-4f95-a290-174957593e18",
+      "message_timestamp": 1769699003,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699003215_704a86e6385f27f5.webm",
+      "original_filename": "012-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "012-1.webm",
+        "file_size": 433981,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:03:23.215Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699012621,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "If you put a marker on the fours princes, it can make them look like it",
+          "timestamp": "2026-01-29T15:03:32.621Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "If you put a marker on the fours princes, it can make them look like it",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:05",
+          "speaker": "Speaker 1",
+          "text": "If you put a marker on the fours princes, it can make them look like it.",
+          "related_goal": "",
+          "segment_type": "suggestion",
+          "new_pattern_detected": "Unclear/possibly mistranscribed phrase 'fours princes'; incomplete or ambiguous statement.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "marker, appearance, instruction, ambiguity",
+          "keywords_grouped": "{\"action\":[\"put a marker\"],\"objects\":[\"marker\"],\"targets\":[\"fours princes\"],\"effects\":[\"make them look like it\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b76c9bebd2e48576bc6fa",
+      "timestamp": 1769699017491,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699411439,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:03:37.491Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "5cd946ecd3352fce",
+      "chat_id": 3045664,
+      "message_id": "2e8992fe-6fb4-4ab3-8f73-c9ac27af14b0",
+      "message_timestamp": 1769699017,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699017491_5cd946ecd3352fce.webm",
+      "original_filename": "013-2.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "013-2.webm",
+        "file_size": 9163,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:03:37.491Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699018733,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "you",
+          "timestamp": "2026-01-29T15:03:38.733Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "you",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "User",
+          "text": "you",
+          "related_goal": "",
+          "segment_type": "incomplete",
+          "new_pattern_detected": "Single-word utterance without context or structure",
+          "quality_flag": "incomplete",
+          "topic_keywords": "address, pronoun",
+          "keywords_grouped": "{\"addressing\":[\"you\"],\"linguistic\":[\"pronoun\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b76c9bebd2e48576bc6fb",
+      "timestamp": 1769699017757,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699452259,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:03:37.757Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "f11d0503f0c9c988",
+      "chat_id": 3045664,
+      "message_id": "eb4c715c-40d5-4bd9-bd90-4b6a102106a7",
+      "message_timestamp": 1769699017,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699017757_f11d0503f0c9c988.webm",
+      "original_filename": "013-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "013-1.webm",
+        "file_size": 239079,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:03:37.757Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699019759,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Чего так шумодар-то слабо работает?",
+          "timestamp": "2026-01-29T15:03:39.758Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Чего так шумодар-то слабо работает?",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:03",
+          "speaker": "Пользователь",
+          "text": "Почему шумодав работает слабо?",
+          "related_goal": "",
+          "segment_type": "question",
+          "new_pattern_detected": "Разговорная форма/опечатка: 'шумодар' вероятно имелось в виду 'шумодав' (шумоподавление).",
+          "quality_flag": "low_quality",
+          "topic_keywords": "шумодав, работает слабо, почему, проблема",
+          "keywords_grouped": "{\"problem\":[\"слабо работает\",\"недостаточная эффективность\"],\"feature\":[\"шумодав\",\"шумоподавление\"],\"question\":[\"почему\",\"причина\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b76d5bebd2e48576bc6fc",
+      "timestamp": 1769699029432,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699491281,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:03:49.432Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "45cd313525e141a2",
+      "chat_id": 3045664,
+      "message_id": "e34159af-9cb9-4c70-8483-1343d8b65c87",
+      "message_timestamp": 1769699029,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699029432_45cd313525e141a2.webm",
+      "original_filename": "015-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "015-1.webm",
+        "file_size": 168022,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:03:49.432Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699031474,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "What? What?",
+          "timestamp": "2026-01-29T15:03:51.474Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "What? What?",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "User",
+          "text": "What?",
+          "related_goal": "",
+          "segment_type": "question",
+          "new_pattern_detected": "Repeated single-word question without context",
+          "quality_flag": "incomplete",
+          "topic_keywords": "clarification, confusion, repeat",
+          "keywords_grouped": "{\"questioning\":[\"what\"],\"communication\":[\"clarification\",\"repeat\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:01",
+          "end": "00:00:02",
+          "speaker": "User",
+          "text": "What?",
+          "related_goal": "",
+          "segment_type": "question",
+          "new_pattern_detected": "Repeated single-word question without context",
+          "quality_flag": "incomplete",
+          "topic_keywords": "clarification, confusion, repeat",
+          "keywords_grouped": "{\"questioning\":[\"what\"],\"communication\":[\"clarification\",\"repeat\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7715bebd2e48576bc6fd",
+      "timestamp": 1769699093778,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699566392,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:04:53.778Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "1bb9e765a2dbc8ab",
+      "chat_id": 3045664,
+      "message_id": "8f69677b-ce8b-41bd-8bf2-397bf11743c1",
+      "message_timestamp": 1769699093,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699093777_1bb9e765a2dbc8ab.webm",
+      "original_filename": "016-2.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "016-2.webm",
+        "file_size": 40011,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:04:53.778Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699095554,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "you you you",
+          "timestamp": "2026-01-29T15:04:55.554Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "you you you",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "Speaker 1",
+          "text": "you",
+          "related_goal": "",
+          "segment_type": "noise",
+          "new_pattern_detected": "Repetitive filler without semantic content",
+          "quality_flag": "low_quality",
+          "topic_keywords": "you, repetition, filler",
+          "keywords_grouped": "{\"noise\":[\"repetition\",\"filler\"],\"pronoun\":[\"you\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7716bebd2e48576bc6fe",
+      "timestamp": 1769699094054,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699602245,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:04:54.054Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "d90e217e9214513d",
+      "chat_id": 3045664,
+      "message_id": "ad0989d6-c9d3-4628-bec9-2cc6b3a72d3f",
+      "message_timestamp": 1769699094,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699094054_d90e217e9214513d.webm",
+      "original_filename": "016-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "016-1.webm",
+        "file_size": 1064927,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:04:54.054Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699105200,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Собачка грыдет, а это зачитывается. Как голос.",
+          "timestamp": "2026-01-29T15:05:05.200Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Собачка грыдет, а это зачитывается. Как голос.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:03",
+          "speaker": "Speaker 1",
+          "text": "Собачка грызет, и это засчитывается как голос.",
+          "related_goal": "",
+          "segment_type": "issue",
+          "keywords_grouped": "{\"audio\":[\"шум\",\"голос\",\"распознавание\"],\"context\":[\"собачка\"],\"problem\":[\"засчитывается\"]}",
+          "certainty_level": "medium",
+          "new_pattern_detected": "Нарушенная структура фразы, вероятная ошибка распознавания (\"грыдет\" вместо \"грызет\").",
+          "quality_flag": "low_quality",
+          "topic_keywords": "собачка, шум, распознавание, голос",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b772abebd2e48576bc6ff",
+      "timestamp": 1769699114483,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699677934,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:05:14.483Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "28897eda893cb529",
+      "chat_id": 3045664,
+      "message_id": "d91903fa-c0ef-4ed9-9df9-73b1c2b89a86",
+      "message_timestamp": 1769699114,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699114483_28897eda893cb529.webm",
+      "original_filename": "018-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "018-1.webm",
+        "file_size": 311205,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:05:14.483Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699123969,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "ᶦᵒᵏᵏᶻmat... ᵘᵐᵏᵏᴴᵏᶧ ᵒᶹ�abaᴴᵏствиеᵇ, ᶸᵒᵒᵘ ᵗᶦᵏᴴᵏɴ ᶅᶦᵉ ᶸᵒᵗᶤᵗᵉᶜᵏᴴˢᵗᵏ",
+          "timestamp": "2026-01-29T15:05:23.969Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "ᶦᵒᵏᵏᶻmat... ᵘᵐᵏᵏᴴᵏᶧ ᵒᶹ�abaᴴᵏствиеᵇ, ᶸᵒᵒᵘ ᵗᶦᵏᴴᵏɴ ᶅᶦᵉ ᶸᵒᵗᶤᵗᵉᶜᵏᴴˢᵗᵏ",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Повреждённая кодировка; смысл фрагмента не распознан. Предположительно: приветствие и указание «вот текст».",
+          "related_goal": "",
+          "segment_type": "greeting",
+          "new_pattern_detected": "Нестандартные суперскриптовые символы и артефакты кодировки; существенное искажение текста.",
+          "quality_flag": "low_quality",
+          "topic_keywords": "повреждённая кодировка, неразборчивый текст, приветствие",
+          "keywords_grouped": "{\"quality\":[\"повреждённая кодировка\",\"неразборчиво\"],\"possible_intent\":[\"приветствие\",\"вот текст\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b778fbebd2e48576bc700",
+      "timestamp": 1769699215520,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699730320,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:06:55.520Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "ef93991e91f3f4a3",
+      "chat_id": 3045664,
+      "message_id": "25e1f34d-1e3c-461e-af58-c0b5bcc1ce67",
+      "message_timestamp": 1769699215,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699215520_ef93991e91f3f4a3.webm",
+      "original_filename": "019-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "019-1.webm",
+        "file_size": 1660859,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:06:55.520Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699225348,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Печка у нас 0,10. Попробуем. Хрум-хрум, засчитывается коллекционное голосовое сообщение. Продолжение следует...",
+          "timestamp": "2026-01-29T15:07:05.348Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Печка у нас 0,10. Попробуем. Хрум-хрум, засчитывается коллекционное голосовое сообщение. Продолжение следует...",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Печка у нас 0,10.",
+          "related_goal": "",
+          "segment_type": "statement",
+          "new_pattern_detected": "Неформатная числовая/временная метка «0,10» без контекста.",
+          "quality_flag": "low_quality",
+          "topic_keywords": "печка, показатель, 0,10",
+          "keywords_grouped": "{\"оборудование\":[\"печка\"],\"показатели\":[\"0,10\"]}",
+          "certainty_level": "low",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:02",
+          "end": "00:00:03",
+          "speaker": "Speaker 1",
+          "text": "Попробуем.",
+          "related_goal": "",
+          "segment_type": "suggestion",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "попробовать, тест",
+          "keywords_grouped": "{\"действие\":[\"попробуем\",\"тест\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:03",
+          "end": "00:00:07",
+          "speaker": "Speaker 1",
+          "text": "Засчитывается коллекционное голосовое сообщение.",
+          "related_goal": "",
+          "segment_type": "status_update",
+          "new_pattern_detected": "Удалены междометия/ономатопея («Хрум-хрум»).",
+          "quality_flag": "normal",
+          "topic_keywords": "голосовое сообщение, коллекционное, засчитывается",
+          "keywords_grouped": "{\"аудио\":[\"голосовое сообщение\"],\"коллекции\":[\"коллекционное\"],\"статус\":[\"засчитывается\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        },
+        {
+          "start": "00:00:07",
+          "end": "00:00:09",
+          "speaker": "Speaker 1",
+          "text": "Продолжение следует.",
+          "related_goal": "",
+          "segment_type": "closing",
+          "new_pattern_detected": "",
+          "quality_flag": "normal",
+          "topic_keywords": "продолжение, анонс",
+          "keywords_grouped": "{\"анонс\":[\"продолжение следует\",\"тизер\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b77dbbebd2e48576bc701",
+      "timestamp": 1769699291606,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699802679,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:08:11.606Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "885fd11093388abc",
+      "chat_id": 3045664,
+      "message_id": "afc1d0a1-ecfc-405d-a613-5537d9d029f9",
+      "message_timestamp": 1769699291,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699291605_885fd11093388abc.webm",
+      "original_filename": "020-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "020-1.webm",
+        "file_size": 1259501,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:08:11.606Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699303914,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Ладно, пробуем дан нажать.",
+          "timestamp": "2026-01-29T15:08:23.914Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Ладно, пробуем дан нажать.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:02",
+          "speaker": "Speaker 1",
+          "text": "Пробуем нажать «дан».",
+          "related_goal": "",
+          "segment_type": "action_item",
+          "new_pattern_detected": "Неоднозначная форма: возможная опечатка или распознавание «дан» (вместо «Done» или «да»).",
+          "quality_flag": "low_quality",
+          "topic_keywords": "нажать, дан, действие",
+          "keywords_grouped": "{\"action\":[\"пробуем\",\"нажать\"],\"control\":[\"дан\"]}",
+          "certainty_level": "medium",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b7893bebd2e48576bc702",
+      "timestamp": 1769699475556,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699842262,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:11:15.556Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "a557e80fc6533550",
+      "chat_id": 3045664,
+      "message_id": "305d7fec-c1be-44c2-80de-69ba611cbedf",
+      "message_timestamp": 1769699475,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699475556_a557e80fc6533550.webm",
+      "original_filename": "021-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "021-1.webm",
+        "file_size": 3034225,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:11:15.556Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699484941,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "フィルターを使用するために、フィルターを使用する前にフィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。",
+          "timestamp": "2026-01-29T15:11:24.941Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "フィルターを使用するために、フィルターを使用する前にフィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。 フィルターを使用する前に、フィルターを固定する必要があります。",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:05",
+          "speaker": "不明",
+          "text": "フィルターを使用する前に、必ずフィルターを固定してください。",
+          "related_goal": "",
+          "segment_type": "action_item",
+          "new_pattern_detected": "同一文の過剰な繰り返し",
+          "quality_flag": "low_quality",
+          "topic_keywords": "フィルター, 固定, 使用前, 手順, 安全",
+          "keywords_grouped": "{\"手順\":[\"使用前\",\"固定\",\"事前準備\"],\"機器\":[\"フィルター\"],\"安全\":[\"安全確保\",\"誤作動防止\"]}",
+          "certainty_level": "high",
+          "mentioned_roles": "作業者, ユーザー",
+          "referenced_systems": "フィルター"
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b78c9bebd2e48576bc703",
+      "timestamp": 1769699529420,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699905486,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:12:09.420Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "14480c416e3ac66a",
+      "chat_id": 3045664,
+      "message_id": "450d9029-104c-4244-909a-775c8047ac0d",
+      "message_timestamp": 1769699529,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699529420_14480c416e3ac66a.webm",
+      "original_filename": "022-2.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "022-2.webm",
+        "file_size": 33560,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:12:09.420Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699530836,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "you you",
+          "timestamp": "2026-01-29T15:12:10.836Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "you you",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:01",
+          "speaker": "Speaker 1",
+          "text": "you",
+          "related_goal": "",
+          "segment_type": "filler",
+          "keywords_grouped": "{\"speech_quality\":[\"repetition\",\"stutter\",\"incomplete\"],\"utterance\":[\"you\"]}",
+          "certainty_level": "low",
+          "new_pattern_detected": "Repeated token 'you'; possible stutter or incomplete utterance.",
+          "quality_flag": "incomplete",
+          "topic_keywords": "repetition, stutter, you",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    },
+    {
+      "_id": "697b78c9bebd2e48576bc704",
+      "timestamp": 1769699529715,
+      "processors_data": {
+        "transcription": {
+          "is_finished": true
+        },
+        "categorization": {
+          "is_processed": true,
+          "is_processing": false,
+          "job_queued_timestamp": 1769699942048,
+          "is_finished": true
+        }
+      },
+      "created_at": "2026-01-29T15:12:09.715Z",
+      "source_type": "web",
+      "file_id": null,
+      "file_unique_id": "f512d332fb719754",
+      "chat_id": 3045664,
+      "message_id": "cb482876-a103-4e69-bfe4-7cb3b706c84e",
+      "message_timestamp": 1769699529,
+      "duration": null,
+      "file_path": "uploads/audio/sessions/697b75eabebd2e48576bc6ed/1769699529715_f512d332fb719754.webm",
+      "original_filename": "022-1.webm",
+      "uploaded_by": "6863eab6a6d7b324e2df310a",
+      "session_id": "697b75eabebd2e48576bc6ed",
+      "session_type": "multiprompt_voice_session",
+      "is_transcribed": true,
+      "file_metadata": {
+        "original_filename": "022-1.webm",
+        "file_size": 892194,
+        "mime_type": "audio/webm",
+        "upload_timestamp": "2026-01-29T15:12:09.715Z"
+      },
+      "transcribe_attempts": 1,
+      "transcribe_timestamp": 1769699534012,
+      "transcription_chunks": [
+        {
+          "segment_index": 0,
+          "text": "Покладіть тісто на тісто і дайте йому відпочити 15 хвилин. Покладіть тісто на тісто і дайте йому відпочити 15 хвилин.",
+          "timestamp": "2026-01-29T15:12:14.012Z",
+          "duration_seconds": 0
+        }
+      ],
+      "transcription_method": "direct",
+      "transcription_text": "Покладіть тісто на тісто і дайте йому відпочити 15 хвилин. Покладіть тісто на тісто і дайте йому відпочити 15 хвилин.",
+      "categorization": [
+        {
+          "start": "00:00:00",
+          "end": "00:00:05",
+          "speaker": "Спікер 1",
+          "text": "Покладіть тісто на тісто і дайте йому відпочити 15 хвилин.",
+          "related_goal": "",
+          "segment_type": "action_item",
+          "keywords_grouped": "{\"process\":[\"покласти тісто\",\"дати відпочити\"],\"time\":[\"15 хвилин\"],\"object\":[\"тісто\"]}",
+          "certainty_level": "medium",
+          "new_pattern_detected": "Повтор однакової фрази; можлива описка «тісто на тісто».",
+          "quality_flag": "low_quality",
+          "topic_keywords": "тісто, відпочинок, 15 хвилин, кулінарія",
+          "mentioned_roles": "",
+          "referenced_systems": ""
+        }
+      ],
+      "is_finalized": true
+    }
+  ],
+  "messages_count_string": 0,
+  "messages_string": []
+}

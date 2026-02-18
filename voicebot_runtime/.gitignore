@@ -1,0 +1,43 @@
+# phpstorm project files
+.idea
+.jshintrc
+
+# netbeans project files
+nbproject
+
+# zend studio for eclipse project files
+.buildpath
+.project
+.settings
+
+# windows thumbnail cache
+Thumbs.db
+
+# Mac DS_Store Files
+.DS_Store
+
+.next
+node_modules
+
+.env
+.env.*
+!.env.example
+app/.env.development
+logs
+tools
+downloads
+uploads
+plugin-uploads
+
+googlesheets_key.json
+google_service_account.json
+
+# Agent secrets
+agents/fastagent.secrets.yaml
+
+# fast-agent local runtime artifacts (keep out of git + search)
+agents/.venv/
+agents/logs/
+
+# Python egg-info directories
+*.egg-info/

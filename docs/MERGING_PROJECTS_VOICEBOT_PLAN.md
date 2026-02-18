@@ -30,7 +30,7 @@
   - добавлен endpoint `POST /api/voicebot/auth/list-users` в `backend/src/api/routes/voicebot/sessions.ts` (убран `404` в FAB/settings на `/voice`).
 - Проверки:
   - `backend`: `npm run build` — OK
-  - `backend`: `npm test -- --runInBand` — OK (`11 suites`, `133 tests`)
+  - `backend`: `npm test -- --runInBand` — OK (`25 suites`, `170 tests`)
   - `app`: `npm run build` — OK
   - `app`: `PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth` — OK (`6 passed`)
   - MCP Chrome smoke: `https://copilot.stratospace.fun/voice` и `https://copilot-dev.stratospace.fun/voice` открываются без console/network errors.
@@ -87,7 +87,51 @@
 
 ### Финальная структура проекта
 
-Используется существующий раздел ниже: `## Финальная структура проекта` (оставлен без удаления; все новые runtime/voice блоки добавляются инкрементально).
+Source of truth: см. раздел `## Финальная структура проекта` ниже (актуализирован по состоянию на 2026-02-18).
+
+### Проверка changelog voicebot (с 2026-02-05)
+- Создана матрица 1:1 (каждый bullet changelog = отдельная BD-задача): `docs/VOICEBOT_CHANGELOG_GAP_MATRIX_2026-02-05.md`.
+- Исходный JSON-артефакт: `docs/VOICEBOT_CHANGELOG_GAP_MATRIX_2026-02-05.json`.
+- Meta-задача трекинга: `copilot-7bm`.
+- Все созданные задачи можно смотреть по label:
+  - `bd list --all | rg 'voicebot-changelog-gap'`
+
+### Прогресс 2026-02-18
+- [v] `copilot-a0c`: parity для `/api/voicebot/trigger_session_ready_to_summarize` + route-level test (`backend/__tests__/voicebot/triggerSummarizeRoute.test.ts`) + API docs (`docs/VOICEBOT_API.md`, `docs/VOICEBOT_API_CODE_EXAMPLES.md`, `docs/VOICEBOT_API_TESTS.md`).
+- [v] `copilot-ayv`: ffprobe duration probing parity (`backend/src/utils/audioUtils.ts`) и сохранение `duration` в `upload_audio` сообщении/metadata + test coverage (`backend/__tests__/voicebot/audioUtils.test.ts`, `backend/__tests__/voicebot/uploadAudioRoute.test.ts`).
+- [v] `copilot-1ot`: добавлен smoke suite `backend/__tests__/smoke/voicebotApiSmoke.test.ts` (critical flat endpoints без 404 regressions).
+- [v] Синхронизированы doc-only planning артефакты из `voicebot/plan` в `docs/voicebot-plan-sync/*` (WBS, implementation draft, event-log plans).
+- [v] Старт runtime-isolation wave: добавлен audit `docs/RUNTIME_ISOLATION_AUDIT_2026-02-18.md`; `voicebotObjectLocator` переведен на runtime-scoped upsert/find + тест `backend/__tests__/voicebot/objectLocatorRuntime.test.ts`.
+- [v] Точечные runtime-фиксы по маршрутам: `backend/src/api/routes/voicebot/transcription.ts`, `backend/src/api/routes/voicebot/permissions.ts`, `backend/src/api/routes/voicebot/uploads.ts` + route tests (`transcriptionRuntimeRoute`, `permissionsRuntimeRoute`, `uploadAudioRoute` assertions).
+- [v] Начат TG parity chunk: добавлен форматтер 4-строчного Telegram-сообщения `backend/src/voicebot_tgbot/sessionTelegramMessage.ts` + тест `backend/__tests__/voicebot/sessionTelegramMessage.test.ts` (event/url/session-name/project-name).
+- [v] Интеграция форматтера в done/notify flow: `backend/src/api/socket/voicebot.ts` теперь формирует `notify_preview` для `session_done` и пишет `notify_requested` event-log через `backend/src/services/voicebotDoneNotify.ts` (`doneNotifyService.test.ts`).
+- [v] Расширен TG command parity scaffold: добавлены `backend/src/voicebot_tgbot/commandHandlers.ts`, `backend/src/voicebot_tgbot/activeSessionMapping.ts`, `backend/src/voicebot_tgbot/sessionRef.ts` с контрактом `/start /session /done /login /help` (active-session mapping по `telegram_user_id + runtime_tag`, `/login` one-time `tg_auth`, 4-line сообщения для `/start|/session|/done`), плюс тесты `tgCommandHandlers.test.ts`, `tgSessionRef.test.ts`.
+- [v] Done-flow теперь очищает active-session mapping: `backend/src/workers/voicebot/handlers/doneMultiprompt.ts` и `backend/src/api/socket/voicebot.ts` вызывают cleanup по `session_id` и `telegram_user_id`.
+- [v] Runtime-safe one-time token auth: `backend/src/api/routes/auth.ts` ищет/обновляет `automation_one_use_tokens` через runtime filter.
+- [v] Расширен каркас workers: `backend/src/workers/voicebot/manifest.ts` + handlers `doneMultiprompt`, `processingLoop`, `transcribe`, `categorize`, `finalization` (runtime-scoped безопасные entrypoints; heavy engines пока вне copilot runtime) + тесты `workerDoneMultipromptHandler.test.ts`, `workerScaffoldHandlers.test.ts`.
+- [v] Расширен перенос Playwright Mode A/Mode B сценариев: `app/e2e/voice-fab-lifecycle.spec.ts` (порядок `New/Rec/Cut/Pause/Done`, `Rec -> activate_session`, `New/Done -> FAB control`, state enablement parity в recording-state).
+- [v] Добавлена матрица переноса сценариев из `voicebot/webrtc` в copilot e2e: `docs/PLAYWRIGHT_MIGRATION_MATRIX.md` (`[v]/[x]/[~]` статусы и команды прогонов).
+- [v] MCP Chrome smoke: `/voice` на `https://copilot.stratospace.fun/voice` открывается без infinite loader, видны таблица сессий и FAB toolbar `New/Rec/Cut/Pause/Done`.
+
+### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
+- [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
+- [x] T2 `POST /api/voicebot/create_session` создает и активирует новую сессию.
+- [x] T3 Socket `session_done` с чужой сессией -> `{ok:false,error:'forbidden'}`.
+- [v] T4 `/voice/session` при active-session делает redirect на `/voice/session/:id` (Playwright).
+- [v] T5 `/voice/session/:id` для runtime mismatch показывает явный error-screen, без infinite loader (Playwright + MCP Chrome).
+- [x] T6 Разделение page `Done` vs FAB `Done` (pageSessionId vs activeSessionId).
+- [x] T7 `New` всегда создает новую сессию и стартует запись.
+- [x] T8 `Rec` на странице сессии активирует её и пишет туда.
+- [x] T9 TG `/session` без аргумента возвращает только active или “не найдена”.
+- [x] T10 TG `/session <id|url>` активирует при доступе.
+- [x] T11 TG `/done` закрывает active и очищает mapping.
+- [x] T12 TG `/login` отдает one-time tg_auth URL независимо от active-session.
+- [x] T13 TG event message format = 4 строки (`event/url/session/project`).
+- [x] T14 Runtime leakage check (dev/prod изоляция end-to-end).
+- [x] T15 Upload в чужой runtime -> `409 runtime_mismatch`.
+- [x] T16 `delete_transcript_chunk` синхронно обновляет transcription/categorization проекции.
+- [x] T17 Playwright full lifecycle `/voice` (New/Rec/Cut/Pause/Done + attachments + log).
+- [v] T18 MCP Chrome smoke на dev/prod (базовые `/voice` маршруты и network health).
 
 ## Общая информация
 **Дата:** 5 февраля 2026  
@@ -409,93 +453,59 @@ Copilot использует:
 
 ---
 
+
 ## Финальная структура проекта
 
-```
-copilot/
-├── backend/
-│   ├── src/
-│   │   ├── index.ts                    # Main entry point (обновить)
-│   │   ├── constants.ts                # Объединённые константы (+VoiceBot коллекции, очереди)
-│   │   │
-│   │   ├── api/
-│   │   │   ├── routes/
-│   │   │   │   ├── index.ts            # Корневой router (обновить)
-│   │   │   │   ├── auth.ts             # Auth (добавить one-time token)
-│   │   │   │   │
-│   │   │   │   ├── crm/                # CRM (из automation) ✓
-│   │   │   │   │
-│   │   │   │   ├── finops/             # FinOps (из copilot) ✓
-│   │   │   │   │
-│   │   │   │   └── voicebot/           # VoiceBot (из voicebot) — НОВОЕ
-│   │   │   │       ├── index.ts        # VoiceBot router hub
-│   │   │   │       ├── sessions.ts     # Сессии, проекты, загрузка аудио
-│   │   │   │       ├── transcription.ts # Транскрипция
-│   │   │   │       ├── persons.ts      # Управление персонами
-│   │   │   │       ├── permissions.ts  # API для прав доступа
-│   │   │   │       ├── llmgate.ts      # Запуск промптов
-│   │   │   │       └── uploads.ts      # Загрузка файлов
-│   │   │   │
-│   │   │   ├── middleware/
-│   │   │   │   ├── auth.ts             # Auth middleware (обновить)
-│   │   │   │   ├── permissions.ts      # PermissionManager (НОВОЕ)
-│   │   │   │   ├── roleGuard.ts        # Ограничение Super Admin / Administrator (НОВОЕ)
-│   │   │   │   ├── error.ts            # Error handler ✓
-│   │   │   │   ├── response.ts         # Response envelope ✓
-│   │   │   │   └── metrics.ts          # Prometheus ✓
-│   │   │   │
-│   │   │   └── socket/
-│   │   │       ├── index.ts            # Socket.IO setup (обновить)
-│   │   │       ├── finops.ts           # FinOps events ✓
-│   │   │       └── voicebot.ts         # VoiceBot events (НОВОЕ)
-│   │   │
-│   │   ├── services/
-│   │   │   ├── db.ts                   # MongoDB ✓
-│   │   │   ├── redis.ts                # Redis ✓
-│   │   │   ├── google/                 # Google APIs ✓
-│   │   │   │   ├── sheets.ts
-│   │   │   │   └── drive.ts
-│   │   │   └── mcp/                    # MCP Proxy (НОВОЕ)
-│   │   │       ├── index.ts            # MCP Proxy setup
-│   │   │       ├── proxyClient.ts      # MCP client
-│   │   │       └── sessionManager.ts   # Session management
-│   │   │
-│   │   ├── workers/                    # BullMQ workers (НОВОЕ — отдельный сервис)
-│   │   │   ├── index.ts                # Workers entry point
-│   │   │   ├── events.ts               # EVENTS worker
-│   │   │   └── notifies.ts             # NOTIFIES worker
-│   │   │
-│   │   ├── permissions/                # Permission system (НОВОЕ)
-│   │   │   ├── permission-manager.ts   # PermissionManager
-│   │   │   └── permissions-config.ts   # Конфигурация прав
-│   │   │
-│   │   ├── models/                     # MongoDB types ✓
-│   │   │
-│   │   └── utils/
-│   │       ├── logger.ts               # Winston ✓
-│   │       └── helpers.ts              # Common helpers
-│   │
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── .env.example
-│   └── .env
-│
-├── agents/                             # Fast-Agent (НОВОЕ — перенести из voicebot)
-│   ├── agent-cards/
-│   │   ├── create_tasks.md
-│   │   └── generate_session_title.md
-│   ├── fastagent.config.yaml
-│   ├── fastagent.secrets.yaml
-│   ├── ecosystem.config.cjs
-│   ├── pm2-agents.sh
-│   └── pyproject.toml
-│
-├── app/                                # FinOps UI ✓ (объединение на следующем этапе)
-│
-└── ...
-```
+Актуализировано по состоянию на 2026-02-18. Ниже — целевая структура интеграции `voicebot -> copilot` по слоям.
 
----
+### 1) Что из `voicebot` идет в API (`copilot/backend/src/api/routes/voicebot/*`)
+
+| Source (`/home/strato-space/voicebot`) | Target (`/home/strato-space/copilot`) | Статус |
+|---|---|---|
+| `crm/routes/voicebot.js` + `crm/controllers/voicebot.js` (session/read/write, active-session, edit/delete/rollback, retry/resend, attachments) | `backend/src/api/routes/voicebot/sessions.ts` | in progress parity |
+| `crm/routes/uploads.js` + `crm/controllers/audio_upload.js` | `backend/src/api/routes/voicebot/uploads.ts` | integrated |
+| `crm/routes/transcription.js` + `crm/controllers/transcription.js` | `backend/src/api/routes/voicebot/transcription.ts` | integrated |
+| `crm/routes/persons.js` + `crm/controllers/persons.js` | `backend/src/api/routes/voicebot/persons.ts` | integrated |
+| `crm/routes/permissions.js` + `crm/controllers/permissions.js` | `backend/src/api/routes/voicebot/permissions.ts` | integrated |
+| `crm/routes/llmgate.js` + `crm/controllers/llmgate.js` | `backend/src/api/routes/voicebot/llmgate.ts` | integrated |
+| flat + legacy alias mounting | `backend/src/api/routes/voicebot/index.ts` | integrated |
+
+### 2) Что из `voicebot` идет в middleware/services
+
+| Source (`/home/strato-space/voicebot`) | Target (`/home/strato-space/copilot`) | Назначение | Статус |
+|---|---|---|---|
+| `permissions/permission-manager.js` | `backend/src/permissions/permission-manager.ts` | RBAC/ACL checks | integrated |
+| auth/session guards в `voicebot-backend.js` | `backend/src/api/middleware/auth.ts`, `backend/src/api/middleware/roleGuard.ts` | performer auth + admin gate | integrated |
+| runtime isolation (`constants.js`, `services/runtimeScope.js`) | `backend/src/constants.ts`, `backend/src/services/runtimeScope.ts`, `backend/src/services/db.ts` | prod/dev data isolation | integrated (ongoing extension) |
+| socket auth/access helpers | `backend/src/services/session-socket-auth.ts` + `backend/src/api/socket/voicebot.ts` | explicit `session_done`, authz | integrated |
+| timeline/object-locator/session-log helpers | `backend/src/services/transcriptionTimeline.ts`, `backend/src/services/voicebotObjectLocator.ts`, `backend/src/services/voicebotSessionLog.ts`, `backend/src/services/voicebotOid.ts` | edit/rollback and transcript consistency | integrated |
+
+### 3) Куда попадает front (`voicebot/app` -> `copilot/app/src/pages/voice/*`)
+
+| Source (`/home/strato-space/voicebot/app`) | Target (`/home/strato-space/copilot/app`) | Статус |
+|---|---|---|
+| `pages/SessionPage.jsx`, `pages/SessionsListPage.jsx`, resolver behavior | `src/pages/voice/SessionPage.tsx`, `src/pages/voice/SessionsListPage.tsx`, `src/pages/voice/SessionResolverPage.tsx` | in progress parity |
+| store `store/voiceBot.js` | `src/store/voiceBotStore.ts` | in progress parity |
+| components: `MeetingCard`, `Transcription`, `Categorization`, `SessionStatusWidget`, `SessionLog`, `Screenshort` | `src/components/voice/*` | in progress parity |
+| voice shell routing/layout | `src/pages/VoiceLayout.tsx`, `src/App.tsx` | integrated |
+
+### 4) WebRTC components integration (где подключено в copilot)
+
+| Source | Target in Copilot | Назначение |
+|---|---|---|
+| `/home/strato-space/webrtc/src/webrtc-voicebot-lib.js` | `app/public/webrtc/webrtc-voicebot-lib.js` | Runtime FAB/WebRTC logic |
+| `/home/strato-space/webrtc/src/components/*` | `app/public/webrtc/components/*` | Static FAB dependencies |
+| `/home/strato-space/webrtc/src/settings.html` + `monitoring.html` | `app/public/webrtc/settings.html`, `app/public/webrtc/monitoring.html` | Settings/monitoring UI |
+| Copilot loader | `app/src/components/voice/WebrtcFabLoader.tsx` | Dynamic script injection |
+| Env binding | `app/.env.development`, `app/.env.production`, `app/.env.localhost` (`VITE_WEBRTC_VOICEBOT_SCRIPT_URL=/webrtc/webrtc-voicebot-lib.js`) | Same-origin runtime URL |
+| Mount point | `app/src/pages/VoiceLayout.tsx` | FAB loader activation for `/voice/*` |
+
+### 5) Runtime isolation rule (применяется ко всем voice-путям)
+- runtime-scoped collections читаются/пишутся через `runtime_tag` фильтры.
+- prod читает `runtime_tag=prod` + legacy without tag.
+- non-prod читает строго свой runtime tag.
+- mutating runtime mismatch -> `404`/`409` по контракту API.
+
 
 ## Детальное ТЗ на слияние
 

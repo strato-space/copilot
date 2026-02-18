@@ -47,6 +47,8 @@ interface VoiceBotState {
     sendSessionToCrm: (sessionId: string) => Promise<boolean>;
     sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
     fetchVoiceBotSession: (sessionId: string) => Promise<void>;
+    fetchActiveSession: () => Promise<Record<string, unknown> | null>;
+    activateSession: (sessionId: string) => Promise<boolean>;
     fetchSessionLog: (sessionId: string, options?: { silent?: boolean }) => Promise<void>;
     editTranscriptChunk: (
         payload: { session_id: string; message_id: string; segment_oid: string; new_text: string; reason?: string },
@@ -584,6 +586,30 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
         if (!get().performers_list) {
             void get().fetchPerformersList();
+        }
+    },
+
+    fetchActiveSession: async () => {
+        try {
+            const response = await voicebotRequest<Record<string, unknown>>('voicebot/active_session', {});
+            const active = response?.active_session;
+            if (active && typeof active === 'object') {
+                return active as Record<string, unknown>;
+            }
+            return null;
+        } catch (error) {
+            console.error('Ошибка при получении active-session:', error);
+            return null;
+        }
+    },
+
+    activateSession: async (sessionId) => {
+        try {
+            await voicebotRequest('voicebot/activate_session', { session_id: sessionId });
+            return true;
+        } catch (error) {
+            console.error('Ошибка при активации сессии:', error);
+            return false;
         }
     },
 

@@ -58,3 +58,19 @@ Queue names are defined in `src/constants.ts`:
 3. Create queue instances in the API (see `src/services/queue.ts.example`)
 
 4. For full worker functionality, use the original voicebot service.
+
+## Current Scaffold in Copilot
+
+Copilot now includes a minimal worker scaffold to unblock migration work:
+
+- `src/workers/voicebot/manifest.ts` - typed job-name -> handler map
+- `src/workers/voicebot/handlers/doneMultiprompt.ts` - queue-handler skeleton for `DONE_MULTIPROMPT`
+- `src/workers/voicebot/handlers/processingLoop.ts` - runtime-scoped queue snapshot for pending work
+- `src/workers/voicebot/handlers/transcribe.ts` - runtime-safe transcribe entrypoint scaffold
+- `src/workers/voicebot/handlers/categorize.ts` - runtime-safe categorize entrypoint scaffold
+- `src/workers/voicebot/handlers/finalization.ts` - runtime-safe finalization entrypoint scaffold
+
+This scaffold is intentionally minimal:
+- no long-running worker process is started from API runtime,
+- no Telegram delivery is executed yet,
+- handlers persist only safe metadata/log side effects needed for auditability.

@@ -1,0 +1,3178 @@
+{
+  "generated_at": "2026-02-18T02:03:56.485554Z",
+  "count": 133,
+  "items": [
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 5,
+      "raw": "**16:20** Active-session behavior was still ambiguous between Telegram, WebRTC FAB, and session pages; users could implicitly fall back to unrelated open sessions instead of deterministic explicit active-session routing.",
+      "short": "Active-session behavior was still ambiguous between Telegram, WebRTC FAB, and session pages; users could implicitly fall back to unrelated open sessions instead of deterministic explicit active-session routing.",
+      "idx": 1,
+      "keywords": [
+        "active-session",
+        "webrtc",
+        "Active-session",
+        "behavior",
+        "still"
+      ],
+      "hits": {
+        "active-session": 10,
+        "webrtc": 53,
+        "Active-session": 0,
+        "behavior": 8,
+        "still": 8
+      },
+      "hit_total": 79,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ev4"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 6,
+      "raw": "**16:20** Socket session-closing flow trusted client payload context for user mapping and did not uniformly enforce session/project access checks across mutating socket events.",
+      "short": "Socket session-closing flow trusted client payload context for user mapping and did not uniformly enforce session/project access checks across mutating socket events.",
+      "idx": 2,
+      "keywords": [
+        "/project",
+        "socket",
+        "Socket",
+        "session-closing",
+        "flow"
+      ],
+      "hits": {
+        "/project": 83,
+        "socket": 457,
+        "Socket": 208,
+        "session-closing": 0,
+        "flow": 52
+      },
+      "hit_total": 800,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-8zr"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 7,
+      "raw": "**16:20** Shared Mongo/Redis between prod and beta runtimes allowed cross-runtime workers to pick foreign sessions/messages, causing stuck processing and environment leakage.",
+      "short": "Shared Mongo/Redis between prod and beta runtimes allowed cross-runtime workers to pick foreign sessions/messages, causing stuck processing and environment leakage.",
+      "idx": 3,
+      "keywords": [
+        "/Redis",
+        "/messages",
+        "redis"
+      ],
+      "hits": {
+        "/Redis": 2,
+        "/messages": 2,
+        "redis": 136
+      },
+      "hit_total": 140,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-zhd"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 8,
+      "raw": "**16:20** Deleting transcript segments could leave stale overlapping categorization rows in message projections, causing UI inconsistency between Transcription and Categorization tabs.",
+      "short": "Deleting transcript segments could leave stale overlapping categorization rows in message projections, causing UI inconsistency between Transcription and Categorization tabs.",
+      "idx": 4,
+      "keywords": [
+        "categorization",
+        "transcription",
+        "Deleting",
+        "transcript",
+        "segments"
+      ],
+      "hits": {
+        "categorization": 190,
+        "transcription": 225,
+        "Deleting": 3,
+        "transcript": 251,
+        "segments": 79
+      },
+      "hit_total": 748,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-2sj"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 9,
+      "raw": "**17:33** Telegram responses were inconsistent (`prefix + field headers`) across `/start`, `/session`, `/done`, and postprocessing events, which complicated quick parsing and copy/reuse in chat operations.",
+      "short": "Telegram responses were inconsistent (`prefix + field headers`) across `/start`, `/session`, `/done`, and postprocessing events, which complicated quick parsing and copy/reuse in chat operations.",
+      "idx": 5,
+      "keywords": [
+        "/start",
+        "/session",
+        "/done",
+        "/reuse",
+        "prefix + field headers"
+      ],
+      "hits": {
+        "/start": 3,
+        "/session": 112,
+        "/done": 4,
+        "/reuse": 0,
+        "prefix + field headers": 0
+      },
+      "hit_total": 119,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-0mi"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 10,
+      "raw": "**17:33** `/login` behavior still depended on active-session context, while operators needed a deterministic auth-entry link regardless of current session mapping.",
+      "short": "`/login` behavior still depended on active-session context, while operators needed a deterministic auth-entry link regardless of current session mapping.",
+      "idx": 6,
+      "keywords": [
+        "/login",
+        "active-session",
+        "login",
+        "behavior",
+        "still"
+      ],
+      "hits": {
+        "/login": 28,
+        "active-session": 10,
+        "login": 143,
+        "behavior": 8,
+        "still": 8
+      },
+      "hit_total": 197,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-22x"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 11,
+      "raw": "**17:33** Session page controls/status did not match the new FAB `New/Rec` contract, so operators could not trigger explicit `Rec` from a session row with a predictable active-session sync.",
+      "short": "Session page controls/status did not match the new FAB `New/Rec` contract, so operators could not trigger explicit `Rec` from a session row with a predictable active-session sync.",
+      "idx": 7,
+      "keywords": [
+        "/status",
+        "/Rec",
+        "New/Rec",
+        "Rec",
+        "active-session"
+      ],
+      "hits": {
+        "/status": 2,
+        "/Rec": 1,
+        "New/Rec": 1,
+        "Rec": 500,
+        "active-session": 10
+      },
+      "hit_total": 514,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-nvg"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 12,
+      "raw": "**17:52** Session status pictogram near session-page action buttons was not fully tied to runtime `State` values (`cutting`, `final_uploading`, `error`, etc.), so operators lost quick visual feedback for real recorder state.",
+      "short": "Session status pictogram near session-page action buttons was not fully tied to runtime `State` values (`cutting`, `final_uploading`, `error`, etc.), so operators lost quick visual feedback for real recorder state.",
+      "idx": 8,
+      "keywords": [
+        "State",
+        "cutting",
+        "final_uploading",
+        "error"
+      ],
+      "hits": {
+        "State": 386,
+        "cutting": 14,
+        "final_uploading": 9,
+        "error": 500
+      },
+      "hit_total": 909,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ris"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "PROBLEM SOLVED",
+      "line": 13,
+      "raw": "**18:25** Opening `/session/:id` for a session inaccessible in the current runtime showed endless spinner instead of an explicit \"session not found / runtime mismatch\" state.",
+      "short": "Opening `/session/:id` for a session inaccessible in the current runtime showed endless spinner instead of an explicit \"session not found / runtime mismatch\" state.",
+      "idx": 9,
+      "keywords": [
+        "/session/:id",
+        "/session",
+        "Opening",
+        "session/:id",
+        "session"
+      ],
+      "hits": {
+        "/session/:id": 2,
+        "/session": 112,
+        "Opening": 0,
+        "session/:id": 2,
+        "session": 500
+      },
+      "hit_total": 616,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-uzp"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 16,
+      "raw": "**16:20** Implemented strict active-session semantics across TG/Web/WebRTC:",
+      "short": "Implemented strict active-session semantics across TG/Web/WebRTC:",
+      "idx": 10,
+      "keywords": [
+        "/Web/WebRTC:",
+        "active-session",
+        "webrtc"
+      ],
+      "hits": {
+        "/Web/WebRTC:": 0,
+        "active-session": 10,
+        "webrtc": 53
+      },
+      "hit_total": 63,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-obm"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 21,
+      "raw": "**16:20** Added Web API + UI active-session controls:",
+      "short": "Added Web API + UI active-session controls:",
+      "idx": 11,
+      "keywords": [
+        "active-session",
+        "Web",
+        "API",
+        "controls:"
+      ],
+      "hits": {
+        "active-session": 10,
+        "Web": 69,
+        "API": 196,
+        "controls:": 0
+      },
+      "hit_total": 275,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ajg"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 26,
+      "raw": "**16:20** Added runtime isolation contract:",
+      "short": "Added runtime isolation contract:",
+      "idx": 12,
+      "keywords": [
+        "runtime",
+        "isolation",
+        "contract:"
+      ],
+      "hits": {
+        "runtime": 236,
+        "isolation": 7,
+        "contract:": 0
+      },
+      "hit_total": 243,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-xgk"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 31,
+      "raw": "**16:20** Hardened socket contracts:",
+      "short": "Hardened socket contracts:",
+      "idx": 13,
+      "keywords": [
+        "socket",
+        "Hardened",
+        "contracts:"
+      ],
+      "hits": {
+        "socket": 457,
+        "Hardened": 0,
+        "contracts:": 0
+      },
+      "hit_total": 457,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-s93"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 35,
+      "raw": "**17:33** Unified Telegram session-event output to a strict 4-line message contract:",
+      "short": "Unified Telegram session-event output to a strict 4-line message contract:",
+      "idx": 14,
+      "keywords": [
+        "Unified",
+        "Telegram",
+        "session-event",
+        "output",
+        "strict"
+      ],
+      "hits": {
+        "Unified": 1,
+        "Telegram": 42,
+        "session-event": 0,
+        "output": 81,
+        "strict": 33
+      },
+      "hit_total": 157,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-sm0"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 40,
+      "raw": "**17:33** Reworked `/login` to issue one-time `tg_auth` links (token in `automation_one_use_tokens`), fully independent of active-session state.",
+      "short": "Reworked `/login` to issue one-time `tg_auth` links (token in `automation_one_use_tokens`), fully independent of active-session state.",
+      "idx": 15,
+      "keywords": [
+        "/login",
+        "tg_auth",
+        "automation_one_use_tokens",
+        "active-session",
+        "one-time"
+      ],
+      "hits": {
+        "/login": 28,
+        "tg_auth": 6,
+        "automation_one_use_tokens": 3,
+        "active-session": 10,
+        "one-time": 20
+      },
+      "hit_total": 67,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-orh"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 41,
+      "raw": "**17:33** Updated session page UI actions to `Rec / Activate / Done` with FAB state sync and visual status markers (`rec/pause/closed`).",
+      "short": "Updated session page UI actions to `Rec / Activate / Done` with FAB state sync and visual status markers (`rec/pause/closed`).",
+      "idx": 16,
+      "keywords": [
+        "/pause/closed",
+        "Rec / Activate / Done",
+        "rec/pause/closed"
+      ],
+      "hits": {
+        "/pause/closed": 0,
+        "Rec / Activate / Done": 0,
+        "rec/pause/closed": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-7v2"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 42,
+      "raw": "**17:52** Finalized session-page controls to `New / Rec / Cut / Pause / Done` (same order as FAB) and switched left-side pictogram to full state-driven mapping.",
+      "short": "Finalized session-page controls to `New / Rec / Cut / Pause / Done` (same order as FAB) and switched left-side pictogram to full state-driven mapping.",
+      "idx": 17,
+      "keywords": [
+        "New / Rec / Cut / Pause / Done",
+        "new / rec / cut / pause / done",
+        "Finalized",
+        "session-page",
+        "controls"
+      ],
+      "hits": {
+        "New / Rec / Cut / Pause / Done": 0,
+        "new / rec / cut / pause / done": 0,
+        "Finalized": 0,
+        "session-page": 0,
+        "controls": 30
+      },
+      "hit_total": 30,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-szo"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 43,
+      "raw": "**18:25** Improved session-page resilience on 404 response from `/voicebot/session` by introducing explicit runtime-mismatch UI and retry-safe error rendering when a session is outside the active runtime.",
+      "short": "Improved session-page resilience on 404 response from `/voicebot/session` by introducing explicit runtime-mismatch UI and retry-safe error rendering when a session is outside the active runtime.",
+      "idx": 18,
+      "keywords": [
+        "/voicebot/session",
+        "retry",
+        "/session"
+      ],
+      "hits": {
+        "/voicebot/session": 17,
+        "retry": 46,
+        "/session": 112
+      },
+      "hit_total": 175,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ueu"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 46,
+      "raw": "**16:20** Backend session flow updates:",
+      "short": "Backend session flow updates:",
+      "idx": 19,
+      "keywords": [
+        "Backend",
+        "session",
+        "flow",
+        "updates:"
+      ],
+      "hits": {
+        "Backend": 42,
+        "session": 500,
+        "flow": 52,
+        "updates:": 2
+      },
+      "hit_total": 596,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-qkd"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 50,
+      "raw": "**16:20** Runtime isolation implementation:",
+      "short": "Runtime isolation implementation:",
+      "idx": 20,
+      "keywords": [
+        "Runtime",
+        "isolation",
+        "implementation:"
+      ],
+      "hits": {
+        "Runtime": 70,
+        "isolation": 7,
+        "implementation:": 0
+      },
+      "hit_total": 77,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-amj"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 56,
+      "raw": "**16:20** API/routes and frontend integration:",
+      "short": "API/routes and frontend integration:",
+      "idx": 21,
+      "keywords": [
+        "/routes",
+        "API/routes",
+        "frontend",
+        "integration:"
+      ],
+      "hits": {
+        "/routes": 66,
+        "API/routes": 0,
+        "frontend": 38,
+        "integration:": 0
+      },
+      "hit_total": 104,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-1he"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 60,
+      "raw": "**16:20** Reliability and compatibility coverage:",
+      "short": "Reliability and compatibility coverage:",
+      "idx": 22,
+      "keywords": [
+        "Reliability",
+        "compatibility",
+        "coverage:"
+      ],
+      "hits": {
+        "Reliability": 0,
+        "compatibility": 3,
+        "coverage:": 0
+      },
+      "hit_total": 3,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-9x8"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 64,
+      "raw": "**17:33** Added shared formatter module `voicebot/session_telegram_message.js` and switched message producers (`voicebot-tgbot.js`, `voicebot/common_jobs/done_multiprompt.js`, `voicebot/postprocessing/all_custom_prompts.js`) to unified event output.",
+      "short": "Added shared formatter module `voicebot/session_telegram_message.js` and switched message producers (`voicebot-tgbot.js`, `voicebot/common_jobs/done_multiprompt.js`, `voicebot/postprocessing/all_custom_prompts.js`) to unified event output.",
+      "idx": 23,
+      "keywords": [
+        "/session_telegram_message.js",
+        "/common_jobs/done_multiprompt.js",
+        "/postprocessing/all_custom_prompts.js",
+        "voicebot/session_telegram_message.js",
+        "voicebot-tgbot.js",
+        "voicebot/common_jobs/done_multiprompt.js"
+      ],
+      "hits": {
+        "/session_telegram_message.js": 0,
+        "/common_jobs/done_multiprompt.js": 0,
+        "/postprocessing/all_custom_prompts.js": 0,
+        "voicebot/session_telegram_message.js": 0,
+        "voicebot-tgbot.js": 7,
+        "voicebot/common_jobs/done_multiprompt.js": 0
+      },
+      "hit_total": 7,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-e2o"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 65,
+      "raw": "**17:33** Updated Telegram `/login` path in `voicebot-tgbot.js`: token generation (`crypto.randomBytes`), persistence in one-use tokens collection, and command/help text updates.",
+      "short": "Updated Telegram `/login` path in `voicebot-tgbot.js`: token generation (`crypto.randomBytes`), persistence in one-use tokens collection, and command/help text updates.",
+      "idx": 24,
+      "keywords": [
+        "/login",
+        "/help",
+        "voicebot-tgbot.js",
+        "crypto.randomBytes",
+        "voicebot-tgbot"
+      ],
+      "hits": {
+        "/login": 28,
+        "/help": 99,
+        "voicebot-tgbot.js": 7,
+        "crypto.randomBytes": 0,
+        "voicebot-tgbot": 15
+      },
+      "hit_total": 149,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-r75"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 66,
+      "raw": "**17:33** Updated `app/src/components/voicebot/MeetingCard.jsx` with `Rec / Activate / Done`, active-session localStorage/event sync to FAB, and rec/pause/closed status icon rendering.",
+      "short": "Updated `app/src/components/voicebot/MeetingCard.jsx` with `Rec / Activate / Done`, active-session localStorage/event sync to FAB, and rec/pause/closed status icon rendering.",
+      "idx": 25,
+      "keywords": [
+        "/src/components/voicebot/MeetingCard.jsx",
+        "/event",
+        "/pause/closed",
+        "app/src/components/voicebot/MeetingCard.jsx",
+        "Rec / Activate / Done",
+        "active-session"
+      ],
+      "hits": {
+        "/src/components/voicebot/MeetingCard.jsx": 0,
+        "/event": 10,
+        "/pause/closed": 0,
+        "app/src/components/voicebot/MeetingCard.jsx": 0,
+        "Rec / Activate / Done": 0,
+        "active-session": 10
+      },
+      "hit_total": 20,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-2mo"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 67,
+      "raw": "**17:52** Updated `app/src/components/voicebot/MeetingCard.jsx` status icon mapping to runtime states:",
+      "short": "Updated `app/src/components/voicebot/MeetingCard.jsx` status icon mapping to runtime states:",
+      "idx": 26,
+      "keywords": [
+        "/src/components/voicebot/MeetingCard.jsx",
+        "app/src/components/voicebot/MeetingCard.jsx",
+        "status",
+        "icon",
+        "mapping"
+      ],
+      "hits": {
+        "/src/components/voicebot/MeetingCard.jsx": 0,
+        "app/src/components/voicebot/MeetingCard.jsx": 0,
+        "status": 500,
+        "icon": 246,
+        "mapping": 54
+      },
+      "hit_total": 800,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-3tx"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 75,
+      "raw": "**17:52** Updated `plan/session-managment.md` and `README.md` to align documentation with the new button order and state-driven pictogram contract.",
+      "short": "Updated `plan/session-managment.md` and `README.md` to align documentation with the new button order and state-driven pictogram contract.",
+      "idx": 27,
+      "keywords": [
+        "/session-managment.md",
+        "plan/session-managment.md",
+        "README.md",
+        "/session"
+      ],
+      "hits": {
+        "/session-managment.md": 0,
+        "plan/session-managment.md": 0,
+        "README.md": 10,
+        "/session": 112
+      },
+      "hit_total": 122,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-yud"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 76,
+      "raw": "**17:33** Updated session management spec in `plan/session-managment.md` to document `/login` one-time auth-link semantics.",
+      "short": "Updated session management spec in `plan/session-managment.md` to document `/login` one-time auth-link semantics.",
+      "idx": 28,
+      "keywords": [
+        "/session-managment.md",
+        "/login",
+        "plan/session-managment.md",
+        "/session",
+        "one-time"
+      ],
+      "hits": {
+        "/session-managment.md": 0,
+        "/login": 28,
+        "plan/session-managment.md": 0,
+        "/session": 112,
+        "one-time": 20
+      },
+      "hit_total": 160,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-6jv"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 77,
+      "raw": "**17:33** Adjusted `__tests__/common_jobs/done_multiprompt.test.js` assertions to validate the new 4-line Telegram message contract.",
+      "short": "Adjusted `__tests__/common_jobs/done_multiprompt.test.js` assertions to validate the new 4-line Telegram message contract.",
+      "idx": 29,
+      "keywords": [
+        "/common_jobs/done_multiprompt.test.js",
+        "__tests__/common_jobs/done_multiprompt.test.js",
+        "/done"
+      ],
+      "hits": {
+        "/common_jobs/done_multiprompt.test.js": 0,
+        "__tests__/common_jobs/done_multiprompt.test.js": 0,
+        "/done": 4
+      },
+      "hit_total": 4,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-9qu"
+    },
+    {
+      "date": "2026-02-17",
+      "section": "CHANGES",
+      "line": 78,
+      "raw": "**18:25** Updated session fetch UX in `app/src/store/voiceBot.js` + `app/src/pages/SessionPage.jsx` and enriched request diagnostics in `app/src/store/request.js` to distinguish 404 runtime-mismatch states from other load errors.",
+      "short": "Updated session fetch UX in `app/src/store/voiceBot.js` + `app/src/pages/SessionPage.jsx` and enriched request diagnostics in `app/src/store/request.js` to distinguish 404 runtime-mismatch states from other load errors.",
+      "idx": 30,
+      "keywords": [
+        "/src/store/voiceBot.js",
+        "/src/pages/SessionPage.jsx",
+        "/src/store/request.js",
+        "app/src/store/voiceBot.js",
+        "app/src/pages/SessionPage.jsx",
+        "app/src/store/request.js"
+      ],
+      "hits": {
+        "/src/store/voiceBot.js": 1,
+        "/src/pages/SessionPage.jsx": 1,
+        "/src/store/request.js": 2,
+        "app/src/store/voiceBot.js": 1,
+        "app/src/pages/SessionPage.jsx": 1,
+        "app/src/store/request.js": 0
+      },
+      "hit_total": 6,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-f4f"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "PROBLEM SOLVED",
+      "line": 82,
+      "raw": "**07:19** Telegram screenshot/document attachments were not consistently accessible to external processors (LLM/MCP) because the only supported path required session auth and depended on message ids; we now provide a stable, direct attachment contract without exposing Telegram bot tokens.",
+      "short": "Telegram screenshot/document attachments were not consistently accessible to external processors (LLM/MCP) because the only supported path required session auth and depended on message ids; we now provide a stable, direct attachment contract without exposing Telegram bot tokens.",
+      "idx": 31,
+      "keywords": [
+        "/document",
+        "/MCP",
+        "Telegram",
+        "screenshot/document",
+        "attachments"
+      ],
+      "hits": {
+        "/document": 4,
+        "/MCP": 1,
+        "Telegram": 42,
+        "screenshot/document": 0,
+        "attachments": 96
+      },
+      "hit_total": 143,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-dmw"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "PROBLEM SOLVED",
+      "line": 83,
+      "raw": "**07:19** External attachment links needed to be explicit about compatibility between legacy UI consumption and stable public access; mixed behavior could break automation consumers and direct download tooling.",
+      "short": "External attachment links needed to be explicit about compatibility between legacy UI consumption and stable public access; mixed behavior could break automation consumers and direct download tooling.",
+      "idx": 32,
+      "keywords": [
+        "External",
+        "attachment",
+        "links",
+        "needed",
+        "explicit"
+      ],
+      "hits": {
+        "External": 2,
+        "attachment": 183,
+        "links": 6,
+        "needed": 15,
+        "explicit": 35
+      },
+      "hit_total": 241,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-jte"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 86,
+      "raw": "**07:19** Added a stable public attachment endpoint: `GET /voicebot/public_attachment/:session_id/:file_unique_id` for Telegram-only attachments (no session auth, lookup by session + file_unique_id).",
+      "short": "Added a stable public attachment endpoint: `GET /voicebot/public_attachment/:session_id/:file_unique_id` for Telegram-only attachments (no session auth, lookup by session + file_unique_id).",
+      "idx": 33,
+      "keywords": [
+        "/voicebot/public_attachment/:session_id/:file_unique_id",
+        "GET /voicebot/public_attachment/:session_id/:file_unique_id",
+        "public_attachment"
+      ],
+      "hits": {
+        "/voicebot/public_attachment/:session_id/:file_unique_id": 0,
+        "GET /voicebot/public_attachment/:session_id/:file_unique_id": 0,
+        "public_attachment": 7
+      },
+      "hit_total": 7,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-csk"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 87,
+      "raw": "**07:19** Extended `session_attachments` payload to include both legacy protected `uri` and optional `direct_uri` so existing UI flow stays intact while external consumers get stable references.",
+      "short": "Extended `session_attachments` payload to include both legacy protected `uri` and optional `direct_uri` so existing UI flow stays intact while external consumers get stable references.",
+      "idx": 34,
+      "keywords": [
+        "session_attachments",
+        "uri",
+        "direct_uri"
+      ],
+      "hits": {
+        "session_attachments": 8,
+        "uri": 88,
+        "direct_uri": 12
+      },
+      "hit_total": 108,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-9gj"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 88,
+      "raw": "**07:19** Added direct rendering path in `Screenshort` for `direct_uri` with protected fallback to `/voicebot/message_attachment/...`.",
+      "short": "Added direct rendering path in `Screenshort` for `direct_uri` with protected fallback to `/voicebot/message_attachment/...`.",
+      "idx": 35,
+      "keywords": [
+        "/voicebot/message_attachment/...",
+        "Screenshort",
+        "direct_uri",
+        "message_attachment"
+      ],
+      "hits": {
+        "/voicebot/message_attachment/...": 3,
+        "Screenshort": 8,
+        "direct_uri": 12,
+        "message_attachment": 9
+      },
+      "hit_total": 32,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-yup"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "CHANGES",
+      "line": 91,
+      "raw": "**07:19** Backend: added public attachment resolver and stream proxy in `crm/controllers/voicebot.js`, and registered public route in `crm/routes/voicebot.js`.",
+      "short": "Backend: added public attachment resolver and stream proxy in `crm/controllers/voicebot.js`, and registered public route in `crm/routes/voicebot.js`.",
+      "idx": 36,
+      "keywords": [
+        "/controllers/voicebot.js",
+        "/routes/voicebot.js",
+        "crm/controllers/voicebot.js",
+        "crm/routes/voicebot.js"
+      ],
+      "hits": {
+        "/controllers/voicebot.js": 0,
+        "/routes/voicebot.js": 2,
+        "crm/controllers/voicebot.js": 0,
+        "crm/routes/voicebot.js": 2
+      },
+      "hit_total": 4,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-aqt"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "CHANGES",
+      "line": 92,
+      "raw": "**07:19** Backend auth gate updated in `voicebot-backend.js` to allow unauthenticated `/voicebot/public_attachment/*` requests for public retrieval.",
+      "short": "Backend auth gate updated in `voicebot-backend.js` to allow unauthenticated `/voicebot/public_attachment/*` requests for public retrieval.",
+      "idx": 37,
+      "keywords": [
+        "/voicebot/public_attachment/",
+        "voicebot-backend.js",
+        "/voicebot/public_attachment/*",
+        "public_attachment"
+      ],
+      "hits": {
+        "/voicebot/public_attachment/": 1,
+        "voicebot-backend.js": 8,
+        "/voicebot/public_attachment/*": 1,
+        "public_attachment": 7
+      },
+      "hit_total": 17,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-0da"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "CHANGES",
+      "line": 93,
+      "raw": "**07:19** Frontend: updated `Screenshort.jsx` and attachment normalization in `app/src/store/voiceBot.js` to consume `direct_uri` safely.",
+      "short": "Frontend: updated `Screenshort.jsx` and attachment normalization in `app/src/store/voiceBot.js` to consume `direct_uri` safely.",
+      "idx": 38,
+      "keywords": [
+        "/src/store/voiceBot.js",
+        "Screenshort.jsx",
+        "app/src/store/voiceBot.js",
+        "direct_uri"
+      ],
+      "hits": {
+        "/src/store/voiceBot.js": 1,
+        "Screenshort.jsx": 0,
+        "app/src/store/voiceBot.js": 1,
+        "direct_uri": 12
+      },
+      "hit_total": 14,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-97q"
+    },
+    {
+      "date": "2026-02-16",
+      "section": "CHANGES",
+      "line": 94,
+      "raw": "**07:19** Tests/docs: added/extended API+smoke coverage and docs for public attachment delivery in:",
+      "short": "Tests/docs: added/extended API+smoke coverage and docs for public attachment delivery in:",
+      "idx": 39,
+      "keywords": [
+        "/docs:",
+        "/extended",
+        "Tests/docs:",
+        "added/extended",
+        "API"
+      ],
+      "hits": {
+        "/docs:": 0,
+        "/extended": 0,
+        "Tests/docs:": 0,
+        "added/extended": 0,
+        "API": 196
+      },
+      "hit_total": 196,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-n5l"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 103,
+      "raw": "**15:00** Telegram voice bot session behavior was not aligned for deterministic handoff, with unclear active-session ownership semantics across `/start`, `/done`, and incoming content messages.",
+      "short": "Telegram voice bot session behavior was not aligned for deterministic handoff, with unclear active-session ownership semantics across `/start`, `/done`, and incoming content messages.",
+      "idx": 40,
+      "keywords": [
+        "/start",
+        "/done",
+        "active-session"
+      ],
+      "hits": {
+        "/start": 3,
+        "/done": 4,
+        "active-session": 10
+      },
+      "hit_total": 17,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-dep"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 104,
+      "raw": "**15:00** Session selection behavior for forwarded content and user-owned active sessions was undefined, creating inconsistency in how new voice/text messages should be attached.",
+      "short": "Session selection behavior for forwarded content and user-owned active sessions was undefined, creating inconsistency in how new voice/text messages should be attached.",
+      "idx": 41,
+      "keywords": [
+        "/text",
+        "Session",
+        "selection",
+        "behavior",
+        "forwarded"
+      ],
+      "hits": {
+        "/text": 39,
+        "Session": 500,
+        "selection": 32,
+        "behavior": 8,
+        "forwarded": 3
+      },
+      "hit_total": 582,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-wca"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 105,
+      "raw": "**09:43** Telegram bot command discoverability and login entrypoint were still not codified for operators, increasing support overhead during command onboarding.",
+      "short": "Telegram bot command discoverability and login entrypoint were still not codified for operators, increasing support overhead during command onboarding.",
+      "idx": 42,
+      "keywords": [
+        "Telegram",
+        "bot",
+        "command",
+        "discoverability",
+        "login"
+      ],
+      "hits": {
+        "Telegram": 42,
+        "bot": 500,
+        "command": 126,
+        "discoverability": 0,
+        "login": 143
+      },
+      "hit_total": 811,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-gvq"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 106,
+      "raw": "**17:30** Telegram screenshots/documents did not have a token-safe way to render in Web UI; direct Telegram file URLs would leak bot tokens and attachments were not exposed as a stable UI read model.",
+      "short": "Telegram screenshots/documents did not have a token-safe way to render in Web UI; direct Telegram file URLs would leak bot tokens and attachments were not exposed as a stable UI read model.",
+      "idx": 43,
+      "keywords": [
+        "/documents",
+        "Telegram",
+        "screenshots/documents",
+        "did",
+        "not"
+      ],
+      "hits": {
+        "/documents": 3,
+        "Telegram": 42,
+        "screenshots/documents": 0,
+        "did": 119,
+        "not": 479
+      },
+      "hit_total": 643,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-g4v"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 107,
+      "raw": "**16:01** OpenAI quota failures could stall transcription or categorization indefinitely, requiring manual restarts even after the balance was restored.",
+      "short": "OpenAI quota failures could stall transcription or categorization indefinitely, requiring manual restarts even after the balance was restored.",
+      "idx": 44,
+      "keywords": [
+        "categorization",
+        "transcription",
+        "openai",
+        "quota"
+      ],
+      "hits": {
+        "categorization": 190,
+        "transcription": 225,
+        "openai": 34,
+        "quota": 0
+      },
+      "hit_total": 449,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-2nj"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 108,
+      "raw": "**19:53** `/session` and `/login` responses could still surface internal session URLs and did not consistently expose session metadata, forcing manual mapping when users revisited existing sessions.",
+      "short": "`/session` and `/login` responses could still surface internal session URLs and did not consistently expose session metadata, forcing manual mapping when users revisited existing sessions.",
+      "idx": 45,
+      "keywords": [
+        "/session",
+        "/login",
+        "session",
+        "login",
+        "responses"
+      ],
+      "hits": {
+        "/session": 112,
+        "/login": 28,
+        "session": 500,
+        "login": 143,
+        "responses": 2
+      },
+      "hit_total": 785,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-xqt"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 109,
+      "raw": "**21:12** Redis queue overload (maxmemory + noeviction) could stall sequential processors: BullMQ enqueue failed while `is_processing` flags were already set, causing categorization/transcription to loop in a stale-reset state without making progress.",
+      "short": "Redis queue overload (maxmemory + noeviction) could stall sequential processors: BullMQ enqueue failed while `is_processing` flags were already set, causing categorization/transcription to loop in a stale-reset state without making progress.",
+      "idx": 46,
+      "keywords": [
+        "/transcription",
+        "is_processing",
+        "categorization",
+        "transcription",
+        "redis",
+        "bullmq"
+      ],
+      "hits": {
+        "/transcription": 26,
+        "is_processing": 7,
+        "categorization": 190,
+        "transcription": 225,
+        "redis": 124,
+        "bullmq": 57
+      },
+      "hit_total": 629,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-mwg"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 110,
+      "raw": "**21:31** Redis cleanup automation was too conservative for high-throughput queues and included an unsafe emergency path that could delete waiting jobs; cleanup is now bounded and safe (history-only) with stream trimming.",
+      "short": "Redis cleanup automation was too conservative for high-throughput queues and included an unsafe emergency path that could delete waiting jobs; cleanup is now bounded and safe (history-only) with stream trimming.",
+      "idx": 47,
+      "keywords": [
+        "redis",
+        "Redis",
+        "cleanup",
+        "automation",
+        "too"
+      ],
+      "hits": {
+        "redis": 124,
+        "Redis": 63,
+        "cleanup": 60,
+        "automation": 243,
+        "too": 242
+      },
+      "hit_total": 732,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-l20"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "PROBLEM SOLVED",
+      "line": 111,
+      "raw": "**22:10** OpenAI spend could spike because categorization ran on trivial short text messages and used a long instruction prompt; categorization now skips trivial short texts/commands and defaults to a cheaper model (configurable).",
+      "short": "OpenAI spend could spike because categorization ran on trivial short text messages and used a long instruction prompt; categorization now skips trivial short texts/commands and defaults to a cheaper model (configurable).",
+      "idx": 48,
+      "keywords": [
+        "/commands",
+        "categorization",
+        "openai"
+      ],
+      "hits": {
+        "/commands": 3,
+        "categorization": 190,
+        "openai": 34
+      },
+      "hit_total": 227,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-0g1"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 114,
+      "raw": "**15:00** Added an explicit planning document that defines Telegram voicebot session lifecycle and routing behavior (`plan/session-managment.md`): active session model, command semantics, and session-link normalization/representation.",
+      "short": "Added an explicit planning document that defines Telegram voicebot session lifecycle and routing behavior (`plan/session-managment.md`): active session model, command semantics, and session-link normalization/representation.",
+      "idx": 49,
+      "keywords": [
+        "/session-managment.md",
+        "/representation.",
+        "plan/session-managment.md",
+        "/session"
+      ],
+      "hits": {
+        "/session-managment.md": 0,
+        "/representation.": 0,
+        "plan/session-managment.md": 0,
+        "/session": 112
+      },
+      "hit_total": 112,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-8qn"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 115,
+      "raw": "**09:43** Extended the Telegram session plan with a dedicated `/login` command and explicit `@strato_voice_bot` command set for operator operations (`/start`, `/done`, `/session`, `/login`).",
+      "short": "Extended the Telegram session plan with a dedicated `/login` command and explicit `@strato_voice_bot` command set for operator operations (`/start`, `/done`, `/session`, `/login`).",
+      "idx": 50,
+      "keywords": [
+        "/login",
+        "/start",
+        "/done",
+        "/session",
+        "/login",
+        "@strato_voice_bot"
+      ],
+      "hits": {
+        "/login": 28,
+        "/start": 3,
+        "/done": 4,
+        "/session": 112,
+        "@strato_voice_bot": 1
+      },
+      "hit_total": 148,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-3y0"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 116,
+      "raw": "**17:30** Added session attachments support end-to-end:",
+      "short": "Added session attachments support end-to-end:",
+      "idx": 51,
+      "keywords": [
+        "session",
+        "attachments",
+        "support",
+        "end-to-end:"
+      ],
+      "hits": {
+        "session": 500,
+        "attachments": 96,
+        "support": 63,
+        "end-to-end:": 0
+      },
+      "hit_total": 659,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-328"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 120,
+      "raw": "**17:30** UI: added `Screenshort` tab to render screenshots/documents (preview + caption + timestamp).",
+      "short": "UI: added `Screenshort` tab to render screenshots/documents (preview + caption + timestamp).",
+      "idx": 52,
+      "keywords": [
+        "/documents",
+        "Screenshort",
+        "UI:",
+        "tab",
+        "render"
+      ],
+      "hits": {
+        "/documents": 3,
+        "Screenshort": 8,
+        "UI:": 0,
+        "tab": 439,
+        "render": 177
+      },
+      "hit_total": 627,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-wxa"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 121,
+      "raw": "**17:30** LLM context: screenshots/documents are included in categorization/create_tasks input via structured blocks without triggering transcription loops.",
+      "short": "LLM context: screenshots/documents are included in categorization/create_tasks input via structured blocks without triggering transcription loops.",
+      "idx": 53,
+      "keywords": [
+        "/documents",
+        "/create_tasks",
+        "categorization",
+        "transcription"
+      ],
+      "hits": {
+        "/documents": 3,
+        "/create_tasks": 2,
+        "categorization": 190,
+        "transcription": 225
+      },
+      "hit_total": 420,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-7vb"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 122,
+      "raw": "**17:30** Added Jest smoke tests for the Telegram attachment flow and the attachment proxy endpoint.",
+      "short": "Added Jest smoke tests for the Telegram attachment flow and the attachment proxy endpoint.",
+      "idx": 54,
+      "keywords": [
+        "Jest",
+        "smoke",
+        "tests",
+        "Telegram",
+        "attachment"
+      ],
+      "hits": {
+        "Jest": 8,
+        "smoke": 8,
+        "tests": 46,
+        "Telegram": 42,
+        "attachment": 183
+      },
+      "hit_total": 287,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-xhb"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 123,
+      "raw": "**16:01** Processing loop now auto-recovers quota-stopped work: once account balance is restored, transcription and categorization jobs requeue automatically without manual intervention, and quota markers are safely reset once successful.",
+      "short": "Processing loop now auto-recovers quota-stopped work: once account balance is restored, transcription and categorization jobs requeue automatically without manual intervention, and quota markers are safely reset once successful.",
+      "idx": 55,
+      "keywords": [
+        "categorization",
+        "transcription",
+        "quota"
+      ],
+      "hits": {
+        "categorization": 190,
+        "transcription": 225,
+        "quota": 0
+      },
+      "hit_total": 415,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-6lv"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 124,
+      "raw": "**19:53** Telegram command responses were normalized to public host links and enriched with structured metadata:",
+      "short": "Telegram command responses were normalized to public host links and enriched with structured metadata:",
+      "idx": 56,
+      "keywords": [
+        "Telegram",
+        "command",
+        "responses",
+        "were",
+        "normalized"
+      ],
+      "hits": {
+        "Telegram": 42,
+        "command": 126,
+        "responses": 2,
+        "were": 2,
+        "normalized": 96
+      },
+      "hit_total": 268,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-emo"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 127,
+      "raw": "**19:53** Added exponential retry limits and backoff metadata for transcription/categorization recovery (`transcription_attempts`, `categorization_attempts`, `*_next_attempt_at`) with hard fail markers to prevent endless retries.",
+      "short": "Added exponential retry limits and backoff metadata for transcription/categorization recovery (`transcription_attempts`, `categorization_attempts`, `*_next_attempt_at`) with hard fail markers to prevent endless retries.",
+      "idx": 57,
+      "keywords": [
+        "/categorization",
+        "transcription_attempts",
+        "categorization_attempts",
+        "*_next_attempt_at",
+        "categorization",
+        "transcription"
+      ],
+      "hits": {
+        "/categorization": 10,
+        "transcription_attempts": 0,
+        "categorization_attempts": 1,
+        "*_next_attempt_at": 0,
+        "categorization": 190,
+        "transcription": 225
+      },
+      "hit_total": 426,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-e7y"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 128,
+      "raw": "**21:12** Hardened BullMQ queue behavior to prevent Redis OOM stalls:",
+      "short": "Hardened BullMQ queue behavior to prevent Redis OOM stalls:",
+      "idx": 58,
+      "keywords": [
+        "redis",
+        "bullmq",
+        "Hardened",
+        "BullMQ",
+        "queue"
+      ],
+      "hits": {
+        "redis": 124,
+        "bullmq": 57,
+        "Hardened": 0,
+        "BullMQ": 45,
+        "queue": 102
+      },
+      "hit_total": 328,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-6ym"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 131,
+      "raw": "**21:31** Improved Redis protection rails:",
+      "short": "Improved Redis protection rails:",
+      "idx": 59,
+      "keywords": [
+        "redis",
+        "Improved",
+        "Redis",
+        "protection",
+        "rails:"
+      ],
+      "hits": {
+        "redis": 124,
+        "Improved": 0,
+        "Redis": 63,
+        "protection": 0,
+        "rails:": 0
+      },
+      "hit_total": 187,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-st8"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 134,
+      "raw": "**22:10** Added LLM cost controls:",
+      "short": "Added LLM cost controls:",
+      "idx": 60,
+      "keywords": [
+        "LLM",
+        "cost",
+        "controls:"
+      ],
+      "hits": {
+        "LLM": 33,
+        "cost": 57,
+        "controls:": 0
+      },
+      "hit_total": 90,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-6of"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 139,
+      "raw": "**15:00** Added `plan/session-managment.md` with a complete requirements and execution-ready design for:",
+      "short": "Added `plan/session-managment.md` with a complete requirements and execution-ready design for:",
+      "idx": 61,
+      "keywords": [
+        "/session-managment.md",
+        "plan/session-managment.md",
+        "/session"
+      ],
+      "hits": {
+        "/session-managment.md": 0,
+        "plan/session-managment.md": 0,
+        "/session": 112
+      },
+      "hit_total": 112,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-5b2"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 145,
+      "raw": "**09:43** Updated the same session-management specification to include:",
+      "short": "Updated the same session-management specification to include:",
+      "idx": 62,
+      "keywords": [
+        "same",
+        "session-management",
+        "specification",
+        "include:"
+      ],
+      "hits": {
+        "same": 32,
+        "session-management": 0,
+        "specification": 1,
+        "include:": 0
+      },
+      "hit_total": 33,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-g7i"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 149,
+      "raw": "**17:30** Backend: added `GET /voicebot/message_attachment/:message_id/:attachment_index`, extended message persistence with `message_type` + `attachments[]`, introduced `HANDLE_ATTACHMENT` job + idempotency for Telegram retries, and exposed `session_attachments` via `POST /voicebot/session`.",
+      "short": "Backend: added `GET /voicebot/message_attachment/:message_id/:attachment_index`, extended message persistence with `message_type` + `attachments[]`, introduced `HANDLE_ATTACHMENT` job + idempotency for Telegram retries, and exposed `session_attachments` via `POST /voicebot/session`.",
+      "idx": 63,
+      "keywords": [
+        "/voicebot/message_attachment/:message_id/:attachment_index",
+        "/voicebot/session",
+        "GET /voicebot/message_attachment/:message_id/:attachment_index",
+        "message_type",
+        "attachments[]",
+        "HANDLE_ATTACHMENT"
+      ],
+      "hits": {
+        "/voicebot/message_attachment/:message_id/:attachment_index": 0,
+        "/voicebot/session": 17,
+        "GET /voicebot/message_attachment/:message_id/:attachment_index": 0,
+        "message_type": 11,
+        "attachments[]": 0,
+        "HANDLE_ATTACHMENT": 0
+      },
+      "hit_total": 28,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-w8b"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 150,
+      "raw": "**17:30** Frontend: added `Screenshort` tab/component and wired session attachment URIs for Telegram/web sources.",
+      "short": "Frontend: added `Screenshort` tab/component and wired session attachment URIs for Telegram/web sources.",
+      "idx": 64,
+      "keywords": [
+        "/component",
+        "/web",
+        "Screenshort"
+      ],
+      "hits": {
+        "/component": 94,
+        "/web": 31,
+        "Screenshort": 8
+      },
+      "hit_total": 133,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-9xw"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 151,
+      "raw": "**17:30** Docs/tests: updated `docs/VOICEBOT_API*.md`, added smoke tests under `__tests__/smoke/`, and linked implementation tasks in `plan/session-managment.md`.",
+      "short": "Docs/tests: updated `docs/VOICEBOT_API*.md`, added smoke tests under `__tests__/smoke/`, and linked implementation tasks in `plan/session-managment.md`.",
+      "idx": 65,
+      "keywords": [
+        "/tests:",
+        "/VOICEBOT_API",
+        "/smoke/",
+        "/session-managment.md",
+        "docs/VOICEBOT_API*.md",
+        "__tests__/smoke/"
+      ],
+      "hits": {
+        "/tests:": 0,
+        "/VOICEBOT_API": 0,
+        "/smoke/": 0,
+        "/session-managment.md": 0,
+        "docs/VOICEBOT_API*.md": 0,
+        "__tests__/smoke/": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-1ot"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 152,
+      "raw": "**16:01** Backend: updated auto-retry loop (`voicebot/common_jobs/processing_loop.js`) and processors (`voicebot/voice_jobs/transcribe.js`, `voicebot/voice_jobs/categorize.js`) to treat `insufficient_quota` as retryable without terminal corruption and reset quota-lock state after successful retry.",
+      "short": "Backend: updated auto-retry loop (`voicebot/common_jobs/processing_loop.js`) and processors (`voicebot/voice_jobs/transcribe.js`, `voicebot/voice_jobs/categorize.js`) to treat `insufficient_quota` as retryable without terminal corruption and reset quota-lock state after successful retry.",
+      "idx": 66,
+      "keywords": [
+        "/common_jobs/processing_loop.js",
+        "/voice_jobs/transcribe.js",
+        "/voice_jobs/categorize.js",
+        "voicebot/common_jobs/processing_loop.js",
+        "voicebot/voice_jobs/transcribe.js",
+        "voicebot/voice_jobs/categorize.js"
+      ],
+      "hits": {
+        "/common_jobs/processing_loop.js": 0,
+        "/voice_jobs/transcribe.js": 0,
+        "/voice_jobs/categorize.js": 0,
+        "voicebot/common_jobs/processing_loop.js": 0,
+        "voicebot/voice_jobs/transcribe.js": 0,
+        "voicebot/voice_jobs/categorize.js": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-nrv"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 153,
+      "raw": "**19:53** Telegram bot formatting and session state resolution updates:",
+      "short": "Telegram bot formatting and session state resolution updates:",
+      "idx": 67,
+      "keywords": [
+        "Telegram",
+        "bot",
+        "formatting",
+        "session",
+        "state"
+      ],
+      "hits": {
+        "Telegram": 42,
+        "bot": 500,
+        "formatting": 0,
+        "session": 500,
+        "state": 500
+      },
+      "hit_total": 1542,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-irv"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 158,
+      "raw": "**19:53** Retry controls and hard-stop behavior:",
+      "short": "Retry controls and hard-stop behavior:",
+      "idx": 68,
+      "keywords": [
+        "retry",
+        "Retry",
+        "controls",
+        "hard-stop",
+        "behavior:"
+      ],
+      "hits": {
+        "retry": 46,
+        "Retry": 6,
+        "controls": 30,
+        "hard-stop": 0,
+        "behavior:": 1
+      },
+      "hit_total": 83,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-0vc"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 161,
+      "raw": "**21:12** Queue retention + enqueue safety:",
+      "short": "Queue retention + enqueue safety:",
+      "idx": 69,
+      "keywords": [
+        "Queue",
+        "retention",
+        "enqueue",
+        "safety:"
+      ],
+      "hits": {
+        "Queue": 52,
+        "retention": 0,
+        "enqueue": 1,
+        "safety:": 1
+      },
+      "hit_total": 54,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-4bp"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 165,
+      "raw": "**21:31** `voicebot/redis_monitor.js` emergency cleanup no longer risks dropping queued work (`wait`), and additionally trims `bull:<queue>:events` streams.",
+      "short": "`voicebot/redis_monitor.js` emergency cleanup no longer risks dropping queued work (`wait`), and additionally trims `bull:<queue>:events` streams.",
+      "idx": 70,
+      "keywords": [
+        "/redis_monitor.js",
+        "voicebot/redis_monitor.js",
+        "wait",
+        "bull:<queue>:events",
+        "redis"
+      ],
+      "hits": {
+        "/redis_monitor.js": 0,
+        "voicebot/redis_monitor.js": 0,
+        "wait": 500,
+        "bull:<queue>:events": 0,
+        "redis": 124
+      },
+      "hit_total": 624,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-5qu"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 166,
+      "raw": "**22:10** Reduced LLM token usage by shortening categorization/task prompts and adding short-text skip guards in the categorization processor.",
+      "short": "Reduced LLM token usage by shortening categorization/task prompts and adding short-text skip guards in the categorization processor.",
+      "idx": 71,
+      "keywords": [
+        "/task",
+        "categorization",
+        "Reduced",
+        "LLM",
+        "token"
+      ],
+      "hits": {
+        "/task": 14,
+        "categorization": 190,
+        "Reduced": 0,
+        "LLM": 33,
+        "token": 381
+      },
+      "hit_total": 618,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-aaa"
+    },
+    {
+      "date": "2026-02-15",
+      "section": "CHANGES",
+      "line": 167,
+      "raw": "**22:36** Docs: documented LLM cost control env knobs and updated the auto-reprocessing notes in `README.md`/`AGENTS.md`.",
+      "short": "Docs: documented LLM cost control env knobs and updated the auto-reprocessing notes in `README.md`/`AGENTS.md`.",
+      "idx": 72,
+      "keywords": [
+        "README.md",
+        "AGENTS.md",
+        "Docs:",
+        "documented",
+        "LLM"
+      ],
+      "hits": {
+        "README.md": 10,
+        "AGENTS.md": 6,
+        "Docs:": 0,
+        "documented": 0,
+        "LLM": 33
+      },
+      "hit_total": 49,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-3em"
+    },
+    {
+      "date": "2026-02-14",
+      "section": "PROBLEM SOLVED",
+      "line": 171,
+      "raw": "**06:55** Large web audio uploads could appear stuck at 0% because the UI progress only advanced after the request completed; the uploader now tracks byte-level progress during upload.",
+      "short": "Large web audio uploads could appear stuck at 0% because the UI progress only advanced after the request completed; the uploader now tracks byte-level progress during upload.",
+      "idx": 73,
+      "keywords": [
+        "Large",
+        "web",
+        "audio",
+        "uploads",
+        "could"
+      ],
+      "hits": {
+        "Large": 0,
+        "web": 176,
+        "audio": 261,
+        "uploads": 65,
+        "could": 4
+      },
+      "hit_total": 506,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-b6w"
+    },
+    {
+      "date": "2026-02-14",
+      "section": "PROBLEM SOLVED",
+      "line": 172,
+      "raw": "**06:57** Uploads between 500MB and 600MB could fail at the edge due to a lower request body limit; the edge Nginx limit was raised to align with the product's 600MB cap.",
+      "short": "Uploads between 500MB and 600MB could fail at the edge due to a lower request body limit; the edge Nginx limit was raised to align with the product's 600MB cap.",
+      "idx": 74,
+      "keywords": [
+        "Uploads",
+        "between",
+        "could",
+        "fail",
+        "edge"
+      ],
+      "hits": {
+        "Uploads": 18,
+        "between": 80,
+        "could": 4,
+        "fail": 133,
+        "edge": 3
+      },
+      "hit_total": 238,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-qkq"
+    },
+    {
+      "date": "2026-02-14",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 175,
+      "raw": "**06:55** Added real-time upload feedback for large audio files (file name + uploaded MB / total MB) while a web upload is in progress.",
+      "short": "Added real-time upload feedback for large audio files (file name + uploaded MB / total MB) while a web upload is in progress.",
+      "idx": 75,
+      "keywords": [
+        "real-time",
+        "upload",
+        "feedback",
+        "large",
+        "audio"
+      ],
+      "hits": {
+        "real-time": 14,
+        "upload": 378,
+        "feedback": 4,
+        "large": 22,
+        "audio": 261
+      },
+      "hit_total": 679,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-v0b"
+    },
+    {
+      "date": "2026-02-14",
+      "section": "CHANGES",
+      "line": 178,
+      "raw": "**06:55** Frontend: added axios upload progress tracking and improved error hints for common failures (413, network, timeouts).",
+      "short": "Frontend: added axios upload progress tracking and improved error hints for common failures (413, network, timeouts).",
+      "idx": 76,
+      "keywords": [
+        "Frontend:",
+        "axios",
+        "upload",
+        "progress",
+        "tracking"
+      ],
+      "hits": {
+        "Frontend:": 8,
+        "axios": 41,
+        "upload": 378,
+        "progress": 72,
+        "tracking": 6
+      },
+      "hit_total": 505,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-4jr"
+    },
+    {
+      "date": "2026-02-14",
+      "section": "CHANGES",
+      "line": 179,
+      "raw": "**06:55** Frontend: stopped forcing the multipart Content-Type header so the browser/axios can set the correct boundary automatically.",
+      "short": "Frontend: stopped forcing the multipart Content-Type header so the browser/axios can set the correct boundary automatically.",
+      "idx": 77,
+      "keywords": [
+        "/axios",
+        "Frontend:",
+        "stopped",
+        "forcing",
+        "multipart"
+      ],
+      "hits": {
+        "/axios": 4,
+        "Frontend:": 8,
+        "stopped": 12,
+        "forcing": 0,
+        "multipart": 3
+      },
+      "hit_total": 27,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-3u9"
+    },
+    {
+      "date": "2026-02-14",
+      "section": "CHANGES",
+      "line": 180,
+      "raw": "**06:55** Docs: documented where source WebM/audio files live on disk and how duration backfill is computed (including an ffprobe fallback) in `AGENTS.md`.",
+      "short": "Docs: documented where source WebM/audio files live on disk and how duration backfill is computed (including an ffprobe fallback) in `AGENTS.md`.",
+      "idx": 78,
+      "keywords": [
+        "/audio",
+        "AGENTS.md",
+        "Docs:",
+        "documented",
+        "where"
+      ],
+      "hits": {
+        "/audio": 5,
+        "AGENTS.md": 6,
+        "Docs:": 0,
+        "documented": 0,
+        "where": 44
+      },
+      "hit_total": 55,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-fo9"
+    },
+    {
+      "date": "2026-02-14",
+      "section": "CHANGES",
+      "line": 181,
+      "raw": "**06:57** Ops (edge): increased Nginx request body size limit to `700m` and upload body timeout to `600s` for `voice.stratospace.fun`.",
+      "short": "Ops (edge): increased Nginx request body size limit to `700m` and upload body timeout to `600s` for `voice.stratospace.fun`.",
+      "idx": 79,
+      "keywords": [
+        "700m",
+        "600s",
+        "voice.stratospace.fun"
+      ],
+      "hits": {
+        "700m": 0,
+        "600s": 0,
+        "voice.stratospace.fun": 7
+      },
+      "hit_total": 7,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-baj"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "PROBLEM SOLVED",
+      "line": 185,
+      "raw": "**09:45** Transcription chunk actions overlapped content and were inconsistent across segments; the UI now renders Copy/Edit/Delete in the free space above the chunk text (hover-only) and reserves safe right padding to prevent overlap.",
+      "short": "Transcription chunk actions overlapped content and were inconsistent across segments; the UI now renders Copy/Edit/Delete in the free space above the chunk text (hover-only) and reserves safe right padding to prevent overlap.",
+      "idx": 80,
+      "keywords": [
+        "/Edit/Delete",
+        "transcription",
+        "Transcription",
+        "chunk",
+        "actions"
+      ],
+      "hits": {
+        "/Edit/Delete": 1,
+        "transcription": 225,
+        "Transcription": 85,
+        "chunk": 435,
+        "actions": 72
+      },
+      "hit_total": 818,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ddl"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "PROBLEM SOLVED",
+      "line": 186,
+      "raw": "**09:45** Session/message durations were frequently zero or derived from unstable indexes, breaking timeline rendering and downstream analytics; duration is now resolved from message/chunk metadata and `ffprobe` as needed, and canonical segments are rebuilt with monotonic start/end times.",
+      "short": "Session/message durations were frequently zero or derived from unstable indexes, breaking timeline rendering and downstream analytics; duration is now resolved from message/chunk metadata and `ffprobe` as needed, and canonical segments are rebuilt with monotonic start/end times.",
+      "idx": 81,
+      "keywords": [
+        "/message",
+        "/chunk",
+        "/end",
+        "ffprobe"
+      ],
+      "hits": {
+        "/message": 13,
+        "/chunk": 1,
+        "/end": 0,
+        "ffprobe": 0
+      },
+      "hit_total": 14,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-dw8"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "PROBLEM SOLVED",
+      "line": 187,
+      "raw": "**09:45** Closing a multiprompt session could unexpectedly spawn a new session automatically; the done handler now only closes the current session and emits update/notify events.",
+      "short": "Closing a multiprompt session could unexpectedly spawn a new session automatically; the done handler now only closes the current session and emits update/notify events.",
+      "idx": 82,
+      "keywords": [
+        "/notify",
+        "Closing",
+        "multiprompt",
+        "session",
+        "could"
+      ],
+      "hits": {
+        "/notify": 0,
+        "Closing": 7,
+        "multiprompt": 5,
+        "session": 500,
+        "could": 4
+      },
+      "hit_total": 516,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-bs3"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 190,
+      "raw": "**09:45** Added Copy action for transcription segments (hover-only) and an inline timeline label under the segment text (`HH:mm, mm:ss - mm:ss`) derived from canonical transcription or legacy chunks.",
+      "short": "Added Copy action for transcription segments (hover-only) and an inline timeline label under the segment text (`HH:mm, mm:ss - mm:ss`) derived from canonical transcription or legacy chunks.",
+      "idx": 83,
+      "keywords": [
+        "HH:mm, mm:ss - mm:ss",
+        "transcription",
+        "Copy",
+        "action",
+        "segments"
+      ],
+      "hits": {
+        "HH:mm, mm:ss - mm:ss": 0,
+        "transcription": 225,
+        "Copy": 18,
+        "action": 245,
+        "segments": 79
+      },
+      "hit_total": 567,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-mub"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 191,
+      "raw": "**09:45** Added `services/transcriptionTimeline.js` to normalize legacy `transcription_chunks[]` into a stable timeline and to resolve duration consistently across sources.",
+      "short": "Added `services/transcriptionTimeline.js` to normalize legacy `transcription_chunks[]` into a stable timeline and to resolve duration consistently across sources.",
+      "idx": 84,
+      "keywords": [
+        "/transcriptionTimeline.js",
+        "services/transcriptionTimeline.js",
+        "transcription_chunks[]",
+        "transcription"
+      ],
+      "hits": {
+        "/transcriptionTimeline.js": 1,
+        "services/transcriptionTimeline.js": 1,
+        "transcription_chunks[]": 0,
+        "transcription": 225
+      },
+      "hit_total": 227,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-bix"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 192,
+      "raw": "**09:45** Added diagnostics CLI `node cli/diagnostics/recalc_session_duration.js <sessionId> [--apply]` to recompute and optionally backfill message/session durations.",
+      "short": "Added diagnostics CLI `node cli/diagnostics/recalc_session_duration.js <sessionId> [--apply]` to recompute and optionally backfill message/session durations.",
+      "idx": 85,
+      "keywords": [
+        "/diagnostics/recalc_session_duration.js",
+        "/session",
+        "node cli/diagnostics/recalc_session_duration.js <sessionId> [--apply]"
+      ],
+      "hits": {
+        "/diagnostics/recalc_session_duration.js": 0,
+        "/session": 112,
+        "node cli/diagnostics/recalc_session_duration.js <sessionId> [--apply]": 0
+      },
+      "hit_total": 112,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-kqt"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 193,
+      "raw": "**09:45** Added unit tests for timeline normalization and session-close behavior.",
+      "short": "Added unit tests for timeline normalization and session-close behavior.",
+      "idx": 86,
+      "keywords": [
+        "unit",
+        "tests",
+        "timeline",
+        "normalization",
+        "session-close"
+      ],
+      "hits": {
+        "unit": 40,
+        "tests": 46,
+        "timeline": 9,
+        "normalization": 0,
+        "session-close": 2
+      },
+      "hit_total": 97,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-s8z"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "CHANGES",
+      "line": 196,
+      "raw": "**09:45** Backend: improved audio duration probing via `ffprobe` JSON (`utils/audio_utils.js`), persisted upload duration in `crm/controllers/audio_upload.js`, and used timeline normalization in `crm/controllers/voicebot.js` and `voicebot/voice_jobs/transcribe.js`.",
+      "short": "Backend: improved audio duration probing via `ffprobe` JSON (`utils/audio_utils.js`), persisted upload duration in `crm/controllers/audio_upload.js`, and used timeline normalization in `crm/controllers/voicebot.js` and `voicebot/voice_jobs/transcribe.js`.",
+      "idx": 87,
+      "keywords": [
+        "/audio_utils.js",
+        "/controllers/audio_upload.js",
+        "/controllers/voicebot.js",
+        "/voice_jobs/transcribe.js",
+        "ffprobe",
+        "utils/audio_utils.js"
+      ],
+      "hits": {
+        "/audio_utils.js": 0,
+        "/controllers/audio_upload.js": 0,
+        "/controllers/voicebot.js": 0,
+        "/voice_jobs/transcribe.js": 0,
+        "ffprobe": 0,
+        "utils/audio_utils.js": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-ayv"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "CHANGES",
+      "line": 197,
+      "raw": "**09:45** Frontend: simplified the Transcription table header (removed the standalone time column) and polished segment rendering/actions in `TranscriptionTableRow.jsx`.",
+      "short": "Frontend: simplified the Transcription table header (removed the standalone time column) and polished segment rendering/actions in `TranscriptionTableRow.jsx`.",
+      "idx": 88,
+      "keywords": [
+        "/actions",
+        "TranscriptionTableRow.jsx",
+        "transcription"
+      ],
+      "hits": {
+        "/actions": 0,
+        "TranscriptionTableRow.jsx": 0,
+        "transcription": 225
+      },
+      "hit_total": 225,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-dwl"
+    },
+    {
+      "date": "2026-02-13",
+      "section": "CHANGES",
+      "line": 198,
+      "raw": "**09:45** Planning: added WBS + Mermaid artifacts for spec tracking (`plan/spec-task-breakdown-v1.md`, `plan/spec-wbs-status.png`).",
+      "short": "Planning: added WBS + Mermaid artifacts for spec tracking (`plan/spec-task-breakdown-v1.md`, `plan/spec-wbs-status.png`).",
+      "idx": 89,
+      "keywords": [
+        "/spec-task-breakdown-v1.md",
+        "/spec-wbs-status.png",
+        "plan/spec-task-breakdown-v1.md",
+        "plan/spec-wbs-status.png"
+      ],
+      "hits": {
+        "/spec-task-breakdown-v1.md": 0,
+        "/spec-wbs-status.png": 0,
+        "plan/spec-task-breakdown-v1.md": 0,
+        "plan/spec-wbs-status.png": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-ayy"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "PROBLEM SOLVED",
+      "line": 202,
+      "raw": "**05:22** Planning requirements for a large event-log/edit/rollback initiative were scattered across discussions; this session captures the source planning input in-repo for traceability and coordinated implementation.",
+      "short": "Planning requirements for a large event-log/edit/rollback initiative were scattered across discussions; this session captures the source planning input in-repo for traceability and coordinated implementation.",
+      "idx": 90,
+      "keywords": [
+        "/edit/rollback",
+        "rollback",
+        "Planning",
+        "requirements",
+        "large"
+      ],
+      "hits": {
+        "/edit/rollback": 0,
+        "rollback": 28,
+        "Planning": 0,
+        "requirements": 0,
+        "large": 22
+      },
+      "hit_total": 50,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-eho"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "PROBLEM SOLVED",
+      "line": 203,
+      "raw": "**08:35** Planning specs drifted on transcript identity and storage layers, mixing canonical transcription facts with UI-facing chunk lists; specs now converge on an immutable `transcription_raw -> transcription` chain and treat list views as derived/legacy.",
+      "short": "Planning specs drifted on transcript identity and storage layers, mixing canonical transcription facts with UI-facing chunk lists; specs now converge on an immutable `transcription_raw -> transcription` chain and treat list views as derived/legacy.",
+      "idx": 91,
+      "keywords": [
+        "/legacy.",
+        "transcription_raw -> transcription",
+        "transcription"
+      ],
+      "hits": {
+        "/legacy.": 0,
+        "transcription_raw -> transcription": 0,
+        "transcription": 225
+      },
+      "hit_total": 225,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-b9i"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "PROBLEM SOLVED",
+      "line": 204,
+      "raw": "**09:12** Closed the remaining blocker on transcript version storage by locking versions at the session level, with session API responses returning only the effective final transcript after edits.",
+      "short": "Closed the remaining blocker on transcript version storage by locking versions at the session level, with session API responses returning only the effective final transcript after edits.",
+      "idx": 92,
+      "keywords": [
+        "Closed",
+        "remaining",
+        "blocker",
+        "transcript",
+        "version"
+      ],
+      "hits": {
+        "Closed": 46,
+        "remaining": 3,
+        "blocker": 1,
+        "transcript": 251,
+        "version": 500
+      },
+      "hit_total": 801,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-om9"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "PROBLEM SOLVED",
+      "line": 205,
+      "raw": "**09:14** Closed the remaining blocker on speaker display defaults by locking technical-label rendering to `Спикер 1/2/...` while preserving raw labels in immutable transcription facts.",
+      "short": "Closed the remaining blocker on speaker display defaults by locking technical-label rendering to `Спикер 1/2/...` while preserving raw labels in immutable transcription facts.",
+      "idx": 93,
+      "keywords": [
+        "/2/...",
+        "Спикер 1/2/...",
+        "transcription"
+      ],
+      "hits": {
+        "/2/...": 2,
+        "Спикер 1/2/...": 0,
+        "transcription": 225
+      },
+      "hit_total": 227,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-tyz"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "PROBLEM SOLVED",
+      "line": 206,
+      "raw": "**18:31** Transcript segment edits lacked a durable audit trail and safe rollback semantics; introduced an append-only session log with replayable events for edit/delete/rollback actions.",
+      "short": "Transcript segment edits lacked a durable audit trail and safe rollback semantics; introduced an append-only session log with replayable events for edit/delete/rollback actions.",
+      "idx": 94,
+      "keywords": [
+        "/delete/rollback",
+        "rollback",
+        "session log"
+      ],
+      "hits": {
+        "/delete/rollback": 1,
+        "rollback": 28,
+        "session log": 0
+      },
+      "hit_total": 29,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-9hl"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "PROBLEM SOLVED",
+      "line": 207,
+      "raw": "**19:06** Operators could not edit or delete transcript segments directly in the Transcription tab; added UI controls wired to the new edit/delete endpoints.",
+      "short": "Operators could not edit or delete transcript segments directly in the Transcription tab; added UI controls wired to the new edit/delete endpoints.",
+      "idx": 95,
+      "keywords": [
+        "/delete",
+        "transcription",
+        "Operators",
+        "could",
+        "not"
+      ],
+      "hits": {
+        "/delete": 26,
+        "transcription": 225,
+        "Operators": 0,
+        "could": 4,
+        "not": 479
+      },
+      "hit_total": 734,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ot2"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "PROBLEM SOLVED",
+      "line": 208,
+      "raw": "**19:25** Segment editing was modal-heavy and required a mandatory reason for destructive actions; moved to inline editing, hover-only actions, immediate delete, and optional reason.",
+      "short": "Segment editing was modal-heavy and required a mandatory reason for destructive actions; moved to inline editing, hover-only actions, immediate delete, and optional reason.",
+      "idx": 96,
+      "keywords": [
+        "Segment",
+        "editing",
+        "modal-heavy",
+        "required",
+        "mandatory"
+      ],
+      "hits": {
+        "Segment": 93,
+        "editing": 158,
+        "modal-heavy": 0,
+        "required": 215,
+        "mandatory": 0
+      },
+      "hit_total": 466,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-89c"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 211,
+      "raw": "**05:22** Added raw stakeholder planning artifact `plan/edit-event-log-req.md` as the baseline input for the upcoming event-log specification work.",
+      "short": "Added raw stakeholder planning artifact `plan/edit-event-log-req.md` as the baseline input for the upcoming event-log specification work.",
+      "idx": 97,
+      "keywords": [
+        "/edit-event-log-req.md",
+        "plan/edit-event-log-req.md",
+        "raw",
+        "stakeholder",
+        "planning"
+      ],
+      "hits": {
+        "/edit-event-log-req.md": 0,
+        "plan/edit-event-log-req.md": 0,
+        "raw": 256,
+        "stakeholder": 0,
+        "planning": 0
+      },
+      "hit_total": 256,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-t85"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 212,
+      "raw": "**08:35** Added an event-log/edit/rollback spec draft (`plan/edit-event-log-plan.md`) aligned to immutable facts, append-only events, and replayable projections.",
+      "short": "Added an event-log/edit/rollback spec draft (`plan/edit-event-log-plan.md`) aligned to immutable facts, append-only events, and replayable projections.",
+      "idx": 98,
+      "keywords": [
+        "/edit/rollback",
+        "/edit-event-log-plan.md",
+        "plan/edit-event-log-plan.md",
+        "rollback"
+      ],
+      "hits": {
+        "/edit/rollback": 0,
+        "/edit-event-log-plan.md": 0,
+        "plan/edit-event-log-plan.md": 0,
+        "rollback": 28
+      },
+      "hit_total": 28,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-2tr"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 213,
+      "raw": "**08:35** Refined the diarization migration plan to make `transcription_raw -> transcription` the canonical immutable storage contract and documented the model-agnostic `transcription` schema.",
+      "short": "Refined the diarization migration plan to make `transcription_raw -> transcription` the canonical immutable storage contract and documented the model-agnostic `transcription` schema.",
+      "idx": 99,
+      "keywords": [
+        "transcription_raw -> transcription",
+        "transcription",
+        "Refined",
+        "diarization",
+        "migration"
+      ],
+      "hits": {
+        "transcription_raw -> transcription": 0,
+        "transcription": 225,
+        "Refined": 0,
+        "diarization": 1,
+        "migration": 11
+      },
+      "hit_total": 237,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-6av"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 214,
+      "raw": "**09:18** Added a consolidated launch draft `plan/implementation-draft-v1.md` with decision-locked staged execution (`event-log -> diarization`).",
+      "short": "Added a consolidated launch draft `plan/implementation-draft-v1.md` with decision-locked staged execution (`event-log -> diarization`).",
+      "idx": 100,
+      "keywords": [
+        "/implementation-draft-v1.md",
+        "plan/implementation-draft-v1.md",
+        "event-log -> diarization"
+      ],
+      "hits": {
+        "/implementation-draft-v1.md": 0,
+        "plan/implementation-draft-v1.md": 0,
+        "event-log -> diarization": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-bf5"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 215,
+      "raw": "**18:31** Added session log storage and CRM endpoints for transcript segment edit/delete/rollback, aligned to lowercase snake_case event taxonomy and replay-friendly actor/target metadata.",
+      "short": "Added session log storage and CRM endpoints for transcript segment edit/delete/rollback, aligned to lowercase snake_case event taxonomy and replay-friendly actor/target metadata.",
+      "idx": 101,
+      "keywords": [
+        "/delete/rollback",
+        "/target",
+        "rollback",
+        "session log"
+      ],
+      "hits": {
+        "/delete/rollback": 1,
+        "/target": 0,
+        "rollback": 28,
+        "session log": 0
+      },
+      "hit_total": 29,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-8h6"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 216,
+      "raw": "**19:06** Added Transcription tab segment actions (edit/delete) plus a Log tab to surface session events.",
+      "short": "Added Transcription tab segment actions (edit/delete) plus a Log tab to surface session events.",
+      "idx": 102,
+      "keywords": [
+        "/delete",
+        "transcription",
+        "Transcription",
+        "tab",
+        "segment"
+      ],
+      "hits": {
+        "/delete": 26,
+        "transcription": 225,
+        "Transcription": 85,
+        "tab": 439,
+        "segment": 228
+      },
+      "hit_total": 1003,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-3vx"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 217,
+      "raw": "**19:25** Updated the UI to show segment actions on hover only, make `reason` optional across action endpoints, and move the Log tab to the end of the tab bar.",
+      "short": "Updated the UI to show segment actions on hover only, make `reason` optional across action endpoints, and move the Log tab to the end of the tab bar.",
+      "idx": 103,
+      "keywords": [
+        "reason",
+        "show",
+        "segment",
+        "actions",
+        "hover"
+      ],
+      "hits": {
+        "reason": 165,
+        "show": 179,
+        "segment": 228,
+        "actions": 72,
+        "hover": 49
+      },
+      "hit_total": 693,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-th5"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 220,
+      "raw": "**05:22** Updated `AGENTS.md`, `README.md`, and `CHANGELOG.md` to document planning-artifact placement and close-session outcomes.",
+      "short": "Updated `AGENTS.md`, `README.md`, and `CHANGELOG.md` to document planning-artifact placement and close-session outcomes.",
+      "idx": 104,
+      "keywords": [
+        "AGENTS.md",
+        "README.md",
+        "CHANGELOG.md"
+      ],
+      "hits": {
+        "AGENTS.md": 6,
+        "README.md": 10,
+        "CHANGELOG.md": 0
+      },
+      "hit_total": 16,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-tdt"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 221,
+      "raw": "**08:35** Planning specs: updated `plan/gpt-4o-transcribe-diarize-plan.md` to clarify the minimal immutable transcription contract and added `plan/edit-event-log-plan.md` for segment edits/rollback.",
+      "short": "Planning specs: updated `plan/gpt-4o-transcribe-diarize-plan.md` to clarify the minimal immutable transcription contract and added `plan/edit-event-log-plan.md` for segment edits/rollback.",
+      "idx": 105,
+      "keywords": [
+        "/gpt-4o-transcribe-diarize-plan.md",
+        "/edit-event-log-plan.md",
+        "/rollback.",
+        "plan/gpt-4o-transcribe-diarize-plan.md",
+        "plan/edit-event-log-plan.md",
+        "transcription"
+      ],
+      "hits": {
+        "/gpt-4o-transcribe-diarize-plan.md": 0,
+        "/edit-event-log-plan.md": 0,
+        "/rollback.": 3,
+        "plan/gpt-4o-transcribe-diarize-plan.md": 0,
+        "plan/edit-event-log-plan.md": 0,
+        "transcription": 225
+      },
+      "hit_total": 228,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-be3"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 222,
+      "raw": "**08:35** No runtime, API, database, or production behavior changes were introduced by these planning/spec updates.",
+      "short": "No runtime, API, database, or production behavior changes were introduced by these planning/spec updates.",
+      "idx": 106,
+      "keywords": [
+        "/spec",
+        "runtime",
+        "API",
+        "database",
+        "production"
+      ],
+      "hits": {
+        "/spec": 1,
+        "runtime": 236,
+        "API": 196,
+        "database": 23,
+        "production": 18
+      },
+      "hit_total": 474,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-8zy"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 223,
+      "raw": "**09:22** Synchronized locked clarification outcomes across `plan/edit-event-log-plan.md`, `plan/gpt-4o-transcribe-diarize-plan.md`, and `plan/edit-event-log-req.md`.",
+      "short": "Synchronized locked clarification outcomes across `plan/edit-event-log-plan.md`, `plan/gpt-4o-transcribe-diarize-plan.md`, and `plan/edit-event-log-req.md`.",
+      "idx": 107,
+      "keywords": [
+        "/edit-event-log-plan.md",
+        "/gpt-4o-transcribe-diarize-plan.md",
+        "/edit-event-log-req.md",
+        "plan/edit-event-log-plan.md",
+        "plan/gpt-4o-transcribe-diarize-plan.md",
+        "plan/edit-event-log-req.md"
+      ],
+      "hits": {
+        "/edit-event-log-plan.md": 0,
+        "/gpt-4o-transcribe-diarize-plan.md": 0,
+        "/edit-event-log-req.md": 0,
+        "plan/edit-event-log-plan.md": 0,
+        "plan/gpt-4o-transcribe-diarize-plan.md": 0,
+        "plan/edit-event-log-req.md": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-51l"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 224,
+      "raw": "**09:24** Updated planning references in `AGENTS.md` and `README.md` to include `plan/implementation-draft-v1.md` and session-level transcript-versioning semantics.",
+      "short": "Updated planning references in `AGENTS.md` and `README.md` to include `plan/implementation-draft-v1.md` and session-level transcript-versioning semantics.",
+      "idx": 108,
+      "keywords": [
+        "/implementation-draft-v1.md",
+        "AGENTS.md",
+        "README.md",
+        "plan/implementation-draft-v1.md"
+      ],
+      "hits": {
+        "/implementation-draft-v1.md": 0,
+        "AGENTS.md": 6,
+        "README.md": 10,
+        "plan/implementation-draft-v1.md": 0
+      },
+      "hit_total": 16,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-itr"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 225,
+      "raw": "**18:31** Backend: introduced `automation_voice_bot_session_log` storage and API routes for segment actions (`crm/controllers/voicebot.js`) to support replayable history and rollback.",
+      "short": "Backend: introduced `automation_voice_bot_session_log` storage and API routes for segment actions (`crm/controllers/voicebot.js`) to support replayable history and rollback.",
+      "idx": 109,
+      "keywords": [
+        "/controllers/voicebot.js",
+        "automation_voice_bot_session_log",
+        "crm/controllers/voicebot.js",
+        "rollback"
+      ],
+      "hits": {
+        "/controllers/voicebot.js": 0,
+        "automation_voice_bot_session_log": 3,
+        "crm/controllers/voicebot.js": 0,
+        "rollback": 28
+      },
+      "hit_total": 31,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-pim"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 226,
+      "raw": "**19:06** Frontend: added Transcription and Log tab UI for segment operations and event visibility (segment-level edit/delete wiring).",
+      "short": "Frontend: added Transcription and Log tab UI for segment operations and event visibility (segment-level edit/delete wiring).",
+      "idx": 110,
+      "keywords": [
+        "/delete",
+        "transcription",
+        "Frontend:",
+        "Transcription",
+        "Log"
+      ],
+      "hits": {
+        "/delete": 26,
+        "transcription": 225,
+        "Frontend:": 8,
+        "Transcription": 85,
+        "Log": 241
+      },
+      "hit_total": 585,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-io6"
+    },
+    {
+      "date": "2026-02-12",
+      "section": "CHANGES",
+      "line": 227,
+      "raw": "**19:25** Frontend/backend: removed required `reason` validation for action endpoints and streamlined the editing workflow to be inline (no modal).",
+      "short": "Frontend/backend: removed required `reason` validation for action endpoints and streamlined the editing workflow to be inline (no modal).",
+      "idx": 111,
+      "keywords": [
+        "/backend:",
+        "reason",
+        "Frontend/backend:",
+        "removed",
+        "required"
+      ],
+      "hits": {
+        "/backend:": 0,
+        "reason": 165,
+        "Frontend/backend:": 0,
+        "removed": 11,
+        "required": 215
+      },
+      "hit_total": 391,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-b24"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "PROBLEM SOLVED",
+      "line": 231,
+      "raw": "**07:10** Sessions could not be summarized on-demand when a project was missing or the automatic conditions hadn't fired; the UI can now manually enqueue `session_ready_to_summarize` with a PMO fallback project, without affecting the standard automatic trigger.",
+      "short": "Sessions could not be summarized on-demand when a project was missing or the automatic conditions hadn't fired; the UI can now manually enqueue `session_ready_to_summarize` with a PMO fallback project, without affecting the standard automatic trigger.",
+      "idx": 112,
+      "keywords": [
+        "session_ready_to_summarize",
+        "Sessions",
+        "could",
+        "not",
+        "summarized"
+      ],
+      "hits": {
+        "session_ready_to_summarize": 0,
+        "Sessions": 120,
+        "could": 4,
+        "not": 479,
+        "summarized": 0
+      },
+      "hit_total": 603,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-jzk"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "PROBLEM SOLVED",
+      "line": 232,
+      "raw": "**08:32** Circle action buttons in the session header were visually misaligned (icons shifted up), making actions appear on different levels; icons are now centered so the buttons align consistently.",
+      "short": "Circle action buttons in the session header were visually misaligned (icons shifted up), making actions appear on different levels; icons are now centered so the buttons align consistently.",
+      "idx": 113,
+      "keywords": [
+        "Circle",
+        "action",
+        "buttons",
+        "session",
+        "header"
+      ],
+      "hits": {
+        "Circle": 16,
+        "action": 245,
+        "buttons": 20,
+        "session": 500,
+        "header": 143
+      },
+      "hit_total": 924,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-g68"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 235,
+      "raw": "**07:10** Added a `Summarize (∑)` action next to the AI title generator to trigger summarization and disable itself for 3 minutes.",
+      "short": "Added a `Summarize (∑)` action next to the AI title generator to trigger summarization and disable itself for 3 minutes.",
+      "idx": 114,
+      "keywords": [
+        "Summarize (∑)",
+        "Summarize",
+        "action",
+        "next",
+        "title"
+      ],
+      "hits": {
+        "Summarize (∑)": 0,
+        "Summarize": 1,
+        "action": 245,
+        "next": 165,
+        "title": 500
+      },
+      "hit_total": 911,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ziw"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 236,
+      "raw": "**07:10** Added `POST /voicebot/trigger_session_ready_to_summarize` to (1) assign PMO when `project_id` is missing and (2) enqueue the `session_ready_to_summarize` notify event (hooks from `notifies.hooks.yaml` will run via the notifies worker).",
+      "short": "Added `POST /voicebot/trigger_session_ready_to_summarize` to (1) assign PMO when `project_id` is missing and (2) enqueue the `session_ready_to_summarize` notify event (hooks from `notifies.hooks.yaml` will run via the notifies worker).",
+      "idx": 115,
+      "keywords": [
+        "/voicebot/trigger_session_ready_to_summarize",
+        "POST /voicebot/trigger_session_ready_to_summarize",
+        "project_id",
+        "session_ready_to_summarize",
+        "notifies.hooks.yaml"
+      ],
+      "hits": {
+        "/voicebot/trigger_session_ready_to_summarize": 0,
+        "POST /voicebot/trigger_session_ready_to_summarize": 0,
+        "project_id": 208,
+        "session_ready_to_summarize": 0,
+        "notifies.hooks.yaml": 0
+      },
+      "hit_total": 208,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-a9z"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 237,
+      "raw": "**07:10** Added Jest unit + integration tests and API docs for `/voicebot/create_session`, `/voicebot/add_text`, and `/voicebot/trigger_session_ready_to_summarize`.",
+      "short": "Added Jest unit + integration tests and API docs for `/voicebot/create_session`, `/voicebot/add_text`, and `/voicebot/trigger_session_ready_to_summarize`.",
+      "idx": 116,
+      "keywords": [
+        "/voicebot/create_session",
+        "/voicebot/add_text",
+        "/voicebot/trigger_session_ready_to_summarize"
+      ],
+      "hits": {
+        "/voicebot/create_session": 2,
+        "/voicebot/add_text": 0,
+        "/voicebot/trigger_session_ready_to_summarize": 0
+      },
+      "hit_total": 2,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-a0c"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "CHANGES",
+      "line": 240,
+      "raw": "**07:10** Frontend: `MeetingCard.jsx` and `voiceBot.js` add manual summarize trigger + 3-minute cooldown.",
+      "short": "Frontend: `MeetingCard.jsx` and `voiceBot.js` add manual summarize trigger + 3-minute cooldown.",
+      "idx": 117,
+      "keywords": [
+        "MeetingCard.jsx",
+        "voiceBot.js",
+        "Frontend:",
+        "add",
+        "manual"
+      ],
+      "hits": {
+        "MeetingCard.jsx": 0,
+        "voiceBot.js": 3,
+        "Frontend:": 8,
+        "add": 415,
+        "manual": 73
+      },
+      "hit_total": 499,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-ap6"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "CHANGES",
+      "line": 241,
+      "raw": "**07:10** Backend: `crm/controllers/voicebot.js`, `crm/routes/voicebot.js` add manual summarize endpoint (PMO assign + notify enqueue).",
+      "short": "Backend: `crm/controllers/voicebot.js`, `crm/routes/voicebot.js` add manual summarize endpoint (PMO assign + notify enqueue).",
+      "idx": 118,
+      "keywords": [
+        "/controllers/voicebot.js",
+        "/routes/voicebot.js",
+        "crm/controllers/voicebot.js",
+        "crm/routes/voicebot.js"
+      ],
+      "hits": {
+        "/controllers/voicebot.js": 0,
+        "/routes/voicebot.js": 2,
+        "crm/controllers/voicebot.js": 0,
+        "crm/routes/voicebot.js": 2
+      },
+      "hit_total": 4,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-97r"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "CHANGES",
+      "line": 242,
+      "raw": "**07:10** Tests/docs: `__tests__/controllers/*`, `__tests__/setup.js`, plus `docs/VOICEBOT_API*.md`.",
+      "short": "Tests/docs: `__tests__/controllers/*`, `__tests__/setup.js`, plus `docs/VOICEBOT_API*.md`.",
+      "idx": 119,
+      "keywords": [
+        "/docs:",
+        "/controllers/",
+        "/setup.js",
+        "/VOICEBOT_API",
+        "__tests__/controllers/*",
+        "__tests__/setup.js"
+      ],
+      "hits": {
+        "/docs:": 0,
+        "/controllers/": 2,
+        "/setup.js": 0,
+        "/VOICEBOT_API": 0,
+        "__tests__/controllers/*": 0,
+        "__tests__/setup.js": 0
+      },
+      "hit_total": 2,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-eyu"
+    },
+    {
+      "date": "2026-02-07",
+      "section": "CHANGES",
+      "line": 243,
+      "raw": "**08:32** Frontend: centered icon rendering for circle action buttons in `MeetingCard.jsx` to avoid baseline drift.",
+      "short": "Frontend: centered icon rendering for circle action buttons in `MeetingCard.jsx` to avoid baseline drift.",
+      "idx": 120,
+      "keywords": [
+        "MeetingCard.jsx",
+        "Frontend:",
+        "centered",
+        "icon",
+        "rendering"
+      ],
+      "hits": {
+        "MeetingCard.jsx": 0,
+        "Frontend:": 8,
+        "centered": 0,
+        "icon": 246,
+        "rendering": 0
+      },
+      "hit_total": 254,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-jfi"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "PROBLEM SOLVED",
+      "line": 247,
+      "raw": "**13:35** Session project assignment notifies were emitted on rename and lacked change context; notifies now fire only when `project_id` actually changes and include old/new project ids.",
+      "short": "Session project assignment notifies were emitted on rename and lacked change context; notifies now fire only when `project_id` actually changes and include old/new project ids.",
+      "idx": 121,
+      "keywords": [
+        "/new",
+        "project_id",
+        "Session",
+        "project",
+        "assignment"
+      ],
+      "hits": {
+        "/new": 2,
+        "project_id": 208,
+        "Session": 500,
+        "project": 500,
+        "assignment": 10
+      },
+      "hit_total": 1220,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-jyr"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "PROBLEM SOLVED",
+      "line": 248,
+      "raw": "**22:00** Local notify hooks could fail silently (detached spawn with ignored stdio), making production debugging difficult; hook runner now logs starts and spawn failures with `event`, `cmd`, `session_id`, and payload context.",
+      "short": "Local notify hooks could fail silently (detached spawn with ignored stdio), making production debugging difficult; hook runner now logs starts and spawn failures with `event`, `cmd`, `session_id`, and payload context.",
+      "idx": 122,
+      "keywords": [
+        "event",
+        "cmd",
+        "session_id",
+        "notify hooks"
+      ],
+      "hits": {
+        "event": 500,
+        "cmd": 6,
+        "session_id": 305,
+        "notify hooks": 0
+      },
+      "hit_total": 811,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-b3v"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 251,
+      "raw": "**13:35** Introduced `session_ready_to_summarize` notify event when both conditions are met: session is closed and `project_id` is assigned (emitted on close or on project assignment for already closed sessions).",
+      "short": "Introduced `session_ready_to_summarize` notify event when both conditions are met: session is closed and `project_id` is assigned (emitted on close or on project assignment for already closed sessions).",
+      "idx": 123,
+      "keywords": [
+        "session_ready_to_summarize",
+        "project_id",
+        "Introduced",
+        "notify",
+        "event"
+      ],
+      "hits": {
+        "session_ready_to_summarize": 0,
+        "project_id": 208,
+        "Introduced": 0,
+        "notify": 31,
+        "event": 500
+      },
+      "hit_total": 739,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-vq4"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 252,
+      "raw": "**13:35** Added an optional local notify hooks runner (YAML/JSON config) so events can trigger background commands (for example StratoProject summarization) without blocking the queue worker.",
+      "short": "Added an optional local notify hooks runner (YAML/JSON config) so events can trigger background commands (for example StratoProject summarization) without blocking the queue worker.",
+      "idx": 124,
+      "keywords": [
+        "/JSON",
+        "notify hooks",
+        "optional",
+        "local",
+        "notify"
+      ],
+      "hits": {
+        "/JSON": 0,
+        "notify hooks": 0,
+        "optional": 352,
+        "local": 298,
+        "notify": 31
+      },
+      "hit_total": 681,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-qeb"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "CHANGES",
+      "line": 255,
+      "raw": "**13:35** Added `VOICE_BOT_NOTIFY_HOOKS_CONFIG` to `.env.example` and added `notifies.hooks.yaml` sample config.",
+      "short": "Added `VOICE_BOT_NOTIFY_HOOKS_CONFIG` to `.env.example` and added `notifies.hooks.yaml` sample config.",
+      "idx": 125,
+      "keywords": [
+        "VOICE_BOT_NOTIFY_HOOKS_CONFIG",
+        ".env.example",
+        "notifies.hooks.yaml"
+      ],
+      "hits": {
+        "VOICE_BOT_NOTIFY_HOOKS_CONFIG": 0,
+        ".env.example": 7,
+        "notifies.hooks.yaml": 0
+      },
+      "hit_total": 7,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-61m"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "CHANGES",
+      "line": 256,
+      "raw": "**22:00** Updated the sample hooks config to use an absolute `uv` path to avoid PATH differences under PM2/systemd.",
+      "short": "Updated the sample hooks config to use an absolute `uv` path to avoid PATH differences under PM2/systemd.",
+      "idx": 126,
+      "keywords": [
+        "/systemd.",
+        "uv",
+        "sample",
+        "hooks",
+        "config"
+      ],
+      "hits": {
+        "/systemd.": 0,
+        "uv": 144,
+        "sample": 20,
+        "hooks": 28,
+        "config": 253
+      },
+      "hit_total": 445,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-kks"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "CHANGES",
+      "line": 257,
+      "raw": "**13:35** Ignored fast-agent local artifacts (`agents/.venv/`, `agents/logs/`) in `.gitignore`.",
+      "short": "Ignored fast-agent local artifacts (`agents/.venv/`, `agents/logs/`) in `.gitignore`.",
+      "idx": 127,
+      "keywords": [
+        "/.venv/",
+        "/logs/",
+        "agents/.venv/",
+        "agents/logs/",
+        ".gitignore"
+      ],
+      "hits": {
+        "/.venv/": 0,
+        "/logs/": 0,
+        "agents/.venv/": 0,
+        "agents/logs/": 0,
+        ".gitignore": 5
+      },
+      "hit_total": 5,
+      "pre_gap": "PARTIAL",
+      "bd_issue": "copilot-7l7"
+    },
+    {
+      "date": "2026-02-06",
+      "section": "CHANGES",
+      "line": 258,
+      "raw": "**13:35** Bumped frontend package version to `0.0.39` (`app/package.json`).",
+      "short": "Bumped frontend package version to `0.0.39` (`app/package.json`).",
+      "idx": 128,
+      "keywords": [
+        "/package.json",
+        "0.0.39",
+        "app/package.json"
+      ],
+      "hits": {
+        "/package.json": 8,
+        "0.0.39": 0,
+        "app/package.json": 1
+      },
+      "hit_total": 9,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-g44"
+    },
+    {
+      "date": "2026-02-05",
+      "section": "PROBLEM SOLVED",
+      "line": 262,
+      "raw": "Closed sessions could not accept web audio uploads, blocking late chunks from entering the processing pipeline.",
+      "short": "Closed sessions could not accept web audio uploads, blocking late chunks from entering the processing pipeline.",
+      "idx": 129,
+      "keywords": [
+        "Closed",
+        "sessions",
+        "could",
+        "not",
+        "accept"
+      ],
+      "hits": {
+        "Closed": 46,
+        "sessions": 459,
+        "could": 4,
+        "not": 479,
+        "accept": 28
+      },
+      "hit_total": 1016,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-sve"
+    },
+    {
+      "date": "2026-02-05",
+      "section": "FEATURE IMPLEMENTED",
+      "line": 265,
+      "raw": "None.",
+      "short": "None.",
+      "idx": 130,
+      "keywords": [
+        "None."
+      ],
+      "hits": {
+        "None.": 0
+      },
+      "hit_total": 0,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-mes"
+    },
+    {
+      "date": "2026-02-05",
+      "section": "CHANGES",
+      "line": 268,
+      "raw": "Allow `/voicebot/upload_audio` to accept inactive sessions unless `is_deleted=true` (`crm/controllers/audio_upload.js`).",
+      "short": "Allow `/voicebot/upload_audio` to accept inactive sessions unless `is_deleted=true` (`crm/controllers/audio_upload.js`).",
+      "idx": 131,
+      "keywords": [
+        "/voicebot/upload_audio",
+        "/controllers/audio_upload.js",
+        "is_deleted=true",
+        "crm/controllers/audio_upload.js"
+      ],
+      "hits": {
+        "/voicebot/upload_audio": 1,
+        "/controllers/audio_upload.js": 0,
+        "is_deleted=true": 0,
+        "crm/controllers/audio_upload.js": 0
+      },
+      "hit_total": 1,
+      "pre_gap": "GAP",
+      "bd_issue": "copilot-16h"
+    },
+    {
+      "date": "2026-02-05",
+      "section": "CHANGES",
+      "line": 269,
+      "raw": "Keep the upload UI available for closed sessions and disable only when the session is deleted (`app/src/components/voicebot/SessionStatusWidget.jsx`).",
+      "short": "Keep the upload UI available for closed sessions and disable only when the session is deleted (`app/src/components/voicebot/SessionStatusWidget.jsx`).",
+      "idx": 132,
+      "keywords": [
+        "/src/components/voicebot/SessionStatusWidget.jsx",
+        "app/src/components/voicebot/SessionStatusWidget.jsx",
+        "/session"
+      ],
+      "hits": {
+        "/src/components/voicebot/SessionStatusWidget.jsx": 0,
+        "app/src/components/voicebot/SessionStatusWidget.jsx": 0,
+        "/session": 112
+      },
+      "hit_total": 112,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-4qs"
+    },
+    {
+      "date": "2026-02-05",
+      "section": "CHANGES",
+      "line": 270,
+      "raw": "Bumped frontend package version to `0.0.38` (`app/package.json`).",
+      "short": "Bumped frontend package version to `0.0.38` (`app/package.json`).",
+      "idx": 133,
+      "keywords": [
+        "/package.json",
+        "0.0.38",
+        "app/package.json"
+      ],
+      "hits": {
+        "/package.json": 8,
+        "0.0.38": 0,
+        "app/package.json": 1
+      },
+      "hit_total": 9,
+      "pre_gap": "LIKELY_COVERED",
+      "bd_issue": "copilot-d9l"
+    }
+  ]
+}

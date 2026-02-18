@@ -1353,11 +1353,17 @@
                 }
             } catch {}
         }
+        function getMainAppSessionPath(sid) {
+            const safeId = String(sid || '').trim();
+            if (!safeId) return '/voice/session';
+            return `/voice/session/${encodeURIComponent(safeId)}`;
+        }
         function openSessionInMainApp(sid) {
             try {
                 if (!sid || PAGE_MODE !== 'host') return;
-                const url = new URL(`/session/${encodeURIComponent(sid)}`, location.origin).toString();
-                if (location.pathname.includes(`/session/${encodeURIComponent(sid)}`)) return;
+                const sessionPath = getMainAppSessionPath(sid);
+                const url = new URL(sessionPath, location.origin).toString();
+                if (location.pathname.includes(sessionPath)) return;
                 if (openSessionLinkInHost(url)) return;
                 const target = (window.top && window.top !== window) ? window.top : window;
                 target.location.assign(url);
@@ -1441,7 +1447,7 @@
                 const sessionName = String(newSess?.name || newSess?.session_name || newSess?.title || '').trim();
                 const compactName = sessionName.replace(/\s+/g, ' ').trim();
                 const shortName = compactName.length > 28 ? `${compactName.slice(0, 25)}…` : compactName;
-                const link = `/session/${encodeURIComponent(newId)}`;
+                const link = getMainAppSessionPath(newId);
                 if (sessionName) {
                     setSessionNameEverywhere(sessionName);
                     persistSessionMeta(newId, sessionName, { projectId: '', projectName: '' });
@@ -1959,7 +1965,7 @@
 	            try {
                 const TOOLTIP_BY_ID = {
                     'start-btn': 'New: create a brand-new active session and begin recording.',
-                    'record-btn': 'Rec: record into active session (activates page session on /session/:id).',
+                    'record-btn': 'Rec: record into active session (activates page session on /voice/session/:id).',
                     'chunk-btn': 'Cut the current chunk right now.',
                     'pause-btn': 'Pause recording (finalizes current chunk and uploads).',
                     'btn-done-button': 'Close only the page session from the current session card.',
@@ -6220,7 +6226,7 @@
                 // Use the currently configured base URL (same-origin by default) so dev links stay on dev.
                 const baseInput = document.getElementById('base-url');
                 const base = (baseInput && 'value' in baseInput ? String(baseInput.value || '').trim() : '') || API_BASE || location.origin;
-	            const url = new URL(`/session/${encodeURIComponent(safeSid)}`, base.replace(/\/+$/, '') + '/').toString();
+	            const url = new URL(getMainAppSessionPath(safeSid), base.replace(/\/+$/, '') + '/').toString();
 	            try {
                     if (window.top && window.top !== window) {
                         if (openSessionLinkInWindow(window.top, url)) return;

@@ -9,10 +9,17 @@ import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb } from '../../../services/db.js';
+import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const router = Router();
 const logger = getLogger();
+
+const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> =>
+    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+
+const runtimeMessageQuery = (query: Record<string, unknown>): Record<string, unknown> =>
+    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
 
 /**
  * Extended Express Request with voicebot-specific fields
@@ -47,12 +54,15 @@ router.post('/get', async (req: Request, res: Response) => {
         if (!session_id) {
             return res.status(400).json({ error: "session_id is required" });
         }
+        if (!ObjectId.isValid(String(session_id))) {
+            return res.status(400).json({ error: "Invalid session_id" });
+        }
 
         // Get session with transcription data
-        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(runtimeSessionQuery({
             _id: new ObjectId(session_id),
             is_deleted: { $ne: true }
-        });
+        }));
 
         if (!session) {
             return res.status(404).json({ error: "Session not found" });
@@ -74,9 +84,9 @@ router.post('/get', async (req: Request, res: Response) => {
         }
 
         // Get messages with transcriptions
-        const messages = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).find({
+        const messages = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(runtimeMessageQuery({
             session_id: new ObjectId(session_id)
-        }).sort({ timestamp: 1 }).toArray();
+        })).sort({ timestamp: 1 }).toArray();
 
         // Build transcription text from messages
         const transcriptionParts: string[] = [];
@@ -119,24 +129,27 @@ router.post('/update_message', async (req: Request, res: Response) => {
         if (!message_id) {
             return res.status(400).json({ error: "message_id is required" });
         }
+        if (!ObjectId.isValid(String(message_id))) {
+            return res.status(400).json({ error: "Invalid message_id" });
+        }
         if (typeof transcription_text !== 'string') {
             return res.status(400).json({ error: "transcription_text must be a string" });
         }
 
         // Get message to find session
-        const message = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne({
+        const message = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(runtimeMessageQuery({
             _id: new ObjectId(message_id)
-        });
+        }));
 
         if (!message) {
             return res.status(404).json({ error: "Message not found" });
         }
 
         // Get session to check permissions
-        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(runtimeSessionQuery({
             _id: message.session_id,
             is_deleted: { $ne: true }
-        });
+        }));
 
         if (!session) {
             return res.status(404).json({ error: "Session not found" });
@@ -159,7 +172,7 @@ router.post('/update_message', async (req: Request, res: Response) => {
 
         // Update message transcription
         await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
-            { _id: new ObjectId(message_id) },
+            runtimeMessageQuery({ _id: new ObjectId(message_id) }),
             {
                 $set: {
                     'transcription.text': transcription_text,
@@ -192,11 +205,14 @@ router.post('/retry', async (req: Request, res: Response) => {
         if (!session_id) {
             return res.status(400).json({ error: "session_id is required" });
         }
+        if (!ObjectId.isValid(String(session_id))) {
+            return res.status(400).json({ error: "Invalid session_id" });
+        }
 
-        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(runtimeSessionQuery({
             _id: new ObjectId(session_id),
             is_deleted: { $ne: true }
-        });
+        }));
 
         if (!session) {
             return res.status(404).json({ error: "Session not found" });
@@ -211,7 +227,7 @@ router.post('/retry', async (req: Request, res: Response) => {
         // TODO: Queue transcription retry via BullMQ
         // Mark session for re-transcription
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(session_id) },
+            runtimeSessionQuery({ _id: new ObjectId(session_id) }),
             {
                 $set: {
                     to_transcribe: true,
