@@ -709,6 +709,8 @@
         async function waitForAllPendingUploads(opts = {}) {
             const settleMs = Number.isFinite(opts.settleMs) ? opts.settleMs : 2000;
             const pollMs = Number.isFinite(opts.pollMs) ? opts.pollMs : 500;
+            const maxWaitMs = Number.isFinite(opts.maxWaitMs) ? opts.maxWaitMs : 120000;
+            const startedAt = Date.now();
             let lastCount = -1;
             let lastChangeTs = Date.now();
             while (true) {
@@ -718,8 +720,12 @@
                 if (count !== lastCount) { lastCount = count; lastChangeTs = Date.now(); }
 
                 let pending = 0;
+                let inFlight = 0;
+                let startedNow = 0;
+
                 for (const li of lis) {
-                    if (li?.dataset?.silent === '1' || li?.dataset?.corrupt === '1') {
+                    const trackKind = String(li?.dataset?.trackKind || '').trim();
+                    if (li?.dataset?.silent === '1' || li?.dataset?.corrupt === '1' || trackKind === 'full_track') {
                         try { if (li.dataset) delete li.dataset.uploading; } catch {}
                         continue;
                     }
@@ -727,28 +733,67 @@
                         try { if (li.dataset) delete li.dataset.uploading; } catch {}
                         continue;
                     }
+
                     pending += 1;
+
+                    if (li?.dataset?.uploading === '1') {
+                        inFlight += 1;
+                        continue;
+                    }
+                    if (li?.dataset?.autoUploadAttempted === '1') continue;
+
                     const upBtn = li.querySelector('button[data-role="upload"]');
-                    if (!upBtn || upBtn.disabled) continue;
-                    if (li.dataset && li.dataset.uploading === '1') continue;
-                    try { if (li.dataset) li.dataset.uploading = '1'; } catch {}
+                    if (!upBtn || upBtn.disabled) {
+                        try { if (li?.dataset) li.dataset.autoUploadAttempted = '1'; } catch {}
+                        continue;
+                    }
+
+                    startedNow += 1;
+                    inFlight += 1;
+                    try {
+                        if (li?.dataset) {
+                            li.dataset.uploading = '1';
+                            li.dataset.autoUploadAttempted = '1';
+                        }
+                    } catch {}
+
                     try {
                         if (li._blob) {
                             uploadBlobForLi(li._blob, li, upBtn, null, { silent: true })
                                 .finally(() => {
-                                    try { if (!isLiUploaded(li) && li.dataset) delete li.dataset.uploading; } catch {}
+                                    try { if (li?.dataset) delete li.dataset.uploading; } catch {}
                                 });
                         } else {
                             upBtn.click();
-                            try { if (!isLiUploaded(li) && li.dataset) delete li.dataset.uploading; } catch {}
+                            try { if (li?.dataset) delete li.dataset.uploading; } catch {}
                         }
                     } catch {
-                        try { if (li.dataset) delete li.dataset.uploading; } catch {}
+                        try { if (li?.dataset) delete li.dataset.uploading; } catch {}
                     }
                 }
 
                 const settled = (Date.now() - lastChangeTs) >= settleMs;
-                if (pending === 0 && settled) return 'all-uploaded';
+                if (pending === 0 && settled) {
+                    return { status: 'all-uploaded', pending: 0, failed: 0 };
+                }
+
+                if (startedNow === 0 && inFlight === 0 && settled) {
+                    const failed = lis.filter((li) => {
+                        const trackKind = String(li?.dataset?.trackKind || '').trim();
+                        if (trackKind === 'full_track') return false;
+                        if (li?.dataset?.silent === '1' || li?.dataset?.corrupt === '1') return false;
+                        return !isLiUploaded(li);
+                    }).length;
+                    return {
+                        status: failed > 0 ? 'pending-manual' : 'all-uploaded',
+                        pending: failed,
+                        failed,
+                    };
+                }
+
+                if ((Date.now() - startedAt) >= maxWaitMs) {
+                    return { status: 'timeout', pending, failed: pending };
+                }
 
                 await sleepMs(pollMs);
             }
@@ -3236,6 +3281,62 @@
 	            if (!keepSession) archiveTrackSessionId = '';
 	        }
 
+	        function buildArchiveSegmentFileName(seg) {
+	            const ext = guessAudioExtFromMime(seg?.blob?.type || seg?.mimeType || '');
+	            const micLabel = Number.isFinite(seg?.mic) && seg.mic > 0 ? `mic${seg.mic}` : String(seg?.key || 'track');
+	            const seq = String(seg?.seq || 0).padStart(3, '0');
+	            return `full-${micLabel}-seg${seq}${ext}`;
+	        }
+
+	        function ensureArchiveSegmentListItem(seg, opts = {}) {
+	            try {
+	                if (!seg || seg._li) return seg?._li || null;
+	                const { list, doc } = resolveChunkListTarget();
+	                if (!list) return null;
+	                const sid = String(opts?.sessionId || archiveTrackSessionId || getSessionIdValue() || '').trim();
+	                const fileName = buildArchiveSegmentFileName(seg);
+	                const startedAtMs = Number.isFinite(seg?.startedAtMs) ? Math.max(0, Math.round(seg.startedAtMs)) : 0;
+	                const endedRaw = Number.isFinite(seg?.endedAtMs) ? Math.max(0, Math.round(seg.endedAtMs)) : 0;
+	                const endedAtMs = Math.max(endedRaw || startedAtMs, startedAtMs);
+	                const durationMs = Math.max(0, endedAtMs - startedAtMs);
+	                const label = `${fileName} (${(durationMs / 1000).toFixed(1)}s)`;
+	                const { li, upBtn } = createChunkListItem(seg.blob, label, null, fileName, doc);
+	                try {
+	                    li.dataset.trackKind = 'full_track';
+	                    li.dataset.trackKey = String(seg?.key || '');
+	                    li.dataset.sessionId = sid;
+	                    if (Number.isFinite(seg?.mic) && seg.mic > 0) li.dataset.mic = String(seg.mic);
+	                    if (startedAtMs > 0) li.dataset.startedAtMs = String(startedAtMs);
+	                    if (endedAtMs > 0) li.dataset.endedAtMs = String(endedAtMs);
+	                    if (durationMs > 0) li.dataset.durationMs = String(durationMs);
+	                    li.dataset.autoUploadAttempted = seg?.autoUploadAttempted ? '1' : '0';
+	                } catch {}
+	                try {
+	                    if (li?._statusEl) {
+	                        li._statusEl.textContent = ' · full-track';
+	                        li._statusEl.style.color = '#0f766e';
+	                    }
+	                } catch {}
+	                try {
+	                    li._onUploadSuccess = () => {
+	                        try { seg.uploaded = true; seg.uploadError = ''; } catch {}
+	                    };
+	                    li._onUploadError = (msg) => {
+	                        try { seg.uploaded = false; seg.uploadError = String(msg || ''); } catch {}
+	                    };
+	                } catch {}
+	                list.insertBefore(li, list.firstChild);
+	                seg._li = li;
+	                seg._upBtn = upBtn || null;
+	                seg.fileName = fileName;
+	                seg.durationMs = durationMs;
+	                return li;
+	            } catch (e) {
+	                console.warn('[archive] list item create failed', e);
+	                return null;
+	            }
+	        }
+
 	        async function stopArchiveTrackRecorders(opts = {}) {
 	            const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 5000;
 	            const pollMs = Number.isFinite(opts.pollMs) ? opts.pollMs : 60;
@@ -3294,10 +3395,12 @@
 	                                startedAtMs: Number(r?.startedAtMs || 0),
 	                                endedAtMs: Date.now(),
 	                                uploaded: false,
+	                                autoUploadAttempted: false,
 	                                uploadError: ''
 	                            };
 	                            if (!Array.isArray(archiveTrackSegmentsByKey[key])) archiveTrackSegmentsByKey[key] = [];
 	                            archiveTrackSegmentsByKey[key].push(item);
+	                            try { ensureArchiveSegmentListItem(item, { sessionId: archiveTrackSessionId }); } catch {}
 	                            produced += 1;
 	                        }
 	                    }
@@ -3369,11 +3472,13 @@
 
 	        async function uploadArchiveTrackSegments(sessionId, opts = {}) {
 	            const sid = String(sessionId || archiveTrackSessionId || '').trim();
-	            if (!sid) return { total: 0, uploaded: 0, failed: 0 };
+	            if (!sid) return { total: 0, uploaded: 0, failed: 0, skipped: 0 };
 	            let total = 0;
 	            let uploaded = 0;
 	            let failed = 0;
+	            let skipped = 0;
 	            const reason = String(opts.reason || '');
+	            const autoMode = opts?.autoMode !== false;
 
 	            const keys = Object.keys(archiveTrackSegmentsByKey || {}).sort();
 	            for (const key of keys) {
@@ -3384,40 +3489,60 @@
 	                        seg.uploaded = true;
 	                        continue;
 	                    }
+	                    if (autoMode && seg.autoUploadAttempted) {
+	                        skipped += 1;
+	                        continue;
+	                    }
+	                    if (autoMode) {
+	                        seg.autoUploadAttempted = true;
+	                        try { if (seg._li?.dataset) seg._li.dataset.autoUploadAttempted = '1'; } catch {}
+	                    }
 	                    total += 1;
-	                    const ext = guessAudioExtFromMime(seg.blob.type || seg.mimeType || '');
-	                    const micLabel = Number.isFinite(seg.mic) && seg.mic > 0 ? `mic${seg.mic}` : key;
-	                    const fileName = `full-${micLabel}-seg${String(seg.seq || 0).padStart(3, '0')}${ext}`;
-	                    const speaker = Number.isFinite(seg.mic) && seg.mic > 0 ? inferSpeakerForMicIndex(seg.mic) : '';
-                        const startedAtMs = Number.isFinite(seg.startedAtMs) ? Math.max(0, Math.round(seg.startedAtMs)) : 0;
-                        const endedAtMsRaw = Number.isFinite(seg.endedAtMs) ? Math.max(0, Math.round(seg.endedAtMs)) : 0;
-                        const endedAtMs = Math.max(endedAtMsRaw || startedAtMs, startedAtMs);
-                        const durationMs = Math.max(0, endedAtMs - startedAtMs);
+	                    const li = ensureArchiveSegmentListItem(seg, { sessionId: sid });
+	                    const upBtn = seg?._upBtn || li?.querySelector?.('button[data-role="upload"]') || null;
+	                    let ok = false;
 	                    try {
-	                        await uploadBlob(seg.blob, fileName, {
-                                sessionId: sid,
-                                speaker,
-                                allowWhileUnloading: true,
-                                meta: {
-                                    chunk_started_at_ms: startedAtMs,
-                                    chunk_ended_at_ms: endedAtMs,
-                                    chunk_duration_ms: durationMs,
-                                    chunk_track_kind: 'full_track',
-                                    chunk_track_key: key,
-                                    chunk_track_mic: Number.isFinite(seg.mic) && seg.mic > 0 ? seg.mic : ''
-                                }
-                            });
+	                        if (li) {
+	                            ok = await uploadBlobForLi(seg.blob, li, upBtn, null, { silent: true });
+	                        } else {
+	                            const fileName = buildArchiveSegmentFileName(seg);
+	                            const speaker = Number.isFinite(seg.mic) && seg.mic > 0 ? inferSpeakerForMicIndex(seg.mic) : '';
+	                            const startedAtMs = Number.isFinite(seg.startedAtMs) ? Math.max(0, Math.round(seg.startedAtMs)) : 0;
+	                            const endedAtMsRaw = Number.isFinite(seg.endedAtMs) ? Math.max(0, Math.round(seg.endedAtMs)) : 0;
+	                            const endedAtMs = Math.max(endedAtMsRaw || startedAtMs, startedAtMs);
+	                            const durationMs = Math.max(0, endedAtMs - startedAtMs);
+	                            await uploadBlob(seg.blob, fileName, {
+	                                sessionId: sid,
+	                                speaker,
+	                                allowWhileUnloading: true,
+	                                meta: {
+	                                    chunk_started_at_ms: startedAtMs,
+	                                    chunk_ended_at_ms: endedAtMs,
+	                                    chunk_duration_ms: durationMs,
+	                                    chunk_track_kind: 'full_track',
+	                                    chunk_track_key: key,
+	                                    chunk_track_mic: Number.isFinite(seg.mic) && seg.mic > 0 ? seg.mic : ''
+	                                }
+	                            });
+	                            ok = true;
+	                        }
+	                    } catch (e) {
+	                        ok = false;
+	                        seg.uploadError = String(e || '');
+	                    }
+	                    if (ok) {
 	                        seg.uploaded = true;
 	                        seg.uploadError = '';
 	                        uploaded += 1;
-	                    } catch (e) {
-	                        seg.uploadError = String(e || '');
+	                    } else {
+	                        seg.uploaded = false;
 	                        failed += 1;
+	                        if (!seg.uploadError) seg.uploadError = 'upload_failed';
 	                        console.warn('[archive] upload failed', { reason, key, seq: seg.seq, error: seg.uploadError });
 	                    }
 	                }
 	            }
-	            return { total, uploaded, failed };
+	            return { total, uploaded, failed, skipped };
 	        }
 
         function getHostSessionIdFromPath() {
@@ -3581,13 +3706,26 @@
 
                 try { await stopArchiveTrackRecorders({ reason: doneReason, timeoutMs: 5000, pollMs: 60 }); } catch (e) { console.warn('[Done] stop archive failed (continuing):', e); }
 
-                // Wait for final chunks + upload (all tracks, unbounded).
-                try { await waitForAllPendingUploads({ settleMs: 2000, pollMs: 500 }); } catch {}
+                // Wait for final chunk uploads; each chunk is auto-attempted only once.
+                try {
+                    const pendingResult = await waitForAllPendingUploads({ settleMs: 2000, pollMs: 500, maxWaitMs: 120000 });
+                    if (pendingResult && pendingResult.status && pendingResult.status !== 'all-uploaded') {
+                        console.warn('[Done] some chunk uploads require manual retry', pendingResult);
+                        try {
+                            const failed = Number(pendingResult.failed || pendingResult.pending || 0);
+                            if (failed > 0) showFabToast(`Chunk upload failed (${failed}). Use Upload button.`, 3000);
+                        } catch {}
+                    }
+                } catch {}
 
                 // Upload full per-mic tracks (created from Start->Done segments incl. mic switches).
-                const archiveUpload = await uploadArchiveTrackSegments(prevSid, { reason: doneReason });
+                const archiveUpload = await uploadArchiveTrackSegments(prevSid, { reason: doneReason, autoMode: true });
                 if ((archiveUpload?.failed || 0) > 0) {
-                    throw new Error(`Full-track upload failed: uploaded=${archiveUpload?.uploaded || 0}, failed=${archiveUpload?.failed || 0}`);
+                    console.warn('[Done] archive upload has failed segments; waiting for manual retries', archiveUpload);
+                    try {
+                        const failed = Number(archiveUpload?.failed || 0);
+                        showFabToast(`Full-track upload failed (${failed}). Use Upload button.`, 3200);
+                    } catch {}
                 }
 
                 // Close session (best-effort).
@@ -5816,7 +5954,11 @@
             uploadOpts.allowWhileUnloading = true;
             await uploadBlob(blob, fname, uploadOpts);
             success = true;
-            if (li && li.dataset) li.dataset.uploaded = '1';
+            if (li && li.dataset) {
+                li.dataset.uploaded = '1';
+                delete li.dataset.uploadError;
+            }
+            try { if (typeof li?._onUploadSuccess === 'function') li._onUploadSuccess(); } catch {}
             // Replace the upload button with a checkmark in-place
             if (upBtn) {
                 upBtn.textContent = '✓';
@@ -5833,6 +5975,8 @@
                 console.warn('[uploadAudio] suppressed error during unload', msg);
                 return success;
             }
+            if (li?.dataset) li.dataset.uploadError = msg;
+            try { if (typeof li?._onUploadError === 'function') li._onUploadError(msg); } catch {}
             if (statusMark) statusMark.textContent = '✗';
             if (silent) {
                 console.warn('Upload error (silent)', e);

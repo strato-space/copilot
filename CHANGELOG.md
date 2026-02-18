@@ -7,6 +7,7 @@
 - **11:08** Prod runtime filtering treated only exact `runtime_tag=prod`, so `prod-*` session family visibility and access were inconsistent between pages.
 - **11:09** MCP agent URL in production UI could be missing in built envs, triggering `Не настроен MCP URL агента` when requesting AI title.
 - **11:10** Passive WebRTC monitor restore could request microphone permission immediately on page load in Copilot voice UI.
+- **11:40** `Done` flow could repeatedly auto-retry previously failed uploads, especially full-track chunks, making recovery ambiguous.
 
 ### FEATURE IMPLEMENTED
 - **11:03** Hardened Voice runtime bootstrap: `voicebot_runtime/voicebot-tgbot.js` now loads dotenv via explicit path/override (`DOTENV_CONFIG_PATH`, `DOTENV_CONFIG_OVERRIDE`) so cutover runtime always applies `voicebot_runtime/.env.prod-cutover` values.
@@ -15,6 +16,9 @@
 - **11:08** Implemented prod-family runtime model (`prod`, `prod-*`) in backend/runtime scope utilities and session/message queries.
 - **11:09** Added MCP URL fallback chain for frontend voice flows (`window.agents_api_url` -> `VITE_AGENTS_API_URL` -> `http://127.0.0.1:8722`) and aligned tool call to `generate_session_title`.
 - **11:10** Added passive mic-permission gate in WebRTC boot flow to skip monitor restore until microphone permission is already granted.
+- **11:40** Added one-pass upload policy for pending chunks in `Done`: after one automatic pass, failed chunks enter manual retry state (`pending-manual`) with explicit controls.
+- **11:40** Added full-track archive tracking in WebRTC (new metadata + naming + UI marker `· full-track`, with metadata `trackKind: 'full_track'`).
+- **11:40** Relaxed task creation validation in voicebot runtime task UI by removing hard requirement for `task_type_id` in `TasksTable` and ticket preview modal.
 
 ### CHANGES
 - **11:03** Extended backend socket integration in upload pipeline (`backend/src/api/routes/voicebot/uploads.ts`, `backend/src/api/socket/voicebot.ts`, `backend/src/index.ts`) to emit session-scoped updates immediately after insert/update.
@@ -24,6 +28,12 @@
 - **11:09** Updated voice session APIs/controllers for prod-family compatibility and upload tagging (`backend/src/api/routes/voicebot/sessions.ts`, `backend/src/api/routes/voicebot/messageHelpers.ts`, `backend/src/api/routes/voicebot/uploads.ts`, `voicebot_runtime/crm/controllers/voicebot.js`).
 - **11:09** Updated frontend + runtime MCP integration (`app/.env.production`, `app/src/store/voiceBotStore.ts`, `app/src/store/sessionsUIStore.ts`, `app/src/pages/operops/CRMPage.tsx`, `voicebot_runtime/app/src/store/sessionsUI.js`, `voicebot_runtime/services/setupMCPProxy.js`, `agents/agent-cards/generate_session_title_send.md`).
 - **11:10** Updated Google Sheet export runtime branching (`voicebot_runtime/voicebot/common_jobs/save_to_google_sheet.js`) and documented frontend-agent integration in `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md`.
+- **11:40** Updated `app/public/webrtc/webrtc-voicebot-lib.js`:
+  - `waitForAllPendingUploads` now uses bounded wait/timeout, returns structured status, and marks per-item `autoUploadAttempted`.
+  - `uploadArchiveTrackSegments` now skips previously auto-attempted full-track segments and supports one manual retry cycle.
+  - `buildArchiveSegmentFileName`/`ensureArchiveSegmentListItem` added for full-track chunk labeling and metadata storage (sessionId, mic, start/end, duration).
+- **11:40** Added regression test `app/__tests__/voice/webrtcDoneUploadPolicy.test.ts` for one-shot auto-upload policy and full-track separation.
+- **11:40** Updated task validation in `voicebot_runtime/app/src/components/voicebot/TasksTable.jsx` and `voicebot_runtime/app/src/components/voicebot/TicketsPreviewModal.jsx` so missing task type no longer blocks ticket creation.
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -31,6 +41,7 @@
 - **11:05** `cd app && npm test -- --runInBand __tests__/voice/webrtcMicPermissionBoot.test.ts`
 - **11:11** `cd backend && npm test -- --runInBand __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
 - **11:12** `cd app && npm test -- --runInBand __tests__/voice/webrtcMicPermissionBoot.test.ts`
+- **11:40** `cd app && npm test -- --runInBand __tests__/voice/webrtcDoneUploadPolicy.test.ts`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

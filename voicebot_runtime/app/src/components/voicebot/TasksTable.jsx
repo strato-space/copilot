@@ -239,7 +239,6 @@ const TasksTable = () => {
                 const missing = [];
                 if (!task.name || !task.name.trim()) missing.push('название');
                 if (!task.description || !task.description.trim()) missing.push('описание');
-                if (!task.task_type_id) missing.push('тип задачи');
                 if (!task.performer_id) missing.push('исполнитель');
                 if (!task.project_id) missing.push('проект');
                 if (!task.priority) missing.push('приоритет');

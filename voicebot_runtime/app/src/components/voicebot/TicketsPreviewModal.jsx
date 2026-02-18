@@ -94,10 +94,8 @@ const TicketsPreviewModal = () => {
         const invalidTickets = selectedTickets
             .map(t => {
                 const performerVal = getEditedValue(t.id, 'performer_id', t.performer_id);
-                const taskTypeVal = getEditedValue(t.id, 'task_type_id', t.task_type_id);
                 const missing = [];
                 if (!performerVal) missing.push('Исполнитель');
-                if (!taskTypeVal) missing.push('Тип задачи');
                 return missing.length ? { id: t.id, name: t.name, missing } : null;
             })
             .filter(Boolean);
