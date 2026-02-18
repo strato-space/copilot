@@ -162,4 +162,114 @@ describe('handleTranscribeJob', () => {
     expect(String(context.openai_key_mask || '')).toMatch(/\.{3}/);
     expect(String(context.error_code || '')).toBe('insufficient_quota');
   });
+
+  it('marks file_not_found and stores diagnostics when local file is missing', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const missingPath = '/tmp/copilot-transcribe-missing-file.webm';
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: missingPath,
+      message_timestamp: 1770489126,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'file_not_found',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    const updatePayload = messagesUpdateOne.mock.calls[messagesUpdateOne.mock.calls.length - 1]?.[1] as Record<string, unknown>;
+    const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    expect(setPayload.transcription_error).toBe('file_not_found');
+    expect(setPayload.to_transcribe).toBe(false);
+
+    const context = setPayload.transcription_error_context as Record<string, unknown>;
+    expect(String(context.server_name || '')).not.toBe('');
+    expect(String(context.file_path || '')).toBe(missingPath);
+    expect(String(context.error_code || '')).toBe('file_not_found');
+  });
+
+  it('marks openai_api_key_missing when key is absent', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      message_timestamp: 1770489126,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        return {};
+      },
+    });
+
+    delete process.env.OPENAI_API_KEY;
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'openai_api_key_missing',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+    expect(openAiCtorMock).not.toHaveBeenCalled();
+
+    const updatePayload = messagesUpdateOne.mock.calls[messagesUpdateOne.mock.calls.length - 1]?.[1] as Record<string, unknown>;
+    const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    expect(setPayload.transcription_error).toBe('openai_api_key_missing');
+    expect(setPayload.to_transcribe).toBe(false);
+
+    const context = setPayload.transcription_error_context as Record<string, unknown>;
+    expect(String(context.error_code || '')).toBe('openai_api_key_missing');
+  });
+
 });

@@ -122,6 +122,8 @@
 - **23:58** Upgraded `backend/src/workers/voicebot/handlers/transcribe.ts` from scaffold to a TS runtime handler for local uploaded audio (`file_path`) with OpenAI Whisper direct transcription, runtime-family filters (`prod` + `prod-*`), retry/backoff, and quota-aware error handling.
 - **23:58** Added transcription diagnostics parity in TS worker path: `transcription_error_context` now includes `server_name`, `openai_key_source`, `openai_key_mask`, `openai_api_key_env_file`, `file_path`, and `error_code`. Updated worker docs in `backend/src/workers/README.md` and migration evidence in `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`.
 
+- **00:16** Strengthened TS transcribe worker failure-path coverage: added `file_not_found` and `openai_api_key_missing` regression tests, validating diagnostic payload completeness (`server_name`, key mask/source, env file, file_path, error_code) and non-retry behavior for non-quota errors.
+
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
 - **11:05** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts`
@@ -204,6 +206,9 @@
 
 - **23:57** `cd backend && npm test -- --runInBand __tests__/voicebot/workerScaffoldHandlers.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts`
 - **23:57** `cd backend && npm run build`
+
+- **00:16** `cd backend && npm test -- --runInBand __tests__/voicebot/workerTranscribeHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
+- **00:16** `cd backend && npm run build`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
