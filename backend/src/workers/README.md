@@ -68,9 +68,9 @@ Copilot now includes a minimal worker scaffold to unblock migration work:
 - `src/workers/voicebot/handlers/processingLoop.ts` - runtime-scoped queue snapshot for pending work
 - `src/workers/voicebot/handlers/transcribe.ts` - runtime-safe transcribe handler (OpenAI Whisper direct path for local uploaded audio + quota diagnostics)
 - `src/workers/voicebot/handlers/categorize.ts` - runtime-safe categorize handler (OpenAI Responses path + retry/backoff + quota handling)
-- `src/workers/voicebot/handlers/finalization.ts` - runtime-safe finalization entrypoint scaffold
+- `src/workers/voicebot/handlers/finalization.ts` - runtime-safe finalization handler (OpenAI Responses dedup for custom processor outputs + no-custom-data short-circuit)
 
 This scaffold is intentionally minimal:
 - no long-running worker process is started from API runtime,
 - Telegram voice-link download path is not ported yet (handler currently expects local file_path),
-- finalization handler still runs in metadata-only scaffold mode.
+- full session-level postprocessing fanout and long-running worker bootstrap are still external to API runtime.

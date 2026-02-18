@@ -68,16 +68,17 @@ describe('voicebot worker scaffold handlers', () => {
     expect(result.reason).toBe('missing_transcription_text');
   });
 
-  it('finalization handler returns deferred scaffold result', async () => {
+  it('finalization handler skips with no_custom_data when no custom buckets exist', async () => {
     const sessionId = new ObjectId();
     const findOne = jest.fn(async () => ({
       _id: sessionId,
       is_messages_processed: true,
     }));
+    const updateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
-        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { findOne };
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { findOne, updateOne };
         return {};
       },
     });
@@ -85,7 +86,7 @@ describe('voicebot worker scaffold handlers', () => {
     const result = await handleFinalizationJob({ session_id: sessionId.toString() });
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
-    expect(result.reason).toBe('engine_not_integrated');
+    expect(result.reason).toBe('no_custom_data');
   });
 
   it('processing loop handler returns runtime snapshot counters', async () => {

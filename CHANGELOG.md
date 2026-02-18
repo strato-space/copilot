@@ -126,6 +126,8 @@
 
 - **00:22** Upgraded `backend/src/workers/voicebot/handlers/categorize.ts` from scaffold to TS runtime logic: OpenAI Responses categorization path, prompt/model contract (`VOICEBOT_CATEGORIZATION_MODEL`), retry/backoff, quota-aware `insufficient_quota`, and hard-stop `max_attempts_exceeded`.
 - **00:22** Added categorize worker regression suite `backend/__tests__/voicebot/workerCategorizeHandler.test.ts` (success normalization + quota retry + missing-key failure) and aligned scaffold contract test for runtime-safe session lookup.
+- **00:28** Upgraded `backend/src/workers/voicebot/handlers/finalization.ts` from scaffold to TS runtime logic: OpenAI Responses dedup (`VOICEBOT_FINALIZATION_MODEL`), explicit `no_custom_data` short-circuit, and error-state parity (`openai_api_key_missing`, `finalization_failed`) with runtime-family filters.
+- **00:28** Added finalization worker regression suite `backend/__tests__/voicebot/workerFinalizationHandler.test.ts` and updated scaffold coverage in `backend/__tests__/voicebot/workerScaffoldHandlers.test.ts`.
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -215,6 +217,8 @@
 
 - **00:22** `cd backend && npm test -- --runInBand __tests__/voicebot/workerCategorizeHandler.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
 - **00:22** `cd backend && npm run build`
+- **00:28** `cd backend && npm test -- --runInBand __tests__/voicebot/workerFinalizationHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts __tests__/voicebot/workerCategorizeHandler.test.ts`
+- **00:28** `cd backend && npm run build`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
