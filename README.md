@@ -83,6 +83,11 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - `docs/`, `specs/`, `projects/` for product documentation and specs.
 - `deploy/` Host-level Nginx config and notes.
 
+## Planning Artifacts
+- Synced voice migration planning docs are stored under `docs/voicebot-plan-sync/`.
+- Keep `docs/voicebot-plan-sync/implementation-draft-v1.md` and session-level transcript versioning specs (`edit-event-log-plan.md`, `gpt-4o-transcribe-diarize-plan.md`) current with migration decisions.
+- Session close/finalization outcomes for voice migration should be documented in `CHANGELOG.md` and mirrored in `AGENTS.md` + `README.md`.
+
 ## Versioning And Dependencies
 - SemVer policy: `MAJOR.MINOR.PATCH`.
 - `MAJOR`: breaking API or behavior contract changes.
