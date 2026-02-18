@@ -514,3 +514,15 @@
 ### CHANGES
 - **10:08** Added `.beads/*` config and `.gitattributes` for `bd` integration.
 - **10:10** Documented `bd` usage and required setup in `AGENTS.md`.
+
+## 2026-02-18
+### PROBLEM SOLVED
+- **01:25** TS Telegram runtime kept non-command ingestion logic inline in `runtime.ts`, which made event-level verification difficult and slowed parity closure for non-command paths.
+
+### FEATURE IMPLEMENTED
+- **01:25** Extracted non-command Telegram update handling (`voice/text/photo/document/audio`) into a dedicated TS module with focused unit coverage.
+
+### CHANGES
+- **01:25** Added `backend/src/voicebot_tgbot/runtimeNonCommandHandlers.ts` and rewired `backend/src/voicebot_tgbot/runtime.ts` to use it.
+- **01:25** Added `backend/__tests__/voicebot/runtimeNonCommandHandlers.test.ts` for command-text filtering, forwarded/reply context extraction, and attachment ingress routing.
+- **01:25** Re-ran targeted TG suites and backend build (`tgCommandHandlers`, `tgIngressHandlers`, `runtimeNonCommandHandlers`, `npm run build`).

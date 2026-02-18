@@ -17,12 +17,7 @@ import {
   handleSessionCommand,
   handleStartCommand,
 } from './commandHandlers.js';
-import {
-  buildIngressDeps,
-  handleAttachmentIngress,
-  handleTextIngress,
-  handleVoiceIngress,
-} from './ingressHandlers.js';
+import { installNonCommandHandlers as installRuntimeNonCommandHandlers } from './runtimeNonCommandHandlers.js';
 
 type SerializedError = {
   message: string | null;
@@ -252,242 +247,6 @@ const installAuthorizationMiddleware = (bot: Telegraf<Context>) => {
 };
 
 
-const extractForwardedContext = (message: Record<string, unknown>): Record<string, unknown> | null => {
-  const context: Record<string, unknown> = {};
-
-  const legacyKeys = [
-    'forward_date',
-    'forward_sender_name',
-    'forward_from_message_id',
-  ] as const;
-
-  for (const key of legacyKeys) {
-    if (message[key] != null) context[key] = message[key];
-  }
-
-  const forwardFrom = message.forward_from as Record<string, unknown> | undefined;
-  if (forwardFrom && typeof forwardFrom === 'object') {
-    context.forward_from = {
-      id: forwardFrom.id ?? null,
-      username: forwardFrom.username ?? null,
-      first_name: forwardFrom.first_name ?? null,
-      last_name: forwardFrom.last_name ?? null,
-    };
-  }
-
-  const forwardFromChat = message.forward_from_chat as Record<string, unknown> | undefined;
-  if (forwardFromChat && typeof forwardFromChat === 'object') {
-    context.forward_from_chat = {
-      id: forwardFromChat.id ?? null,
-      type: forwardFromChat.type ?? null,
-      title: forwardFromChat.title ?? null,
-      username: forwardFromChat.username ?? null,
-    };
-  }
-
-  const forwardOrigin = message.forward_origin as Record<string, unknown> | undefined;
-  if (forwardOrigin && typeof forwardOrigin === 'object') {
-    context.forward_origin = forwardOrigin;
-  }
-
-  return Object.keys(context).length > 0 ? context : null;
-};
-
-const buildCommonIngressContext = (ctx: Context): Record<string, unknown> => {
-  const message = (ctx.message || {}) as unknown as Record<string, unknown>;
-  const reply = (message.reply_to_message || {}) as Record<string, unknown>;
-  return {
-    telegram_user_id: ctx.from?.id,
-    chat_id: ctx.chat?.id,
-    username: (ctx.from as { username?: string } | undefined)?.username || null,
-    message_id: message.message_id,
-    message_timestamp: message.date,
-    timestamp: Date.now(),
-    source_type: 'telegram',
-    text: typeof message.text === 'string' ? message.text : null,
-    caption: typeof message.caption === 'string' ? message.caption : null,
-    reply_text:
-      (typeof reply.text === 'string' && reply.text) ||
-      (typeof reply.caption === 'string' && reply.caption) ||
-      null,
-    forwarded_context: extractForwardedContext(message),
-  };
-};
-
-const isCommandText = (value: unknown): boolean => {
-  const text = String(value || '').trim();
-  return /^\/[a-zA-Z0-9_]+(?:\s|$)/.test(text);
-};
-
-const installNonCommandHandlers = (bot: Telegraf<Context>) => {
-  bot.on('voice', async (ctx) => {
-    const message = (ctx.message || {}) as unknown as Record<string, unknown>;
-    const voice = (message.voice || {}) as Record<string, unknown>;
-
-    const result = await handleVoiceIngress({
-      deps: buildIngressDeps({
-        db: getDb(),
-        queues: {
-          [VOICEBOT_QUEUES.COMMON]: commonQueue,
-          [VOICEBOT_QUEUES.VOICE]: voiceQueue,
-        },
-        logger,
-      }),
-      input: {
-        ...buildCommonIngressContext(ctx),
-        file_id: String(voice.file_id || ''),
-        file_unique_id: voice.file_unique_id ? String(voice.file_unique_id) : null,
-        duration: Number(voice.duration || 0) || 0,
-        mime_type: voice.mime_type ? String(voice.mime_type) : null,
-      },
-    });
-
-    if (!result.ok) {
-      logger.warn(`[tgbot-runtime] voice_ingress_failed ${serializeForLog(result)}`);
-    }
-  });
-
-  bot.on('text', async (ctx) => {
-    const message = (ctx.message || {}) as unknown as Record<string, unknown>;
-    const text = String(message.text || '');
-    if (!text.trim() || isCommandText(text)) return;
-
-    const result = await handleTextIngress({
-      deps: buildIngressDeps({
-        db: getDb(),
-        queues: {
-          [VOICEBOT_QUEUES.COMMON]: commonQueue,
-          [VOICEBOT_QUEUES.VOICE]: voiceQueue,
-        },
-        logger,
-      }),
-      input: {
-        ...buildCommonIngressContext(ctx),
-        text,
-      },
-    });
-
-    if (!result.ok) {
-      logger.warn(`[tgbot-runtime] text_ingress_failed ${serializeForLog(result)}`);
-    }
-  });
-
-  bot.on('photo', async (ctx) => {
-    const message = (ctx.message || {}) as unknown as Record<string, unknown>;
-    const photos = Array.isArray(message.photo) ? (message.photo as Record<string, unknown>[]) : [];
-    if (photos.length === 0) return;
-
-    const sorted = [...photos].sort((a, b) => Number(b.file_size || 0) - Number(a.file_size || 0));
-    const best = sorted[0] || {};
-
-    const result = await handleAttachmentIngress({
-      deps: buildIngressDeps({
-        db: getDb(),
-        queues: {
-          [VOICEBOT_QUEUES.COMMON]: commonQueue,
-          [VOICEBOT_QUEUES.VOICE]: voiceQueue,
-        },
-        logger,
-      }),
-      input: {
-        ...buildCommonIngressContext(ctx),
-        text: typeof message.caption === 'string' ? message.caption : '',
-        message_type: 'screenshot',
-        attachments: [
-          {
-            kind: 'image',
-            source: 'telegram',
-            file_id: best.file_id ? String(best.file_id) : null,
-            file_unique_id: best.file_unique_id ? String(best.file_unique_id) : null,
-            size: Number(best.file_size || 0) || null,
-            width: Number(best.width || 0) || null,
-            height: Number(best.height || 0) || null,
-            mimeType: 'image/jpeg',
-          },
-        ],
-      },
-    });
-
-    if (!result.ok) {
-      logger.warn(`[tgbot-runtime] photo_ingress_failed ${serializeForLog(result)}`);
-    }
-  });
-
-  bot.on('document', async (ctx) => {
-    const message = (ctx.message || {}) as unknown as Record<string, unknown>;
-    const doc = (message.document || {}) as Record<string, unknown>;
-    if (!doc.file_id) return;
-
-    const result = await handleAttachmentIngress({
-      deps: buildIngressDeps({
-        db: getDb(),
-        queues: {
-          [VOICEBOT_QUEUES.COMMON]: commonQueue,
-          [VOICEBOT_QUEUES.VOICE]: voiceQueue,
-        },
-        logger,
-      }),
-      input: {
-        ...buildCommonIngressContext(ctx),
-        text: typeof message.caption === 'string' ? message.caption : '',
-        message_type: 'document',
-        attachments: [
-          {
-            kind: 'file',
-            source: 'telegram',
-            file_id: String(doc.file_id || ''),
-            file_unique_id: doc.file_unique_id ? String(doc.file_unique_id) : null,
-            name: doc.file_name ? String(doc.file_name) : null,
-            mimeType: doc.mime_type ? String(doc.mime_type) : null,
-            size: Number(doc.file_size || 0) || null,
-          },
-        ],
-      },
-    });
-
-    if (!result.ok) {
-      logger.warn(`[tgbot-runtime] document_ingress_failed ${serializeForLog(result)}`);
-    }
-  });
-
-  bot.on('audio', async (ctx) => {
-    const message = (ctx.message || {}) as unknown as Record<string, unknown>;
-    const audio = (message.audio || {}) as Record<string, unknown>;
-    if (!audio.file_id) return;
-
-    const result = await handleAttachmentIngress({
-      deps: buildIngressDeps({
-        db: getDb(),
-        queues: {
-          [VOICEBOT_QUEUES.COMMON]: commonQueue,
-          [VOICEBOT_QUEUES.VOICE]: voiceQueue,
-        },
-        logger,
-      }),
-      input: {
-        ...buildCommonIngressContext(ctx),
-        text: typeof message.caption === 'string' ? message.caption : '',
-        message_type: 'audio',
-        attachments: [
-          {
-            kind: 'audio',
-            source: 'telegram',
-            file_id: String(audio.file_id || ''),
-            file_unique_id: audio.file_unique_id ? String(audio.file_unique_id) : null,
-            name: audio.file_name ? String(audio.file_name) : null,
-            mimeType: audio.mime_type ? String(audio.mime_type) : null,
-            size: Number(audio.file_size || 0) || null,
-          },
-        ],
-      },
-    });
-
-    if (!result.ok) {
-      logger.warn(`[tgbot-runtime] audio_ingress_failed ${serializeForLog(result)}`);
-    }
-  });
-};
-
 const installCommandHandlers = (bot: Telegraf<Context>) => {
   bot.command('help', async (ctx) => {
     await safeReply(ctx, getHelpMessage());
@@ -580,7 +339,13 @@ const main = async () => {
   installRawLogging(bot);
   installAuthorizationMiddleware(bot);
   installCommandHandlers(bot);
-  installNonCommandHandlers(bot);
+  installRuntimeNonCommandHandlers(bot, {
+    getDb,
+    logger,
+    commonQueue,
+    voiceQueue,
+    serializeForLog,
+  });
 
   await bot.telegram.setMyCommands([
     { command: 'start', description: 'Начать работу.' },
