@@ -79,6 +79,7 @@
 - **18:41** Closed changelog-gap verification tasks `copilot-b6w` and `copilot-qkq` after implementing byte-level upload progress in Copilot voice UI and aligning nginx upload limits/timeouts for 600MB uploads (with tests).
 - **18:56** Closed changelog-gap verification tasks `copilot-v0b` and `copilot-3u9` after confirming byte-level upload progress UI and removing forced multipart Content-Type for axios uploads (test-backed).
 - **19:18** Closed changelog-gap verification tasks `copilot-4jr` and `copilot-fo9` after adding upload error-hint parity (413/network/timeout) and doc smoke coverage for duration backfill/ffprobe notes.
+- **19:46** Closed changelog-gap verification tasks `copilot-bs3` and `copilot-baj` after validating close-only done handler behavior and nginx upload limit/timeouts parity via tests.
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -132,6 +133,8 @@
 - **18:56** `cd app && npm test -- --runInBand __tests__/voice/audioUploadProgress.test.ts`
 - **19:18** `cd app && npm test -- --runInBand __tests__/voice/audioUploadProgress.test.ts`
 - **19:18** `cd voicebot_runtime && npx jest --runInBand __tests__/docs/duration_backfill_docs_smoke.test.js`
+- **19:46** `cd voicebot_runtime && npx jest --runInBand __tests__/common_jobs/done_multiprompt.test.js`
+- **19:46** `cd backend && npm test -- --runInBand __tests__/voicebot/doneNotifyService.test.ts __tests__/deploy/nginxUploadLimits.test.ts`
 ## 2026-02-17
 ### PROBLEM SOLVED
 - **21:49** Voice migration after 2026-02-05 required strict runtime isolation in shared Mongo/Redis to avoid dev/prod cross-processing.
