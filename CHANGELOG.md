@@ -76,6 +76,7 @@
 - **17:41** Closed changelog-gap verification tasks `copilot-irv` and `copilot-0vc` after re-validating TG formatter/session-resolution behavior and retry hard-stop gating via backend + voicebot_runtime unit tests.
 - **17:56** Closed changelog-gap verification tasks `copilot-4bp` and `copilot-5qu` after validating BullMQ retention/enqueue rollback and RedisMonitor emergency cleanup rails via voicebot_runtime unit tests.
 - **18:12** Closed changelog-gap verification tasks `copilot-aaa` and `copilot-3em` after adding voicebot_runtime tests for prompt-length cost rails and doc smoke checks for cost-control env knobs/auto-reprocessing.
+- **18:41** Closed changelog-gap verification tasks `copilot-b6w` and `copilot-qkq` after implementing byte-level upload progress in Copilot voice UI and aligning nginx upload limits/timeouts for 600MB uploads (with tests).
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -124,6 +125,8 @@
 - **17:41** `cd voicebot_runtime && npx jest --runInBand __tests__/common_jobs/processing_loop_retry_gating.test.js __tests__/processors/categorization_retry_gating.test.js __tests__/common_jobs/processing_loop_quota_recovery.test.js`
 - **17:56** `cd voicebot_runtime && npx jest --runInBand __tests__/bullmq_default_job_options_retention.test.js __tests__/processors/questioning_enqueue_failure_rollback.test.js __tests__/voicebot/categorization_enqueue_failure.test.js __tests__/services/redis_monitor_safety.test.js`
 - **18:12** `cd voicebot_runtime && npx jest --runInBand __tests__/prompts/prompt_length_cost_controls.test.js __tests__/docs/llm_cost_controls_docs_smoke.test.js __tests__/voicebot/categorization_cost_controls.test.js`
+- **18:41** `cd app && npm test -- --runInBand __tests__/voice/audioUploadProgress.test.ts`
+- **18:41** `cd backend && npm test -- --runInBand __tests__/deploy/nginxUploadLimits.test.ts`
 ## 2026-02-17
 ### PROBLEM SOLVED
 - **21:49** Voice migration after 2026-02-05 required strict runtime isolation in shared Mongo/Redis to avoid dev/prod cross-processing.

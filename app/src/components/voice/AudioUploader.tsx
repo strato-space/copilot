@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import type { AxiosProgressEvent } from 'axios';
 import { Upload, message } from 'antd';
 import type { RcFile, UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
 import { InboxOutlined } from '@ant-design/icons';
@@ -22,9 +23,19 @@ const allowedTypes = [
     'audio/x-m4a',
 ];
 
+const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+
+const formatMb = (bytes: number): string => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0.0';
+    return (bytes / (1024 * 1024)).toFixed(1);
+};
+
 export default function AudioUploader({ sessionId, onUploadComplete, disabled = false }: AudioUploaderProps) {
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadLoadedBytes, setUploadLoadedBytes] = useState(0);
+    const [uploadTotalBytes, setUploadTotalBytes] = useState(0);
+    const [uploadCurrentFileName, setUploadCurrentFileName] = useState<string | null>(null);
     const [fileList, setFileList] = useState<UploadFile[]>([]);
     const processedKeysRef = useRef(new Set<string>());
 
@@ -54,25 +65,46 @@ export default function AudioUploader({ sessionId, onUploadComplete, disabled = 
         const validFiles = files.filter((file) => validateFile(file));
         if (validFiles.length === 0) return;
 
+        const totalBytes = validFiles.reduce((sum, file) => sum + Number(file.size || 0), 0);
+        let uploadedBytesBefore = 0;
+
         setUploading(true);
         setUploadProgress(0);
+        setUploadLoadedBytes(0);
+        setUploadTotalBytes(totalBytes);
+        setUploadCurrentFileName(validFiles[0]?.name ?? null);
 
         const results: Array<Record<string, unknown>> = [];
         let successCount = 0;
         let failCount = 0;
 
-        for (const [index, file] of validFiles.entries()) {
+        for (const file of validFiles) {
+            setUploadCurrentFileName(file.name);
+
+            const onUploadProgress = (evt: AxiosProgressEvent) => {
+                const loadedCurrent = typeof evt.loaded === 'number' ? evt.loaded : 0;
+                const overallLoaded = uploadedBytesBefore + loadedCurrent;
+
+                setUploadLoadedBytes(overallLoaded);
+                if (totalBytes > 0) {
+                    setUploadProgress(clamp(Math.round((overallLoaded / totalBytes) * 100), 0, 100));
+                }
+            };
+
             try {
-                const result = await uploadAudioFile(file as File, sessionId);
+                const result = await uploadAudioFile(file as File, sessionId, { onUploadProgress });
                 results.push({ file, result, success: true });
                 successCount += 1;
+                uploadedBytesBefore += Number(file.size || 0);
+
+                setUploadLoadedBytes(uploadedBytesBefore);
+                if (totalBytes > 0) {
+                    setUploadProgress(clamp(Math.round((uploadedBytesBefore / totalBytes) * 100), 0, 100));
+                }
             } catch (error) {
                 console.error('Upload failed:', error);
                 results.push({ file, error, success: false });
                 failCount += 1;
-            } finally {
-                const percent = Math.round(((index + 1) / validFiles.length) * 100);
-                setUploadProgress(percent);
             }
         }
 
@@ -88,6 +120,7 @@ export default function AudioUploader({ sessionId, onUploadComplete, disabled = 
             onUploadComplete(results);
         }
 
+        setUploadCurrentFileName(null);
         setUploading(false);
     };
 
@@ -124,7 +157,12 @@ export default function AudioUploader({ sessionId, onUploadComplete, disabled = 
                 <p className="ant-upload-text">Перетащите аудиофайл сюда или нажмите для выбора</p>
                 <p className="ant-upload-hint">Поддерживаются MP3, WAV, OGG, WebM, M4a. Максимум 600MB.</p>
                 {uploading && (
-                    <p className="mt-2 text-sm text-slate-500">Загрузка: {uploadProgress}%</p>
+                    <p className="mt-2 text-sm text-slate-500">
+                        {uploadCurrentFileName ? `${uploadCurrentFileName}: ` : ''}
+                        {uploadTotalBytes > 0
+                            ? `${formatMb(uploadLoadedBytes)} MB / ${formatMb(uploadTotalBytes)} MB (${uploadProgress}%)`
+                            : `Загрузка: ${uploadProgress}%`}
+                    </p>
                 )}
             </Dragger>
         </div>

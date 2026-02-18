@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosProgressEvent } from 'axios';
 import { create } from 'zustand';
 import update from 'immutability-helper';
 import _ from 'lodash';
@@ -86,7 +86,11 @@ interface VoiceBotState {
     fetchPersonsList: () => Promise<VoicebotPerson[]>;
     createPerson: (personData: Record<string, unknown>) => Promise<VoicebotPerson>;
     updateSessionParticipants: (sessionId: string, participantIds: string[]) => Promise<boolean>;
-    uploadAudioFile: (file: File, sessionId: string) => Promise<unknown>;
+    uploadAudioFile: (
+        file: File,
+        sessionId: string,
+        opt?: { onUploadProgress?: (evt: AxiosProgressEvent) => void }
+    ) => Promise<unknown>;
     updateSessionAllowedUsers: (sessionId: string, allowedUserIds: string[]) => Promise<boolean>;
     fetchPerformersList: () => Promise<Array<Record<string, unknown>>>;
     fetchPerformersForTasksList: () => Promise<Array<Record<string, unknown>>>;
@@ -928,7 +932,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         }
     },
 
-    uploadAudioFile: async (file, sessionId) => {
+    uploadAudioFile: async (file, sessionId, opt) => {
         try {
             const backendUrl = getBackendUrl();
             const { authToken } = useAuthStore.getState();
@@ -939,8 +943,9 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             const response = await axios.post(`${backendUrl}/voicebot/uploads/audio`, formData, {
                 headers: {
                     'X-Authorization': authToken ?? '',
-                    'Content-Type': 'multipart/form-data',
                 },
+                // Byte-level progress for large uploads (UI)
+                onUploadProgress: opt?.onUploadProgress,
                 withCredentials: true,
             });
             return response.data;
