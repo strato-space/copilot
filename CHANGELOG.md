@@ -73,6 +73,7 @@
 - **16:58** Closed changelog-gap verification tasks `copilot-st8` and `copilot-6of` after validating Redis protection rails (history-only cleanup + trimEvents + REDIS_USERNAME support) and LLM cost controls (VOICEBOT_*_MODEL env knobs + model_not_found fallback) in voicebot_runtime.
 - **17:06** Closed changelog-gap verification tasks `copilot-5b2` and `copilot-g7i` after adding a spec smoke test to guard `voicebot_runtime/plan/session-managment.md` command semantics and WebRTC FAB/page lifecycle contract.
 - **17:23** Closed changelog-gap verification tasks `copilot-w8b` and `copilot-9xw` after validating attachment persistence + message_attachment proxy contract and Screenshort tab wiring via backend/app tests.
+- **17:41** Closed changelog-gap verification tasks `copilot-irv` and `copilot-0vc` after re-validating TG formatter/session-resolution behavior and retry hard-stop gating via backend + voicebot_runtime unit tests.
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -117,6 +118,8 @@
 - **17:06** `cd voicebot_runtime && npx jest --runInBand __tests__/plan/session_management_spec_smoke.test.js`
 - **17:23** `cd backend && npm test -- --runInBand __tests__/smoke/voicebotAttachmentSmoke.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
 - **17:23** `cd app && npm test -- --runInBand __tests__/voice/screenshortDirectUri.test.ts`
+- **17:41** `cd backend && npm test -- --runInBand __tests__/voicebot/sessionTelegramMessage.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
+- **17:41** `cd voicebot_runtime && npx jest --runInBand __tests__/common_jobs/processing_loop_retry_gating.test.js __tests__/processors/categorization_retry_gating.test.js __tests__/common_jobs/processing_loop_quota_recovery.test.js`
 ## 2026-02-17
 ### PROBLEM SOLVED
 - **21:49** Voice migration after 2026-02-05 required strict runtime isolation in shared Mongo/Redis to avoid dev/prod cross-processing.
