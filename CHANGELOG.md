@@ -104,6 +104,7 @@
 - **23:48** Restored frontend Summarize control parity in `MeetingCard`: added circle `Summarize (∑)` action next to AI-title trigger with strict 3-minute cooldown and endpoint wiring to `voicebot/trigger_session_ready_to_summarize` via `voiceBotStore.triggerSessionReadyToSummarize`.
 - **23:48** Reworked MeetingCard header action buttons to centered circle-icon rendering (`Edit`/`AI`/`Summarize`) using flex wrappers to prevent baseline drift in icon glyph alignment.
 - **23:49** Closed changelog-gap verification tasks `copilot-ap6`, `copilot-ziw`, `copilot-jfi`, and `copilot-g68` with test-backed frontend/store parity evidence.
+- **23:57** Closed changelog-gap verification tasks `copilot-eho`, `copilot-b9i`, and `copilot-om9` with docs-sync evidence for event-log source requirements, immutable `transcription_raw -> transcription` chain, and session-level transcript versioning/final-effective response contract in synced planning artifacts.
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -186,6 +187,7 @@
 - **23:31** `cd voicebot_runtime && npx jest --runInBand __tests__/docs/gitignore_fastagent_artifacts.test.js __tests__/docs/planning_references_docs_smoke.test.js`
 - **23:46** `cd app && npm test -- --runInBand __tests__/voice/meetingCardSummarizeAndIconContract.test.ts __tests__/voice/voiceBotStoreSummarizeContract.test.ts __tests__/voice/meetingCardStateMapping.test.ts`
 - **23:47** `cd app && npm run build`
+- **23:56** `cd voicebot_runtime && npx jest --runInBand __tests__/docs/transcript_versioning_plans_smoke.test.js __tests__/docs/event_log_plan_sync_docs_smoke.test.js`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

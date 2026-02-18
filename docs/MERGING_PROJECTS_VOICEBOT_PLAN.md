@@ -177,6 +177,8 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-ap6` и `copilot-ziw`: восстановлен frontend-контракт ручного `Summarize (∑)` рядом с AI title (MeetingCard + store endpoint `trigger_session_ready_to_summarize`) с 3-минутным cooldown и явным success/error UX. Tests: `app/__tests__/voice/meetingCardSummarizeAndIconContract.test.ts`, `app/__tests__/voice/voiceBotStoreSummarizeContract.test.ts`.
 - [v] Закрыты changelog-gap `copilot-jfi` и `copilot-g68`: session-header action buttons переведены на circle-icon layout с центрированными glyph wrappers (`inline-flex items-center justify-center`) для устранения baseline drift; test `app/__tests__/voice/meetingCardSummarizeAndIconContract.test.ts`.
 
+- [v] Закрыты changelog-gap `copilot-eho`, `copilot-b9i`, `copilot-om9`: подтверждена синхронизация planning-артефактов для event-log/edit/rollback и transcript-versioning (`edit-event-log-req`, `edit-event-log-plan`, `gpt-4o-transcribe-diarize-plan`, `implementation-draft-v1`) с контрактом `transcription_raw -> transcription` и session-level final-effective transcript semantics. Tests: `voicebot_runtime/__tests__/docs/transcript_versioning_plans_smoke.test.js`, `voicebot_runtime/__tests__/docs/event_log_plan_sync_docs_smoke.test.js`.
+
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
 - [x] T2 `POST /api/voicebot/create_session` создает и активирует новую сессию.
