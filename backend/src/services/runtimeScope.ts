@@ -12,6 +12,10 @@ export type RuntimeScopeOptions = {
   prodRuntime?: boolean;
 };
 
+export type RuntimeScopeExprOptions = Omit<RuntimeScopeOptions, 'field'> & {
+  fieldExpr?: string;
+};
+
 export function resolveBetaTag(rawValue: string | undefined): string {
   const value = typeof rawValue === 'string' ? rawValue.trim() : '';
   if (!value) return '';
@@ -145,6 +149,57 @@ export const buildRuntimeFilter = ({
 
   return { [field]: runtimeTag };
 };
+
+const buildRuntimeFilterExpressionForPath = ({
+  fieldExpr = '$runtime_tag',
+  strict = false,
+  includeLegacyInProd = false,
+  familyMatch = false,
+  runtimeTag = RUNTIME_TAG,
+  runtimeFamily = RUNTIME_FAMILY,
+  prodRuntime = IS_PROD_RUNTIME,
+}: RuntimeScopeExprOptions = {}): Record<string, unknown> => {
+  if (strict) {
+    return { $eq: [fieldExpr, runtimeTag] };
+  }
+
+  if (familyMatch) {
+    const familyExpr = {
+      $regexMatch: {
+        input: fieldExpr,
+        regex: new RegExp(`^${escapeRegex(runtimeFamily)}(?:-|$)`),
+      },
+    } as const;
+
+    if (prodRuntime && includeLegacyInProd) {
+      return {
+        $or: [
+          familyExpr,
+          { $eq: [fieldExpr, null] },
+          { $eq: [fieldExpr, ''] },
+        ],
+      };
+    }
+
+    return familyExpr as Record<string, unknown>;
+  }
+
+  if (prodRuntime && includeLegacyInProd) {
+    return {
+      $or: [
+        { $eq: [fieldExpr, runtimeTag] },
+        { $eq: [fieldExpr, null] },
+        { $eq: [fieldExpr, ''] },
+      ],
+    };
+  }
+
+  return { $eq: [fieldExpr, runtimeTag] };
+};
+
+export const buildRuntimeFilterExpression = (
+  options: RuntimeScopeExprOptions = {}
+): Record<string, unknown> => buildRuntimeFilterExpressionForPath(options);
 
 export const mergeWithRuntimeFilter = (
   query: Record<string, unknown> = {},

@@ -11,6 +11,7 @@ import {
 import {
   IS_PROD_RUNTIME,
   RUNTIME_TAG,
+  buildRuntimeFilterExpression,
   isRuntimeScopedCollection,
   mergeWithRuntimeFilter,
 } from './runtimeScope.js';
@@ -45,6 +46,91 @@ const runtimeFilterForCollection = <TSchema extends Document>(
     runtimeTag: RUNTIME_TAG,
     prodRuntime: IS_PROD_RUNTIME,
   }) as Filter<TSchema>;
+
+const buildRuntimeLookupFilterExpr = (fieldExpr: string): Record<string, unknown> => ({
+  $expr: buildRuntimeFilterExpression({
+    fieldExpr,
+    strict: false,
+    includeLegacyInProd: IS_PROD_RUNTIME,
+    familyMatch: IS_PROD_RUNTIME,
+    runtimeTag: RUNTIME_TAG,
+    prodRuntime: IS_PROD_RUNTIME,
+  }),
+});
+
+const buildRuntimeScopedLookup = (lookup: Document): Document => {
+  const from = String(lookup.from || '');
+  if (!isRuntimeScopedCollection(from)) {
+    return { $lookup: lookup } as Document;
+  }
+
+  const as = String((lookup as { as?: string }).as || 'lookup');
+
+  if (Array.isArray(lookup.pipeline)) {
+    return {
+      $lookup: {
+        ...lookup,
+        pipeline: [
+          { $match: buildRuntimeLookupFilterExpr('$runtime_tag') },
+          ...((lookup.pipeline as Document[]) as Document[]),
+        ],
+      },
+    } as Document;
+  }
+
+  const localField = lookup.localField;
+  const foreignField = lookup.foreignField;
+
+  if (typeof localField === 'string' && typeof foreignField === 'string') {
+    const localVar = '__runtime_lookup_local';
+
+    return {
+      $lookup: {
+        from,
+        let: { [localVar]: `$${localField}` },
+        pipeline: [
+          { $match: buildRuntimeLookupFilterExpr('$runtime_tag') },
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $eq: [`$$${localVar}`, `$${foreignField}`] },
+                  {
+                    $and: [
+                      { $isArray: `$$${localVar}` },
+                      { $in: [`$${foreignField}`, `$$${localVar}`] },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        as,
+      },
+    } as Document;
+  }
+
+  return {
+    $lookup: {
+      ...lookup,
+      pipeline: [{ $match: buildRuntimeLookupFilterExpr('$runtime_tag') }],
+    },
+  } as Document;
+};
+
+export const applyRuntimeScopeToAggregatePipeline = (pipeline: Document[] = []): Document[] => {
+  if (!Array.isArray(pipeline) || pipeline.length === 0) return [];
+
+  return pipeline.map((stage) => {
+    if (!stage || typeof stage !== 'object') return stage;
+    if (Object.prototype.hasOwnProperty.call(stage, '$lookup')) {
+      return buildRuntimeScopedLookup(stage.$lookup as Document);
+    }
+
+    return stage;
+  });
+};
 
 const withRuntimeTag = <TSchema extends Document>(
   doc: OptionalUnlessRequiredId<TSchema>
@@ -117,7 +203,7 @@ const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
           const runtimeMatch = {
             $match: runtimeFilterForCollection<TSchema>({}),
           };
-          const scopedPipeline = [runtimeMatch, ...pipeline];
+          const scopedPipeline = [runtimeMatch, ...applyRuntimeScopeToAggregatePipeline(pipeline)];
           return target.aggregate(scopedPipeline, ...(args as []));
         };
       }

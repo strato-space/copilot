@@ -6,6 +6,7 @@ import { existsSync, unlinkSync } from 'node:fs';
 
 import { VOICEBOT_COLLECTIONS } from '../../src/constants.js';
 import { PERMISSIONS } from '../../src/permissions/permissions-config.js';
+import { IS_PROD_RUNTIME } from '../../src/services/runtimeScope.js';
 
 const getDbMock = jest.fn();
 const getRawDbMock = jest.fn();
@@ -231,6 +232,76 @@ describe('POST /voicebot/upload_audio', () => {
         is_messages_processed: false,
       })
     );
+  });
+
+
+  it('returns runtime_mismatch (409) when target session is owned by different runtime family', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439013');
+
+    const runtimeMismatchSession = {
+      _id: sessionId,
+      chat_id: 999,
+      user_id: performerId.toString(),
+      access_level: 'private',
+      is_deleted: false,
+      runtime_tag: IS_PROD_RUNTIME ? 'dev-other-host' : 'prod-other-host',
+    };
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async (_query: Record<string, unknown>) => null),
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async (_query: Record<string, unknown>) => runtimeMismatchSession),
+          };
+        }
+        return { findOne: jest.fn(async () => null) };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & { performer: Record<string, unknown>; user: Record<string, unknown> };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '999',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'audio/webm',
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('runtime_mismatch');
   });
 
 });

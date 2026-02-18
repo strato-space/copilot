@@ -119,7 +119,7 @@ const verifySocketToken = (socket: VoicebotSocket): boolean => {
   }
 };
 
-const resolveAuthorizedSessionForSocket = async ({
+export const resolveAuthorizedSessionForSocket = async ({
   socket,
   session_id,
   requireUpdate = false,

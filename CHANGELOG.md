@@ -8,6 +8,8 @@
 - **11:09** MCP agent URL in production UI could be missing in built envs, triggering `Не настроен MCP URL агента` when requesting AI title.
 - **11:10** Passive WebRTC monitor restore could request microphone permission immediately on page load in Copilot voice UI.
 - **11:40** `Done` flow could repeatedly auto-retry previously failed uploads, especially full-track chunks, making recovery ambiguous.
+- **13:52** Runtime-scoped aggregate pipelines could still pull cross-runtime rows through `$lookup` joins, creating hidden data-leak vectors in composed reporting/session queries.
+- **13:53** Quota/file errors in transcription did not include key-source/server diagnostics, slowing root-cause analysis when multiple runtimes used different env files.
 
 ### FEATURE IMPLEMENTED
 - **11:03** Hardened Voice runtime bootstrap: `voicebot_runtime/voicebot-tgbot.js` now loads dotenv via explicit path/override (`DOTENV_CONFIG_PATH`, `DOTENV_CONFIG_OVERRIDE`) so cutover runtime always applies `voicebot_runtime/.env.prod-cutover` values.
@@ -19,6 +21,9 @@
 - **11:40** Added one-pass upload policy for pending chunks in `Done`: after one automatic pass, failed chunks enter manual retry state (`pending-manual`) with explicit controls.
 - **11:40** Added full-track archive tracking in WebRTC (new metadata + naming + UI marker `· full-track`, with metadata `trackKind: 'full_track'`).
 - **11:40** Relaxed task creation validation in voicebot runtime task UI by removing hard requirement for `task_type_id` in `TasksTable` and ticket preview modal.
+- **13:53** Added runtime-aware aggregate lookup scoping and dedicated coverage to keep runtime isolation intact beyond top-level collection filters.
+- **13:54** Added explicit socket-auth unit coverage for `session_done` authorization path via exported `resolveAuthorizedSessionForSocket` helper.
+- **13:54** Extended transcription error context with masked OpenAI key source + env file + runtime server identity for fast production diagnostics.
 
 ### CHANGES
 - **11:03** Extended backend socket integration in upload pipeline (`backend/src/api/routes/voicebot/uploads.ts`, `backend/src/api/socket/voicebot.ts`, `backend/src/index.ts`) to emit session-scoped updates immediately after insert/update.
@@ -34,6 +39,11 @@
   - `buildArchiveSegmentFileName`/`ensureArchiveSegmentListItem` added for full-track chunk labeling and metadata storage (sessionId, mic, start/end, duration).
 - **11:40** Added regression test `app/__tests__/voice/webrtcDoneUploadPolicy.test.ts` for one-shot auto-upload policy and full-track separation.
 - **11:40** Updated task validation in `voicebot_runtime/app/src/components/voicebot/TasksTable.jsx` and `voicebot_runtime/app/src/components/voicebot/TicketsPreviewModal.jsx` so missing task type no longer blocks ticket creation.
+- **13:53** Updated runtime scope internals to support expression-based filtering (`buildRuntimeFilterExpression`) and aggregate `$lookup` auto-scoping (`backend/src/services/runtimeScope.ts`, `backend/src/services/db.ts`).
+- **13:54** Added/updated regression tests for aggregate runtime scope and socket/session authz (`backend/__tests__/services/dbAggregateRuntimeScope.test.ts`, `backend/__tests__/voicebot/voicebotSocketAuth.test.ts`, `backend/__tests__/voicebot/tgCommandHandlers.test.ts`, `backend/__tests__/voicebot/messageHelpers.test.ts`, `backend/__tests__/voicebot/uploadAudioRoute.test.ts`).
+- **13:55** Updated engineering docs for runtime diagnostics and socket/runtime scoping expectations (`README.md`, `AGENTS.md`, `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`).
+- **13:55** Extended E2E selectors for transcript edit/delete dialogs in log workflows to match current AntD combobox behavior (`app/e2e/voice-log.spec.ts`).
+- **13:55** Added transcription diagnostic payload in runtime job errors (`voicebot_runtime/voicebot/voice_jobs/transcribe.js`): `server_name`, `openai_key_source`, `openai_key_mask`, `openai_api_key_env_file`, `file_path`, `error_code`.
 
 ### TESTS
 - **11:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
@@ -42,6 +52,9 @@
 - **11:11** `cd backend && npm test -- --runInBand __tests__/voicebot/runtimeScope.test.ts __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
 - **11:12** `cd app && npm test -- --runInBand __tests__/voice/webrtcMicPermissionBoot.test.ts`
 - **11:40** `cd app && npm test -- --runInBand __tests__/voice/webrtcDoneUploadPolicy.test.ts`
+- **13:52** `cd backend && npm test -- --runInBand __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/messageHelpers.test.ts __tests__/voicebot/voicebotSocketAuth.test.ts __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
+- **13:53** `cd backend && npm run build`
+- **13:54** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-log.spec.ts --project=chromium-unauth`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

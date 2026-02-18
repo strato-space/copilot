@@ -28,6 +28,29 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Voice task creation in Copilot runtime no longer requires `task_type_id`; missing type is no longer a hard blocker in ticket/task generation.
 - `copilot-voicebot-tgbot-prod` bootstraps env from `voicebot_runtime/.env.prod-cutover` via `DOTENV_CONFIG_PATH` with dotenv override to avoid inheriting stale shell keys.
 
+
+### Voice runtime: key configuration map
+- OpenAI key is a shared variable: `OPENAI_API_KEY`.
+  - Copilot backend: `backend/src/api/routes/voicebot/llmgate.ts`.
+  - Voice runtime services: `voicebot_runtime/` jobs and processors (transcribe/categorization/task creation/title flows).
+- Runtime/instance settings:
+  - `VOICE_RUNTIME_ENV` (`prod|dev`) — runtime family.
+  - `VOICE_RUNTIME_SERVER_NAME` — host identity (`p2`, etc.).
+  - `VOICE_RUNTIME_TAG` — explicit full tag override.
+  - Runtime family matching in prod accepts `prod` and `prod-*` tags; non-prod remains strict by exact tag.
+  - `DOTENV_CONFIG_PATH`, `DOTENV_CONFIG_OVERRIDE` — explicit env file source for cutover startup.
+- Telegram identity:
+  - `TG_VOICE_BOT_TOKEN` (prod family)
+  - `TG_VOICE_BOT_BETA_TOKEN` (non-prod runtime)
+- OpenAI/LLM knobs:
+  - `OPENAI_BASE_URL` (default `https://api.openai.com/v1`)
+  - `VOICEBOT_CATEGORIZATION_MODEL` (default `gpt-4.1`)
+  - `VOICEBOT_TASK_CREATION_MODEL` (default `gpt-4.1`)
+  - Transcription errors persist diagnostics (`openai_key_mask`, `openai_key_source`, `openai_api_key_env_file`, `server_name`) for quota/file-path incident analysis.
+- Storage and services:
+  - `OPENAI_*` keys are loaded by the runtime that executes the call (`copilot-backend-*` and `copilot-voicebot-tgbot-*` are separated by service/PM2 files).
+  - `MONGO_*`, `REDIS_*`, `MAX_FILE_SIZE`, `UPLOADS_DIR` remain service-specific.
+
 ### Voice agents integration (frontend -> agents)
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
 - Frontend trigger points:

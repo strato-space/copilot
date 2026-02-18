@@ -164,6 +164,8 @@ Preferred engineering principles for this repo:
 - Permission system: `backend/src/permissions/permission-manager.ts` (ported from voicebot).
 - Socket.IO namespace: `/voicebot` for real-time session updates.
 - Voice upload path must broadcast `new_message` and `session_update` into room `voicebot:session:<session_id>` immediately after successful upload.
+- Runtime-scoped aggregate queries now auto-scope nested `$lookup` stages for runtime-tagged collections (`prod` family vs exact non-prod), so cross-runtime joins do not leak records.
+- Socket `session_done` authorization is test-covered through `resolveAuthorizedSessionForSocket` export; keep socket handlers bound to backend performer/session auth checks only.
 - `Done` path enforces one-shot auto-upload retry per pending chunk/session and surfaces manual retry for remaining failures.
 - Full-track archive chunks are tracked as `trackKind='full_track'` with metadata (`sessionId`, `mic`, `duration/start/end`) in voicebot runtime.
 - Voice task creation UI accepts missing `task_type_id` in task/ticket entry points (`TasksTable`, `TicketsPreviewModal`).

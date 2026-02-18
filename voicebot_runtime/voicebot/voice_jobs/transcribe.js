@@ -21,6 +21,47 @@ const HARD_MAX_TRANSCRIBE_ATTEMPTS = 10;
 const TRANSCRIBE_RETRY_BASE_DELAY_MS = 60 * 1000;
 const TRANSCRIBE_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
 const INSUFFICIENT_QUOTA_RETRY = "insufficient_quota";
+const OPENAI_KEY_ENV_NAMES = [
+    "OPENAI_API_KEY",
+];
+
+const maskOpenAIKey = (apiKey) => {
+    const raw = String(apiKey || "");
+    if (!raw) return "unknown";
+
+    const match = raw.match(/^sk-[A-Za-z0-9_-]{4}([A-Za-z0-9_-]*)([A-Za-z0-9_-]{4})$/);
+    if (match) {
+        return `sk-${match[1] ? match[1].slice(0, 4) : ""}...${match[2]}`;
+    }
+
+    if (raw.length <= 12) return raw;
+    return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
+};
+
+const getOpenAIKeySource = () => OPENAI_KEY_ENV_NAMES.find((name) => Boolean(process.env[name])) || "OPENAI_API_KEY";
+
+const getOpenAIKeyDiagnostic = (openaiClient) => {
+    const source = getOpenAIKeySource();
+    const apiKey = openaiClient?.apiKey || process.env[source] || "";
+
+    return {
+        openai_key_source: source,
+        openai_key_mask: maskOpenAIKey(apiKey),
+        openai_key_present: Boolean(apiKey),
+        openai_api_key_env_file: process.env.DOTENV_CONFIG_PATH || ".env",
+    };
+};
+
+const getTranscriptionErrorContext = ({
+    openaiClient,
+    filePath = null,
+    extra = {},
+}) => ({
+    server_name: constants.RUNTIME_SERVER_NAME || "unknown",
+    ...getOpenAIKeyDiagnostic(openaiClient),
+    ...(filePath ? { file_path: filePath } : {}),
+    ...extra,
+});
 
 const getErrorMessage = (error) => {
     if (!error) return "Unknown transcription error";
@@ -635,7 +676,8 @@ const job_handler = async (job_data, queues, apis) => {
         transcription_text,
         transcription_chunks,
         isQuotaRetryable = false,
-        skipRetrySchedule = false
+        skipRetrySchedule = false,
+        filePath = null,
     }) => {
         const error_message = getErrorMessage(error);
         const resolvedCode = isQuotaRetryable ? (normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY) : code;
@@ -645,7 +687,14 @@ const job_handler = async (job_data, queues, apis) => {
             error_message: error_message,
             error_timestamp: new Date(),
             transcribe_timestamp: Date.now(),
-            transcribe_attempts: attempts
+            transcribe_attempts: attempts,
+            transcription_error_context: getTranscriptionErrorContext({
+                openaiClient,
+                filePath,
+                extra: {
+                    error_code: resolvedCode,
+                }
+            }),
         };
         if (!skipRetrySchedule) {
             messageUpdate.transcription_next_attempt_at = new Date(nextAttemptAt);
@@ -691,7 +740,14 @@ const job_handler = async (job_data, queues, apis) => {
                         transcription_error: resolvedCode,
                         error_message: `OpenAI quota limit reached. Will resume automatically after payment restoration.`,
                         error_timestamp: new Date(),
-                        error_message_id: job_data.message_db_id.toString()
+                        error_message_id: job_data.message_db_id.toString(),
+                        transcription_error_context: getTranscriptionErrorContext({
+                            openaiClient,
+                            filePath,
+                            extra: {
+                                error_code: resolvedCode,
+                            }
+                        }),
                     }
                     : {
                         is_corrupted: true,
@@ -699,7 +755,14 @@ const job_handler = async (job_data, queues, apis) => {
                         transcription_error: resolvedCode,
                         error_message: error_message,
                         error_timestamp: new Date(),
-                        error_message_id: job_data.message_db_id.toString()
+                        error_message_id: job_data.message_db_id.toString(),
+                        transcription_error_context: getTranscriptionErrorContext({
+                            openaiClient,
+                            filePath,
+                            extra: {
+                                error_code: resolvedCode,
+                            }
+                        }),
                     }
             }
         );
@@ -714,6 +777,7 @@ const job_handler = async (job_data, queues, apis) => {
                 $unset: {
                     transcription_error: 1,
                     error_message: 1,
+                    transcription_error_context: 1,
                     error_timestamp: 1,
                     transcription_retry_reason: 1,
                     transcription_next_attempt_at: 1
@@ -731,6 +795,7 @@ const job_handler = async (job_data, queues, apis) => {
                 $unset: {
                     error_source: 1,
                     transcription_error: 1,
+                    transcription_error_context: 1,
                     error_message: 1,
                     error_timestamp: 1,
                     error_message_id: 1,
@@ -851,7 +916,8 @@ const job_handler = async (job_data, queues, apis) => {
             if (!resolvedPath || !fs.existsSync(resolvedPath)) {
                 await markTranscriptionError({
                     error: `Web upload file not found: ${resolvedPath || rawPath}`,
-                    code: "file_not_found"
+                    code: "file_not_found",
+                    filePath: resolvedPath || rawPath,
                 });
                 return;
             }
@@ -948,7 +1014,8 @@ const job_handler = async (job_data, queues, apis) => {
                     code: "segment_transcription_failed",
                     transcription_text: transcription_text,
                     transcription_chunks: transcription_chunks,
-                    isQuotaRetryable: isQuotaError(processor.error)
+                    isQuotaRetryable: isQuotaError(processor.error),
+                    filePath: fileLink,
                 });
                 return;
             }
@@ -1012,7 +1079,7 @@ const job_handler = async (job_data, queues, apis) => {
                     duration_seconds: resolvedDurationSeconds || 0
                 }];
             } catch (error) {
-                const apiKey = openaiClient?.apiKey || process.env.OPENAI_API_KEY || '';
+                const apiKey = openaiClient?.apiKey || process.env.OPENAI_API_KEY || "";
                 const maskedKey = apiKey.match(/^sk-([a-zA-Z0-9]{4})[a-zA-Z0-9]+([a-zA-Z0-9]{4})$/)
                     ? `sk-${RegExp.$1}...${RegExp.$2}`
                     : 'sk-****';
@@ -1021,7 +1088,8 @@ const job_handler = async (job_data, queues, apis) => {
                 await markTranscriptionError({
                     error,
                     code: "transcription_failed",
-                    isQuotaRetryable: isQuotaError(error)
+                    isQuotaRetryable: isQuotaError(error),
+                    filePath: fileLink,
                 });
                 return;
             }
