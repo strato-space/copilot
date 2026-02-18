@@ -121,6 +121,7 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-xgk` и `copilot-s93`: runtime-isolation contract усилен для aggregate `$lookup`-pipeline (`backend/src/services/db.ts`, `backend/src/services/runtimeScope.ts`) и socket auth contract покрыт unit-tests (`backend/__tests__/services/dbAggregateRuntimeScope.test.ts`, `backend/__tests__/voicebot/voicebotSocketAuth.test.ts`).
 - [v] Закрыты changelog-gap `copilot-sm0` и `copilot-orh`: подтверждены строгий 4-line Telegram output контракт и `/login` one-time `tg_auth`, независимый от active-session; тесты `backend/__tests__/voicebot/sessionTelegramMessage.test.ts`, `backend/__tests__/voicebot/doneNotifyService.test.ts`, `backend/__tests__/voicebot/tgCommandHandlers.test.ts`.
 - [v] Закрыты changelog-gap `copilot-ueu` и `copilot-szo`: подтверждены runtime-mismatch экран без infinite loader и parity управления `New/Rec/Cut/Pause/Done` на page+FAB; тесты `app/e2e/voice.spec.ts` и `app/e2e/voice-fab-lifecycle.spec.ts`.
+- [v] Закрыты changelog-gap `copilot-ajg` и `copilot-qkd`: подтверждены backend session flow и Web API/UI active-session controls (create/activate/active-session + runtime compatibility) по тестам `backend/__tests__/voicebot/sessions.test.ts`, `backend/__tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`, `backend/__tests__/voicebot/tgCommandHandlers.test.ts`.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
