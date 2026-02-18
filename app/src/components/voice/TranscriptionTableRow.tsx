@@ -159,9 +159,36 @@ const getSegmentsFromMessage = (msg: VoiceBotMessage): TranscriptionSegment[] =>
     return [];
 };
 
-const formatSegmentMeta = (seg: TranscriptionSegment): string => {
+const isTechnicalSpeakerLabel = (label: string): boolean => {
+    const normalized = label.trim().toLowerCase();
+    if (!normalized || normalized === 'unknown') return true;
+    if (/^spk[_-]?\d+$/.test(normalized)) return true;
+    if (/^speaker\s*\d+$/.test(normalized)) return true;
+    if (/^\d+$/.test(normalized)) return true;
+    if (/^[a-zа-я]$/i.test(normalized)) return true;
+    return false;
+};
+
+const buildSpeakerDisplayMap = (segments: TranscriptionSegment[]): Map<string, string> => {
+    const speakerMap = new Map<string, string>();
+    let nextSpeakerNumber = 1;
+
+    for (const seg of segments) {
+        const rawSpeaker = typeof seg?.speaker === 'string' && seg.speaker.trim() ? seg.speaker.trim() : '';
+        if (!rawSpeaker) continue;
+        if (!isTechnicalSpeakerLabel(rawSpeaker)) continue;
+        if (speakerMap.has(rawSpeaker)) continue;
+        speakerMap.set(rawSpeaker, `Спикер ${nextSpeakerNumber}`);
+        nextSpeakerNumber += 1;
+    }
+
+    return speakerMap;
+};
+
+const formatSegmentMeta = (seg: TranscriptionSegment, speakerDisplayMap: Map<string, string>): string => {
     const speaker = typeof seg.speaker === 'string' && seg.speaker.trim() ? seg.speaker.trim() : '';
-    return speaker;
+    if (!speaker) return '';
+    return speakerDisplayMap.get(speaker) ?? speaker;
 };
 
 const isSegmentOid = (value: unknown): value is string => typeof value === 'string' && value.startsWith('ch_');
@@ -258,6 +285,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
 
     const segments = getSegmentsFromMessage(row);
     const visibleSegments = segments.filter((seg) => !seg?.is_deleted);
+    const speakerDisplayMap = buildSpeakerDisplayMap(segments);
 
     const [editingOid, setEditingOid] = useState<string | null>(null);
     const [draftText, setDraftText] = useState('');
@@ -376,7 +404,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                     {visibleSegments.length > 0 ? (
                         visibleSegments.map((seg, segIdx) => {
                             const segmentKey = seg?.id || `${row?._id || row?.message_id || 'msg'}:${segIdx}`;
-                            const segmentMeta = formatSegmentMeta(seg);
+                            const segmentMeta = formatSegmentMeta(seg, speakerDisplayMap);
                             const timelineLabel = formatSegmentTimeline(seg, row, sessionBaseTimestampMs);
                             const showActions = isSegmentOid(seg?.id);
                             const isEditing = editingOid === seg?.id;

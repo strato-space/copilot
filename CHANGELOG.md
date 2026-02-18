@@ -105,6 +105,11 @@
 - **23:48** Reworked MeetingCard header action buttons to centered circle-icon rendering (`Edit`/`AI`/`Summarize`) using flex wrappers to prevent baseline drift in icon glyph alignment.
 - **23:49** Closed changelog-gap verification tasks `copilot-ap6`, `copilot-ziw`, `copilot-jfi`, and `copilot-g68` with test-backed frontend/store parity evidence.
 - **23:57** Closed changelog-gap verification tasks `copilot-eho`, `copilot-b9i`, and `copilot-om9` with docs-sync evidence for event-log source requirements, immutable `transcription_raw -> transcription` chain, and session-level transcript versioning/final-effective response contract in synced planning artifacts.
+- **00:11** Updated `/voicebot/update_project` parity: notify-context log events are now emitted only when `project_id` actually changes and include `old_project_id`/`project_id` metadata; no project-assignment notify side-effect is tied to `update_name`.
+- **00:11** Added regression contracts for append-only session-log replay lineage (`source_event_id`, `is_replay`, `event_version`) and for session-page tabs ordering (Log tab last).
+- **00:12** Closed changelog-gap verification tasks `copilot-jyr`, `copilot-th5`, and `copilot-9hl` with backend/app test-backed parity evidence.
+- **00:19** Added speaker-display normalization in Copilot transcription UI: technical raw labels map to `Спикер 1/2/...` in display layer while preserving original raw labels in message/transcription data.
+- **00:19** Closed changelog-gap verification task `copilot-tyz` with test-backed speaker mapping parity evidence.
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -188,6 +193,11 @@
 - **23:46** `cd app && npm test -- --runInBand __tests__/voice/meetingCardSummarizeAndIconContract.test.ts __tests__/voice/voiceBotStoreSummarizeContract.test.ts __tests__/voice/meetingCardStateMapping.test.ts`
 - **23:47** `cd app && npm run build`
 - **23:56** `cd voicebot_runtime && npx jest --runInBand __tests__/docs/transcript_versioning_plans_smoke.test.js __tests__/docs/event_log_plan_sync_docs_smoke.test.js`
+- **00:08** `cd app && npm test -- --runInBand __tests__/voice/sessionPageTabsOrderContract.test.ts __tests__/voice/transcriptionRowActions.test.ts`
+- **00:09** `cd backend && npm test -- --runInBand __tests__/voicebot/updateProjectNotifyContract.test.ts __tests__/voicebot/sessionLogAppendOnlyContract.test.ts __tests__/voicebot/sessionLogRouteContract.test.ts`
+- **00:10** `cd backend && npm run build`
+- **00:17** `cd app && npm test -- --runInBand __tests__/voice/speakerDisplayContract.test.ts __tests__/voice/transcriptionRowActions.test.ts __tests__/voice/sessionPageTabsOrderContract.test.ts`
+- **00:18** `cd app && npm run build`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

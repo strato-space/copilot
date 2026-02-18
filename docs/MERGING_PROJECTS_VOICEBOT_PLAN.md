@@ -179,6 +179,12 @@ Source of truth: см. раздел `## Финальная структура п
 
 - [v] Закрыты changelog-gap `copilot-eho`, `copilot-b9i`, `copilot-om9`: подтверждена синхронизация planning-артефактов для event-log/edit/rollback и transcript-versioning (`edit-event-log-req`, `edit-event-log-plan`, `gpt-4o-transcribe-diarize-plan`, `implementation-draft-v1`) с контрактом `transcription_raw -> transcription` и session-level final-effective transcript semantics. Tests: `voicebot_runtime/__tests__/docs/transcript_versioning_plans_smoke.test.js`, `voicebot_runtime/__tests__/docs/event_log_plan_sync_docs_smoke.test.js`.
 
+- [v] Закрыт changelog-gap `copilot-jyr`: route `/voicebot/update_project` теперь логирует notify-context только при фактической смене `project_id` (`old_project_id`/`project_id` в metadata), а `update_name` не создает project-assignment notify side-effects. Test: `backend/__tests__/voicebot/updateProjectNotifyContract.test.ts`.
+- [v] Закрыт changelog-gap `copilot-th5`: подтверждены hover-only segment actions + optional `reason` contract и размещение вкладки `Log` в конце tab bar (`SessionPage`). Tests: `app/__tests__/voice/transcriptionRowActions.test.ts`, `app/__tests__/voice/sessionPageTabsOrderContract.test.ts`.
+- [v] Закрыт changelog-gap `copilot-9hl`: подтвержден append-only session log/replay contract для rollback/resend/retry (`source_event_id`, `is_replay`, `event_version`, insert-only write path). Tests: `backend/__tests__/voicebot/sessionLogAppendOnlyContract.test.ts`, `backend/__tests__/voicebot/sessionLogRouteContract.test.ts`.
+
+- [v] Закрыт changelog-gap `copilot-tyz`: добавлено deterministic speaker-display mapping в Transcription UI — технические raw labels (`spk_*`, single-letter, numeric, `Unknown`) отображаются как `Спикер 1/2/...`, при этом raw labels сохраняются в данных/контракте. Tests: `app/__tests__/voice/speakerDisplayContract.test.ts`.
+
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
 - [x] T2 `POST /api/voicebot/create_session` создает и активирует новую сессию.

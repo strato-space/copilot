@@ -986,27 +986,88 @@ router.post('/update_name', async (req: Request, res: Response) => {
  * Update session project
  */
 router.post('/update_project', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
     const db = getDb();
 
     try {
-        const { session_id, project_id } = req.body;
-        if (!session_id || !project_id) {
-            return res.status(400).json({ error: "session_id and project_id are required" });
+        const sessionId = String(req.body?.session_id || '').trim();
+        const projectId = String(req.body?.project_id || '').trim();
+        if (!sessionId || !projectId) {
+            return res.status(400).json({ error: 'session_id and project_id are required' });
+        }
+        if (!ObjectId.isValid(sessionId) || !ObjectId.isValid(projectId)) {
+            return res.status(400).json({ error: 'Invalid session_id/project_id' });
         }
 
+        const { session, hasAccess } = await resolveSessionAccess({
+            db,
+            performer,
+            sessionId,
+        });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const oldProjectId = session.project_id ? String(session.project_id) : null;
+        const projectChanged = oldProjectId !== projectId;
+
         const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(session_id) },
-            { $set: { project_id: new ObjectId(project_id) } }
+            runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+            { $set: { project_id: new ObjectId(projectId), updated_at: new Date() } }
         );
 
         if (result.matchedCount === 0) {
-            return res.status(404).json({ error: "Session not found" });
+            return res.status(404).json({ error: 'Session not found' });
         }
 
-        res.status(200).json({ success: true });
+        if (projectChanged) {
+            const actor = buildActorFromPerformer(performer);
+            const source = buildWebSource(req);
+
+            await insertSessionLogEvent({
+                db,
+                session_id: new ObjectId(sessionId),
+                project_id: new ObjectId(projectId),
+                event_name: 'notify_requested',
+                status: 'done',
+                actor,
+                source,
+                action: { available: true, type: 'resend' },
+                metadata: {
+                    notify_event: VOICEBOT_JOBS.notifies.SESSION_PROJECT_ASSIGNED,
+                    notify_payload: { project_id: projectId, old_project_id: oldProjectId },
+                    source: 'project_update',
+                },
+            });
+
+            if (session.is_active === false) {
+                await insertSessionLogEvent({
+                    db,
+                    session_id: new ObjectId(sessionId),
+                    project_id: new ObjectId(projectId),
+                    event_name: 'notify_requested',
+                    status: 'done',
+                    actor,
+                    source,
+                    action: { available: true, type: 'resend' },
+                    metadata: {
+                        notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+                        notify_payload: { project_id: projectId },
+                        source: 'project_update_after_done',
+                    },
+                });
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            project_changed: projectChanged,
+            project_id: projectId,
+            old_project_id: oldProjectId,
+        });
     } catch (error) {
         logger.error('Error in sessions/update_project:', error);
-        res.status(500).json({ error: String(error) });
+        return res.status(500).json({ error: String(error) });
     }
 });
 
