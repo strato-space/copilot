@@ -167,6 +167,7 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-be3` и `copilot-8zy`: подтверждено, что обновления `gpt-4o-transcribe-diarize-plan` + `edit-event-log-plan` синхронизированы как docs-only изменения (без runtime/API drift), что дополнительно подтверждено backend smoke `backend/__tests__/smoke/voicebotApiSmoke.test.ts`.
 - [v] Закрыты changelog-gap `copilot-b24` и `copilot-89c`: подтверждены inline/hover segment edit-delete UX и optional `reason` контракт для session-log action endpoints (frontend payload + backend route parsing). Tests: `app/__tests__/voice/transcriptionRowActions.test.ts`, `backend/__tests__/voicebot/reasonOptionalRouteContract.test.ts`.
 - [v] Закрыты changelog-gap `copilot-io6` и `copilot-3vx`: подтверждены вкладки `Transcription`/`Log`, segment edit/delete wiring и event actions (rollback/resend/retry) в e2e `app/e2e/voice-log.spec.ts` (prod URL, chromium-unauth).
+- [v] Закрыты changelog-gap `copilot-pim` и `copilot-8h6`: подтверждены backend session-log storage/action routes (edit/delete/rollback/retry/resend) и snake_case event taxonomy с actor/target metadata; tests `backend/__tests__/voicebot/sessionLogRouteContract.test.ts` + e2e `app/e2e/voice-log.spec.ts`.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.
