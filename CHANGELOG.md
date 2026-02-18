@@ -141,7 +141,9 @@
 - **20:08** `cd app && npm test -- --runInBand __tests__/voice/transcriptionRowActions.test.ts`
 - **20:42** `cd app && npm test -- --runInBand __tests__/voice/transcriptionRowActions.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts`
 - **20:42** `cd voicebot_runtime && npx jest --runInBand __tests__/services/transcriptionTimeline.test.js`
-- **21:06** `cd voicebot_runtime && npx jest --runInBand __tests__/services/transcriptionTimeline.test.js __tests__/common_jobs/done_multiprompt.test.js __tests__/cli/recalc_session_duration_cli_smoke.test.js`
+- **21:06** `cd voicebot_runtime && npx jest --runInBand __tests__/services/transcriptionTimeline.test.js __tests__/common_jobs/done_multiprompt.test.js __tests__/cli/recalc_session_duration_cli_smoke.test.js`- **22:52** Closed changelog-gap verification tasks `copilot-dw8` and `copilot-ot2` with test evidence for duration/timeline parity and operator edit/delete segment UI actions (tests: `backend/__tests__/voicebot/audioUtils.test.ts`, `voicebot_runtime/__tests__/services/transcriptionTimeline.test.js`, `app/__tests__/voice/transcriptionRowActions.test.ts`).
+- **22:52** Updated migration evidence notes in `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`.
+
 ## 2026-02-17
 ### PROBLEM SOLVED
 - **21:49** Voice migration after 2026-02-05 required strict runtime isolation in shared Mongo/Redis to avoid dev/prod cross-processing.
