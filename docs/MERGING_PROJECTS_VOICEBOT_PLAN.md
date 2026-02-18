@@ -161,6 +161,8 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыт changelog-gap `copilot-zhd`: подтверждена runtime isolation защита от cross-runtime leakage в shared Mongo/Redis (runtime filters + aggregate lookup scoping + prod-family compatibility); tests `backend/__tests__/voicebot/runtimeScope.test.ts`, `backend/__tests__/services/dbAggregateRuntimeScope.test.ts`, `backend/__tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`.
 - [v] Закрыта задача `copilot-fko`: матрица миграции Playwright (`voicebot/webrtc -> copilot`) зафиксирована в `docs/PLAYWRIGHT_MIGRATION_MATRIX.md` со статусами `[v]/[x]/[~]` и подтверждена e2e smoke-run (`e2e/voice.spec.ts`, chromium-unauth).
 - [v] Закрыта задача `copilot-7bm`: сформирована и поддерживается 1:1 матрица проверок changelog (`133` BD задач с label `voicebot-changelog-gap`) на базе `docs/VOICEBOT_CHANGELOG_GAP_MATRIX_2026-02-05.{md,json}`.
+- [v] Закрыт bug `copilot-ad4`: восстановлена сессия `69953b9207290561f6e9c96a` после runtime-изоляции/cutover фиксов; операционная проверка Mongo подтвердила `is_messages_processed=true`, `transcribed=21/21`, `transcription_error=0`.
+- [v] Закрыты changelog-gap `copilot-d9l` и `copilot-g44`: пункты о bump `app/package.json` (`0.0.38/0.0.39`) отмечены как repo-local version bookkeeping (в copilot независимая semver линия `1.0.2`), функционального gap нет.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.

@@ -1,4 +1,4 @@
-import axios, { type AxiosProgressEvent } from 'axios';
+import axios, { type AxiosProgressEvent, type AxiosRequestConfig } from 'axios';
 import { create } from 'zustand';
 import update from 'immutability-helper';
 import _ from 'lodash';
@@ -940,14 +940,19 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             formData.append('audio', file);
             formData.append('session_id', sessionId);
 
-            const response = await axios.post(`${backendUrl}/voicebot/uploads/audio`, formData, {
+            const requestConfig: AxiosRequestConfig<FormData> = {
                 headers: {
                     'X-Authorization': authToken ?? '',
                 },
-                // Byte-level progress for large uploads (UI)
-                onUploadProgress: opt?.onUploadProgress,
                 withCredentials: true,
-            });
+            };
+
+            // Byte-level progress for large uploads (UI)
+            if (opt?.onUploadProgress) {
+                requestConfig.onUploadProgress = opt.onUploadProgress;
+            }
+
+            const response = await axios.post(`${backendUrl}/voicebot/uploads/audio`, formData, requestConfig);
             return response.data;
         } catch (e) {
             console.error('Ошибка при загрузке аудио файла:', e);

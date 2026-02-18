@@ -88,6 +88,10 @@
 - **22:57** Closed changelog-gap verification tasks `copilot-9qu` and `copilot-7v2` with evidence for 4-line done/notify Telegram output and session control/state-marker parity (source `Rec/Activate/Done` treated as superseded by current `New/Rec/Cut/Pause/Done` contract).
 - **22:56** Closed changelog-gap verification tasks `copilot-nrv` and `copilot-zhd` with evidence for quota-retry recovery semantics (`insufficient_quota` stays retryable) and runtime isolation across shared Mongo/Redis (including aggregate lookup scoping + prod-family compatibility).
 - **22:58** Closed tracking tasks `copilot-fko` and `copilot-7bm`: finalized Playwright migration matrix (`voicebot/webrtc -> copilot`) and completed 1:1 changelog verification registration (133 `voicebot-changelog-gap` tasks).
+- **23:03** Fixed strict TS build regressions in voice UI/store: `TranscriptionTableRow` now uses exact-optional-safe payload/timeline typing, and `uploadAudioFile` now wires `onUploadProgress` via conditional `AxiosRequestConfig` assignment (no implicit undefined config fields).
+- **23:03** Updated `app/__tests__/voice/audioUploadProgress.test.ts` for the new progress wiring contract (`requestConfig.onUploadProgress` assignment).
+- **23:03** Closed bug `copilot-ad4` after runtime recovery verification for session `69953b9207290561f6e9c96a` (`is_messages_processed=true`, `transcribed=21/21`, no transcription errors).
+- **23:03** Closed changelog-gap verification tasks `copilot-d9l` and `copilot-g44` as non-functional version-bump bookkeeping (copilot keeps independent app semver).
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -154,6 +158,8 @@
 - **22:56** `cd backend && npm test -- --runInBand __tests__/voicebot/runtimeScope.test.ts __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
 - **22:58** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth --grep "@unauth loads /voice sessions table|@unauth resolves /voice/session to active-session"`
 - **22:58** `cd /home/strato-space/copilot && bd list --all | rg "voicebot-changelog-gap" | wc -l` (expected `133`)
+- **23:02** `cd app && npm run build`
+- **23:03** `cd app && npm test -- --runInBand __tests__/voice/transcriptionRowActions.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts __tests__/voice/audioUploadProgress.test.ts`
 
 ## 2026-02-17
 ### PROBLEM SOLVED

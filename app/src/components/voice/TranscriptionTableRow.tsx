@@ -12,13 +12,13 @@ interface TranscriptionTableRowProps {
 }
 
 type TranscriptionSegment = {
-    id?: string;
-    start?: number | null;
-    end?: number | null;
-    speaker?: string | null;
-    text?: string;
-    is_deleted?: boolean;
-    absoluteTimestampMs?: number | null;
+    id?: string | undefined;
+    start?: number | null | undefined;
+    end?: number | null | undefined;
+    speaker?: string | null | undefined;
+    text?: string | undefined;
+    is_deleted?: boolean | undefined;
+    absoluteTimestampMs?: number | null | undefined;
 };
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
@@ -188,13 +188,18 @@ const formatSegmentTimeline = (
     let relativeStartSeconds = start;
     let relativeEndSeconds: number | null = hasEnd ? end : null;
 
-    if (Number.isFinite(sessionBaseTimestampMs)) {
+    const sessionBaseMs =
+        typeof sessionBaseTimestampMs === 'number' && Number.isFinite(sessionBaseTimestampMs)
+            ? sessionBaseTimestampMs
+            : null;
+
+    if (sessionBaseMs != null) {
         if (messageTimestampMs != null) {
-            const messageOffsetSeconds = Math.max(0, (messageTimestampMs - sessionBaseTimestampMs) / 1000);
+            const messageOffsetSeconds = Math.max(0, (messageTimestampMs - sessionBaseMs) / 1000);
             relativeStartSeconds = messageOffsetSeconds + start;
             if (hasEnd) relativeEndSeconds = messageOffsetSeconds + end;
         } else if (segmentAbsoluteStartMs != null) {
-            const sessionStartSeconds = Math.max(0, (segmentAbsoluteStartMs - sessionBaseTimestampMs) / 1000);
+            const sessionStartSeconds = Math.max(0, (segmentAbsoluteStartMs - sessionBaseMs) / 1000);
             relativeStartSeconds = sessionStartSeconds;
             if (hasEnd) relativeEndSeconds = sessionStartSeconds + (end - start);
         }
@@ -289,16 +294,14 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
 
         setBusyOid(editingOid);
         try {
-            await editTranscriptChunk(
-                {
-                    session_id: sessionId,
-                    message_id: messageId,
-                    segment_oid: editingOid,
-                    new_text: draftText,
-                    reason: draftReason.trim() ? draftReason.trim() : undefined,
-                },
-                { silent: true }
-            );
+            const payload = {
+                session_id: sessionId,
+                message_id: messageId,
+                segment_oid: editingOid,
+                new_text: draftText,
+                ...(draftReason.trim() ? { reason: draftReason.trim() } : {}),
+            };
+            await editTranscriptChunk(payload, { silent: true });
             await fetchVoiceBotSession(sessionId);
             message.success('Saved');
             setEditingOid(null);

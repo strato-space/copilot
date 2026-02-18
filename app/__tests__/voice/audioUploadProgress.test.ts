@@ -8,7 +8,8 @@ describe('AudioUploader byte-level upload progress', () => {
   const storeSource = fs.readFileSync(storePath, 'utf8');
 
   it('passes onUploadProgress through to axios and does not force multipart Content-Type', () => {
-    expect(storeSource).toContain('onUploadProgress: opt?.onUploadProgress');
+    expect(storeSource).toContain('if (opt?.onUploadProgress)');
+    expect(storeSource).toContain('requestConfig.onUploadProgress = opt.onUploadProgress;');
     expect(storeSource).not.toContain("'Content-Type': 'multipart/form-data'");
   });
 
