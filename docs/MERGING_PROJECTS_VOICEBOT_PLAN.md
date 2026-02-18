@@ -136,6 +136,7 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Закрыты changelog-gap `copilot-8qn` и `copilot-3y0`: подтверждено, что migration-spec в copilot покрывает lifecycle/session-routing модель и полный операторский набор TG-команд (`/start` `/session` `/done` `/login`).
 - [v] Закрыты changelog-gap `copilot-328` и `copilot-wxa`: подтверждена end-to-end цепочка session attachments и UI-вкладка `Screenshort` (preview/caption/timestamp).
 - [v] Закрыты changelog-gap `copilot-xhb` и `copilot-emo`: подтверждены Jest smoke tests для Telegram attachment flow/proxy endpoints и нормализация TG response формата на public-host links + metadata.
+- [v] Закрыты changelog-gap `copilot-2nj` и `copilot-mwg`: подтверждены auto-recovery после `insufficient_quota` (quota-only corruption clear + requeue) и защита от Redis enqueue-fail (rollback `is_processing` при ошибке `queue.add`); unit-tests в `voicebot_runtime/__tests__/common_jobs/processing_loop_quota_recovery.test.js` и `voicebot_runtime/__tests__/voicebot/categorization_enqueue_failure.test.js`.
 
 ### Тестовый чеклист T1-T18 (актуальный статус, `[v]` = подтверждено тестами)
 - [x] T1 `POST /api/voicebot/active_session` без active -> `{active_session:null}`.

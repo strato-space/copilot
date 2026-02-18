@@ -1,5 +1,10 @@
 // Test setup and configuration
-const { MongoMemoryServer } = require('mongodb-memory-server');
+// mongodb-memory-server is only required by some integration/smoke suites; keep unit runs workable on prod-like installs.
+try {
+    require('mongodb-memory-server');
+} catch {
+    // optional
+}
 
 // Mock environment variables for testing
 process.env.NODE_ENV = 'test';
