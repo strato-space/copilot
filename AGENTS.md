@@ -131,7 +131,7 @@ Preferred engineering principles for this repo:
 ### PM2 services (prod) -> repo paths
 - `copilot-backend-prod` — Finance Ops backend API (`npm run start` with `backend/.env.production`).
 - `copilot-miniapp-backend-prod` — Miniapp backend API (`npm run start:miniapp` with `backend/.env.production`).
-- `copilot-voicebot-tgbot-prod` — TG bot runtime from `backend/dist/voicebot_tgbot/runtime.js` (`npm run start:voicebot-tgbot`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js` with env `backend/.env.production`.
+- `copilot-voicebot-tgbot-prod` — TG bot runtime from `backend/dist/voicebot_tgbot/runtime.js` (`npm run start:voicebot-tgbot`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; env is merged from `backend/.env.production` plus `voicebot_runtime/.env.prod-cutover` (TG/runtime overrides).
 
 ### PM2 services (dev) -> repo paths
 - `copilot-backend-dev` / `copilot-backend-local` — backend API (`npm run dev` with `backend/.env.development`).

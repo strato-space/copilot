@@ -527,4 +527,4 @@
 - **01:25** Added `backend/__tests__/voicebot/runtimeNonCommandHandlers.test.ts` for command-text filtering, forwarded/reply context extraction, and attachment ingress routing.
 - **01:25** Re-ran targeted TG suites and backend build (`tgCommandHandlers`, `tgIngressHandlers`, `runtimeNonCommandHandlers`, `npm run build`).
 - **01:35** Added `backend/__tests__/voicebot/workerIngressHandlers.test.ts` to validate TS worker wrapper delegation for `HANDLE_VOICE`, `HANDLE_TEXT`, `HANDLE_ATTACHMENT` and payload normalization.
-- **01:50** Updated `scripts/pm2-voicebot-cutover.ecosystem.config.js` to launch `copilot-voicebot-tgbot-prod` from backend TypeScript runtime (`npm run start:voicebot-tgbot` with `backend/.env.production`) instead of legacy `voicebot_runtime/voicebot-tgbot.js`.
+- **01:50** Updated `scripts/pm2-voicebot-cutover.ecosystem.config.js` to launch `copilot-voicebot-tgbot-prod` from backend TypeScript runtime (`npm run start:voicebot-tgbot`) with merged env (`backend/.env.production` + `voicebot_runtime/.env.prod-cutover`) instead of legacy `voicebot_runtime/voicebot-tgbot.js`.
