@@ -95,6 +95,7 @@
 - **23:12** Closed changelog-gap verification tasks `copilot-t85`, `copilot-2tr`, `copilot-6av` with doc-smoke evidence for synced event-log and diarization planning artifacts in `docs/voicebot-plan-sync/*` (including immutable `transcription_raw -> transcription` contract).
 - **23:13** Closed changelog-gap verification tasks `copilot-be3` and `copilot-8zy`: synced planning specs (`gpt-4o-transcribe-diarize-plan`, `edit-event-log-plan`) are tracked as docs-only with no runtime/API regressions.
 - **23:15** Closed changelog-gap verification tasks `copilot-b24` and `copilot-89c`: validated inline/hover transcript editing UX plus optional `reason` contract on session-log action endpoints (frontend + backend parity).
+- **23:17** Closed changelog-gap verification tasks `copilot-io6` and `copilot-3vx` with e2e evidence for Transcription/Log tabs, segment edit-delete wiring, and rollback/resend/retry session-log actions.
 
 - **16:07** Added voicebot_runtime unit coverage for quota recovery and enqueue-failure rollback; made `voicebot_runtime/__tests__/setup.js` tolerant of missing `mongodb-memory-server` so unit tests can run on prod-like installs.
 
@@ -167,6 +168,7 @@
 - **23:13** `cd backend && npm test -- --runInBand __tests__/smoke/voicebotApiSmoke.test.ts`
 - **23:14** `cd app && npm test -- --runInBand __tests__/voice/transcriptionRowActions.test.ts`
 - **23:14** `cd backend && npm test -- --runInBand __tests__/voicebot/reasonOptionalRouteContract.test.ts`
+- **23:16** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-log.spec.ts --project=chromium-unauth`
 
 ## 2026-02-17
 ### PROBLEM SOLVED
