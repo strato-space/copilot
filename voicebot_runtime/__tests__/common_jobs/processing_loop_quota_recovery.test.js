@@ -126,4 +126,97 @@ describe("processing_loop quota recovery", () => {
             expect.objectContaining({ deduplication: expect.any(Object) })
         );
     });
+
+
+    it("resets stale categorization locks in quota-retry state (allows requeue)", async () => {
+        const sessionId = new ObjectId();
+        const messageId = new ObjectId();
+
+        const session = {
+            _id: sessionId,
+            runtime_tag: constants.RUNTIME_TAG,
+            is_messages_processed: false,
+            is_waiting: false,
+            is_corrupted: false,
+            processors: [],
+        };
+
+        const msg = {
+            _id: messageId,
+            runtime_tag: constants.RUNTIME_TAG,
+            session_id: sessionId,
+            chat_id: 123456,
+            message_id: 2,
+            message_timestamp: 2,
+            is_transcribed: true,
+            categorization_retry_reason: "insufficient_quota",
+            processors_data: {
+                categorization: {
+                    is_processing: true,
+                    is_processed: false,
+                    is_finished: false,
+                    job_queued_timestamp: Date.now() - 60_000,
+                },
+            },
+        };
+
+        const sessionsFind = jest
+            .fn()
+            .mockImplementationOnce(() => ({ toArray: async () => [session] }))
+            .mockImplementationOnce(() => ({ toArray: async () => [] }));
+        const sessionsUpdateOne = jest.fn().mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
+
+        const messagesFind = jest.fn(() => ({
+            sort: jest.fn(() => ({ toArray: async () => [msg] })),
+        }));
+        const messagesUpdateOne = jest.fn().mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
+
+        const db = {
+            collection: jest.fn((name) => {
+                if (name === constants.collections.VOICE_BOT_SESSIONS) {
+                    return {
+                        find: sessionsFind,
+                        updateOne: sessionsUpdateOne,
+                    };
+                }
+                if (name === constants.collections.VOICE_BOT_MESSAGES) {
+                    return {
+                        find: messagesFind,
+                        updateOne: messagesUpdateOne,
+                    };
+                }
+                throw new Error(`Unexpected collection: ${name}`);
+            }),
+        };
+
+        const voiceQueue = { add: jest.fn().mockResolvedValue({ id: "voice-job" }) };
+        const processorsQueue = { add: jest.fn().mockResolvedValue({ id: "proc-job" }) };
+
+        const queues = {
+            [constants.voice_bot_queues.VOICE]: voiceQueue,
+            [constants.voice_bot_queues.PROCESSORS]: processorsQueue,
+        };
+
+        const apis = {
+            tgbot: { telegram: {} },
+            openaiClient: {},
+            db,
+            logger: global.testUtils.createMockLogger(),
+        };
+
+        await processingLoopJob({}, queues, apis);
+
+        const resetCall = messagesUpdateOne.mock.calls.find((call) => {
+            const update = call?.[1] || {};
+            return update?.$set?.["processors_data.categorization.is_processing"] === false;
+        });
+        expect(resetCall).toBeTruthy();
+        expect(resetCall[1].$set).toEqual(
+            expect.objectContaining({
+                "processors_data.categorization.is_processing": false,
+                "processors_data.categorization.is_processed": false,
+                "processors_data.categorization.is_finished": false,
+            })
+        );
+    });
 });
