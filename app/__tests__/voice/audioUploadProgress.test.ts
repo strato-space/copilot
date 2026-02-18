@@ -24,4 +24,10 @@ describe('AudioUploader byte-level upload progress', () => {
     // UI feedback includes MB counters.
     expect(uploaderSource).toContain('MB /');
   });
+
+  it('shows helpful error hints for common failures (413/network/timeout)', () => {
+    expect(uploaderSource).toContain('status === 413');
+    expect(uploaderSource).toContain('ECONNABORTED');
+    expect(uploaderSource).toContain("includes('network')");
+  });
 });

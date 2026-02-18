@@ -30,6 +30,27 @@ const formatMb = (bytes: number): string => {
     return (bytes / (1024 * 1024)).toFixed(1);
 };
 
+const describeUploadError = (error: unknown): string => {
+    const err = error as {
+        response?: { status?: number };
+        code?: string;
+        message?: string;
+    };
+
+    const status = typeof err?.response?.status === 'number' ? err.response.status : null;
+    if (status === 413) {
+        return 'Файл слишком большой для лимита сервера (413). Если файл < 600MB, нужно увеличить лимит на edge (Nginx).';
+    }
+    if (err?.code === 'ECONNABORTED') {
+        return 'Таймаут загрузки. Повторите попытку и не закрывайте вкладку во время загрузки.';
+    }
+    if (typeof err?.message === 'string' && err.message.toLowerCase().includes('network')) {
+        return 'Сетевая ошибка при загрузке. Проверьте соединение и попробуйте снова.';
+    }
+    return 'Ошибка загрузки файла.';
+};
+
+
 export default function AudioUploader({ sessionId, onUploadComplete, disabled = false }: AudioUploaderProps) {
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -105,6 +126,7 @@ export default function AudioUploader({ sessionId, onUploadComplete, disabled = 
                 console.error('Upload failed:', error);
                 results.push({ file, error, success: false });
                 failCount += 1;
+                message.error(describeUploadError(error));
             }
         }
 
