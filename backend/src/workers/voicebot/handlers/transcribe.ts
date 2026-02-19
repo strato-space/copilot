@@ -1,13 +1,19 @@
 import { createReadStream, existsSync } from 'node:fs';
 import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
-import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
+import {
+  VOICEBOT_COLLECTIONS,
+  VOICEBOT_JOBS,
+  VOICEBOT_PROCESSORS,
+  VOICEBOT_QUEUES,
+} from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import {
   IS_PROD_RUNTIME,
   mergeWithRuntimeFilter,
   RUNTIME_SERVER_NAME,
 } from '../../../services/runtimeScope.js';
+import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import {
   buildSegmentsFromChunks,
   resolveMessageDurationSeconds,
@@ -38,13 +44,24 @@ type VoiceMessageRecord = {
   is_transcribed?: boolean;
   transcribe_attempts?: number;
   transcription_retry_reason?: string;
+  file_hash?: string;
+  file_unique_id?: string;
+  hash_sha256?: string;
   file_path?: string;
   message_timestamp?: number;
   duration?: number;
+  processors_data?: Record<string, unknown>;
+  transcription_text?: string;
+  text?: string;
+  transcription_raw?: unknown;
+  transcription?: unknown;
+  transcription_chunks?: unknown[];
+  task?: string;
 };
 
 type VoiceSessionRecord = {
   _id: ObjectId;
+  processors?: unknown[];
 };
 
 const HARD_MAX_TRANSCRIBE_ATTEMPTS = 10;
@@ -174,6 +191,82 @@ const createOpenAiClient = (): { apiKey: string; client: OpenAI | null } => {
   };
 };
 
+const resolveMessageContentHash = (message: VoiceMessageRecord): string => {
+  const candidates = [message.file_hash, message.file_unique_id, message.hash_sha256];
+  for (const value of candidates) {
+    const normalized = String(value || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
+const shouldUseTranscriptionReuse = (message: VoiceMessageRecord): boolean => {
+  const hasText = typeof message.transcription_text === 'string' && message.transcription_text.trim().length > 0;
+  const hasChunks = Array.isArray(message.transcription_chunks) && message.transcription_chunks.length > 0;
+  const hasPayload = Boolean(message.transcription);
+  return hasText || hasChunks || hasPayload;
+};
+
+const enqueueCategorizationIfEnabled = async ({
+  db,
+  session,
+  session_id,
+  message_id,
+  messageObjectId,
+}: {
+  db: ReturnType<typeof getDb>;
+  session: VoiceSessionRecord;
+  session_id: string;
+  message_id: string;
+  messageObjectId: ObjectId;
+}): Promise<void> => {
+  const sessionProcessors = Array.isArray(session.processors)
+    ? session.processors.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
+  const categorizationEnabled =
+    sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_PROCESSORS.CATEGORIZATION);
+
+  if (!categorizationEnabled) return;
+
+  const queues = getVoicebotQueues();
+  const processorsQueue = queues?.[VOICEBOT_QUEUES.PROCESSORS];
+  if (!processorsQueue) {
+    logger.warn('[voicebot-worker] processors queue unavailable after transcribe', {
+      message_id,
+      session_id,
+    });
+    return;
+  }
+
+  const processorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
+  const jobId = `${session_id}-${message_id}-CATEGORIZE`;
+  await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+    $set: {
+      [`${processorKey}.is_processing`]: true,
+      [`${processorKey}.is_processed`]: false,
+      [`${processorKey}.is_finished`]: false,
+      [`${processorKey}.job_queued_timestamp`]: Date.now(),
+    },
+    $unset: {
+      categorization_retry_reason: 1,
+      categorization_next_attempt_at: 1,
+      categorization_error: 1,
+      categorization_error_message: 1,
+      categorization_error_timestamp: 1,
+    },
+  });
+
+  await processorsQueue.add(
+    VOICEBOT_JOBS.voice.CATEGORIZE,
+    {
+      message_id,
+      session_id,
+      job_id: jobId,
+    },
+    { deduplication: { id: jobId } }
+  );
+};
+
 export const handleTranscribeJob = async (
   payload: TranscribeJobData
 ): Promise<TranscribeResult> => {
@@ -214,6 +307,91 @@ export const handleTranscribeJob = async (
       message_id,
       session_id,
     };
+  }
+
+  const contentHash = resolveMessageContentHash(message);
+  if (contentHash) {
+    const reuseSource = (await db
+      .collection(VOICEBOT_COLLECTIONS.MESSAGES)
+      .findOne(
+        runtimeQuery({
+          session_id: sessionObjectId,
+          is_deleted: { $ne: true },
+          _id: { $ne: messageObjectId },
+          is_transcribed: true,
+          $or: [
+            { file_hash: contentHash },
+            { file_unique_id: contentHash },
+            { hash_sha256: contentHash },
+          ],
+        }),
+        { sort: { updated_at: -1, created_at: -1 } }
+      )) as VoiceMessageRecord | null;
+
+    if (reuseSource && shouldUseTranscriptionReuse(reuseSource)) {
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+        $set: {
+          transcribe_timestamp: Date.now(),
+          transcription_text: String(reuseSource.transcription_text || reuseSource.text || '').trim(),
+          task: reuseSource.task || 'transcribe',
+          text: String(reuseSource.text || reuseSource.transcription_text || '').trim(),
+          transcription_raw: reuseSource.transcription_raw ?? null,
+          transcription: reuseSource.transcription ?? null,
+          transcription_chunks: Array.isArray(reuseSource.transcription_chunks) ? reuseSource.transcription_chunks : [],
+          is_transcribed: true,
+          transcription_method: 'reuse_by_file_hash',
+          transcribe_attempts: 0,
+          to_transcribe: false,
+          transcription_reused_from_message_id: String(reuseSource._id),
+          transcription_reuse_hash: contentHash,
+        },
+        $unset: {
+          transcription_error: 1,
+          transcription_error_context: 1,
+          error_message: 1,
+          error_timestamp: 1,
+          transcription_retry_reason: 1,
+          transcription_next_attempt_at: 1,
+        },
+      });
+
+      await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {
+        $set: {
+          is_corrupted: false,
+        },
+        $unset: {
+          error_source: 1,
+          transcription_error: 1,
+          transcription_error_context: 1,
+          error_message: 1,
+          error_timestamp: 1,
+          error_message_id: 1,
+        },
+      });
+
+      await enqueueCategorizationIfEnabled({
+        db,
+        session,
+        session_id,
+        message_id,
+        messageObjectId,
+      });
+
+      logger.info('[voicebot-worker] transcribe reused by hash', {
+        message_id,
+        session_id,
+        reused_from_message_id: String(reuseSource._id),
+        hash: contentHash.slice(0, 12),
+      });
+
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'reused_transcription_by_hash',
+        message_id,
+        session_id,
+      };
+    }
   }
 
   const filePath = String(message.file_path || '').trim();
@@ -314,6 +492,7 @@ export const handleTranscribeJob = async (
     const transcription_text = String(transcription.text || '').trim();
     const durationFromMessage = resolveMessageDurationSeconds({
       message: message as unknown as Record<string, unknown>,
+      chunks: [],
     });
     let durationSeconds = durationFromMessage;
     if (durationSeconds == null) {
@@ -402,6 +581,13 @@ export const handleTranscribeJob = async (
         error_message_id: 1,
       },
     });
+    await enqueueCategorizationIfEnabled({
+      db,
+      session,
+      session_id,
+      message_id,
+      messageObjectId,
+    });
 
     logger.info('[voicebot-worker] transcribe handled', {
       message_id,
@@ -437,52 +623,52 @@ export const handleTranscribeJob = async (
         }),
         ...(quotaRetryable
           ? {
-              to_transcribe: true,
-              transcription_retry_reason: INSUFFICIENT_QUOTA_RETRY,
-              transcription_next_attempt_at: nextAttemptAt,
-            }
+            to_transcribe: true,
+            transcription_retry_reason: INSUFFICIENT_QUOTA_RETRY,
+            transcription_next_attempt_at: nextAttemptAt,
+          }
           : {
-              to_transcribe: false,
-            }),
+            to_transcribe: false,
+          }),
       },
       ...(quotaRetryable
         ? {}
         : {
-            $unset: {
-              transcription_retry_reason: 1,
-              transcription_next_attempt_at: 1,
-            },
-          }),
+          $unset: {
+            transcription_retry_reason: 1,
+            transcription_next_attempt_at: 1,
+          },
+        }),
     });
 
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {
       $set: quotaRetryable
         ? {
-            is_corrupted: false,
-            error_source: 'transcription',
-            transcription_error: normalizedCode,
-            error_message: 'OpenAI quota limit reached. Will resume automatically after payment restoration.',
-            error_timestamp: new Date(),
-            error_message_id: message_id,
-            transcription_error_context: getTranscriptionErrorContext({
-              apiKey,
-              filePath,
-              errorCode: normalizedCode,
-            }),
-          }
+          is_corrupted: false,
+          error_source: 'transcription',
+          transcription_error: normalizedCode,
+          error_message: 'OpenAI quota limit reached. Will resume automatically after payment restoration.',
+          error_timestamp: new Date(),
+          error_message_id: message_id,
+          transcription_error_context: getTranscriptionErrorContext({
+            apiKey,
+            filePath,
+            errorCode: normalizedCode,
+          }),
+        }
         : {
-            is_corrupted: true,
-            error_source: 'transcription',
-            transcription_error: normalizedCode,
-            error_message: getErrorMessage(error),
-            error_timestamp: new Date(),
-            error_message_id: message_id,
-            transcription_error_context: getTranscriptionErrorContext({
-              apiKey,
-              filePath,
-              errorCode: normalizedCode,
-            }),
-          },
+          is_corrupted: true,
+          error_source: 'transcription',
+          transcription_error: normalizedCode,
+          error_message: getErrorMessage(error),
+          error_timestamp: new Date(),
+          error_message_id: message_id,
+          transcription_error_context: getTranscriptionErrorContext({
+            apiKey,
+            filePath,
+            errorCode: normalizedCode,
+          }),
+        },
     });
 
     logger.error('[voicebot-worker] transcribe failed', {

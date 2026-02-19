@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 
-import { VOICEBOT_COLLECTIONS } from '../../src/constants.js';
+import {
+  VOICEBOT_COLLECTIONS,
+  VOICEBOT_JOBS,
+  VOICEBOT_QUEUES,
+} from '../../src/constants.js';
 
 const getDbMock = jest.fn();
 const createResponseMock = jest.fn();
+const getVoicebotQueuesMock = jest.fn();
 const openAiCtorMock = jest.fn(() => ({
   responses: {
     create: createResponseMock,
@@ -13,6 +18,10 @@ const openAiCtorMock = jest.fn(() => ({
 
 jest.unstable_mockModule('../../src/services/db.js', () => ({
   getDb: getDbMock,
+}));
+
+jest.unstable_mockModule('../../src/services/voicebotQueues.js', () => ({
+  getVoicebotQueues: getVoicebotQueuesMock,
 }));
 
 jest.unstable_mockModule('openai', () => ({
@@ -25,8 +34,10 @@ describe('handleCategorizeJob', () => {
   beforeEach(() => {
     getDbMock.mockReset();
     createResponseMock.mockReset();
+    getVoicebotQueuesMock.mockReset();
     openAiCtorMock.mockClear();
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcd';
+    getVoicebotQueuesMock.mockReturnValue(null);
   });
 
   it('stores normalized categorization payload on success', async () => {
@@ -41,6 +52,12 @@ describe('handleCategorizeJob', () => {
     }));
     const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
     const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-1' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
@@ -92,6 +109,16 @@ describe('handleCategorizeJob', () => {
     expect(categorization[0]?.referenced_systems).toBe('Jira');
     expect(categorization[0]?.speaker).toBe('Alex');
     expect(String(categorization[0]?.keywords_grouped || '')).toContain('planning');
+    expect(eventsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.events.SEND_TO_SOCKET,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        event: 'message_update',
+        payload: expect.objectContaining({
+          message_id: messageId.toString(),
+        }),
+      })
+    );
   });
 
   it('marks insufficient_quota with retry metadata', async () => {

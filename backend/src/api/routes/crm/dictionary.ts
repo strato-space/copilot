@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import _ from 'lodash';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
-import { COLLECTIONS } from '../../../constants.js';
+import { COLLECTIONS, TASK_CLASSES } from '../../../constants.js';
 
 const router = Router();
 const logger = getLogger();
@@ -27,6 +27,16 @@ type ProjectGroupDoc = {
     _id: IdLike;
     name?: string;
     projects_ids?: IdLike[];
+    [key: string]: unknown;
+};
+
+type TaskTypeTreeDoc = {
+    _id: IdLike;
+    title?: string;
+    description?: string;
+    task_id?: string;
+    parent_type_id?: IdLike;
+    type_class?: string;
     [key: string]: unknown;
 };
 
@@ -158,21 +168,97 @@ router.post('/', async (req: Request, res: Response) => {
             tree.push(trackNode);
         }
 
-        // Get performers
-        const performers = await db.collection(COLLECTIONS.PERFORMERS).find(filter).toArray();
+        // Keep legacy performers visible in edit forms: include docs without is_active flag.
+        const performersFilter = showInactive
+            ? {}
+            : { $or: [{ is_active: true }, { is_active: { $exists: false } }] };
+        const performers = await db.collection(COLLECTIONS.PERFORMERS).find(performersFilter).toArray();
 
-        // Get task types
-        const taskTypes = await db.collection(COLLECTIONS.TASK_TYPES).find({}).toArray();
+        // Build task types from TASK_TYPES_TREE to keep compatibility with legacy ticket.task_type ids.
+        const taskTypesTreeRaw = (await db
+            .collection(COLLECTIONS.TASK_TYPES_TREE)
+            .find({})
+            .toArray()) as TaskTypeTreeDoc[];
+
+        const taskSupertypesRaw = taskTypesTreeRaw.filter(
+            (node) => node.type_class === TASK_CLASSES.FUNCTIONALITY
+        );
+        const taskSupertypesById = _.keyBy(taskSupertypesRaw, (node) => node._id.toString());
+
+        const taskTypes = taskTypesTreeRaw
+            .filter((node) => node.type_class === TASK_CLASSES.TASK)
+            .map((node) => {
+                const supertypeId = node.parent_type_id?.toString();
+                const supertype = supertypeId ? taskSupertypesById[supertypeId] : undefined;
+                return {
+                    _id: node._id.toString(),
+                    id: node._id.toString(),
+                    name: node.title ?? '',
+                    title: node.title ?? '',
+                    description: node.description ?? '',
+                    task_id: node.task_id ?? '',
+                    parent_type_id: supertypeId ?? '',
+                    supertype: supertype?.title ?? 'Other',
+                };
+            });
+
+        const taskSupertypes = taskSupertypesRaw.map((node) => ({
+            _id: node._id.toString(),
+            name: node.title ?? '',
+        }));
+
+        const taskTypesTree = taskSupertypesRaw.map((node) => ({
+            key: node._id.toString(),
+            title: node.title ?? '',
+            type: 'task_supertype',
+            children: taskTypes
+                .filter((taskType) => taskType.parent_type_id === node._id.toString())
+                .map((taskType) => ({
+                    key: taskType._id,
+                    title: taskType.name,
+                    type: 'task_type',
+                })),
+        }));
+
+        const epicsRaw = await db
+            .collection(COLLECTIONS.EPICS)
+            .aggregate([
+                {
+                    $lookup: {
+                        from: COLLECTIONS.PROJECTS,
+                        localField: 'project',
+                        foreignField: '_id',
+                        as: 'project_data',
+                    },
+                },
+            ])
+            .toArray();
+
+        const epics = epicsRaw.map((epic) => ({
+            ...epic,
+            project_name:
+                Array.isArray(epic.project_data) && epic.project_data[0]
+                    ? (epic.project_data[0] as { name?: string }).name
+                    : undefined,
+        }));
+
+        const incomeTypes = await db.collection(COLLECTIONS.FINANCES_INCOME_TYPES).find({}).toArray();
 
         res.status(200).json({
             tree,
             projects,
             performers,
+            customers,
+            projectGroups,
             clients: normalizedCustomers,
             tracks: normalizedTracks,
+            task_types: taskTypes,
+            task_supertypes: taskSupertypes,
+            task_types_tree: taskTypesTree,
+            // Compatibility keys for consumers still expecting camelCase fields.
             taskTypes,
-            projectGroups,
-            customers,
+            epics,
+            income_types: incomeTypes,
         });
     } catch (error) {
         logger.error('Error getting dictionary:', error);

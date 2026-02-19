@@ -915,10 +915,62 @@ router.post('/projects', async (req: Request, res: Response) => {
         let projects: unknown[] = [];
 
         if (userPermissions.includes(PERMISSIONS.PROJECTS.READ_ALL)) {
-            projects = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).find({
-                is_deleted: { $ne: true },
-                is_active: true,
-            }).sort({ name: 1, title: 1 }).toArray();
+            projects = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).aggregate([
+                {
+                    $match: {
+                        is_deleted: { $ne: true },
+                        is_active: true,
+                    },
+                },
+                {
+                    $lookup: {
+                        from: COLLECTIONS.PROJECT_GROUPS,
+                        localField: 'project_group',
+                        foreignField: '_id',
+                        as: 'project_group_info',
+                    },
+                },
+                {
+                    $lookup: {
+                        from: COLLECTIONS.CUSTOMERS,
+                        localField: 'project_group_info.customer',
+                        foreignField: '_id',
+                        as: 'customer_info',
+                    },
+                },
+                {
+                    $addFields: {
+                        project_group: { $arrayElemAt: ['$project_group_info', 0] },
+                        customer: { $arrayElemAt: ['$customer_info', 0] },
+                    },
+                },
+                {
+                    $project: {
+                        name: 1,
+                        title: 1,
+                        description: 1,
+                        created_at: 1,
+                        board_id: 1,
+                        drive_folder_id: 1,
+                        design_files: 1,
+                        status: 1,
+                        is_active: 1,
+                        project_group: {
+                            _id: '$project_group._id',
+                            name: '$project_group.name',
+                            is_active: '$project_group.is_active',
+                        },
+                        customer: {
+                            _id: '$customer._id',
+                            name: '$customer.name',
+                            is_active: '$customer.is_active',
+                        },
+                    },
+                },
+                {
+                    $sort: { name: 1, title: 1 },
+                },
+            ]).toArray();
         } else if (userPermissions.includes(PERMISSIONS.PROJECTS.READ_ASSIGNED)) {
             projects = await PermissionManager.getUserAccessibleProjects(performer, db);
         }

@@ -72,6 +72,12 @@ function LegacyProjectRedirect(): ReactElement {
   );
 }
 
+function LegacyTaskRedirect(): ReactElement {
+  const { taskId } = useParams();
+
+  return <Navigate to={taskId ? `/operops/task/${taskId}` : '/operops/crm'} replace />;
+}
+
 function RequireAuth(): ReactElement {
   const { isAuth, loading, ready } = useAuthStore();
   const location = useLocation();
@@ -270,6 +276,7 @@ export default function App(): ReactElement {
           <Route path="/finops/projects/:projectId" element={<LegacyProjectRedirect />} />
           <Route path="/projects/:projectId" element={<LegacyProjectRedirect />} />
           <Route path="/projects" element={<Navigate to="/guide/clients-projects-rates" replace />} />
+          <Route path="/task/:taskId" element={<LegacyTaskRedirect />} />
           <Route path="*" element={<Navigate to="/analytics" replace />} />
         </Route>
       </Route>

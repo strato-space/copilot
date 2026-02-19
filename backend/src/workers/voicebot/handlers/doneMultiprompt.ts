@@ -1,6 +1,11 @@
 import { ObjectId } from 'mongodb';
-import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
+import {
+  VOICEBOT_COLLECTIONS,
+  VOICEBOT_JOBS,
+  VOICEBOT_QUEUES,
+} from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
+import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 import {
@@ -14,6 +19,8 @@ import {
 
 const logger = getLogger();
 
+const POSTPROCESS_DELAY_MS = 500;
+
 export type DoneMultipromptJobData = {
   session_id?: string;
   chat_id?: string | number | null;
@@ -24,21 +31,99 @@ export type DoneMultipromptJobData = {
   };
 };
 
+type DoneMultipromptResult = {
+  ok: boolean;
+  session_id?: string;
+  error?: string;
+};
+
+const queuePostprocessingJobs = async (session_id: string): Promise<void> => {
+  const queues = getVoicebotQueues();
+  const postprocessorsQueue = queues?.[VOICEBOT_QUEUES.POSTPROCESSORS];
+
+  if (!postprocessorsQueue) {
+    logger.warn('[voicebot-worker] done_multiprompt postprocessors queue unavailable', {
+      session_id,
+    });
+    return;
+  }
+
+  await postprocessorsQueue.add(
+    VOICEBOT_JOBS.postprocessing.ALL_CUSTOM_PROMPTS,
+    {
+      session_id,
+      job_id: `${session_id}-ALL_CUSTOM_PROMPTS`,
+    },
+    {
+      deduplication: { id: `${session_id}-ALL_CUSTOM_PROMPTS` },
+      delay: POSTPROCESS_DELAY_MS,
+    }
+  );
+
+  await postprocessorsQueue.add(
+    VOICEBOT_JOBS.postprocessing.AUDIO_MERGING,
+    {
+      session_id,
+      job_id: `${session_id}-AUDIO_MERGING`,
+    },
+    {
+      deduplication: { id: `${session_id}-AUDIO_MERGING` },
+      delay: POSTPROCESS_DELAY_MS,
+    }
+  );
+
+  await postprocessorsQueue.add(
+    VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+    {
+      session_id,
+      job_id: `${session_id}-CREATE_TASKS`,
+    },
+    {
+      deduplication: { id: `${session_id}-CREATE_TASKS` },
+      delay: POSTPROCESS_DELAY_MS,
+    }
+  );
+};
+
+const queueDoneNotify = async (session_id: string): Promise<void> => {
+  const queues = getVoicebotQueues();
+  const notifiesQueue = queues?.[VOICEBOT_QUEUES.NOTIFIES];
+
+  if (!notifiesQueue) {
+    logger.warn('[voicebot-worker] done_multiprompt notifies queue unavailable', {
+      session_id,
+    });
+    return;
+  }
+
+  await notifiesQueue.add(
+    VOICEBOT_JOBS.notifies.SESSION_DONE,
+    {
+      session_id,
+      payload: {},
+    },
+    {
+      attempts: 1,
+      deduplication: { id: `${session_id}-SESSION_DONE` },
+    }
+  );
+};
+
 export const handleDoneMultipromptJob = async (
   payload: DoneMultipromptJobData
-): Promise<{ ok: boolean; session_id?: string; error?: string }> => {
+): Promise<DoneMultipromptResult> => {
   const session_id = String(payload.session_id || '').trim();
   if (!session_id || !ObjectId.isValid(session_id)) {
     return { ok: false, error: 'invalid_session_id' };
   }
 
   const db = getDb();
-  const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+  const session = (await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
     mergeWithRuntimeFilter(
       { _id: new ObjectId(session_id), is_deleted: { $ne: true } },
       { field: 'runtime_tag' }
     )
-  ) as Record<string, unknown> | null;
+  )) as Record<string, unknown> | null;
 
   if (!session) {
     return { ok: false, error: 'session_not_found' };
@@ -63,6 +148,9 @@ export const handleDoneMultipromptJob = async (
   if (payload.telegram_user_id !== undefined && payload.telegram_user_id !== null) {
     await clearActiveVoiceSessionForUser({ db, telegram_user_id: payload.telegram_user_id });
   }
+
+  await queuePostprocessingJobs(session_id);
+  await queueDoneNotify(session_id);
 
   const preview =
     payload.notify_preview?.telegram_message && payload.notify_preview?.event_name

@@ -82,6 +82,7 @@ export const getVoicebotSocket = (authToken?: string | null): Socket => {
         const socketUrl = baseUrl.startsWith('http')
             ? new URL(baseUrl).origin
             : window.location.origin;
+        const voicebotNamespaceUrl = `${socketUrl.replace(/\/$/, '')}/voicebot`;
 
         const options: Parameters<typeof io>[1] = {
             withCredentials: true,
@@ -93,7 +94,7 @@ export const getVoicebotSocket = (authToken?: string | null): Socket => {
             options.auth = { token: authToken };
         }
 
-        voicebotSocket = io(socketUrl, options);
+        voicebotSocket = io(voicebotNamespaceUrl, options);
 
         voicebotSocket.on('connect', () => {
             console.log('[VoiceBot Socket] Connected:', voicebotSocket?.id);

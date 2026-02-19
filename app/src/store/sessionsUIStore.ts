@@ -34,6 +34,10 @@ interface CategorizationSortState {
     ascending: boolean;
 }
 
+interface TranscriptionSortState {
+    ascending: boolean;
+}
+
 export type CategorizationRow = VoiceMessageRow & {
     message_id?: string | undefined;
     timeStart?: number | string | undefined;
@@ -45,6 +49,7 @@ interface SessionsUIState {
     accessUsersModal: AccessUsersModalState;
     selectedCategorizationRows: CategorizationRow[];
     categorizationSort: CategorizationSortState;
+    transcriptionSort: TranscriptionSortState;
     ticketsModal: TicketsModalState;
 
     setParticipantModalVisible: (visible: boolean) => void;
@@ -77,6 +82,9 @@ interface SessionsUIState {
     toggleCategorizationSort: () => void;
     setCategorizationSortAscending: (ascending: boolean) => void;
     initCategorizationSort: (sessionIsActive?: boolean) => void;
+    toggleTranscriptionSort: () => void;
+    setTranscriptionSortAscending: (ascending: boolean) => void;
+    initTranscriptionSort: (sessionIsActive?: boolean) => void;
 
     openTicketsModal: (data: TicketsModalData) => void;
     closeTicketsModal: () => void;
@@ -134,11 +142,47 @@ const initialTicketsModal: TicketsModalState = {
     savedChanges: {},
 };
 
+const SORT_STORAGE_KEYS = {
+    categorization: 'VOICEBOT_SORT_CATEGORIZATION_ASC',
+    transcription: 'VOICEBOT_SORT_TRANSCRIPTION_ASC',
+} as const;
+
+const readSortPreference = (storageKey: string): boolean | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw === 'true') return true;
+        if (raw === 'false') return false;
+    } catch {
+        // ignore storage failures
+    }
+    return null;
+};
+
+const persistSortPreference = (storageKey: string, ascending: boolean): void => {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.setItem(storageKey, ascending ? 'true' : 'false');
+    } catch {
+        // ignore storage failures
+    }
+};
+
+const resolveInitialSortAscending = (storageKey: string, fallbackAscending: boolean): boolean => {
+    const stored = readSortPreference(storageKey);
+    return stored == null ? fallbackAscending : stored;
+};
+
 export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
     participantModal: initialParticipantModal,
     accessUsersModal: initialAccessUsersModal,
     selectedCategorizationRows: [],
-    categorizationSort: { ascending: false },
+    categorizationSort: {
+        ascending: resolveInitialSortAscending(SORT_STORAGE_KEYS.categorization, false),
+    },
+    transcriptionSort: {
+        ascending: resolveInitialSortAscending(SORT_STORAGE_KEYS.transcription, false),
+    },
     ticketsModal: initialTicketsModal,
 
     setParticipantModalVisible: (visible) =>
@@ -271,18 +315,57 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
     },
     clearSelectedCategorizationRows: () => set({ selectedCategorizationRows: [] }),
     toggleCategorizationSort: () =>
-        set((state) => ({
-            categorizationSort: { ascending: !state.categorizationSort.ascending },
-        })),
+        set((state) => {
+            const ascending = !state.categorizationSort.ascending;
+            persistSortPreference(SORT_STORAGE_KEYS.categorization, ascending);
+            return { categorizationSort: { ascending } };
+        }),
     setCategorizationSortAscending: (ascending) =>
-        set((state) => ({ categorizationSort: { ...state.categorizationSort, ascending } })),
+        set((state) => {
+            persistSortPreference(SORT_STORAGE_KEYS.categorization, ascending);
+            return { categorizationSort: { ...state.categorizationSort, ascending } };
+        }),
     initCategorizationSort: (sessionIsActive) =>
-        set((state) => ({
-            categorizationSort: {
-                ...state.categorizationSort,
-                ascending: sessionIsActive === false,
-            },
-        })),
+        set((state) => {
+            const stored = readSortPreference(SORT_STORAGE_KEYS.categorization);
+            if (stored != null) {
+                return state;
+            }
+            const ascending = sessionIsActive === false;
+            persistSortPreference(SORT_STORAGE_KEYS.categorization, ascending);
+            return {
+                categorizationSort: {
+                    ...state.categorizationSort,
+                    ascending,
+                },
+            };
+        }),
+    toggleTranscriptionSort: () =>
+        set((state) => {
+            const ascending = !state.transcriptionSort.ascending;
+            persistSortPreference(SORT_STORAGE_KEYS.transcription, ascending);
+            return { transcriptionSort: { ascending } };
+        }),
+    setTranscriptionSortAscending: (ascending) =>
+        set((state) => {
+            persistSortPreference(SORT_STORAGE_KEYS.transcription, ascending);
+            return { transcriptionSort: { ...state.transcriptionSort, ascending } };
+        }),
+    initTranscriptionSort: (sessionIsActive) =>
+        set((state) => {
+            const stored = readSortPreference(SORT_STORAGE_KEYS.transcription);
+            if (stored != null) {
+                return state;
+            }
+            const ascending = sessionIsActive === false;
+            persistSortPreference(SORT_STORAGE_KEYS.transcription, ascending);
+            return {
+                transcriptionSort: {
+                    ...state.transcriptionSort,
+                    ascending,
+                },
+            };
+        }),
 
     openTicketsModal: (data) =>
         set({ ticketsModal: { ...initialTicketsModal, visible: true, tickets: data.tickets ?? null } }),

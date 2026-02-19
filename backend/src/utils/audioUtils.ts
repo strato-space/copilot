@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 
 const toPositiveNumber = (value: unknown): number | null => {
   const parsed = Number(value);
@@ -70,4 +72,9 @@ export const getAudioDurationFromFile = async (filePath: string): Promise<number
   }
 
   return parseFfprobeDuration(String(probe.stdout || ''));
+};
+
+export const getFileSha256FromPath = async (filePath: string): Promise<string> => {
+  const buffer = await readFile(filePath);
+  return createHash('sha256').update(buffer).digest('hex');
 };

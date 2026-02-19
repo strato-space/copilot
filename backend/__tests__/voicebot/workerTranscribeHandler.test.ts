@@ -4,11 +4,16 @@ import { tmpdir } from 'node:os';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 
-import { VOICEBOT_COLLECTIONS } from '../../src/constants.js';
+import {
+  VOICEBOT_COLLECTIONS,
+  VOICEBOT_JOBS,
+  VOICEBOT_QUEUES,
+} from '../../src/constants.js';
 
 const getDbMock = jest.fn();
 const getAudioDurationFromFileMock = jest.fn();
 const createTranscriptionMock = jest.fn();
+const getVoicebotQueuesMock = jest.fn();
 const openAiCtorMock = jest.fn(() => ({
   audio: {
     transcriptions: {
@@ -25,6 +30,10 @@ jest.unstable_mockModule('../../src/utils/audioUtils.js', () => ({
   getAudioDurationFromFile: getAudioDurationFromFileMock,
 }));
 
+jest.unstable_mockModule('../../src/services/voicebotQueues.js', () => ({
+  getVoicebotQueues: getVoicebotQueuesMock,
+}));
+
 jest.unstable_mockModule('openai', () => ({
   default: openAiCtorMock,
 }));
@@ -36,8 +45,10 @@ describe('handleTranscribeJob', () => {
     getDbMock.mockReset();
     getAudioDurationFromFileMock.mockReset();
     createTranscriptionMock.mockReset();
+    getVoicebotQueuesMock.mockReset();
     openAiCtorMock.mockClear();
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcd';
+    getVoicebotQueuesMock.mockReturnValue(null);
   });
 
   it('transcribes uploaded web audio and stores canonical transcription payload', async () => {
@@ -80,6 +91,12 @@ describe('handleTranscribeJob', () => {
 
     createTranscriptionMock.mockResolvedValue({ text: 'hello world' });
     getAudioDurationFromFileMock.mockResolvedValue(12);
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-1' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsQueueAdd,
+      },
+    });
 
     const result = await handleTranscribeJob({ message_id: messageId.toString() });
     expect(result).toMatchObject({
@@ -90,12 +107,26 @@ describe('handleTranscribeJob', () => {
     expect(openAiCtorMock).toHaveBeenCalledTimes(1);
     expect(createTranscriptionMock).toHaveBeenCalledTimes(1);
 
-    const updatePayload = messagesUpdateOne.mock.calls[messagesUpdateOne.mock.calls.length - 1]?.[1] as Record<string, unknown>;
+    const transcriptionUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.is_transcribed === true;
+    });
+    expect(transcriptionUpdateCall).toBeTruthy();
+    const updatePayload = transcriptionUpdateCall?.[1] as Record<string, unknown>;
     const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
     expect(setPayload.is_transcribed).toBe(true);
     expect(setPayload.to_transcribe).toBe(false);
     expect(setPayload.transcription_text).toBe('hello world');
     expect((setPayload.transcription as Record<string, unknown>).provider).toBe('openai');
+    expect(processorsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.CATEGORIZE,
+      expect.objectContaining({
+        message_id: messageId.toString(),
+        session_id: sessionId.toString(),
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
   });
 
   it('marks insufficient quota with diagnostics context and retry metadata', async () => {

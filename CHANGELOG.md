@@ -2,9 +2,21 @@
 
 ## 2026-02-19
 ### PROBLEM SOLVED
+- **14:04** Long-running voice sessions could stall processing when pending message scans were gated by strict `is_waiting=false`; rows with `is_waiting` absent were skipped and transcription/categorization stayed pending.
+- **14:04** Re-uploaded chunks with identical binary payload could trigger redundant transcription runs and duplicate categorization queue pressure.
+- **14:04** Operators could not switch chronological direction in Transcription/Categorization tables from the UI, and sort preference was not persisted between reloads.
 - **01:39** Telegram `/start` in `copilot-voicebot-tgbot-prod` failed with Mongo update conflict (`Updating the path 'runtime_tag' would create a conflict`) during active-session upsert.
 
 ### FEATURE IMPLEMENTED
+- **14:04** Added deterministic voice-processing scheduler in TS workers: `runner` now registers periodic `PROCESSING` jobs and `processingLoop` scans sessions with `is_waiting: { $ne: true }`.
+- **14:04** Added hash-based transcription reuse in TS transcribe worker: when a session already has a successful transcription for the same file hash (`file_hash`/`file_unique_id`/`hash_sha256`), worker reuses text/speaker metadata and skips duplicate OpenAI calls.
+- **14:04** Added chronological sort toggle for Transcription/Categorization lists with explicit direction control (up/down icon) and client-side persistence in `sessionsUIStore`.
+- **11:39** Fixed live categorization delivery path in Copilot voice UI:
+  - frontend Voice socket now connects to Socket.IO namespace `/voicebot` (instead of root `/`), restoring valid `subscribe_on_session` behavior;
+  - backend categorization handler now enqueues `message_update` websocket events for both success and failure updates, so Categorization tab refresh is not required.
+- **11:40** Added backend Socket.IO cross-process room delivery support:
+  - enabled `@socket.io/redis-adapter` in `backend/src/index.ts`;
+  - socket events worker now returns room diagnostics (`room_size`, `no_room_subscribers`) to speed up runtime troubleshooting.
 - **01:41** Hardened runtime-scoped upserts in TS backend:
   - `backend/src/voicebot_tgbot/activeSessionMapping.ts` now writes `runtime_tag` via `$setOnInsert` (not `$set`) for `setActiveVoiceSession` upserts.
   - `backend/src/services/db.ts` adds `patchRuntimeTagIntoSetOnInsert(...)` to avoid injecting `runtime_tag` into `$setOnInsert` when update already sets it in `$set`.
@@ -16,7 +28,26 @@
 - **03:42** Added TS handlers for `VOICEBOT_JOBS.voice.SUMMARIZE` and `VOICEBOT_JOBS.voice.QUESTIONS` with runtime-scoped message/session guards and processors_data persistence (`backend/src/workers/voicebot/handlers/{summarize,questions}.ts`).
 - **03:43** Expanded TS worker manifest coverage for `SUMMARIZE`, `QUESTIONS`, and `CREATE_TASKS_FROM_CHUNKS` parity path (`backend/src/workers/voicebot/manifest.ts`).
 
+- **09:09** Added TS runtime handler for `VOICEBOT_JOBS.voice.CUSTOM_PROMPT` (`backend/src/workers/voicebot/handlers/customPrompt.ts`) with prompt-file resolution (`VOICEBOT_CUSTOM_PROMPTS_DIR`), runtime-safe guards, and `processors_data.<processor_name>` persistence.
+- **09:09** Updated worker manifest/runtime coverage for `CUSTOM_PROMPT` binding (`backend/src/workers/voicebot/manifest.ts`) and documented handler inventory in `backend/src/workers/README.md`.
+- **09:17** Wired TS postprocessing handlers `ALL_CUSTOM_PROMPTS` and `ONE_CUSTOM_PROMPT` into worker manifest (`backend/src/workers/voicebot/manifest.ts`), completing runtime dispatch coverage for custom-prompt postprocessing chain.
+- **09:22** Added TS postprocessing handlers for `CREATE_TASKS` and `AUDIO_MERGING`: `CREATE_TASKS` now runs through `createTasksPostprocessing` (categorization-ready gating + delayed requeue + notify emission), while `AUDIO_MERGING` has explicit controlled-skip behavior in TS runtime with telemetry.
+- **10:16** Upgraded TS `DONE_MULTIPROMPT` worker parity: on session close it now queues postprocessing chain (`ALL_CUSTOM_PROMPTS`, `AUDIO_MERGING`, `CREATE_TASKS`) and `SESSION_DONE` notify job in addition to active-session cleanup and session-log write.
+
 ### CHANGES
+- **14:04** Updated voice UI sort contracts and persistence:
+  - `app/src/components/voice/Transcription.tsx`
+  - `app/src/components/voice/TranscriptionTableHeader.tsx`
+  - `app/src/store/sessionsUIStore.ts`
+- **14:04** Updated TS voice worker processing/transcription runtime:
+  - `backend/src/workers/voicebot/handlers/processingLoop.ts`
+  - `backend/src/workers/voicebot/handlers/transcribe.ts`
+  - `backend/src/workers/voicebot/runner.ts`
+- **14:04** Performed production data hygiene for legacy pending records: marked 7 stale rows as deleted in session `6996d9169bce3264e9851c1c` where relative `file_path` values could not be resolved on current runtime.
+- Updated docs to reflect live websocket categorization contract and runtime ownership:
+  - `README.md` (Voice notes),
+  - `AGENTS.md` (VoiceBot product notes),
+  - `backend/src/workers/README.md` (EVENTS queue ownership and sendToSocket behavior).
 - Added regression test `backend/__tests__/voicebot/activeSessionMapping.test.ts`.
 - Extended `backend/__tests__/services/dbAggregateRuntimeScope.test.ts` with upsert runtime-tag conflict coverage.
 - Added worker-runner regression coverage `backend/__tests__/voicebot/workerRunner.test.ts` (manifest routing, explicit handler-not-found error, queue concurrency defaults).
@@ -33,7 +64,20 @@
 - `cd backend && npm test -- --runInBand __tests__/voicebot/workerSummarizeQuestionsHandlers.test.ts __tests__/voicebot/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
 - `cd backend && npm run build`
 
+- `cd backend && npm test -- --runInBand __tests__/voicebot/workerCustomPromptHandler.test.ts __tests__/voicebot/workerSummarizeQuestionsHandlers.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
+- `cd backend && npm run build`
+
+- Added regression suite `backend/__tests__/voicebot/workerPostprocessingCustomPromptsHandlers.test.ts` (queue handoff + final-processing enqueue path) and expanded manifest contract expectations in `backend/__tests__/voicebot/workerScaffoldHandlers.test.ts`.
+- Added regression suite `backend/__tests__/voicebot/workerPostprocessingCreateTasksAudioMergingHandlers.test.ts` and updated worker docs (`backend/src/workers/README.md`, `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`) for postprocessing dispatch parity.
+- Expanded done handler regression coverage in `backend/__tests__/voicebot/workerDoneMultipromptHandler.test.ts` to assert postprocessing/notify queue fan-out and session-not-found behavior under runtime-scoped filtering.
+
 ### TESTS
+- **14:04** `cd backend && npm test -- --runInBand __tests__/voicebot/workerProcessingLoopHandler.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts __tests__/voicebot/workerRunner.test.ts`
+- **14:04** `cd backend && npm run build`
+- **14:04** `cd app && npm run build`
+- `cd backend && npm test -- --runInBand __tests__/voicebot/workerCategorizeHandler.test.ts __tests__/voicebot/voicebotSocketEventsWorker.test.ts`
+- `cd backend && npm run build`
+- `cd app && npm run build`
 - `cd backend && npm test -- --runInBand __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/activeSessionMapping.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
 - `cd backend && npm run build`
 
@@ -41,6 +85,11 @@
 
 - `cd backend && npm test -- --runInBand __tests__/voicebot/workerAncillaryHandlers.test.ts __tests__/voicebot/workerRunner.test.ts __tests__/voicebot/tgCommandHandlers.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
 - `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/tgIngressHandlers.test.ts __tests__/voicebot/workerProcessingLoopHandler.test.ts`
+- `cd backend && npm test -- --runInBand __tests__/voicebot/workerPostprocessingCustomPromptsHandlers.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
+- `cd backend && npm run build`
+- `cd backend && npm test -- --runInBand __tests__/voicebot/workerPostprocessingCreateTasksAudioMergingHandlers.test.ts __tests__/voicebot/workerPostprocessingCustomPromptsHandlers.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
+- `cd backend && npm run build`
+- `cd backend && npm test -- --runInBand __tests__/voicebot/workerDoneMultipromptHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
 - `cd backend && npm run build`
 
 ## 2026-02-18

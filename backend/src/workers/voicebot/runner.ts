@@ -1,7 +1,8 @@
-import { Worker, type Job } from 'bullmq';
-import { RUNTIME_TAG, VOICEBOT_QUEUES } from '../../constants.js';
+import { Queue, Worker, type Job } from 'bullmq';
+import { RUNTIME_TAG, VOICEBOT_JOBS, VOICEBOT_QUEUES } from '../../constants.js';
 import { connectDb, closeDb } from '../../services/db.js';
 import { connectRedis, closeRedis, getBullMQConnection } from '../../services/redis.js';
+import { closeVoicebotQueues, initVoicebotQueues } from '../../services/voicebotQueues.js';
 import { initLogger } from '../../utils/logger.js';
 import {
   VOICEBOT_WORKER_MANIFEST,
@@ -64,6 +65,12 @@ const queueConcurrency = new Map<string, number>(
     return [queueName, Number.isFinite(raw) && raw > 0 ? raw : fallback];
   })
 );
+
+const resolveProcessingLoopIntervalMs = (): number => {
+  const raw = Number.parseInt(String(process.env.VOICEBOT_PROCESSING_LOOP_INTERVAL_MS || ''), 10);
+  if (!Number.isFinite(raw) || raw < 5_000) return 10_000;
+  return raw;
+};
 
 export const resolveQueueConcurrency = (queueName: string): number => {
   return queueConcurrency.get(queueName) ?? 1;
@@ -128,8 +135,36 @@ export const startVoicebotWorkers = async ({
 }: WorkerRunnerDeps = {}): Promise<VoicebotWorkerRuntime> => {
   await connectDb();
   connectRedis();
+  initVoicebotQueues();
 
-  const queueNames = Object.values(VOICEBOT_QUEUES);
+  const queueNames = Object.values(VOICEBOT_QUEUES).filter(
+    (queueName) => queueName !== VOICEBOT_QUEUES.EVENTS
+  );
+  const commonQueue = new Queue(VOICEBOT_QUEUES.COMMON, {
+    connection: getBullMQConnection(),
+  });
+
+  const processingLoopIntervalMs = resolveProcessingLoopIntervalMs();
+  const processingSchedulerId = `processing-loop-${RUNTIME_TAG}`;
+  await commonQueue.upsertJobScheduler(
+    processingSchedulerId,
+    { every: processingLoopIntervalMs },
+    {
+      name: VOICEBOT_JOBS.common.PROCESSING,
+      data: {},
+      opts: {
+        removeOnComplete: true,
+        removeOnFail: 50,
+      },
+    }
+  );
+  logger.info('[voicebot-workers] processing_loop_scheduler_ready', {
+    runtime_tag: RUNTIME_TAG,
+    queue: VOICEBOT_QUEUES.COMMON,
+    scheduler_id: processingSchedulerId,
+    every_ms: processingLoopIntervalMs,
+  });
+
   const workers = queueNames.map(
     (queueName) =>
       new Worker(queueName, buildVoicebotWorkerProcessor({ queueName, manifest, logger }), {
@@ -178,6 +213,11 @@ export const startVoicebotWorkers = async ({
     workers,
     close: async () => {
       await Promise.allSettled(workers.map((worker) => worker.close()));
+      await Promise.allSettled([
+        commonQueue.removeJobScheduler(processingSchedulerId),
+      ]);
+      await Promise.allSettled([commonQueue.close()]);
+      await closeVoicebotQueues();
       await closeRedis();
       await closeDb();
       logger.info('[voicebot-workers] stopped', {

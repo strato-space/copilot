@@ -29,7 +29,7 @@ import {
 } from '../../../services/runtimeScope.js';
 import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
 import { getLogger } from '../../../utils/logger.js';
-import { getAudioDurationFromFile } from '../../../utils/audioUtils.js';
+import { getAudioDurationFromFile, getFileSha256FromPath } from '../../../utils/audioUtils.js';
 
 const router = Router();
 const logger = getLogger();
@@ -240,6 +240,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         for (const file of filesArray) {
             const createdAt = new Date();
             const absoluteFilePath = resolve(file.path);
+            const fileHash = await getFileSha256FromPath(absoluteFilePath);
             let duration = 0;
             try {
                 duration = await getAudioDurationFromFile(absoluteFilePath);
@@ -251,12 +252,15 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 type: 'voice',
                 source_type: 'web',
                 message_type: 'voice',
+                file_hash: fileHash,
+                file_unique_id: fileHash,
                 file_path: absoluteFilePath,
                 file_name: file.originalname,
                 file_size: file.size,
                 mime_type: file.mimetype,
                 duration,
                 file_metadata: {
+                    file_hash: fileHash,
                     original_filename: file.originalname,
                     file_size: file.size,
                     mime_type: file.mimetype,
@@ -279,6 +283,42 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             };
 
             const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
+
+            // Keep only the latest upload for identical content inside one session.
+            // This deduplicates repeated WebRTC uploads/retries of the same blob.
+            const duplicateDocs = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(
+                runtimeMessageQuery({
+                    session_id: new ObjectId(session_id),
+                    is_deleted: { $ne: true },
+                    _id: { $ne: op.insertedId },
+                    $or: [
+                        { file_hash: fileHash },
+                        { file_unique_id: fileHash },
+                    ],
+                })
+            ).project({ _id: 1 }).toArray() as Array<{ _id: ObjectId }>;
+
+            let deduplicatedCount = 0;
+            if (duplicateDocs.length > 0) {
+                const duplicateIds = duplicateDocs.map((doc) => doc._id);
+                const dedupRes = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateMany(
+                    runtimeMessageQuery({
+                        _id: { $in: duplicateIds },
+                        is_deleted: { $ne: true },
+                    }),
+                    {
+                        $set: {
+                            is_deleted: true,
+                            deleted_at: createdAt,
+                            dedup_replaced_by: op.insertedId,
+                            dedup_reason: 'same_file_hash_latest_wins',
+                            updated_at: createdAt,
+                        },
+                    }
+                );
+                deduplicatedCount = dedupRes.modifiedCount ?? 0;
+            }
+
             if (voiceQueue) {
                 const messageId = String(op.insertedId);
                 const jobId = `${session_id}-${messageId}-TRANSCRIBE`;
@@ -326,9 +366,17 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                     file_size: file.size,
                     mime_type: file.mimetype,
                     original_filename: file.originalname,
+                    file_hash: fileHash,
                 },
                 processing_status: 'queued',
+                deduplicated_previous_count: deduplicatedCount,
             });
+
+            if (deduplicatedCount > 0) {
+                logger.info(
+                    `Web upload deduplicated ${deduplicatedCount} previous message(s): session=${session_id}, hash=${fileHash.slice(0, 12)}…`
+                );
+            }
         }
 
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(

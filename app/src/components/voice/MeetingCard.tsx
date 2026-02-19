@@ -9,6 +9,7 @@ import { SESSION_ACCESS_LEVELS, SESSION_ACCESS_LEVELS_DESCRIPTIONS, SESSION_ACCE
 import AddParticipantModal from './AddParticipantModal';
 import AccessUsersModal from './AccessUsersModal';
 import CustomPromptModal from './CustomPromptModal';
+import { buildGroupedProjectOptions } from './projectSelectOptions';
 import type { SessionAccessLevel } from '../../constants/permissions';
 
 interface MeetingCardProps {
@@ -365,10 +366,12 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         value={voiceBotSession?.project_id ?? undefined}
                         onChange={(value) => voiceBotSession?._id && updateSessionProject(voiceBotSession._id, value ?? null)}
                         allowClear
-                        options={(prepared_projects || []).map((project) => ({
-                            label: project.name || project._id,
-                            value: project._id,
-                        }))}
+                        options={buildGroupedProjectOptions(prepared_projects)}
+                        showSearch
+                        optionFilterProp="label"
+                        filterOption={(inputValue, option) =>
+                            String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
+                        }
                     />
 
                     <Tooltip

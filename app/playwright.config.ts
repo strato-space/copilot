@@ -6,8 +6,10 @@ import dotenv from 'dotenv';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load test environment variables
+// Load test environment variables:
+// 1) legacy root-level file, 2) e2e-local overrides/credentials
 dotenv.config({ path: path.resolve(__dirname, '.env.test') });
+dotenv.config({ path: path.resolve(__dirname, 'e2e/.env'), override: true });
 
 /**
  * Playwright configuration for FinOps + CRM E2E tests

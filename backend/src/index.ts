@@ -19,6 +19,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 
 import { registerSocketHandlers } from './api/socket.js';
 import apiRouter from './api/routes/index.js';
@@ -35,6 +36,10 @@ import {
   closeVoicebotQueues,
   type VoicebotQueuesMap,
 } from './services/voicebotQueues.js';
+import {
+  startVoicebotSocketEventsWorker,
+  type VoicebotSocketEventsRuntime,
+} from './services/voicebotSocketEventsWorker.js';
 
 // Initialize logger
 const serviceName = process.env.SERVICE_NAME ?? 'copilot-backend';
@@ -119,6 +124,11 @@ const io = new SocketIOServer(httpServer, {
 app.set('io', io);
 
 let voicebotQueues: VoicebotQueuesMap | undefined;
+let voicebotSocketEventsRuntime: VoicebotSocketEventsRuntime | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let socketIoPubRedis: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let socketIoSubRedis: any = null;
 
 
 // Graceful shutdown handler
@@ -137,6 +147,22 @@ const shutdown = async (signal: string) => {
 
       await closeVoicebotQueues();
       logger.info('Voicebot queues closed');
+
+      if (voicebotSocketEventsRuntime) {
+        await voicebotSocketEventsRuntime.close();
+        voicebotSocketEventsRuntime = null;
+      }
+      logger.info('Voicebot socket events worker closed');
+
+      if (socketIoPubRedis) {
+        await socketIoPubRedis.quit();
+        socketIoPubRedis = null;
+      }
+      if (socketIoSubRedis) {
+        await socketIoSubRedis.quit();
+        socketIoSubRedis = null;
+      }
+      logger.info('Socket.IO Redis adapter clients closed');
 
       await closeRedis();
       logger.info('Redis connection closed');
@@ -169,8 +195,20 @@ const startServer = async () => {
     // Connect to Redis (optional, for BullMQ)
     const redisUrl = process.env.REDIS_URL ?? process.env.REDIS_CONNECTION_HOST;
     if (redisUrl) {
-      connectRedis();
+      const redisClient = connectRedis();
       logger.info('Redis connection initialized');
+      try {
+        socketIoPubRedis = redisClient.duplicate();
+        socketIoSubRedis = redisClient.duplicate();
+        io.adapter(createAdapter(socketIoPubRedis, socketIoSubRedis));
+        logger.info('Socket.IO Redis adapter initialized');
+      } catch (adapterError) {
+        const error = adapterError as Error;
+        logger.error('Failed to initialize Socket.IO Redis adapter', {
+          error: error.message,
+          stack: error.stack,
+        });
+      }
       try {
         voicebotQueues = initVoicebotQueues();
         logger.info('Voicebot queues initialized', {
@@ -187,6 +225,7 @@ const startServer = async () => {
 
     if (voicebotQueues) {
       registerSocketHandlers(io, { queues: voicebotQueues });
+      voicebotSocketEventsRuntime = startVoicebotSocketEventsWorker({ io });
     } else {
       registerSocketHandlers(io);
     }

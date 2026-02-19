@@ -1,8 +1,14 @@
 import OpenAI from 'openai';
-import { ObjectId } from 'mongodb';
-import { VOICEBOT_COLLECTIONS, VOICEBOT_PROCESSORS } from '../../../constants.js';
+import { ObjectId, type Db } from 'mongodb';
+import {
+  VOICEBOT_COLLECTIONS,
+  VOICEBOT_JOBS,
+  VOICEBOT_PROCESSORS,
+  VOICEBOT_QUEUES,
+} from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
+import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const logger = getLogger();
@@ -25,6 +31,7 @@ type CategorizeResult = {
 type VoiceMessageRecord = {
   _id: ObjectId;
   session_id?: ObjectId | string;
+  message_id?: string | number;
   categorization_attempts?: number;
   categorization_retry_reason?: string;
   transcription_text?: string;
@@ -189,6 +196,56 @@ const createOpenAiClient = (): OpenAI | null => {
   return new OpenAI({ apiKey });
 };
 
+const queueMessageUpdateEvent = async ({
+  session_id,
+  message_id,
+  message,
+}: {
+  session_id: string;
+  message_id: string;
+  message: Record<string, unknown>;
+}): Promise<void> => {
+  const queues = getVoicebotQueues();
+  const eventsQueue = queues?.[VOICEBOT_QUEUES.EVENTS];
+  if (!eventsQueue) return;
+
+  await eventsQueue.add(VOICEBOT_JOBS.events.SEND_TO_SOCKET, {
+    session_id,
+    event: 'message_update',
+    payload: {
+      message_id,
+      message,
+    },
+  });
+};
+
+const emitMessageUpdateById = async ({
+  db,
+  messageObjectId,
+  message_id,
+  session_id,
+}: {
+  db: Db;
+  messageObjectId: ObjectId;
+  message_id: string;
+  session_id: string;
+}): Promise<void> => {
+  const updatedMessage = (await db
+    .collection(VOICEBOT_COLLECTIONS.MESSAGES)
+    .findOne(runtimeQuery({ _id: messageObjectId }))) as Record<string, unknown> | null;
+  if (!updatedMessage) return;
+
+  await queueMessageUpdateEvent({
+    session_id,
+    message_id,
+    message: {
+      ...updatedMessage,
+      _id: String(updatedMessage._id || message_id),
+      session_id: String(updatedMessage.session_id || session_id),
+    },
+  });
+};
+
 export const handleCategorizeJob = async (
   payload: CategorizeJobData
 ): Promise<CategorizeResult> => {
@@ -253,6 +310,12 @@ export const handleCategorizeJob = async (
         categorization_next_attempt_at: 1,
       },
     });
+    await emitMessageUpdateById({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
+    });
 
     return {
       ok: false,
@@ -278,6 +341,12 @@ export const handleCategorizeJob = async (
         categorization_retry_reason: 1,
         categorization_next_attempt_at: 1,
       },
+    });
+    await emitMessageUpdateById({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
     });
     return {
       ok: false,
@@ -317,6 +386,12 @@ export const handleCategorizeJob = async (
         categorization_error_timestamp: 1,
         categorization_retry_reason: 1,
       },
+    });
+    await emitMessageUpdateById({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
     });
 
     logger.info('[voicebot-worker] categorize handled', {
@@ -360,7 +435,13 @@ export const handleCategorizeJob = async (
               categorization_retry_reason: 1,
               categorization_next_attempt_at: 1,
             },
-          }),
+        }),
+    });
+    await emitMessageUpdateById({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
     });
 
     logger.error('[voicebot-worker] categorize failed', {

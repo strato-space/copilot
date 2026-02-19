@@ -164,7 +164,7 @@ export const handleProcessingLoopJob = async (
   const sessionsFilter: Record<string, unknown> = {
     is_deleted: { $ne: true },
     is_messages_processed: false,
-    is_waiting: false,
+    is_waiting: { $ne: true },
     $or: [
       { is_corrupted: { $ne: true } },
       {

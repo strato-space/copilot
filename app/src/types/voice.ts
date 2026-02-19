@@ -167,6 +167,17 @@ export interface TaskTypeNode {
 export interface VoiceBotProject {
     _id: string;
     name?: string;
+    title?: string;
+    project_group?: {
+        _id?: string;
+        name?: string;
+        is_active?: boolean;
+    } | null;
+    customer?: {
+        _id?: string;
+        name?: string;
+        is_active?: boolean;
+    } | null;
 }
 
 export interface VoiceBotPerformer {

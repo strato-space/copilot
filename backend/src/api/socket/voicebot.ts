@@ -329,6 +329,11 @@ export function registerVoicebotSocketHandlers(
             requireUpdate: false,
           });
           if (!access.ok) {
+            logger.warn('[voicebot-socket] subscribe denied', {
+              socketId: socket.id,
+              session_id,
+              error: access.error,
+            });
             replyError(reply, access.error);
             return;
           }
@@ -343,6 +348,12 @@ export function registerVoicebotSocketHandlers(
           }
           sessionSocketMap.get(session_id)?.add(socket.id);
           socket.join(getVoicebotSessionRoom(session_id));
+          logger.info('[voicebot-socket] subscribed', {
+            socketId: socket.id,
+            session_id,
+            room: getVoicebotSessionRoom(session_id),
+            subscribers: sessionSocketMap.get(session_id)?.size ?? 0,
+          });
           reply({ ok: true });
         } catch (error) {
           logger.error('[voicebot-socket] Error handling subscribe_on_session:', error);

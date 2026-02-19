@@ -288,6 +288,55 @@ test.describe('Voice FAB lifecycle parity', () => {
     expect(calls).toContain('rec');
   });
 
+  test('@unauth Rec switches active-session from another session to current page session', async ({ page }) => {
+    const anotherSessionId = '507f1f77bcf86cd7994390aa';
+    await installFabControlMock(page, { sessionId: anotherSessionId });
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+
+    let activatePayload: Record<string, unknown> | null = null;
+    await page.route('**/api/voicebot/activate_session', async (route) => {
+      activatePayload = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+
+    await page.goto(`/voice/session/${SESSION_ID}`);
+    await attachFabControlRecorder(page, { sessionId: anotherSessionId });
+
+    await page.evaluate(() => {
+      const win = window as unknown as {
+        __voicebotActiveSessionEvents?: string[];
+      };
+      win.__voicebotActiveSessionEvents = [];
+      window.addEventListener('voicebot:active-session-updated', (event) => {
+        const detail = (event as CustomEvent<{ session_id?: string }>).detail;
+        if (typeof detail?.session_id === 'string') {
+          win.__voicebotActiveSessionEvents?.push(detail.session_id);
+        }
+      });
+    });
+
+    await actionButton(page, 'Rec').click();
+
+    await expect.poll(() => activatePayload?.session_id).toBe(SESSION_ID);
+    await expect.poll(() =>
+      page.evaluate(() => {
+        const win = window as unknown as {
+          __voicebotActiveSessionEvents?: string[];
+        };
+        return win.__voicebotActiveSessionEvents ?? [];
+      })
+    ).toContain(SESSION_ID);
+
+    const calls = await getFabCalls(page);
+    expect(calls).toContain('rec');
+  });
+
   test('@unauth button enablement follows recording state contract', async ({ page }) => {
     await installFabControlMock(page, { state: 'recording' });
     await addAuthCookie(page);

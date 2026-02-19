@@ -163,10 +163,12 @@ const buildRuntimeFilterExpressionForPath = ({
     return { $eq: [fieldExpr, runtimeTag] };
   }
 
+  const normalizedFieldExpr = { $ifNull: [fieldExpr, ''] } as const;
+
   if (familyMatch) {
     const familyExpr = {
       $regexMatch: {
-        input: fieldExpr,
+        input: normalizedFieldExpr,
         regex: new RegExp(`^${escapeRegex(runtimeFamily)}(?:-|$)`),
       },
     } as const;
@@ -175,8 +177,7 @@ const buildRuntimeFilterExpressionForPath = ({
       return {
         $or: [
           familyExpr,
-          { $eq: [fieldExpr, null] },
-          { $eq: [fieldExpr, ''] },
+          { $eq: [normalizedFieldExpr, ''] },
         ],
       };
     }
@@ -188,8 +189,7 @@ const buildRuntimeFilterExpressionForPath = ({
     return {
       $or: [
         { $eq: [fieldExpr, runtimeTag] },
-        { $eq: [fieldExpr, null] },
-        { $eq: [fieldExpr, ''] },
+        { $eq: [normalizedFieldExpr, ''] },
       ],
     };
   }

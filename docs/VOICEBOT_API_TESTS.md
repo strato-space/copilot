@@ -1,6 +1,6 @@
 # Copilot VoiceBot API Test Matrix
 
-Date: 2026-02-18
+Date: 2026-02-19
 
 ## Backend test command
 
@@ -34,6 +34,9 @@ npm test -- --runInBand __tests__/voicebot/workerDoneMultipromptHandler.test.ts
 npm test -- --runInBand __tests__/voicebot/workerScaffoldHandlers.test.ts
 npm test -- --runInBand __tests__/voicebot/tgSessionRef.test.ts
 npm test -- --runInBand __tests__/voicebot/tgCommandHandlers.test.ts
+npm test -- --runInBand __tests__/voicebot/voicebotSocketEventsWorker.test.ts
+npm test -- --runInBand __tests__/voicebot/workerCategorizeHandler.test.ts
+npm test -- --runInBand __tests__/services/dbRuntimeScopedCollectionProxy.test.ts
 ```
 
 ## Frontend smoke (voice routes)
@@ -55,3 +58,25 @@ PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voic
 
 Latest local result:
 - `11` tests passed (`voice.spec.ts` + `voice-fab-lifecycle.spec.ts`).
+
+## Realtime websocket verification
+
+Backend (automated):
+- `__tests__/voicebot/voicebotSocketEventsWorker.test.ts` validates `SEND_TO_SOCKET` -> namespace room emit (`message_update`).
+- `__tests__/voicebot/workerCategorizeHandler.test.ts` validates categorization handler enqueues socket events on success/error paths.
+
+Latest targeted run:
+- `2` suites passed
+- `6` tests passed
+
+Command:
+
+```bash
+cd /home/strato-space/copilot/backend
+npm test -- --runInBand __tests__/voicebot/voicebotSocketEventsWorker.test.ts __tests__/voicebot/workerCategorizeHandler.test.ts
+```
+
+MCP Chrome smoke (manual):
+- Open `/voice/session/:id`, verify console shows socket connected to `/voicebot`.
+- Ensure `subscribe_on_session` happens for current `session_id`.
+- During categorization, rows in Categorization tab must update without page refresh (`message_update` fan-out).

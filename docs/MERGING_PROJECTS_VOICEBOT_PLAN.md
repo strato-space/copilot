@@ -18,6 +18,9 @@
 - Усилен socket `/voicebot`:
   - `backend/src/services/session-socket-auth.ts`
   - переписан `backend/src/api/socket/voicebot.ts` (explicit `session_done`, authz, ack `{ok,error}`)
+  - `app/src/services/socket.ts` подключает voice socket строго к namespace `/voicebot` (устранен root-namespace drift).
+  - `backend/src/services/voicebotSocketEventsWorker.ts` fan-out'ит `message_update` в room после `subscribe_on_session`.
+  - `backend/src/index.ts` включает Socket.IO Redis adapter (`@socket.io/redis-adapter`) для межпроцессной доставки realtime events.
 - Начата API parity:
   - flat mounting + legacy aliases в `backend/src/api/routes/voicebot/index.ts`
   - расширение `backend/src/api/routes/voicebot/sessions.ts` (`active_session`, `activate_session`, `create_session`, `projects`, `add_text`, `add_attachment`, aliases)
@@ -34,6 +37,7 @@
   - `app`: `npm run build` — OK
   - `app`: `PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth` — OK (`6 passed`)
   - MCP Chrome smoke: `https://copilot.stratospace.fun/voice` и `https://copilot-dev.stratospace.fun/voice` открываются без console/network errors.
+  - MCP Chrome realtime check: для `session_id=6996ae012835b2811da9b9ca` категоризация обновляется без refresh страницы (socket `message_update`).
 
 ### Повторный gap-аудит (история `voicebot` с 2026-02-05)
 - Источник ревизии: `git log --since=2026-02-05` в `/home/strato-space/voicebot` + route/component diff against `/home/strato-space/copilot`.
@@ -52,8 +56,8 @@
 | `copilot-37l` | Voicebot gap-audit + sync matrix + migration spec refresh | open | `bd show copilot-37l` |
 | `copilot-xh5` | Runtime foundation: RUNTIME_TAG + runtimeScope helpers | in_progress | `bd show copilot-xh5` |
 | `copilot-au9` | Runtime isolation: Voice domain data paths | closed | `bd show copilot-au9` |
-| `copilot-2s0` | Runtime isolation: CRM/OperOps domain data paths | open | `bd show copilot-2s0` |
-| `copilot-3h6` | Runtime isolation: FinOps/reports/miniapp data paths | open | `bd show copilot-3h6` |
+| `copilot-2s0` | Runtime isolation: CRM/OperOps domain data paths | closed | `bd show copilot-2s0` |
+| `copilot-3h6` | Runtime isolation: FinOps/reports/miniapp data paths | closed | `bd show copilot-3h6` |
 | `copilot-lru` | Voice API parity + Zod schemas + legacy aliases | closed | `bd show copilot-lru` |
 | `copilot-2rk` | Socket `/voicebot` authz parity + explicit `session_done` | closed | `bd show copilot-2rk` |
 | `copilot-z9j` | Frontend `/voice` source-sync + `New/Rec/Cut/Pause/Done` | closed | `bd show copilot-z9j` |
@@ -128,6 +132,8 @@ Source of truth: см. раздел `## Финальная структура п
 - [v] Стабилизирован `voice-fab-lifecycle` e2e against runtime interference: тесты мокируют same-origin WebRTC asset (`/webrtc/webrtc-voicebot-lib.js`) в `beforeEach`, что убирает race с реальным FAB runtime; прогон `--repeat-each=3` (18/18 passed, chromium-unauth).
 - [v] Восстановлен cross-browser Playwright контур (`firefox-unauth` проект, включается через `PLAYWRIGHT_INCLUDE_FIREFOX=1`). Прогоны `voice.spec.ts`, `voice-log.spec.ts`, `voice-fab-lifecycle.spec.ts` на `chromium-unauth + firefox-unauth` проходят green (18/18, 8/8, 12/12).
 - [v] Устранен cross-browser drift по toolbar state (`MeetingCard`): доступность `New/Rec/Done` больше не зависит от локального `VOICEBOT_AUTH_TOKEN` и привязана к runtime state сессии; добавлен e2e-регресс `@unauth controls stay enabled on session page without local VOICEBOT token` (`app/e2e/voice-fab-lifecycle.spec.ts`), подтверждено на `chromium-unauth` и `firefox-unauth` (7/7 в каждом проекте).
+- [v] Закрыт `copilot-mwdg`: realtime категоризация доставляется без refresh через namespace `/voicebot` + room subscription `subscribe_on_session`; `categorize` enqueue'ит `SEND_TO_SOCKET(message_update)`, backend `startVoicebotSocketEventsWorker` fan-out'ит события (Redis adapter enabled). Доказательства: `backend/__tests__/voicebot/voicebotSocketEventsWorker.test.ts`, `backend/__tests__/voicebot/workerCategorizeHandler.test.ts`, MCP Chrome smoke на `session_id=6996ae012835b2811da9b9ca`.
+- [v] Закрыт `copilot-2s0`: runtime isolation для CRM/OperOps data paths подтверждена service-level regression suite `backend/__tests__/services/dbRuntimeScopedCollectionProxy.test.ts` (runtime-scoped `find/aggregate/updateOne` для `automation_tasks`/`automation_work_hours`, shared collections bypass), плюс re-run `backend/__tests__/services/dbAggregateRuntimeScope.test.ts` и `backend/__tests__/voicebot/runtimeScope.test.ts`.
 - [v] Усилено e2e покрытие `copilot-b13`: добавлен smoke-тест `@unauth does not request microphone on initial /voice load` в `app/e2e/voice.spec.ts`; локальный прогон `voice.spec.ts + voice-fab-lifecycle.spec.ts` на `127.0.0.1:3002` = `13 passed`.
 - [v] Добавлена матрица переноса сценариев из `voicebot/webrtc` в copilot e2e: `docs/PLAYWRIGHT_MIGRATION_MATRIX.md` (`[v]/[x]/[~]` статусы и команды прогонов).
 - [v] MCP Chrome smoke: `/voice` на `https://copilot.stratospace.fun/voice` открывается без infinite loader, видны таблица сессий и FAB toolbar `New/Rec/Cut/Pause/Done`.
@@ -208,6 +214,10 @@ Source of truth: см. раздел `## Финальная структура п
 
 - [v] Дополнительно усилена runtime isolation для project-files utility routes: `get_project_files`, `get_all_project_files`, `get_file_content` в `backend/src/api/routes/voicebot/sessions.ts` теперь читают `automation_google_drive_projects_files` через runtime-family filter (`prod + prod-*` с legacy fallback); добавлены тесты `backend/__tests__/voicebot/projectFilesRuntimeRoutes.test.ts`.
 - [v] Продвинут перенос voice worker jobs: добавлены TS handlers для `VOICEBOT_JOBS.voice.SUMMARIZE` и `VOICEBOT_JOBS.voice.QUESTIONS` (`backend/src/workers/voicebot/handlers/{summarize,questions}.ts`) с runtime-safe filters, OpenAI responses processing и записью в `processors_data.summarization/questioning`; покрытие `backend/__tests__/voicebot/workerSummarizeQuestionsHandlers.test.ts` + manifest assertions в `workerScaffoldHandlers.test.ts`.
+- [v] Добавлен TS handler для `VOICEBOT_JOBS.voice.CUSTOM_PROMPT` (`backend/src/workers/voicebot/handlers/customPrompt.ts`): загрузка prompt из `VOICEBOT_CUSTOM_PROMPTS_DIR` (fallback на `voicebot_runtime/voicebot/custom_prompts`), runtime-safe message/session checks, OpenAI response parsing и запись в `processors_data.<processor_name>`; покрытие `backend/__tests__/voicebot/workerCustomPromptHandler.test.ts` и manifest binding check.
+- [v] Постпроцессинг custom-prompts доведен до TS worker runtime: `backend/src/workers/voicebot/handlers/{allCustomPrompts,oneCustomPrompt}.ts` теперь привязаны в manifest для `ALL_CUSTOM_PROMPTS`/`ONE_CUSTOM_PROMPT`, поддерживают runtime-safe session/message filters, queue handoff на final custom processing и покрыты тестом `backend/__tests__/voicebot/workerPostprocessingCustomPromptsHandlers.test.ts`.
+- [v] Закрыт parity-gap postprocessing dispatch для `CREATE_TASKS`/`AUDIO_MERGING`: добавлены TS handlers `backend/src/workers/voicebot/handlers/{createTasksPostprocessing,audioMerging}.ts`, manifest теперь маппит `CREATE_TASKS` на task-generation wrapper (с requeue при pending categorization) и `AUDIO_MERGING` на controlled-skip runtime path; покрытие `backend/__tests__/voicebot/workerPostprocessingCreateTasksAudioMergingHandlers.test.ts`.
+- [v] `DONE_MULTIPROMPT` в TS worker доведен до parity по fan-out side effects: после закрытия сессии enqueue цепочки `ALL_CUSTOM_PROMPTS`/`AUDIO_MERGING`/`CREATE_TASKS` и notify `session_done`, с сохранением active-session cleanup + done notify session-log (`backend/src/workers/voicebot/handlers/doneMultiprompt.ts`, `backend/__tests__/voicebot/workerDoneMultipromptHandler.test.ts`).
 - [v] Utility endpoints parity hardened with route-level Zod validation: `create_tickets`, `delete_task_from_session`, `topics`, `save_custom_prompt_result`, `get_project_files`, `upload_file_to_project`, `get_file_content`; negative-path coverage in `backend/__tests__/voicebot/sessionUtilityValidationRoutes.test.ts`.
 - [v] Utility runtime behavior covered in `backend/__tests__/voicebot/sessionUtilityRuntimeBehavior.test.ts`: `create_tickets` writes `runtime_tag`, `task_types` and `topics` apply runtime-family filters for prod compatibility.
 - [v] Socket `session_done` explicit-contract suite added: `backend/__tests__/voicebot/voicebotSocketDoneHandler.test.ts` validates forbidden/success ack paths, server-side performer auth, active-session cleanup and notify-log write semantics.
@@ -353,7 +363,7 @@ voicebot/
 | Auth middleware | JWT + whitelist paths | Cookie + AppError |
 | Permission system | PermissionManager (RBAC) | Базовый (только auth) |
 | Socket.IO events | VoiceBot sessions (subscribe/unsubscribe) | FinOps updates |
-| BullMQ Workers | EVENTS, NOTIFIES (inline) | Нет inline workers |
+| BullMQ Workers | EVENTS, NOTIFIES (inline) | TS voice workers в отдельном PM2 + socket-events worker в backend API |
 | MCP Proxy | setupMCPProxy (Socket.IO) | Нет |
 | Google Drive scanning | Периодическое (AsyncPolling) | Нет |
 
@@ -527,6 +537,7 @@ Copilot использует:
 | Permission | Перенести PermissionManager, но ограничить доступ ролями Super Admin / Administrator |
 | MCP Proxy | Перенести в copilot backend |
 | BullMQ Workers | Вынести в отдельный сервис внутри copilot |
+| Events fan-out | Socket queue `EVENTS` доставляется backend `startVoicebotSocketEventsWorker` в namespace `/voicebot` rooms |
 | PM2 | Единый сервис `copilot-backend` |
 
 ### Что включается в слияние
@@ -578,6 +589,7 @@ Copilot использует:
 | auth/session guards в `voicebot-backend.js` | `backend/src/api/middleware/auth.ts`, `backend/src/api/middleware/roleGuard.ts` | performer auth + admin gate | integrated |
 | runtime isolation (`constants.js`, `services/runtimeScope.js`) | `backend/src/constants.ts`, `backend/src/services/runtimeScope.ts`, `backend/src/services/db.ts` | prod/dev data isolation | integrated (ongoing extension) |
 | socket auth/access helpers | `backend/src/services/session-socket-auth.ts` + `backend/src/api/socket/voicebot.ts` | explicit `session_done`, authz | integrated |
+| socket events fan-out + Redis adapter | `backend/src/services/voicebotSocketEventsWorker.ts`, `backend/src/index.ts` | realtime `message_update` delivery after `subscribe_on_session` | integrated |
 | timeline/object-locator/session-log helpers | `backend/src/services/transcriptionTimeline.ts`, `backend/src/services/voicebotObjectLocator.ts`, `backend/src/services/voicebotSessionLog.ts`, `backend/src/services/voicebotOid.ts` | edit/rollback and transcript consistency | integrated |
 
 ### 3) Куда попадает front (`voicebot/app` -> `copilot/app/src/pages/voice/*`)

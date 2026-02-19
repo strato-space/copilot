@@ -254,6 +254,7 @@ router.post('/create', async (req: Request, res: Response) => {
         const now = Date.now();
         const newTicket: Record<string, unknown> = {
             ...ticket,
+            task_status: TASK_STATUSES.READY_10,
             created_at: now,
             updated_at: now,
             is_deleted: false,

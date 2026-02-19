@@ -176,7 +176,7 @@ export const patchRuntimeTagIntoSetOnInsert = <TSchema extends Document>(
   } as unknown as UpdateFilter<TSchema>;
 };
 
-const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
+export const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
   collection: Collection<TSchema>
 ): Collection<TSchema> => {
   const collectionName = collection.collectionName;
@@ -320,7 +320,7 @@ const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
   });
 };
 
-const createRuntimeScopedDbProxy = (db: Db): Db =>
+export const createRuntimeScopedDbProxy = (db: Db): Db =>
   new Proxy(db, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);

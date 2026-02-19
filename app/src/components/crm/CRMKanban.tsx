@@ -546,7 +546,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
             render: (_, record) => (
                 <div className="flex gap-4">
                     <EditOutlined className="hover:text-cyan-500" onClick={() => setEditingTicket(record)} />
-                    <a href={`/task/${record.id}`} target="_blank" rel="noopener noreferrer">
+                    <a href={`/operops/task/${record.id}`} target="_blank" rel="noopener noreferrer">
                         <EyeOutlined className="hover:text-cyan-500" />
                     </a>
                 </div>

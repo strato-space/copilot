@@ -581,6 +581,10 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
             socket.on('connect', () => {
                 console.log('Connected to voice bot socket');
+                const activeSessionId = get().currentSessionId;
+                if (activeSessionId) {
+                    socket.emit(SOCKET_EVENTS.SUBSCRIBE_ON_SESSION, { session_id: activeSessionId });
+                }
             });
 
             socket.on('disconnect', (reason) => {
@@ -1027,7 +1031,10 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
             const preparedTickets = selectedTickets.map((ticket) => ({
                 ...ticket,
-                project: prepared_projects?.find((p) => p._id === ticket.project_id)?.name || null,
+                project: (() => {
+                    const project = prepared_projects?.find((p) => p._id === ticket.project_id);
+                    return project?.name || project?.title || null;
+                })(),
             }));
 
             await voicebotRequest('voicebot/create_tickets', { tickets: preparedTickets, session_id: get().currentSessionId });

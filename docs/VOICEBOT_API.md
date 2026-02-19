@@ -1,6 +1,6 @@
 # Copilot VoiceBot API
 
-Date: 2026-02-18  
+Date: 2026-02-19  
 Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration parity checks.
 
 ## Auth
@@ -40,6 +40,27 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 ## Runtime mismatch contract
 - Read/update for foreign runtime returns `404`.
 - Upload/attach into foreign runtime returns `409` with `error=runtime_mismatch`.
+
+## Realtime websocket contract (`/voicebot`)
+
+- Frontend voice socket MUST connect to namespace `/voicebot` (not root `/`).
+- Client joins session room via:
+  - `subscribe_on_session` with `{ session_id }`
+  - `unsubscribe_from_session` with `{ session_id }`
+- Room format: `voicebot:session:<session_id>`.
+
+### Realtime events
+- `new_message` — new chunk/message attached to session.
+- `session_update` — session-level state/metadata updates.
+- `message_update` — per-message updates (including categorization/transcription progress).
+
+### Delivery path ownership
+- Categorization/transcription workers enqueue socket fan-out jobs to `VOICEBOT_QUEUES.EVENTS` (`SEND_TO_SOCKET`).
+- Backend API process runs `startVoicebotSocketEventsWorker` and is the owner of websocket delivery.
+- Standalone worker runtime MUST NOT consume `EVENTS` queue directly.
+
+### Multi-process delivery
+- Socket.IO Redis adapter is enabled in backend bootstrap (`backend/src/index.ts`), so events are delivered correctly across PM2 processes.
 
 ## Legacy compatibility aliases
 - `/api/voicebot/sessions/*` and `/api/voicebot/uploads/*` are temporarily preserved as thin aliases during migration.

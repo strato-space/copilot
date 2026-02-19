@@ -27,6 +27,22 @@ interface TicketFormValues {
     description?: string;
 }
 
+const toIdString = (value: unknown): string | undefined => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        const directId = record._id ?? record.id;
+        if (typeof directId === 'string' || typeof directId === 'number') {
+            return String(directId);
+        }
+        if (directId && typeof directId === 'object' && typeof (directId as { toString?: () => string }).toString === 'function') {
+            return (directId as { toString: () => string }).toString();
+        }
+    }
+    return undefined;
+};
+
 const CRMCreateTicket = () => {
     const [form] = Form.useForm<TicketFormValues>();
     const { editingTicket, setEditingTicket, editTiketProject, setEditTiketProject } = useCRMStore();
@@ -107,6 +123,8 @@ const CRMCreateTicket = () => {
     if (!editingTicket) return null;
 
     const projectEpics = getProjectEpics(editTiketProject ?? '').filter((e) => !e.is_deleted);
+    const initialPerformer = toIdString(editingTicket.performer);
+    const initialTaskType = toIdString(editingTicket.task_type);
 
     return (
         <div className="text-black flex flex-col pt-3">
@@ -138,7 +156,8 @@ const CRMCreateTicket = () => {
                     layout="vertical"
                     initialValues={{
                         ...editingTicket,
-                        performer: typeof editingTicket?.performer === 'object' ? editingTicket.performer._id : editingTicket?.performer,
+                        performer: initialPerformer,
+                        task_type: initialTaskType,
                     }}
                     onFinish={(values) => {
                         // Очищаем пустые строки, заменяя их на null
@@ -219,7 +238,7 @@ const CRMCreateTicket = () => {
                                                     title: supertype,
                                                     options: types.map((tt) => ({
                                                         label: `${tt.task_id ?? ''} ${tt.name}`,
-                                                        value: tt._id,
+                                                        value: toIdString(tt),
                                                     })),
                                                 })
                                             )}
@@ -240,7 +259,7 @@ const CRMCreateTicket = () => {
                                     <Form.Item label="Исполнитель:" name="performer" className="w-full">
                                         <Select
                                             options={performers.map((performer) => ({
-                                                value: performer._id,
+                                                value: toIdString(performer),
                                                 label: performer.real_name ?? performer.name,
                                             }))}
                                         />
@@ -297,7 +316,7 @@ const CRMCreateTicket = () => {
                                     >
                                         <Select
                                             options={performers.map((performer) => ({
-                                                value: performer._id,
+                                                value: toIdString(performer),
                                                 label: performer.real_name ?? performer.name,
                                             }))}
                                             mode="multiple"

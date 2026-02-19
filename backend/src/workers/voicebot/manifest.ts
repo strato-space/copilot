@@ -55,6 +55,26 @@ import {
   handleQuestionsJob,
   type QuestionsJobData,
 } from './handlers/questions.js';
+import {
+  handleCustomPromptJob,
+  type CustomPromptJobData,
+} from './handlers/customPrompt.js';
+import {
+  handleAllCustomPromptsJob,
+  type AllCustomPromptsJobData,
+} from './handlers/allCustomPrompts.js';
+import {
+  handleOneCustomPromptJob,
+  type OneCustomPromptJobData,
+} from './handlers/oneCustomPrompt.js';
+import {
+  handleCreateTasksPostprocessingJob,
+  type CreateTasksPostprocessingJobData,
+} from './handlers/createTasksPostprocessing.js';
+import {
+  handleAudioMergingJob,
+  type AudioMergingJobData,
+} from './handlers/audioMerging.js';
 
 export type VoicebotWorkerHandler = (payload: unknown) => Promise<unknown>;
 
@@ -81,10 +101,18 @@ export const VOICEBOT_WORKER_MANIFEST: Record<string, VoicebotWorkerHandler> = {
     handleSummarizeJob(payload as SummarizeJobData),
   [VOICEBOT_JOBS.voice.QUESTIONS]: async (payload: unknown) =>
     handleQuestionsJob(payload as QuestionsJobData),
+  [VOICEBOT_JOBS.voice.CUSTOM_PROMPT]: async (payload: unknown) =>
+    handleCustomPromptJob(payload as CustomPromptJobData),
+  [VOICEBOT_JOBS.postprocessing.ALL_CUSTOM_PROMPTS]: async (payload: unknown) =>
+    handleAllCustomPromptsJob(payload as AllCustomPromptsJobData),
+  [VOICEBOT_JOBS.postprocessing.ONE_CUSTOM_PROMPT]: async (payload: unknown) =>
+    handleOneCustomPromptJob(payload as OneCustomPromptJobData),
   [VOICEBOT_JOBS.postprocessing.FINAL_CUSTOM_PROMPT]: async (payload: unknown) =>
     handleFinalizationJob(payload as FinalizationJobData),
+  [VOICEBOT_JOBS.postprocessing.AUDIO_MERGING]: async (payload: unknown) =>
+    handleAudioMergingJob(payload as AudioMergingJobData),
   [VOICEBOT_JOBS.postprocessing.CREATE_TASKS]: async (payload: unknown) =>
-    handleFinalizationJob(payload as FinalizationJobData),
+    handleCreateTasksPostprocessingJob(payload as CreateTasksPostprocessingJobData),
   [VOICEBOT_JOBS.events.SEND_TO_SOCKET]: async (payload: unknown) =>
     handleSendToSocketJob(payload as SendToSocketJobData),
   [VOICEBOT_JOBS.notifies.SESSION_START]: async (payload: unknown) =>

@@ -13,13 +13,14 @@ TypeScript VoiceBot workers live under `backend/src/workers/voicebot`.
 - PM2 cutover process: `copilot-voicebot-workers-prod` (see `scripts/pm2-voicebot-cutover.ecosystem.config.js`)
 
 ## Queue Coverage
-Workers are started for all runtime-scoped queue names from `VOICEBOT_QUEUES`:
+Standalone workers are started for runtime-scoped queues:
 - `COMMON`
 - `VOICE`
 - `PROCESSORS`
 - `POSTPROCESSORS`
-- `EVENTS`
 - `NOTIFIES`
+
+`EVENTS` queue is intentionally excluded from standalone worker runtime and is consumed by backend API process via `startVoicebotSocketEventsWorker` (has live Socket.IO context).
 
 Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly (`voicebot_worker_handler_not_found:*`) and are logged with queue/job context.
 
@@ -33,6 +34,11 @@ Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly 
 - `handlers/categorize.ts`
 - `handlers/summarize.ts`
 - `handlers/questions.ts`
+- `handlers/customPrompt.ts`
+- `handlers/allCustomPrompts.ts`
+- `handlers/oneCustomPrompt.ts`
+- `handlers/audioMerging.ts`
+- `handlers/createTasksPostprocessing.ts`
 - `handlers/finalization.ts`
 - `handlers/startMultiprompt.ts`
 - `handlers/createTasksFromChunks.ts`
@@ -40,6 +46,7 @@ Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly 
 - `handlers/notify.ts`
 
 ## Remaining Gaps
-- `sendToSocket` currently logs+skips (`socket_runtime_not_available`) because dedicated worker runtime has no Socket.IO transport context; event delivery is still performed directly by backend API process.
+- `sendToSocket` handler remains a controlled skip in standalone workers (`socket_runtime_not_available`) by design; socket delivery is handled by backend runtime (`backend/src/services/voicebotSocketEventsWorker.ts`) consuming `VOICEBOT_JOBS.events.SEND_TO_SOCKET` from `voicebot--events-*`.
 - Notify handler currently supports HTTP webhook envelope delivery; local hook runner/event-log parity from legacy runtime is not fully ported yet.
+- `audioMerging` handler in TS runtime is intentionally a controlled skip unless Telegram merge transport/tooling is wired in worker process context.
 - Telegram voice-file download path remains pending in transcribe pipeline (current TS transcribe path expects local `file_path`).
