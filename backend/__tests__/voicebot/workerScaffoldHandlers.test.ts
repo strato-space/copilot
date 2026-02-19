@@ -90,30 +90,48 @@ describe('voicebot worker scaffold handlers', () => {
   });
 
   it('processing loop handler returns runtime counters', async () => {
-    const find = jest
+    const sessionsFind = jest
       .fn()
       .mockImplementationOnce(() => ({
-        limit: () => ({
-          toArray: async () => [{ _id: new ObjectId() }, { _id: new ObjectId() }],
+        sort: () => ({
+          limit: () => ({
+            toArray: async () => [{ _id: new ObjectId() }, { _id: new ObjectId() }],
+          }),
         }),
       }))
-      .mockImplementationOnce(() => ({
+      .mockImplementation(() => ({
+        sort: () => ({
+          limit: () => ({
+            toArray: async () => [],
+          }),
+        }),
         limit: () => ({
           toArray: async () => [],
         }),
       }));
 
-    const messagesFind = jest.fn(() => ({
-      sort: () => ({
-        toArray: async () => [],
-      }),
-    }));
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() => ({
+        sort: () => ({
+          limit: () => ({
+            project: () => ({
+              toArray: async () => [],
+            }),
+          }),
+        }),
+      }))
+      .mockImplementation(() => ({
+        sort: () => ({
+          toArray: async () => [],
+        }),
+      }));
 
     const countDocuments = jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(2);
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
-        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { find, updateOne: jest.fn() };
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { find: sessionsFind, updateOne: jest.fn() };
         if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { find: messagesFind, countDocuments, updateOne: jest.fn() };
         return {};
       },

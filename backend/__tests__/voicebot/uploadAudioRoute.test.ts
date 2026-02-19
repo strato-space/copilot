@@ -332,6 +332,87 @@ describe('POST /voicebot/upload_audio', () => {
     );
   });
 
+  it('links first uploaded audio chunk to pending image anchor and clears pending marker', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439031');
+    const insertedMessages: Array<Record<string, unknown>> = [];
+    const updateSessionMock = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: sessionId,
+              chat_id: 777,
+              user_id: performerId.toString(),
+              access_level: 'private',
+              is_deleted: false,
+              runtime_tag: 'prod-p2',
+              pending_image_anchor_message_id: 'img-anchor-message-1',
+            })),
+            updateOne: updateSessionMock,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return createMessagesCollection(insertedMessages, new ObjectId('507f1f77bcf86cd799439091'));
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '777',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'audio/webm',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(insertedMessages).toHaveLength(1);
+    expect(insertedMessages[0]?.image_anchor_message_id).toBe('img-anchor-message-1');
+    const persisted = insertedMessages[0] ?? {};
+    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
+    if (storedPath) uploadedFilePaths.add(storedPath);
+
+    expect(updateSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ $and: expect.any(Array) }),
+      expect.objectContaining({
+        $unset: expect.objectContaining({
+          pending_image_anchor_message_id: '',
+          pending_image_anchor_oid: '',
+          pending_image_anchor_created_at: '',
+        }),
+      })
+    );
+  });
+
   it('accepts upload for inactive (closed) sessions when session is not deleted', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439021');

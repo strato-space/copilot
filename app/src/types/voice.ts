@@ -38,6 +38,8 @@ export interface VoiceBotMessage {
     message_id?: string;
     message_timestamp?: string | number;
     session_id?: string;
+    image_anchor_message_id?: string | null;
+    is_image_anchor?: boolean;
     message_type?: string;
     text?: string;
     file_id?: string;

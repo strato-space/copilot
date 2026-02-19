@@ -7,6 +7,7 @@ import {
 } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
+import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const logger = getLogger();
@@ -23,10 +24,12 @@ type ProcessingLoopResult = {
   pending_categorizations: number;
   mode: 'runtime';
   requeued_transcriptions: number;
+  requeued_categorizations: number;
   reset_categorization_locks: number;
   finalized_sessions: number;
   skipped_finalize: number;
   skipped_requeue_no_queue: number;
+  skipped_requeue_no_processors: number;
 };
 
 type QueueLike = {
@@ -64,6 +67,7 @@ type MessageRecord = {
   transcription_retry_reason?: string;
   transcription_next_attempt_at?: number | Date | string;
   categorization_retry_reason?: string;
+  categorization_next_attempt_at?: number | Date | string;
   processors_data?: Record<string, unknown>;
 };
 
@@ -126,6 +130,13 @@ const isQuotaBlockedMessage = (message: MessageRecord): boolean =>
 const isQuotaRestartingCategorization = (message: MessageRecord): boolean =>
   message.categorization_retry_reason === INSUFFICIENT_QUOTA_RETRY;
 
+const canRetryCategorization = (message: MessageRecord, now: number): boolean => {
+  if (!isQuotaRestartingCategorization(message)) return false;
+  const nextAttemptAt = toTimestamp(message.categorization_next_attempt_at);
+  if (nextAttemptAt && now < nextAttemptAt) return false;
+  return true;
+};
+
 const canRetryTranscribe = (message: MessageRecord, now: number): boolean => {
   const attempts = Number(message.transcribe_attempts || 0) || 0;
   const isQuotaRetry = isQuotaBlockedMessage(message);
@@ -159,11 +170,13 @@ export const handleProcessingLoopJob = async (
   const sessionLimit = clampLimit(payload.limit);
   const rawSessionId = String(payload.session_id || '').trim();
   const now = Date.now();
-  const voiceQueue = options.queues?.[VOICEBOT_QUEUES.VOICE] || null;
+  const runtimeQueues = getVoicebotQueues();
+  const voiceQueue = options.queues?.[VOICEBOT_QUEUES.VOICE] || runtimeQueues?.[VOICEBOT_QUEUES.VOICE] || null;
+  const processorsQueue =
+    options.queues?.[VOICEBOT_QUEUES.PROCESSORS] || runtimeQueues?.[VOICEBOT_QUEUES.PROCESSORS] || null;
 
-  const sessionsFilter: Record<string, unknown> = {
+  const sessionsScanBaseFilter: Record<string, unknown> = {
     is_deleted: { $ne: true },
-    is_messages_processed: false,
     is_waiting: { $ne: true },
     $or: [
       { is_corrupted: { $ne: true } },
@@ -175,13 +188,68 @@ export const handleProcessingLoopJob = async (
     ],
   };
 
+  let prioritizedSessionIds: ObjectId[] = [];
   if (rawSessionId) {
-    sessionsFilter._id = ObjectId.isValid(rawSessionId) ? new ObjectId(rawSessionId) : null;
+    prioritizedSessionIds = ObjectId.isValid(rawSessionId) ? [new ObjectId(rawSessionId)] : [];
+  } else {
+    const pendingMessages = (await db
+      .collection(VOICEBOT_COLLECTIONS.MESSAGES)
+      .find(
+        runtimeQuery({
+          is_deleted: { $ne: true },
+          $or: [
+            {
+              is_transcribed: { $ne: true },
+              to_transcribe: true,
+            },
+            {
+              categorization_retry_reason: INSUFFICIENT_QUOTA_RETRY,
+            },
+          ],
+        })
+      )
+      .sort({
+        transcription_next_attempt_at: 1,
+        categorization_next_attempt_at: 1,
+        created_at: 1,
+        _id: 1,
+      })
+      .limit(sessionLimit * 20)
+      .project({ session_id: 1 })
+      .toArray()) as Array<{ session_id?: ObjectId | string }>;
+
+    const seenSessionIds = new Set<string>();
+    for (const entry of pendingMessages) {
+      const raw = entry.session_id;
+      const asObjectId =
+        raw instanceof ObjectId
+          ? raw
+          : ObjectId.isValid(String(raw || ''))
+            ? new ObjectId(String(raw))
+            : null;
+      if (!asObjectId) continue;
+      const key = asObjectId.toString();
+      if (seenSessionIds.has(key)) continue;
+      seenSessionIds.add(key);
+      prioritizedSessionIds.push(asObjectId);
+      if (prioritizedSessionIds.length >= sessionLimit) break;
+    }
   }
+
+  const sessionsFilter: Record<string, unknown> = {
+    ...sessionsScanBaseFilter,
+    ...(prioritizedSessionIds.length > 0
+      ? { _id: { $in: prioritizedSessionIds } }
+      : { is_messages_processed: false }),
+  };
 
   const sessions = (await db
     .collection(VOICEBOT_COLLECTIONS.SESSIONS)
     .find(runtimeQuery(sessionsFilter))
+    .sort({
+      updated_at: -1,
+      _id: -1,
+    })
     .limit(sessionLimit)
     .toArray()) as SessionRecord[];
 
@@ -191,8 +259,10 @@ export const handleProcessingLoopJob = async (
   });
 
   let requeuedTranscriptions = 0;
+  let requeuedCategorizations = 0;
   let resetCategorizationLocks = 0;
   let skippedRequeueNoQueue = 0;
+  let skippedRequeueNoProcessors = 0;
 
   for (const session of sessions) {
     const sessionObjectId = new ObjectId(session._id);
@@ -266,6 +336,66 @@ export const handleProcessingLoopJob = async (
         }
       );
       resetCategorizationLocks += 1;
+    }
+
+    const categorizationsToRetry = messages.filter((message) => canRetryCategorization(message, now));
+
+    for (const message of categorizationsToRetry) {
+      const messageObjectId = new ObjectId(message._id);
+      const messageId = messageObjectId.toString();
+      const sessionId = sessionObjectId.toString();
+      const categorizeJobId = `${sessionId}-${messageId}-CATEGORIZE`;
+      const categorizationProcessorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
+
+      if (!processorsQueue) {
+        skippedRequeueNoProcessors += 1;
+        continue;
+      }
+
+      try {
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+          runtimeQuery({ _id: messageObjectId }),
+          {
+            $set: {
+              [`${categorizationProcessorKey}.is_processing`]: true,
+              [`${categorizationProcessorKey}.is_processed`]: false,
+              [`${categorizationProcessorKey}.is_finished`]: false,
+              [`${categorizationProcessorKey}.job_queued_timestamp`]: now,
+            },
+            $unset: {
+              categorization_next_attempt_at: 1,
+            },
+          }
+        );
+
+        await processorsQueue.add(
+          VOICEBOT_JOBS.voice.CATEGORIZE,
+          {
+            message_id: messageId,
+            session_id: sessionId,
+            job_id: categorizeJobId,
+          },
+          { deduplication: { id: categorizeJobId } }
+        );
+
+        requeuedCategorizations += 1;
+      } catch (error) {
+        logger.error('[voicebot-worker] processing_loop categorization requeue failed', {
+          session_id: sessionId,
+          message_id: messageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+          runtimeQuery({ _id: messageObjectId }),
+          {
+            $set: {
+              categorization_retry_reason: INSUFFICIENT_QUOTA_RETRY,
+              categorization_next_attempt_at: new Date(now + 60_000),
+            },
+          }
+        );
+      }
     }
 
     const untranscribedMessages = messages.filter(
@@ -398,10 +528,12 @@ export const handleProcessingLoopJob = async (
     pending_transcriptions: pendingTranscriptions,
     pending_categorizations: pendingCategorizations,
     requeued_transcriptions: requeuedTranscriptions,
+    requeued_categorizations: requeuedCategorizations,
     reset_categorization_locks: resetCategorizationLocks,
     finalized_sessions: finalizedSessions,
     skipped_finalize: skippedFinalize,
     skipped_requeue_no_queue: skippedRequeueNoQueue,
+    skipped_requeue_no_processors: skippedRequeueNoProcessors,
     mode: 'runtime',
   });
 
@@ -412,9 +544,11 @@ export const handleProcessingLoopJob = async (
     pending_categorizations: pendingCategorizations,
     mode: 'runtime',
     requeued_transcriptions: requeuedTranscriptions,
+    requeued_categorizations: requeuedCategorizations,
     reset_categorization_locks: resetCategorizationLocks,
     finalized_sessions: finalizedSessions,
     skipped_finalize: skippedFinalize,
     skipped_requeue_no_queue: skippedRequeueNoQueue,
+    skipped_requeue_no_processors: skippedRequeueNoProcessors,
   };
 };

@@ -2,6 +2,11 @@
 
 ## 2026-02-19
 ### PROBLEM SOLVED
+- **22:01** Image-only uploads referenced by session pending anchors could appear as detached transcript blocks and duplicate standalone rows.
+- **22:01** Oversized upload failures surfaced raw backend payload text with inconsistent diagnostics across `413`/`500` paths.
+- **22:01** Browser unload races could persist stale WebRTC `recording` state, triggering incorrect auto-resume behavior after refresh.
+- **22:01** TS processing loop could miss pending retries when sessions were already marked `is_messages_processed=true`, and categorization quota retries were not requeued automatically.
+- **22:01** Voice FAB lifecycle parity lacked explicit regression guards for pause wait-state busy controls and temporary-session delete cleanup flow.
 - **18:49** Voice realtime updates could drift after websocket reconnect because UI re-subscribed but did not force rehydrate current session state.
 - **18:49** `message_update` events for not-yet-present rows could be dropped from UI state, causing out-of-order/live categorization gaps until manual refresh.
 - **18:43** OpenAI key mask diagnostics still used mixed legacy formats (`sk-pro...XXXX`/raw prefix variants), complicating cross-runtime incident triage.
@@ -16,6 +21,11 @@
 - **01:39** Telegram `/start` in `copilot-voicebot-tgbot-prod` failed with Mongo update conflict (`Updating the path 'runtime_tag' would create a conflict`) during active-session upsert.
 
 ### FEATURE IMPLEMENTED
+- **22:01** Implemented pending-image-anchor contract across upload and UI: first chunk now stores `image_anchor_message_id`, session pending markers clear on consume, and frontend groups anchor images with the next transcript block.
+- **22:01** Added inline image attachment previews in transcription rows (segmented and fallback render paths) with click-through to source image URL.
+- **22:01** Added structured multer limit handling for `/voicebot/upload_audio` (`file_too_large`, `max_size_bytes`, `max_size_mb`) and normalized WebRTC client-side upload errors.
+- **22:01** Extended TS `processingLoop` with backlog-priority session scan, quota-aware categorization requeue, and runtime queue-map fallback when handler-local queues are absent.
+- **22:01** Expanded Playwright FAB lifecycle coverage with pause busy-state semantics and session delete cleanup contract checks.
 - **18:49** Added reconnect-safe voice session rehydration on socket reconnect and deterministic realtime message upsert/sort for `new_message` + `message_update`.
 - **18:43** Normalized OpenAI key masking in both TS and legacy runtime transcription paths to a single canonical format: `sk-...LAST4`.
 - **18:40** Screenshot card link rendering now prefers canonical `public_attachment` URLs (`direct_uri`), resolves them to absolute host URLs, and provides hover-only copy button.
@@ -49,6 +59,26 @@
 - **10:16** Upgraded TS `DONE_MULTIPROMPT` worker parity: on session close it now queues postprocessing chain (`ALL_CUSTOM_PROMPTS`, `AUDIO_MERGING`, `CREATE_TASKS`) and `SESSION_DONE` notify job in addition to active-session cleanup and session-log write.
 
 ### CHANGES
+- **22:01** Updated image-anchor linkage and transcript image rendering:
+  - `app/src/store/voiceBotStore.ts`
+  - `app/src/components/voice/TranscriptionTableRow.tsx`
+  - `app/src/types/voice.ts`
+  - `app/__tests__/voice/voiceImageAnchorGroupingContract.test.ts`
+  - `app/__tests__/voice/transcriptionImagePreviewContract.test.ts`
+- **22:01** Updated upload route/file-size diagnostics and WebRTC client error handling:
+  - `backend/src/api/routes/voicebot/uploads.ts`
+  - `app/public/webrtc/webrtc-voicebot-lib.js`
+  - `backend/__tests__/voicebot/uploadAudioRoute.test.ts`
+  - `backend/__tests__/voicebot/uploadAudioFileSizeLimitRoute.test.ts`
+  - `app/__tests__/voice/webrtcUploadErrorHandling.test.ts`
+  - `app/__tests__/voice/webrtcPausedRestoreContract.test.ts`
+- **22:01** Updated worker retry behavior, lifecycle e2e coverage, and docs:
+  - `backend/src/workers/voicebot/handlers/processingLoop.ts`
+  - `backend/__tests__/voicebot/workerProcessingLoopHandler.test.ts`
+  - `backend/__tests__/voicebot/workerScaffoldHandlers.test.ts`
+  - `app/e2e/voice-fab-lifecycle.spec.ts`
+  - `AGENTS.md`
+  - `README.md`
 - **18:49** Updated realtime socket state handling:
   - `app/src/store/voiceBotStore.ts`
   - `app/__tests__/voice/voiceSocketRealtimeContract.test.ts`
@@ -112,6 +142,11 @@
 - Expanded done handler regression coverage in `backend/__tests__/voicebot/workerDoneMultipromptHandler.test.ts` to assert postprocessing/notify queue fan-out and session-not-found behavior under runtime-scoped filtering.
 
 ### TESTS
+- **22:02** `cd app && npm test -- --runInBand __tests__/voice/transcriptionImagePreviewContract.test.ts __tests__/voice/voiceImageAnchorGroupingContract.test.ts __tests__/voice/webrtcPausedRestoreContract.test.ts __tests__/voice/webrtcUploadErrorHandling.test.ts`
+- **22:02** `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/uploadAudioFileSizeLimitRoute.test.ts __tests__/voicebot/workerProcessingLoopHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
+- **22:03** `cd backend && npm run build`
+- **22:03** `cd app && npm run build`
+- **22:04** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice-fab-lifecycle.spec.ts --project=chromium-unauth --workers=1`
 - **18:49** `cd app && npm test -- --runInBand __tests__/voice/voiceSocketRealtimeContract.test.ts __tests__/voice/screenshortAttachmentUrl.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts`
 - **18:49** `cd app && npm run build`
 - **18:40** `cd app && npm test -- --runInBand __tests__/voice/screenshortAttachmentUrl.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts`

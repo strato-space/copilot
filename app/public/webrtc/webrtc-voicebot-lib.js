@@ -5849,6 +5849,37 @@
             }
         }
 
+        function parseUploadErrorPayload(rawText) {
+            try {
+                const parsed = rawText ? JSON.parse(rawText) : {};
+                if (parsed && typeof parsed === 'object') return parsed;
+            } catch {}
+            return null;
+        }
+        function formatBytesShort(bytes) {
+            const num = Number(bytes);
+            if (!Number.isFinite(num) || num <= 0) return '';
+            const mb = num / (1024 * 1024);
+            if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+            return `${mb.toFixed(1)} MB`;
+        }
+        function normalizeUploadErrorMessage(status, rawText) {
+            const payload = parseUploadErrorPayload(rawText);
+            const payloadMsg = String(payload?.message || payload?.error || '').trim();
+            if (status === 413 || String(payload?.error || '').trim() === 'file_too_large') {
+                const maxBytes = Number(payload?.max_size_bytes || 0);
+                const maxLabel = formatBytesShort(maxBytes);
+                return maxLabel
+                    ? `Upload failed: 413 File too large (max ${maxLabel})`
+                    : 'Upload failed: 413 File too large';
+            }
+            if (status === 500 && /file too large/i.test(`${rawText || ''}`)) {
+                return 'Upload failed: 500 File too large';
+            }
+            if (payloadMsg) return `Upload failed: ${status} ${payloadMsg}`;
+            return `Upload failed: ${status} ${String(rawText || '').trim()}`;
+        }
+
         // --- Upload API ---
         async function uploadBlob(blob, filenameOpt, opts = {}) {
             if (typeof navigator !== 'undefined' && 'onLine' in navigator && navigator.onLine === false) {
@@ -5926,7 +5957,7 @@
                         console.warn('[uploadAudio] session status check failed', e);
                     }
                 }
-                throw new Error(`Upload failed: ${resp.status} ${text}`);
+                throw new Error(normalizeUploadErrorMessage(resp.status, text));
             }
             const data = text ? JSON.parse(text) : {};
             return data;
@@ -6936,8 +6967,11 @@
                 try { detectPause(true); } catch {}
             }
             if (hasOpenSession || isRecording || isPaused || isFinalUploading) {
-                const persistedPaused = isPaused || readPausedHint();
-                try { persistVoicebotState(persistedPaused ? 'paused' : 'recording'); } catch {}
+                // Keep refresh recovery deterministic: any non-recording state must restore as paused.
+                // This prevents stale "recording" writes during unload races from auto-resuming after reload.
+                const persistedPaused = isPaused || readPausedHint() || !isRecording;
+                const persistedState = persistedPaused ? 'paused' : 'recording';
+                try { persistVoicebotState(persistedState); } catch {}
             } else {
                 try { persistVoicebotState(''); } catch {}
             }

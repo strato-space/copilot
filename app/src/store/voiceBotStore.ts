@@ -240,9 +240,96 @@ const voicebotRequest = async <T = unknown>(url: string, data: unknown = {}, sil
     return response.data;
 };
 
+const getMessageRecord = (msg: VoiceBotMessage): Record<string, unknown> =>
+    (msg && typeof msg === 'object' ? (msg as unknown as Record<string, unknown>) : {});
+
+const getNormalizedMessageId = (msg: VoiceBotMessage): string => {
+    const raw = msg?.message_id;
+    return typeof raw === 'string' ? raw.trim() : '';
+};
+
+const getImageRowsFromMessage = (msg: VoiceBotMessage): VoiceMessageRow[] => {
+    const record = getMessageRecord(msg);
+    const attachments = Array.isArray(record.attachments) ? record.attachments : [];
+
+    return attachments
+        .map((attachment) => {
+            const item = attachment && typeof attachment === 'object' ? (attachment as Record<string, unknown>) : null;
+            if (!item) return null;
+
+            const mime =
+                typeof item.mime_type === 'string'
+                    ? item.mime_type
+                    : typeof item.mimeType === 'string'
+                        ? item.mimeType
+                        : '';
+            const kind = typeof item.kind === 'string' ? item.kind : '';
+            const url =
+                normalizeAttachmentUri(item.direct_uri) ||
+                normalizeAttachmentUri(item.uri) ||
+                normalizeAttachmentUri(item.url);
+
+            if (!url) return null;
+            if (!(mime.startsWith('image/') || kind === 'image')) return null;
+
+            const imageName =
+                typeof item.name === 'string'
+                    ? item.name
+                    : typeof item.file_unique_id === 'string'
+                        ? item.file_unique_id
+                        : 'image';
+            const fallbackText =
+                typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
+                    ? msg.transcription_text.trim()
+                    : typeof msg.text === 'string' && msg.text.trim()
+                        ? msg.text.trim()
+                        : '[Image]';
+
+            return {
+                avatar: 'I',
+                name: 'Image',
+                text: fallbackText,
+                kind: 'image' as const,
+                imageUrl: url,
+                imageName,
+                message_id: msg.message_id,
+            } satisfies VoiceMessageRow;
+        })
+        .filter((row): row is Exclude<typeof row, null> => row !== null);
+};
+
 const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]): VoiceMessageGroup[] => {
     if (!Array.isArray(voiceBotMessages)) return [];
-    return voiceBotMessages.map((msg) => {
+
+    const imageRowsByMessageId = new Map<string, VoiceMessageRow[]>();
+    const linkedImageAnchorIds = new Set<string>();
+    for (const msg of voiceBotMessages) {
+        const messageId = getNormalizedMessageId(msg);
+        if (messageId) {
+            const imageRows = getImageRowsFromMessage(msg);
+            if (imageRows.length > 0) {
+                imageRowsByMessageId.set(messageId, imageRows);
+            }
+        }
+
+        const record = getMessageRecord(msg);
+        const imageAnchorIdRaw = record.image_anchor_message_id;
+        const imageAnchorId = typeof imageAnchorIdRaw === 'string' ? imageAnchorIdRaw.trim() : '';
+        if (imageAnchorId) linkedImageAnchorIds.add(imageAnchorId);
+    }
+
+    return voiceBotMessages.flatMap((msg) => {
+        const messageId = getNormalizedMessageId(msg);
+        const ownImageRows = messageId ? (imageRowsByMessageId.get(messageId) ?? []) : [];
+        const record = getMessageRecord(msg);
+        const imageAnchorIdRaw = record.image_anchor_message_id;
+        const imageAnchorId = typeof imageAnchorIdRaw === 'string' ? imageAnchorIdRaw.trim() : '';
+        const linkedAnchorRows = imageAnchorId ? (imageRowsByMessageId.get(imageAnchorId) ?? []) : [];
+
+        if (messageId && linkedImageAnchorIds.has(messageId) && ownImageRows.length > 0) {
+            return [];
+        }
+
         const categorizationRows: VoiceMessageRow[] = (msg.categorization || []).map((cat) => {
             let avatar = 'U';
             const speaker = typeof cat.speaker === 'string' ? cat.speaker : '';
@@ -266,51 +353,8 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
 
         let rows: VoiceMessageRow[] = categorizationRows;
         if (rows.length === 0) {
-            const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
-            const imageRows = attachments
-                .map((attachment) => {
-                    const item = attachment && typeof attachment === 'object' ? (attachment as Record<string, unknown>) : null;
-                    if (!item) return null;
-                    const mime =
-                        typeof item.mime_type === 'string'
-                            ? item.mime_type
-                            : typeof item.mimeType === 'string'
-                                ? item.mimeType
-                                : '';
-                    const kind = typeof item.kind === 'string' ? item.kind : '';
-                    const url =
-                        normalizeAttachmentUri(item.direct_uri) ||
-                        normalizeAttachmentUri(item.uri) ||
-                        normalizeAttachmentUri(item.url);
-                    if (!url) return null;
-                    if (!(mime.startsWith('image/') || kind === 'image')) return null;
-                    const imageName =
-                        typeof item.name === 'string'
-                            ? item.name
-                            : typeof item.file_unique_id === 'string'
-                                ? item.file_unique_id
-                                : 'image';
-                    const fallbackText =
-                        typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
-                            ? msg.transcription_text.trim()
-                            : typeof msg.text === 'string' && msg.text.trim()
-                                ? msg.text.trim()
-                                : '[Image]';
-
-                    return {
-                        avatar: 'I',
-                        name: 'Image',
-                        text: fallbackText,
-                        kind: 'image' as const,
-                        imageUrl: url,
-                        imageName,
-                        message_id: msg.message_id,
-                    };
-                })
-                .filter((row): row is Exclude<typeof row, null> => row !== null);
-
-            if (imageRows.length > 0) {
-                rows = imageRows;
+            if (ownImageRows.length > 0) {
+                rows = ownImageRows;
             } else {
                 const fallbackText =
                     typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
@@ -330,35 +374,43 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                     ];
                 }
             }
+        } else if (ownImageRows.length > 0) {
+            rows = [...ownImageRows, ...rows];
         }
 
-        return {
-            message_id: msg.message_id,
-            message_timestamp: msg.message_timestamp,
-            original_message: msg,
-            rows,
-            summary: {
-                text: (msg.processors_data?.summarization?.data?.[0]?.summary as string) || '',
-            },
-            widgets: (() => {
-                const custom_widgets = _.omit(msg.processors_data, ['transcription', 'summarization', 'categorization', 'questioning']);
-                const widgets: Record<string, unknown> = {};
-                for (const [key, value] of Object.entries(custom_widgets || {})) {
-                    const typedValue = value as { data?: Array<Record<string, unknown>> };
-                    if (typedValue?.data && Array.isArray(typedValue.data)) {
-                        widgets[key] = typedValue.data.map((d) => ({ ...d, message_id: msg.message_id }));
+        if (linkedAnchorRows.length > 0) {
+            rows = [...linkedAnchorRows, ...rows];
+        }
+
+        return [
+            {
+                message_id: msg.message_id,
+                message_timestamp: msg.message_timestamp,
+                original_message: msg,
+                rows,
+                summary: {
+                    text: (msg.processors_data?.summarization?.data?.[0]?.summary as string) || '',
+                },
+                widgets: (() => {
+                    const custom_widgets = _.omit(msg.processors_data, ['transcription', 'summarization', 'categorization', 'questioning']);
+                    const widgets: Record<string, unknown> = {};
+                    for (const [key, value] of Object.entries(custom_widgets || {})) {
+                        const typedValue = value as { data?: Array<Record<string, unknown>> };
+                        if (typedValue?.data && Array.isArray(typedValue.data)) {
+                            widgets[key] = typedValue.data.map((d) => ({ ...d, message_id: msg.message_id }));
+                        }
                     }
-                }
-                return {
-                    questions:
-                        (msg.processors_data?.questioning?.data?.map((d) => ({
-                            ...(d as Record<string, unknown>),
-                            message_id: msg.message_id,
-                        })) || []) as unknown,
-                    ...widgets,
-                };
-            })(),
-        };
+                    return {
+                        questions:
+                            (msg.processors_data?.questioning?.data?.map((d) => ({
+                                ...(d as Record<string, unknown>),
+                                message_id: msg.message_id,
+                            })) || []) as unknown,
+                        ...widgets,
+                    };
+                })(),
+            },
+        ];
     });
 };
 

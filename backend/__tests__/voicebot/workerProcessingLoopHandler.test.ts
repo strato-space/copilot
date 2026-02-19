@@ -8,28 +8,44 @@ import {
 } from '../../src/constants.js';
 
 const getDbMock = jest.fn();
+const getVoicebotQueuesMock = jest.fn();
 
 jest.unstable_mockModule('../../src/services/db.js', () => ({
   getDb: getDbMock,
 }));
+jest.unstable_mockModule('../../src/services/voicebotQueues.js', () => ({
+  getVoicebotQueues: getVoicebotQueuesMock,
+}));
 
 const { handleProcessingLoopJob } = await import('../../src/workers/voicebot/handlers/processingLoop.js');
 
-const makeFindLimitCursor = (rows: unknown[]) => ({
-  limit: () => ({
-    toArray: async () => rows,
-  }),
-});
-
-const makeFindSortCursor = (rows: unknown[]) => ({
+const makeFindCursor = (rows: unknown[]) => ({
   sort: () => ({
+    limit: () => ({
+      project: () => ({
+        toArray: async () => rows,
+      }),
+      toArray: async () => rows,
+    }),
     toArray: async () => rows,
   }),
+  limit: () => ({
+    project: () => ({
+      toArray: async () => rows,
+    }),
+    toArray: async () => rows,
+  }),
+  project: () => ({
+    toArray: async () => rows,
+  }),
+  toArray: async () => rows,
 });
 
 describe('handleProcessingLoopJob', () => {
   beforeEach(() => {
     getDbMock.mockReset();
+    getVoicebotQueuesMock.mockReset();
+    getVoicebotQueuesMock.mockReturnValue({});
   });
 
   it('clears quota session block and requeues quota-blocked transcriptions', async () => {
@@ -39,7 +55,7 @@ describe('handleProcessingLoopJob', () => {
     const sessionsFind = jest
       .fn()
       .mockImplementationOnce(() =>
-        makeFindLimitCursor([
+        makeFindCursor([
           {
             _id: sessionId,
             is_messages_processed: false,
@@ -50,11 +66,11 @@ describe('handleProcessingLoopJob', () => {
           },
         ])
       )
-      .mockImplementationOnce(() => makeFindLimitCursor([]));
+      .mockImplementationOnce(() => makeFindCursor([]));
     const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 
     const messagesFind = jest.fn(() =>
-      makeFindSortCursor([
+      makeFindCursor([
         {
           _id: messageId,
           session_id: sessionId,
@@ -83,7 +99,31 @@ describe('handleProcessingLoopJob', () => {
         }
         if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
           return {
-            find: messagesFind,
+            find: messagesFind
+              .mockImplementationOnce(() =>
+                makeFindCursor([
+                  {
+                    session_id: sessionId,
+                  },
+                ])
+              )
+              .mockImplementationOnce(() =>
+                makeFindCursor([
+                  {
+                    _id: messageId,
+                    session_id: sessionId,
+                    chat_id: 3045664,
+                    message_id: 42,
+                    message_timestamp: 1770000000,
+                    is_transcribed: false,
+                    transcribe_attempts: 5,
+                    transcription_retry_reason: 'insufficient_quota',
+                    to_transcribe: false,
+                    created_at: 0,
+                    transcribe_timestamp: null,
+                  },
+                ])
+              ),
             updateOne: messagesUpdateOne,
             countDocuments: messagesCountDocuments,
           };
@@ -139,22 +179,31 @@ describe('handleProcessingLoopJob', () => {
 
     const sessionsFind = jest
       .fn()
-      .mockImplementationOnce(() => makeFindLimitCursor([{ _id: sessionId, is_messages_processed: false }]))
-      .mockImplementationOnce(() => makeFindLimitCursor([]));
+      .mockImplementationOnce(() => makeFindCursor([{ _id: sessionId, is_messages_processed: false }]))
+      .mockImplementationOnce(() => makeFindCursor([]));
 
-    const messagesFind = jest.fn(() =>
-      makeFindSortCursor([
-        {
-          _id: messageId,
-          session_id: sessionId,
-          is_transcribed: false,
-          transcribe_attempts: 1,
-          to_transcribe: true,
-          transcription_next_attempt_at: new Date(Date.now() + 60_000),
-          created_at: Date.now() - 120_000,
-        },
-      ])
-    );
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: false,
+            transcribe_attempts: 1,
+            to_transcribe: true,
+            transcription_next_attempt_at: new Date(Date.now() + 60_000),
+            created_at: Date.now() - 120_000,
+          },
+        ])
+      );
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
@@ -198,21 +247,30 @@ describe('handleProcessingLoopJob', () => {
 
     const sessionsFind = jest
       .fn()
-      .mockImplementationOnce(() => makeFindLimitCursor([{ _id: sessionId, is_messages_processed: false }]))
-      .mockImplementationOnce(() => makeFindLimitCursor([]));
+      .mockImplementationOnce(() => makeFindCursor([{ _id: sessionId, is_messages_processed: false }]))
+      .mockImplementationOnce(() => makeFindCursor([]));
 
-    const messagesFind = jest.fn(() =>
-      makeFindSortCursor([
-        {
-          _id: messageId,
-          session_id: sessionId,
-          is_transcribed: false,
-          transcribe_attempts: 10,
-          to_transcribe: true,
-          created_at: Date.now() - 120_000,
-        },
-      ])
-    );
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: false,
+            transcribe_attempts: 10,
+            to_transcribe: true,
+            created_at: Date.now() - 120_000,
+          },
+        ])
+      );
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
@@ -256,27 +314,36 @@ describe('handleProcessingLoopJob', () => {
 
     const sessionsFind = jest
       .fn()
-      .mockImplementationOnce(() => makeFindLimitCursor([{ _id: sessionId, is_messages_processed: false }]))
-      .mockImplementationOnce(() => makeFindLimitCursor([]));
+      .mockImplementationOnce(() => makeFindCursor([{ _id: sessionId, is_messages_processed: false }]))
+      .mockImplementationOnce(() => makeFindCursor([]));
     const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 
-    const messagesFind = jest.fn(() =>
-      makeFindSortCursor([
-        {
-          _id: messageId,
-          session_id: sessionId,
-          is_transcribed: true,
-          processors_data: {
-            categorization: {
-              is_processing: true,
-              is_processed: false,
-              is_finished: false,
-              job_queued_timestamp: Date.now() - 20 * 60 * 1000,
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: true,
+            processors_data: {
+              categorization: {
+                is_processing: true,
+                is_processed: false,
+                is_finished: false,
+                job_queued_timestamp: Date.now() - 20 * 60 * 1000,
+              },
             },
           },
-        },
-      ])
-    );
+        ])
+      );
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
@@ -308,5 +375,220 @@ describe('handleProcessingLoopJob', () => {
       return setPayload['processors_data.categorization.is_processing'] === false;
     });
     expect(lockResetCall).toBeTruthy();
+  });
+
+  it('requeues categorization after insufficient_quota retry delay', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() => makeFindCursor([{ _id: sessionId, is_messages_processed: false }]))
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: true,
+            categorization_retry_reason: 'insufficient_quota',
+            categorization_next_attempt_at: new Date(Date.now() - 60_000),
+            processors_data: {
+              categorization: {
+                is_processing: false,
+                is_processed: false,
+                is_finished: false,
+              },
+            },
+          },
+        ])
+      );
+
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-1' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: jest.fn(),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: messagesUpdateOne,
+            countDocuments: jest.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(1),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.PROCESSORS]: {
+            add: processorsQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_categorizations).toBe(1);
+    expect(processorsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.CATEGORIZE,
+      expect.objectContaining({
+        message_id: messageId.toString(),
+        session_id: sessionId.toString(),
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+  });
+
+  it('scans prioritized pending session even if session flag is_messages_processed=true', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() => makeFindCursor([{ _id: sessionId, is_messages_processed: true }]))
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: false,
+            to_transcribe: true,
+            transcribe_attempts: 0,
+            transcription_next_attempt_at: new Date(Date.now() - 60_000),
+            created_at: Date.now() - 120_000,
+          },
+        ])
+      );
+
+    const voiceQueueAdd = jest.fn(async () => ({ id: 'voice-job-prioritized' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: jest.fn(),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: jest.fn(),
+            countDocuments: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.VOICE]: {
+            add: voiceQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_transcriptions).toBe(1);
+    expect(voiceQueueAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses runtime queue fallback when explicit queue options are not provided', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() => makeFindCursor([{ _id: sessionId, is_messages_processed: false }]))
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: false,
+            to_transcribe: true,
+            transcription_next_attempt_at: new Date(Date.now() - 60_000),
+            transcribe_attempts: 0,
+          },
+        ])
+      );
+
+    const runtimeVoiceQueueAdd = jest.fn(async () => ({ id: 'runtime-voice-job' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.VOICE]: {
+        add: runtimeVoiceQueueAdd,
+      },
+    });
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: jest.fn(),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: jest.fn(),
+            countDocuments: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob({});
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_transcriptions).toBe(1);
+    expect(runtimeVoiceQueueAdd).toHaveBeenCalledTimes(1);
   });
 });

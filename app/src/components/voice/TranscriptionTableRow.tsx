@@ -106,6 +106,43 @@ const extractSourceFileName = (row: VoiceBotMessage): string => {
     return '';
 };
 
+const normalizeAttachmentUri = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return trimmed;
+};
+
+const extractImageAttachment = (row: VoiceBotMessage): { url: string; name: string } | null => {
+    const rowRecord = row as unknown as Record<string, unknown>;
+    const attachments = Array.isArray(rowRecord.attachments) ? rowRecord.attachments : [];
+    for (const attachment of attachments) {
+        if (!attachment || typeof attachment !== 'object') continue;
+        const item = attachment as Record<string, unknown>;
+        const kind = typeof item.kind === 'string' ? item.kind.toLowerCase() : '';
+        const mimeType =
+            typeof item.mime_type === 'string'
+                ? item.mime_type.toLowerCase()
+                : typeof item.mimeType === 'string'
+                    ? item.mimeType.toLowerCase()
+                    : '';
+        if (!(kind === 'image' || mimeType.startsWith('image/'))) continue;
+        const url =
+            normalizeAttachmentUri(item.direct_uri) ||
+            normalizeAttachmentUri(item.uri) ||
+            normalizeAttachmentUri(item.url);
+        if (!url) continue;
+        const name =
+            typeof item.name === 'string' && item.name.trim()
+                ? item.name.trim()
+                : typeof item.file_name === 'string' && item.file_name.trim()
+                    ? item.file_name.trim()
+                    : 'image';
+        return { url, name };
+    }
+    return null;
+};
+
 const getSegmentEndSeconds = (segment: TranscriptionSegment, row: VoiceBotMessage, startSeconds: number): number | null => {
     const explicitEnd = parseSecondsValue(segment?.end);
     if (explicitEnd != null && explicitEnd > startSeconds) return explicitEnd;
@@ -365,6 +402,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
     const deleteTranscriptChunk = useVoiceBotStore((state) => state.deleteTranscriptChunk);
 
     const segments = getSegmentsFromMessage(row);
+    const imageAttachment = extractImageAttachment(row);
     const visibleSegments = segments.filter((seg) => {
         if (seg?.is_deleted) return false;
         const text = typeof seg?.text === 'string' ? seg.text.trim() : '';
@@ -579,6 +617,20 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                                                         {timelineLabel}
                                                     </div>
                                                 ) : null}
+                                                {imageAttachment && segIdx === 0 ? (
+                                                    <a
+                                                        href={imageAttachment.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="mt-2 block"
+                                                    >
+                                                        <img
+                                                            src={imageAttachment.url}
+                                                            alt={imageAttachment.name}
+                                                            className="max-h-48 max-w-[320px] rounded border border-slate-200 object-contain bg-white"
+                                                        />
+                                                    </a>
+                                                ) : null}
                                             </>
                                         )}
                                     </div>
@@ -588,6 +640,20 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                     ) : (
                         <div className="self-stretch text-black/90 text-[10px] font-normal leading-3 p-1 whitespace-pre-wrap break-words">
                             {row.transcription_text || ''}
+                            {imageAttachment ? (
+                                <a
+                                    href={imageAttachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-2 block"
+                                >
+                                    <img
+                                        src={imageAttachment.url}
+                                        alt={imageAttachment.name}
+                                        className="max-h-48 max-w-[320px] rounded border border-slate-200 object-contain bg-white"
+                                    />
+                                </a>
+                            ) : null}
                         </div>
                     )}
                 </div>

@@ -3,7 +3,11 @@ import { test, expect, type Page } from '@playwright/test';
 const SESSION_ID = '507f1f77bcf86cd799439011';
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3002';
 
-const mockAuth = async (page: Page): Promise<void> => {
+const mockAuth = async (
+  page: Page,
+  options: { permissions?: string[] } = {}
+): Promise<void> => {
+  const permissions = Array.isArray(options.permissions) ? options.permissions : [];
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
@@ -14,7 +18,7 @@ const mockAuth = async (page: Page): Promise<void> => {
             id: '507f1f77bcf86cd799439099',
             email: 'test@stratospace.fun',
             role: 'ADMIN',
-            permissions: [],
+            permissions,
           },
         },
       }),
@@ -156,7 +160,7 @@ const actionButton = (page: Page, name: string) =>
   controlsRow(page).getByRole('button', { name: new RegExp(`^${name}$`) });
 
 const mockFabScriptAsset = async (page: Page): Promise<void> => {
-  await page.route('**/webrtc/webrtc-voicebot-lib.js', async (route) => {
+  await page.route('**/webrtc/webrtc-voicebot-lib.js**', async (route) => {
     const method = route.request().method().toUpperCase();
     if (method === 'HEAD') {
       await route.fulfill({
@@ -218,6 +222,7 @@ test.describe('Voice FAB lifecycle parity', () => {
 
   test('@unauth controls stay enabled on session page without local VOICEBOT token', async ({ page }) => {
     await installFabControlMock(page, { state: 'paused' });
+    await addAuthCookie(page);
     await mockAuth(page);
     await mockSessionApis(page);
     await page.goto(`/voice/session/${SESSION_ID}`);
@@ -368,6 +373,69 @@ test.describe('Voice FAB lifecycle parity', () => {
     await expect(actionButton(page, 'Done')).toBeEnabled();
   });
 
+  test('@unauth Pause keeps controls busy until FAB pause resolves (upload-wait semantics)', async ({ page }) => {
+    await installFabControlMock(page, { state: 'recording' });
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await page.goto(`/voice/session/${SESSION_ID}`);
+
+    await page.evaluate(({ sessionId }) => {
+      const win = window as unknown as {
+        __voicebotControlCalls?: string[];
+        __voicebotControl?: (action: string) => Promise<void>;
+        __voicebotState?: { get?: () => { state?: string } };
+        __resolvePauseGate?: () => void;
+      };
+
+      win.__voicebotControlCalls = [];
+      let pauseResolver: (() => void) | null = null;
+
+      win.__voicebotControl = async (action: string) => {
+        win.__voicebotControlCalls?.push(action);
+        if (action !== 'pause') return;
+        await new Promise<void>((resolve) => {
+          pauseResolver = resolve;
+        });
+        win.__voicebotState = { get: () => ({ state: 'paused' }) };
+      };
+
+      win.__resolvePauseGate = () => {
+        if (pauseResolver) {
+          pauseResolver();
+          pauseResolver = null;
+        }
+      };
+
+      win.__voicebotState = { get: () => ({ state: 'recording' }) };
+      window.localStorage.setItem('VOICEBOT_ACTIVE_SESSION_ID', sessionId);
+      window.dispatchEvent(
+        new CustomEvent('voicebot:active-session-updated', {
+          detail: {
+            session_id: sessionId,
+            source: 'playwright-pause-gate',
+          },
+        })
+      );
+    }, { sessionId: SESSION_ID });
+
+    await expect(actionButton(page, 'Pause')).toBeEnabled();
+    await actionButton(page, 'Pause').click();
+
+    await expect(actionButton(page, 'Done')).toBeDisabled();
+    await expect(actionButton(page, 'New')).toBeDisabled();
+    await expect(actionButton(page, 'Rec')).toBeDisabled();
+
+    await page.evaluate(() => {
+      const win = window as unknown as { __resolvePauseGate?: () => void };
+      win.__resolvePauseGate?.();
+    });
+
+    await expect(actionButton(page, 'Done')).toBeEnabled();
+    const calls = await getFabCalls(page);
+    expect(calls).toContain('pause');
+  });
+
   test('@unauth Done button routes action into FAB control', async ({ page }) => {
     await installFabControlMock(page);
     await addAuthCookie(page);
@@ -389,5 +457,72 @@ test.describe('Voice FAB lifecycle parity', () => {
 
     const calls = await getFabCalls(page);
     expect(calls).toContain('done');
+  });
+
+  test('@unauth sessions cleanup flow deletes created test session row', async ({ page }) => {
+    await addAuthCookie(page);
+    await mockAuth(page, { permissions: ['system:admin_panel'] });
+
+    await page.route('**/api/voicebot/projects**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route('**/api/voicebot/persons/list**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+
+    const createdSessionId = '507f1f77bcf86cd7994390ff';
+    const sessions = [
+      {
+        _id: createdSessionId,
+        session_name: 'Playwright Temp Session',
+        created_at: '2026-02-19T10:00:00.000Z',
+        is_active: true,
+        access_level: 'private',
+        participants: [],
+        allowed_users: [],
+        message_count: 1,
+      },
+    ];
+
+    let deletePayload: Record<string, unknown> | null = null;
+    await page.route('**/api/voicebot/sessions/list**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(sessions),
+      });
+    });
+    await page.route('**/api/voicebot/sessions/delete**', async (route) => {
+      deletePayload = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
+      const sessionId = typeof deletePayload?.session_id === 'string' ? deletePayload.session_id : '';
+      const idx = sessions.findIndex((item) => item._id === sessionId);
+      if (idx >= 0) sessions.splice(idx, 1);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+
+    await page.goto('/voice');
+    await expect(page.getByText('Playwright Temp Session')).toBeVisible();
+    const sessionRow = page.locator('tr').filter({ hasText: 'Playwright Temp Session' }).first();
+    await expect(sessionRow).toBeVisible();
+
+    await sessionRow.getByTitle('Меню').click();
+    await page.getByText('Удалить сессию').first().click();
+    await page.getByRole('button', { name: /^Да$/ }).click();
+
+    await expect.poll(() => deletePayload?.session_id).toBe(createdSessionId);
+    await expect(sessionRow).toHaveCount(0);
+    expect(sessions).toHaveLength(0);
   });
 });

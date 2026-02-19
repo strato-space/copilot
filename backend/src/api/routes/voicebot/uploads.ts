@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type Response, type RequestHandler } from 'express';
 import multer from 'multer';
 import { ObjectId } from 'mongodb';
 import type { Server as SocketIOServer } from 'socket.io';
@@ -75,6 +75,45 @@ const upload = multer({
         cb(new Error(`File type ${file.mimetype} not allowed`));
     },
 });
+
+const uploadAnyWithErrorHandling: RequestHandler = (req, res, next) => {
+    upload.any()(req, res, (error: unknown) => {
+        if (!error) {
+            next();
+            return;
+        }
+
+        if (error instanceof multer.MulterError) {
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                const maxBytes = VOICEBOT_FILE_STORAGE.maxAudioFileSize;
+                return res.status(413).json({
+                    error: 'file_too_large',
+                    message: 'File too large',
+                    max_size_bytes: maxBytes,
+                    max_size_mb: Number((maxBytes / (1024 * 1024)).toFixed(1)),
+                });
+            }
+
+            return res.status(400).json({
+                error: 'upload_error',
+                message: error.message || 'Upload failed',
+                code: error.code,
+            });
+        }
+
+        if (error instanceof Error) {
+            return res.status(400).json({
+                error: 'upload_error',
+                message: error.message || 'Upload failed',
+            });
+        }
+
+        return res.status(400).json({
+            error: 'upload_error',
+            message: 'Upload failed',
+        });
+    });
+};
 
 type VoiceQueueLike = {
     add: (name: string, payload: unknown, opts?: unknown) => Promise<unknown>;
@@ -217,6 +256,13 @@ const resolveUploadRuntimeTag = (session: Record<string, unknown>): string => {
     return RUNTIME_TAG;
 };
 
+const normalizePendingImageAnchorId = (value: unknown): string | null => {
+    if (value instanceof ObjectId) return value.toString();
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+};
+
 const checkSessionAccess = async ({
     sessionId,
     req,
@@ -314,6 +360,11 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         const chatId = Number(session.chat_id);
         const uploadRuntimeTag = resolveUploadRuntimeTag(session);
         const voiceQueue = (req.app.get('voicebotQueues') as Record<string, VoiceQueueLike> | undefined)?.[VOICEBOT_QUEUES.VOICE];
+        const pendingImageAnchorId = normalizePendingImageAnchorId(
+            session.pending_image_anchor_message_id ?? session.pending_image_anchor_oid
+        );
+        let consumePendingImageAnchor = pendingImageAnchorId;
+        let pendingImageAnchorConsumed = false;
 
         const results: Array<Record<string, unknown>> = [];
         const socketMessages: Array<Record<string, unknown>> = [];
@@ -360,7 +411,18 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 runtime_tag: uploadRuntimeTag,
                 created_at: createdAt,
                 updated_at: createdAt,
+                ...(consumePendingImageAnchor
+                    ? {
+                        image_anchor_message_id: consumePendingImageAnchor,
+                        image_anchor_linked_at: createdAt,
+                    }
+                    : {}),
             };
+
+            if (consumePendingImageAnchor) {
+                pendingImageAnchorConsumed = true;
+                consumePendingImageAnchor = null;
+            }
 
             const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
 
@@ -435,6 +497,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 is_transcribed: false,
                 transcription_text: '',
                 runtime_tag: uploadRuntimeTag,
+                image_anchor_message_id: messageDoc.image_anchor_message_id ?? null,
                 created_at: createdAt.toISOString(),
                 updated_at: createdAt.toISOString(),
             });
@@ -468,6 +531,15 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                     is_messages_processed: false,
                     runtime_tag: uploadRuntimeTag,
                 },
+                ...(pendingImageAnchorConsumed
+                    ? {
+                        $unset: {
+                            pending_image_anchor_message_id: '',
+                            pending_image_anchor_oid: '',
+                            pending_image_anchor_created_at: '',
+                        },
+                    }
+                    : {}),
             }
         );
 
@@ -511,7 +583,7 @@ router.post(
     PermissionManager.requirePermission([
         PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN,
     ]),
-    upload.any(),
+    uploadAnyWithErrorHandling,
     uploadAudioHandler
 );
 
@@ -520,7 +592,7 @@ router.post(
     PermissionManager.requirePermission([
         PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN,
     ]),
-    upload.any(),
+    uploadAnyWithErrorHandling,
     uploadAudioHandler
 );
 
