@@ -134,6 +134,8 @@ describe('voicebot worker scaffold handlers', () => {
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.HANDLE_ATTACHMENT]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.voice.TRANSCRIBE]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.voice.CATEGORIZE]).toBeDefined();
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.voice.SUMMARIZE]).toBeDefined();
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.voice.QUESTIONS]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.postprocessing.FINAL_CUSTOM_PROMPT]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.postprocessing.CREATE_TASKS]).toBeDefined();
   });

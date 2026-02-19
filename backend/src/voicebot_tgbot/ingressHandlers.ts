@@ -451,7 +451,7 @@ export const handleVoiceIngress = async ({
         job_id: jobId,
       },
       {
-        deduplication: { key: jobId },
+        deduplication: { id: jobId },
         attempts: 1,
       }
     );

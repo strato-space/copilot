@@ -47,6 +47,16 @@ const readCookieToken = (): string | null => {
   if (typeof token === 'string' && token.length > 0 && token !== 'undefined') {
     return token;
   }
+
+  try {
+    const localToken = localStorage.getItem('VOICEBOT_AUTH_TOKEN');
+    if (typeof localToken === 'string' && localToken.length > 0 && localToken !== 'undefined') {
+      return localToken;
+    }
+  } catch {
+    // ignore localStorage access errors
+  }
+
   return null;
 };
 

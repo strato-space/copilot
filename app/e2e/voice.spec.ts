@@ -47,7 +47,15 @@ const mockCommonVoiceListApis = async (page: Page, sessions: Array<Record<string
     });
 };
 
-const mockSessionGet = async (page: Page, sessionId = SESSION_ID): Promise<void> => {
+const mockSessionGet = async (
+    page: Page,
+    sessionId = SESSION_ID,
+    options: {
+        sessionMessages?: Array<Record<string, unknown>>;
+        sessionAttachments?: Array<Record<string, unknown>>;
+        socketToken?: string | null;
+    } = {}
+): Promise<void> => {
     await page.route('**/api/voicebot/sessions/get', async (route) => {
         await route.fulfill({
             status: 200,
@@ -61,10 +69,24 @@ const mockSessionGet = async (page: Page, sessionId = SESSION_ID): Promise<void>
                     participants: [],
                     allowed_users: [],
                 },
-                session_messages: [],
-                socket_token: null,
+                session_messages: options.sessionMessages ?? [],
+                session_attachments: options.sessionAttachments ?? [],
+                socket_token: options.socketToken ?? null,
                 socket_port: null,
             }),
+        });
+    });
+};
+
+const mockSessionLog = async (
+    page: Page,
+    events: Array<Record<string, unknown>> = []
+): Promise<void> => {
+    await page.route('**/api/voicebot/session_log', async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ events }),
         });
     });
 };
@@ -75,7 +97,7 @@ test.describe('Voice UI', () => {
             const win = window as unknown as { __gumCalls?: number };
             win.__gumCalls = 0;
 
-            const nav = navigator as Navigator & {
+            const nav = navigator as unknown as {
                 mediaDevices?: {
                     getUserMedia?: (...args: unknown[]) => Promise<MediaStream>;
                 };
@@ -196,6 +218,58 @@ test.describe('Voice UI', () => {
         await page.goto('/voice/session');
         await expect(page.getByText('Активная сессия не найдена')).toBeVisible();
         await expect(page.getByRole('button', { name: 'Открыть список сессий' })).toBeVisible();
+    });
+
+
+    test('@unauth renders Screenshort tab attachment cards', async ({ page }) => {
+        await mockAuth(page);
+        await mockSessionLog(page, []);
+        await mockSessionGet(page, SESSION_ID, {
+            sessionAttachments: [
+                {
+                    _id: 'att_1',
+                    message_id: 'msg_1',
+                    message_timestamp: 1771405775,
+                    kind: 'screenshot',
+                    source: 'web',
+                    uri: 'https://example.com/mock-screenshot.png',
+                    url: 'https://example.com/mock-screenshot.png',
+                    caption: 'Mock screenshot attachment',
+                    size: 2048,
+                },
+            ],
+        });
+
+        await page.goto(`/voice/session/${SESSION_ID}`);
+        await page.getByRole('tab', { name: 'Screenshort' }).click();
+
+        await expect(page.getByText('Mock screenshot attachment')).toBeVisible();
+        await expect(page.getByText('screenshot', { exact: true })).toBeVisible();
+    });
+
+    test('@unauth renders Log tab with rollback action controls', async ({ page }) => {
+        await mockAuth(page);
+        await mockSessionLog(page, [
+            {
+                oid: 'evt_1',
+                event_group: 'transcription',
+                event_name: 'segment_edited',
+                status: 'done',
+                event_time: '2026-02-18T09:00:00.000Z',
+                action: {
+                    available: true,
+                    type: 'rollback',
+                },
+            },
+        ]);
+        await mockSessionGet(page, SESSION_ID);
+
+        await page.goto(`/voice/session/${SESSION_ID}`);
+        await page.getByRole('tab', { name: 'Log' }).click();
+
+        await expect(page.getByText('segment_edited')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Rollback' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Edit segment' })).toBeVisible();
     });
 
     test('@unauth shows runtime mismatch screen on 404 session fetch', async ({ page }) => {

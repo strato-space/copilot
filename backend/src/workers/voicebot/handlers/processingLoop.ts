@@ -306,7 +306,7 @@ export const handleProcessingLoopJob = async (
             chat_id: message.chat_id,
             job_id: jobId,
           },
-          { deduplication: { key: jobId } }
+          { deduplication: { id: jobId } }
         );
 
         requeuedTranscriptions += 1;

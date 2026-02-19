@@ -21,12 +21,21 @@ const onConnection = (socket: Socket): void => {
   });
 };
 
-export const registerSocketHandlers = (io: Server): void => {
+export const registerSocketHandlers = (
+  io: Server,
+  options?: {
+    queues?: Record<string, { add: (...args: any[]) => Promise<unknown> }>;
+  }
+): void => {
   // Main namespace handlers
   io.on('connection', onConnection);
 
   setupMCPProxy(io);
 
   // VoiceBot namespace (/voicebot)
-  registerVoicebotSocketHandlers(io);
+  if (options?.queues) {
+    registerVoicebotSocketHandlers(io, { queues: options.queues });
+  } else {
+    registerVoicebotSocketHandlers(io);
+  }
 };

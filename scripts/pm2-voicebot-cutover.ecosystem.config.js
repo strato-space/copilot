@@ -77,5 +77,19 @@ module.exports = {
       max_restarts: 10,
       min_uptime: '10s',
     },
+    {
+      name: 'copilot-voicebot-workers-prod',
+      cwd: backendDir,
+      script: 'npm',
+      args: 'run start:voicebot-workers',
+      env_file: cutoverEnvFilePath,
+      env: {
+        ...mergedEnv,
+        NODE_ENV: mergedEnv.NODE_ENV || 'production',
+      },
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+    },
   ],
 };

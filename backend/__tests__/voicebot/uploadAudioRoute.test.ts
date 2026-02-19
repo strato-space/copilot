@@ -4,7 +4,7 @@ import { ObjectId } from 'mongodb';
 import { beforeEach, describe, expect, it, jest, afterEach } from '@jest/globals';
 import { existsSync, unlinkSync } from 'node:fs';
 
-import { VOICEBOT_COLLECTIONS } from '../../src/constants.js';
+import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS, VOICEBOT_QUEUES } from '../../src/constants.js';
 import { PERMISSIONS } from '../../src/permissions/permissions-config.js';
 import { IS_PROD_RUNTIME } from '../../src/services/runtimeScope.js';
 
@@ -133,6 +133,102 @@ describe('POST /voicebot/upload_audio', () => {
     expect(persisted.runtime_tag).toBeDefined();
     expect((persisted.file_metadata as Record<string, unknown>)?.duration).toBe(123.456);
   });
+  it('enqueues transcribe job when voice queue is available', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439019');
+    const insertedMessages: Array<Record<string, unknown>> = [];
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: sessionId,
+              chat_id: 777,
+              user_id: performerId.toString(),
+              access_level: 'private',
+              is_deleted: false,
+              runtime_tag: 'prod-p2',
+            })),
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            insertOne: jest.fn(async (doc: Record<string, unknown>) => {
+              insertedMessages.push(doc);
+              return { insertedId: new ObjectId('507f1f77bcf86cd79943909a') };
+            }),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const voiceQueueAddMock = jest.fn(async () => ({ id: 'job-1' }));
+
+    const app = express();
+    app.use(express.json());
+    app.set('voicebotQueues', {
+      [VOICEBOT_QUEUES.VOICE]: {
+        add: voiceQueueAddMock,
+      },
+    });
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '777',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'audio/webm',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(voiceQueueAddMock).toHaveBeenCalledTimes(1);
+    expect(voiceQueueAddMock).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.TRANSCRIBE,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        message_id: '507f1f77bcf86cd79943909a',
+        message_db_id: '507f1f77bcf86cd79943909a',
+      }),
+      expect.objectContaining({
+        deduplication: expect.objectContaining({
+          id: `${sessionId.toString()}-507f1f77bcf86cd79943909a-TRANSCRIBE`,
+        }),
+      })
+    );
+
+    expect(insertedMessages).toHaveLength(1);
+    expect(insertedMessages[0]?.to_transcribe).toBe(false);
+
+    const persisted = insertedMessages[0] ?? {};
+    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
+    if (storedPath) uploadedFilePaths.add(storedPath);
+  });
+
   it('pushes new_message and session_update to the socket room after upload', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439012');

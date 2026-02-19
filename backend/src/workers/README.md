@@ -10,6 +10,7 @@ TypeScript VoiceBot workers live under `backend/src/workers/voicebot`.
 ## Start Commands
 - Dev: `npm run dev:voicebot-workers`
 - Prod: `npm run start:voicebot-workers`
+- PM2 cutover process: `copilot-voicebot-workers-prod` (see `scripts/pm2-voicebot-cutover.ecosystem.config.js`)
 
 ## Queue Coverage
 Workers are started for all runtime-scoped queue names from `VOICEBOT_QUEUES`:
@@ -30,8 +31,15 @@ Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly 
 - `handlers/handleAttachment.ts`
 - `handlers/transcribe.ts`
 - `handlers/categorize.ts`
+- `handlers/summarize.ts`
+- `handlers/questions.ts`
 - `handlers/finalization.ts`
+- `handlers/startMultiprompt.ts`
+- `handlers/createTasksFromChunks.ts`
+- `handlers/sendToSocket.ts`
+- `handlers/notify.ts`
 
 ## Remaining Gaps
-- `EVENTS` and `NOTIFIES` queue job handlers are not fully ported yet (jobs without manifest handler fail explicitly and stay visible for retry/diagnostics).
+- `sendToSocket` currently logs+skips (`socket_runtime_not_available`) because dedicated worker runtime has no Socket.IO transport context; event delivery is still performed directly by backend API process.
+- Notify handler currently supports HTTP webhook envelope delivery; local hook runner/event-log parity from legacy runtime is not fully ported yet.
 - Telegram voice-file download path remains pending in transcribe pipeline (current TS transcribe path expects local `file_path`).

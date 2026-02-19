@@ -9,18 +9,38 @@
   - `backend/src/voicebot_tgbot/activeSessionMapping.ts` now writes `runtime_tag` via `$setOnInsert` (not `$set`) for `setActiveVoiceSession` upserts.
   - `backend/src/services/db.ts` adds `patchRuntimeTagIntoSetOnInsert(...)` to avoid injecting `runtime_tag` into `$setOnInsert` when update already sets it in `$set`.
 - **01:44** Added TypeScript voice worker runtime scaffold (`backend/src/workers/voicebot/{runner.ts,runtime.ts}`) plus npm scripts `dev:voicebot-workers` / `start:voicebot-workers` for separate worker process bring-up.
+- **01:55** Added first TS parity wave for queue backlogs: handlers for `START_MULTIPROMPT`, `SEND_TO_SOCKET`, and `session_*` notify jobs (`backend/src/workers/voicebot/handlers/{startMultiprompt,sendToSocket,notify}.ts`) plus manifest bindings.
+- **02:10** Fixed web upload transcription enqueue path: `backend/src/api/routes/voicebot/uploads.ts` now pushes `TRANSCRIBE` jobs to `VOICEBOT_QUEUES.VOICE` when queue map is available (`to_transcribe=false` in queued mode), and backend runtime now initializes shared VoiceBot queue map for API/socket handlers.
+- **02:10** Updated BullMQ deduplication option from `{ key }` to `{ id }` across TS voice paths (`uploads`, `voicebot_tgbot/ingressHandlers`, `workers/processingLoop`) to match active BullMQ contract and avoid runtime enqueue failures.
+
+- **03:42** Added TS handlers for `VOICEBOT_JOBS.voice.SUMMARIZE` and `VOICEBOT_JOBS.voice.QUESTIONS` with runtime-scoped message/session guards and processors_data persistence (`backend/src/workers/voicebot/handlers/{summarize,questions}.ts`).
+- **03:43** Expanded TS worker manifest coverage for `SUMMARIZE`, `QUESTIONS`, and `CREATE_TASKS_FROM_CHUNKS` parity path (`backend/src/workers/voicebot/manifest.ts`).
 
 ### CHANGES
 - Added regression test `backend/__tests__/voicebot/activeSessionMapping.test.ts`.
 - Extended `backend/__tests__/services/dbAggregateRuntimeScope.test.ts` with upsert runtime-tag conflict coverage.
 - Added worker-runner regression coverage `backend/__tests__/voicebot/workerRunner.test.ts` (manifest routing, explicit handler-not-found error, queue concurrency defaults).
-- PM2 trial for workers detected missing handlers (`START_MULTIPROMPT`, `SEND_TO_SOCKET`, `session_*` notifies); worker runtime remains manual-only and is not enabled in cutover PM2 config yet.
+- **02:09** Enabled `copilot-voicebot-workers-prod` in `scripts/pm2-voicebot-cutover.ecosystem.config.js` and restarted prod runtime (`copilot-backend-prod`, `copilot-voicebot-tgbot-prod`, `copilot-voicebot-workers-prod`).
+- Added regression suite `backend/__tests__/voicebot/workerAncillaryHandlers.test.ts` and updated worker docs (`backend/src/workers/README.md`, `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`) for current manual-only runtime limits.
+- **02:10** Requeued pending chunks for session `6995810a9bce3264e9851b87` on `voicebot--voice-prod-p2`; worker logs confirm successful `TRANSCRIBE` completion for all pending messages (pending=0).
 - Live smoke confirmed via PM2 raw Telegram logs after restart:
   - `/help`, `/session`, `/login`, `/start`, `/done` processed by copilot runtime.
   - `/start` created session `69963fb37d45b98d3fbc0344`; `/done` closed it.
 
+- **03:34** Fixed Voice toolbar cross-browser state drift in `app/src/components/voice/MeetingCard.tsx`: `New/Rec/Done` availability no longer depends on `VOICEBOT_AUTH_TOKEN` presence in localStorage and now follows FAB/session runtime state consistently.
+- **03:35** Added Playwright regression `@unauth controls stay enabled on session page without local VOICEBOT token` to `app/e2e/voice-fab-lifecycle.spec.ts`; validated on both `chromium-unauth` and `firefox-unauth` against `https://copilot.stratospace.fun`.
+
+- `cd backend && npm test -- --runInBand __tests__/voicebot/workerSummarizeQuestionsHandlers.test.ts __tests__/voicebot/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
+- `cd backend && npm run build`
+
 ### TESTS
 - `cd backend && npm test -- --runInBand __tests__/services/dbAggregateRuntimeScope.test.ts __tests__/voicebot/activeSessionMapping.test.ts __tests__/voicebot/tgCommandHandlers.test.ts`
+- `cd backend && npm run build`
+
+- `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth --workers=1`
+
+- `cd backend && npm test -- --runInBand __tests__/voicebot/workerAncillaryHandlers.test.ts __tests__/voicebot/workerRunner.test.ts __tests__/voicebot/tgCommandHandlers.test.ts __tests__/voicebot/workerScaffoldHandlers.test.ts`
+- `cd backend && npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/tgIngressHandlers.test.ts __tests__/voicebot/workerProcessingLoopHandler.test.ts`
 - `cd backend && npm run build`
 
 ## 2026-02-18

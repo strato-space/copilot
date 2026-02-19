@@ -193,6 +193,9 @@ const mockFabScriptAsset = async (page: Page): Promise<void> => {
 };
 
 test.describe('Voice FAB lifecycle parity', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockFabScriptAsset(page);
+  });
   test('@unauth session action order is New / Rec / Cut / Pause / Done', async ({ page }) => {
     await installFabControlMock(page);
     await addAuthCookie(page);
@@ -213,6 +216,22 @@ test.describe('Voice FAB lifecycle parity', () => {
     expect([...xPositions].sort((a, b) => a - b)).toEqual(xPositions);
   });
 
+  test('@unauth controls stay enabled on session page without local VOICEBOT token', async ({ page }) => {
+    await installFabControlMock(page, { state: 'paused' });
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await page.goto(`/voice/session/${SESSION_ID}`);
+
+    await page.evaluate(() => {
+      window.localStorage.removeItem('VOICEBOT_AUTH_TOKEN');
+      window.localStorage.removeItem('auth_token');
+    });
+
+    await expect(actionButton(page, 'New')).toBeEnabled();
+    await expect(actionButton(page, 'Rec')).toBeEnabled();
+    await expect(actionButton(page, 'Done')).toBeEnabled();
+  });
+
   test('@unauth New button routes action into FAB control', async ({ page }) => {
     await installFabControlMock(page);
     await addAuthCookie(page);
@@ -231,7 +250,6 @@ test.describe('Voice FAB lifecycle parity', () => {
     await addAuthCookie(page);
     await mockAuth(page);
     await mockSessionApis(page);
-    await mockFabScriptAsset(page);
 
     await page.goto('/voice');
     await expect(page.locator('#fab-wrap')).toBeVisible();

@@ -14,6 +14,8 @@ import type { Server as SocketIOServer } from 'socket.io';
 import {
     VOICEBOT_COLLECTIONS,
     VOICEBOT_FILE_STORAGE,
+    VOICEBOT_JOBS,
+    VOICEBOT_QUEUES,
     VOICE_BOT_SESSION_ACCESS,
 } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
@@ -73,6 +75,10 @@ const upload = multer({
         cb(new Error(`File type ${file.mimetype} not allowed`));
     },
 });
+
+type VoiceQueueLike = {
+    add: (name: string, payload: unknown, opts?: unknown) => Promise<unknown>;
+};
 
 interface UploadsRequest extends Request {
     performer: {
@@ -227,6 +233,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         const session = sessionCheck.session as Record<string, unknown>;
         const chatId = Number(session.chat_id);
         const uploadRuntimeTag = resolveUploadRuntimeTag(session);
+        const voiceQueue = (req.app.get('voicebotQueues') as Record<string, VoiceQueueLike> | undefined)?.[VOICEBOT_QUEUES.VOICE];
 
         const results: Array<Record<string, unknown>> = [];
         const socketMessages: Array<Record<string, unknown>> = [];
@@ -262,7 +269,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 message_timestamp: Math.floor(Date.now() / 1000),
                 timestamp: Date.now(),
                 chat_id: Number.isFinite(chatId) ? chatId : (Number(performer.telegram_id) || null),
-                to_transcribe: true,
+                to_transcribe: !voiceQueue,
                 is_transcribed: false,
                 transcription_text: '',
                 is_deleted: false,
@@ -272,6 +279,24 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             };
 
             const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
+            if (voiceQueue) {
+                const messageId = String(op.insertedId);
+                const jobId = `${session_id}-${messageId}-TRANSCRIBE`;
+                await voiceQueue.add(
+                    VOICEBOT_JOBS.voice.TRANSCRIBE,
+                    {
+                        message_id: messageId,
+                        message_db_id: messageId,
+                        session_id,
+                        chat_id: Number.isFinite(chatId) ? chatId : (Number(performer.telegram_id) || null),
+                        job_id: jobId,
+                    },
+                    {
+                        deduplication: { id: jobId },
+                        attempts: 1,
+                    }
+                );
+            }
             socketMessages.push({
                 _id: String(op.insertedId),
                 session_id,
@@ -286,7 +311,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 file_size: messageDoc.file_size,
                 mime_type: messageDoc.mime_type,
                 duration: messageDoc.duration,
-                to_transcribe: true,
+                to_transcribe: !voiceQueue,
                 is_transcribed: false,
                 transcription_text: '',
                 runtime_tag: uploadRuntimeTag,

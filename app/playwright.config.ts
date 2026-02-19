@@ -30,6 +30,7 @@ const authFile = path.join(__dirname, '.playwright/.auth/user.json');
 //     };
 
 const workersConfig = isCI ? { workers: 1 } : {};
+const includeFirefoxUnauth = process.env.PLAYWRIGHT_INCLUDE_FIREFOX === '1';
 
 export default defineConfig({
     testDir: './e2e',
@@ -66,6 +67,18 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'] },
             grep: /@unauth|unauthenticated/i,
         },
+
+        ...(includeFirefoxUnauth
+            ? [
+                {
+                    name: 'firefox-unauth',
+                    testMatch: /\.spec\.ts/,
+                    testIgnore: /auth\.setup\.ts/,
+                    use: { ...devices['Desktop Firefox'] },
+                    grep: /@unauth|unauthenticated/i,
+                },
+            ]
+            : []),
         // Authenticated tests - depend on setup
         {
             name: 'chromium',

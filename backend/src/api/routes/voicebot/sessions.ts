@@ -7,9 +7,17 @@
  * TODO: Google Drive integration for spreadsheet renaming
  */
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { ObjectId, type Db, type Collection } from 'mongodb';
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { extname, resolve } from 'node:path';
+import multer from 'multer';
 import {
+    COLLECTIONS,
+    TASK_CLASSES,
+    VOICEBOT_FILE_STORAGE,
     VOICEBOT_COLLECTIONS,
     VOICE_BOT_SESSION_ACCESS,
     VOICEBOT_JOBS,
@@ -20,7 +28,7 @@ import {
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
-import { buildRuntimeFilter, IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
+import { buildRuntimeFilter, IS_PROD_RUNTIME, mergeWithRuntimeFilter, RUNTIME_TAG } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 import { z } from 'zod';
 import { insertSessionLogEvent, mapEventForApi } from '../../../services/voicebotSessionLog.js';
@@ -54,10 +62,94 @@ const createSessionInputSchema = z.object({
     chat_id: z.union([z.string(), z.number()]).optional().nullable(),
 });
 
+const createTicketsInputSchema = z.object({
+    session_id: z.string().trim().min(1),
+    tickets: z.array(z.object({}).passthrough()).min(1),
+});
+
+const deleteTaskFromSessionInputSchema = z.object({
+    session_id: z.string().trim().min(1),
+    task_id: z.union([z.string(), z.number()]),
+});
+
+const topicsInputSchema = z.object({
+    project_id: z.string().trim().min(1),
+    session_id: z.string().trim().optional(),
+});
+
+const saveCustomPromptResultInputSchema = z.object({
+    session_id: z.string().trim().min(1),
+    prompt: z.unknown().optional(),
+    input_type: z.unknown().optional(),
+    result: z.unknown().optional(),
+});
+
+const projectFilesInputSchema = z.object({
+    project_id: z.string().trim().min(1),
+});
+
+const uploadProjectFileInputSchema = z.object({
+    project_id: z.string().trim().min(1),
+    folder_path: z.string().optional(),
+});
+
+const getFileContentInputSchema = z.object({
+    file_id: z.string().trim().min(1),
+});
+
+const projectFilesUploadDir = resolve(VOICEBOT_FILE_STORAGE.uploadsDir, 'project-files');
+if (!existsSync(projectFilesUploadDir)) {
+    mkdirSync(projectFilesUploadDir, { recursive: true });
+}
+
+const projectFilesUpload = multer({
+    storage: multer.diskStorage({
+        destination: (_req, _file, cb) => cb(null, projectFilesUploadDir),
+        filename: (_req, file, cb) => {
+            const fileExt = extname(file.originalname || '').slice(0, 16) || '.bin';
+            cb(null, `${Date.now()}-${randomUUID()}${fileExt}`);
+        },
+    }),
+    limits: {
+        fileSize: VOICEBOT_FILE_STORAGE.maxFileSize,
+        files: 20,
+    },
+});
+
 const activeSessionUrl = (sessionId?: string | null): string => {
     const base = (process.env.VOICE_WEB_INTERFACE_URL || 'https://voice.stratospace.fun').replace(/\/+$/, '');
     if (!sessionId) return `${base}/session`;
     return `${base}/session/${sessionId}`;
+};
+
+const buildSocketToken = (req: VoicebotRequest): string | null => {
+    const secret = process.env.APP_ENCRYPTION_KEY;
+    if (!secret) {
+        logger.error('[voicebot.sessions.get] APP_ENCRYPTION_KEY is not configured');
+        return null;
+    }
+
+    const performerId = req.performer?._id?.toString?.() || '';
+    const userId = String(req.user?.userId || performerId).trim();
+    if (!ObjectId.isValid(userId)) {
+        logger.warn('[voicebot.sessions.get] invalid user id for socket token', { userId });
+        return null;
+    }
+
+    const jwtPayload = {
+        userId,
+        email: req.user?.email ?? req.performer?.corporate_email,
+        name: req.user?.name ?? req.performer?.name ?? req.performer?.real_name,
+        role: req.user?.role ?? req.performer?.role ?? 'PERFORMER',
+        permissions: Array.isArray(req.user?.permissions) ? req.user.permissions : [],
+    };
+
+    try {
+        return jwt.sign(jwtPayload, secret, { expiresIn: '90d' });
+    } catch (error) {
+        logger.error('[voicebot.sessions.get] failed to sign socket token', error);
+        return null;
+    }
 };
 
 const registerPostAlias = (sourcePath: string, targetPath: string): void => {
@@ -125,6 +217,60 @@ const toObjectIdArray = (value: unknown): ObjectId[] => {
     return result;
 };
 
+type ProjectFileRecord = Record<string, unknown> & {
+    _id?: ObjectId;
+    project_id?: ObjectId | string | null;
+    file_id?: string;
+    file_name?: string;
+    file_path?: string;
+    local_path?: string;
+    mime_type?: string;
+    file_size?: number;
+    web_view_link?: string;
+    web_content_link?: string;
+    uploaded_at?: Date | string;
+};
+
+const normalizeProjectFileForApi = (file: ProjectFileRecord): Record<string, unknown> => ({
+    ...file,
+    _id: file._id instanceof ObjectId ? file._id.toString() : file._id,
+    project_id: file.project_id instanceof ObjectId ? file.project_id.toString() : (file.project_id ?? ''),
+    file_path: typeof file.file_path === 'string' ? file.file_path : (typeof file.file_name === 'string' ? file.file_name : ''),
+    file_name: typeof file.file_name === 'string' ? file.file_name : 'Unknown file',
+    file_size: Number.isFinite(Number(file.file_size)) ? Number(file.file_size) : 0,
+    mime_type: typeof file.mime_type === 'string' && file.mime_type
+        ? file.mime_type
+        : 'application/octet-stream',
+});
+
+const canAccessProject = async ({
+    db,
+    performer,
+    projectId,
+}: {
+    db: Db;
+    performer: VoicebotRequest['performer'];
+    projectId: ObjectId;
+}): Promise<boolean> => {
+    const userPermissions = await PermissionManager.getUserPermissions(performer, db);
+    if (userPermissions.includes(PERMISSIONS.PROJECTS.READ_ALL)) return true;
+    if (!userPermissions.includes(PERMISSIONS.PROJECTS.READ_ASSIGNED)) return false;
+    const projectAccess = toObjectIdArray(performer.projects_access);
+    return projectAccess.some((id) => id.equals(projectId));
+};
+
+const canAccessProjectFiles = async ({
+    db,
+    performer,
+}: {
+    db: Db;
+    performer: VoicebotRequest['performer'];
+}): Promise<boolean> => {
+    const userPermissions = await PermissionManager.getUserPermissions(performer, db);
+    return userPermissions.includes(PERMISSIONS.PROJECTS.READ_ALL)
+        || userPermissions.includes(PERMISSIONS.PROJECTS.READ_ASSIGNED);
+};
+
 const buildProdAwareRuntimeFilter = (): Record<string, unknown> =>
     buildRuntimeFilter({
         field: 'runtime_tag',
@@ -135,6 +281,13 @@ const buildProdAwareRuntimeFilter = (): Record<string, unknown> =>
 const mergeWithProdAwareRuntimeFilter = (query: Record<string, unknown>): Record<string, unknown> => ({
     $and: [query, buildProdAwareRuntimeFilter()],
 });
+
+const runtimeProjectFilesQuery = (query: Record<string, unknown>): Record<string, unknown> =>
+    mergeWithRuntimeFilter(query, {
+        field: 'runtime_tag',
+        familyMatch: IS_PROD_RUNTIME,
+        includeLegacyInProd: IS_PROD_RUNTIME,
+    });
 
 const resolveTelegramUserId = (performer: VoicebotRequest['performer']): string | null => {
     const fromPerformer = performer?.telegram_id ? String(performer.telegram_id).trim() : '';
@@ -569,9 +722,7 @@ const getSession = async (req: Request, res: Response) => {
             }));
         }
 
-        // TODO: Generate JWT socket_token when Socket.IO is integrated
-        // const socket_token = jwt.sign(jwtPayload, config.APP_ENCRYPTION_KEY, { expiresIn: '90d' });
-        const socket_token = '';
+        const socket_token = buildSocketToken(vreq) ?? '';
         const socket_port = process.env.API_PORT ?? '3002';
 
         res.status(200).json({
@@ -1597,6 +1748,568 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
         logger.error('Error in sessions/restart_create_tasks:', error);
         res.status(500).json({ error: String(error) });
     }
+});
+
+router.post('/create_tickets', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = createTicketsInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id and tickets are required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        const tickets = parsedBody.data.tickets;
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess } = await resolveSessionAccess({ db, performer, sessionId });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const now = new Date();
+        const tasksToSave: Array<Record<string, unknown>> = [];
+        for (const rawTicket of tickets) {
+            if (!rawTicket || typeof rawTicket !== 'object') continue;
+            const ticket = rawTicket as Record<string, unknown>;
+            const name = String(ticket.name || '').trim();
+            const description = String(ticket.description || '').trim();
+            const performerId = toObjectIdOrNull(ticket.performer_id);
+            const projectId = toObjectIdOrNull(ticket.project_id);
+            const projectName = String(ticket.project || '').trim();
+            if (!name || !description || !performerId || !projectId || !projectName) continue;
+
+            const canAccess = await canAccessProject({ db, performer, projectId });
+            if (!canAccess) continue;
+
+            const taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId });
+            if (!taskPerformer) continue;
+
+            tasksToSave.push({
+                id: String(ticket.id || randomUUID()),
+                name,
+                project_id: projectId,
+                project: projectName,
+                description,
+                task_type_id: toObjectIdOrNull(ticket.task_type_id),
+                priority: String(ticket.priority || 'P3'),
+                priority_reason: String(ticket.priority_reason || 'No reason provided'),
+                performer_id: performerId,
+                performer: taskPerformer,
+                created_at: now,
+                updated_at: now,
+                task_status: 'Ready',
+                task_status_history: [],
+                last_status_update: now,
+                status_update_checked: false,
+                task_id_from_ai: ticket.task_id_from_ai || null,
+                dependencies_from_ai: Array.isArray(ticket.dependencies_from_ai) ? ticket.dependencies_from_ai : [],
+                dialogue_reference: ticket.dialogue_reference || null,
+                dialogue_tag: ticket.dialogue_tag || null,
+                source: 'VOICE_BOT',
+                source_data: {
+                    session_name: String((session as Record<string, unknown>).session_name || ''),
+                    session_id: new ObjectId(sessionId),
+                },
+                runtime_tag: RUNTIME_TAG,
+            });
+        }
+
+        if (tasksToSave.length === 0) {
+            return res.status(400).json({ error: 'No valid tasks to create tickets' });
+        }
+
+        const insertResult = await db.collection(COLLECTIONS.TASKS).insertMany(tasksToSave);
+        return res.status(200).json({ success: true, insertedCount: insertResult.insertedCount });
+    } catch (error) {
+        logger.error('Error in create_tickets:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/delete_task_from_session', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = deleteTaskFromSessionInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id and task_id are required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        const taskId = String(parsedBody.data.task_id).trim();
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess } = await resolveSessionAccess({ db, performer, sessionId });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const updatePayload: Record<string, unknown> = {
+            $pull: {
+                'processors_data.CREATE_TASKS.data': { id: taskId },
+            },
+            $set: { updated_at: new Date() },
+        };
+
+        const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+            runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+            updatePayload
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        logger.error('Error in delete_task_from_session:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/task_types', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const canReadAnyProjects = await canAccessProjectFiles({ db, performer });
+        if (!canReadAnyProjects) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const taskTypesTree = await db.collection(COLLECTIONS.TASK_TYPES_TREE).find({}).toArray() as Array<Record<string, unknown>>;
+        const executionPlanItems = await db.collection(COLLECTIONS.EXECUTION_PLANS_ITEMS).find(
+            mergeWithRuntimeFilter({}, { field: 'runtime_tag', familyMatch: IS_PROD_RUNTIME, includeLegacyInProd: IS_PROD_RUNTIME })
+        ).toArray() as Array<Record<string, unknown>>;
+
+        const executionPlanMap = new Map<string, Record<string, unknown>>();
+        for (const item of executionPlanItems) {
+            if (item._id instanceof ObjectId) executionPlanMap.set(item._id.toString(), item);
+        }
+
+        const flattened: Array<Record<string, unknown>> = [];
+        for (const element of taskTypesTree) {
+            const elementId = element._id instanceof ObjectId ? element._id : toObjectIdOrNull(element._id);
+            if (!elementId) continue;
+            const typeClass = String(element.type_class || '');
+            if (typeClass === TASK_CLASSES.FUNCTIONALITY) continue;
+
+            const executionPlanSource = Array.isArray(element.execution_plan) ? element.execution_plan : [];
+            const executionPlan: Array<Record<string, unknown>> = [];
+            for (const entry of executionPlanSource) {
+                const planId = toObjectIdOrNull(entry);
+                if (!planId) continue;
+                const planItem = executionPlanMap.get(planId.toString());
+                if (!planItem) continue;
+                executionPlan.push({
+                    _id: planId.toString(),
+                    title: String(planItem.title || ''),
+                });
+            }
+
+            flattened.push({
+                _id: elementId.toString(),
+                key: elementId.toString(),
+                id: elementId,
+                title: element.title,
+                description: element.description,
+                task_id: element.task_id,
+                parent_type_id: element.parent_type_id,
+                type_class: element.type_class,
+                roles: element.roles,
+                execution_plan: executionPlan,
+            });
+        }
+
+        const treesByRoot: Record<string, Record<string, unknown> & { children: Array<Record<string, unknown>> }> = {};
+        for (const element of taskTypesTree) {
+            const elementId = toObjectIdOrNull(element._id);
+            if (!elementId) continue;
+            if (String(element.type_class || '') !== TASK_CLASSES.FUNCTIONALITY) continue;
+            treesByRoot[elementId.toString()] = {
+                ...element,
+                _id: elementId.toString(),
+                children: [],
+            };
+        }
+
+        for (const element of flattened) {
+            const parentId = toObjectIdOrNull(element.parent_type_id);
+            if (!parentId) continue;
+            const parent = treesByRoot[parentId.toString()];
+            if (!parent) continue;
+            (element as Record<string, unknown>).parent = {
+                _id: parent._id,
+                title: parent.title,
+            };
+            parent.children.push(element);
+        }
+
+        return res.status(200).json(Object.values(treesByRoot));
+    } catch (error) {
+        logger.error('Error in task_types:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/topics', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = topicsInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'project_id is required' });
+        }
+
+        const projectIdRaw = parsedBody.data.project_id;
+        const sessionIdRaw = (parsedBody.data.session_id || '').trim();
+        if (!ObjectId.isValid(projectIdRaw)) {
+            return res.status(400).json({ error: 'Invalid project_id format' });
+        }
+
+        const projectId = new ObjectId(projectIdRaw);
+        const projectAccess = await canAccessProject({ db, performer, projectId });
+        if (!projectAccess) {
+            return res.status(403).json({ error: 'Access denied to this project' });
+        }
+
+        const filter: Record<string, unknown> = { project_id: projectId };
+        if (sessionIdRaw) {
+            if (!ObjectId.isValid(sessionIdRaw)) {
+                return res.status(400).json({ error: 'Invalid session_id format' });
+            }
+            filter.session_id = new ObjectId(sessionIdRaw);
+        }
+
+        const topics = await db.collection(VOICEBOT_COLLECTIONS.TOPICS).find(
+            mergeWithRuntimeFilter(filter, { field: 'runtime_tag', familyMatch: IS_PROD_RUNTIME, includeLegacyInProd: IS_PROD_RUNTIME })
+        ).sort({ created_at: -1, topic_index: 1 }).toArray() as Array<Record<string, unknown>>;
+
+        const sessionIds = Array.from(new Set(
+            topics
+                .map((topic) => toObjectIdOrNull(topic.session_id))
+                .filter((id): id is ObjectId => Boolean(id))
+                .map((id) => id.toString())
+        ));
+
+        const sessions = sessionIds.length > 0
+            ? await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).find(
+                mergeWithRuntimeFilter(
+                    { _id: { $in: sessionIds.map((id) => new ObjectId(id)) } },
+                    { field: 'runtime_tag', familyMatch: IS_PROD_RUNTIME, includeLegacyInProd: IS_PROD_RUNTIME }
+                )
+            ).project({ _id: 1, session_name: 1, created_at: 1 }).toArray()
+            : [];
+        const sessionsById = new Map<string, Record<string, unknown>>();
+        for (const session of sessions as Array<Record<string, unknown>>) {
+            const sid = session._id instanceof ObjectId ? session._id.toString() : '';
+            if (sid) sessionsById.set(sid, session);
+        }
+
+        const project = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne({ _id: projectId }, { projection: { name: 1, title: 1 } });
+        const projectName = String(project?.name || project?.title || '');
+
+        const topicsBySessions: Record<string, Record<string, unknown>> = {};
+        for (const topic of topics) {
+            const topicSessionId = toObjectIdOrNull(topic.session_id);
+            if (!topicSessionId) continue;
+            const sessionKey = topicSessionId.toString();
+            if (!topicsBySessions[sessionKey]) {
+                const sessionDoc = sessionsById.get(sessionKey);
+                topicsBySessions[sessionKey] = {
+                    session_id: sessionKey,
+                    session_name: String(sessionDoc?.session_name || ''),
+                    session_created_at: sessionDoc?.created_at || null,
+                    project_name: projectName,
+                    topics: [],
+                };
+            }
+
+            const cleanTopic = {
+                _id: topic._id instanceof ObjectId ? topic._id.toString() : topic._id,
+                topic_index: topic.topic_index,
+                topic_number: topic.topic_number,
+                topic_title: topic.topic_title,
+                topic_description: topic.topic_description,
+                chunks: topic.chunks,
+                assignment_reasoning: topic.assignment_reasoning,
+                created_at: topic.created_at,
+                created_by: topic.created_by,
+            };
+            const sessionRecord = topicsBySessions[sessionKey] as { topics: Array<Record<string, unknown>> };
+            sessionRecord.topics.push(cleanTopic);
+        }
+
+        return res.status(200).json({
+            project_id: projectIdRaw,
+            total_topics: topics.length,
+            total_sessions: Object.keys(topicsBySessions).length,
+            sessions: Object.values(topicsBySessions),
+            all_topics: topics,
+        });
+    } catch (error) {
+        logger.error('Error in topics:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/save_custom_prompt_result', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = saveCustomPromptResultInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess } = await resolveSessionAccess({ db, performer, sessionId });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const customPromptRun = {
+            prompt: parsedBody.data.prompt ?? null,
+            input_type: parsedBody.data.input_type ?? null,
+            result: parsedBody.data.result ?? null,
+            executed_at: new Date(),
+            executed_by: performer._id,
+        };
+
+        await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+            runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+            {
+                $set: {
+                    custom_prompt_run: customPromptRun,
+                    updated_at: new Date(),
+                },
+            }
+        );
+
+        return res.status(200).json({ success: true, message: 'Custom prompt result saved successfully' });
+    } catch (error) {
+        logger.error('Error in save_custom_prompt_result:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/get_project_files', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = projectFilesInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'project_id is required' });
+        }
+
+        const projectIdRaw = parsedBody.data.project_id;
+        if (!ObjectId.isValid(projectIdRaw)) {
+            return res.status(400).json({ error: 'Invalid project_id format' });
+        }
+        const projectId = new ObjectId(projectIdRaw);
+
+        if (!await canAccessProjectFiles({ db, performer })) {
+            return res.status(403).json({ error: 'Access denied to project files' });
+        }
+        if (!await canAccessProject({ db, performer, projectId })) {
+            return res.status(403).json({ error: 'Access denied to this project' });
+        }
+
+        const files = await db.collection(VOICEBOT_COLLECTIONS.GOOGLE_DRIVE_PROJECTS_FILES)
+            .find(runtimeProjectFilesQuery({ project_id: projectId, is_deleted: { $ne: true } }))
+            .sort({ file_path: 1, file_name: 1 })
+            .toArray() as ProjectFileRecord[];
+
+        return res.status(200).json({ success: true, files: files.map(normalizeProjectFileForApi) });
+    } catch (error) {
+        logger.error('Error in get_project_files:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/get_all_project_files', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        if (!await canAccessProjectFiles({ db, performer })) {
+            return res.status(403).json({ error: 'Access denied to project files' });
+        }
+
+        const userPermissions = await PermissionManager.getUserPermissions(performer, db);
+        const filter: Record<string, unknown> = { is_deleted: { $ne: true } };
+
+        if (!userPermissions.includes(PERMISSIONS.PROJECTS.READ_ALL)) {
+            const projectsAccess = toObjectIdArray(performer.projects_access);
+            if (projectsAccess.length === 0) {
+                return res.status(200).json({ success: true, files: [] });
+            }
+            filter.project_id = { $in: projectsAccess };
+        }
+
+        const files = await db.collection(VOICEBOT_COLLECTIONS.GOOGLE_DRIVE_PROJECTS_FILES)
+            .find(runtimeProjectFilesQuery(filter))
+            .sort({ project_name: 1, file_path: 1, file_name: 1 })
+            .toArray() as ProjectFileRecord[];
+
+        return res.status(200).json({ success: true, files: files.map(normalizeProjectFileForApi) });
+    } catch (error) {
+        logger.error('Error in get_all_project_files:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/upload_file_to_project', projectFilesUpload.any(), async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest & {
+        files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
+    };
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = uploadProjectFileInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'project_id is required' });
+        }
+
+        const projectIdRaw = parsedBody.data.project_id;
+        const folderPathRaw = String(parsedBody.data.folder_path || '').trim();
+        const folderPath = folderPathRaw.replace(/^\/+|\/+$/g, '');
+        if (!ObjectId.isValid(projectIdRaw)) {
+            return res.status(400).json({ error: 'Invalid project_id format' });
+        }
+        const projectId = new ObjectId(projectIdRaw);
+
+        if (!await canAccessProjectFiles({ db, performer })) {
+            return res.status(403).json({ error: 'Access denied to project files' });
+        }
+        if (!await canAccessProject({ db, performer, projectId })) {
+            return res.status(403).json({ error: 'Access denied to this project' });
+        }
+
+        const uploadedFiles = Array.isArray(vreq.files)
+            ? vreq.files
+            : (vreq.files ? Object.values(vreq.files).flat() : []);
+        if (uploadedFiles.length === 0) {
+            return res.status(400).json({ error: 'No files uploaded' });
+        }
+
+        const fileDocs: ProjectFileRecord[] = uploadedFiles.map((file) => ({
+            _id: new ObjectId(),
+            project_id: projectId,
+            file_id: randomUUID(),
+            file_name: file.originalname,
+            file_size: file.size,
+            file_path: folderPath ? `${folderPath}/${file.originalname}` : file.originalname,
+            local_path: resolve(file.path),
+            mime_type: file.mimetype || 'application/octet-stream',
+            uploaded_at: new Date(),
+            uploaded_by: performer._id,
+            runtime_tag: RUNTIME_TAG,
+        }));
+
+        await db.collection(VOICEBOT_COLLECTIONS.GOOGLE_DRIVE_PROJECTS_FILES).insertMany(fileDocs as Record<string, unknown>[]);
+
+        return res.status(200).json({
+            success: true,
+            files: fileDocs.map((file) => ({
+                id: file.file_id,
+                name: file.file_name,
+                size: file.file_size,
+                path: file.file_path,
+            })),
+            count: fileDocs.length,
+        });
+    } catch (error) {
+        logger.error('Error in upload_file_to_project:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/get_file_content', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = getFileContentInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'file_id is required' });
+        }
+
+        const fileId = parsedBody.data.file_id;
+
+        if (!await canAccessProjectFiles({ db, performer })) {
+            return res.status(403).json({ error: 'Access denied to project files' });
+        }
+
+        const fileDoc = await db.collection(VOICEBOT_COLLECTIONS.GOOGLE_DRIVE_PROJECTS_FILES).findOne(runtimeProjectFilesQuery({
+            file_id: fileId,
+            is_deleted: { $ne: true },
+        })) as ProjectFileRecord | null;
+        if (!fileDoc) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+
+        const projectId = toObjectIdOrNull(fileDoc.project_id);
+        if (!projectId || !await canAccessProject({ db, performer, projectId })) {
+            return res.status(403).json({ error: 'Access denied to this project file' });
+        }
+
+        const localPath = typeof fileDoc.local_path === 'string' ? fileDoc.local_path : '';
+        if (localPath && existsSync(localPath)) {
+            const buffer = await readFile(localPath);
+            return res.status(200).json({
+                success: true,
+                file_id: fileDoc.file_id,
+                file_name: fileDoc.file_name,
+                mime_type: fileDoc.mime_type || 'application/octet-stream',
+                content_type: 'binary_base64',
+                content: buffer.toString('base64'),
+                size: buffer.length,
+                project_id: projectId.toString(),
+                web_view_link: fileDoc.web_view_link || null,
+                web_content_link: fileDoc.web_content_link || null,
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            file_id: fileDoc.file_id,
+            file_name: fileDoc.file_name,
+            mime_type: fileDoc.mime_type || 'application/octet-stream',
+            content_type: 'link',
+            web_view_link: fileDoc.web_view_link || null,
+            web_content_link: fileDoc.web_content_link || null,
+            message: 'File is available by link only',
+        });
+    } catch (error) {
+        logger.error('Error in get_file_content:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/upload_progress/:message_id', (_req: Request, res: Response) => {
+    res.status(200).json({ success: true, status: 'done', progress: 100 });
 });
 
 router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Response) => {

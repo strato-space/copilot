@@ -305,7 +305,13 @@ test.describe('Voice log workflows', () => {
         await addAuthCookie(page);
         await mockAuth(page);
         await mockCommonSessionApis(page);
-        await mockSessionData(page, { segmentText: 'Original text' });
+        let fetchSessionCalled = 0;
+        await mockSessionData(page, {
+            segmentText: 'Original text',
+            onSessionGet: () => {
+                fetchSessionCalled += 1;
+            },
+        });
 
         let editPayload: Record<string, unknown> | null = null;
         let deletePayload: Record<string, unknown> | null = null;
@@ -377,5 +383,6 @@ test.describe('Voice log workflows', () => {
             message_id: 'msg-1',
             segment_oid: 'seg-1',
         });
+        await expect(fetchSessionCalled).toBeGreaterThanOrEqual(2);
     });
 });

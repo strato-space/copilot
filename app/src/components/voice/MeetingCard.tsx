@@ -5,7 +5,6 @@ import { DownloadOutlined, EditOutlined, RobotOutlined, TeamOutlined, UserOutlin
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import { useMCPRequestStore } from '../../store/mcpRequestStore';
-import { useAuthStore } from '../../store/authStore';
 import { SESSION_ACCESS_LEVELS, SESSION_ACCESS_LEVELS_DESCRIPTIONS, SESSION_ACCESS_LEVELS_NAMES } from '../../constants/permissions';
 import AddParticipantModal from './AddParticipantModal';
 import AccessUsersModal from './AccessUsersModal';
@@ -37,8 +36,6 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
 
     const { openParticipantModal, openAccessUsersModal, generateSessionTitle } = useSessionsUIStore();
     const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
-    const authToken = useAuthStore((state) => state.authToken);
-
     const [isEditing, setIsEditing] = useState(false);
     const [localSessionName, setLocalSessionName] = useState(voiceBotSession?.session_name || '');
     const [customPromptModalVisible, setCustomPromptModalVisible] = useState(false);
@@ -269,16 +266,15 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const currentSessionId = String(voiceBotSession?._id || '').trim();
     const normalizedFabState = String(fabSessionState || '').trim().toLowerCase();
     const isThisSessionActiveInFab = Boolean(currentSessionId && fabActiveSessionId && currentSessionId === fabActiveSessionId);
-    const hasAuthToken = Boolean(authToken);
     const isSummarizeCooldownActive = typeof summarizeDisabledUntil === 'number' && Date.now() < summarizeDisabledUntil;
     const fabIsRecording = normalizedFabState === 'recording' || normalizedFabState === 'cutting';
     const fabIsPaused = normalizedFabState === 'paused';
     const fabIsFinalUploading = normalizedFabState === 'final_uploading';
-    const canNewControl = hasAuthToken && !fabIsFinalUploading && !fabIsRecording;
-    const canRecControl = hasAuthToken && !fabIsFinalUploading && !fabIsRecording;
-    const canCutControl = hasAuthToken && !fabIsFinalUploading && (fabIsRecording || fabIsPaused);
-    const canPauseControl = hasAuthToken && !fabIsFinalUploading && fabIsRecording;
-    const canDoneControl = hasAuthToken && !fabIsFinalUploading && Boolean(currentSessionId);
+    const canNewControl = !fabIsFinalUploading && !fabIsRecording;
+    const canRecControl = !fabIsFinalUploading && !fabIsRecording;
+    const canCutControl = !fabIsFinalUploading && (fabIsRecording || fabIsPaused);
+    const canPauseControl = !fabIsFinalUploading && fabIsRecording;
+    const canDoneControl = !fabIsFinalUploading && Boolean(currentSessionId);
     const controlsBusy = isNewStarting || isRecStarting || isCutting || isPausing || isFinishing;
 
     const sessionVisualState = (() => {

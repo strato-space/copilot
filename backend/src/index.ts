@@ -30,6 +30,11 @@ import { metricsMiddleware, metricsHandler, setHealthStatus } from './api/middle
 import { initLogger, getLogger } from './utils/logger.js';
 import { connectDb, closeDb } from './services/db.js';
 import { connectRedis, closeRedis } from './services/redis.js';
+import {
+  initVoicebotQueues,
+  closeVoicebotQueues,
+  type VoicebotQueuesMap,
+} from './services/voicebotQueues.js';
 
 // Initialize logger
 const serviceName = process.env.SERVICE_NAME ?? 'copilot-backend';
@@ -113,7 +118,8 @@ const io = new SocketIOServer(httpServer, {
 });
 app.set('io', io);
 
-registerSocketHandlers(io);
+let voicebotQueues: VoicebotQueuesMap | undefined;
+
 
 // Graceful shutdown handler
 const shutdown = async (signal: string) => {
@@ -128,6 +134,9 @@ const shutdown = async (signal: string) => {
       // Close database connections
       await closeDb();
       logger.info('MongoDB connection closed');
+
+      await closeVoicebotQueues();
+      logger.info('Voicebot queues closed');
 
       await closeRedis();
       logger.info('Redis connection closed');
@@ -162,7 +171,26 @@ const startServer = async () => {
     if (redisUrl) {
       connectRedis();
       logger.info('Redis connection initialized');
+      try {
+        voicebotQueues = initVoicebotQueues();
+        logger.info('Voicebot queues initialized', {
+          queues: Object.keys(voicebotQueues || {}),
+        });
+      } catch (queueError) {
+        const error = queueError as Error;
+        logger.error('Failed to initialize voicebot queues', {
+          error: error.message,
+          stack: error.stack,
+        });
+      }
     }
+
+    if (voicebotQueues) {
+      registerSocketHandlers(io, { queues: voicebotQueues });
+    } else {
+      registerSocketHandlers(io);
+    }
+    app.set('voicebotQueues', voicebotQueues ?? null);
 
     // Set health status to healthy
     setHealthStatus(true);
