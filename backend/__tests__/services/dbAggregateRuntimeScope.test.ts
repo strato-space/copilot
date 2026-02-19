@@ -10,20 +10,20 @@ describe('db aggregate runtime scope', () => {
   const expectedRuntimeFilterExpr = {
     $expr: IS_PROD_RUNTIME
       ? {
-          $or: [
-            {
-              $regexMatch: {
-                input: '$runtime_tag',
-                regex: new RegExp(`^${RUNTIME_FAMILY}(?:-|$)`),
-              },
+        $or: [
+          {
+            $regexMatch: {
+              input: '$runtime_tag',
+              regex: new RegExp(`^${RUNTIME_FAMILY}(?:-|$)`),
             },
-            { $eq: ['$runtime_tag', null] },
-            { $eq: ['$runtime_tag', ''] },
-          ],
-        }
+          },
+          { $eq: ['$runtime_tag', null] },
+          { $eq: ['$runtime_tag', ''] },
+        ],
+      }
       : {
-          $eq: ['$runtime_tag', RUNTIME_TAG],
-        },
+        $eq: ['$runtime_tag', RUNTIME_TAG],
+      },
   };
 
   it('adds runtime filter to lookup stage with explicit pipeline', () => {
@@ -78,11 +78,11 @@ describe('db aggregate runtime scope', () => {
       $match: {
         $expr: {
           $or: [
-            { $eq: ['$$__runtime_lookup_local', '$_id'] },
+            { $eq: ['$$runtime_lookup_local', '$_id'] },
             {
               $and: [
-                { $isArray: '$$__runtime_lookup_local' },
-                { $in: ['$_id', '$$__runtime_lookup_local'] },
+                { $isArray: '$$runtime_lookup_local' },
+                { $in: ['$_id', '$$runtime_lookup_local'] },
               ],
             },
           ],

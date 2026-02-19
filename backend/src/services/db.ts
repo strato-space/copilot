@@ -82,7 +82,7 @@ const buildRuntimeScopedLookup = (lookup: Document): Document => {
   const foreignField = lookup.foreignField;
 
   if (typeof localField === 'string' && typeof foreignField === 'string') {
-    const localVar = '__runtime_lookup_local';
+    const localVar = 'runtime_lookup_local';
 
     return {
       $lookup: {
