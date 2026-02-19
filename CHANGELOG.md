@@ -2,12 +2,16 @@
 
 ## 2026-02-19
 ### PROBLEM SOLVED
+- **18:21** Deleting transcript segments in Copilot did not reliably remove matching categorization rows; punctuation/spacing variants could survive and still appear in Categorization UI.
+- **18:21** Miniapp E2E command could pick up non-Playwright tests from mixed project tooling, causing unstable execution expectations for CI/local smoke runs.
 - **14:04** Long-running voice sessions could stall processing when pending message scans were gated by strict `is_waiting=false`; rows with `is_waiting` absent were skipped and transcription/categorization stayed pending.
 - **14:04** Re-uploaded chunks with identical binary payload could trigger redundant transcription runs and duplicate categorization queue pressure.
 - **14:04** Operators could not switch chronological direction in Transcription/Categorization tables from the UI, and sort preference was not persisted between reloads.
 - **01:39** Telegram `/start` in `copilot-voicebot-tgbot-prod` failed with Mongo update conflict (`Updating the path 'runtime_tag' would create a conflict`) during active-session upsert.
 
 ### FEATURE IMPLEMENTED
+- **18:21** Added server-side categorization cleanup on session read: stale categorization rows for deleted transcript segments are normalized (including loose punctuation/spacing matching) and persisted back to `processed_data`.
+- **18:21** Added dedicated Miniapp Playwright config and scripts isolation so `npm run test:e2e` runs only Playwright tests (`--pass-with-no-tests` for empty suites).
 - **14:04** Added deterministic voice-processing scheduler in TS workers: `runner` now registers periodic `PROCESSING` jobs and `processingLoop` scans sessions with `is_waiting: { $ne: true }`.
 - **14:04** Added hash-based transcription reuse in TS transcribe worker: when a session already has a successful transcription for the same file hash (`file_hash`/`file_unique_id`/`hash_sha256`), worker reuses text/speaker metadata and skips duplicate OpenAI calls.
 - **14:04** Added chronological sort toggle for Transcription/Categorization lists with explicit direction control (up/down icon) and client-side persistence in `sessionsUIStore`.
@@ -35,6 +39,15 @@
 - **10:16** Upgraded TS `DONE_MULTIPROMPT` worker parity: on session close it now queues postprocessing chain (`ALL_CUSTOM_PROMPTS`, `AUDIO_MERGING`, `CREATE_TASKS`) and `SESSION_DONE` notify job in addition to active-session cleanup and session-log write.
 
 ### CHANGES
+- **18:21** Updated transcript/categorization cleanup and tests:
+  - `backend/src/api/routes/voicebot/messageHelpers.ts`
+  - `backend/src/api/routes/voicebot/sessions.ts`
+  - `backend/__tests__/voicebot/messageHelpers.test.ts`
+  - `backend/__tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
+  - `backend/__tests__/voicebot/uploadAudioRoute.test.ts`
+- **18:21** Added Miniapp Playwright runtime config and script wiring:
+  - `miniapp/playwright.config.ts`
+  - `miniapp/package.json`
 - **14:04** Updated voice UI sort contracts and persistence:
   - `app/src/components/voice/Transcription.tsx`
   - `app/src/components/voice/TranscriptionTableHeader.tsx`
@@ -72,6 +85,11 @@
 - Expanded done handler regression coverage in `backend/__tests__/voicebot/workerDoneMultipromptHandler.test.ts` to assert postprocessing/notify queue fan-out and session-not-found behavior under runtime-scoped filtering.
 
 ### TESTS
+- **18:21** `cd backend && npm test -- --runInBand __tests__/voicebot/messageHelpers.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/publicAttachmentRoute.test.ts __tests__/smoke/voicebotAttachmentSmoke.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts`
+- **18:21** `cd app && npm test -- --runInBand __tests__/voice/transcriptionTimelineLabel.test.ts`
+- **18:21** `cd miniapp && npm run test:e2e`
+- **18:21** `cd backend && npm run build`
+- **18:21** `cd app && npm run build`
 - **14:04** `cd backend && npm test -- --runInBand __tests__/voicebot/workerProcessingLoopHandler.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts __tests__/voicebot/workerRunner.test.ts`
 - **14:04** `cd backend && npm run build`
 - **14:04** `cd app && npm run build`

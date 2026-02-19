@@ -8,6 +8,12 @@ const {
     recordMatchesRuntime,
 } = require("../services/runtimeScope");
 
+const runtimeScopeOptions = {
+    field: "runtime_tag",
+    familyMatch: constants.IS_PROD_RUNTIME === true,
+    includeLegacyInProd: constants.IS_PROD_RUNTIME === true,
+};
+
 const normalizeTelegramUserId = (telegram_user_id) => {
     const asNumber = Number(telegram_user_id);
     if (!Number.isFinite(asNumber)) return null;
@@ -248,7 +254,7 @@ const resolveActiveSessionByUser = async ({
             _id: resolveToObjectId(activeMapping.active_session_id),
             is_deleted: { $ne: true },
         };
-        activeSessionFilter = mergeWithRuntimeFilter(activeSessionFilter, { field: "runtime_tag" });
+        activeSessionFilter = mergeWithRuntimeFilter(activeSessionFilter, runtimeScopeOptions);
         if (!includeClosed) {
             activeSessionFilter = {
                 $and: [
@@ -318,7 +324,7 @@ const resolveActiveSessionByUser = async ({
                 is_deleted: { $ne: true },
                 session_source: { $in: [null, constants.voice_bot_session_source.TELEGRAM] },
                 ...timeWindow,
-            }, { field: "runtime_tag" }),
+            }, runtimeScopeOptions),
             { sort: { updated_at: -1, created_at: -1 } }
         );
         if (sessionByUser) return sessionByUser;
@@ -333,7 +339,7 @@ const resolveActiveSessionByUser = async ({
                 is_deleted: { $ne: true },
                 session_source: { $in: [null, constants.voice_bot_session_source.TELEGRAM] },
                 ...timeWindow,
-            }, { field: "runtime_tag" }),
+            }, runtimeScopeOptions),
             { sort: { updated_at: -1, created_at: -1 } }
         );
     }
@@ -344,7 +350,7 @@ const resolveActiveSessionByUser = async ({
 const send_message_update_event = async (queues, session, message_id, db) => {
     const message_id_str = message_id.toString();
     const message = await db.collection(constants.collections.VOICE_BOT_MESSAGES).findOne(
-        mergeWithRuntimeFilter({ _id: new ObjectId(message_id) }, { field: "runtime_tag" })
+        mergeWithRuntimeFilter({ _id: new ObjectId(message_id) }, runtimeScopeOptions)
     );
     if (!message) return;
     await queues[constants.voice_bot_queues.EVENTS].add(constants.voice_bot_jobs.events.SEND_TO_SOCKET, {
@@ -365,7 +371,7 @@ const send_message_update_event = async (queues, session, message_id, db) => {
 
 const send_session_update_event = async (queues, session_id, db) => {
     const session = await db.collection(constants.collections.VOICE_BOT_SESSIONS).findOne(
-        mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: "runtime_tag" })
+        mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, runtimeScopeOptions)
     );
     if (!session) return;
     await queues[constants.voice_bot_queues.EVENTS].add(constants.voice_bot_jobs.events.SEND_TO_SOCKET, {

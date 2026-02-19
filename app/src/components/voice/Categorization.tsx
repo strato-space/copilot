@@ -114,7 +114,15 @@ export default function Categorization() {
 
             return categorizationSort.ascending ? -comparison : comparison;
         });
-        return list;
+        return list.filter((group) =>
+            Array.isArray(group.rows) && group.rows.some((row) => {
+                if (row.kind === 'image' && typeof row.imageUrl === 'string' && row.imageUrl.trim().length > 0) {
+                    return true;
+                }
+                const text = typeof row.text === 'string' ? row.text.trim() : '';
+                return text.length > 0;
+            })
+        );
     }, [voiceMesagesData, categorizationSort.ascending]);
 
     const handleCreateTasks = (): void => {

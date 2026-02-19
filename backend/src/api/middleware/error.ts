@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import multer from 'multer';
 import { sendError } from './response.js';
 
 export class AppError extends Error {
@@ -22,6 +23,13 @@ export const errorMiddleware = (
   res: Response,
   _next: NextFunction,
 ): void => {
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'File too large' : err.message;
+    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    sendError(res, { message, code: err.code }, status);
+    return;
+  }
+
   if (err instanceof AppError) {
     const payload = {
       message: err.message,

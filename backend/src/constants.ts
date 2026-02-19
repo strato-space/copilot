@@ -463,5 +463,11 @@ export const VOICEBOT_FILE_STORAGE = {
   uploadsDir: process.env.VOICEBOT_UPLOADS_DIR || 'uploads/voicebot',
   audioDir: process.env.VOICEBOT_AUDIO_DIR || 'uploads/voicebot/audio',
   tempDir: process.env.VOICEBOT_TEMP_DIR || 'uploads/voicebot/temp',
-  maxFileSize: 50 * 1024 * 1024, // 50MB
+  // Generic upload limit (project files, attachments, etc.).
+  maxFileSize: Number.parseInt(process.env.VOICEBOT_MAX_FILE_SIZE ?? '', 10) || 50 * 1024 * 1024, // 50MB default
+  // Voice chunks/full-track archives are larger than generic files.
+  maxAudioFileSize:
+    Number.parseInt(process.env.VOICEBOT_MAX_AUDIO_FILE_SIZE ?? '', 10) ||
+    Number.parseInt(process.env.VOICEBOT_MAX_FILE_SIZE ?? '', 10) ||
+    128 * 1024 * 1024, // 128MB default
 } as const;

@@ -43,6 +43,7 @@ export interface VoiceBotMessage {
     file_id?: string;
     transcription_text?: string;
     transcription?: {
+        duration_seconds?: number | string;
         segments?: Array<{
             id?: string;
             start?: number;
@@ -89,6 +90,9 @@ export interface VoiceMessageRow {
     avatar: string;
     name?: string | undefined;
     text?: string | undefined;
+    kind?: 'categorization' | 'text' | 'image' | undefined;
+    imageUrl?: string | undefined;
+    imageName?: string | undefined;
     goal?: string | undefined;
     patt?: string | undefined;
     flag?: string | undefined;

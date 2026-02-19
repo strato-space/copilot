@@ -14,6 +14,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import multer from 'multer';
+import type { Server as SocketIOServer } from 'socket.io';
 import {
     COLLECTIONS,
     TASK_CLASSES,
@@ -45,6 +46,7 @@ import {
   normalizeSegmentsText,
 } from './messageHelpers.js';
 import { findObjectLocatorByOid, upsertObjectLocator } from '../../../services/voicebotObjectLocator.js';
+import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
 
 // TODO: Import MCPProxyClient when MCP integration is needed
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -215,6 +217,126 @@ const toObjectIdArray = (value: unknown): ObjectId[] => {
         if (parsed) result.push(parsed);
     }
     return result;
+};
+
+const getValueByPath = (input: unknown, path: string): unknown => {
+    if (!path) return undefined;
+    const keys = path.split('.');
+    let current: unknown = input;
+    for (const key of keys) {
+        if (!current || typeof current !== 'object') return undefined;
+        current = (current as Record<string, unknown>)[key];
+    }
+    return current;
+};
+
+const setValueByPath = (input: Record<string, unknown>, path: string, value: unknown): void => {
+    if (!path) return;
+    const keys = path.split('.');
+    let current: Record<string, unknown> = input;
+    for (let idx = 0; idx < keys.length; idx += 1) {
+        const key = keys[idx];
+        if (!key) return;
+        const isLast = idx === keys.length - 1;
+        if (isLast) {
+            current[key] = value;
+            return;
+        }
+        const nextValue = current[key];
+        if (!nextValue || typeof nextValue !== 'object' || Array.isArray(nextValue)) {
+            current[key] = {};
+        }
+        current = current[key] as Record<string, unknown>;
+    }
+};
+
+const buildCategorizationCleanupStats = (
+    message: Record<string, unknown>,
+    cleanupPayload: Record<string, unknown>
+): { affected_paths: number; removed_rows: number } => {
+    let affectedPaths = 0;
+    let removedRows = 0;
+
+    for (const [path, nextValue] of Object.entries(cleanupPayload)) {
+        if (!Array.isArray(nextValue)) continue;
+        const prevValue = getValueByPath(message, path);
+        if (!Array.isArray(prevValue)) continue;
+        if (prevValue.length === nextValue.length) continue;
+        affectedPaths += 1;
+        removedRows += Math.max(0, prevValue.length - nextValue.length);
+    }
+
+    return {
+        affected_paths: affectedPaths,
+        removed_rows: removedRows,
+    };
+};
+
+const cleanupMessageCategorizationForDeletedSegments = (
+    message: Record<string, unknown>
+): {
+    message: Record<string, unknown>;
+    cleanupPayload: Record<string, unknown>;
+    cleanupStats: { affected_paths: number; removed_rows: number };
+} => {
+    const transcription = (message?.transcription && typeof message.transcription === 'object')
+        ? (message.transcription as Record<string, unknown>)
+        : null;
+    const segments = Array.isArray(transcription?.segments)
+        ? (transcription?.segments as Array<Record<string, unknown>>)
+        : [];
+    if (segments.length === 0) {
+        return {
+            message,
+            cleanupPayload: {},
+            cleanupStats: { affected_paths: 0, removed_rows: 0 },
+        };
+    }
+
+    const deletedSegments = segments.filter((segment) => segment?.is_deleted === true);
+    if (deletedSegments.length === 0) {
+        return {
+            message,
+            cleanupPayload: {},
+            cleanupStats: { affected_paths: 0, removed_rows: 0 },
+        };
+    }
+
+    const cloneValue = <T>(value: T): T => {
+        if (value == null) return value;
+        if (typeof value !== 'object') return value;
+        return structuredClone(value);
+    };
+    const messageForCleanup: Record<string, unknown> = {
+        _id: message._id,
+        categorization: cloneValue(message.categorization),
+        categorization_data: cloneValue(message.categorization_data),
+        processors_data: cloneValue(message.processors_data),
+    };
+    const aggregatePayload: Record<string, unknown> = {};
+
+    for (const deletedSegment of deletedSegments) {
+        const payload = buildCategorizationCleanupPayload({
+            message: messageForCleanup as Record<string, unknown> & { _id: ObjectId },
+            segment: deletedSegment,
+        });
+        if (Object.keys(payload).length === 0) continue;
+        for (const [path, value] of Object.entries(payload)) {
+            aggregatePayload[path] = value;
+            setValueByPath(messageForCleanup, path, value);
+        }
+    }
+
+    const cleanupStats = buildCategorizationCleanupStats(message, aggregatePayload);
+    const updatedMessage = { ...message };
+    for (const [path, value] of Object.entries(aggregatePayload)) {
+        setValueByPath(updatedMessage, path, value);
+    }
+    return {
+        message: updatedMessage,
+        cleanupPayload: aggregatePayload,
+        cleanupStats,
+    };
 };
 
 type ProjectFileRecord = Record<string, unknown> & {
@@ -430,6 +552,59 @@ const toFiniteNumber = (value: unknown): number | null => {
 const toMessageTimestamp = (value: unknown): number => {
     const parsed = toFiniteNumber(value);
     return parsed ?? 0;
+};
+
+const isImageAttachmentPayload = (attachment: unknown): boolean => {
+    if (!attachment || typeof attachment !== 'object') return false;
+    const item = attachment as Record<string, unknown>;
+    const kind = typeof item.kind === 'string' ? item.kind.trim().toLowerCase() : '';
+    if (kind === 'image') return true;
+    const mimeTypeRaw = item.mimeType ?? item.mime_type;
+    const mimeType = typeof mimeTypeRaw === 'string' ? mimeTypeRaw.trim().toLowerCase() : '';
+    return mimeType.startsWith('image/');
+};
+
+const emitSessionRealtimeUpdate = ({
+    req,
+    sessionId,
+    messageDoc,
+}: {
+    req: Request;
+    sessionId: string;
+    messageDoc: Record<string, unknown>;
+}): void => {
+    const io = req.app.get('io') as SocketIOServer | undefined;
+    if (!io) return;
+    const room = getVoicebotSessionRoom(sessionId);
+    const namespace = io.of('/voicebot');
+    const createdAt = messageDoc.created_at instanceof Date ? messageDoc.created_at : new Date();
+    const messageId = messageDoc._id instanceof ObjectId
+        ? messageDoc._id.toString()
+        : String(messageDoc._id || '');
+
+    namespace.to(room).emit('new_message', {
+        _id: messageId,
+        session_id: sessionId,
+        message_id: messageDoc.message_id,
+        message_timestamp: messageDoc.message_timestamp,
+        source_type: messageDoc.source_type,
+        message_type: messageDoc.message_type,
+        type: messageDoc.type,
+        text: messageDoc.text,
+        transcription_text: messageDoc.transcription_text,
+        is_transcribed: messageDoc.is_transcribed,
+        to_transcribe: messageDoc.to_transcribe,
+        attachments: Array.isArray(messageDoc.attachments) ? messageDoc.attachments : [],
+        image_anchor_message_id: messageDoc.image_anchor_message_id ?? null,
+        created_at: createdAt.toISOString(),
+        updated_at: createdAt.toISOString(),
+    });
+    namespace.to(room).emit('session_update', {
+        _id: sessionId,
+        session_id: sessionId,
+        is_messages_processed: false,
+        updated_at: new Date().toISOString(),
+    });
 };
 
 const voicebotApiAttachmentPath = (path: string): string => `/api/voicebot${path}`;
@@ -685,6 +860,31 @@ const getSession = async (req: Request, res: Response) => {
                 session_id: new ObjectId(session_id),
             })
         ).toArray();
+        const sessionMessagesCleaned = session_messages.map((message) =>
+            cleanupMessageCategorizationForDeletedSegments(message as Record<string, unknown>)
+        );
+        const cleanupUpdates = sessionMessagesCleaned.filter((entry) => entry.cleanupStats.removed_rows > 0);
+        if (cleanupUpdates.length > 0) {
+            await Promise.all(
+                cleanupUpdates.map((entry) =>
+                    db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+                        runtimeMessageQuery({ _id: (entry.message as { _id: ObjectId })._id }),
+                        {
+                            $set: {
+                                ...entry.cleanupPayload,
+                                updated_at: new Date(),
+                            },
+                        }
+                    )
+                )
+            );
+            logger.info('[voicebot.sessions.get] cleaned stale categorization rows', {
+                session_id,
+                messages: cleanupUpdates.length,
+                rows_removed: cleanupUpdates.reduce((sum, entry) => sum + entry.cleanupStats.removed_rows, 0),
+            });
+        }
+        const normalizedSessionMessages = sessionMessagesCleaned.map((entry) => entry.message);
 
         // Get participants info
         let participants: any[] = [];
@@ -731,8 +931,8 @@ const getSession = async (req: Request, res: Response) => {
                 participants,
                 allowed_users
             },
-            session_messages,
-            session_attachments: buildSessionAttachments(session_messages as Array<Record<string, unknown>>),
+            session_messages: normalizedSessionMessages,
+            session_attachments: buildSessionAttachments(normalizedSessionMessages as Array<Record<string, unknown>>),
             socket_token,
             socket_port
         });
@@ -1032,6 +1232,7 @@ router.post('/add_text', async (req: Request, res: Response) => {
         const attachments = Array.isArray(req.body?.attachments)
             ? req.body.attachments.filter((item: unknown) => !!item && typeof item === 'object')
             : [];
+        const hasImageAttachment = attachments.some(isImageAttachmentPayload);
 
         if (!sessionId || !ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'session_id is required' });
@@ -1049,6 +1250,7 @@ router.post('/add_text', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const sessionRecord = session as VoiceSessionRecord;
+        const createdAt = new Date();
         const messageDoc: Record<string, unknown> = {
             session_id: new ObjectId(sessionId),
             chat_id: Number(sessionRecord.chat_id),
@@ -1064,19 +1266,45 @@ router.post('/add_text', async (req: Request, res: Response) => {
             processors_data: {},
             is_transcribed: true,
             transcription_text: text,
-            created_at: new Date(),
-            updated_at: new Date(),
+            to_transcribe: false,
+            runtime_tag: RUNTIME_TAG,
+            created_at: createdAt,
+            updated_at: createdAt,
+            ...(hasImageAttachment ? { is_image_anchor: true } : {}),
         };
 
         const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
+        const insertedMessageId = String(op.insertedId);
+        messageDoc._id = op.insertedId;
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(sessionId) },
-            { $set: { updated_at: new Date(), is_messages_processed: false } }
+            mergeWithProdAwareRuntimeFilter({ _id: new ObjectId(sessionId) }),
+            {
+                $set: {
+                    updated_at: createdAt,
+                    is_messages_processed: false,
+                    ...(hasImageAttachment
+                        ? {
+                            pending_image_anchor_message_id: insertedMessageId,
+                            pending_image_anchor_oid: op.insertedId,
+                            pending_image_anchor_created_at: createdAt,
+                        }
+                        : {}),
+                },
+            }
         );
+        emitSessionRealtimeUpdate({
+            req,
+            sessionId,
+            messageDoc: {
+                ...messageDoc,
+                _id: insertedMessageId,
+            },
+        });
 
         return res.status(200).json({
             success: true,
-            message_id: String(op.insertedId),
+            message_id: insertedMessageId,
+            image_anchor_message_id: hasImageAttachment ? insertedMessageId : null,
         });
     } catch (error) {
         logger.error('Error in add_text:', error);
@@ -1097,6 +1325,7 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
         const attachments = Array.isArray(req.body?.attachments)
             ? req.body.attachments.filter((item: unknown) => !!item && typeof item === 'object')
             : [];
+        const hasImageAttachment = attachments.some(isImageAttachmentPayload);
         const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
         if (!sessionId || !ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'session_id is required' });
@@ -1114,6 +1343,7 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const sessionRecord = session as VoiceSessionRecord;
+        const createdAt = new Date();
         const messageDoc: Record<string, unknown> = {
             session_id: new ObjectId(sessionId),
             chat_id: Number(sessionRecord.chat_id),
@@ -1129,19 +1359,44 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
             processors_data: {},
             is_transcribed: false,
             to_transcribe: false,
-            created_at: new Date(),
-            updated_at: new Date(),
+            runtime_tag: RUNTIME_TAG,
+            created_at: createdAt,
+            updated_at: createdAt,
+            ...(hasImageAttachment ? { is_image_anchor: true } : {}),
         };
 
         const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
+        const insertedMessageId = String(op.insertedId);
+        messageDoc._id = op.insertedId;
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(sessionId) },
-            { $set: { updated_at: new Date(), is_messages_processed: false } }
+            mergeWithProdAwareRuntimeFilter({ _id: new ObjectId(sessionId) }),
+            {
+                $set: {
+                    updated_at: createdAt,
+                    is_messages_processed: false,
+                    ...(hasImageAttachment
+                        ? {
+                            pending_image_anchor_message_id: insertedMessageId,
+                            pending_image_anchor_oid: op.insertedId,
+                            pending_image_anchor_created_at: createdAt,
+                        }
+                        : {}),
+                },
+            }
         );
+        emitSessionRealtimeUpdate({
+            req,
+            sessionId,
+            messageDoc: {
+                ...messageDoc,
+                _id: insertedMessageId,
+            },
+        });
 
         return res.status(200).json({
             success: true,
-            message_id: String(op.insertedId),
+            message_id: insertedMessageId,
+            image_anchor_message_id: hasImageAttachment ? insertedMessageId : null,
         });
     } catch (error) {
         logger.error('Error in add_attachment:', error);
@@ -2596,6 +2851,10 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
             message: updatedMessageBase as Record<string, unknown> & { _id: ObjectId },
             segment: segmentForCleanup,
         });
+        const cleanupStats = buildCategorizationCleanupStats(
+            updatedMessageBase as Record<string, unknown>,
+            categorizationCleanupPayload
+        );
 
         await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
             runtimeMessageQuery({ _id: messageObjectId }),
@@ -2633,7 +2892,37 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
             source: buildWebSource(req),
             action: { type: 'rollback', available: true, handler: 'rollback_event', args: {} },
             reason,
+            metadata: {
+                categorization_cleanup: cleanupStats,
+            },
         });
+
+        if (cleanupStats.removed_rows > 0) {
+            await insertSessionLogEvent({
+                db,
+                session_id: sessionObjectId,
+                message_id: messageObjectId,
+                project_id: toObjectIdOrNull((session as VoiceSessionRecord)?.project_id),
+                event_name: 'categorization_rows_deleted',
+                actor: buildActorFromPerformer(performer),
+                target: {
+                    entity_type: 'categorization',
+                    entity_oid: segment_oid,
+                    path: `/messages/${formatOid('msg', messageObjectId)}/categorization`,
+                    stage: 'categorization',
+                },
+                diff: {
+                    op: 'delete',
+                    old_value: cleanupStats.removed_rows,
+                    new_value: 0,
+                },
+                source: buildWebSource(req),
+                metadata: {
+                    reason: 'transcript_segment_edited',
+                    cleanup: cleanupStats,
+                },
+            });
+        }
 
         return res.status(200).json({ success: true, event: mapEventForApi(logEvent) });
     } catch (error) {
@@ -2743,6 +3032,10 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
             message: updatedMessageBase as Record<string, unknown> & { _id: ObjectId },
             segment: segmentForCleanup,
         });
+        const cleanupStats = buildCategorizationCleanupStats(
+            updatedMessageBase as Record<string, unknown>,
+            categorizationCleanupPayload
+        );
 
         await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
             runtimeMessageQuery({ _id: messageObjectId }),
@@ -2780,7 +3073,37 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
             source: buildWebSource(req),
             action: { type: 'rollback', available: true, handler: 'rollback_event', args: {} },
             reason,
+            metadata: {
+                categorization_cleanup: cleanupStats,
+            },
         });
+
+        if (cleanupStats.removed_rows > 0) {
+            await insertSessionLogEvent({
+                db,
+                session_id: sessionObjectId,
+                message_id: messageObjectId,
+                project_id: toObjectIdOrNull((session as VoiceSessionRecord)?.project_id),
+                event_name: 'categorization_rows_deleted',
+                actor: buildActorFromPerformer(performer),
+                target: {
+                    entity_type: 'categorization',
+                    entity_oid: segment_oid,
+                    path: `/messages/${formatOid('msg', messageObjectId)}/categorization`,
+                    stage: 'categorization',
+                },
+                diff: {
+                    op: 'delete',
+                    old_value: cleanupStats.removed_rows,
+                    new_value: 0,
+                },
+                source: buildWebSource(req),
+                metadata: {
+                    reason: 'transcript_segment_deleted',
+                    cleanup: cleanupStats,
+                },
+            });
+        }
 
         return res.status(200).json({ success: true, event: mapEventForApi(logEvent) });
     } catch (error) {

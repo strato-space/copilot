@@ -131,8 +131,8 @@ Preferred engineering principles for this repo:
 ### PM2 services (prod) -> repo paths
 - `copilot-backend-prod` — Finance Ops backend API (`npm run start` with `backend/.env.production`).
 - `copilot-miniapp-backend-prod` — Miniapp backend API (`npm run start:miniapp` with `backend/.env.production`).
-- `copilot-voicebot-tgbot-prod` — TG bot runtime from `backend/dist/voicebot_tgbot/runtime.js` (`npm run start:voicebot-tgbot`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; env is merged from `backend/.env.production` plus `voicebot_runtime/.env.prod-cutover` (TG/runtime overrides).
-- `copilot-voicebot-workers-prod` — VoiceBot worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; env is merged from `backend/.env.production` plus `voicebot_runtime/.env.prod-cutover`.
+- `copilot-voicebot-tgbot-prod` — TG bot runtime from `backend/dist/voicebot_tgbot/runtime.js` (`npm run start:voicebot-tgbot`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; env source is `backend/.env.production`.
+- `copilot-voicebot-workers-prod` — VoiceBot worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; env source is `backend/.env.production`.
 
 ### PM2 services (dev) -> repo paths
 - `copilot-backend-dev` / `copilot-backend-local` — backend API (`npm run dev` with `backend/.env.development`).
@@ -174,6 +174,7 @@ Preferred engineering principles for this repo:
 - Full-track archive chunks are tracked as `trackKind='full_track'` with metadata (`sessionId`, `mic`, `duration/start/end`) in voicebot runtime.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - TS transcribe worker deduplicates repeated chunk uploads by file hash (`file_hash`/`file_unique_id`/`hash_sha256`) and reuses existing transcription payload before calling OpenAI.
+- Session payload normalization now removes stale categorization rows that reference already deleted transcript segments (including punctuation/spacing variants), and persists cleanup on read.
 - Transcription/Categorization tables expose explicit chronological direction toggle (up/down) and persist user preference in `sessionsUIStore` local storage.
 - Voice task creation UI accepts missing `task_type_id` in task/ticket entry points (`TasksTable`, `TicketsPreviewModal`).
 - MCP proxy stubs: `backend/src/services/mcp/` (requires `@modelcontextprotocol/sdk`).

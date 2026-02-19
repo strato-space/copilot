@@ -318,6 +318,107 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
     expect(attachment.direct_uri).toBe(`/api/voicebot/public_attachment/${sessionId.toHexString()}/uniq-file-1`);
   });
 
+  it('POST /voicebot/session removes stale categorization rows for already deleted transcript segments', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+    const deletedSegmentId = `ch_${new ObjectId().toHexString()}`;
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toString(),
+      session_name: 'Stale cleanup parity',
+      runtime_tag: 'prod-p2',
+      is_active: true,
+      is_deleted: false,
+      participants: [],
+      allowed_users: [],
+    }));
+    const messageUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const staleRowText = 'クレームチーズの 上に Кремиум Кремиум';
+    const messagesFind = jest.fn(() => ({
+      toArray: async () => [
+        {
+          _id: messageId,
+          session_id: sessionId,
+          message_id: 'msg-stale-1',
+          runtime_tag: 'prod-p2',
+          message_timestamp: 1700000000,
+          message_type: 'voice',
+          transcription: {
+            text: staleRowText,
+            segments: [
+              {
+                id: deletedSegmentId,
+                text: 'クレームチーズの上に…Кремиум Кремиум',
+                start: 0,
+                end: 0,
+                is_deleted: true,
+              },
+            ],
+          },
+          categorization: [
+            { text: staleRowText, start: '', end: '', speaker: 'Unknown' },
+            { text: 'Keep me', start: '', end: '', speaker: 'Unknown' },
+          ],
+        },
+      ],
+    }));
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return { find: messagesFind };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          find: jest.fn(() => ({ toArray: async () => [] })),
+        };
+      },
+    };
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return { updateOne: messageUpdateOne };
+        }
+        if (name === VOICEBOT_COLLECTIONS.PERSONS || name === VOICEBOT_COLLECTIONS.PERFORMERS) {
+          return { find: jest.fn(() => ({ project: () => ({ toArray: async () => [] }) })) };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          find: jest.fn(() => ({ project: () => ({ toArray: async () => [] }) })),
+        };
+      },
+    };
+
+    getRawDbMock.mockReturnValue(rawDbStub);
+    getDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session')
+      .send({ session_id: sessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    const returnedRows = response.body.session_messages?.[0]?.categorization ?? [];
+    expect(returnedRows).toEqual([
+      { text: 'Keep me', start: '', end: '', speaker: 'Unknown' },
+    ]);
+    expect(messageUpdateOne).toHaveBeenCalledTimes(1);
+    const [, updateDoc] = messageUpdateOne.mock.calls[0] as [Record<string, unknown>, { $set?: Record<string, unknown> }];
+    expect(updateDoc.$set?.categorization).toEqual([
+      { text: 'Keep me', start: '', end: '', speaker: 'Unknown' },
+    ]);
+  });
+
   it('POST /voicebot/delete_transcript_chunk marks canonical transcription segment as deleted', async () => {
     const sessionId = new ObjectId();
     const messageId = new ObjectId();

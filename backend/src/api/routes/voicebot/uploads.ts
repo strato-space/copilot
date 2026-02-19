@@ -65,7 +65,7 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage,
     limits: {
-        fileSize: VOICEBOT_FILE_STORAGE.maxFileSize,
+        fileSize: VOICEBOT_FILE_STORAGE.maxAudioFileSize,
     },
     fileFilter: (_req, file, cb) => {
         if (file.mimetype.startsWith('audio/')) {
@@ -119,6 +119,86 @@ const resolveMessageFilePath = (message: Record<string, unknown>, attachment?: R
     const raw = (fromAttachment || fromMessage || '').trim();
     if (!raw) return '';
     return isAbsolute(raw) ? raw : resolve(raw);
+};
+
+const isTelegramSource = (value: unknown): boolean =>
+    typeof value === 'string' && value.trim().toLowerCase() === 'telegram';
+
+const resolveAttachmentFileId = (
+    message: Record<string, unknown>,
+    attachment?: Record<string, unknown>
+): string | null => {
+    const fromAttachment = attachment && typeof attachment.file_id === 'string'
+        ? attachment.file_id.trim()
+        : '';
+    if (fromAttachment) return fromAttachment;
+    const fromMessage = typeof message.file_id === 'string' ? message.file_id.trim() : '';
+    return fromMessage || null;
+};
+
+const resolveTelegramBotToken = (): string | null => {
+    const prodToken = typeof process.env.TG_VOICE_BOT_TOKEN === 'string'
+        ? process.env.TG_VOICE_BOT_TOKEN.trim()
+        : '';
+    const betaToken = typeof process.env.TG_VOICE_BOT_BETA_TOKEN === 'string'
+        ? process.env.TG_VOICE_BOT_BETA_TOKEN.trim()
+        : '';
+    if (IS_PROD_RUNTIME) return prodToken || betaToken || null;
+    return betaToken || prodToken || null;
+};
+
+const createHttpError = (message: string, statusCode: number): Error & { statusCode: number } => {
+    const err = new Error(message) as Error & { statusCode: number };
+    err.statusCode = statusCode;
+    return err;
+};
+
+const streamTelegramAttachmentByFileId = async ({
+    response,
+    fileId,
+    mimeType,
+}: {
+    response: Response;
+    fileId: string;
+    mimeType?: string | null;
+}): Promise<void> => {
+    const token = resolveTelegramBotToken();
+    if (!token) {
+        throw createHttpError('Telegram bot token is not configured', 500);
+    }
+
+    const metadataUrl = `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`;
+    const metadataResponse = await fetch(metadataUrl, { method: 'GET' });
+    if (!metadataResponse.ok) {
+        throw createHttpError(`Telegram getFile failed (${metadataResponse.status})`, 502);
+    }
+
+    const metadata = await metadataResponse.json() as {
+        ok?: boolean;
+        description?: string;
+        result?: { file_path?: string };
+    };
+    const filePath = typeof metadata?.result?.file_path === 'string' ? metadata.result.file_path : '';
+    if (!metadata?.ok || !filePath) {
+        throw createHttpError(metadata?.description || 'Telegram file path not found', 404);
+    }
+
+    const downloadUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
+    const downloadResponse = await fetch(downloadUrl, { method: 'GET' });
+    if (!downloadResponse.ok) {
+        throw createHttpError(`Telegram file download failed (${downloadResponse.status})`, 502);
+    }
+    const binary = Buffer.from(await downloadResponse.arrayBuffer());
+
+    response.setHeader('Cache-Control', 'private, max-age=3600');
+    response.setHeader(
+        'Content-Type',
+        downloadResponse.headers.get('content-type')
+            || mimeType
+            || 'application/octet-stream'
+    );
+    response.setHeader('Content-Length', String(binary.length));
+    response.status(200).send(binary);
 };
 
 const resolveMessageRuntimeTag = (session: Record<string, unknown>): string => {
@@ -567,14 +647,32 @@ router.get(
             const attachments = Array.isArray(messageDoc.attachments) ? messageDoc.attachments : [];
             const attachment = attachments[attachmentIndex] as Record<string, unknown> | undefined;
             const filePath = resolveMessageFilePath(messageDoc, attachment);
-            if (!filePath || !existsSync(filePath)) {
-                return res.status(404).json({ error: 'Attachment not found' });
+            if (filePath && existsSync(filePath)) {
+                return res.sendFile(filePath);
             }
 
-            return res.sendFile(filePath);
+            const fromAttachmentSource = attachment ? attachment.source : null;
+            const isTelegram = isTelegramSource(fromAttachmentSource) || isTelegramSource(messageDoc.source_type);
+            const fileId = resolveAttachmentFileId(messageDoc, attachment);
+            if (isTelegram && fileId) {
+                const mimeTypeRaw = attachment?.mimeType ?? attachment?.mime_type;
+                const mimeType = typeof mimeTypeRaw === 'string' ? mimeTypeRaw : null;
+                await streamTelegramAttachmentByFileId({
+                    response: res,
+                    fileId,
+                    mimeType,
+                });
+                return;
+            }
+
+            return res.status(404).json({ error: 'Attachment not found' });
         } catch (error) {
+            const statusCode = Number((error as { statusCode?: unknown })?.statusCode);
+            const normalizedStatus = Number.isFinite(statusCode) ? statusCode : 500;
             logger.error('Error in message_attachment:', error);
-            return res.status(500).json({ error: String(error) });
+            return res.status(normalizedStatus).json({
+                error: (error as Error)?.message || String(error),
+            });
         }
     }
 );
@@ -607,14 +705,30 @@ export const publicAttachmentHandler = async (req: Request, res: Response) => {
         }) as Record<string, unknown> | undefined;
 
         const filePath = resolveMessageFilePath(messageDoc, attachment);
-        if (!filePath || !existsSync(filePath)) {
-            return res.status(404).json({ error: 'Attachment not found' });
+        if (filePath && existsSync(filePath)) {
+            return res.sendFile(filePath);
         }
 
-        return res.sendFile(filePath);
+        const fromAttachmentSource = attachment ? attachment.source : null;
+        const isTelegram = isTelegramSource(fromAttachmentSource) || isTelegramSource(messageDoc.source_type);
+        const fileId = resolveAttachmentFileId(messageDoc, attachment);
+        if (isTelegram && fileId) {
+            const mimeTypeRaw = attachment?.mimeType ?? attachment?.mime_type;
+            const mimeType = typeof mimeTypeRaw === 'string' ? mimeTypeRaw : null;
+            await streamTelegramAttachmentByFileId({
+                response: res,
+                fileId,
+                mimeType,
+            });
+            return;
+        }
+
+        return res.status(404).json({ error: 'Attachment not found' });
     } catch (error) {
+        const statusCode = Number((error as { statusCode?: unknown })?.statusCode);
+        const normalizedStatus = Number.isFinite(statusCode) ? statusCode : 500;
         logger.error('Error in public_attachment:', error);
-        return res.status(500).json({ error: String(error) });
+        return res.status(normalizedStatus).json({ error: (error as Error)?.message || String(error) });
     }
 };
 

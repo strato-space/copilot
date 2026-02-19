@@ -15,14 +15,18 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
 
     const isHighlighted = highlightedMessageId && row.message_id === highlightedMessageId;
     const isSelected = isCategorizationRowSelected(row);
+    const isImageRow = row.kind === 'image' && typeof row.imageUrl === 'string' && row.imageUrl.trim().length > 0;
+    const isSelectable = !isImageRow;
 
     const handleCheckboxChange = (): void => {
+        if (!isSelectable) return;
         toggleSelectedCategorizationRow(row);
     };
 
     const handleRowClick = (event: React.MouseEvent<HTMLDivElement>): void => {
         const target = event.target as HTMLInputElement;
         if (target?.type === 'checkbox') return;
+        if (!isSelectable) return;
 
         if (event.ctrlKey || event.metaKey) {
             toggleSelectedCategorizationRow(row);
@@ -40,7 +44,7 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
 
     return (
         <div
-            className={`flex w-full transition-colors duration-150 cursor-pointer hover:bg-slate-50 ${isSelected ? 'border-l-2 border-blue-500' : ''} ${rowBgClass}`}
+            className={`flex w-full transition-colors duration-150 ${isSelectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'border-l-2 border-blue-500' : ''} ${rowBgClass}`}
             onClick={handleRowClick}
         >
             <div className="w-12 flex flex-col justify-center items-start p-1">
@@ -58,10 +62,28 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
                     type="checkbox"
                     checked={isSelected}
                     onChange={handleCheckboxChange}
+                    disabled={!isSelectable}
                     className="w-3 h-3 rounded border border-gray-300 text-blue-600 focus:ring-blue-500"
                     onClick={(event) => event.stopPropagation()}
                 />
-                <span className="text-black/90 text-[10px] font-normal leading-3 whitespace-pre-line">{row.text}</span>
+                <div className="min-w-0">
+                    <span className="text-black/90 text-[10px] font-normal leading-3 whitespace-pre-line">{row.text}</span>
+                    {isImageRow ? (
+                        <a
+                            href={row.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 block"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <img
+                                src={row.imageUrl}
+                                alt={row.imageName || 'attachment'}
+                                className="max-h-36 max-w-[220px] rounded border border-slate-200 object-contain bg-white"
+                            />
+                        </a>
+                    ) : null}
+                </div>
             </div>
         </div>
     );

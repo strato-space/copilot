@@ -24,6 +24,48 @@ const toTimestampMs = (value: unknown): number | null => {
     return null;
 };
 
+const hasVisibleTranscriptionContent = (message: Record<string, unknown>): boolean => {
+    const transcription = message.transcription;
+    if (transcription && typeof transcription === 'object') {
+        const segmentsRaw = (transcription as { segments?: unknown[] }).segments;
+        const segments: unknown[] = Array.isArray(segmentsRaw)
+            ? segmentsRaw
+            : [];
+        if (segments.some((segment) => {
+            if (!segment || typeof segment !== 'object') return false;
+            const item = segment as Record<string, unknown>;
+            if (Boolean(item.is_deleted)) return false;
+            const text = typeof item.text === 'string' ? item.text.trim() : '';
+            return text.length > 0;
+        })) {
+            return true;
+        }
+    }
+
+    const legacyChunks = Array.isArray(message.transcription_chunks)
+        ? message.transcription_chunks
+        : [];
+    if (legacyChunks.some((chunk) => {
+        if (!chunk || typeof chunk !== 'object') return false;
+        const item = chunk as Record<string, unknown>;
+        if (Boolean(item.is_deleted)) return false;
+        const text = typeof item.text === 'string' ? item.text.trim() : '';
+        return text.length > 0;
+    })) {
+        return true;
+    }
+
+    const fallbackText = typeof message.transcription_text === 'string'
+        ? message.transcription_text.trim()
+        : '';
+    if (fallbackText.length > 0) return true;
+
+    const plainText = typeof message.text === 'string' ? message.text.trim() : '';
+    if (plainText.length > 0) return true;
+
+    return false;
+};
+
 export default function Transcription() {
     const rows = useVoiceBotStore((state) => state.voiceBotMessages);
     const voiceBotSession = useVoiceBotStore((state) => state.voiceBotSession);
@@ -38,7 +80,7 @@ export default function Transcription() {
     }, [voiceBotSession?.is_active, initTranscriptionSort]);
 
     const sortedRows = useMemo(() => {
-        const list = [...rows];
+        const list = [...rows].filter((row) => hasVisibleTranscriptionContent(row as unknown as Record<string, unknown>));
         const toNumericMessageId = (value: unknown): number => {
             const parsed = Number(value);
             return Number.isFinite(parsed) ? parsed : 0;

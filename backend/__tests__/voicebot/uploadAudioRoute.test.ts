@@ -13,6 +13,7 @@ const getRawDbMock = jest.fn();
 const getUserPermissionsMock = jest.fn();
 const requirePermissionMock = jest.fn(() => (_req: express.Request, _res: express.Response, next: express.NextFunction) => next());
 const getAudioDurationFromFileMock = jest.fn();
+const getFileSha256FromPathMock = jest.fn(async () => 'sha256-upload-test');
 
 jest.unstable_mockModule('../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -28,10 +29,24 @@ jest.unstable_mockModule('../../src/permissions/permission-manager.js', () => ({
 
 jest.unstable_mockModule('../../src/utils/audioUtils.js', () => ({
   getAudioDurationFromFile: getAudioDurationFromFileMock,
+  getFileSha256FromPath: getFileSha256FromPathMock,
 }));
 
 const { default: uploadsRouter } = await import('../../src/api/routes/voicebot/uploads.js');
 const uploadedFilePaths = new Set<string>();
+
+const createMessagesCollection = (insertedMessages: Array<Record<string, unknown>>, insertedId?: ObjectId) => ({
+  insertOne: jest.fn(async (doc: Record<string, unknown>) => {
+    insertedMessages.push(doc);
+    return { insertedId: insertedId ?? new ObjectId() };
+  }),
+  find: jest.fn(() => ({
+    project: jest.fn(() => ({
+      toArray: jest.fn(async () => []),
+    })),
+  })),
+  updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+});
 
 describe('POST /voicebot/upload_audio', () => {
   beforeEach(() => {
@@ -40,9 +55,11 @@ describe('POST /voicebot/upload_audio', () => {
     getUserPermissionsMock.mockReset();
     requirePermissionMock.mockClear();
     getAudioDurationFromFileMock.mockReset();
+    getFileSha256FromPathMock.mockReset();
 
     getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
     getAudioDurationFromFileMock.mockResolvedValue(123.456);
+    getFileSha256FromPathMock.mockResolvedValue('sha256-upload-test');
   });
 
   afterEach(() => {
@@ -75,12 +92,7 @@ describe('POST /voicebot/upload_audio', () => {
           };
         }
         if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
-          return {
-            insertOne: jest.fn(async (doc: Record<string, unknown>) => {
-              insertedMessages.push(doc);
-              return { insertedId: new ObjectId() };
-            }),
-          };
+          return createMessagesCollection(insertedMessages);
         }
         return {
           findOne: jest.fn(async () => null),
@@ -154,12 +166,7 @@ describe('POST /voicebot/upload_audio', () => {
           };
         }
         if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
-          return {
-            insertOne: jest.fn(async (doc: Record<string, unknown>) => {
-              insertedMessages.push(doc);
-              return { insertedId: new ObjectId('507f1f77bcf86cd79943909a') };
-            }),
-          };
+          return createMessagesCollection(insertedMessages, new ObjectId('507f1f77bcf86cd79943909a'));
         }
         return {
           findOne: jest.fn(async () => null),
@@ -250,12 +257,7 @@ describe('POST /voicebot/upload_audio', () => {
           };
         }
         if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
-          return {
-            insertOne: jest.fn(async (doc: Record<string, unknown>) => {
-              insertedMessages.push(doc);
-              return { insertedId: new ObjectId('507f1f77bcf86cd799439099') };
-            }),
-          };
+          return createMessagesCollection(insertedMessages, new ObjectId('507f1f77bcf86cd799439099'));
         }
         return {
           findOne: jest.fn(async () => null),
@@ -352,12 +354,7 @@ describe('POST /voicebot/upload_audio', () => {
           };
         }
         if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
-          return {
-            insertOne: jest.fn(async (doc: Record<string, unknown>) => {
-              insertedMessages.push(doc);
-              return { insertedId: new ObjectId('507f1f77bcf86cd799439098') };
-            }),
-          };
+          return createMessagesCollection(insertedMessages, new ObjectId('507f1f77bcf86cd799439098'));
         }
         return {
           findOne: jest.fn(async () => null),

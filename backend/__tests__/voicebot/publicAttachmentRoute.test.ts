@@ -50,6 +50,7 @@ jest.unstable_mockModule('../../src/api/middleware/roleGuard.js', () => ({
 
 jest.unstable_mockModule('../../src/utils/audioUtils.js', () => ({
   getAudioDurationFromFile: jest.fn(async () => 0),
+  getFileSha256FromPath: jest.fn(async () => 'sha256-public-attachment'),
 }));
 
 const { VOICEBOT_COLLECTIONS } = await import('../../src/constants.js');

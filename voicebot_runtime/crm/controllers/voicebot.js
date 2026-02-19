@@ -208,8 +208,13 @@ const buildWebSource = (req) => {
     };
 };
 
-const runtimeSessionQuery = (query = {}) => mergeWithRuntimeFilter(query, { field: "runtime_tag" });
-const runtimeMessageQuery = (query = {}) => mergeWithRuntimeFilter(query, { field: "runtime_tag" });
+const runtimeScopeOptions = {
+    field: "runtime_tag",
+    familyMatch: constants.IS_PROD_RUNTIME === true,
+    includeLegacyInProd: constants.IS_PROD_RUNTIME === true,
+};
+const runtimeSessionQuery = (query = {}) => mergeWithRuntimeFilter(query, runtimeScopeOptions);
+const runtimeMessageQuery = (query = {}) => mergeWithRuntimeFilter(query, runtimeScopeOptions);
 
 const findSessionByIdWithinRuntime = async ({ db, sessionObjectId, includeDeleted = false }) => {
     const baseQuery = { _id: sessionObjectId };
@@ -228,7 +233,7 @@ const findSessionByIdWithinRuntime = async ({ db, sessionObjectId, includeDelete
         baseQuery,
         { projection: { _id: 1, runtime_tag: 1 } }
     );
-    if (anyRuntimeSession && !recordMatchesRuntime(anyRuntimeSession, { field: "runtime_tag" })) {
+    if (anyRuntimeSession && !recordMatchesRuntime(anyRuntimeSession, runtimeScopeOptions)) {
         return { session: null, runtime_mismatch: true };
     }
 

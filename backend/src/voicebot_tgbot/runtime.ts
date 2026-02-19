@@ -351,8 +351,8 @@ const main = async () => {
     { command: 'start', description: 'Начать работу.' },
     { command: 'session', description: 'Показать/активировать текущую сессию' },
     { command: 'done', description: 'Завершить активную сессию транскрипции' },
-    { command: 'login', description: 'Получить ссылку входа в web-интерфейс' },
-    { command: 'help', description: 'Показать список команд' },
+    // { command: 'login', description: 'Получить ссылку входа в web-интерфейс' },
+    // { command: 'help', description: 'Показать список команд' },
   ]);
 
   void launchWithRetry(bot);

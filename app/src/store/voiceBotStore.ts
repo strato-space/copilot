@@ -12,6 +12,7 @@ import type {
     VoiceBotMessage,
     VoiceBotSession,
     VoiceMessageGroup,
+    VoiceMessageRow,
     TaskTypeNode,
     VoiceBotProject,
     VoicebotPerson,
@@ -92,6 +93,17 @@ interface VoiceBotState {
         sessionId: string,
         opt?: { onUploadProgress?: (evt: AxiosProgressEvent) => void }
     ) => Promise<unknown>;
+    addSessionTextChunk: (sessionId: string, text: string) => Promise<void>;
+    addSessionImageChunk: (
+        sessionId: string,
+        payload: {
+            dataUrl: string;
+            mimeType: string;
+            name?: string;
+            caption?: string;
+            size?: number | null;
+        }
+    ) => Promise<void>;
     updateSessionAllowedUsers: (sessionId: string, allowedUserIds: string[]) => Promise<boolean>;
     fetchPerformersList: () => Promise<Array<Record<string, unknown>>>;
     fetchPerformersForTasksList: () => Promise<Array<Record<string, unknown>>>;
@@ -231,11 +243,8 @@ const voicebotRequest = async <T = unknown>(url: string, data: unknown = {}, sil
 
 const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]): VoiceMessageGroup[] => {
     if (!Array.isArray(voiceBotMessages)) return [];
-    return voiceBotMessages.map((msg) => ({
-        message_id: msg.message_id,
-        message_timestamp: msg.message_timestamp,
-        original_message: msg,
-        rows: (msg.categorization || []).map((cat) => {
+    return voiceBotMessages.map((msg) => {
+        const categorizationRows: VoiceMessageRow[] = (msg.categorization || []).map((cat) => {
             let avatar = 'U';
             const speaker = typeof cat.speaker === 'string' ? cat.speaker : '';
             if (speaker && speaker !== 'Unknown' && speaker.length > 0) {
@@ -246,36 +255,112 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                 timeEnd: cat.end,
                 avatar,
                 name: cat.speaker,
-                text: cat.text,
+                text: typeof cat.text === 'string' ? cat.text.trim() : '',
+                kind: 'categorization' as const,
                 goal: cat.related_goal || '',
                 patt: cat.new_pattern_detected || '',
                 flag: cat.quality_flag || '',
                 keywords: cat.topic_keywords || '',
                 message_id: msg.message_id,
             };
-        }),
-        summary: {
-            text: (msg.processors_data?.summarization?.data?.[0]?.summary as string) || '',
-        },
-        widgets: (() => {
-            const custom_widgets = _.omit(msg.processors_data, ['transcription', 'summarization', 'categorization', 'questioning']);
-            const widgets: Record<string, unknown> = {};
-            for (const [key, value] of Object.entries(custom_widgets || {})) {
-                const typedValue = value as { data?: Array<Record<string, unknown>> };
-                if (typedValue?.data && Array.isArray(typedValue.data)) {
-                    widgets[key] = typedValue.data.map((d) => ({ ...d, message_id: msg.message_id }));
+        }).filter((row) => typeof row.text === 'string' && row.text.trim().length > 0);
+
+        let rows: VoiceMessageRow[] = categorizationRows;
+        if (rows.length === 0) {
+            const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
+            const imageRows = attachments
+                .map((attachment) => {
+                    const item = attachment && typeof attachment === 'object' ? (attachment as Record<string, unknown>) : null;
+                    if (!item) return null;
+                    const mime =
+                        typeof item.mime_type === 'string'
+                            ? item.mime_type
+                            : typeof item.mimeType === 'string'
+                                ? item.mimeType
+                                : '';
+                    const kind = typeof item.kind === 'string' ? item.kind : '';
+                    const url =
+                        normalizeAttachmentUri(item.direct_uri) ||
+                        normalizeAttachmentUri(item.uri) ||
+                        normalizeAttachmentUri(item.url);
+                    if (!url) return null;
+                    if (!(mime.startsWith('image/') || kind === 'image')) return null;
+                    const imageName =
+                        typeof item.name === 'string'
+                            ? item.name
+                            : typeof item.file_unique_id === 'string'
+                                ? item.file_unique_id
+                                : 'image';
+                    const fallbackText =
+                        typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
+                            ? msg.transcription_text.trim()
+                            : typeof msg.text === 'string' && msg.text.trim()
+                                ? msg.text.trim()
+                                : '[Image]';
+
+                    return {
+                        avatar: 'I',
+                        name: 'Image',
+                        text: fallbackText,
+                        kind: 'image' as const,
+                        imageUrl: url,
+                        imageName,
+                        message_id: msg.message_id,
+                    };
+                })
+                .filter((row): row is Exclude<typeof row, null> => row !== null);
+
+            if (imageRows.length > 0) {
+                rows = imageRows;
+            } else {
+                const fallbackText =
+                    typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
+                        ? msg.transcription_text.trim()
+                        : typeof msg.text === 'string' && msg.text.trim()
+                            ? msg.text.trim()
+                            : '';
+                if (fallbackText) {
+                    rows = [
+                        {
+                            avatar: 'T',
+                            name: 'Text',
+                            text: fallbackText,
+                            kind: 'text' as const,
+                            message_id: msg.message_id,
+                        },
+                    ];
                 }
             }
-            return {
-                questions:
-                    (msg.processors_data?.questioning?.data?.map((d) => ({
-                        ...(d as Record<string, unknown>),
-                        message_id: msg.message_id,
-                    })) || []) as unknown,
-                ...widgets,
-            };
-        })(),
-    }));
+        }
+
+        return {
+            message_id: msg.message_id,
+            message_timestamp: msg.message_timestamp,
+            original_message: msg,
+            rows,
+            summary: {
+                text: (msg.processors_data?.summarization?.data?.[0]?.summary as string) || '',
+            },
+            widgets: (() => {
+                const custom_widgets = _.omit(msg.processors_data, ['transcription', 'summarization', 'categorization', 'questioning']);
+                const widgets: Record<string, unknown> = {};
+                for (const [key, value] of Object.entries(custom_widgets || {})) {
+                    const typedValue = value as { data?: Array<Record<string, unknown>> };
+                    if (typedValue?.data && Array.isArray(typedValue.data)) {
+                        widgets[key] = typedValue.data.map((d) => ({ ...d, message_id: msg.message_id }));
+                    }
+                }
+                return {
+                    questions:
+                        (msg.processors_data?.questioning?.data?.map((d) => ({
+                            ...(d as Record<string, unknown>),
+                            message_id: msg.message_id,
+                        })) || []) as unknown,
+                    ...widgets,
+                };
+            })(),
+        };
+    });
 };
 
 const normalizeAttachmentUri = (value: unknown): string | null => {
@@ -972,6 +1057,63 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             return response.data;
         } catch (e) {
             console.error('Ошибка при загрузке аудио файла:', e);
+            throw e;
+        }
+    },
+
+    addSessionTextChunk: async (sessionId, text) => {
+        const normalizedSessionId = String(sessionId || '').trim();
+        const normalizedText = String(text || '').trim();
+        if (!normalizedSessionId || !normalizedText) return;
+
+        try {
+            await voicebotRequest('voicebot/add_text', {
+                session_id: normalizedSessionId,
+                text: normalizedText,
+            });
+            await get().fetchVoiceBotSession(normalizedSessionId);
+        } catch (e) {
+            console.error('Ошибка при добавлении текстового чанка:', e);
+            throw e;
+        }
+    },
+
+    addSessionImageChunk: async (sessionId, payload) => {
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) return;
+        const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
+        if (!dataUrl) return;
+
+        const mimeType = typeof payload?.mimeType === 'string' && payload.mimeType.trim()
+            ? payload.mimeType.trim()
+            : 'image/png';
+        const name = typeof payload?.name === 'string' && payload.name.trim()
+            ? payload.name.trim()
+            : `pasted-${Date.now()}.png`;
+        const caption = typeof payload?.caption === 'string' ? payload.caption.trim() : '';
+        const fallbackText = caption || '[Image]';
+
+        try {
+            await voicebotRequest('voicebot/add_text', {
+                session_id: normalizedSessionId,
+                text: fallbackText,
+                kind: 'image',
+                attachments: [
+                    {
+                        kind: 'image',
+                        source: 'web',
+                        name,
+                        mime_type: mimeType,
+                        uri: dataUrl,
+                        url: dataUrl,
+                        size: payload?.size ?? null,
+                        caption: caption || null,
+                    },
+                ],
+            });
+            await get().fetchVoiceBotSession(normalizedSessionId);
+        } catch (e) {
+            console.error('Ошибка при добавлении изображения в сессию:', e);
             throw e;
         }
     },

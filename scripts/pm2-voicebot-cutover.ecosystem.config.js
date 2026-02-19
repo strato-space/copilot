@@ -4,7 +4,6 @@ const path = require('path');
 const rootDir = path.resolve(__dirname, '..');
 const backendDir = path.join(rootDir, 'backend');
 const backendEnvFilePath = path.join(backendDir, '.env.production');
-const cutoverEnvFilePath = path.join(rootDir, 'voicebot_runtime', '.env.prod-cutover');
 
 const parseEnvFile = (filePath) => {
   if (!fs.existsSync(filePath)) return {};
@@ -50,10 +49,8 @@ const deriveMongoConnectionString = (env) => {
 };
 
 const backendEnv = parseEnvFile(backendEnvFilePath);
-const cutoverEnv = parseEnvFile(cutoverEnvFilePath);
 const mergedEnv = {
   ...backendEnv,
-  ...cutoverEnv,
 };
 
 if (!mergedEnv.MONGODB_CONNECTION_STRING) {
@@ -68,7 +65,7 @@ module.exports = {
       cwd: backendDir,
       script: 'npm',
       args: 'run start:voicebot-tgbot',
-      env_file: cutoverEnvFilePath,
+      env_file: backendEnvFilePath,
       env: {
         ...mergedEnv,
         NODE_ENV: mergedEnv.NODE_ENV || 'production',
@@ -82,7 +79,7 @@ module.exports = {
       cwd: backendDir,
       script: 'npm',
       args: 'run start:voicebot-workers',
-      env_file: cutoverEnvFilePath,
+      env_file: backendEnvFilePath,
       env: {
         ...mergedEnv,
         NODE_ENV: mergedEnv.NODE_ENV || 'production',

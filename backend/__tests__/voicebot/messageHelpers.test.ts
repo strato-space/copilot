@@ -52,7 +52,7 @@ describe('buildCategorizationCleanupPayload', () => {
     ]);
   });
 
-  it('returns empty payload when segment has no timing bounds', () => {
+  it('removes empty categorization rows even when segment has no timing bounds', () => {
     const payload = buildCategorizationCleanupPayload({
       message: {
         _id: new ObjectId(),
@@ -65,10 +65,10 @@ describe('buildCategorizationCleanupPayload', () => {
       },
     });
 
-    expect(payload).toEqual({});
+    expect(payload).toEqual({ categorization: [] });
   });
 
-  it('returns empty payload when no rows overlap with removed segment', () => {
+  it('drops empty categorization rows even without overlap', () => {
     const payload = buildCategorizationCleanupPayload({
       message: {
         _id: new ObjectId(),
@@ -81,6 +81,73 @@ describe('buildCategorizationCleanupPayload', () => {
       },
     });
 
-    expect(payload).toEqual({});
+    expect(payload).toEqual({ categorization: [] });
+  });
+
+  it('removes rows linked by source_segment_id and mm:ss time overlap', () => {
+    const payload = buildCategorizationCleanupPayload({
+      message: {
+        _id: new ObjectId(),
+        categorization: [
+          { id: 'row-linked', source_segment_id: 'ch_seg_1', text: 'linked row' },
+          { id: 'row-time', start: '2:10', end: '2:20', text: 'timed overlap' },
+          { id: 'row-keep', start: '2:30', end: '2:40', text: 'keep me' },
+        ],
+      } as any,
+      segment: {
+        id: 'ch_seg_1',
+        start: '2:12',
+        end: '2:18',
+        text: 'linked row',
+      },
+    });
+
+    expect(payload.categorization).toEqual([
+      { id: 'row-keep', start: '2:30', end: '2:40', text: 'keep me' },
+    ]);
+  });
+
+  it('removes categorization rows containing deleted segment text', () => {
+    const payload = buildCategorizationCleanupPayload({
+      message: {
+        _id: new ObjectId(),
+        categorization: [
+          { id: 'row-contains', text: 'クレームチーズの 上に Кремиум Кремиум' },
+          { id: 'row-keep', text: 'クレームチーズをのせます。' },
+        ],
+      } as any,
+      segment: {
+        id: 'ch_1',
+        start: null,
+        end: null,
+        text: 'Кремиум Кремиум',
+      },
+    });
+
+    expect(payload.categorization).toEqual([
+      { id: 'row-keep', text: 'クレームチーズをのせます。' },
+    ]);
+  });
+
+  it('removes categorization rows when deleted segment text differs only by spacing/punctuation', () => {
+    const payload = buildCategorizationCleanupPayload({
+      message: {
+        _id: new ObjectId(),
+        categorization: [
+          { id: 'row-contains', text: 'クレームチーズの 上に Кремиум Кремиум' },
+          { id: 'row-keep', text: 'Другой текст для проверки' },
+        ],
+      } as any,
+      segment: {
+        id: 'ch_2',
+        start: 0,
+        end: 0,
+        text: 'クレームチーズの上に…Кремиум Кремиум',
+      },
+    });
+
+    expect(payload.categorization).toEqual([
+      { id: 'row-keep', text: 'Другой текст для проверки' },
+    ]);
   });
 });

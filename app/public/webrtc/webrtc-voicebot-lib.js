@@ -1224,7 +1224,20 @@
         const SESSION_PROJECT_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_PROJECT_ID';
         const SESSION_PROJECT_NAME_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_PROJECT_NAME';
         const SESSION_STATE_STORAGE_KEY = 'VOICEBOT_STATE';
+        const SESSION_PAUSED_HINT_KEY = 'VOICEBOT_PAUSED_HINT';
         let lastSessionMetaStorageSig = '';
+        function persistPausedHint(value) {
+            try {
+                if (value) {
+                    localStorage.setItem(SESSION_PAUSED_HINT_KEY, '1');
+                } else {
+                    localStorage.removeItem(SESSION_PAUSED_HINT_KEY);
+                }
+            } catch {}
+        }
+        function readPausedHint() {
+            try { return String(localStorage.getItem(SESSION_PAUSED_HINT_KEY) || '') === '1'; } catch { return false; }
+        }
         function persistVoicebotState(state) {
             try {
                 if (!state) {
@@ -1243,6 +1256,7 @@
             try { localStorage.removeItem(SESSION_PROJECT_ID_STORAGE_KEY); } catch {}
             try { localStorage.removeItem(SESSION_PROJECT_NAME_STORAGE_KEY); } catch {}
             try { localStorage.removeItem(SESSION_STATE_STORAGE_KEY); } catch {}
+            try { localStorage.removeItem(SESSION_PAUSED_HINT_KEY); } catch {}
         }
         function upsertProjectOption(sel, projectId, projectName = '') {
             try {
@@ -1435,13 +1449,17 @@
             try { logUi('session.clear', { reason }); } catch {}
         }
         async function reconcileStoredSessionState(reason = 'boot') {
-            const storedState = readVoicebotState();
+            let storedState = readVoicebotState();
             const storedId = (() => {
                 try { return String(localStorage.getItem(SESSION_ID_STORAGE_KEY) || '').trim(); } catch { return ''; }
             })();
             if (!storedId) {
                 clearSessionInfoStorage();
                 return { action: 'idle', reason: 'no-session' };
+            }
+            // Keep paused restore deterministic even if a stale "recording" write happened before refresh.
+            if (storedState === 'recording' && readPausedHint()) {
+                storedState = 'paused';
             }
             if (!['recording', 'paused'].includes(storedState)) {
                 clearActiveSession('stored-state-not-recording');
@@ -4081,6 +4099,7 @@
 
             isRecording = true;
             isPaused = false;
+            try { persistPausedHint(false); } catch {}
             try {
                 const now = Date.now();
                 // Start keeps its original startTs; Resume continues from the paused position.
@@ -4601,6 +4620,7 @@
             } catch {}
             isRecording = false;
             isPaused = true;
+            try { persistPausedHint(true); } catch {}
             try { persistVoicebotState('paused'); } catch {}
             if (fabStopTimer) { clearTimeout(fabStopTimer); fabStopTimer = null; }
             setFabState('paused');
@@ -4688,6 +4708,7 @@
             const reason = String(opts?.reason || 'stop');
 	            isRecording = false;
                 isPaused = false;
+                try { persistPausedHint(false); } catch {}
                 if (fabStopTimer) { clearTimeout(fabStopTimer); fabStopTimer = null; }
                 setFabState('idle');
                 try { persistVoicebotState('idle'); } catch {}
@@ -6826,6 +6847,7 @@
                     if (IS_CHROME) {
                         isRecording = false;
                         isPaused = true;
+                        try { persistPausedHint(true); } catch {}
                         setFabState('paused');
                         try { persistVoicebotState('paused'); } catch {}
                         await restoreAudioMonitor('recording');
@@ -6842,12 +6864,14 @@
                         console.warn('restore recording failed, staying paused', e);
                         isRecording = false;
                         isPaused = true;
+                        try { persistPausedHint(true); } catch {}
                         setFabState('paused');
                         await restoreAudioMonitor('recording-fallback');
                     }
                 } else if (action === 'paused') {
                     isRecording = false;
                     isPaused = true;
+                    try { persistPausedHint(true); } catch {}
                     setFabState('paused');
                     await restoreAudioMonitor('paused');
                 }
@@ -6912,7 +6936,8 @@
                 try { detectPause(true); } catch {}
             }
             if (hasOpenSession || isRecording || isPaused || isFinalUploading) {
-                try { persistVoicebotState(isPaused ? 'paused' : 'recording'); } catch {}
+                const persistedPaused = isPaused || readPausedHint();
+                try { persistVoicebotState(persistedPaused ? 'paused' : 'recording'); } catch {}
             } else {
                 try { persistVoicebotState(''); } catch {}
             }

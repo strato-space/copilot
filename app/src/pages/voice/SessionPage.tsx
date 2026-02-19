@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Tabs } from 'antd';
+import { Tabs, message } from 'antd';
 import { useParams } from 'react-router-dom';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
@@ -12,9 +12,55 @@ import CustomPromptResult from '../../components/voice/CustomPromptResult';
 import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
 
+const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('file_read_failed'));
+        reader.readAsDataURL(file);
+    });
+
+const loadImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('image_decode_failed'));
+        image.src = src;
+    });
+
+const toOptimizedClipboardImage = async (file: File): Promise<string> => {
+    const dataUrl = await readFileAsDataUrl(file);
+    if (typeof document === 'undefined') return dataUrl;
+    const maxDimension = 1600;
+    const sourceImage = await loadImage(dataUrl);
+    const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
+    const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
+    if (!sourceWidth || !sourceHeight) return dataUrl;
+
+    const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+    if (scale >= 1 && file.size <= 1_500_000) return dataUrl;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    const context = canvas.getContext('2d');
+    if (!context) return dataUrl;
+    context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+
+    const outputMime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    const result = canvas.toDataURL(outputMime, outputMime === 'image/jpeg' ? 0.85 : undefined);
+    return result || dataUrl;
+};
+
+const isEditableTarget = (target: EventTarget | null): boolean => {
+    if (!(target instanceof Element)) return false;
+    if (target.closest('input, textarea, [contenteditable=\"true\"], [contenteditable=\"\"]')) return true;
+    return false;
+};
+
 export default function SessionPage() {
     const { sessionId } = useParams();
-    const { fetchVoiceBotSession, voiceBotSession, sessionAttachments } = useVoiceBotStore();
+    const { fetchVoiceBotSession, voiceBotSession, sessionAttachments, addSessionTextChunk, addSessionImageChunk } = useVoiceBotStore();
     const [customPromptResult, setCustomPromptResult] = useState<unknown>(null);
     const [activeTab, setActiveTab] = useState('2');
     const [isLoading, setIsLoading] = useState(true);
@@ -47,6 +93,62 @@ export default function SessionPage() {
             disposed = true;
         };
     }, [sessionId, fetchVoiceBotSession]);
+
+    useEffect(() => {
+        if (!sessionId) return undefined;
+
+        const handlePaste = (event: ClipboardEvent): void => {
+            if (isEditableTarget(event.target)) return;
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) return;
+
+            const imageItems = Array.from(clipboardData.items || []).filter(
+                (item) => item.kind === 'file' && item.type.startsWith('image/')
+            );
+            const pastedText = clipboardData.getData('text/plain')?.trim() || '';
+
+            if (imageItems.length === 0 && !pastedText) return;
+            event.preventDefault();
+
+            void (async () => {
+                try {
+                    if (imageItems.length > 0) {
+                        let insertedCount = 0;
+                        for (const [index, item] of imageItems.entries()) {
+                            const file = item.getAsFile();
+                            if (!file) continue;
+                            const dataUrl = await toOptimizedClipboardImage(file);
+                            await addSessionImageChunk(sessionId, {
+                                dataUrl,
+                                mimeType: file.type || 'image/png',
+                                name: file.name || `clipboard-${Date.now()}-${index + 1}.png`,
+                                caption: index === 0 ? pastedText : '',
+                                size: file.size,
+                            });
+                            insertedCount += 1;
+                        }
+                        if (insertedCount > 0) {
+                            message.success('Изображение добавлено в сессию');
+                            return;
+                        }
+                    }
+
+                    if (pastedText) {
+                        await addSessionTextChunk(sessionId, pastedText);
+                        message.success('Текст добавлен в сессию');
+                    }
+                } catch (error) {
+                    console.error('Ошибка вставки из буфера обмена:', error);
+                    message.error('Не удалось добавить содержимое из буфера обмена');
+                }
+            })();
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => {
+            window.removeEventListener('paste', handlePaste);
+        };
+    }, [sessionId, addSessionTextChunk, addSessionImageChunk]);
 
     if (isLoading) {
         return (

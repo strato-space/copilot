@@ -29,11 +29,12 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Full-track recording segments are represented as `full_track` in chunk metadata and UI, with duration and timestamp information persisted in upload metadata.
 - Voice workers schedule periodic `PROCESSING` scans in TS runtime; pending-session filtering uses `is_waiting: { $ne: true }` to include legacy rows without explicit flag.
 - TS transcribe handler deduplicates repeated uploads by file hash (`file_hash` / `file_unique_id` / `hash_sha256`) and reuses existing session transcription before new OpenAI requests.
+- Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
 - Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).
 - Transcription/Categorization tables support client-side chronological direction switching (up/down) with preference persisted in local storage.
 - Voice task creation in Copilot runtime no longer requires `task_type_id`; missing type is no longer a hard blocker in ticket/task generation.
-- `copilot-voicebot-tgbot-prod` runs TypeScript runtime from `backend/dist/voicebot_tgbot/runtime.js` with merged env sources: `backend/.env.production` + `voicebot_runtime/.env.prod-cutover` (TG/runtime overrides).
-- `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST`.
+- `copilot-voicebot-tgbot-prod` runs TypeScript runtime from `backend/dist/voicebot_tgbot/runtime.js` with `backend/.env.production` as the single env source.
+- `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
 
 
@@ -56,7 +57,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
   - `VOICEBOT_TASK_CREATION_MODEL` (default `gpt-4.1`)
   - Transcription errors persist diagnostics (`openai_key_mask`, `openai_key_source`, `openai_api_key_env_file`, `server_name`) for quota/file-path incident analysis.
 - Storage and services:
-  - `OPENAI_*` keys are loaded per service source: backend API uses `backend/.env.production`; TG runtime uses merged env (`backend/.env.production` + `voicebot_runtime/.env.prod-cutover`).
+  - `OPENAI_*` keys are loaded from `backend/.env.production` for backend API, TS workers, and TS tgbot runtime.
   - `MONGO_*`, `REDIS_*`, `MAX_FILE_SIZE`, `UPLOADS_DIR` remain service-specific.
 
 ### Voice agents integration (frontend -> agents)

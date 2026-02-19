@@ -70,18 +70,77 @@ const toSecondsNumber = (value: unknown): number | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
-  const hhmmssMatch = trimmed.match(/^(\d+):(\d{2}):(\d+(?:\.\d+)?)/);
-  if (hhmmssMatch) {
-    const hours = Number(hhmmssMatch[1]);
-    const minutes = Number(hhmmssMatch[2]);
-    const seconds = Number(hhmmssMatch[3]);
-    if (Number.isFinite(hours) && Number.isFinite(minutes) && Number.isFinite(seconds)) {
+  const colonParts = trimmed.split(':');
+  if (colonParts.length === 2 || colonParts.length === 3) {
+    const numericParts = colonParts.map((part) => Number(part.trim()));
+    if (numericParts.every((part) => Number.isFinite(part) && part >= 0)) {
+      if (numericParts.length === 2) {
+        const minutes = numericParts[0] ?? 0;
+        const seconds = numericParts[1] ?? 0;
+        return minutes * 60 + seconds;
+      }
+      const hours = numericParts[0] ?? 0;
+      const minutes = numericParts[1] ?? 0;
+      const seconds = numericParts[2] ?? 0;
       return hours * 3600 + minutes * 60 + seconds;
     }
   }
 
   const numeric = Number(trimmed);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const normalizeComparableText = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+};
+
+const hasStrongTextMatch = (left: string, right: string): boolean => {
+  if (!left || !right) return false;
+  if (left === right) return true;
+
+  const minComparableLength = 10;
+  const leftLongEnough = left.length >= minComparableLength;
+  const rightLongEnough = right.length >= minComparableLength;
+
+  if (rightLongEnough && left.includes(right)) return true;
+  if (leftLongEnough && right.includes(left)) return true;
+
+  // Fallback for OCR/tokenizer artifacts: ignore punctuation/spacing and compare canonical text.
+  // This catches rows like "クレームチーズの 上に Кремиум Кремиум" vs
+  // "クレームチーズの上に... Кремиум Кремиум".
+  const looseLeft = left
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+  const looseRight = right
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+  const minLooseLength = 8;
+  const looseLeftLongEnough = looseLeft.length >= minLooseLength;
+  const looseRightLongEnough = looseRight.length >= minLooseLength;
+  if (looseRightLongEnough && looseLeft.includes(looseRight)) return true;
+  if (looseLeftLongEnough && looseRight.includes(looseLeft)) return true;
+  return false;
+};
+
+const getSegmentLinkId = (row: Record<string, unknown>): string => {
+  const candidates = [
+    row.source_segment_id,
+    row.segment_id,
+    row.transcript_segment_id,
+    row.chunk_id,
+    row.transcription_chunk_id,
+    row.segment_oid,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const trimmed = candidate.trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
 };
 
 const collectCategorizationCleanupCandidates = (basePath: string, candidate: unknown) => {
@@ -118,9 +177,12 @@ export const buildCategorizationCleanupPayload = ({
 }): Record<string, unknown> => {
   const segmentStart = toSecondsNumber(segment?.start);
   const segmentEnd = toSecondsNumber(segment?.end);
-  if (segmentStart == null || segmentEnd == null) {
-    return {};
-  }
+  const segmentId = typeof segment?.id === 'string' ? segment.id.trim() : '';
+  const segmentTextNormalized = normalizeComparableText(segment?.text);
+  const hasTimeRange = segmentStart != null && segmentEnd != null;
+  const hasIdentifier = Boolean(segmentId);
+  const hasText = Boolean(segmentTextNormalized);
+  if (!hasTimeRange && !hasIdentifier && !hasText) return {};
 
   const hasOverlap = (startA: number, endA: number, startB: number, endB: number): boolean => {
     if (!Number.isFinite(startA) || !Number.isFinite(endA) || !Number.isFinite(startB) || !Number.isFinite(endB)) {
@@ -143,24 +205,46 @@ export const buildCategorizationCleanupPayload = ({
     if (!Array.isArray(rows)) continue;
 
     const filteredRows = rows.filter((row) => {
+      if (!row || typeof row !== 'object') return false;
+      const rowRecord = row as Record<string, unknown>;
+      const rowTextNormalized = normalizeComparableText(rowRecord.text);
+      if (!rowTextNormalized) return false;
+
+      if (hasIdentifier) {
+        const rowSegmentId = getSegmentLinkId(rowRecord);
+        if (rowSegmentId && rowSegmentId === segmentId) {
+          return false;
+        }
+      }
+
       const rowStart = toSecondsNumber(
-        (row as Record<string, unknown>)?.timeStart ??
-          (row as Record<string, unknown>)?.start ??
-          (row as Record<string, unknown>)?.start_time ??
-          (row as Record<string, unknown>)?.startTime ??
-          (row as Record<string, unknown>)?.from ??
-          (row as Record<string, unknown>)?.segment_start
+        rowRecord.timeStart ??
+          rowRecord.start ??
+          rowRecord.start_time ??
+          rowRecord.startTime ??
+          rowRecord.from ??
+          rowRecord.segment_start
       );
       const rowEnd = toSecondsNumber(
-        (row as Record<string, unknown>)?.timeEnd ??
-          (row as Record<string, unknown>)?.end ??
-          (row as Record<string, unknown>)?.end_time ??
-          (row as Record<string, unknown>)?.endTime ??
-          (row as Record<string, unknown>)?.to ??
-          (row as Record<string, unknown>)?.segment_end
+        rowRecord.timeEnd ??
+          rowRecord.end ??
+          rowRecord.end_time ??
+          rowRecord.endTime ??
+          rowRecord.to ??
+          rowRecord.segment_end
       );
-      if (rowStart == null || rowEnd == null) return true;
-      return !hasOverlap(segmentStart, segmentEnd, rowStart, rowEnd);
+      if (hasTimeRange && rowStart != null && rowEnd != null) {
+        if (hasOverlap(segmentStart as number, segmentEnd as number, rowStart, rowEnd)) {
+          return false;
+        }
+        return true;
+      }
+
+      if (hasText && hasStrongTextMatch(rowTextNormalized, segmentTextNormalized)) {
+        return false;
+      }
+
+      return true;
     });
 
     if (filteredRows.length !== rows.length) {

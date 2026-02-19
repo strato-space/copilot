@@ -12,6 +12,7 @@ import {
 
 const getDbMock = jest.fn();
 const getAudioDurationFromFileMock = jest.fn();
+const getFileSha256FromPathMock = jest.fn(async () => 'sha256-transcribe-test');
 const createTranscriptionMock = jest.fn();
 const getVoicebotQueuesMock = jest.fn();
 const openAiCtorMock = jest.fn(() => ({
@@ -28,6 +29,7 @@ jest.unstable_mockModule('../../src/services/db.js', () => ({
 
 jest.unstable_mockModule('../../src/utils/audioUtils.js', () => ({
   getAudioDurationFromFile: getAudioDurationFromFileMock,
+  getFileSha256FromPath: getFileSha256FromPathMock,
 }));
 
 jest.unstable_mockModule('../../src/services/voicebotQueues.js', () => ({
@@ -44,10 +46,12 @@ describe('handleTranscribeJob', () => {
   beforeEach(() => {
     getDbMock.mockReset();
     getAudioDurationFromFileMock.mockReset();
+    getFileSha256FromPathMock.mockReset();
     createTranscriptionMock.mockReset();
     getVoicebotQueuesMock.mockReset();
     openAiCtorMock.mockClear();
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcd';
+    getFileSha256FromPathMock.mockResolvedValue('sha256-transcribe-test');
     getVoicebotQueuesMock.mockReturnValue(null);
   });
 

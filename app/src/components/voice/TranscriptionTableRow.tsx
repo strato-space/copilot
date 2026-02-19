@@ -53,6 +53,91 @@ const formatRelativeTime = (secondsValue: unknown): string | null => {
     return `${minutes}:${String(rem).padStart(2, '0')}`;
 };
 
+const parseSecondsValue = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+    if (typeof value !== 'string') return null;
+
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const colonParts = trimmed.split(':');
+    if (colonParts.length === 2 || colonParts.length === 3) {
+        const numericParts = colonParts.map((part) => Number(part.trim()));
+        if (numericParts.every((part) => Number.isFinite(part) && part >= 0)) {
+            if (colonParts.length === 2) {
+                const minutes = numericParts[0] ?? 0;
+                const seconds = numericParts[1] ?? 0;
+                return minutes * 60 + seconds;
+            }
+            const hours = numericParts[0] ?? 0;
+            const minutes = numericParts[1] ?? 0;
+            const seconds = numericParts[2] ?? 0;
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+    }
+
+    const numeric = Number(trimmed);
+    return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+};
+
+const extractSourceFileName = (row: VoiceBotMessage): string => {
+    const rowRecord = row as unknown as Record<string, unknown>;
+
+    const candidates: Array<unknown> = [
+        rowRecord.file_name,
+        row?.file_metadata?.original_filename,
+    ];
+
+    const attachments = Array.isArray(rowRecord.attachments) ? rowRecord.attachments : [];
+    if (attachments.length > 0) {
+        const attachment = attachments[0];
+        if (attachment && typeof attachment === 'object') {
+            const item = attachment as Record<string, unknown>;
+            candidates.push(item.name, item.filename, item.file_name);
+        }
+    }
+
+    for (const candidate of candidates) {
+        if (typeof candidate !== 'string') continue;
+        const trimmed = candidate.trim();
+        if (trimmed) return trimmed;
+    }
+
+    return '';
+};
+
+const getSegmentEndSeconds = (segment: TranscriptionSegment, row: VoiceBotMessage, startSeconds: number): number | null => {
+    const explicitEnd = parseSecondsValue(segment?.end);
+    if (explicitEnd != null && explicitEnd > startSeconds) return explicitEnd;
+
+    const segmentId = typeof segment?.id === 'string' ? segment.id.trim() : '';
+    const chunks: Array<Record<string, unknown>> = Array.isArray((row as unknown as Record<string, unknown>).transcription_chunks)
+        ? ((row as unknown as Record<string, unknown>).transcription_chunks as Array<Record<string, unknown>>)
+        : [];
+
+    if (segmentId && chunks.length > 0) {
+        const matchingChunk: Record<string, unknown> | undefined = chunks.find((chunk) => {
+            if (!chunk || typeof chunk !== 'object') return false;
+            return typeof chunk.id === 'string' && chunk.id.trim() === segmentId;
+        });
+        if (matchingChunk) {
+            const chunkEnd = parseSecondsValue(matchingChunk.end);
+            if (chunkEnd != null && chunkEnd > startSeconds) return chunkEnd;
+
+            const chunkDuration = parseSecondsValue(matchingChunk.duration_seconds);
+            if (chunkDuration != null && chunkDuration > 0) return startSeconds + chunkDuration;
+        }
+    }
+
+    const transcriptionDuration = parseSecondsValue(row?.transcription?.duration_seconds);
+    if (transcriptionDuration != null && transcriptionDuration > startSeconds) {
+        // Canonical transcription duration is message-local; for single-segment rows this gives real chunk end.
+        return transcriptionDuration;
+    }
+
+    return null;
+};
+
 const buildLegacySegments = (legacyChunks: unknown[], fallbackTimestampMs: number | null): TranscriptionSegment[] => {
     if (!Array.isArray(legacyChunks) || legacyChunks.length === 0) return [];
 
@@ -198,11 +283,10 @@ const formatSegmentTimeline = (
     row: VoiceBotMessage,
     sessionBaseTimestampMs: number | null
 ): string | null => {
-    const start = Number(segment?.start);
-    if (!Number.isFinite(start) || start < 0) return null;
-
-    const end = Number(segment?.end);
-    const hasEnd = Number.isFinite(end) && end > start;
+    const start = parseSecondsValue(segment?.start);
+    if (start == null) return null;
+    const end = getSegmentEndSeconds(segment, row, start);
+    const hasEnd = end != null && end > start;
 
     const messageTimestampMs = toTimestampMs(row?.message_timestamp);
     const segmentAbsoluteStartMs =
@@ -210,7 +294,7 @@ const formatSegmentTimeline = (
             ? messageTimestampMs + start * 1000
             : toTimestampMs(segment?.absoluteTimestampMs);
 
-    const absoluteLabel = segmentAbsoluteStartMs != null ? dayjs(segmentAbsoluteStartMs).format('HH:mm') : null;
+    const absoluteLabel = segmentAbsoluteStartMs != null ? dayjs(segmentAbsoluteStartMs).format('HH:mm:ss') : null;
 
     let relativeStartSeconds = start;
     let relativeEndSeconds: number | null = hasEnd ? end : null;
@@ -235,19 +319,15 @@ const formatSegmentTimeline = (
     const relativeStart = formatRelativeTime(relativeStartSeconds);
     if (!relativeStart) return null;
 
-    if (!hasEnd || relativeEndSeconds == null) {
-        if (absoluteLabel) return `${absoluteLabel}, ${relativeStart}`;
-        return `${relativeStart}`;
-    }
+    const relativeEnd = hasEnd && relativeEndSeconds != null
+        ? formatRelativeTime(relativeEndSeconds)
+        : relativeStart;
+    const rangeLabel = relativeEnd ? `${relativeStart} - ${relativeEnd}` : relativeStart;
+    const fileName = extractSourceFileName(row);
 
-    const relativeEnd = formatRelativeTime(relativeEndSeconds);
-    if (!relativeEnd) {
-        if (absoluteLabel) return `${absoluteLabel}, ${relativeStart}`;
-        return `${relativeStart}`;
-    }
-
-    if (absoluteLabel) return `${absoluteLabel}, ${relativeStart} - ${relativeEnd}`;
-    return `${relativeStart} - ${relativeEnd}`;
+    const parts = [rangeLabel, fileName, absoluteLabel].filter((part): part is string => Boolean(part && part.trim()));
+    if (parts.length === 0) return null;
+    return parts.join(', ');
 };
 
 const copyTextToClipboard = async (text: string): Promise<boolean> => {
@@ -280,11 +360,16 @@ const copyTextToClipboard = async (text: string): Promise<boolean> => {
 export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestampMs }: TranscriptionTableRowProps) {
     const voiceBotSession = useVoiceBotStore((state) => state.voiceBotSession);
     const fetchVoiceBotSession = useVoiceBotStore((state) => state.fetchVoiceBotSession);
+    const fetchSessionLog = useVoiceBotStore((state) => state.fetchSessionLog);
     const editTranscriptChunk = useVoiceBotStore((state) => state.editTranscriptChunk);
     const deleteTranscriptChunk = useVoiceBotStore((state) => state.deleteTranscriptChunk);
 
     const segments = getSegmentsFromMessage(row);
-    const visibleSegments = segments.filter((seg) => !seg?.is_deleted);
+    const visibleSegments = segments.filter((seg) => {
+        if (seg?.is_deleted) return false;
+        const text = typeof seg?.text === 'string' ? seg.text.trim() : '';
+        return text.length > 0;
+    });
     const speakerDisplayMap = buildSpeakerDisplayMap(segments);
 
     const [editingOid, setEditingOid] = useState<string | null>(null);
@@ -331,6 +416,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
             };
             await editTranscriptChunk(payload, { silent: true });
             await fetchVoiceBotSession(sessionId);
+            await fetchSessionLog(sessionId, { silent: true });
             message.success('Saved');
             setEditingOid(null);
             setDraftText('');
@@ -361,6 +447,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                 { silent: true }
             );
             await fetchVoiceBotSession(sessionId);
+            await fetchSessionLog(sessionId, { silent: true });
             message.success('Deleted');
 
             if (editingOid === seg.id) {
