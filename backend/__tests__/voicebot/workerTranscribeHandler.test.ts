@@ -194,7 +194,7 @@ describe('handleTranscribeJob', () => {
     const context = setPayload.transcription_error_context as Record<string, unknown>;
     expect(String(context.server_name || '')).not.toBe('');
     expect(String(context.file_path || '')).toBe(filePath);
-    expect(String(context.openai_key_mask || '')).toMatch(/\.{3}/);
+    expect(String(context.openai_key_mask || '')).toMatch(/^sk-\.\.\.[A-Za-z0-9_-]{4}$/);
     expect(String(context.error_code || '')).toBe('insufficient_quota');
   });
 

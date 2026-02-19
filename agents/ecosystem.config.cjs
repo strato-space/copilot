@@ -35,7 +35,7 @@ module.exports = {
                 '--agent-cards', 'agent-cards',
                 '--name', 'copilot-agent-services',
                 '--transport', 'http',
-                '--host', '0.0.0.0',
+                '--host', '127.0.0.1',
                 '--port', '8722',
                 '--instance-scope', 'request',
                 '--description', 'Copilot Agent Services for intelligent dialogue processing'

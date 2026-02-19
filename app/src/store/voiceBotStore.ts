@@ -1,6 +1,5 @@
 import axios, { type AxiosProgressEvent, type AxiosRequestConfig } from 'axios';
 import { create } from 'zustand';
-import update from 'immutability-helper';
 import _ from 'lodash';
 import { message } from 'antd';
 import type { Socket } from 'socket.io-client';
@@ -363,6 +362,59 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     });
 };
 
+const getMessageIdentity = (message: VoiceBotMessage): string => {
+    const messageId = typeof message.message_id === 'string' ? message.message_id.trim() : '';
+    if (messageId) return `mid:${messageId}`;
+    const oid = typeof message._id === 'string' ? message._id.trim() : '';
+    if (oid) return `oid:${oid}`;
+    return '';
+};
+
+const getMessageTimestamp = (message: VoiceBotMessage): number => {
+    const raw = message.message_timestamp;
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) return numeric;
+    return 0;
+};
+
+const sortVoiceBotMessages = (messages: VoiceBotMessage[]): VoiceBotMessage[] => {
+    return [...messages].sort((left, right) => {
+        const leftTs = getMessageTimestamp(left);
+        const rightTs = getMessageTimestamp(right);
+        if (leftTs !== rightTs) return leftTs - rightTs;
+        const leftId = `${left.message_id || left._id || ''}`;
+        const rightId = `${right.message_id || right._id || ''}`;
+        return leftId.localeCompare(rightId);
+    });
+};
+
+const upsertVoiceBotMessage = (
+    current: VoiceBotMessage[],
+    incoming: VoiceBotMessage
+): VoiceBotMessage[] => {
+    const next = [...current];
+    const incomingIdentity = getMessageIdentity(incoming);
+    let replaced = false;
+
+    for (let index = 0; index < next.length; index++) {
+        const existing = next[index];
+        if (!existing) continue;
+        const existingIdentity = getMessageIdentity(existing);
+        const identityMatch = Boolean(incomingIdentity && existingIdentity && incomingIdentity === existingIdentity);
+        const fallbackMatch =
+            (incoming.message_id && existing.message_id && incoming.message_id === existing.message_id) ||
+            (incoming._id && existing._id && incoming._id === existing._id);
+        if (identityMatch || fallbackMatch) {
+            next[index] = { ...existing, ...incoming };
+            replaced = true;
+            break;
+        }
+    }
+
+    if (!replaced) next.push(incoming);
+    return sortVoiceBotMessages(next);
+};
+
 const normalizeAttachmentUri = (value: unknown): string | null => {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
@@ -648,13 +700,14 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         const prevSessionId = get().currentSessionId;
         const response = await voicebotRequest<unknown>('voicebot/sessions/get', { session_id: sessionId });
         const normalized = normalizeSessionResponse(response);
-        const processed = transformVoiceBotMessagesToGroups(normalized.session_messages);
+        const sortedMessages = sortVoiceBotMessages(normalized.session_messages);
+        const processed = transformVoiceBotMessagesToGroups(sortedMessages);
 
         set({
             voiceBotSession: normalized.voice_bot_session,
-            voiceBotMessages: normalized.session_messages,
+            voiceBotMessages: sortedMessages,
             voiceMesagesData: processed,
-            sessionAttachments: normalized.session_attachments ?? [],
+            sessionAttachments: normalized.session_attachments ?? buildSessionAttachmentsFromMessages(sortedMessages),
             sessionLogEvents: [],
             socketToken: normalized.socket_token ?? null,
             socketPort: normalized.socket_port ?? null,
@@ -669,6 +722,9 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 const activeSessionId = get().currentSessionId;
                 if (activeSessionId) {
                     socket.emit(SOCKET_EVENTS.SUBSCRIBE_ON_SESSION, { session_id: activeSessionId });
+                    void get().fetchVoiceBotSession(activeSessionId).catch((error) => {
+                        console.error('Failed to rehydrate voice session after reconnect:', error);
+                    });
                 }
             });
 
@@ -678,11 +734,10 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             });
 
             socket.on('message_update', (data: { message_id?: string; message?: VoiceBotMessage; _id?: string }) => {
+                if (!data?.message) return;
                 set((state) => {
-                    const updatedMessages = state.voiceBotMessages.map((msg) =>
-                        msg.message_id === data.message_id || msg._id === data.message?._id ? (data.message ?? msg) : msg
-                    );
-                    const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups([...updatedMessages]);
+                    const updatedMessages = upsertVoiceBotMessage(state.voiceBotMessages, data.message as VoiceBotMessage);
+                    const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups(updatedMessages);
                     const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
                     return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };
                 });
@@ -695,8 +750,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 if (existingMessage) return;
 
                 set((state) => {
-                    const updatedMessages = update(state.voiceBotMessages, { $push: [data] });
-                    const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups([...updatedMessages]);
+                    const updatedMessages = upsertVoiceBotMessage(state.voiceBotMessages, data);
+                    const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups(updatedMessages);
                     const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
                     return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };
                 });

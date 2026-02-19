@@ -154,13 +154,9 @@ const getOpenAIKeySource = (): string =>
 const maskOpenAIKey = (apiKey: string): string => {
   const raw = String(apiKey || '');
   if (!raw) return 'unknown';
-
-  const match = raw.match(/^sk-[A-Za-z0-9_-]{4}([A-Za-z0-9_-]*)([A-Za-z0-9_-]{4})$/);
-  if (match) {
-    return `sk-${match[1] ? match[1].slice(0, 4) : ''}...${match[2]}`;
-  }
-  if (raw.length <= 12) return raw;
-  return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
+  const safeTail = raw.replace(/[^A-Za-z0-9_-]/g, '').slice(-4);
+  if (safeTail.length === 4) return `sk-...${safeTail}`;
+  return 'sk-...????';
 };
 
 const getTranscriptionErrorContext = ({

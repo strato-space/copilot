@@ -41,9 +41,11 @@ fast-agent serve \
   --agent-cards agent-cards \
   --name copilot-agent-services \
   --transport http \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port 8722
 ```
+
+Security note: keep the agent service bound to loopback (`127.0.0.1`) and access it through backend proxy/SSH tunnel when needed.
 
 ### Production Deployment (PM2)
 

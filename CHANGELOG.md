@@ -2,6 +2,12 @@
 
 ## 2026-02-19
 ### PROBLEM SOLVED
+- **18:49** Voice realtime updates could drift after websocket reconnect because UI re-subscribed but did not force rehydrate current session state.
+- **18:49** `message_update` events for not-yet-present rows could be dropped from UI state, causing out-of-order/live categorization gaps until manual refresh.
+- **18:43** OpenAI key mask diagnostics still used mixed legacy formats (`sk-pro...XXXX`/raw prefix variants), complicating cross-runtime incident triage.
+- **18:40** Screenshot cards showed internal `message_attachment` proxy paths in caption/footer, which made copy-paste sharing inconvenient and inconsistent with canonical public links.
+- **18:36** Fast-Agent service on port `8722` was configured to bind `0.0.0.0`, exposing MCP HTTP endpoint on all interfaces unnecessarily.
+- **18:36** Dev frontend MCP URL still pointed to `http://copilot-dev.stratospace.fun:8722`, which is incompatible with loopback-only hardening.
 - **18:21** Deleting transcript segments in Copilot did not reliably remove matching categorization rows; punctuation/spacing variants could survive and still appear in Categorization UI.
 - **18:21** Miniapp E2E command could pick up non-Playwright tests from mixed project tooling, causing unstable execution expectations for CI/local smoke runs.
 - **14:04** Long-running voice sessions could stall processing when pending message scans were gated by strict `is_waiting=false`; rows with `is_waiting` absent were skipped and transcription/categorization stayed pending.
@@ -10,6 +16,10 @@
 - **01:39** Telegram `/start` in `copilot-voicebot-tgbot-prod` failed with Mongo update conflict (`Updating the path 'runtime_tag' would create a conflict`) during active-session upsert.
 
 ### FEATURE IMPLEMENTED
+- **18:49** Added reconnect-safe voice session rehydration on socket reconnect and deterministic realtime message upsert/sort for `new_message` + `message_update`.
+- **18:43** Normalized OpenAI key masking in both TS and legacy runtime transcription paths to a single canonical format: `sk-...LAST4`.
+- **18:40** Screenshot card link rendering now prefers canonical `public_attachment` URLs (`direct_uri`), resolves them to absolute host URLs, and provides hover-only copy button.
+- **18:36** Hardened agents runtime networking: `copilot-agent-services` now binds to `127.0.0.1` and docs/env defaults are aligned to loopback MCP URL.
 - **18:21** Added server-side categorization cleanup on session read: stale categorization rows for deleted transcript segments are normalized (including loose punctuation/spacing matching) and persisted back to `processed_data`.
 - **18:21** Added dedicated Miniapp Playwright config and scripts isolation so `npm run test:e2e` runs only Playwright tests (`--pass-with-no-tests` for empty suites).
 - **14:04** Added deterministic voice-processing scheduler in TS workers: `runner` now registers periodic `PROCESSING` jobs and `processingLoop` scans sessions with `is_waiting: { $ne: true }`.
@@ -39,6 +49,23 @@
 - **10:16** Upgraded TS `DONE_MULTIPROMPT` worker parity: on session close it now queues postprocessing chain (`ALL_CUSTOM_PROMPTS`, `AUDIO_MERGING`, `CREATE_TASKS`) and `SESSION_DONE` notify job in addition to active-session cleanup and session-log write.
 
 ### CHANGES
+- **18:49** Updated realtime socket state handling:
+  - `app/src/store/voiceBotStore.ts`
+  - `app/__tests__/voice/voiceSocketRealtimeContract.test.ts`
+- **18:43** Updated key-mask format in transcription diagnostics:
+  - `backend/src/workers/voicebot/handlers/transcribe.ts`
+  - `voicebot_runtime/voicebot/voice_jobs/transcribe.js`
+  - `backend/__tests__/voicebot/workerTranscribeHandler.test.ts`
+  - `README.md`
+- **18:40** Updated screenshot attachment UI:
+  - `app/src/components/voice/Screenshort.tsx`
+  - `app/__tests__/voice/screenshortAttachmentUrl.test.ts`
+- **18:36** Updated agent networking and docs:
+  - `agents/ecosystem.config.cjs` (`--host 127.0.0.1`)
+  - `agents/pm2-agents.sh` (startup URL output)
+  - `agents/README.md` (local run and security note)
+  - `app/.env.development` (`VITE_AGENTS_API_URL=http://127.0.0.1:8722`)
+  - `README.md`, `AGENTS.md` (loopback-only guidance)
 - **18:21** Updated transcript/categorization cleanup and tests:
   - `backend/src/api/routes/voicebot/messageHelpers.ts`
   - `backend/src/api/routes/voicebot/sessions.ts`
@@ -85,6 +112,10 @@
 - Expanded done handler regression coverage in `backend/__tests__/voicebot/workerDoneMultipromptHandler.test.ts` to assert postprocessing/notify queue fan-out and session-not-found behavior under runtime-scoped filtering.
 
 ### TESTS
+- **18:49** `cd app && npm test -- --runInBand __tests__/voice/voiceSocketRealtimeContract.test.ts __tests__/voice/screenshortAttachmentUrl.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts`
+- **18:49** `cd app && npm run build`
+- **18:40** `cd app && npm test -- --runInBand __tests__/voice/screenshortAttachmentUrl.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts`
+- **18:40** `cd app && npm run build`
 - **18:21** `cd backend && npm test -- --runInBand __tests__/voicebot/messageHelpers.test.ts __tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts __tests__/voicebot/uploadAudioRoute.test.ts __tests__/voicebot/publicAttachmentRoute.test.ts __tests__/smoke/voicebotAttachmentSmoke.test.ts __tests__/voicebot/workerTranscribeHandler.test.ts`
 - **18:21** `cd app && npm test -- --runInBand __tests__/voice/transcriptionTimelineLabel.test.ts`
 - **18:21** `cd miniapp && npm run test:e2e`

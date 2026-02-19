@@ -61,7 +61,7 @@ start_services() {
     set +e
     pm2 start ecosystem.config.cjs
     set -e
-    print_success "Сервис запущен на http://0.0.0.0:8722"
+    print_success "Сервис запущен на http://127.0.0.1:8722"
 }
 
 stop_services() {

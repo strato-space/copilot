@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Empty, Image, List, Space, Tag, Typography } from 'antd';
+import { Empty, Image, List, Space, Tag, Typography, Button, Tooltip, message } from 'antd';
 import axios from 'axios';
+import { CopyOutlined } from '@ant-design/icons';
 
 import { useAuthStore } from '../../store/authStore';
 import type { VoiceSessionAttachment } from '../../types/voice';
@@ -39,6 +40,42 @@ const isMessageAttachmentProxyPath = (src: string): boolean => {
     } catch {
         return src.startsWith('/api/voicebot/message_attachment/') || src.startsWith('/voicebot/message_attachment/');
     }
+};
+
+const toAbsoluteUrl = (value: string | null | undefined): string | null => {
+    if (!value) return null;
+    try {
+        return new URL(value, window.location.origin).toString();
+    } catch {
+        return value;
+    }
+};
+
+const getDisplayAttachmentUrl = (attachment: VoiceSessionAttachment): string | null => {
+    const preferred = attachment.direct_uri || attachment.uri || attachment.url || null;
+    return toAbsoluteUrl(preferred);
+};
+
+const copyTextToClipboard = async (raw: string): Promise<boolean> => {
+    const text = raw.trim();
+    if (!text) return false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+    }
+    if (typeof document !== 'undefined') {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.setAttribute('readonly', '');
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return copied;
+    }
+    return false;
 };
 
 function AttachmentPreview({ attachment }: { attachment: VoiceSessionAttachment }) {
@@ -169,33 +206,66 @@ export default function Screenshort({ attachments = [] }: { attachments?: VoiceS
                     emptyText: <Empty description="Скриншоты/вложения отсутствуют" />,
                 }}
                 grid={{ gutter: [12, 12], xs: 1, sm: 2, lg: 3, xl: 4 }}
-                renderItem={(item) => (
-                    <List.Item>
-                        <div className="h-full rounded border border-gray-200 bg-white">
-                            <AttachmentPreview attachment={item} />
-                            <div className="p-2">
-                                <Title level={5} ellipsis={{ tooltip: item.caption || 'Без подписи' }}>
-                                    {item.caption || 'Без подписи'}
-                                </Title>
-                                <Space size={4} direction="vertical" className="w-full">
-                                    <Text type="secondary">
-                                        Сообщение: {item.message_id || '—'} · {formatTimestamp(item.message_timestamp) || '—'}
-                                    </Text>
-                                    <Text type="secondary" className="text-[12px]" ellipsis={{ tooltip: item.uri || item.url || undefined }}>
-                                        {item.uri || item.url || 'Нет источника'}
-                                    </Text>
-                                    <Space wrap size={6}>
-                                        {item.kind && <Tag>{item.kind}</Tag>}
-                                        {item.source && <Tag>{item.source}</Tag>}
-                                        {typeof item.size === 'number' && item.size > 0 && (
-                                            <Tag>{Math.max(1, Math.round(item.size / 1024))} KB</Tag>
-                                        )}
+                renderItem={(item) => {
+                    const displayUrl = getDisplayAttachmentUrl(item);
+                    const copyLink = async (): Promise<void> => {
+                        if (!displayUrl) return;
+                        try {
+                            const copied = await copyTextToClipboard(displayUrl);
+                            if (!copied) {
+                                message.error('Copy is not supported in this browser');
+                                return;
+                            }
+                            message.success('Copied');
+                        } catch (error) {
+                            console.error(error);
+                            message.error('Failed to copy');
+                        }
+                    };
+
+                    return (
+                        <List.Item>
+                            <div className="h-full rounded border border-gray-200 bg-white">
+                                <AttachmentPreview attachment={item} />
+                                <div className="p-2">
+                                    <Title level={5} ellipsis={{ tooltip: item.caption || 'Без подписи' }}>
+                                        {item.caption || 'Без подписи'}
+                                    </Title>
+                                    <Space size={4} direction="vertical" className="w-full">
+                                        <Text type="secondary">
+                                            Сообщение: {item.message_id || '—'} · {formatTimestamp(item.message_timestamp) || '—'}
+                                        </Text>
+                                        <div className="group flex items-start gap-1">
+                                            <Text type="secondary" className="flex-1 text-[12px]" ellipsis={{ tooltip: displayUrl || undefined }}>
+                                                {displayUrl || 'Нет источника'}
+                                            </Text>
+                                            {displayUrl ? (
+                                                <Tooltip title="Copy link">
+                                                    <Button
+                                                        size="small"
+                                                        type="text"
+                                                        icon={<CopyOutlined />}
+                                                        onClick={() => {
+                                                            void copyLink();
+                                                        }}
+                                                        className="opacity-0 transition-opacity group-hover:opacity-100"
+                                                    />
+                                                </Tooltip>
+                                            ) : null}
+                                        </div>
+                                        <Space wrap size={6}>
+                                            {item.kind && <Tag>{item.kind}</Tag>}
+                                            {item.source && <Tag>{item.source}</Tag>}
+                                            {typeof item.size === 'number' && item.size > 0 && (
+                                                <Tag>{Math.max(1, Math.round(item.size / 1024))} KB</Tag>
+                                            )}
+                                        </Space>
                                     </Space>
-                                </Space>
+                                </div>
                             </div>
-                        </div>
-                    </List.Item>
-                )}
+                        </List.Item>
+                    );
+                }}
             />
         </div>
     );
