@@ -2496,13 +2496,14 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
     try {
         const session_id = String(req.body?.session_oid || req.body?.session_id || '').trim();
         const message_id = String(req.body?.message_oid || req.body?.message_id || '').trim();
-        const segment_oid = String(req.body?.segment_oid || req.body?.chunk_oid || '').trim();
+        const segment_oid_raw = String(req.body?.segment_oid || req.body?.chunk_oid || '').trim();
         const text = typeof req.body?.text === 'string' ? req.body.text : '';
+        const reason = getOptionalTrimmedString(req.body?.reason);
 
         if (!session_id || !ObjectId.isValid(session_id) || !message_id || !ObjectId.isValid(message_id)) {
             return res.status(400).json({ error: 'session_oid/session_id and message_oid/message_id are required' });
         }
-        if (!segment_oid || !text.trim()) {
+        if (!segment_oid_raw || !text.trim()) {
             return res.status(400).json({ error: 'segment_oid and text are required' });
         }
 
@@ -2514,18 +2515,62 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne({
-            _id: new ObjectId(message_id),
-            session_id: new ObjectId(session_id),
-        }) as { categorization?: Array<Record<string, unknown>>; transcription_text?: string } | null;
+        const messageObjectId = new ObjectId(message_id);
+        const sessionObjectId = new ObjectId(session_id);
+        const { oid: segment_oid } = parseEmbeddedOid(segment_oid_raw, { allowedPrefixes: ['ch'] });
+
+        const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+            runtimeMessageQuery({
+                _id: messageObjectId,
+                session_id: sessionObjectId,
+            })
+        ) as (Record<string, unknown> & { _id: ObjectId }) | null;
         if (!messageDoc) {
             return res.status(404).json({ error: 'Message not found' });
         }
 
-        const nextCategorization = Array.isArray(messageDoc.categorization)
-            ? messageDoc.categorization.map((chunk) => {
-                const chunkId = String(chunk.id || chunk._id || chunk.oid || '');
-                if (chunkId === segment_oid) {
+        const existingLocator = await findObjectLocatorByOid({ db, oid: segment_oid }).catch(() => null);
+        if (existingLocator && existingLocator.parent_id && existingLocator.parent_id.toString() !== messageObjectId.toString()) {
+            return res.status(409).json({ error: 'segment_oid locator points to a different message' });
+        }
+        if (!existingLocator) {
+            await upsertObjectLocator({
+                db,
+                oid: segment_oid,
+                entity_type: 'transcript_segment',
+                parent_collection: VOICEBOT_COLLECTIONS.MESSAGES,
+                parent_id: messageObjectId,
+                parent_prefix: 'msg',
+                path: `/transcription/segments[id=${segment_oid}]`,
+            });
+        }
+
+        const ensured = await ensureMessageCanonicalTranscription({ db, logger, message: messageDoc });
+        const transcription = ensured.transcription;
+        const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
+        const segIdx = segments.findIndex((seg) => seg?.id === segment_oid);
+        if (segIdx === -1) return res.status(404).json({ error: 'Segment not found' });
+
+        const previousSegment = { ...(segments[segIdx] || {}) } as Record<string, unknown>;
+        segments[segIdx] = {
+            ...(segments[segIdx] || {}),
+            text: text.trim(),
+            is_edited: true,
+        };
+
+        const updatedTranscription = {
+            ...(transcription || {}),
+            segments,
+            text: normalizeSegmentsText(segments),
+        };
+
+        let updatedChunks = Array.isArray((ensured.message as Record<string, unknown>)?.transcription_chunks)
+            ? [...((ensured.message as Record<string, unknown>).transcription_chunks as Array<Record<string, unknown>>)]
+            : (Array.isArray(messageDoc.transcription_chunks) ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)] : []);
+        if (updatedChunks.length > 0) {
+            updatedChunks = updatedChunks.map((chunk) => {
+                if (!chunk || typeof chunk !== 'object') return chunk;
+                if (chunk.id === segment_oid) {
                     return {
                         ...chunk,
                         text: text.trim(),
@@ -2533,21 +2578,64 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
                     };
                 }
                 return chunk;
-            })
-            : [];
+            });
+        }
+
+        const updatedMessageBase = {
+            _id: messageObjectId,
+            ...(ensured.message as Record<string, unknown>),
+            transcription: updatedTranscription,
+            transcription_text: updatedTranscription.text,
+            text: updatedTranscription.text,
+        };
+        const segmentForCleanup = segments[segIdx];
+        if (!segmentForCleanup) {
+            return res.status(404).json({ error: 'Segment not found' });
+        }
+        const categorizationCleanupPayload = buildCategorizationCleanupPayload({
+            message: updatedMessageBase as Record<string, unknown> & { _id: ObjectId },
+            segment: segmentForCleanup,
+        });
 
         await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
-            { _id: new ObjectId(message_id) },
+            runtimeMessageQuery({ _id: messageObjectId }),
             {
                 $set: {
-                    categorization: nextCategorization,
-                    transcription_text: nextCategorization.map((chunk) => String(chunk.text || '')).join(' ').trim(),
+                    transcription: updatedTranscription,
+                    transcription_text: updatedTranscription.text,
+                    text: updatedTranscription.text,
+                    transcription_chunks: updatedChunks,
                     updated_at: new Date(),
+                    is_finalized: false,
+                    ...categorizationCleanupPayload,
                 },
             }
         );
 
-        return res.status(200).json({ success: true });
+        const logEvent = await insertSessionLogEvent({
+            db,
+            session_id: sessionObjectId,
+            message_id: messageObjectId,
+            project_id: toObjectIdOrNull((session as VoiceSessionRecord)?.project_id),
+            event_name: 'transcript_segment_edited',
+            actor: buildActorFromPerformer(performer),
+            target: {
+                entity_type: 'transcript_segment',
+                entity_oid: segment_oid,
+                path: `/messages/${formatOid('msg', messageObjectId)}/transcription/segments[id=${segment_oid}]`,
+                stage: 'transcript',
+            },
+            diff: {
+                op: 'replace',
+                old_value: typeof previousSegment?.text === 'string' ? previousSegment.text : '',
+                new_value: text.trim(),
+            },
+            source: buildWebSource(req),
+            action: { type: 'rollback', available: true, handler: 'rollback_event', args: {} },
+            reason,
+        });
+
+        return res.status(200).json({ success: true, event: mapEventForApi(logEvent) });
     } catch (error) {
         logger.error('Error in edit_transcript_chunk:', error);
         return res.status(500).json({ error: String(error) });
@@ -2561,9 +2649,10 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
     try {
         const session_id = String(req.body?.session_oid || req.body?.session_id || '').trim();
         const message_id = String(req.body?.message_oid || req.body?.message_id || '').trim();
-        const segment_oid = String(req.body?.segment_oid || req.body?.chunk_oid || '').trim();
+        const segment_oid_raw = String(req.body?.segment_oid || req.body?.chunk_oid || '').trim();
+        const reason = getOptionalTrimmedString(req.body?.reason);
 
-        if (!session_id || !ObjectId.isValid(session_id) || !message_id || !ObjectId.isValid(message_id) || !segment_oid) {
+        if (!session_id || !ObjectId.isValid(session_id) || !message_id || !ObjectId.isValid(message_id) || !segment_oid_raw) {
             return res.status(400).json({ error: 'session/message/segment ids are required' });
         }
 
@@ -2575,30 +2664,125 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne({
-            _id: new ObjectId(message_id),
-            session_id: new ObjectId(session_id),
-        }) as { categorization?: Array<Record<string, unknown>> } | null;
+        const messageObjectId = new ObjectId(message_id);
+        const sessionObjectId = new ObjectId(session_id);
+        const { oid: segment_oid } = parseEmbeddedOid(segment_oid_raw, { allowedPrefixes: ['ch'] });
+
+        const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+            runtimeMessageQuery({
+                _id: messageObjectId,
+                session_id: sessionObjectId,
+            })
+        ) as (Record<string, unknown> & { _id: ObjectId }) | null;
         if (!messageDoc) {
             return res.status(404).json({ error: 'Message not found' });
         }
 
-        const filtered = Array.isArray(messageDoc.categorization)
-            ? messageDoc.categorization.filter((chunk) => String(chunk.id || chunk._id || chunk.oid || '') !== segment_oid)
-            : [];
+        const existingLocator = await findObjectLocatorByOid({ db, oid: segment_oid }).catch(() => null);
+        if (existingLocator && existingLocator.parent_id && existingLocator.parent_id.toString() !== messageObjectId.toString()) {
+            return res.status(409).json({ error: 'segment_oid locator points to a different message' });
+        }
+        if (!existingLocator) {
+            await upsertObjectLocator({
+                db,
+                oid: segment_oid,
+                entity_type: 'transcript_segment',
+                parent_collection: VOICEBOT_COLLECTIONS.MESSAGES,
+                parent_id: messageObjectId,
+                parent_prefix: 'msg',
+                path: `/transcription/segments[id=${segment_oid}]`,
+            });
+        }
+
+        const ensured = await ensureMessageCanonicalTranscription({ db, logger, message: messageDoc });
+        const transcription = ensured.transcription;
+        const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
+        const segIdx = segments.findIndex((seg) => seg?.id === segment_oid);
+        if (segIdx === -1) return res.status(404).json({ error: 'Segment not found' });
+
+        const oldSegmentSnapshot = { ...(segments[segIdx] || {}) } as Record<string, unknown>;
+        segments[segIdx] = {
+            ...(segments[segIdx] || {}),
+            is_deleted: true,
+        };
+
+        const updatedTranscription = {
+            ...(transcription || {}),
+            segments,
+            text: normalizeSegmentsText(segments),
+        };
+
+        let updatedChunks = Array.isArray((ensured.message as Record<string, unknown>)?.transcription_chunks)
+            ? [...((ensured.message as Record<string, unknown>).transcription_chunks as Array<Record<string, unknown>>)]
+            : (Array.isArray(messageDoc.transcription_chunks) ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)] : []);
+        if (updatedChunks.length > 0) {
+            updatedChunks = updatedChunks.map((chunk) => {
+                if (!chunk || typeof chunk !== 'object') return chunk;
+                if (chunk.id === segment_oid) {
+                    return {
+                        ...chunk,
+                        is_deleted: true,
+                    };
+                }
+                return chunk;
+            });
+        }
+
+        const updatedMessageBase = {
+            _id: messageObjectId,
+            ...(ensured.message as Record<string, unknown>),
+            transcription: updatedTranscription,
+            transcription_text: updatedTranscription.text,
+            text: updatedTranscription.text,
+        };
+        const segmentForCleanup = segments[segIdx];
+        if (!segmentForCleanup) {
+            return res.status(404).json({ error: 'Segment not found' });
+        }
+        const categorizationCleanupPayload = buildCategorizationCleanupPayload({
+            message: updatedMessageBase as Record<string, unknown> & { _id: ObjectId },
+            segment: segmentForCleanup,
+        });
 
         await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
-            { _id: new ObjectId(message_id) },
+            runtimeMessageQuery({ _id: messageObjectId }),
             {
                 $set: {
-                    categorization: filtered,
-                    transcription_text: filtered.map((chunk) => String(chunk.text || '')).join(' ').trim(),
+                    transcription: updatedTranscription,
+                    transcription_text: updatedTranscription.text,
+                    text: updatedTranscription.text,
+                    transcription_chunks: updatedChunks,
                     updated_at: new Date(),
+                    is_finalized: false,
+                    ...categorizationCleanupPayload,
                 },
             }
         );
 
-        return res.status(200).json({ success: true });
+        const logEvent = await insertSessionLogEvent({
+            db,
+            session_id: sessionObjectId,
+            message_id: messageObjectId,
+            project_id: toObjectIdOrNull((session as VoiceSessionRecord)?.project_id),
+            event_name: 'transcript_segment_deleted',
+            actor: buildActorFromPerformer(performer),
+            target: {
+                entity_type: 'transcript_segment',
+                entity_oid: segment_oid,
+                path: `/messages/${formatOid('msg', messageObjectId)}/transcription/segments[id=${segment_oid}]`,
+                stage: 'transcript',
+            },
+            diff: {
+                op: 'delete',
+                old_value: oldSegmentSnapshot,
+                new_value: null,
+            },
+            source: buildWebSource(req),
+            action: { type: 'rollback', available: true, handler: 'rollback_event', args: {} },
+            reason,
+        });
+
+        return res.status(200).json({ success: true, event: mapEventForApi(logEvent) });
     } catch (error) {
         logger.error('Error in delete_transcript_chunk:', error);
         return res.status(500).json({ error: String(error) });
