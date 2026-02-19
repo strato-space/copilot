@@ -240,9 +240,13 @@ router.post('/update', async (req: Request, res: Response) => {
 router.post('/create', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const ticket = req.body.ticket as Record<string, unknown>;
+        const body = req.body as {
+            ticket?: Record<string, unknown>;
+            data?: Record<string, unknown>;
+        };
+        const ticket = (body.ticket ?? body.data) as Record<string, unknown> | undefined;
 
-        if (!ticket) {
+        if (!ticket || typeof ticket !== 'object') {
             res.status(400).json({ error: 'ticket data is required' });
             return;
         }
@@ -255,17 +259,34 @@ router.post('/create', async (req: Request, res: Response) => {
             is_deleted: false,
         };
 
+        if (newTicket._id == null) {
+            delete newTicket._id;
+        }
+
+        if (newTicket.id == null) {
+            delete newTicket.id;
+        }
+
+        if (!newTicket.project_id && newTicket.project) {
+            newTicket.project_id = newTicket.project;
+        }
+        delete newTicket.project;
+
         // Convert ObjectId fields
-        if (newTicket.project_id) {
+        if (typeof newTicket.project_id === 'string' && ObjectId.isValid(newTicket.project_id)) {
             newTicket.project_id = new ObjectId(newTicket.project_id as string);
         }
-        if (newTicket.epic) {
+        if (typeof newTicket.epic === 'string' && ObjectId.isValid(newTicket.epic)) {
             newTicket.epic = new ObjectId(newTicket.epic as string);
         }
 
         const dbRes = await db.collection(COLLECTIONS.TASKS).insertOne(newTicket);
 
-        res.status(200).json({ db_op_result: dbRes, ticket: { ...newTicket, _id: dbRes.insertedId } });
+        res.status(200).json({
+            db_op_result: dbRes,
+            ticket: { ...newTicket, _id: dbRes.insertedId },
+            ticket_db: { ...newTicket, _id: dbRes.insertedId },
+        });
     } catch (error) {
         logger.error('Error creating ticket:', error);
         res.status(500).json({ error: String(error) });
