@@ -2,18 +2,31 @@
 
 ## 2026-02-20
 ### PROBLEM SOLVED
+- **09:02** OperOps CRM task details link from the eye icon could resolve to `/operops/task/undefined` for rows without a public `id`, causing `404` on `/api/crm/tickets/get-by-id`.
+- **09:02** CRM table filter by performer could miss valid rows because records mix `_id` and legacy `id` across ticket payloads and dictionary data.
+- **09:02** Newly created/edited CRM tasks could show placeholder/malformed project labels in the table when only `project_id` was present and `project` name was not hydrated.
+- **09:02** Ticket create/update diagnostics lacked normalized project/performer payload traces, slowing incident triage for CRM regressions.
 - **06:35** Voice migration documentation drifted across three plan files: status legend usage and BD source-of-truth mapping were inconsistent, making rollout state ambiguous.
 - **06:01** WebRTC full-track archive uploads generated redundant backend rows without downstream diarization consumption, creating avoidable duplicate payloads.
 - **06:05** Migration docs still referenced open backlog and incomplete legacy-removal status after `copilot-vsen`/`copilot-ia38` were already completed.
 - **05:18** Migration planning docs drifted from current `bd` execution state: open backlog and accepted decisions were not clearly reflected in one place.
 
 ### FEATURE IMPLEMENTED
+- **09:02** Added robust CRM task-link fallback and identifier normalization in Kanban so task details open by `id || _id` and project labels resolve from `project_data`/`project_id`/`project`.
+- **09:02** Implemented performer filter compatibility layer in CRM Kanban to match rows reliably for mixed `_id`/`id` performer references.
+- **09:02** Added structured CRM ticket normalization logs on `create` and `update` with before/after `project_id` and performer identifiers.
 - **06:35** Performed deep BD-driven documentation sync for migration program/project/frontend plans with unified status legend `[v] / [x] / [~]`.
 - **06:01** Disabled backend upload for `full_track` WebRTC segments while preserving Monitor visibility and metadata for future diarization rollout.
 - **06:05** Completed full closeout of migration waves: legacy runtime removed, full test sweep closed, plan docs synced to current BD state.
 - **05:18** Added a refreshed execution-oriented migration plan with explicit open backlog mapping (`copilot-vsen`, `copilot-ia38`) and accepted-decision section.
 
 ### CHANGES
+- **09:02** Updated CRM Kanban render/filter/action behavior:
+  - `app/src/components/crm/CRMKanban.tsx`: normalized project lookup (string/ObjectId-like values), display-name resolution for project tag/filter/sort, performer filter id-compatibility, and eye-link fallback to `_id`.
+  - `app/src/components/crm/CommentsSidebar.tsx` and `app/src/components/crm/WorkHoursSidebar.tsx`: render project name via store resolver instead of raw stored identifier.
+  - `app/src/store/kanbanStore.ts`: project resolver (`getProjectByIdentifier`) and ticket edit/create normalization paths for `project`/`project_id`/`project_data`.
+- **09:02** Updated CRM ticket API normalization and diagnostics:
+  - `backend/src/api/routes/crm/tickets.ts`: safe project conversion (`project` -> `project_id`) on update, guarded `ObjectId` conversion for `project_id`, and structured logs (`[crm.tickets.create]`, `[crm.tickets.update]`).
 - **06:35** Deep-refreshed migration docs from closed BD tickets (`bd list --all`):
   - `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`: rebuilt as BD-driven execution plan with stream status matrix, updated final structure, and explicit `[x]` Playwright gaps.
   - `docs/PLAYWRIGHT_MIGRATION_MATRIX.md`: synchronized scenario mapping and status classification (`[v]` green e2e, `[~]` partial/manual, `[x]` not migrated).

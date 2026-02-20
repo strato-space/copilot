@@ -292,6 +292,16 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         });
     };
 
+    const getProjectByIdentifier = (project?: string): Project | undefined => {
+        if (!project) return undefined;
+        const target = project.toString();
+        const { projectsData } = get();
+        return (
+            projectsData.find((item) => item._id.toString() === target) ??
+            projectsData.find((item) => item.name === target)
+        );
+    };
+
     return {
         statusesFilter: ['READY_TO_GO', 'IN_PROGRESS'],
         setStatusesFilter: (statuses) => set({ statusesFilter: statuses }),
@@ -300,22 +310,21 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             if (!project) {
                 return '';
             }
-            const { customers, projectGroups, projectsData } = get();
-            const projectDoc = projectsData.find((item) => item.name === project);
+            const projectDoc = getProjectByIdentifier(project);
             if (!projectDoc?._id) {
                 return '';
             }
-            const projectGroup = projectGroups.find((group) => {
+            const projectGroup = get().projectGroups.find((group: ProjectGroup) => {
                 if (group._id && projectDoc.project_group && group._id.toString() === projectDoc.project_group.toString()) {
                     return true;
                 }
-                return (group.projects_ids ?? []).some((id) => id.toString() === projectDoc._id);
+                return (group.projects_ids ?? []).some((id: string) => id.toString() === projectDoc._id);
             });
             if (!projectGroup?._id) {
                 return '';
             }
-            const customer = customers.find((item) =>
-                (item.project_groups_ids ?? []).some((id) => id.toString() === projectGroup._id)
+            const customer = get().customers.find((item: Customer) =>
+                (item.project_groups_ids ?? []).some((id: string) => id.toString() === projectGroup._id)
             );
             return customer?.name ?? '';
         },
@@ -324,16 +333,15 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             if (!project) {
                 return '';
             }
-            const { projectGroups, projectsData } = get();
-            const projectDoc = projectsData.find((item) => item.name === project);
+            const projectDoc = getProjectByIdentifier(project);
             if (!projectDoc?._id) {
                 return '';
             }
-            const projectGroup = projectGroups.find((group) => {
+            const projectGroup = get().projectGroups.find((group: ProjectGroup) => {
                 if (group._id && projectDoc.project_group && group._id.toString() === projectDoc.project_group.toString()) {
                     return true;
                 }
-                return (group.projects_ids ?? []).some((id) => id.toString() === projectDoc._id);
+                return (group.projects_ids ?? []).some((id: string) => id.toString() === projectDoc._id);
             });
             return projectGroup?.name ?? '';
         },
@@ -462,6 +470,19 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
                 ticket.performer = performer;
             }
             const updateProps = _.omit(ticket, ['_id', 'id']);
+            if (typeof updateProps.project === 'string') {
+                const normalizedProject = getProjectByIdentifier(updateProps.project);
+                if (normalizedProject) {
+                    updateProps.project = normalizedProject.name;
+                    updateProps.project_id = normalizedProject._id;
+                    updateProps.project_data = {
+                        _id: normalizedProject._id,
+                        name: normalizedProject.name,
+                    };
+                } else if (typeof updateProps.project === 'string' && /^[0-9a-fA-F]{24}$/.test(updateProps.project)) {
+                    updateProps.project_id = updateProps.project;
+                }
+            }
 
             const updateObj = _.reduce(
                 Object.entries(updateProps),
@@ -492,6 +513,16 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
 
             const response = await api_request<{ ticket_db: Ticket }>('tickets/create', { data: values });
             const new_ticket = response.ticket_db;
+            const normalizedProject = getProjectByIdentifier(
+                typeof new_ticket.project_id === 'string'
+                    ? new_ticket.project_id
+                    : new_ticket.project_id
+                      ? `${new_ticket.project_id}`
+                      : undefined
+            );
+            if (normalizedProject) {
+                new_ticket.project = normalizedProject.name;
+            }
 
             const performer = _.find(get().performers, { _id: values.performer as string });
             if (performer) {
@@ -618,11 +649,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         },
 
         getProjectByName: (project_name) => {
-            return _.find(get().projectsData, (p) => p.name === project_name);
+            return getProjectByIdentifier(project_name);
         },
 
         getProjectEpics: (project_name) => {
-            const project = _.find(get().projectsData, (p) => p.name === project_name);
+            const project = getProjectByIdentifier(project_name);
             if (!project) return [];
             return project.epics ?? [];
         },

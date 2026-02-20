@@ -152,6 +152,9 @@ Preferred engineering principles for this repo:
 - CRM stores: `kanbanStore.ts` (tickets, epics, performers), `crmStore.ts` (UI state), `projectsStore.ts` (project tree), `requestStore.ts` (API).
 - Socket.IO events for CRM: TICKET_CREATED, TICKET_UPDATED, TICKET_DELETED, EPIC_UPDATED, COMMENT_ADDED, WORK_HOURS_UPDATED.
 - CRM routes accessible at `/operops/*` with OperOpsNav horizontal navigation.
+- CRM Kanban task-detail links must use `id || _id`; records created without public `id` should still open `/operops/task/:taskId` correctly.
+- CRM performer filtering must be identifier-compatible (`_id` and legacy `id`), and project labels must resolve via `project_data`/`project_id`/`project` fallback chain.
+- Ticket create/update diagnostics should log normalized `project/project_id/performer` payload values to speed up CRM incident triage.
 
 ## Product Notes (VoiceBot)
 - VoiceBot backend routes live in `backend/src/api/routes/voicebot/`.

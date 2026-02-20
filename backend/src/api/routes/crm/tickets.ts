@@ -17,6 +17,19 @@ dayjs.extend(weekOfYear);
 const router = Router();
 const logger = getLogger();
 
+const toLogString = (value: unknown): string | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'string') return value;
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string') return record.$oid;
+        if (typeof record._id === 'string') return record._id;
+    }
+    return null;
+};
+
 /**
  * Get all tickets
  * POST /api/crm/tickets
@@ -212,13 +225,32 @@ router.post('/update', async (req: Request, res: Response) => {
             });
         }
 
+        const rawProject = toLogString(updateProps.project);
+        const rawProjectId = toLogString(updateProps.project_id);
+
         // Convert ObjectId fields
+        if (updateProps.project) {
+            if (typeof updateProps.project === 'string' && ObjectId.isValid(updateProps.project)) {
+                updateProps.project_id = new ObjectId(updateProps.project as string);
+            }
+            delete updateProps.project;
+        }
         if (updateProps.project_id) {
-            updateProps.project_id = new ObjectId(updateProps.project_id as string);
+            if (typeof updateProps.project_id === 'string' && ObjectId.isValid(updateProps.project_id)) {
+                updateProps.project_id = new ObjectId(updateProps.project_id as string);
+            }
         }
         if (updateProps.epic) {
             updateProps.epic = new ObjectId(updateProps.epic as string);
         }
+
+        logger.info('[crm.tickets.update] normalized ticket update payload', {
+            ticket: ticketId,
+            project: rawProject,
+            project_id_before: rawProjectId,
+            project_id_after: toLogString(updateProps.project_id),
+            performer: toLogString(updateProps.performer),
+        });
 
         updateProps.updated_at = Date.now();
 
@@ -260,6 +292,9 @@ router.post('/create', async (req: Request, res: Response) => {
             is_deleted: false,
         };
 
+        const rawProject = toLogString(newTicket.project);
+        const rawProjectId = toLogString(newTicket.project_id);
+
         if (newTicket._id == null) {
             delete newTicket._id;
         }
@@ -280,6 +315,14 @@ router.post('/create', async (req: Request, res: Response) => {
         if (typeof newTicket.epic === 'string' && ObjectId.isValid(newTicket.epic)) {
             newTicket.epic = new ObjectId(newTicket.epic as string);
         }
+
+        logger.info('[crm.tickets.create] normalized new ticket payload', {
+            project: rawProject,
+            project_id_before: rawProjectId,
+            project_id_after: toLogString(newTicket.project_id),
+            performer: toLogString(newTicket.performer),
+            has_public_id: typeof newTicket.id === 'string' && newTicket.id.length > 0,
+        });
 
         const dbRes = await db.collection(COLLECTIONS.TASKS).insertOne(newTicket);
 

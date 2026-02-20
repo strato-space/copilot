@@ -127,11 +127,37 @@ const CRMKanban = (props: CRMKanbanProps) => {
         return customer?.name ?? 'Без заказчика';
     };
 
-    const getProjectInfo = (project_id: string | undefined) => {
-        if (!project_id) return null;
+    const toLookupValue = (value: unknown): string => {
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return String(value);
+        if (!value || typeof value !== 'object') return '';
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string') return record.$oid;
+        if (typeof record._id === 'string') return record._id;
+        if (typeof record.toString === 'function') {
+            const directValue = record.toString();
+            if (directValue && directValue !== '[object Object]') return directValue;
+        }
+        return '';
+    };
 
-        const project = projectsData.find((p) => p._id.toString() === project_id.toString());
-        if (!project) return { project: project_id, group: 'Unknown', customer: 'Unknown' };
+    const getProjectByValue = (projectValue?: unknown) => {
+        const targetValue = toLookupValue(projectValue);
+        if (!targetValue) return null;
+
+        return (
+            projectsData.find((p) => p._id.toString() === targetValue) ??
+            projectsData.find((p) => p.name === targetValue)
+        );
+    };
+
+    const getProjectInfo = (project_id?: string | null, project_name?: string | null) => {
+        const project = getProjectByValue(project_id) ?? getProjectByValue(project_name);
+        if (!project) {
+            return project_name || project_id
+                ? { project: project_name || project_id, group: 'Unknown', customer: 'Unknown' }
+                : null;
+        }
 
         const group = projectGroups.find(
             (g) => g._id && project.project_group && g._id.toString() === project.project_group.toString()
@@ -145,6 +171,22 @@ const CRMKanban = (props: CRMKanbanProps) => {
             group: group?.name ?? 'Unassigned',
             customer: customer?.name ?? 'Unknown',
         };
+    };
+
+    const getProjectDisplayName = (record: Ticket): string => {
+        const projectData = (record as Ticket & { project_data?: unknown }).project_data;
+        const projectDataName =
+            projectData &&
+            typeof projectData === 'object' &&
+            !Array.isArray(projectData) &&
+            'name' in projectData &&
+            typeof projectData.name === 'string'
+                ? projectData.name
+                : Array.isArray(projectData)
+                  ? projectData.find((item) => item && typeof item.name === 'string' && item.name)
+                        ?.name
+                  : '';
+        return projectDataName || getProjectByValue(record.project_id)?.name || getProjectByValue(record.project)?.name || record.project || '—';
     };
 
     useEffect(() => {
@@ -256,7 +298,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
             title: 'Проект',
             key: 'project',
             width: 120,
-            sorter: (a, b) => compareStrings(a?.project_data?.name, b?.project_data?.name),
+            sorter: (a, b) => compareStrings(getProjectDisplayName(a), getProjectDisplayName(b)),
             filterDropdown: ({ close }) => (
                 <div className="p-2 w-[260px]">
                     <Select
@@ -287,7 +329,8 @@ const CRMKanban = (props: CRMKanbanProps) => {
             ),
             filterIcon: () => <FilterOutlined style={{ color: projectGroupFilter ? '#1677ff' : undefined }} />,
             render: (_, record) => {
-                const projectInfo = getProjectInfo(record.project_id);
+                const projectInfo = getProjectInfo(record.project_id, record.project);
+                const projectName = getProjectDisplayName(record);
                 return (
                     <div
                         className="flex flex-col cursor-pointer"
@@ -299,8 +342,8 @@ const CRMKanban = (props: CRMKanbanProps) => {
                             padding: projectInfo ? '4px' : '0px',
                         }}
                     >
-                        {record.project ? (
-                            <ProjectTag name={record?.project_data?.name ?? record.project} tooltip={projectInfo?.project ?? record.project} />
+                        {projectName && projectName !== '—' ? (
+                            <ProjectTag name={projectName} tooltip={projectInfo?.project ?? projectName} />
                         ) : (
                             <ProjectTag />
                         )}
@@ -380,10 +423,23 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 const bName = typeof b.performer === 'object' ? (b.performer as Performer)?.name : '';
                 return compareStrings(aName, bName);
             },
-            filters: performers.map((performer) => ({ text: performer.name, value: performer.id ?? performer._id })),
+            filters: performers.map((performer) => ({ text: performer.name, value: performer._id ?? performer.id })),
             onFilter: (value, record) => {
-                const perfId = typeof record.performer === 'object' ? (record.performer as Performer)?.id : record.performer;
-                return perfId === value;
+                const valueStr = String(value);
+                if (typeof record.performer === 'object' && record.performer) {
+                    const performerObj = record.performer as Performer;
+                    return [performerObj._id, performerObj.id].filter(Boolean).some((id) => String(id) === valueStr);
+                }
+                const performerRaw = record.performer ? String(record.performer) : '';
+                const performerRecord = performers.find(
+                    (p) => [p._id, p.id].filter(Boolean).some((id) => String(id) === performerRaw)
+                );
+                if (performerRecord) {
+                    return [performerRecord._id, performerRecord.id]
+                        .filter(Boolean)
+                        .some((id) => String(id) === valueStr);
+                }
+                return performerRaw === valueStr;
             },
             defaultFilteredValue: props.filter.performer ?? null,
             filterSearch: true,
@@ -546,7 +602,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
             render: (_, record) => (
                 <div className="flex gap-4">
                     <EditOutlined className="hover:text-cyan-500" onClick={() => setEditingTicket(record)} />
-                    <a href={`/operops/task/${record.id}`} target="_blank" rel="noopener noreferrer">
+                    <a href={`/operops/task/${record.id || record._id}`} target="_blank" rel="noopener noreferrer">
                         <EyeOutlined className="hover:text-cyan-500" />
                     </a>
                 </div>
@@ -623,7 +679,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
     });
     let filteredTickets = tickets.filter((record) => statusFilterLabels.includes(record.task_status as typeof statusFilterLabels[number]));
     if (projectFilter && projectFilter.length > 0) {
-        filteredTickets = filteredTickets.filter((record) => projectFilter.includes(record.project));
+        filteredTickets = filteredTickets.filter((record) =>
+            projectFilter.includes(getProjectDisplayName(record))
+        );
     }
 
     return (
