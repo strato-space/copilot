@@ -28,6 +28,9 @@ type SessionRecord = {
 
 type MessageRecord = {
   _id: ObjectId;
+  message_type?: string;
+  transcription_text?: string;
+  text?: string;
   categorization?: unknown;
   processors_data?: Record<string, unknown>;
   message_timestamp?: number;
@@ -51,7 +54,32 @@ const runtimeQuery = (query: Record<string, unknown>) =>
     includeLegacyInProd: IS_PROD_RUNTIME,
   });
 
+const NON_CATEGORIZABLE_TYPES = new Set([
+  'image',
+  'screenshot',
+  'document',
+  'photo',
+  'file',
+  'attachment',
+]);
+
+const shouldRequireCategorization = (message: MessageRecord): boolean => {
+  const messageType = String(message.message_type || '').trim().toLowerCase();
+  if (NON_CATEGORIZABLE_TYPES.has(messageType)) return false;
+
+  const transcriptionText = String(message.transcription_text || '').trim();
+  const fallbackText = String(message.text || '').trim();
+  const effectiveText = transcriptionText || fallbackText;
+  if (!effectiveText) return false;
+  if (effectiveText === '[Image]' || effectiveText === '[Screenshot]') return false;
+  return true;
+};
+
 const isCategorizationReady = (message: MessageRecord): boolean => {
+  if (!shouldRequireCategorization(message)) {
+    return true;
+  }
+
   if (Array.isArray(message.categorization)) {
     return true;
   }
@@ -61,6 +89,19 @@ const isCategorizationReady = (message: MessageRecord): boolean => {
     null;
 
   return processor?.is_processed === true || processor?.is_finished === true;
+};
+
+const markSessionMessagesProcessed = async ({ sessionObjectId }: { sessionObjectId: ObjectId }): Promise<void> => {
+  const db = getDb();
+  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+    runtimeQuery({ _id: sessionObjectId }),
+    {
+      $set: {
+        is_messages_processed: true,
+        updated_at: new Date(),
+      },
+    }
+  );
 };
 
 const markCreateTasksPending = async ({
@@ -146,6 +187,7 @@ export const handleCreateTasksPostprocessingJob = async (
 
   if (messages.length === 0) {
     await markCreateTasksNoData({ sessionObjectId });
+    await markSessionMessagesProcessed({ sessionObjectId });
     return {
       ok: true,
       skipped: true,
@@ -203,6 +245,7 @@ export const handleCreateTasksPostprocessingJob = async (
 
   if (!chunksToProcess || chunksToProcess.length === 0) {
     await markCreateTasksNoData({ sessionObjectId });
+    await markSessionMessagesProcessed({ sessionObjectId });
     return {
       ok: true,
       skipped: true,
@@ -218,6 +261,9 @@ export const handleCreateTasksPostprocessingJob = async (
 
   if (result.ok && (result.tasks_count || 0) > 0) {
     await enqueueSessionTasksCreatedNotify(session_id);
+  }
+  if (result.ok) {
+    await markSessionMessagesProcessed({ sessionObjectId });
   }
 
   const response: CreateTasksPostprocessingResult = {

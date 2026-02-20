@@ -8,9 +8,12 @@ import SessionStatusWidget from '../../components/voice/SessionStatusWidget';
 import MeetingCard from '../../components/voice/MeetingCard';
 import Transcription from '../../components/voice/Transcription';
 import Categorization from '../../components/voice/Categorization';
+import PossibleTasks from '../../components/voice/PossibleTasks';
 import CustomPromptResult from '../../components/voice/CustomPromptResult';
 import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
+import { useCurrentUserPermissions } from '../../store/permissionsStore';
+import { PERMISSIONS } from '../../constants/permissions';
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -61,6 +64,7 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 export default function SessionPage() {
     const { sessionId } = useParams();
     const { fetchVoiceBotSession, voiceBotSession, sessionAttachments, addSessionTextChunk, addSessionImageChunk } = useVoiceBotStore();
+    const { hasPermission } = useCurrentUserPermissions();
     const [customPromptResult, setCustomPromptResult] = useState<unknown>(null);
     const [activeTab, setActiveTab] = useState('2');
     const [isLoading, setIsLoading] = useState(true);
@@ -183,6 +187,14 @@ export default function SessionPage() {
         );
     }
 
+    const possibleTasks = (
+        (voiceBotSession?.processors_data as Record<string, unknown> | undefined)?.CREATE_TASKS as
+            | { data?: unknown[] }
+            | undefined
+    )?.data;
+    const hasPossibleTasks = Array.isArray(possibleTasks) && possibleTasks.length > 0;
+    const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
+
     const tabs = [
         {
             key: '1',
@@ -194,6 +206,15 @@ export default function SessionPage() {
             label: 'Категоризация',
             children: <Categorization />,
         },
+        ...(hasPossibleTasks && canUpdateProjects
+            ? [
+                {
+                    key: 'tasks',
+                    label: 'Возможные задачи',
+                    children: <PossibleTasks />,
+                },
+            ]
+            : []),
         {
             key: 'screenshort',
             label: 'Screenshort',

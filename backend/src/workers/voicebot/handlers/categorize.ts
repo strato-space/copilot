@@ -32,10 +32,13 @@ type VoiceMessageRecord = {
   _id: ObjectId;
   session_id?: ObjectId | string;
   message_id?: string | number;
+  message_type?: string;
   categorization_attempts?: number;
   categorization_retry_reason?: string;
   transcription_text?: string;
   text?: string;
+  transcription?: unknown;
+  transcription_raw?: unknown;
   speaker?: string;
 };
 
@@ -190,6 +193,29 @@ const normalizeCategorizationItem = (
   };
 };
 
+const getTextFromUnknownPayload = (value: unknown): string => {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  const text = record.text;
+  return typeof text === 'string' ? text.trim() : '';
+};
+
+const resolveTranscriptionText = (message: VoiceMessageRecord): string => {
+  const candidates = [
+    message.transcription_text,
+    message.text,
+    getTextFromUnknownPayload(message.transcription),
+    getTextFromUnknownPayload(message.transcription_raw),
+  ];
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim();
+    if (!normalized) continue;
+    if (normalized === '[Image]' || normalized === '[Screenshot]') continue;
+    return normalized;
+  }
+  return '';
+};
+
 const createOpenAiClient = (): OpenAI | null => {
   const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
   if (!apiKey) return null;
@@ -277,12 +303,41 @@ export const handleCategorizeJob = async (
     return { ok: false, error: 'session_not_found', message_id, session_id };
   }
 
-  const transcriptionText = String(message.transcription_text || message.text || '').trim();
+  const transcriptionText = resolveTranscriptionText(message);
   if (!transcriptionText && !payload.force) {
+    const skippedMessageType = String(message.message_type || '').trim().toLowerCase();
+    const processorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+      $set: {
+        categorization: [],
+        categorization_timestamp: Date.now(),
+        [`${processorKey}.is_processing`]: false,
+        [`${processorKey}.is_processed`]: true,
+        [`${processorKey}.is_finished`]: true,
+        [`${processorKey}.job_finished_timestamp`]: Date.now(),
+      },
+      $unset: {
+        categorization_attempts: 1,
+        categorization_next_attempt_at: 1,
+        categorization_retry_reason: 1,
+        categorization_error: 1,
+        categorization_error_message: 1,
+        categorization_error_timestamp: 1,
+      },
+    });
+    await emitMessageUpdateById({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
+    });
+
     return {
       ok: true,
       skipped: true,
-      reason: 'missing_transcription_text',
+      reason: skippedMessageType === 'image' || skippedMessageType === 'screenshot'
+        ? 'non_text_message'
+        : 'missing_transcription_text',
       message_id,
       session_id,
     };

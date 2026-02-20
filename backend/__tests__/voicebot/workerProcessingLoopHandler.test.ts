@@ -19,27 +19,36 @@ jest.unstable_mockModule('../../src/services/voicebotQueues.js', () => ({
 
 const { handleProcessingLoopJob } = await import('../../src/workers/voicebot/handlers/processingLoop.js');
 
-const makeFindCursor = (rows: unknown[]) => ({
-  sort: () => ({
-    limit: () => ({
-      project: () => ({
-        toArray: async () => rows,
-      }),
-      toArray: async () => rows,
-    }),
-    toArray: async () => rows,
-  }),
-  limit: () => ({
-    project: () => ({
-      toArray: async () => rows,
-    }),
-    toArray: async () => rows,
-  }),
-  project: () => ({
-    toArray: async () => rows,
-  }),
-  toArray: async () => rows,
-});
+const makeFindCursor = (rows: unknown[]) => {
+  let scopedRows = [...rows];
+  const cursor = {
+    sort: (spec?: Record<string, 1 | -1>) => {
+      if (spec && typeof spec === 'object') {
+        const entries = Object.entries(spec);
+        scopedRows.sort((left, right) => {
+          for (const [field, direction] of entries) {
+            const lVal = (left as Record<string, unknown>)[field];
+            const rVal = (right as Record<string, unknown>)[field];
+            if (lVal === rVal) continue;
+            const cmp = lVal && rVal && lVal > rVal ? 1 : -1;
+            return direction === -1 ? -cmp : cmp;
+          }
+          return 0;
+        });
+      }
+      return cursor;
+    },
+    limit: (value?: number) => {
+      if (typeof value === 'number') {
+        scopedRows = scopedRows.slice(0, value);
+      }
+      return cursor;
+    },
+    project: () => cursor,
+    toArray: async () => scopedRows,
+  };
+  return cursor;
+};
 
 describe('handleProcessingLoopJob', () => {
   beforeEach(() => {
@@ -590,5 +599,77 @@ describe('handleProcessingLoopJob', () => {
     expect(result.ok).toBe(true);
     expect(result.requeued_transcriptions).toBe(1);
     expect(runtimeVoiceQueueAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('finalizes newest ready session first when finalize backlog exceeds limit', async () => {
+    const oldStuckSessionId = new ObjectId();
+    const newReadySessionId = new ObjectId();
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() => makeFindCursor([]))
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: oldStuckSessionId,
+            updated_at: new Date('2026-02-01T00:00:00.000Z'),
+            session_processors: ['CREATE_TASKS'],
+            processors_data: {
+              CREATE_TASKS: {
+                is_processed: false,
+              },
+            },
+          },
+          {
+            _id: newReadySessionId,
+            updated_at: new Date('2026-02-20T06:00:00.000Z'),
+            session_processors: ['CREATE_TASKS'],
+            processors_data: {
+              CREATE_TASKS: {
+                is_processed: true,
+              },
+            },
+          },
+        ])
+      );
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: jest.fn(() => makeFindCursor([])),
+            updateOne: jest.fn(),
+            countDocuments: jest.fn().mockResolvedValue(0),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob({ limit: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(result.finalized_sessions).toBe(1);
+
+    expect(sessionsUpdateOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $and: expect.arrayContaining([
+          expect.objectContaining({ _id: newReadySessionId }),
+        ]),
+      }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          is_finalized: true,
+          is_postprocessing: true,
+        }),
+      })
+    );
   });
 });

@@ -241,10 +241,6 @@ test.describe('Voice FAB lifecycle parity', () => {
 
     const metaRow = page.locator('.voice-meeting-meta-row');
     await expect(metaRow).toBeVisible();
-    await expect(metaRow.getByText('Создано', { exact: true })).toBeVisible();
-    await expect(metaRow.getByText('Session ID', { exact: true })).toBeVisible();
-    await expect(metaRow.getByText('Участники', { exact: true })).toBeVisible();
-    await expect(metaRow.getByText('Доступ', { exact: true })).toBeVisible();
 
     await expect(page.getByText('Ожидание обработки сообщений').first()).toBeVisible();
     await expect(page.getByRole('button', { name: /Загрузить аудио/i }).first()).toBeVisible();

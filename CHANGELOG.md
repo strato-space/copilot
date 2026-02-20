@@ -2,6 +2,10 @@
 
 ## 2026-02-20
 ### PROBLEM SOLVED
+- **09:20** Session page in Copilot missed the `Возможные задачи` tab even after session postprocessing had produced `CREATE_TASKS.data`, forcing operators to leave the session UI to create tasks.
+- **09:20** Non-text placeholders (`image` / `[Image]` / `[Screenshot]`) could block `CREATE_TASKS` postprocessing and keep sessions in `is_messages_processed=false` despite having nothing to categorize.
+- **09:20** Finalization scan could starve newly closed sessions when old stuck sessions accumulated in `to_finalize=true` backlog.
+- **09:20** Voice header metadata still rendered verbose labels (`Создано`, `Session ID`, `Участники`, `Доступ`) contrary to the compact value-only contract.
 - **09:02** OperOps CRM task details link from the eye icon could resolve to `/operops/task/undefined` for rows without a public `id`, causing `404` on `/api/crm/tickets/get-by-id`.
 - **09:02** CRM table filter by performer could miss valid rows because records mix `_id` and legacy `id` across ticket payloads and dictionary data.
 - **09:02** Newly created/edited CRM tasks could show placeholder/malformed project labels in the table when only `project_id` was present and `project` name was not hydrated.
@@ -12,6 +16,10 @@
 - **05:18** Migration planning docs drifted from current `bd` execution state: open backlog and accepted decisions were not clearly reflected in one place.
 
 ### FEATURE IMPLEMENTED
+- **09:20** Added session-level `Возможные задачи` tab in Copilot with task-triage table (`description` restored, no `status/project/AI` columns), validation highlights, and row-level AI metadata expander.
+- **09:20** Hardened TS voice workers: categorization now marks non-text rows as processed (with realtime `message_update`), and `CREATE_TASKS` treats non-categorizable rows as ready while still marking session messages processed on empty/no-chunks paths.
+- **09:20** Updated processing loop finalization strategy to prioritize newest sessions under backlog pressure via sorted wide-window scan.
+- **09:20** Updated UI contract to value-only metadata row and synchronized Playwright/Jest expectations.
 - **09:02** Added robust CRM task-link fallback and identifier normalization in Kanban so task details open by `id || _id` and project labels resolve from `project_data`/`project_id`/`project`.
 - **09:02** Implemented performer filter compatibility layer in CRM Kanban to match rows reliably for mixed `_id`/`id` performer references.
 - **09:02** Added structured CRM ticket normalization logs on `create` and `update` with before/after `project_id` and performer identifiers.
@@ -21,6 +29,19 @@
 - **05:18** Added a refreshed execution-oriented migration plan with explicit open backlog mapping (`copilot-vsen`, `copilot-ia38`) and accepted-decision section.
 
 ### CHANGES
+- **09:20** Voice session page + task UI updates:
+  - `app/src/pages/voice/SessionPage.tsx`: conditional `Возможные задачи` tab injection (requires `CREATE_TASKS.data` and `PROJECTS.UPDATE` permission).
+  - `app/src/components/voice/PossibleTasks.tsx` (new): task triage table with required-field validation, search/filter controls, row selection, delete flow, and expandable AI metadata details.
+  - `app/src/components/voice/MeetingCard.tsx`: compact value-only metadata row (labels removed).
+- **09:20** Worker runtime behavior updates:
+  - `backend/src/workers/voicebot/handlers/categorize.ts`: transcription text resolution now checks `transcription_text`, `text`, `transcription.text`, `transcription_raw.text`; non-text messages are marked processed with empty categorization and emitted via socket update.
+  - `backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts`: non-categorizable message-type allowlist for readiness and explicit `is_messages_processed=true` marking for empty/no-chunks/success paths.
+  - `backend/src/workers/voicebot/handlers/processingLoop.ts`: finalize backlog scan widened and sorted by newest sessions (`updated_at`, `_id`).
+- **09:20** Added/updated regression tests:
+  - new `app/__tests__/voice/possibleTasksDesignContract.test.ts`;
+  - new `app/__tests__/voice/sessionPagePossibleTasksTabContract.test.ts`;
+  - updated `app/e2e/voice-fab-lifecycle.spec.ts`;
+  - updated backend worker tests: `workerPostprocessingCreateTasksAudioMergingHandlers.test.ts`, `workerProcessingLoopHandler.test.ts`, `workerScaffoldHandlers.test.ts`.
 - **09:02** Updated CRM Kanban render/filter/action behavior:
   - `app/src/components/crm/CRMKanban.tsx`: normalized project lookup (string/ObjectId-like values), display-name resolution for project tag/filter/sort, performer filter id-compatibility, and eye-link fallback to `_id`.
   - `app/src/components/crm/CommentsSidebar.tsx` and `app/src/components/crm/WorkHoursSidebar.tsx`: render project name via store resolver instead of raw stored identifier.

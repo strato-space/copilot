@@ -48,6 +48,7 @@ describe('postprocessing create tasks + audio merging handlers', () => {
           {
             _id: new ObjectId(),
             session_id: sessionId,
+            transcription_text: 'Need categorization before task synthesis',
             processors_data: {
               categorization: { is_processed: false },
             },
@@ -193,11 +194,58 @@ describe('postprocessing create tasks + audio merging handlers', () => {
       session_id: sessionId.toString(),
     });
 
-    expect(sessionsUpdateOne).toHaveBeenCalledTimes(1);
+    expect(sessionsUpdateOne).toHaveBeenCalledTimes(2);
     const updatePayload = sessionsUpdateOne.mock.calls[0]?.[1] as Record<string, unknown>;
     const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
     expect(setPayload['processors_data.CREATE_TASKS.is_processed']).toBe(true);
     expect(setPayload['processors_data.CREATE_TASKS.data']).toEqual([]);
+    const processedPayload = sessionsUpdateOne.mock.calls[1]?.[1] as Record<string, unknown>;
+    const processedSetPayload = (processedPayload.$set as Record<string, unknown>) || {};
+    expect(processedSetPayload.is_messages_processed).toBe(true);
+  });
+
+  it('does not block CREATE_TASKS on uncategorizable image placeholders', async () => {
+    const sessionId = new ObjectId();
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: new ObjectId(),
+            session_id: sessionId,
+            message_type: 'image',
+            text: '[Image]',
+          },
+        ],
+      }),
+    }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionsFindOne, updateOne: sessionsUpdateOne };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return { find: messagesFind };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleCreateTasksPostprocessingJob({
+      session_id: sessionId.toString(),
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      skipped: true,
+      reason: 'no_chunks_to_process',
+      session_id: sessionId.toString(),
+    });
+    expect(sessionsUpdateOne).toHaveBeenCalledTimes(3);
+    const markProcessedPayload = sessionsUpdateOne.mock.calls[2]?.[1] as Record<string, unknown>;
+    expect((markProcessedPayload.$set as Record<string, unknown>).is_messages_processed).toBe(true);
   });
 
   it('audio_merging skips when there are fewer than 2 telegram chunks', async () => {

@@ -702,19 +702,16 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
 
                 <div className="voice-meeting-meta-row">
                     <div className="voice-meeting-meta-chip">
-                        <span className="voice-meeting-meta-label">Создано</span>
                         <span className="voice-meeting-meta-value">
                             {voiceBotSession?.created_at ? dayjs(voiceBotSession.created_at).format('DD.MM.YYYY HH:mm') : '—'}
                         </span>
                     </div>
 
                     <div className="voice-meeting-meta-chip">
-                        <span className="voice-meeting-meta-label">Session ID</span>
                         <span className="voice-meeting-meta-value">{voiceBotSession?._id || 'N/A'}</span>
                     </div>
 
                     <div className="voice-meeting-meta-chip voice-meeting-meta-chip-grow">
-                        <span className="voice-meeting-meta-label">Участники</span>
                         <Tooltip title={participantsTitle}>
                             <span className="voice-meeting-meta-value">{participantsDisplay}</span>
                         </Tooltip>
@@ -730,7 +727,6 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                     </div>
 
                     <div className="voice-meeting-meta-chip voice-meeting-meta-chip-grow">
-                        <span className="voice-meeting-meta-label">Доступ</span>
                         <Tooltip title={SESSION_ACCESS_LEVELS_DESCRIPTIONS[currentAccessLevel]}>
                             <span className="voice-meeting-meta-value">{accessSummary}</span>
                         </Tooltip>

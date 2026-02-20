@@ -460,6 +460,8 @@ export const handleProcessingLoopJob = async (
     }
   }
 
+  const finalizeScanLimit = Math.max(sessionLimit * 20, 500);
+
   const sessionsToFinalize = (await db
     .collection(VOICEBOT_COLLECTIONS.SESSIONS)
     .find(
@@ -468,9 +470,21 @@ export const handleProcessingLoopJob = async (
         is_messages_processed: true,
         to_finalize: true,
         is_finalized: false,
-      })
+      }),
+      {
+        projection: {
+          _id: 1,
+          session_processors: 1,
+          processors_data: 1,
+        },
+      }
     )
-    .limit(sessionLimit)
+    // Prioritize newest closed sessions so stale old sessions do not starve finalization.
+    .sort({
+      updated_at: -1,
+      _id: -1,
+    })
+    .limit(finalizeScanLimit)
     .toArray()) as SessionRecord[];
 
   let finalizedSessions = 0;

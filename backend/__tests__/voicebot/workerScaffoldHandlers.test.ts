@@ -47,6 +47,7 @@ describe('voicebot worker scaffold handlers', () => {
   it('categorize handler skips when transcription text is absent', async () => {
     const messageId = new ObjectId();
     const sessionId = new ObjectId();
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
     const messageFindOne = jest.fn(async () => ({
       _id: messageId,
       session_id: sessionId,
@@ -56,7 +57,7 @@ describe('voicebot worker scaffold handlers', () => {
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
-        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne: messageFindOne };
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) return { findOne: messageFindOne, updateOne: messagesUpdateOne };
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { findOne: sessionFindOne };
         return {};
       },
@@ -66,6 +67,7 @@ describe('voicebot worker scaffold handlers', () => {
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
     expect(result.reason).toBe('missing_transcription_text');
+    expect(messagesUpdateOne).toHaveBeenCalled();
   });
 
   it('finalization handler skips with no_custom_data when no custom buckets exist', async () => {
