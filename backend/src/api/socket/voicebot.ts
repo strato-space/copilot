@@ -227,36 +227,37 @@ const handleSessionDone = async ({
       return;
     }
 
+    // Close immediately so UI/state reflects closed session even before async post-processing.
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+      mergeWithRuntimeFilter(
+        { _id: new ObjectId(session_id) },
+        {
+          field: 'runtime_tag',
+          familyMatch: IS_PROD_RUNTIME,
+          includeLegacyInProd: IS_PROD_RUNTIME,
+        }
+      ),
+      {
+        $set: {
+          is_active: false,
+          to_finalize: true,
+          done_at: new Date(),
+          updated_at: new Date(),
+        },
+        $inc: {
+          done_count: 1,
+        },
+      }
+    );
+
     if (commonQueue) {
       await commonQueue.add(VOICEBOT_JOBS.common.DONE_MULTIPROMPT, {
         session_id,
         chat_id,
         telegram_user_id: performer?.telegram_id ? String(performer.telegram_id) : null,
         notify_preview: notifyPreview,
+        already_closed: true,
       });
-    } else {
-      // Fallback for Copilot runtime where workers may run outside this process.
-      await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-        mergeWithRuntimeFilter(
-          { _id: new ObjectId(session_id) },
-          {
-            field: 'runtime_tag',
-            familyMatch: IS_PROD_RUNTIME,
-            includeLegacyInProd: IS_PROD_RUNTIME,
-          }
-        ),
-        {
-          $set: {
-            is_active: false,
-            to_finalize: true,
-            done_at: new Date(),
-            updated_at: new Date(),
-          },
-          $inc: {
-            done_count: 1,
-          },
-        }
-      );
     }
 
     await clearActiveVoiceSessionBySessionId({ db, session_id });

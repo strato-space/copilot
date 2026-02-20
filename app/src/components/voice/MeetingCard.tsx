@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button, Select, message, Input, Tooltip } from 'antd';
-import { DownloadOutlined, EditOutlined, RobotOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
@@ -11,11 +12,38 @@ import AccessUsersModal from './AccessUsersModal';
 import CustomPromptModal from './CustomPromptModal';
 import { buildGroupedProjectOptions } from './projectSelectOptions';
 import type { SessionAccessLevel } from '../../constants/permissions';
+import type { VoicebotPerson } from '../../types/voice';
 
 interface MeetingCardProps {
     onCustomPromptResult?: (result: unknown) => void;
     activeTab?: string;
 }
+
+type PerformerRecord = Record<string, unknown>;
+
+const getInitials = (fullName: string): string => {
+    const trimmed = String(fullName || '').trim();
+    if (!trimmed) return '';
+    const parts = trimmed.split(/\s+/g).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0] ?? '';
+    const surname = parts[0] ?? '';
+    const initials = parts
+        .slice(1)
+        .map((name) => name.charAt(0).toUpperCase())
+        .join('.');
+    return initials ? `${surname} ${initials}.` : surname;
+};
+
+const readPerformerField = (performer: PerformerRecord | undefined, field: 'name' | 'email'): string => {
+    const value = performer?.[field];
+    return typeof value === 'string' ? value : '';
+};
+
+const resolvePerformer = (performers: PerformerRecord[] | null, id: string): PerformerRecord | undefined => {
+    if (!Array.isArray(performers) || !id) return undefined;
+    return performers.find((performer) => String(performer._id || '').trim() === id);
+};
 
 export default function MeetingCard({ onCustomPromptResult, activeTab }: MeetingCardProps) {
     const SESSION_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_ID';
@@ -23,6 +51,8 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         voiceBotSession,
         updateSessionName,
         prepared_projects,
+        persons_list,
+        performers_list,
         fetchPreparedProjects,
         updateSessionProject,
         updateSessionAccessLevel,
@@ -51,6 +81,67 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const [isCutting, setIsCutting] = useState(false);
     const [isPausing, setIsPausing] = useState(false);
     const [isFinishing, setIsFinishing] = useState(false);
+
+    const circleIconWrapperStyle: CSSProperties = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        lineHeight: 0,
+    };
+    const circleIconButtonStyle: CSSProperties = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    };
+    const controlButtonBaseStyle: CSSProperties = {
+        borderRadius: 999,
+        minWidth: 92,
+        height: 40,
+        paddingInline: 16,
+        fontWeight: 650,
+        letterSpacing: '0.01em',
+        borderColor: 'rgba(15, 23, 42, 0.12)',
+        background: 'rgba(15, 23, 42, 0.04)',
+        color: '#0f172a',
+        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.72)',
+    };
+    const controlButtonByAction: Record<string, CSSProperties> = {
+        new: { background: 'rgba(59, 130, 246, 0.10)', borderColor: 'rgba(59, 130, 246, 0.22)', color: '#1d4ed8' },
+        rec: { background: 'rgba(239, 68, 68, 0.10)', borderColor: 'rgba(239, 68, 68, 0.22)', color: '#b91c1c' },
+        cut: { background: 'rgba(15, 23, 42, 0.04)', borderColor: 'rgba(15, 23, 42, 0.12)', color: '#64748b' },
+        pause: { background: 'rgba(234, 179, 8, 0.10)', borderColor: 'rgba(234, 179, 8, 0.22)', color: '#a16207' },
+        done: { background: 'rgba(34, 197, 94, 0.12)', borderColor: 'rgba(34, 197, 94, 0.24)', color: '#047857' },
+    };
+    const controlIconByAction: Record<string, { glyph: string; color: string }> = {
+        new: { glyph: '🆕', color: '#1d4ed8' },
+        rec: { glyph: '⏺', color: '#dc2626' },
+        cut: { glyph: '✂️', color: '#fb7185' },
+        pause: { glyph: '⏸️', color: '#0ea5e9' },
+        done: { glyph: '✅', color: '#4ade80' },
+    };
+
+    const controlButtonStyle = (action: string, disabled: boolean): CSSProperties => (
+        disabled
+            ? {
+                ...controlButtonBaseStyle,
+                color: '#94a3b8',
+                background: 'rgba(15, 23, 42, 0.03)',
+                borderColor: 'rgba(15, 23, 42, 0.10)',
+            }
+            : {
+                ...controlButtonBaseStyle,
+                ...(controlButtonByAction[action] || {}),
+            }
+    );
+
+    const controlLabel = (action: string, title: string): ReactNode => (
+        <span className="inline-flex items-center gap-2">
+            <span style={{ color: controlIconByAction[action]?.color || 'currentColor', lineHeight: 1 }}>
+                {controlIconByAction[action]?.glyph || ''}
+            </span>
+            <span>{title}</span>
+        </span>
+    );
 
     useEffect(() => {
         setLocalSessionName(voiceBotSession?.session_name || '');
@@ -188,7 +279,6 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const triggerSummarize = async (): Promise<void> => {
         if (!voiceBotSession?._id) return;
 
-        // Enforce 3-minute UI cooldown between manual summarize triggers.
         setSummarizeDisabledUntil(Date.now() + 3 * 60 * 1000);
         setIsSummarizing(true);
         messageApi.open({
@@ -219,9 +309,6 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
             setIsSummarizing(false);
         }
     };
-
-    const circleIconButtonClassName = 'inline-flex items-center justify-center border border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100';
-    const centeredIconClassName = 'inline-flex items-center justify-center leading-none';
 
     const runFabControlAction = async ({
         action,
@@ -288,237 +375,377 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         return 'ready';
     })();
 
-    const stateBadge = (() => {
-        if (sessionVisualState === 'recording') return <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />;
-        if (sessionVisualState === 'paused') {
-            return (
-                <span className="inline-flex items-center gap-[2px]">
-                    <span className="block h-3 w-[2px] rounded-sm bg-amber-500" />
-                    <span className="block h-3 w-[2px] rounded-sm bg-amber-500" />
-                </span>
-            );
-        }
-        if (sessionVisualState === 'finalizing') return <span className="text-xs font-semibold leading-none text-emerald-500">✓</span>;
-        if (sessionVisualState === 'error') return <span className="text-xs font-semibold leading-none text-rose-500">!</span>;
-        if (sessionVisualState === 'closed') return <span className="h-2.5 w-2.5 rounded-[2px] bg-blue-500" />;
-        return <span className="h-2.5 w-2.5 rounded-full border border-slate-400" />;
+    const visualByState: Record<string, { title: string; badgeClass: string }> = {
+        recording: { title: 'Recording', badgeClass: 'is-recording' },
+        paused: { title: 'Paused', badgeClass: 'is-paused' },
+        cutting: { title: 'Cutting', badgeClass: 'is-cutting' },
+        finalizing: { title: 'Final upload', badgeClass: 'is-finalizing' },
+        error: { title: 'Error', badgeClass: 'is-error' },
+        closed: { title: 'Closed', badgeClass: 'is-closed' },
+        ready: { title: 'Ready', badgeClass: 'is-ready' },
+    };
+    const defaultVisual = { title: 'Ready', badgeClass: 'is-ready' };
+    const sessionVisual = visualByState[sessionVisualState] ?? defaultVisual;
+
+    const participantNames = Array.isArray(voiceBotSession?.participants)
+        ? voiceBotSession.participants
+            .map((participant, index) => {
+                if (participant && typeof participant === 'object') {
+                    const person = participant as VoicebotPerson;
+                    return person.name || person.full_name || `Участник ${index + 1}`;
+                }
+                const id = typeof participant === 'string' ? participant : '';
+                const found = (persons_list || []).find((person) => person._id === id);
+                return found?.name || found?.full_name || `Участник ${index + 1}`;
+            })
+            .filter((item): item is string => Boolean(item))
+        : [];
+
+    const participantsTitle = participantNames.length > 0 ? participantNames.join(', ') : 'Участники не указаны';
+    const participantsDisplay = participantNames.length > 0
+        ? participantNames.map((name) => getInitials(name)).join(' • ')
+        : 'Не указаны';
+
+    const accessSummary = (() => {
+        const accessLevel = (voiceBotSession?.access_level || SESSION_ACCESS_LEVELS.PRIVATE) as SessionAccessLevel;
+        if (accessLevel === SESSION_ACCESS_LEVELS.PUBLIC) return 'Все пользователи проекта';
+        if (accessLevel === SESSION_ACCESS_LEVELS.PRIVATE) return 'Только создатель';
+
+        const allowedUsersRaw = Array.isArray(voiceBotSession?.allowed_users) ? (voiceBotSession.allowed_users as unknown[]) : [];
+        if (allowedUsersRaw.length === 0) return 'Создатель + админы';
+
+        const labels = allowedUsersRaw
+            .map((entry, index) => {
+                if (entry && typeof entry === 'object') {
+                    const obj = entry as Record<string, unknown>;
+                    const email = typeof obj.email === 'string' ? obj.email : '';
+                    const name = typeof obj.name === 'string' ? obj.name : '';
+                    const id = typeof obj._id === 'string' ? obj._id : '';
+                    if (email) return email;
+                    if (name) return name;
+                    if (id) {
+                        const performer = resolvePerformer(performers_list, id);
+                        return readPerformerField(performer, 'email') || readPerformerField(performer, 'name') || `User ${index + 1}`;
+                    }
+                    return `User ${index + 1}`;
+                }
+
+                const id = typeof entry === 'string' ? entry : '';
+                if (!id) return `User ${index + 1}`;
+                const performer = resolvePerformer(performers_list, id);
+                return readPerformerField(performer, 'email') || readPerformerField(performer, 'name') || `User ${index + 1}`;
+            })
+            .filter(Boolean);
+
+        return labels.length > 0 ? labels.join(' • ') : 'Создатель + админы';
     })();
 
+    const currentAccessLevel = (voiceBotSession?.access_level || SESSION_ACCESS_LEVELS.PRIVATE) as SessionAccessLevel;
+
     return (
-        <div className="w-full max-w-[1740px] bg-white rounded-lg shadow-sm p-4">
+        <>
             {contextHolder}
-            <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                    {isEditing ? (
-                        <Input
-                            value={localSessionName}
-                            onChange={(event) => setLocalSessionName(event.target.value)}
-                            onBlur={handleSessionNameSave}
-                            onPressEnter={handleSessionNameSave}
-                            className="max-w-md"
-                        />
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-base font-semibold m-0">{voiceBotSession?.session_name || 'Без названия'}</h3>
+            <div data-record="False" className="voice-meeting-glass-card">
+                <div className="voice-meeting-header-row">
+                    <div className="voice-meeting-header-main">
+                        <div className="voice-meeting-control-field">
+                            <Select
+                                placeholder="Проект"
+                                className="w-[220px]"
+                                value={voiceBotSession?.project_id ?? undefined}
+                                onChange={(value) => voiceBotSession?._id && updateSessionProject(voiceBotSession._id, value ?? null)}
+                                allowClear
+                                options={buildGroupedProjectOptions(prepared_projects)}
+                                showSearch
+                                optionFilterProp="label"
+                                filterOption={(inputValue, option) =>
+                                    String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
+                                }
+                            />
+                        </div>
+
+                        <div className="voice-meeting-control-field">
+                            <Tooltip title={SESSION_ACCESS_LEVELS_DESCRIPTIONS[currentAccessLevel]}>
+                                <Select
+                                    placeholder="Уровень доступа"
+                                    className="w-[220px]"
+                                    value={currentAccessLevel}
+                                    onChange={(value) => {
+                                        if (!voiceBotSession?._id || !value) return;
+                                        updateSessionAccessLevel(voiceBotSession._id, value);
+                                    }}
+                                    options={Object.values(SESSION_ACCESS_LEVELS).map((value) => ({
+                                        value,
+                                        label: SESSION_ACCESS_LEVELS_NAMES[value as SessionAccessLevel],
+                                    }))}
+                                />
+                            </Tooltip>
+                        </div>
+
+                        <div className="voice-meeting-title-wrap">
+                            {isEditing ? (
+                                <Input
+                                    value={localSessionName}
+                                    onChange={(event) => setLocalSessionName(event.target.value)}
+                                    onBlur={handleSessionNameSave}
+                                    onPressEnter={handleSessionNameSave}
+                                    className="voice-meeting-title-input"
+                                />
+                            ) : (
+                                <div className="voice-meeting-title" onClick={() => setIsEditing(true)} title="Редактировать название встречи">
+                                    {voiceBotSession?.session_name || 'Без названия'}
+                                </div>
+                            )}
+
                             <Tooltip title="Редактировать">
                                 <Button
                                     type="text"
                                     shape="circle"
-                                    className={circleIconButtonClassName}
-                                    icon={<span className={centeredIconClassName}><EditOutlined /></span>}
+                                    style={circleIconButtonStyle}
+                                    icon={<span style={circleIconWrapperStyle}><EditOutlined style={{ color: '#8ea0b8', fontSize: 16 }} /></span>}
                                     onClick={() => setIsEditing(true)}
                                 />
                             </Tooltip>
+
                             <Tooltip title="AI заголовок">
                                 <Button
                                     type="text"
                                     shape="circle"
-                                    className={circleIconButtonClassName}
-                                    icon={<span className={centeredIconClassName}><RobotOutlined /></span>}
+                                    style={circleIconButtonStyle}
+                                    icon={<span style={circleIconWrapperStyle}><RobotOutlined style={{ color: '#1677ff', fontSize: 16 }} /></span>}
                                     loading={isGeneratingTitle}
                                     onClick={handleGenerateTitle}
                                     disabled={!voiceBotSession?._id}
                                 />
                             </Tooltip>
+
                             <Tooltip title="Summarize">
                                 <Button
                                     type="text"
                                     shape="circle"
-                                    className={circleIconButtonClassName}
-                                    icon={<span className={`${centeredIconClassName} text-sm font-semibold`}>∑</span>}
+                                    style={circleIconButtonStyle}
+                                    icon={<span style={circleIconWrapperStyle}><span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span></span>}
                                     loading={isSummarizing}
                                     onClick={triggerSummarize}
                                     disabled={!voiceBotSession?._id || isSummarizing || isSummarizeCooldownActive}
                                 />
                             </Tooltip>
                         </div>
-                    )}
+                    </div>
 
-                    <Button icon={<DownloadOutlined />} onClick={() => voiceBotSession?._id && downloadTranscription(voiceBotSession._id)}>
-                        Скачать транскрипцию
-                    </Button>
+                    <div className="voice-meeting-header-actions">
+                        <Tooltip title="Запустить произвольный промпт">
+                            <button className="voice-meeting-icon-button" onClick={() => setCustomPromptModalVisible(true)}>
+                                <MoreOutlined />
+                            </button>
+                        </Tooltip>
+
+                        <Tooltip title="Скачать Транскрипцию">
+                            <button
+                                className="voice-meeting-icon-button is-success"
+                                onClick={() => {
+                                    if (voiceBotSession?._id) {
+                                        void downloadTranscription(voiceBotSession._id);
+                                    }
+                                }}
+                            >
+                                <DownloadOutlined />
+                            </button>
+                        </Tooltip>
+                    </div>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
-                    <Select
-                        placeholder="Проект"
-                        className="min-w-[240px]"
-                        value={voiceBotSession?.project_id ?? undefined}
-                        onChange={(value) => voiceBotSession?._id && updateSessionProject(voiceBotSession._id, value ?? null)}
-                        allowClear
-                        options={buildGroupedProjectOptions(prepared_projects)}
-                        showSearch
-                        optionFilterProp="label"
-                        filterOption={(inputValue, option) =>
-                            String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
-                        }
-                    />
+                <div className="voice-meeting-toolbar-row flex flex-wrap items-center gap-2">
+                    <Tooltip title={`State: ${sessionVisual.title}`}>
+                        <div className={`voice-meeting-state-badge ${sessionVisual.badgeClass}`}>
+                            <div className="voice-meeting-state-icon">
+                                {sessionVisualState === 'recording' && <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />}
+                                {sessionVisualState === 'paused' && (
+                                    <div className="inline-flex items-center justify-center gap-[2px]">
+                                        <span className="block h-3 w-[2px] rounded-sm bg-amber-500" />
+                                        <span className="block h-3 w-[2px] rounded-sm bg-amber-500" />
+                                    </div>
+                                )}
+                                {sessionVisualState === 'finalizing' && <span className="text-[12px] font-semibold leading-none text-emerald-500">✓</span>}
+                                {sessionVisualState === 'error' && <span className="text-[12px] font-semibold leading-none text-rose-500">!</span>}
+                                {sessionVisualState === 'closed' && <div className="h-2.5 w-2.5 rounded-[2px] bg-blue-500" />}
+                                {sessionVisualState === 'ready' && <div className="h-2.5 w-2.5 rounded-full border border-slate-400" />}
+                            </div>
+                        </div>
+                    </Tooltip>
 
-                    <Tooltip
-                        title={
-                            voiceBotSession?.access_level
-                                ? SESSION_ACCESS_LEVELS_DESCRIPTIONS[voiceBotSession.access_level as SessionAccessLevel]
-                                : undefined
-                        }
-                    >
-                        <Select
-                            placeholder="Уровень доступа"
-                            className="min-w-[220px]"
-                            value={voiceBotSession?.access_level ?? undefined}
-                            onChange={(value) => {
-                                if (!voiceBotSession?._id || !value) return;
-                                updateSessionAccessLevel(voiceBotSession._id, value);
+                    <div className="voice-meeting-toolbar-buttons">
+                        <Button
+                            aria-label="New"
+                            size="middle"
+                            loading={isNewStarting}
+                            disabled={!canNewControl || controlsBusy}
+                            style={controlButtonStyle('new', !canNewControl || controlsBusy)}
+                            onClick={async () => {
+                                if (!canNewControl || controlsBusy) return;
+                                setIsNewStarting(true);
+                                try {
+                                    const result = await runFabControlAction({ action: 'new' });
+                                    if (!result.handled) messageApi.warning('FAB is unavailable right now.');
+                                } catch (error) {
+                                    messageApi.error(`New failed: ${String(error)}`);
+                                } finally {
+                                    setIsNewStarting(false);
+                                }
                             }}
-                            options={Object.values(SESSION_ACCESS_LEVELS).map((value) => ({
-                                value,
-                                label: SESSION_ACCESS_LEVELS_NAMES[value as SessionAccessLevel],
-                            }))}
-                        />
-                    </Tooltip>
+                        >
+                            {controlLabel('new', 'New')}
+                        </Button>
 
-                    <Button icon={<TeamOutlined />} onClick={() => voiceBotSession?._id && openParticipantModal(voiceBotSession._id, voiceBotSession.participants ?? [])}>
-                        Участники
-                    </Button>
+                        <Button
+                            aria-label="Rec"
+                            size="middle"
+                            loading={isRecStarting}
+                            disabled={!canRecControl || controlsBusy}
+                            style={controlButtonStyle('rec', !canRecControl || controlsBusy)}
+                            onClick={async () => {
+                                if (!canRecControl || controlsBusy) return;
+                                setIsRecStarting(true);
+                                try {
+                                    const result = await runFabControlAction({ action: 'rec', ensurePageSessionActive: true });
+                                    if (!result.handled) messageApi.warning('FAB is unavailable right now.');
+                                } catch (error) {
+                                    messageApi.error(`Rec failed: ${String(error)}`);
+                                } finally {
+                                    setIsRecStarting(false);
+                                }
+                            }}
+                        >
+                            {controlLabel('rec', 'Rec')}
+                        </Button>
 
-                    <Button icon={<UserOutlined />} onClick={() => voiceBotSession?._id && openAccessUsersModal(voiceBotSession._id, voiceBotSession.allowed_users ?? [])}>
-                        Доступ
-                    </Button>
+                        <Button
+                            aria-label="Cut"
+                            size="middle"
+                            loading={isCutting}
+                            disabled={!canCutControl || controlsBusy}
+                            style={controlButtonStyle('cut', !canCutControl || controlsBusy)}
+                            onClick={async () => {
+                                if (!canCutControl || controlsBusy) return;
+                                setIsCutting(true);
+                                try {
+                                    const result = await runFabControlAction({ action: 'cut' });
+                                    if (!result.handled) messageApi.warning('FAB is unavailable right now.');
+                                } catch (error) {
+                                    messageApi.error(`Cut failed: ${String(error)}`);
+                                } finally {
+                                    setIsCutting(false);
+                                }
+                            }}
+                        >
+                            {controlLabel('cut', 'Cut')}
+                        </Button>
 
-                    <Button type="primary" onClick={() => setCustomPromptModalVisible(true)}>
-                        Запустить промпт
-                    </Button>
+                        <Button
+                            aria-label="Pause"
+                            size="middle"
+                            loading={isPausing}
+                            disabled={!canPauseControl || controlsBusy}
+                            style={controlButtonStyle('pause', !canPauseControl || controlsBusy)}
+                            onClick={async () => {
+                                if (!canPauseControl || controlsBusy) return;
+                                setIsPausing(true);
+                                try {
+                                    const result = await runFabControlAction({ action: 'pause' });
+                                    if (!result.handled) messageApi.warning('FAB is unavailable right now.');
+                                } catch (error) {
+                                    messageApi.error(`Pause failed: ${String(error)}`);
+                                } finally {
+                                    setIsPausing(false);
+                                }
+                            }}
+                        >
+                            {controlLabel('pause', 'Pause')}
+                        </Button>
+
+                        <Button
+                            aria-label="Done"
+                            size="middle"
+                            loading={isFinishing}
+                            disabled={!canDoneControl || controlsBusy}
+                            style={controlButtonStyle('done', !canDoneControl || controlsBusy)}
+                            onClick={async () => {
+                                if (!canDoneControl || controlsBusy || !voiceBotSession?._id) return;
+                                setIsFinishing(true);
+                                try {
+                                    const pageSessionId = String(voiceBotSession._id || '').trim();
+                                    if (!pageSessionId) return;
+
+                                    const shouldFinalizeViaFab =
+                                        isThisSessionActiveInFab && (fabIsRecording || fabIsPaused || fabIsFinalUploading);
+
+                                    if (shouldFinalizeViaFab) {
+                                        const result = await runFabControlAction({ action: 'done' });
+                                        if (!result.handled) {
+                                            finishSession(pageSessionId);
+                                        }
+                                    } else {
+                                        // Session-page Done must close explicit pageSessionId (spec contract).
+                                        finishSession(pageSessionId);
+                                    }
+                                } catch (error) {
+                                    messageApi.error(`Done failed: ${String(error)}`);
+                                } finally {
+                                    setIsFinishing(false);
+                                }
+                            }}
+                        >
+                            {controlLabel('done', 'Done')}
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <Tooltip title={`State: ${sessionVisualState}`}>
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-slate-50">
-                            {stateBadge}
+                <div className="voice-meeting-meta-row">
+                    <div className="voice-meeting-meta-chip">
+                        <span className="voice-meeting-meta-label">Создано</span>
+                        <span className="voice-meeting-meta-value">
+                            {voiceBotSession?.created_at ? dayjs(voiceBotSession.created_at).format('DD.MM.YYYY HH:mm') : '—'}
                         </span>
-                    </Tooltip>
+                    </div>
 
-                    <Button
-                        size="middle"
-                        loading={isNewStarting}
-                        disabled={!canNewControl || controlsBusy}
-                        onClick={async () => {
-                            if (!canNewControl || controlsBusy) return;
-                            setIsNewStarting(true);
-                            try {
-                                const result = await runFabControlAction({ action: 'new' });
-                                if (!result.handled) messageApi.warning('FAB is unavailable right now.');
-                            } catch (error) {
-                                messageApi.error(`New failed: ${String(error)}`);
-                            } finally {
-                                setIsNewStarting(false);
-                            }
-                        }}
-                    >
-                        New
-                    </Button>
+                    <div className="voice-meeting-meta-chip">
+                        <span className="voice-meeting-meta-label">Session ID</span>
+                        <span className="voice-meeting-meta-value">{voiceBotSession?._id || 'N/A'}</span>
+                    </div>
 
-                    <Button
-                        size="middle"
-                        loading={isRecStarting}
-                        disabled={!canRecControl || controlsBusy}
-                        onClick={async () => {
-                            if (!canRecControl || controlsBusy) return;
-                            setIsRecStarting(true);
-                            try {
-                                const result = await runFabControlAction({ action: 'rec', ensurePageSessionActive: true });
-                                if (!result.handled) messageApi.warning('FAB is unavailable right now.');
-                            } catch (error) {
-                                messageApi.error(`Rec failed: ${String(error)}`);
-                            } finally {
-                                setIsRecStarting(false);
-                            }
-                        }}
-                    >
-                        Rec
-                    </Button>
+                    <div className="voice-meeting-meta-chip voice-meeting-meta-chip-grow">
+                        <span className="voice-meeting-meta-label">Участники</span>
+                        <Tooltip title={participantsTitle}>
+                            <span className="voice-meeting-meta-value">{participantsDisplay}</span>
+                        </Tooltip>
+                        <Tooltip title="Добавить участника">
+                            <Button
+                                type="text"
+                                shape="circle"
+                                className="mt-[-2px] flex-shrink-0"
+                                icon={<PlusOutlined style={{ color: 'rgba(128,128,128,0.9)', fontSize: 12 }} />}
+                                onClick={() => voiceBotSession?._id && openParticipantModal(voiceBotSession._id, voiceBotSession.participants ?? [])}
+                            />
+                        </Tooltip>
+                    </div>
 
-                    <Button
-                        size="middle"
-                        loading={isCutting}
-                        disabled={!canCutControl || controlsBusy}
-                        onClick={async () => {
-                            if (!canCutControl || controlsBusy) return;
-                            setIsCutting(true);
-                            try {
-                                const result = await runFabControlAction({ action: 'cut' });
-                                if (!result.handled) messageApi.warning('FAB is unavailable right now.');
-                            } catch (error) {
-                                messageApi.error(`Cut failed: ${String(error)}`);
-                            } finally {
-                                setIsCutting(false);
-                            }
-                        }}
-                    >
-                        Cut
-                    </Button>
-
-                    <Button
-                        size="middle"
-                        loading={isPausing}
-                        disabled={!canPauseControl || controlsBusy}
-                        onClick={async () => {
-                            if (!canPauseControl || controlsBusy) return;
-                            setIsPausing(true);
-                            try {
-                                const result = await runFabControlAction({ action: 'pause' });
-                                if (!result.handled) messageApi.warning('FAB is unavailable right now.');
-                            } catch (error) {
-                                messageApi.error(`Pause failed: ${String(error)}`);
-                            } finally {
-                                setIsPausing(false);
-                            }
-                        }}
-                    >
-                        Pause
-                    </Button>
-
-                    <Button
-                        size="middle"
-                        loading={isFinishing}
-                        disabled={!canDoneControl || controlsBusy}
-                        onClick={async () => {
-                            if (!canDoneControl || controlsBusy || !voiceBotSession?._id) return;
-                            setIsFinishing(true);
-                            try {
-                                await runFabControlAction({
-                                    action: 'done',
-                                    fallback: async () => {
-                                        finishSession(voiceBotSession._id);
-                                    },
-                                });
-                            } catch (error) {
-                                messageApi.error(`Done failed: ${String(error)}`);
-                            } finally {
-                                setIsFinishing(false);
-                            }
-                        }}
-                    >
-                        Done
-                    </Button>
+                    <div className="voice-meeting-meta-chip voice-meeting-meta-chip-grow">
+                        <span className="voice-meeting-meta-label">Доступ</span>
+                        <Tooltip title={SESSION_ACCESS_LEVELS_DESCRIPTIONS[currentAccessLevel]}>
+                            <span className="voice-meeting-meta-value">{accessSummary}</span>
+                        </Tooltip>
+                        {currentAccessLevel === SESSION_ACCESS_LEVELS.RESTRICTED && (
+                            <Tooltip title="Управлять доступом">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    className="mt-[-2px]"
+                                    icon={<PlusOutlined style={{ color: 'rgba(128,128,128,0.9)', fontSize: 12 }} />}
+                                    onClick={() => voiceBotSession?._id && openAccessUsersModal(voiceBotSession._id, voiceBotSession.allowed_users ?? [])}
+                                />
+                            </Tooltip>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -529,6 +756,6 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                 onCancel={() => setCustomPromptModalVisible(false)}
                 onRun={handleRunCustomPrompt}
             />
-        </div>
+        </>
     );
 }

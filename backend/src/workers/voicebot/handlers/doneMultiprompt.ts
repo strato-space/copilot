@@ -25,6 +25,7 @@ export type DoneMultipromptJobData = {
   session_id?: string;
   chat_id?: string | number | null;
   telegram_user_id?: string | number | null;
+  already_closed?: boolean;
   notify_preview?: {
     event_name?: string;
     telegram_message?: string;
@@ -129,20 +130,22 @@ export const handleDoneMultipromptJob = async (
     return { ok: false, error: 'session_not_found' };
   }
 
-  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-    mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: 'runtime_tag' }),
-    {
-      $set: {
-        is_active: false,
-        to_finalize: true,
-        done_at: new Date(),
-        updated_at: new Date(),
-      },
-      $inc: {
-        done_count: 1,
-      },
-    }
-  );
+  if (!payload.already_closed) {
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+      mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: 'runtime_tag' }),
+      {
+        $set: {
+          is_active: false,
+          to_finalize: true,
+          done_at: new Date(),
+          updated_at: new Date(),
+        },
+        $inc: {
+          done_count: 1,
+        },
+      }
+    );
+  }
 
   await clearActiveVoiceSessionBySessionId({ db, session_id });
   if (payload.telegram_user_id !== undefined && payload.telegram_user_id !== null) {

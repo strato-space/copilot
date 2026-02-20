@@ -21,4 +21,12 @@ describe('MeetingCard FAB sync contract', () => {
     expect(source).toContain("action: 'pause'");
     expect(source).toContain("action: 'done'");
   });
+
+  it('routes page Done by explicit page session id when FAB is not actively recording that same session', () => {
+    expect(source).toContain('const pageSessionId = String(voiceBotSession._id || \'\').trim();');
+    expect(source).toContain('const shouldFinalizeViaFab =');
+    expect(source).toContain('isThisSessionActiveInFab && (fabIsRecording || fabIsPaused || fabIsFinalUploading)');
+    expect(source).toContain('finishSession(pageSessionId);');
+    expect(source).toContain('Session-page Done must close explicit pageSessionId');
+  });
 });

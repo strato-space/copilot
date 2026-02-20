@@ -356,6 +356,19 @@ export const handleDoneCommand = async ({
   }
   const session_id = String(session._id || '').trim();
 
+  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+    mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: 'runtime_tag' }),
+    {
+      $set: {
+        is_active: false,
+        to_finalize: true,
+        done_at: new Date(),
+        updated_at: new Date(),
+      },
+      $inc: { done_count: 1 },
+    }
+  );
+
   if (commonQueue) {
     await commonQueue.add(
       VOICEBOT_JOBS.common.DONE_MULTIPROMPT,
@@ -363,23 +376,11 @@ export const handleDoneCommand = async ({
         chat_id: normalizeChatId(parsed.data.chat_id),
         telegram_user_id: normalizeTelegramId(parsed.data.telegram_user_id),
         session_id,
+        already_closed: true,
       },
       {
         attempts: 1,
         removeOnComplete: true,
-      }
-    );
-  } else {
-    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-      mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: 'runtime_tag' }),
-      {
-        $set: {
-          is_active: false,
-          to_finalize: true,
-          done_at: new Date(),
-          updated_at: new Date(),
-        },
-        $inc: { done_count: 1 },
       }
     );
   }
@@ -407,4 +408,3 @@ export const handleDoneCommand = async ({
 export const getHelpMessage = (): string => helpMessageLines.join('\n');
 
 export const NO_ACTIVE_SESSION_MESSAGE = noActiveSessionMessage;
-

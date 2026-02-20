@@ -189,6 +189,7 @@ describe('voicebot_tgbot command handlers', () => {
     const sessionId = new ObjectId('6994ae109d4d36a850c87809');
     const tgMappingFindOne = jest.fn(async () => ({ active_session_id: sessionId }));
     const tgMappingUpdateMany = jest.fn(async () => ({ matchedCount: 1 }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
     const sessionsFindOne = jest.fn(async () => ({
       _id: sessionId,
       session_name: 'Test',
@@ -204,7 +205,7 @@ describe('voicebot_tgbot command handlers', () => {
         findOne: tgMappingFindOne,
         updateMany: tgMappingUpdateMany,
       },
-      [VOICEBOT_COLLECTIONS.SESSIONS]: { findOne: sessionsFindOne },
+      [VOICEBOT_COLLECTIONS.SESSIONS]: { findOne: sessionsFindOne, updateOne: sessionsUpdateOne },
       [VOICEBOT_COLLECTIONS.PROJECTS]: { findOne: projectsFindOne },
     });
 
@@ -225,9 +226,11 @@ describe('voicebot_tgbot command handlers', () => {
       expect.objectContaining({
         session_id: String(sessionId),
         telegram_user_id: String(telegramUserId),
+        already_closed: true,
       }),
       expect.any(Object)
     );
+    expect(sessionsUpdateOne).toHaveBeenCalledTimes(1);
     expect(tgMappingUpdateMany).toHaveBeenCalledTimes(2);
   });
 
@@ -239,4 +242,3 @@ describe('voicebot_tgbot command handlers', () => {
     expect(help).toContain('/login');
   });
 });
-

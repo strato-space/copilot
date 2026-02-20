@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 import jwt from 'jsonwebtoken';
 
-import { VOICEBOT_COLLECTIONS } from '../../src/constants.js';
+import { VOICEBOT_COLLECTIONS, VOICEBOT_QUEUES } from '../../src/constants.js';
 
 const getDbMock = jest.fn();
 const getUserPermissionsMock = jest.fn();
@@ -215,6 +215,72 @@ describe('voicebot socket session_done contract', () => {
     expect(writeDoneNotifyRequestedLogMock).toHaveBeenCalledWith(
       expect.objectContaining({
         source: expect.objectContaining({ mode: 'fallback', event: 'session_done' }),
+      })
+    );
+  });
+
+  it('closes session immediately and queues DONE_MULTIPROMPT with already_closed=true', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const commonQueue = { add: jest.fn(async () => ({})) };
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.PERFORMERS) {
+          return { findOne: jest.fn(async () => ({ _id: performerId, telegram_id: '4242' })) };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: sessionId,
+              chat_id: 4242,
+              session_name: 'Queued done',
+              project_id: new ObjectId(),
+            })),
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+        };
+      },
+    };
+    getDbMock.mockReturnValue(dbStub);
+    computeSessionAccessMock.mockReturnValue({ hasAccess: true, canUpdateSession: true });
+
+    const { io, namespace, getConnectionHandler } = setupSocketServer();
+    registerVoicebotSocketHandlers(io as any, {
+      queues: {
+        [VOICEBOT_QUEUES.COMMON]: commonQueue as any,
+      },
+    });
+
+    const { socket, handlers } = createSocket({ userId: performerId.toString() });
+    namespace.sockets.set(socket.id, socket);
+    await getConnectionHandler()(socket as any);
+
+    const ack = jest.fn();
+    await handlers.session_done({ session_id: sessionId.toString() }, ack);
+
+    expect(ack).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ok: true,
+      })
+    );
+    expect(sessionsUpdateOne).toHaveBeenCalledTimes(1);
+    expect(commonQueue.add).toHaveBeenCalledWith(
+      'DONE_MULTIPROMPT',
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        telegram_user_id: '4242',
+        already_closed: true,
+      })
+    );
+    expect(writeDoneNotifyRequestedLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({ mode: 'queued', event: 'session_done' }),
       })
     );
   });

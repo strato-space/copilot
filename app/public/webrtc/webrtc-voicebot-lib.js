@@ -1095,7 +1095,8 @@
                     } catch { return (window.isSecureContext && /^http:\/\//.test(base)) ? base.replace(/^http:/,'https:') : base; }
                 })();
                 // Browser cannot set custom headers; pass auth in auth payload
-                const sio = window.io(baseForSocket, {
+                const voicebotNs = `${String(baseForSocket || '').replace(/\/+$/, '')}/voicebot`;
+                const sio = window.io(voicebotNs, {
                     path: '/socket.io',
                     // Prefer polling to avoid noisy WS errors in mixed/proxied environments
                     transports: ['polling'],
@@ -1110,9 +1111,13 @@
                     sio.on('connect', () => {
                         try {
                             const payload = { session_id: sessionId };
-                            sio.timeout(3000).emit('session_done', payload, (err) => {
+                            sio.timeout(3000).emit('session_done', payload, (err, ack) => {
                                 clearTimeout(timer);
                                 if (err) return done(false);
+                                if (ack && typeof ack === 'object' && ack.ok === false) {
+                                    try { console.warn('[sessionDoneBrowser] session_done rejected', ack); } catch {}
+                                    return done(false);
+                                }
                                 done(true);
                             });
                         } catch { clearTimeout(timer); done(false); }
