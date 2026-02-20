@@ -17,10 +17,10 @@ describe('MeetingCard summarize + circle icon alignment contract', () => {
     const shapeMatches = source.match(/shape=\"circle\"/g) ?? [];
     expect(shapeMatches.length).toBeGreaterThanOrEqual(3);
 
-    expect(source).toContain('const circleIconButtonClassName = \'inline-flex items-center justify-center');
-    expect(source).toContain('const centeredIconClassName = \'inline-flex items-center justify-center leading-none\';');
-    expect(source).toContain('icon={<span className={centeredIconClassName}><EditOutlined /></span>}');
-    expect(source).toContain('icon={<span className={centeredIconClassName}><RobotOutlined /></span>}');
-    expect(source).toContain('icon={<span className={`${centeredIconClassName} text-sm font-semibold`}>∑</span>}');
+    expect(source).toContain('const circleIconWrapperStyle: CSSProperties = {');
+    expect(source).toContain('const circleIconButtonStyle: CSSProperties = {');
+    expect(source).toContain('icon={<span style={circleIconWrapperStyle}><EditOutlined');
+    expect(source).toContain('icon={<span style={circleIconWrapperStyle}><RobotOutlined');
+    expect(source).toContain("icon={<span style={circleIconWrapperStyle}><span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span></span>}");
   });
 });

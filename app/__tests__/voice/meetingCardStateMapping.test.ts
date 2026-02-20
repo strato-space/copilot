@@ -15,16 +15,22 @@ describe('MeetingCard state badge and controls contract', () => {
   });
 
   it('renders state badge variants for recording/paused/finalizing/error/closed/ready', () => {
-    expect(source).toContain("if (sessionVisualState === 'recording') return <span className=\"h-2.5 w-2.5 animate-pulse rounded-full bg-red-500\" />;");
-    expect(source).toContain("if (sessionVisualState === 'paused') {");
-    expect(source).toContain("if (sessionVisualState === 'finalizing') return <span className=\"text-xs font-semibold leading-none text-emerald-500\">✓</span>;");
-    expect(source).toContain("if (sessionVisualState === 'error') return <span className=\"text-xs font-semibold leading-none text-rose-500\">!</span>;");
-    expect(source).toContain("if (sessionVisualState === 'closed') return <span className=\"h-2.5 w-2.5 rounded-[2px] bg-blue-500\" />;");
-    expect(source).toContain("return <span className=\"h-2.5 w-2.5 rounded-full border border-slate-400\" />;");
+    expect(source).toContain("{sessionVisualState === 'recording' && <div className=\"h-2.5 w-2.5 animate-pulse rounded-full bg-red-500\" />}");
+    expect(source).toContain("{sessionVisualState === 'paused' && (");
+    expect(source).toContain("{sessionVisualState === 'finalizing' && <span className=\"text-[12px] font-semibold leading-none text-emerald-500\">✓</span>}");
+    expect(source).toContain("{sessionVisualState === 'error' && <span className=\"text-[12px] font-semibold leading-none text-rose-500\">!</span>}");
+    expect(source).toContain("{sessionVisualState === 'closed' && <div className=\"h-2.5 w-2.5 rounded-[2px] bg-blue-500\" />}");
+    expect(source).toContain("{sessionVisualState === 'ready' && <div className=\"h-2.5 w-2.5 rounded-full border border-slate-400\" />}");
   });
 
   it('keeps session control order New/Rec/Cut/Pause/Done', () => {
-    const labels = ['>\n                        New\n                    </Button>', '>\n                        Rec\n                    </Button>', '>\n                        Cut\n                    </Button>', '>\n                        Pause\n                    </Button>', '>\n                        Done\n                    </Button>'];
+    const labels = [
+      "controlLabel('new', 'New')",
+      "controlLabel('rec', 'Rec')",
+      "controlLabel('cut', 'Cut')",
+      "controlLabel('pause', 'Pause')",
+      "controlLabel('done', 'Done')",
+    ];
 
     let cursor = 0;
     for (const label of labels) {

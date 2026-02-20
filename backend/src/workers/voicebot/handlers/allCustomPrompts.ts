@@ -10,6 +10,7 @@ import { getDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
+import { resolveCustomPromptsDir } from '../customPromptsDir.js';
 
 const logger = getLogger();
 
@@ -40,12 +41,6 @@ const runtimeQuery = (query: Record<string, unknown>) =>
     familyMatch: IS_PROD_RUNTIME,
     includeLegacyInProd: IS_PROD_RUNTIME,
   });
-
-const resolveCustomPromptsDir = (): string => {
-  const configured = String(process.env.VOICEBOT_CUSTOM_PROMPTS_DIR || '').trim();
-  if (configured) return configured;
-  return path.resolve(process.cwd(), '..', 'voicebot_runtime', 'voicebot', 'custom_prompts');
-};
 
 const getCustomProcessors = (): string[] => {
   const promptsDir = resolveCustomPromptsDir();

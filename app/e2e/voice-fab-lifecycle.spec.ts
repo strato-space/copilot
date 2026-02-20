@@ -232,7 +232,7 @@ test.describe('Voice FAB lifecycle parity', () => {
     await mockFabScriptAsset(page);
   });
 
-  test('@unauth session header includes meta row and footer status widget', async ({ page }) => {
+  test('@unauth session header includes meta row and status widget', async ({ page }) => {
     await installFabControlMock(page);
     await addAuthCookie(page);
     await mockAuth(page);
@@ -246,9 +246,8 @@ test.describe('Voice FAB lifecycle parity', () => {
     await expect(metaRow.getByText('Участники', { exact: true })).toBeVisible();
     await expect(metaRow.getByText('Доступ', { exact: true })).toBeVisible();
 
-    await expect(page.locator('.voice-session-content .voice-status-card')).toHaveCount(0);
-    const footerStatus = page.locator('.voice-session-status-bottom .voice-status-card');
-    await expect(footerStatus).toBeVisible();
+    await expect(page.getByText('Ожидание обработки сообщений').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Загрузить аудио/i }).first()).toBeVisible();
   });
 
   test('@unauth session action order is New / Rec / Cut / Pause / Done', async ({ page }) => {

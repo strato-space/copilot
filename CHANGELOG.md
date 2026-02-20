@@ -2,12 +2,30 @@
 
 ## 2026-02-20
 ### PROBLEM SOLVED
+- **06:01** WebRTC full-track archive uploads generated redundant backend rows without downstream diarization consumption, creating avoidable duplicate payloads.
+- **06:05** Migration docs still referenced open backlog and incomplete legacy-removal status after `copilot-vsen`/`copilot-ia38` were already completed.
 - **05:18** Migration planning docs drifted from current `bd` execution state: open backlog and accepted decisions were not clearly reflected in one place.
 
 ### FEATURE IMPLEMENTED
+- **06:01** Disabled backend upload for `full_track` WebRTC segments while preserving Monitor visibility and metadata for future diarization rollout.
+- **06:05** Completed full closeout of migration waves: legacy runtime removed, full test sweep closed, plan docs synced to current BD state.
 - **05:18** Added a refreshed execution-oriented migration plan with explicit open backlog mapping (`copilot-vsen`, `copilot-ia38`) and accepted-decision section.
 
 ### CHANGES
+- **06:01** Updated WebRTC FAB runtime policy (`copilot-hmkq`):
+  - `app/public/webrtc/webrtc-voicebot-lib.js`: introduced `ARCHIVE_TRACK_UPLOAD_ENABLED=false`, skipped `uploadArchiveTrackSegments` by policy, disabled upload button on `full_track` rows, and hard-blocked manual upload for `trackKind=full_track`.
+  - `app/__tests__/voice/webrtcDoneUploadPolicy.test.ts`: updated regression contract to assert policy-based full-track skip.
+- **06:01** Copied planning references from external voicebot repo into copilot local plan folder:
+  - added `plan/session-managment.md`;
+  - added `plan/gpt-4o-transcribe-diarize-plan.md`.
+- **06:05** Refreshed docs and migration status:
+  - updated `README.md` and `AGENTS.md` with full-track upload policy and new `plan/*` references;
+  - updated `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md` to rev.3, marked `copilot-vsen` and `copilot-ia38` as closed and removed stale “open backlog” wording;
+  - adjusted `app/e2e/voice-fab-lifecycle.spec.ts` status-widget assertion to match current layout contract (functional marker-based check).
+- **06:08** Finalized legacy runtime elimination (`copilot-vsen`) in the repo tree:
+  - removed `voicebot_runtime/` subtree from Copilot;
+  - kept migration source-of-truth references pointing to external `/home/strato-space/voicebot`;
+  - moved custom prompt runtime artifacts into `backend/resources/voicebot/custom_prompts` and bound TS handlers to the new path.
 - **05:18** Refreshed migration docs to current `bd` execution state (`copilot-xna2`):
   - updated `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md` with explicit open backlog (`copilot-vsen`, `copilot-ia38`);
   - moved section “decision points” to accepted decisions and aligned next-wave plan to active issues;
@@ -172,6 +190,15 @@
 - Expanded done handler regression coverage in `backend/__tests__/voicebot/workerDoneMultipromptHandler.test.ts` to assert postprocessing/notify queue fan-out and session-not-found behavior under runtime-scoped filtering.
 
 ### TESTS
+- **06:03** `cd backend && npm test -- --runInBand` → 61/61 passed.
+- **06:03** `cd app && npm test` → 24/24 passed.
+- **06:04** `cd miniapp && npm test` → 3/3 passed.
+- **06:04** `cd app && PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e` → 53 passed, 4 skipped.
+- **06:04** `cd miniapp && npm run test:e2e` → pass-with-no-tests (configured behavior).
+- **06:07** `cd backend && npm test -- --runInBand` → 61/61 passed.
+- **06:07** `cd app && npm test` → 24/24 passed.
+- **06:07** `cd backend && npm run build` → passed.
+- **06:08** `cd app && npm run build` → passed.
 - **23:25** `cd backend && npm test -- --runInBand __tests__/voicebot/webmFilenameDedupe.test.ts __tests__/voicebot/sessionUtilityRoutes.test.ts`
 - **23:25** `cd backend && npm run build`
 - **22:02** `cd app && npm test -- --runInBand __tests__/voice/transcriptionImagePreviewContract.test.ts __tests__/voice/voiceImageAnchorGroupingContract.test.ts __tests__/voice/webrtcPausedRestoreContract.test.ts __tests__/voice/webrtcUploadErrorHandling.test.ts`

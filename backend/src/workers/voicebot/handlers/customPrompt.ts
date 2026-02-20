@@ -9,17 +9,12 @@ import {
 import { getDb } from '../../../services/db.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
+import { resolveCustomPromptsDir } from '../customPromptsDir.js';
 
 const logger = getLogger();
 
 const CUSTOM_PROMPT_MODEL =
   String(process.env.VOICEBOT_CUSTOM_PROMPT_MODEL || '').trim() || 'gpt-4.1';
-
-const resolveCustomPromptsDir = (): string => {
-  const configured = String(process.env.VOICEBOT_CUSTOM_PROMPTS_DIR || '').trim();
-  if (configured) return configured;
-  return path.resolve(process.cwd(), '..', 'voicebot_runtime', 'voicebot', 'custom_prompts');
-};
 
 export type CustomPromptJobData = {
   message_id?: string;

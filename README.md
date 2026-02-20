@@ -30,7 +30,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - WebRTC unload persistence now stores any non-recording state as `paused` to avoid stale auto-resume after refresh/unload races.
-- Full-track recording segments are represented as `full_track` in chunk metadata and UI, with duration and timestamp information persisted in upload metadata.
+- Full-track recording segments are represented as `full_track` in Monitor/UI with duration and timestamp metadata, but upload to backend is intentionally disabled until diarization workflow is enabled.
 - Voice workers schedule periodic `PROCESSING` scans in TS runtime; pending-session filtering uses `is_waiting: { $ne: true }` to include legacy rows without explicit flag.
 - TS `processingLoop` now also prioritizes sessions inferred from pending message backlog (including rows with `is_messages_processed=true`) and requeues categorization after quota cooldown via processors queue.
 - TS transcribe handler deduplicates repeated uploads by file hash (`file_hash` / `file_unique_id` / `hash_sha256`) and reuses existing session transcription before new OpenAI requests.
@@ -54,14 +54,15 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
   - `backend/src/workers/voicebot/runtime.ts` + manifest/runner (`copilot-ovg`)
 - Core worker handlers migrated to TS (`copilot-6jm`, `copilot-lnu`, `copilot-lcf`):
   - `backend/src/workers/voicebot/handlers/{transcribe,categorize,finalization,processingLoop,summarize,questions,customPrompt,createTasksFromChunks,doneMultiprompt,...}.ts`
-- Legacy `voicebot_runtime/` is deprecated in this repo and queued for elimination (`copilot-vsen`); active prod/dev PM2 services already use only `backend/dist/*` TS runtime.
+- Legacy runtime subtree was removed from this repo under `copilot-vsen`; historical implementation references live in external repo `/home/strato-space/voicebot`.
 - JS cleanup completed for confirmed dead artifact: removed `sandbox-assets/ui-miniapp/app.js` (no runtime references in copilot).
 
 ### Voice migration planning docs
 - Primary frontend migration decision log: `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md`
 - This plan is maintained against closed `bd` issues and includes an explicit contradiction section between old assumptions and implemented behavior.
-- Current open migration backlog is tracked in `bd` issues: `copilot-vsen` (legacy runtime removal) and `copilot-ia38` (full test sweep).
+- Current open migration backlog is tracked only in `bd`; as of the latest refresh there are no open P1 frontend migration tasks.
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
+- Synced legacy planning references copied for context now live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
 
 
 ### Voice runtime: key configuration map

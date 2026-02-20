@@ -11,9 +11,10 @@ describe('webrtc done upload policy', () => {
     expect(source).toContain("'pending-manual'");
   });
 
-  it('keeps full-track uploads separate from chunk auto-loop and marks them in UI', () => {
+  it('keeps full-track rows in monitor but skips full-track upload by policy', () => {
     expect(source).toContain("trackKind === 'full_track'");
-    expect(source).toContain("seg.autoUploadAttempted = true;");
+    expect(source).toContain("ARCHIVE_TRACK_UPLOAD_ENABLED = false");
+    expect(source).toContain("[archive] upload skipped by policy");
     expect(source).toContain(" · full-track");
   });
 });

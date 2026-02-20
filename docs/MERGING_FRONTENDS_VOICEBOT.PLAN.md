@@ -3,7 +3,7 @@
 ## 1. Цель документа
 Зафиксировать **актуальное** состояние миграции Voice frontend в Copilot на базе **закрытых BD задач**, а также явно показать расхождения между старым планом и фактически реализованными решениями.
 
-Дата ревизии: 2026-02-20 (rev.2)
+Дата ревизии: 2026-02-20 (rev.3)
 
 ---
 
@@ -33,14 +33,13 @@ JSONL с карточками:
 - Исправлен критический баг `Done`: сессия закрывается детерминированно
 
 ### 3.2 Что остаётся в работе
-- `copilot-vsen`: элиминация legacy `voicebot_runtime/` из репозитория Copilot и зачистка ссылок в коде/доках/тестах.
-- `copilot-ia38`: полный прогон тестов по репозиторию Copilot с фиксацией фейлов, приоритетом bugfix и закрытием regression debt.
+- Открытых P1 задач по migration frontend-потоку нет.
+- Новые работы заводятся только через `bd create ...` по итогам продовых регрессий/новых требований.
 
 ### 3.3 Текущий открытый backlog (bd)
 | BD ID | Статус | Объём |
 |---|---|---|
-| `copilot-vsen` | open | Удаление legacy `voicebot_runtime/` и полная перепривязка на TS runtime в `backend/src/*`. |
-| `copilot-ia38` | open | Полный тестовый sweep (`app/backend/miniapp`), устранение падений, фиксация отчёта по green/red статусам. |
+| — | — | В текущей ревизии открытый backlog по frontend migration отсутствует. |
 
 ---
 
@@ -51,6 +50,8 @@ JSONL с карточками:
 | BD ID | Статус | Что зафиксировано | Ссылка в JSONL |
 |---|---|---|---|
 | `copilot-z9j` | closed | Итоговый source-sync frontend `/voice`, унификация `New/Rec/Cut/Pause/Done` | [`.beads/issues.jsonl:205`](../.beads/issues.jsonl#L205) |
+| `copilot-vsen` | closed | Полное удаление legacy runtime subtree из Copilot; custom prompts перенесены в `backend/resources/voicebot/custom_prompts`; code/docs/test references очищены | [`.beads/issues.jsonl`](../.beads/issues.jsonl) |
+| `copilot-ia38` | closed | Полный test sweep: backend `61/61`, app unit `24/24`, app e2e `53 passed / 4 skipped`, miniapp unit `3/3`, miniapp e2e `pass-with-no-tests` | [`.beads/issues.jsonl`](../.beads/issues.jsonl) |
 | `copilot-z9j.1` | closed | Паритет вкладок `Screenshort + SessionLog`, attachment contract | [`.beads/issues.jsonl:206`](../.beads/issues.jsonl#L206) |
 | `copilot-z9j.2` | closed | Edit/Delete/Rollback UX и refresh после мутаций | [`.beads/issues.jsonl:207`](../.beads/issues.jsonl#L207) |
 | `copilot-zpb9` | closed | Realtime апдейты категоризации/финализации по websocket | [`.beads/issues.jsonl:210`](../.beads/issues.jsonl#L210) |
@@ -107,10 +108,10 @@ JSONL с карточками:
 **Факт по BD:** реализован и стабилизирован текущий layout без отдельного старого voicebot navigation слоя.  
 **Решение:** фиксировать только текущую реализованную схему роутинга Copilot.
 
-### C3. Статус legacy `voicebot_runtime`
-**Старый план/период миграции:** `voicebot_runtime` допускался как reference scaffold.  
+### C3. Статус legacy runtime
+**Старый план/период миграции:** legacy runtime допускался как reference scaffold.  
 **Новое проектное решение:** legacy нужно убрать из Copilot repo, оставить источник в `/home/strato-space/voicebot`.  
-**Состояние:** решение **ещё не доведено до конца** (open `copilot-vsen`).
+**Состояние:** решение доведено до конца (closed `copilot-vsen`).
 
 ### C4. “Постепенная JS→TS миграция”
 **Старый план:** постепенная конверсия как долговременная норма.  
@@ -125,16 +126,21 @@ JSONL с карточками:
 ---
 
 ## 7. Принятые решения
-1. Legacy `voicebot_runtime/` удаляется из Copilot; исторический reference остаётся только во внешнем репозитории `/home/strato-space/voicebot`.
+1. Legacy runtime удаляется из Copilot; исторический reference остаётся только во внешнем репозитории `/home/strato-space/voicebot`.
 2. Текущий документ больше не поддерживает старую анкету Q1–Q13; формат закреплён как execution log от закрытых/открытых BD задач.
 3. Проверка миграции выполняется через фактические test runs и code-level parity checks, а не через ручной checklist без тестовых артефактов.
+
+Статус исполнения решений:
+- п.1 выполнен (закрыт `copilot-vsen`);
+- п.2 выполнен (Q1–Q13 архивированы, документ ведётся по BD);
+- п.3 выполнен в рамках `copilot-ia38` (полный test sweep + отчёт).
 
 ---
 
 ## 8. Исполняемая структура следующей волны
 
 ### 8.1 Wave A — Cleanup legacy
-- `copilot-vsen`: удалить `voicebot_runtime/`, переместить нужные артефакты в `backend/resources/*`.
+- `copilot-vsen`: удалить legacy runtime subtree, переместить нужные артефакты в `backend/resources/*`.
 - Перепривязать тесты и smoke checks на TS runtime.
 
 ### 8.2 Wave B — Docs hardening
@@ -146,8 +152,8 @@ JSONL с карточками:
 - Отдельно задокументировать known flakes и их статус.
 
 ### 8.4 Wave D — Закрытие открытого backlog
-- Закрыть `copilot-vsen` (legacy elimination).
-- Закрыть `copilot-ia38` (full test sweep + bugfix follow-up).
+- `copilot-vsen` закрыт.
+- `copilot-ia38` закрыт.
 
 ---
 

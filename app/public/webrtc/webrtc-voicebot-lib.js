@@ -3285,6 +3285,9 @@
 	        let archiveTrackSegmentsByKey = {}; // { mic1: [{...}], mic2: [{...}] }
 	        let archiveTrackSeqByKey = {}; // { mic1: 1, mic2: 2, ... }
 	        let archiveTrackSessionId = '';
+	        // Keep full-track rows visible in Monitor for diagnostics, but do not upload them
+	        // to backend until diarization pipeline consumes these artifacts.
+	        const ARCHIVE_TRACK_UPLOAD_ENABLED = false;
 
 	        function inferSpeakerForMicIndex(mi) {
 	            try {
@@ -3338,6 +3341,13 @@
 	                    if (li?._statusEl) {
 	                        li._statusEl.textContent = ' · full-track';
 	                        li._statusEl.style.color = '#0f766e';
+	                    }
+	                } catch {}
+	                try {
+	                    if (upBtn) {
+	                        upBtn.disabled = true;
+	                        upBtn.title = 'Upload disabled for full-track';
+	                        upBtn.setAttribute('aria-label', 'Upload disabled for full-track');
 	                    }
 	                } catch {}
 	                try {
@@ -3496,6 +3506,26 @@
 	        async function uploadArchiveTrackSegments(sessionId, opts = {}) {
 	            const sid = String(sessionId || archiveTrackSessionId || '').trim();
 	            if (!sid) return { total: 0, uploaded: 0, failed: 0, skipped: 0 };
+	            if (!ARCHIVE_TRACK_UPLOAD_ENABLED) {
+	                const keys = Object.keys(archiveTrackSegmentsByKey || {});
+	                let skipped = 0;
+	                for (const key of keys) {
+	                    const segments = Array.isArray(archiveTrackSegmentsByKey[key]) ? archiveTrackSegmentsByKey[key] : [];
+	                    skipped += segments.filter((seg) => seg && seg.blob && seg.blob.size > 0 && !seg.uploaded).length;
+	                    for (const seg of segments) {
+	                        if (!seg || !seg.blob || seg.blob.size <= 0) continue;
+	                        ensureArchiveSegmentListItem(seg, { sessionId: sid });
+	                        try {
+	                            seg.autoUploadAttempted = true;
+	                            if (seg._li?.dataset) seg._li.dataset.autoUploadAttempted = '1';
+	                        } catch {}
+	                    }
+	                }
+	                if (skipped > 0) {
+	                    console.info('[archive] upload skipped by policy', { session_id: sid, skipped });
+	                }
+	                return { total: 0, uploaded: 0, failed: 0, skipped };
+	            }
 	            let total = 0;
 	            let uploaded = 0;
 	            let failed = 0;
@@ -6208,6 +6238,8 @@
           upBtn.title = 'Upload';
           upBtn.innerText = '⬆';
           const doUpload = async (force = false) => {
+              const trackKind = String(li?.dataset?.trackKind || 'chunk').trim();
+              if (trackKind === 'full_track') return false;
               if (!force && li?.dataset?.uploaded === '1') return;
               await uploadBlobForLi(li._blob || blob, li, upBtn, null);
           };
