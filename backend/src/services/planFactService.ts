@@ -1,8 +1,7 @@
-import { type Collection } from 'mongodb';
+import { type Collection, ObjectId } from 'mongodb';
 import { connectDb } from './db.js';
 import { COLLECTIONS } from '../constants.js';
 import { type ContractType, type FactProjectMonth, type ForecastProjectMonth } from '../models/types.js';
-import { loadCrmSnapshotMeta } from './crmIngest.js';
 
 export interface PlanFactMonthCell {
   fact_rub: number;
@@ -30,7 +29,6 @@ export interface PlanFactCustomerRow {
 }
 
 export interface PlanFactGridResponse {
-  snapshot_date: string | null;
   forecast_version_id: string;
   customers: PlanFactCustomerRow[];
 }
@@ -67,10 +65,13 @@ type ProjectGroupDoc = {
 };
 
 type ProjectDoc = {
-  _id: { toString(): string };
+  _id: ObjectId;
   name?: string;
   subproject_name?: string;
   contract_type?: ContractType;
+  rate_rub_per_hour?: number | null;
+  updated_at?: Date | string;
+  updated_by?: string;
 };
 
 const getCustomers = async (): Promise<CustomerDoc[]> => {
@@ -118,11 +119,10 @@ export const buildPlanFactGrid = async (
   forecastVersionId: string,
   months: string[],
 ): Promise<PlanFactGridResponse> => {
-  const [customers, projectGroups, projects, snapshotMeta, facts, forecasts] = await Promise.all([
+  const [customers, projectGroups, projects, facts, forecasts] = await Promise.all([
     getCustomers(),
     getProjectGroups(),
     getProjects(),
-    loadCrmSnapshotMeta(),
     getFactsByMonth(months),
     getForecastsByMonth(forecastVersionId, months),
   ]);
@@ -191,7 +191,7 @@ export const buildPlanFactGrid = async (
           project_name: project.name ?? '—',
           subproject_name: project.subproject_name ?? '',
           contract_type: contractType,
-          rate_rub_per_hour: null,
+          rate_rub_per_hour: project.rate_rub_per_hour ?? null,
           months: monthsMap,
         };
       })
@@ -211,7 +211,6 @@ export const buildPlanFactGrid = async (
   });
 
   return {
-    snapshot_date: snapshotMeta?.snapshotDate ?? null,
     forecast_version_id: forecastVersionId,
     customers: customerRows,
   };
@@ -277,4 +276,86 @@ export const upsertForecastProjectMonth = async (params: UpsertForecastParams) =
     { upsert: true },
   );
   return payload;
+};
+
+export interface UpdatePlanFactProjectParams {
+  project_id: string;
+  project_name?: string;
+  subproject_name?: string;
+  contract_type?: ContractType;
+  rate_rub_per_hour?: number | null;
+}
+
+export interface UpdatePlanFactProjectResult {
+  matched_count: number;
+  modified_count: number;
+  updated_contract_type_docs: {
+    facts: number;
+    forecasts: number;
+  };
+}
+
+export const updatePlanFactProject = async (params: UpdatePlanFactProjectParams): Promise<UpdatePlanFactProjectResult> => {
+  const db = await connectDb();
+  const collection = db.collection<ProjectDoc>(COLLECTIONS.PROJECTS);
+  const projectUpdates: Record<string, unknown> = {};
+
+  if (params.project_name !== undefined) {
+    projectUpdates.name = params.project_name;
+  }
+  if (params.subproject_name !== undefined) {
+    projectUpdates.subproject_name = params.subproject_name;
+  }
+  if (params.contract_type !== undefined) {
+    projectUpdates.contract_type = params.contract_type;
+  }
+  if (params.rate_rub_per_hour !== undefined) {
+    projectUpdates.rate_rub_per_hour = params.rate_rub_per_hour;
+  }
+
+  if (Object.keys(projectUpdates).length > 0) {
+    projectUpdates.updated_at = new Date();
+    projectUpdates.updated_by = 'ui';
+  } else {
+    return {
+      matched_count: 0,
+      modified_count: 0,
+      updated_contract_type_docs: {
+        facts: 0,
+        forecasts: 0,
+      },
+    };
+  }
+
+  const projectResult = await collection.updateOne(
+    { _id: new ObjectId(params.project_id) },
+    { $set: projectUpdates },
+  );
+
+  let factUpdateCount = 0;
+  let forecastUpdateCount = 0;
+
+  if (params.contract_type !== undefined && projectResult.matchedCount > 0) {
+    const [factsResult, forecastsResult] = await Promise.all([
+      db.collection<FactProjectMonth>(COLLECTIONS.FACTS_PROJECT_MONTH).updateMany(
+        { project_id: params.project_id, type: { $ne: params.contract_type } },
+        { $set: { type: params.contract_type } },
+      ),
+      db.collection<ForecastProjectMonth>(COLLECTIONS.FORECASTS_PROJECT_MONTH).updateMany(
+        { project_id: params.project_id, type: { $ne: params.contract_type } },
+        { $set: { type: params.contract_type } },
+      ),
+    ]);
+    factUpdateCount = factsResult.modifiedCount;
+    forecastUpdateCount = forecastsResult.modifiedCount;
+  }
+
+  return {
+    matched_count: projectResult.matchedCount,
+    modified_count: projectResult.modifiedCount,
+    updated_contract_type_docs: {
+      facts: factUpdateCount,
+      forecasts: forecastUpdateCount,
+    },
+  };
 };

@@ -24,7 +24,6 @@ export interface PlanFactCustomerRow {
 }
 
 export interface PlanFactGridResponse {
-  snapshot_date: string | null;
   forecast_version_id: string;
   customers: PlanFactCustomerRow[];
 }

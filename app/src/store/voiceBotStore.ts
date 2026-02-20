@@ -92,6 +92,10 @@ interface VoiceBotState {
         sessionId: string,
         opt?: { onUploadProgress?: (evt: AxiosProgressEvent) => void }
     ) => Promise<unknown>;
+    uploadSessionImageAttachment: (
+        file: File,
+        sessionId: string
+    ) => Promise<Record<string, unknown>>;
     addSessionTextChunk: (sessionId: string, text: string) => Promise<void>;
     addSessionImageChunk: (
         sessionId: string,
@@ -1191,6 +1195,32 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         }
     },
 
+    uploadSessionImageAttachment: async (file, sessionId) => {
+        try {
+            const backendUrl = getBackendUrl();
+            const { authToken } = useAuthStore.getState();
+            const formData = new FormData();
+            formData.append('attachment', file);
+            formData.append('session_id', sessionId);
+
+            const response = await axios.post(`${backendUrl}/voicebot/upload_attachment`, formData, {
+                headers: {
+                    'X-Authorization': authToken ?? '',
+                },
+                withCredentials: true,
+            });
+
+            const attachment = (response.data as { attachment?: Record<string, unknown> })?.attachment;
+            if (!attachment || typeof attachment !== 'object') {
+                throw new Error('Upload attachment response is missing attachment payload');
+            }
+            return attachment;
+        } catch (e) {
+            console.error('Ошибка при загрузке изображения в сессию:', e);
+            throw e;
+        }
+    },
+
     addSessionTextChunk: async (sessionId, text) => {
         const normalizedSessionId = String(sessionId || '').trim();
         const normalizedText = String(text || '').trim();
@@ -1224,19 +1254,24 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         const fallbackText = caption || '[Image]';
 
         try {
+            const blobResponse = await fetch(dataUrl);
+            const blob = await blobResponse.blob();
+            const uploadMimeType = blob.type || mimeType;
+            const uploadFile = new File([blob], name, { type: uploadMimeType });
+            const uploadedAttachment = await get().uploadSessionImageAttachment(uploadFile, normalizedSessionId);
+
             await voicebotRequest('voicebot/add_text', {
                 session_id: normalizedSessionId,
                 text: fallbackText,
                 kind: 'image',
                 attachments: [
                     {
+                        ...uploadedAttachment,
                         kind: 'image',
                         source: 'web',
                         name,
-                        mime_type: mimeType,
-                        uri: dataUrl,
-                        url: dataUrl,
-                        size: payload?.size ?? null,
+                        mime_type: uploadMimeType,
+                        size: payload?.size ?? blob.size ?? null,
                         caption: caption || null,
                     },
                 ],
@@ -1340,7 +1375,9 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                     return state;
                 }
                 const processorsData = state.voiceBotSession.processors_data as Record<string, unknown> | undefined;
-                const createTasks = processorsData?.CREATE_TASKS as { data?: Array<{ id: string }> } | undefined;
+                const createTasks = processorsData?.CREATE_TASKS as
+                    | { data?: Array<Record<string, unknown>> }
+                    | undefined;
                 if (!createTasks?.data) {
                     return state;
                 }
@@ -1352,7 +1389,12 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                             ...processorsData,
                             CREATE_TASKS: {
                                 ...createTasks,
-                                data: createTasks.data.filter((task) => task.id !== taskId),
+                                data: createTasks.data.filter((task) => {
+                                    const byId = typeof task.id === 'string' ? task.id : '';
+                                    const byAiId = typeof task.task_id_from_ai === 'string' ? task.task_id_from_ai : '';
+                                    const byLegacyAiId = typeof task['Task ID'] === 'string' ? task['Task ID'] : '';
+                                    return byId !== taskId && byAiId !== taskId && byLegacyAiId !== taskId;
+                                }),
                             },
                         },
                     },

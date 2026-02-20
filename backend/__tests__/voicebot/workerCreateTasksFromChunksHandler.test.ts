@@ -123,13 +123,28 @@ describe('handleCreateTasksFromChunksJob', () => {
     const updatePayload = sessionsUpdateOne.mock.calls[0]?.[1] as Record<string, unknown>;
     const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
     expect(setPayload['processors_data.CREATE_TASKS.is_processed']).toBe(true);
-    expect(Array.isArray(setPayload['processors_data.CREATE_TASKS.data'])).toBe(true);
+    const storedTasks = setPayload['processors_data.CREATE_TASKS.data'] as Array<Record<string, unknown>>;
+    expect(Array.isArray(storedTasks)).toBe(true);
+    expect(storedTasks[0]).toMatchObject({
+      id: 'TASK-1',
+      task_id_from_ai: 'TASK-1',
+      name: 'Ship voice parity',
+      description: 'Implement full parity',
+      priority: 'P2',
+    });
+    expect(storedTasks[0]).not.toHaveProperty('Task Title');
 
     expect(eventsAdd).toHaveBeenCalledWith(
       VOICEBOT_JOBS.events.SEND_TO_SOCKET,
       expect.objectContaining({
         event: 'tickets_prepared',
         socket_id: 'socket-123',
+        payload: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'TASK-1',
+            name: 'Ship voice parity',
+          }),
+        ]),
       }),
       expect.objectContaining({ attempts: 1 })
     );

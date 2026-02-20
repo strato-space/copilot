@@ -143,6 +143,8 @@ Preferred engineering principles for this repo:
 ## Product Notes (FinOps)
 - FX rates live in `app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
 - The plan-fact grid keeps at least one pinned month; users can pin up to 3 and can unpin the active month if another month remains pinned.
+- Plan-fact pages now use API-only data (no local mock/snapshot fallback in frontend store or analytics page).
+- Plan-fact project edits are persisted via `PUT /api/plan-fact/project` (fields: `project_name`, `subproject_name`, `contract_type`, `rate_rub_per_hour`) and contract type updates are propagated to facts/forecasts.
 - Expense attachments are served from `/uploads/expenses`.
 - Guide directories use mock fallback data when automation APIs fail and expose a global Log sidebar from the Guide header.
 
@@ -181,7 +183,11 @@ Preferred engineering principles for this repo:
 - Upload flow consumes `pending_image_anchor_message_id`/`pending_image_anchor_oid`: first uploaded audio chunk is linked via `image_anchor_message_id`, and pending marker fields are cleared from the session.
 - Voice message grouping keeps image-anchor rows attached to the next transcription message block and suppresses duplicate standalone anchor-only rows.
 - Transcription table rows now render inline image previews for image attachments (segmented and fallback row modes).
+- Web pasted images are uploaded to backend storage through `POST /api/voicebot/upload_attachment` (alias `/api/voicebot/attachment`) and persisted under `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
+- Screenshort cards must keep canonical `https://...` URLs fully visible, while `data:image/...;base64,...` values are rendered in truncated preview form (`data:image/...;base64,...`) with Copy action preserving the full raw URL.
 - Session page should render `Возможные задачи` only when `processors_data.CREATE_TASKS.data` exists and user has `PROJECTS.UPDATE`; keep compact task-table contract (no standalone status/project/AI columns, keep `description`).
+- `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
+- `CREATE_TASKS` persistence in API/worker paths is canonicalized to `id/name/description/priority/...` shape; legacy keys (`Task ID`, `Task Title`, `Description`, `Priority`) are normalized on write and accepted for delete matching.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.
 - Finalization backlog scan should prioritize newest sessions (`updated_at`/`_id` descending) with an expanded scan window so stale rows do not starve fresh closed sessions.

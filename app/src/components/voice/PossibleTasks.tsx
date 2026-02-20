@@ -62,7 +62,6 @@ const parseDependencies = (value: unknown): string[] =>
 const REQUIRED_FIELDS: Array<keyof TaskRow> = [
   'name',
   'description',
-  'task_type_id',
   'performer_id',
   'priority',
 ];
@@ -589,7 +588,6 @@ export default function PossibleTasks() {
             width: 220,
             render: (_value, record) => (
               <Select
-                status={record.__missing.includes('task_type_id') ? 'error' : ''}
                 allowClear
                 value={record.task_type_id || undefined}
                 onChange={(value) => setDraftValue(record.id, 'task_type_id', toText(value))}

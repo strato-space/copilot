@@ -26,6 +26,12 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('session_id: new ObjectId(sessionId)');
   });
 
+  it('normalizes save_create_tasks payload into canonical task fields', () => {
+    expect(source).toContain('normalizeCreateTaskForStorage');
+    expect(source).toContain("'agent_results.create_tasks': normalizedTasks");
+    expect(source).toContain("toTaskText(rawTask['Task Title'])");
+  });
+
   it('enforces project access checks for project-files endpoints', () => {
     expect(source).toContain("canAccessProjectFiles({ db, performer })");
     expect(source).toContain("canAccessProject({ db, performer, projectId })");

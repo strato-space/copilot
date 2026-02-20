@@ -807,3 +807,24 @@
 - **01:35** Added `backend/__tests__/voicebot/workerIngressHandlers.test.ts` to validate TS worker wrapper delegation for `HANDLE_VOICE`, `HANDLE_TEXT`, `HANDLE_ATTACHMENT` and payload normalization.
 - **01:50** Updated `scripts/pm2-voicebot-cutover.ecosystem.config.js` to launch `copilot-voicebot-tgbot-prod` from backend TypeScript runtime (`npm run start:voicebot-tgbot`) with merged env (`backend/.env.production` + `voicebot_runtime/.env.prod-cutover`) instead of legacy `voicebot_runtime/voicebot-tgbot.js`.
 - **02:05** Added Playwright guard `@unauth does not request microphone on initial /voice load` in `app/e2e/voice.spec.ts` and stabilized FAB recording-state e2e setup in `app/e2e/voice-fab-lifecycle.spec.ts`; verified local unauth suite (`13 passed`) on `http://127.0.0.1:3002`.
+
+## 2026-02-20
+### PROBLEM SOLVED
+- **14:52** Screenshort cards could hide URL/metadata under the sticky bottom widget, and very long `data:image/...` links made cards unreadable → adjusted card layout (safe bottom spacing + constrained preview area) and introduced compact base64 preview text while keeping full-value copy.
+- **14:52** Pasted images from web clipboard were stored as inline `data:image` payloads in message attachments, which broke canonical attachment URL behavior and complicated reuse/preview parity → switched clipboard image flow to backend attachment upload and persisted files in voicebot storage.
+- **14:52** CREATE_TASKS rows were stored in mixed schemas (`Task ID`/`Task Title` and canonical fields), which caused inconsistent rendering and partial delete behavior → normalized task payloads to canonical fields and expanded delete matching to canonical + legacy identifiers.
+- **14:52** Plan-fact pages still depended on local mock/snapshot UI state, which diverged from backend reality and hid project update persistence gaps → removed mock/snapshot frontend mode and enabled explicit backend project update route usage in edit flow.
+
+### FEATURE IMPLEMENTED
+- **14:52** Added voice image attachment upload endpoint (`/api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) with MIME validation, deterministic `file_unique_id`, and `public_attachment` URL response contract.
+- **14:52** Added plan-fact project update endpoint (`PUT /api/plan-fact/project`) and backend service method that updates project metadata plus optional contract-type propagation to fact/forecast collections.
+
+### CHANGES
+- **14:52** Voice frontend: updated `app/src/store/voiceBotStore.ts` clipboard image flow to upload image files before `add_text`; added regression contracts `app/__tests__/voice/pastedImageServerStorageContract.test.ts`, `app/__tests__/voice/screenshortAttachmentUrl.test.ts`, and `app/__tests__/voice/screenshortLayoutVisibility.test.ts`.
+- **14:52** Screenshort UI: updated `app/src/components/voice/Screenshort.tsx` to use `contain` previews, card-safe spacing, wrapped URL block, `data:image` truncation preview, and hover copy preserving full URL value.
+- **14:52** Possible Tasks UI/API parity: made `task_type_id` optional in `app/src/components/voice/PossibleTasks.tsx`; normalized CREATE_TASKS persistence in `backend/src/api/routes/voicebot/sessions.ts` and `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts`; added/updated tests in `backend/__tests__/voicebot/sessionUtilityRoutes.test.ts` and `backend/__tests__/voicebot/workerCreateTasksFromChunksHandler.test.ts`.
+- **14:52** Plan-fact backend/frontend cleanup: removed `app/src/services/mockPlanFact.ts` and `backend/src/services/crmIngest.ts`; updated `app/src/store/planFactStore.ts`, `app/src/pages/PlanFactPage.tsx`, `app/src/pages/AnalyticsPage.tsx`, `app/src/services/types.ts`, `app/src/pages/ProjectEditPage.tsx`, `backend/src/api/routes/planFact.ts`, and `backend/src/services/planFactService.ts`.
+- **14:52** Added backend attachment API contract tests in `backend/__tests__/voicebot/uploadAttachmentRoute.test.ts`.
+- **14:52** Removed deprecated env key `CRM_SNAPSHOT_DIR` from `backend/.env.example`.
+- **14:52** Added `docs/FINOPS_REALIZTION.md` and test fixture image files under `backend/uploads/voicebot/attachments/6996d9169bce3264e9851c1c/` used by attachment-flow verification.
+- **14:52** Validation run: `cd app && npm test -- --runInBand` (`28 suites`, `57 tests`), `cd backend && npm test -- --runInBand` (`62 suites`, `307 tests`), and `cd app && npm run build` (success).

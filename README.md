@@ -6,6 +6,8 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - FX rates are managed in `app/src/store/fxStore.ts` and recalculate RUB values in analytics, KPIs, and plan-fact tables.
 - The Employees directory supports a chat-driven form fill that prompts for missing fields.
 - Plan-fact months can be pinned (up to 3), and the totals row stays visible under pinned months.
+- Plan-fact frontend uses API-only data (local `mockPlanFact` fallback and CRM snapshot badges were removed from pages/stores).
+- Plan-fact project edits are persisted through `PUT /api/plan-fact/project`; backend propagates `contract_type` updates into facts/forecasts records for the same `project_id`.
 - The Expenses tab combines payroll and other costs, with category-level operations and sticky totals.
 - Expense attachments are uploaded via `/api/uploads/expense-attachments` and served from `/uploads/expenses`.
 - Guide directories fall back to mock data when the automation API is unavailable, and the Guide header includes a global Log sidebar.
@@ -42,11 +44,16 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
   - rules: only non-Telegram `*.webm` messages, grouped by `(session_id, file_name)`, keep one most relevant message and mark the rest `is_deleted=true`.
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
+- Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page shows `Возможные задачи` tab when `processors_data.CREATE_TASKS.data` is present and user has `PROJECTS.UPDATE`; the table uses compact design (no standalone status/project/AI columns), keeps `description`, and validates required fields inline.
+- Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
+- CREATE_TASKS payloads are normalized to canonical `id/name/description/priority/...` shape in both worker (`createTasksFromChunks`) and API utility (`save_create_tasks`) write paths.
+- Task deletion from session now matches canonical and legacy identifiers (`id`, `task_id_from_ai`, `Task ID`) to handle mixed historical payloads.
 - TS categorization/create-tasks chain treats non-text placeholders (`image`, `[Image]`, `[Screenshot]`) as non-blocking: rows are marked processed with empty categorization, and `CREATE_TASKS` can finalize without waiting on uncategorizable chunks.
 - Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).
 - Transcription/Categorization tables support client-side chronological direction switching (up/down) with preference persisted in local storage.
 - Screenshot attachments now display canonical absolute URLs with `public_attachment` priority (`direct_uri`), and expose hover-only copy-link action in card footer.
+- Screenshort cards keep `https://...` links fully visible, while `data:image/...;base64,...` values are displayed in truncated preview form (`data:image/...;base64,...`) and copied in full through the hover Copy action.
 - Voice task creation in Copilot runtime no longer requires `task_type_id`; missing type is no longer a hard blocker in ticket/task generation.
 - `copilot-voicebot-tgbot-prod` runs TypeScript runtime from `backend/dist/voicebot_tgbot/runtime.js` with `backend/.env.production` as the single env source.
 - `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.

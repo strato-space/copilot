@@ -56,6 +56,16 @@ const getDisplayAttachmentUrl = (attachment: VoiceSessionAttachment): string | n
     return toAbsoluteUrl(preferred);
 };
 
+const toUrlPreviewText = (rawUrl: string | null): string => {
+    if (!rawUrl) return 'Нет источника';
+    const trimmed = rawUrl.trim();
+    if (!trimmed.toLowerCase().startsWith('data:')) return trimmed;
+    const commaIndex = trimmed.indexOf(',');
+    const header = commaIndex >= 0 ? trimmed.slice(0, commaIndex) : trimmed;
+    if (header.toLowerCase().includes(';base64')) return `${header},...`;
+    return header;
+};
+
 const copyTextToClipboard = async (raw: string): Promise<boolean> => {
     const text = raw.trim();
     if (!text) return false;
@@ -148,7 +158,7 @@ function AttachmentPreview({ attachment }: { attachment: VoiceSessionAttachment 
 
     if (!src || !isImageAttachment(attachment) || isBroken) {
         return (
-            <div className="flex h-[220px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
+            <div className="flex h-[180px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
                 <Space direction="vertical" size={4} align="center">
                     <span>Превью недоступно</span>
                     <Text type="secondary" ellipsis={{ tooltip: name }}>
@@ -161,7 +171,7 @@ function AttachmentPreview({ attachment }: { attachment: VoiceSessionAttachment 
 
     if (isLoading || !resolvedSrc) {
         return (
-            <div className="flex h-[220px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
+            <div className="flex h-[180px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
                 <Space direction="vertical" size={4} align="center">
                     <span>Загрузка превью...</span>
                     <Text type="secondary" ellipsis={{ tooltip: name }}>
@@ -173,11 +183,11 @@ function AttachmentPreview({ attachment }: { attachment: VoiceSessionAttachment 
     }
 
     return (
-        <div className="h-[220px]">
+        <div className="h-[180px] overflow-hidden rounded border border-gray-100 bg-gray-50 lg:h-[200px]">
             <Image
                 src={resolvedSrc}
                 alt={name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 onError={() => setIsBroken(true)}
                 preview={{
                     mask: 'Просмотреть',
@@ -199,15 +209,16 @@ export default function Screenshort({ attachments = [] }: { attachments?: VoiceS
     }, [attachments]);
 
     return (
-        <div className="p-3">
+        <div className="p-3 pb-28">
             <List
                 dataSource={sortedAttachments}
                 locale={{
                     emptyText: <Empty description="Скриншоты/вложения отсутствуют" />,
                 }}
-                grid={{ gutter: [12, 12], xs: 1, sm: 2, lg: 3, xl: 4 }}
+                grid={{ gutter: [12, 12], xs: 1, sm: 2, lg: 2, xl: 3, xxl: 3 }}
                 renderItem={(item) => {
                     const displayUrl = getDisplayAttachmentUrl(item);
+                    const displayUrlPreview = toUrlPreviewText(displayUrl);
                     const copyLink = async (): Promise<void> => {
                         if (!displayUrl) return;
                         try {
@@ -225,19 +236,19 @@ export default function Screenshort({ attachments = [] }: { attachments?: VoiceS
 
                     return (
                         <List.Item>
-                            <div className="h-full rounded border border-gray-200 bg-white">
+                            <div className="h-full overflow-hidden rounded border border-gray-200 bg-white shadow-sm">
                                 <AttachmentPreview attachment={item} />
-                                <div className="p-2">
-                                    <Title level={5} ellipsis={{ tooltip: item.caption || 'Без подписи' }}>
+                                <div className="p-3">
+                                    <Title level={5} className="!mb-2" ellipsis={{ tooltip: item.caption || 'Без подписи' }}>
                                         {item.caption || 'Без подписи'}
                                     </Title>
                                     <Space size={4} direction="vertical" className="w-full">
-                                        <Text type="secondary">
-                                            Сообщение: {item.message_id || '—'} · {formatTimestamp(item.message_timestamp) || '—'}
+                                        <Text type="secondary" className="text-[12px]">
+                                            {formatTimestamp(item.message_timestamp) || '—'}
                                         </Text>
-                                        <div className="group flex items-start gap-1">
-                                            <Text type="secondary" className="flex-1 text-[12px]" ellipsis={{ tooltip: displayUrl || undefined }}>
-                                                {displayUrl || 'Нет источника'}
+                                        <div className="group relative rounded border border-gray-200 bg-gray-50 px-2 py-1.5 pr-8">
+                                            <Text type="secondary" className="block break-all text-[11px] leading-4">
+                                                {displayUrlPreview}
                                             </Text>
                                             {displayUrl ? (
                                                 <Tooltip title="Copy link">
@@ -248,11 +259,14 @@ export default function Screenshort({ attachments = [] }: { attachments?: VoiceS
                                                         onClick={() => {
                                                             void copyLink();
                                                         }}
-                                                        className="opacity-0 transition-opacity group-hover:opacity-100"
+                                                        className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100"
                                                     />
                                                 </Tooltip>
                                             ) : null}
                                         </div>
+                                        <Text type="secondary" className="text-[11px]" ellipsis={{ tooltip: item.message_id || undefined }}>
+                                            Message ID: {item.message_id || '—'}
+                                        </Text>
                                         <Space wrap size={6}>
                                             {item.kind && <Tag>{item.kind}</Tag>}
                                             {item.source && <Tag>{item.source}</Tag>}

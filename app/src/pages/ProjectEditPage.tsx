@@ -1,7 +1,9 @@
 import { Button, Card, Col, Form, Input, InputNumber, Row, Select, Typography, message } from 'antd';
 import { type ReactElement, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import PageHeader from '../components/PageHeader';
+import { apiClient } from '../services/api';
 import { usePlanFactStore } from '../store/planFactStore';
 import { type PlanFactProjectRow } from '../services/types';
 
@@ -43,11 +45,36 @@ export default function ProjectEditPage(): ReactElement {
   }, [projectContext, form]);
 
   const handleSave = async (): Promise<void> => {
+    if (!projectId) {
+      message.error('Не удалось определить проект');
+      return;
+    }
+
+    let values: Record<string, unknown>;
     try {
-      await form.validateFields();
-      message.success('Изменения сохранены локально');
+      values = await form.validateFields();
     } catch {
-      // validation handled by Ant Design
+      return;
+    }
+
+    try {
+      const payload = {
+        project_id: projectId,
+        project_name: values.projectName,
+        subproject_name: values.subprojectName,
+        contract_type: values.contractType,
+        rate_rub_per_hour: values.rateRub,
+      };
+      await apiClient.put('/plan-fact/project', payload);
+      await fetchPlanFact();
+      message.success('Изменения сохранены');
+    } catch (error) {
+      const messageText = isAxiosError(error)
+        ? error.response?.data?.error?.message ?? error.message
+        : 'Не удалось сохранить изменения';
+      message.error(
+        typeof messageText === 'string' ? messageText : 'Не удалось сохранить изменения',
+      );
     }
   };
 

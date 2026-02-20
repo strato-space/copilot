@@ -15,5 +15,11 @@ describe('Screenshort attachment URL contract', () => {
     expect(source).toContain('icon={<CopyOutlined />}');
     expect(source).toContain('group-hover:opacity-100');
   });
-});
 
+  it('truncates data:image base64 payload in UI but keeps full value for copy action', () => {
+    expect(source).toContain("if (!trimmed.toLowerCase().startsWith('data:')) return trimmed;");
+    expect(source).toContain("if (header.toLowerCase().includes(';base64')) return `${header},...`;");
+    expect(source).toContain('const displayUrlPreview = toUrlPreviewText(displayUrl);');
+    expect(source).toContain('const copied = await copyTextToClipboard(displayUrl);');
+  });
+});

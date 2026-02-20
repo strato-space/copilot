@@ -6,13 +6,11 @@ import {
   type PlanFactMonthCell,
   type PlanFactProjectRow,
 } from '../services/types';
-import { mockPlanFact } from '../services/mockPlanFact';
 
 interface PlanFactState {
   data: PlanFactGridResponse | null;
   loading: boolean;
   error: string | null;
-  usingMock: boolean;
   year: number;
   focusMonth: string;
   forecastVersionId: string;
@@ -28,19 +26,11 @@ interface PlanFactState {
   setYear: (year: number) => void;
   setFocusMonth: (month: string) => void;
   setForecastVersionId: (value: string) => void;
-  setUsingMock: (value: boolean) => void;
 }
 
 const now = dayjs();
 const initialRangeStart = now.format('YYYY-MM');
 const initialRangeEnd = now.format('YYYY-MM');
-
-const clonePlanFact = (data: PlanFactGridResponse): PlanFactGridResponse => {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(data);
-  }
-  return JSON.parse(JSON.stringify(data)) as PlanFactGridResponse;
-};
 
 const emptyCell = (): PlanFactMonthCell => ({
   fact_rub: 0,
@@ -53,19 +43,14 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
   data: null,
   loading: false,
   error: null,
-  usingMock: false,
   year: now.year(),
   focusMonth: now.format('YYYY-MM'),
   forecastVersionId: 'baseline',
   dateRange: [initialRangeStart, initialRangeEnd],
   fetchPlanFact: async (): Promise<void> => {
-    const { year, focusMonth, forecastVersionId, usingMock } = get();
+    const { year, focusMonth, forecastVersionId } = get();
     set({ loading: true, error: null });
     try {
-      if (usingMock) {
-        set({ data: clonePlanFact(mockPlanFact), loading: false });
-        return;
-      }
       const response = await apiClient.get<{
         data: PlanFactGridResponse;
         error: { message: string } | null;
@@ -76,7 +61,7 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
           forecast_version_id: forecastVersionId,
         },
       });
-      set({ data: response.data.data, loading: false, usingMock: false });
+      set({ data: response.data.data, loading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       set((state) => ({
@@ -151,11 +136,4 @@ export const usePlanFactStore = create<PlanFactState>((set, get): PlanFactState 
   setYear: (year: number): void => set({ year }),
   setFocusMonth: (month: string): void => set({ focusMonth: month }),
   setForecastVersionId: (value: string): void => set({ forecastVersionId: value }),
-  setUsingMock: (value: boolean): void => {
-    if (value) {
-      set({ usingMock: true, data: clonePlanFact(mockPlanFact), error: null });
-      return;
-    }
-    set({ usingMock: false });
-  },
 }));

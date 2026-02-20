@@ -19,6 +19,7 @@ describe('PossibleTasks design contract', () => {
     expect(source.includes('обязательное поле')).toBe(true);
     expect(source.includes("status={record.__missing.includes('name') ? 'error' : ''}")).toBe(true);
     expect(source.includes("status={record.__missing.includes('description') ? 'error' : ''}")).toBe(true);
+    expect(source.includes("status={record.__missing.includes('task_type_id') ? 'error' : ''}")).toBe(false);
   });
 
   it('removes editable project and AI summary columns from main table', () => {

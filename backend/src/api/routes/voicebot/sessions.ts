@@ -219,6 +219,42 @@ const toObjectIdArray = (value: unknown): ObjectId[] => {
     return result;
 };
 
+const toTaskText = (value: unknown): string => {
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+    return '';
+};
+
+const toTaskDependencies = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((entry) => toTaskText(entry))
+        .filter(Boolean);
+};
+
+const normalizeCreateTaskForStorage = (
+    rawTask: Record<string, unknown>,
+    index: number,
+    defaultProjectId: string
+): Record<string, unknown> => {
+    const taskIdFromAi = toTaskText(rawTask.task_id_from_ai ?? rawTask['Task ID']);
+    const id = toTaskText(rawTask.id) || taskIdFromAi || `task-${index + 1}`;
+    return {
+        id,
+        name: toTaskText(rawTask.name) || toTaskText(rawTask['Task Title']) || `Задача ${index + 1}`,
+        description: toTaskText(rawTask.description) || toTaskText(rawTask.Description),
+        priority: toTaskText(rawTask.priority) || toTaskText(rawTask.Priority) || 'P3',
+        priority_reason: toTaskText(rawTask.priority_reason) || toTaskText(rawTask['Priority Reason']),
+        performer_id: toTaskText(rawTask.performer_id),
+        project_id: toTaskText(rawTask.project_id) || defaultProjectId,
+        task_type_id: toTaskText(rawTask.task_type_id),
+        dialogue_tag: toTaskText(rawTask.dialogue_tag) || 'voice',
+        task_id_from_ai: taskIdFromAi,
+        dependencies_from_ai: toTaskDependencies(rawTask.dependencies_from_ai ?? rawTask.Dependencies),
+        dialogue_reference: toTaskText(rawTask.dialogue_reference) || toTaskText(rawTask['Dialogue Reference']),
+    };
+};
+
 const getValueByPath = (input: unknown, path: string): unknown => {
     if (!path) return undefined;
     const keys = path.split('.');
@@ -1640,11 +1676,16 @@ router.post('/save_create_tasks', async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Access denied to update this session' });
         }
 
+        const defaultProjectId = session.project_id ? String(session.project_id) : '';
+        const normalizedTasks = tasks.map((task, index) =>
+            normalizeCreateTaskForStorage(task as Record<string, unknown>, index, defaultProjectId)
+        );
+
         const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
             { _id: new ObjectId(session_id) },
             {
                 $set: {
-                    'agent_results.create_tasks': tasks,
+                    'agent_results.create_tasks': normalizedTasks,
                     updated_at: new Date(),
                 },
             }
@@ -2169,7 +2210,13 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
 
         const updatePayload: Record<string, unknown> = {
             $pull: {
-                'processors_data.CREATE_TASKS.data': { id: taskId },
+                'processors_data.CREATE_TASKS.data': {
+                    $or: [
+                        { id: taskId },
+                        { task_id_from_ai: taskId },
+                        { 'Task ID': taskId },
+                    ],
+                },
             },
             $set: { updated_at: new Date() },
         };

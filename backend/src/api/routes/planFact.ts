@@ -3,6 +3,7 @@ import { sendOk } from '../middleware/response.js';
 import { AppError } from '../middleware/error.js';
 import {
   buildPlanFactGrid,
+  updatePlanFactProject,
   upsertFactProjectMonth,
   upsertForecastProjectMonth,
 } from '../../services/planFactService.js';
@@ -42,6 +43,57 @@ const parseString = (value: unknown, field: string): string => {
     throw new AppError(`${field} is required`, 400, 'VALIDATION_ERROR');
   }
   return value;
+};
+
+const parseOptionalString = (
+  value: unknown,
+  field: string,
+  options: { allowEmpty: boolean } = { allowEmpty: false },
+): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new AppError(`${field} must be a string`, 400, 'VALIDATION_ERROR');
+  }
+  const normalized = value.trim();
+  if (!options.allowEmpty && normalized === '') {
+    throw new AppError(`${field} cannot be empty`, 400, 'VALIDATION_ERROR');
+  }
+  return normalized;
+};
+
+const parseOptionalNumber = (value: unknown, field: string): number | null | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || value === '') {
+    return null;
+  }
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    throw new AppError(`${field} must be a number`, 400, 'VALIDATION_ERROR');
+  }
+  if (!Number.isFinite(value)) {
+    throw new AppError(`${field} must be finite`, 400, 'VALIDATION_ERROR');
+  }
+  return value;
+};
+
+const parseContractType = (value: unknown): 'T&M' | 'Fix' => {
+  const parsed = parseString(value, 'contract_type');
+  if (parsed !== 'T&M' && parsed !== 'Fix') {
+    throw new AppError('contract_type must be T&M or Fix', 400, 'VALIDATION_ERROR');
+  }
+  return parsed;
+};
+
+const parseOptionalContractType = (
+  value: unknown,
+): 'T&M' | 'Fix' | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  return parseContractType(value);
 };
 
 const parseNumber = (value: unknown, field: string): number => {
@@ -112,6 +164,37 @@ router.put('/plan-fact/entry', async (req: Request, res: Response) => {
   }
 
   throw new AppError('mode must be fact or forecast', 400, 'VALIDATION_ERROR');
+});
+
+router.put('/plan-fact/project', async (req: Request, res: Response) => {
+  const projectId = parseString(req.body?.project_id, 'project_id');
+  const projectName = parseOptionalString(req.body?.project_name, 'project_name');
+  const subprojectName = parseOptionalString(req.body?.subproject_name, 'subproject_name', { allowEmpty: true });
+  const contractType = parseOptionalContractType(req.body?.contract_type);
+  const rateRub = parseOptionalNumber(req.body?.rate_rub_per_hour, 'rate_rub_per_hour');
+
+  if (
+    projectName === undefined
+    && subprojectName === undefined
+    && contractType === undefined
+    && rateRub === undefined
+  ) {
+    throw new AppError('no fields to update', 400, 'VALIDATION_ERROR');
+  }
+
+  const result = await updatePlanFactProject({
+    project_id: projectId,
+    ...(projectName === undefined ? {} : { project_name: projectName }),
+    ...(subprojectName === undefined ? {} : { subproject_name: subprojectName }),
+    ...(contractType === undefined ? {} : { contract_type: contractType }),
+    ...(rateRub === undefined ? {} : { rate_rub_per_hour: rateRub }),
+  });
+
+  if (result.matched_count === 0) {
+    throw new AppError('Project not found', 404, 'NOT_FOUND');
+  }
+
+  sendOk(res, result);
 });
 
 export default router;

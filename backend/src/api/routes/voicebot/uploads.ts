@@ -4,9 +4,9 @@
  * Flat API endpoints (`/upload_audio`, `/message_attachment`, `/public_attachment`)
  * plus legacy `/uploads/*` aliases are mounted by index router.
  */
-import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { extname, isAbsolute, resolve } from 'node:path';
 import { Router, type Request, type Response, type RequestHandler } from 'express';
 import multer from 'multer';
 import { ObjectId } from 'mongodb';
@@ -76,6 +76,34 @@ const upload = multer({
     },
 });
 
+const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'image/bmp': '.bmp',
+    'image/tiff': '.tiff',
+    'image/svg+xml': '.svg',
+};
+
+const sanitizeExtension = (rawExtension: string | null | undefined): string => {
+    if (typeof rawExtension !== 'string') return '.bin';
+    const normalized = rawExtension.trim().toLowerCase();
+    if (!normalized) return '.bin';
+    const dotted = normalized.startsWith('.') ? normalized : `.${normalized}`;
+    const safe = dotted.replace(/[^a-z0-9.]/g, '');
+    if (!safe || safe === '.') return '.bin';
+    return safe;
+};
+
+const resolveImageExtension = (file: Express.Multer.File): string => {
+    const fromMime = IMAGE_EXTENSION_BY_MIME[String(file.mimetype || '').toLowerCase()];
+    if (fromMime) return fromMime;
+    const fromOriginal = sanitizeExtension(extname(String(file.originalname || '')));
+    return fromOriginal || '.bin';
+};
+
 const uploadAnyWithErrorHandling: RequestHandler = (req, res, next) => {
     upload.any()(req, res, (error: unknown) => {
         if (!error) {
@@ -86,6 +114,59 @@ const uploadAnyWithErrorHandling: RequestHandler = (req, res, next) => {
         if (error instanceof multer.MulterError) {
             if (error.code === 'LIMIT_FILE_SIZE') {
                 const maxBytes = VOICEBOT_FILE_STORAGE.maxAudioFileSize;
+                return res.status(413).json({
+                    error: 'file_too_large',
+                    message: 'File too large',
+                    max_size_bytes: maxBytes,
+                    max_size_mb: Number((maxBytes / (1024 * 1024)).toFixed(1)),
+                });
+            }
+
+            return res.status(400).json({
+                error: 'upload_error',
+                message: error.message || 'Upload failed',
+                code: error.code,
+            });
+        }
+
+        if (error instanceof Error) {
+            return res.status(400).json({
+                error: 'upload_error',
+                message: error.message || 'Upload failed',
+            });
+        }
+
+        return res.status(400).json({
+            error: 'upload_error',
+            message: 'Upload failed',
+        });
+    });
+};
+
+const uploadImage = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: VOICEBOT_FILE_STORAGE.maxFileSize,
+    },
+    fileFilter: (_req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+            return;
+        }
+        cb(new Error(`File type ${file.mimetype} not allowed`));
+    },
+});
+
+const uploadImageWithErrorHandling: RequestHandler = (req, res, next) => {
+    uploadImage.single('attachment')(req, res, (error: unknown) => {
+        if (!error) {
+            next();
+            return;
+        }
+
+        if (error instanceof multer.MulterError) {
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                const maxBytes = VOICEBOT_FILE_STORAGE.maxFileSize;
                 return res.status(413).json({
                     error: 'file_too_large',
                     message: 'File too large',
@@ -578,6 +659,66 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
     }
 };
 
+const uploadAttachmentHandler = async (req: Request, res: Response) => {
+    const ureq = req as UploadsRequest;
+    const { performer } = ureq;
+    const db = getDb();
+
+    try {
+        const session_id = String(req.body?.session_id || '').trim();
+        if (!session_id || !ObjectId.isValid(session_id)) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+        if (!req.file || !Buffer.isBuffer(req.file.buffer) || req.file.buffer.length === 0) {
+            return res.status(400).json({ error: 'attachment file is required' });
+        }
+
+        const sessionCheck = await checkSessionAccess({ sessionId: session_id, req: ureq });
+        if (sessionCheck.status !== 200) {
+            return res.status(sessionCheck.status).json({ error: sessionCheck.error });
+        }
+
+        const file = req.file;
+        const createdAt = new Date();
+        const fileHash = createHash('sha256').update(file.buffer).digest('hex');
+        const fileUniqueId = `wa_${fileHash.slice(0, 16)}_${Date.now().toString(36)}`;
+        const extension = resolveImageExtension(file);
+        const attachmentDir = resolve(uploadsDir, 'attachments', session_id);
+        mkdirSync(attachmentDir, { recursive: true });
+        const storedFilename = `${fileUniqueId}${extension}`;
+        const absoluteFilePath = resolve(attachmentDir, storedFilename);
+        writeFileSync(absoluteFilePath, file.buffer);
+
+        const publicUri = `/api/voicebot/public_attachment/${session_id}/${fileUniqueId}`;
+        const normalizedName = typeof file.originalname === 'string' && file.originalname.trim()
+            ? file.originalname.trim()
+            : storedFilename;
+
+        return res.status(200).json({
+            success: true,
+            session_id,
+            attachment: {
+                kind: 'image',
+                source: 'web',
+                name: normalizedName,
+                mime_type: file.mimetype || 'application/octet-stream',
+                mimeType: file.mimetype || 'application/octet-stream',
+                size: file.size,
+                file_unique_id: fileUniqueId,
+                file_hash: fileHash,
+                file_path: absoluteFilePath,
+                uri: publicUri,
+                url: publicUri,
+                uploaded_at: createdAt.toISOString(),
+                uploaded_by: performer._id?.toString?.() ?? null,
+            },
+        });
+    } catch (error) {
+        logger.error('Error in upload_attachment:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+};
+
 router.post(
     '/audio',
     PermissionManager.requirePermission([
@@ -594,6 +735,24 @@ router.post(
     ]),
     uploadAnyWithErrorHandling,
     uploadAudioHandler
+);
+
+router.post(
+    '/attachment',
+    PermissionManager.requirePermission([
+        PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN,
+    ]),
+    uploadImageWithErrorHandling,
+    uploadAttachmentHandler
+);
+
+router.post(
+    '/upload_attachment',
+    PermissionManager.requirePermission([
+        PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN,
+    ]),
+    uploadImageWithErrorHandling,
+    uploadAttachmentHandler
 );
 
 // Legacy route for `/voicebot/uploads/create_session`.

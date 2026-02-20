@@ -36,7 +36,6 @@ import { useEmployeeStore } from '../store/employeeStore';
 import { convertToRub } from '../services/expenseDirectory';
 import { useExpensesStore } from '../store/expensesStore';
 import { type PlanFactGridResponse } from '../services/types';
-import { mockPlanFact } from '../services/mockPlanFact';
 
 interface ProjectHighlight {
   key: string;
@@ -260,7 +259,7 @@ export default function AnalyticsPage(): ReactElement {
       sum + employees.reduce((acc, employee) => acc + getEmployeeMonthlySalary(employee, month), 0),
       0);
   }, [activeMonths, focusMonth, employees]);
-  const chartData = useMemo((): PlanFactGridResponse | null => (data?.customers?.length ? data : mockPlanFact), [data]);
+  const chartData = useMemo((): PlanFactGridResponse | null => data, [data]);
 
   const projectHighlights = useMemo((): ProjectHighlight[] => {
     if (!chartData?.customers?.length) {

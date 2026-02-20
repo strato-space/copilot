@@ -24,16 +24,18 @@ const TASK_CREATION_PROMPT = `
 
 Формат ответа: только валидный JSON-массив объектов, без пояснений.
 Каждый объект должен содержать ТОЛЬКО эти ключи:
-- "Task ID"
-- "Task Title"
-- "Description"
-- "Priority" ("🔥 P1" ... "P7")
-- "Priority Reason"
-- "Assignee" (роль/имя/команда или "Unassigned")
-- "Dialogue Reference" (короткая цитата или ссылка/контекст)
-- "Deadline" (если есть; иначе пустая строка)
-- "Project/Goal/Req Link" (если есть; иначе пустая строка)
-- "Dependencies" (массив Task ID или пустой массив)
+- "id" (стабильный идентификатор задачи; если нет, сгенерируй из контекста)
+- "name"
+- "description"
+- "priority" ("🔥 P1" ... "P7")
+- "priority_reason"
+- "performer_id" (ID исполнителя или пустая строка, если неизвестно)
+- "project_id" (ID проекта или пустая строка)
+- "task_type_id" (ID типа задачи или пустая строка)
+- "dialogue_tag" ("voice"/"chat"/"doc"/"call")
+- "task_id_from_ai" (человекочитаемый ID вроде T1, если есть)
+- "dependencies_from_ai" (массив идентификаторов задач или пустой массив)
+- "dialogue_reference" (короткая цитата или ссылка/контекст)
 
 Правила:
 - Не придумывай лишние задачи: только те, что реально следуют из входа.
@@ -67,9 +69,24 @@ type CreateTasksFromChunksResult = {
 
 type SessionRecord = {
   _id: ObjectId;
+  project_id?: ObjectId | string | null;
 };
 
 type ParsedTask = Record<string, unknown>;
+type NormalizedTask = {
+  id: string;
+  name: string;
+  description: string;
+  priority: string;
+  priority_reason: string;
+  performer_id: string;
+  project_id: string;
+  task_type_id: string;
+  dialogue_tag: string;
+  task_id_from_ai: string;
+  dependencies_from_ai: string[];
+  dialogue_reference: string;
+};
 
 const runtimeQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, {
@@ -105,6 +122,44 @@ const normalizeChunkText = (value: unknown): string => {
     if (typeof text === 'string') return text;
   }
   return '';
+};
+
+const toText = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+};
+
+const parseDependencies = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+        .map((entry) => toText(entry))
+        .filter(Boolean)
+    : [];
+
+const toTaskProjectId = (value: ObjectId | string | null | undefined): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  return value.toString().trim();
+};
+
+const normalizeTask = (task: ParsedTask, index: number, defaultProjectId: string): NormalizedTask => {
+  const taskIdFromAi = toText(task['Task ID'] ?? task.task_id_from_ai);
+  const id = toText(task.id) || taskIdFromAi || `task-${index + 1}`;
+  return {
+    id,
+    name: toText(task.name) || toText(task['Task Title']) || `Задача ${index + 1}`,
+    description: toText(task.description) || toText(task.Description),
+    priority: toText(task.priority) || toText(task.Priority) || 'P3',
+    priority_reason: toText(task.priority_reason) || toText(task['Priority Reason']),
+    performer_id: toText(task.performer_id),
+    project_id: toText(task.project_id) || defaultProjectId,
+    task_type_id: toText(task.task_type_id),
+    dialogue_tag: toText(task.dialogue_tag) || 'voice',
+    task_id_from_ai: taskIdFromAi,
+    dependencies_from_ai: parseDependencies(task.dependencies_from_ai ?? task.Dependencies),
+    dialogue_reference: toText(task.dialogue_reference) || toText(task['Dialogue Reference']),
+  };
 };
 
 const parseTasksJson = (raw: string): ParsedTask[] => {
@@ -233,7 +288,10 @@ export const handleCreateTasksFromChunksJob = async (
     }
 
     const outputText = String(response.output_text || '').trim();
-    const tasks = parseTasksJson(outputText);
+    const tasksRaw = parseTasksJson(outputText);
+    const tasks = tasksRaw.map((task, index) =>
+      normalizeTask(task, index, toTaskProjectId(session.project_id))
+    );
 
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
       runtimeQuery({ _id: sessionObjectId }),

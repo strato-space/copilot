@@ -1,4 +1,4 @@
-import { Button, Card, Tabs, Tag, Typography, message } from 'antd';
+import { Button, Card, Tabs, Typography, message } from 'antd';
 import dayjs from 'dayjs';
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
 import PlanFactDrawer from '../components/PlanFactDrawer';
@@ -32,7 +32,6 @@ export default function PlanFactPage(): ReactElement {
     error,
     focusMonth,
     dateRange,
-    usingMock,
     year,
     forecastVersionId,
     setFocusMonth,
@@ -140,7 +139,7 @@ export default function PlanFactPage(): ReactElement {
 
   useEffect((): void => {
     void fetchPlanFact();
-  }, [fetchPlanFact, year, usingMock]);
+  }, [fetchPlanFact, year]);
 
   useEffect((): void => {
     const from = yearMonths[0];
@@ -209,28 +208,6 @@ export default function PlanFactPage(): ReactElement {
     void loadExpenses();
   }, [setExpenseCategories, setExpenseOperations, setFxRatesByMonth, setClosedMonths, setEmployees, yearMonths]);
 
-  const snapshotAgeHours = useMemo((): number | null => {
-    if (!data?.snapshot_date) {
-      return null;
-    }
-    const snapshotMoment = dayjs(data.snapshot_date);
-    if (!snapshotMoment.isValid()) {
-      return null;
-    }
-    return dayjs().diff(snapshotMoment, 'hour', true);
-  }, [data?.snapshot_date]);
-
-  const snapshotLabel = useMemo((): string => {
-    if (!data?.snapshot_date) {
-      return 'нет данных';
-    }
-    const snapshotMoment = dayjs(data.snapshot_date);
-    if (!snapshotMoment.isValid()) {
-      return 'нет данных';
-    }
-    return snapshotMoment.format('YYYY-MM-DD HH:mm');
-  }, [data?.snapshot_date]);
-
   const rangeLabel = useMemo((): string => {
     const [start, end] = dateRange;
     if (!start || !end) {
@@ -238,8 +215,6 @@ export default function PlanFactPage(): ReactElement {
     }
     return `${formatMonthLabel(start)} — ${formatMonthLabel(end)}`;
   }, [dateRange, focusMonth]);
-
-  const isSnapshotStale = snapshotAgeHours !== null && snapshotAgeHours > 1;
 
   useEffect((): void => {
     const [rangeStart, rangeEnd] = dateRange;
@@ -330,14 +305,6 @@ export default function PlanFactPage(): ReactElement {
         description={
           <div className="flex flex-wrap items-center gap-2">
             <span>Период: {rangeLabel}</span>
-            <span>•</span>
-            <span>CRM snapshot: {snapshotLabel}</span>
-            {snapshotAgeHours !== null && (
-              <Tag color={isSnapshotStale ? 'red' : 'green'}>
-                {isSnapshotStale ? 'Данные устарели' : `Обновлено ${snapshotAgeHours.toFixed(1)} ч назад`}
-              </Tag>
-            )}
-            {usingMock && <Tag color="gold">Демо‑данные</Tag>}
           </div>
         }
         actions={
