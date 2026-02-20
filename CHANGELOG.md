@@ -2,16 +2,25 @@
 
 ## 2026-02-20
 ### PROBLEM SOLVED
+- **06:35** Voice migration documentation drifted across three plan files: status legend usage and BD source-of-truth mapping were inconsistent, making rollout state ambiguous.
 - **06:01** WebRTC full-track archive uploads generated redundant backend rows without downstream diarization consumption, creating avoidable duplicate payloads.
 - **06:05** Migration docs still referenced open backlog and incomplete legacy-removal status after `copilot-vsen`/`copilot-ia38` were already completed.
 - **05:18** Migration planning docs drifted from current `bd` execution state: open backlog and accepted decisions were not clearly reflected in one place.
 
 ### FEATURE IMPLEMENTED
+- **06:35** Performed deep BD-driven documentation sync for migration program/project/frontend plans with unified status legend `[v] / [x] / [~]`.
 - **06:01** Disabled backend upload for `full_track` WebRTC segments while preserving Monitor visibility and metadata for future diarization rollout.
 - **06:05** Completed full closeout of migration waves: legacy runtime removed, full test sweep closed, plan docs synced to current BD state.
 - **05:18** Added a refreshed execution-oriented migration plan with explicit open backlog mapping (`copilot-vsen`, `copilot-ia38`) and accepted-decision section.
 
 ### CHANGES
+- **06:35** Deep-refreshed migration docs from closed BD tickets (`bd list --all`):
+  - `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`: rebuilt as BD-driven execution plan with stream status matrix, updated final structure, and explicit `[x]` Playwright gaps.
+  - `docs/PLAYWRIGHT_MIGRATION_MATRIX.md`: synchronized scenario mapping and status classification (`[v]` green e2e, `[~]` partial/manual, `[x]` not migrated).
+  - `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md`: rewritten to frontend capability matrix linked to closed BD evidence and test artifacts.
+- **06:35** Updated doc governance references:
+  - `AGENTS.md`: pinned the three migration documents as primary execution artifacts and fixed legend/source-of-truth policy.
+  - `README.md`: aligned Voice migration docs section with BD-driven workflow and legend contract.
 - **06:01** Updated WebRTC FAB runtime policy (`copilot-hmkq`):
   - `app/public/webrtc/webrtc-voicebot-lib.js`: introduced `ARCHIVE_TRACK_UPLOAD_ENABLED=false`, skipped `uploadArchiveTrackSegments` by policy, disabled upload button on `full_track` rows, and hard-blocked manual upload for `trackKind=full_track`.
   - `app/__tests__/voice/webrtcDoneUploadPolicy.test.ts`: updated regression contract to assert policy-based full-track skip.

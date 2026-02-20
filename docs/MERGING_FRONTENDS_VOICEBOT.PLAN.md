@@ -1,161 +1,71 @@
 # MERGING_FRONTENDS_VOICEBOT.PLAN
 
-## 1. Цель документа
-Зафиксировать **актуальное** состояние миграции Voice frontend в Copilot на базе **закрытых BD задач**, а также явно показать расхождения между старым планом и фактически реализованными решениями.
+Дата ревизии: 2026-02-20
 
-Дата ревизии: 2026-02-20 (rev.3)
+## 1) Цель
+Зафиксировать фактическое состояние миграции frontend voice-контура в Copilot по **закрытым BD задачам** и тестовым артефактам.
 
----
+## 2) Источник истины
+Приоритет:
+1. `bd list --all` (факт закрытия/объёма)
+2. `bd show <id>` (close reason / доказательства)
+3. Код и e2e в `app/src/**`, `app/e2e/**`
 
-## 2. Источник истины
-Приоритет источников:
-1. Закрытые задачи в `bd` (факт реализации)
-2. Реальный код в `app/src/components/voice/*`, `app/src/pages/voice/*`, `app/src/store/voiceBotStore.ts`
-3. Исторический план (этот файл в старой редакции) — только как архив контекста
+## 3) Status legend
 
-Команда просмотра карточки:
-- `bd show <issue-id>`
+- `[v]` migrated and green in Playwright
+- `[x] not yet migrated`
+- `[~] partially covered`
 
-JSONL с карточками:
-- `../.beads/issues.jsonl`
+## 4) Фактический статус frontend migration
 
----
-
-## 3. Актуальный статус миграции frontend
-
-### 3.1 Что уже реализовано
-- Voice UI работает нативно в Copilot под `/voice/*` (без iframe)
-- Контролы сессии унифицированы: `New / Rec / Cut / Pause / Done`
-- Вкладки `Screenshort` и `Log` перенесены и работают через Copilot backend
-- Реализован realtime апдейт транскрипции/категоризации по socket
-- Реализованы действия над сегментами (edit/delete/rollback) и обновление состояния
-- Добавлены серверные дедупликации WebRTC-дублей (по hash и исторический cleanup по filename)
-- Исправлен критический баг `Done`: сессия закрывается детерминированно
-
-### 3.2 Что остаётся в работе
-- Открытых P1 задач по migration frontend-потоку нет.
-- Новые работы заводятся только через `bd create ...` по итогам продовых регрессий/новых требований.
-
-### 3.3 Текущий открытый backlog (bd)
-| BD ID | Статус | Объём |
-|---|---|---|
-| — | — | В текущей ревизии открытый backlog по frontend migration отсутствует. |
-
----
-
-## 4. Карта ключевых закрытых BD задач (ссылки)
-
-> Ниже — задачи, определившие текущую архитектуру frontend и контракты.
-
-| BD ID | Статус | Что зафиксировано | Ссылка в JSONL |
+| Capability | Status | Closed BD | Test evidence |
 |---|---|---|---|
-| `copilot-z9j` | closed | Итоговый source-sync frontend `/voice`, унификация `New/Rec/Cut/Pause/Done` | [`.beads/issues.jsonl:205`](../.beads/issues.jsonl#L205) |
-| `copilot-vsen` | closed | Полное удаление legacy runtime subtree из Copilot; custom prompts перенесены в `backend/resources/voicebot/custom_prompts`; code/docs/test references очищены | [`.beads/issues.jsonl`](../.beads/issues.jsonl) |
-| `copilot-ia38` | closed | Полный test sweep: backend `61/61`, app unit `24/24`, app e2e `53 passed / 4 skipped`, miniapp unit `3/3`, miniapp e2e `pass-with-no-tests` | [`.beads/issues.jsonl`](../.beads/issues.jsonl) |
-| `copilot-z9j.1` | closed | Паритет вкладок `Screenshort + SessionLog`, attachment contract | [`.beads/issues.jsonl:206`](../.beads/issues.jsonl#L206) |
-| `copilot-z9j.2` | closed | Edit/Delete/Rollback UX и refresh после мутаций | [`.beads/issues.jsonl:207`](../.beads/issues.jsonl#L207) |
-| `copilot-zpb9` | closed | Realtime апдейты категоризации/финализации по websocket | [`.beads/issues.jsonl:210`](../.beads/issues.jsonl#L210) |
-| `copilot-soys` | closed | В caption показываем `public_attachment` + hover-copy | [`.beads/issues.jsonl:182`](../.beads/issues.jsonl#L182) |
-| `copilot-ryl8` | closed | Дедуп загрузок WebRTC в рамках сессии по SHA-256 (latest-wins) | [`.beads/issues.jsonl:178`](../.beads/issues.jsonl#L178) |
-| `copilot-qeq0` | closed | Массовый historical dedupe WebRTC-дублей по filename | [`.beads/issues.jsonl:173`](../.beads/issues.jsonl#L173) |
-| `copilot-ltof` | closed | `Done` реально закрывает сессию, исправлен socket path + queued close | [`.beads/issues.jsonl:152`](../.beads/issues.jsonl#L152) |
-| `copilot-ris` | closed | State pictogram привязан к runtime state mapping | [`.beads/issues.jsonl:177`](../.beads/issues.jsonl#L177) |
-| `copilot-szo` | closed | Подтверждён порядок кнопок и lifecycle parity через e2e | [`.beads/issues.jsonl:185`](../.beads/issues.jsonl#L185) |
-| `copilot-yud` | closed | Док-контракт по кнопкам/пиктограмме синхронизирован | [`.beads/issues.jsonl:203`](../.beads/issues.jsonl#L203) |
-| `copilot-wxa` | closed | Паритет вкладки Screenshort (preview/caption/time) | [`.beads/issues.jsonl:198`](../.beads/issues.jsonl#L198) |
-| `copilot-yup` | closed | `direct_uri` + fallback `message_attachment` path | [`.beads/issues.jsonl:204`](../.beads/issues.jsonl#L204) |
-| `copilot-s93` | closed | Hardened socket contracts и authz проверка | [`.beads/issues.jsonl:180`](../.beads/issues.jsonl#L180) |
-| `copilot-sm0` | closed | Telegram 4-line output contract | [`.beads/issues.jsonl:181`](../.beads/issues.jsonl#L181) |
-| `copilot-xh5` | closed | Runtime foundation (`RUNTIME_TAG`, runtimeScope) | [`.beads/issues.jsonl:200`](../.beads/issues.jsonl#L200) |
-| `copilot-xgk` | closed | Runtime isolation contract для aggregate/read paths | [`.beads/issues.jsonl:199`](../.beads/issues.jsonl#L199) |
-| `copilot-zhd` | closed | Проверка отсутствия cross-runtime leakage | [`.beads/issues.jsonl:208`](../.beads/issues.jsonl#L208) |
+| Session page header parity (layout, controls row, footer status widget) | `[v]` | `copilot-oj3a`, `copilot-cgdd`, `copilot-0sp5` | `e2e/voice-fab-lifecycle.spec.ts` |
+| Controls contract `New/Rec/Cut/Pause/Done` | `[v]` | `copilot-z9j`, `copilot-szo`, `copilot-ris` | `e2e/voice-fab-lifecycle.spec.ts` |
+| `Done` closes session correctly (no stuck Ready) | `[v]` | `copilot-ltof` | e2e + bugfix verification in BD |
+| Session resolver and runtime mismatch screen | `[v]` | `copilot-z9j`, `copilot-ueu`, `copilot-uzp` | `e2e/voice.spec.ts` |
+| Tabs: `Transcription / Categorization / Screenshort / Log` | `[v]` | `copilot-z9j.1`, `copilot-z9j.2`, `copilot-wxa`, `copilot-yup` | `e2e/voice.spec.ts`, `e2e/voice-log.spec.ts` |
+| Segment actions (copy/edit/delete/rollback) + cascade cleanup | `[v]` | `copilot-z9j.2`, `copilot-dy1y`, `copilot-15rp`, `copilot-ot2` | `e2e/voice-log.spec.ts` + unit |
+| Signature line format under transcript segment | `[v]` | `copilot-odwy` | unit/ui checks |
+| Realtime categorization/fin updates via socket | `[~]` | `copilot-zpb9`, `copilot-mwdg` | confirmed by BD + MCP/manual smoke; no deterministic isolated Playwright case |
+| Screenshot caption uses `public_attachment` + hover copy | `[v]` | `copilot-soys`, `copilot-vp6o` | ui/unit + backend route checks |
+| Clipboard ingest (text/image chunk + linked categorization block) | `[~]` | `copilot-km0w`, `copilot-7owt` | implemented and tested on unit/integration; no stable dedicated live Playwright flow |
+| Full-track rows visible in Monitor, upload disabled | `[~]` | `copilot-hmkq`, `copilot-xv4a`, `copilot-lj5f` | policy enforced in runtime + docs; no dedicated Playwright assertion |
+| Upload oversize rails (413/502 UX) | `[~]` | `copilot-gpy`, `copilot-kyja` | backend/unit/manual verified, not fully real-media e2e |
+| Firefox lifecycle flake stabilization | `[v]` | `copilot-iy8d` | repeat-each stress pass in BD close reason |
+| FAB persistence across route navigation | `[v]` | `copilot-4y6` | `e2e/voice-fab-lifecycle.spec.ts` |
 
----
+## 5) Что из старого плана заменено решениями из BD
 
-## 5. Обновлённые проектные решения (по факту BD)
+- Старый draft предполагал coexistence с legacy runtime в репозитории.
+  - Факт: legacy удалён (`copilot-vsen`), frontend работает на текущем TS runtime.
+- Старый draft допускал ручной безтестовый приём migration.
+  - Факт: есть обязательный gate `copilot-ia38` + профильные e2e (`copilot-jm8`, `copilot-iy8d`).
+- Старый draft не фиксировал runtime-mismatch UX.
+  - Факт: explicit экран вместо infinite loader (`copilot-ueu`, `copilot-uzp`).
 
-### 5.1 Frontend lifecycle
-- FAB и page-контролы синхронизированы, но `Done` на page обязан закрывать явный `pageSessionId`.
-- Socket для `session_done` идёт в namespace `/voicebot`, ack `{ok:false}` трактуется как ошибка.
-- При reconnect делается rehydrate текущей сессии для детерминированного состояния UI.
+## 6) Remaining frontend scope (`[x]`)
 
-### 5.2 Tabs и данные
-- `Screenshort` получает attachment URL из `direct_uri` (`public_attachment`) с fallback.
-- `Log` вкладка — рабочая часть операционного контура: rollback/edit/delete события и их отражение в UI.
-- После мутаций сегментов делается обновление session payload.
+- `[x]` Playwright e2e через Telegram transport (message/photo/document -> UI timeline).
+- `[x]` Playwright e2e с живым large file upload и реальными browser media devices.
+- `[x]` Отдельный deterministic Playwright кейс на websocket-only realtime update (без polling fallback).
 
-### 5.3 Дедупликация
-- При upload: dedupe по `file_hash`/SHA-256 в рамках сессии.
-- Для исторических данных: отдельный cleanup по filename (`*.webm`) для WebRTC-сообщений.
-- Telegram-сообщения из cleanup исключаются.
+Примечание: эти `x` не блокируют текущую поставку, но остаются как следующая волна hardening.
 
-### 5.4 Runtime isolation
-- Для `prod` отображается `prod` + `prod-*` family.
-- Для non-prod — строгий runtime match.
-- Исключены cross-runtime чтения/обработки в рабочих путях.
+## 7) Минимальный набор проверок после изменений
 
----
+```bash
+cd /home/strato-space/copilot/app
+PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth
+PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun PLAYWRIGHT_INCLUDE_FIREFOX=1 npm run test:e2e -- e2e/voice-fab-lifecycle.spec.ts --project=firefox-unauth
+```
 
-## 6. Противоречия между закрытыми BD задачами и старой версией плана
+## 8) Ссылки на ключевые закрытые задачи
 
-### C1. Тестовая стратегия
-**Старый план:** «Тесты не добавлять, фокус на миграции».  
-**Факт по BD:** Добавлен существенный слой unit/e2e regression тестов (`copilot-z9j`, `copilot-z9j.2`, `copilot-zpb9`, `copilot-ltof`, др.).  
-**Решение:** считать тестирование обязательной частью миграции.
-
-### C2. Навигационная модель Voice
-**Старый план:** в разных разделах одновременно фигурируют и VoiceNav, и отказ от него (внутренняя логическая коллизия).  
-**Факт по BD:** реализован и стабилизирован текущий layout без отдельного старого voicebot navigation слоя.  
-**Решение:** фиксировать только текущую реализованную схему роутинга Copilot.
-
-### C3. Статус legacy runtime
-**Старый план/период миграции:** legacy runtime допускался как reference scaffold.  
-**Новое проектное решение:** legacy нужно убрать из Copilot repo, оставить источник в `/home/strato-space/voicebot`.  
-**Состояние:** решение доведено до конца (closed `copilot-vsen`).
-
-### C4. “Постепенная JS→TS миграция”
-**Старый план:** постепенная конверсия как долговременная норма.  
-**Факт по BD:** критические voice контуры уже в TS runtime; JS остатки трактуются как технический долг на удаление.  
-**Решение:** двигаться к полной TS-only схеме в active runtime.
-
-### C5. Объём переносимых страниц
-**Старый план:** широкий набор Q/A по потенциальному переносу страниц из voicebot.  
-**Факт по BD:** закреплён практический объём: `/voice/*` + нужные operational tabs, без переноса канваса/старых embed-механик.  
-**Решение:** удалить из плана ветки, не прошедшие в реализацию.
-
----
-
-## 7. Принятые решения
-1. Legacy runtime удаляется из Copilot; исторический reference остаётся только во внешнем репозитории `/home/strato-space/voicebot`.
-2. Текущий документ больше не поддерживает старую анкету Q1–Q13; формат закреплён как execution log от закрытых/открытых BD задач.
-3. Проверка миграции выполняется через фактические test runs и code-level parity checks, а не через ручной checklist без тестовых артефактов.
-
-Статус исполнения решений:
-- п.1 выполнен (закрыт `copilot-vsen`);
-- п.2 выполнен (Q1–Q13 архивированы, документ ведётся по BD);
-- п.3 выполнен в рамках `copilot-ia38` (полный test sweep + отчёт).
-
----
-
-## 8. Исполняемая структура следующей волны
-
-### 8.1 Wave A — Cleanup legacy
-- `copilot-vsen`: удалить legacy runtime subtree, переместить нужные артефакты в `backend/resources/*`.
-- Перепривязать тесты и smoke checks на TS runtime.
-
-### 8.2 Wave B — Docs hardening
-- Обновить `README.md`, `AGENTS.md`, `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md` на отсутствие внутренних legacy ссылок.
-- Зафиксировать единый «source of truth»: BD + TS runtime.
-
-### 8.3 Wave C — Full test green gate
-- Полный прогон `app/backend/miniapp` unit/e2e.
-- Отдельно задокументировать known flakes и их статус.
-
-### 8.4 Wave D — Закрытие открытого backlog
-- `copilot-vsen` закрыт.
-- `copilot-ia38` закрыт.
-
----
-
-## 9. Архивная пометка
-Старая версия этого документа (с анкетой Q1–Q13) считалась draft-этапом. С текущей ревизии документ ведётся как **execution plan от BD-фактов**, а не как предварительный опросник.
+- Foundation: `copilot-z9j`, `copilot-z9j.1`, `copilot-z9j.2`, `copilot-oj3a`, `copilot-cgdd`
+- Lifecycle + browser stability: `copilot-jm8`, `copilot-iy8d`, `copilot-ltof`, `copilot-4y6`
+- Realtime + cleanup: `copilot-zpb9`, `copilot-mwdg`, `copilot-dy1y`, `copilot-15rp`
+- Attachments + caption/public URL: `copilot-vp6o`, `copilot-soys`
+- Monitor/full-track policy: `copilot-hmkq`, `copilot-xv4a`, `copilot-lj5f`
+- Final verification: `copilot-ia38`

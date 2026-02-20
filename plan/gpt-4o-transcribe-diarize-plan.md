@@ -9,6 +9,16 @@
 - В UI показываем человеко-понятные speaker labels по дефолту (см. ниже), но raw-лейблы сохраняются в `transcription_raw`.
 - Версии транскрипта хранятся на уровне объекта сессии; session API возвращает финальный effective transcript с примененными правками.
 
+### Full-track policy (temporary)
+- `full-track` запись нужна как технический артефакт для будущей диаризации по непрерывной дорожке:
+  - удержание непрерывного speaker context между отдельными webm-чанками;
+  - восстановление корректных границ говорящих после `Cut/Pause/Rec` и смены микрофонов;
+  - offline re-processing исторических сессий новым diarization-моделем без потери исходного аудио-контекста;
+  - диагностика спорных кейсов, когда сегментная транскрипция выглядит неконсистентной.
+- До включения серверной диаризации `full-track` не отправляем на backend:
+  - в WebRTC он отображается в Monitor как локальный контрольный артефакт;
+  - upload на backend отключен, чтобы не создавать дубли и лишнюю нагрузку хранения/обработки.
+
 ## Target state
 Primary diarization via OpenAI **`gpt-4o-transcribe-diarize`** for production speech-to-text (with speaker labels), with a controlled fallback to Whisper when diarized output is unavailable.
 

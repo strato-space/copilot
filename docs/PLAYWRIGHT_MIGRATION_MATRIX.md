@@ -1,13 +1,10 @@
-# Playwright Migration Matrix (voicebot/webrtc -> copilot)
+# PLAYWRIGHT_MIGRATION_MATRIX
 
-Date: 2026-02-18
+Дата ревизии: 2026-02-20
 
-## Scope
-
-- Source A: `/home/strato-space/webrtc/plan/mcp-fab-auth-tests.md`
-- Source B: `/home/strato-space/webrtc/plan/cdp_fab_tests.py`
-- Source C: `/home/strato-space/voicebot` UI behavior required by `CHANGELOG.md` and `/home/strato-space/voicebot/plan/session-managment.md`
-- Destination: `/home/strato-space/copilot/app/e2e/*.spec.ts`
+## Source of truth
+- BD закрытые задачи: `bd list --all`, `bd show <id>`
+- e2e specs в `app/e2e/*.spec.ts`
 
 ## Status legend
 
@@ -15,38 +12,55 @@ Date: 2026-02-18
 - `[x] not yet migrated`
 - `[~] partially covered`
 
-## Scenario mapping
+## Сводка по покрытию
 
-| Status | Source scenario | Destination |
+| Block | Status | Evidence |
 |---|---|---|
-| `[v]` | `/voice` sessions list loads | `app/e2e/voice.spec.ts` `@unauth loads /voice sessions table` |
-| `[v]` | row click opens session page | `app/e2e/voice.spec.ts` `@unauth opens session from /voice table row click` |
-| `[v]` | resolver `/voice/session` -> active session | `app/e2e/voice.spec.ts` `@unauth resolves /voice/session to active-session` |
-| `[v]` | resolver empty-state when no active session | `app/e2e/voice.spec.ts` `@unauth shows empty-state on /voice/session without active-session` |
-| `[v]` | runtime mismatch must not infinite-load | `app/e2e/voice.spec.ts` `@unauth shows runtime mismatch screen on 404 session fetch` |
-| `[v]` | `/voice` must remain usable on sessions/list error | `app/e2e/voice.spec.ts` `@unauth keeps /voice usable when sessions/list returns 500` |
-| `[v]` | FAB controls order `New / Rec / Cut / Pause / Done` | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth session action order is New / Rec / Cut / Pause / Done` |
-| `[v]` | `Rec` from session page activates page session and routes to FAB | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth Rec on session page activates page session then calls FAB control` |
-| `[v]` | `New` routes to FAB control | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth New button routes action into FAB control` |
-| `[v]` | `Done` routes to FAB control | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth Done button routes action into FAB control` |
-| `[v]` | recording-state button enablement parity | `app/e2e/voice-fab-lifecycle.spec.ts` `@unauth button enablement follows recording state contract` |
-| `[v]` | trigger session ready-to-summarize API flow | `app/e2e/voice-log.spec.ts` `@unauth triggers session ready-to-summarize endpoint payload` |
-| `[v]` | transcript edit/delete + rollback/resend/retry log actions | `app/e2e/voice-log.spec.ts` `@unauth submits transcript segment edit and delete payloads`, `@unauth triggers rollback, resend and retry actions with proper payloads` |
-| `[x] not yet migrated` | `Cut` must route into FAB control (`cut`) | planned `app/e2e/voice-fab-lifecycle.spec.ts` |
-| `[x] not yet migrated` | `Pause` must route into FAB control (`pause`) | planned `app/e2e/voice-fab-lifecycle.spec.ts` |
-| `[x] not yet migrated` | pause waits for all non-silent pending uploads | planned integration e2e (requires real monitoring chunk list) |
-| `[x] not yet migrated` | done waits final upload and clears active state | planned integration e2e with live backend |
-| `[x] not yet migrated` | session cleanup (delete created sessions, no leaked artifacts) | planned integration e2e with cleanup assertions |
-| `[x] not yet migrated` | manual upload/retry and speech-filter interplay checks | planned integration e2e |
-| `[x] not yet migrated` | microphone default auto-selection regression checks | planned browser integration suite (needs real media devices) |
+| Voice page core navigation/resolver/error states | `[v]` | `e2e/voice.spec.ts`, BD: `copilot-fko`, `copilot-ia38` |
+| FAB lifecycle (`New/Rec/Cut/Pause/Done`) | `[v]` | `e2e/voice-fab-lifecycle.spec.ts`, BD: `copilot-jm8`, `copilot-iy8d` |
+| Segment log/edit/delete/rollback/retry | `[v]` | `e2e/voice-log.spec.ts`, BD: `copilot-jm8`, `copilot-ia38` |
+| Header/footer parity + state visuals | `[v]` | `e2e/voice-fab-lifecycle.spec.ts`, BD: `copilot-oj3a`, `copilot-cgdd`, `copilot-0sp5` |
+| Realtime categorization via socket | `[~]` | BD: `copilot-zpb9`, `copilot-mwdg` (+ MCP/manual smoke), no dedicated deterministic Playwright socket test yet |
+| Upload edge cases (413/oversize/full-track monitor-only) | `[~]` | BD: `copilot-gpy`, `copilot-kyja`, `copilot-hmkq`, `copilot-xv4a`; not fully e2e with real large media |
+| TG ingress to timeline end-to-end | `[x]` | No Playwright e2e through Telegram transport |
+| Clipboard image->categorization linked block live e2e | `[x]` | BD implemented (`copilot-km0w`, `copilot-7owt`), but no stable live e2e in Playwright yet |
 
-## Current run commands
+## Детальная матрица сценариев
+
+| Status | Source scenario | Destination spec/test |
+|---|---|---|
+| `[v]` | `/voice` sessions list loads | `e2e/voice.spec.ts` `@unauth loads /voice sessions table` |
+| `[v]` | row click opens session page | `e2e/voice.spec.ts` `@unauth opens session from /voice table row click` |
+| `[v]` | `/voice/session` resolves active session | `e2e/voice.spec.ts` `@unauth resolves /voice/session to active-session` |
+| `[v]` | `/voice/session` empty-state when no active session | `e2e/voice.spec.ts` `@unauth shows empty-state on /voice/session without active-session` |
+| `[v]` | runtime mismatch should not infinite-load | `e2e/voice.spec.ts` `@unauth shows runtime mismatch screen on 404 session fetch` |
+| `[v]` | no microphone prompt on initial `/voice` load | `e2e/voice.spec.ts` `@unauth does not request microphone on initial /voice load` |
+| `[v]` | Screenshort tab cards render | `e2e/voice.spec.ts` `@unauth renders Screenshort tab attachment cards` |
+| `[v]` | Log tab controls render | `e2e/voice.spec.ts` `@unauth renders Log tab with rollback action controls` |
+| `[v]` | session action order `New/Rec/Cut/Pause/Done` | `e2e/voice-fab-lifecycle.spec.ts` `@unauth session action order is New / Rec / Cut / Pause / Done` |
+| `[v]` | `New` routes into FAB control | `e2e/voice-fab-lifecycle.spec.ts` `@unauth New button routes action into FAB control` |
+| `[v]` | `Rec` activates page session then routes into FAB control | `e2e/voice-fab-lifecycle.spec.ts` `@unauth Rec on session page activates page session then calls FAB control` |
+| `[v]` | `Rec` switches active session from another session | `e2e/voice-fab-lifecycle.spec.ts` `@unauth Rec switches active-session from another session to current page session` |
+| `[v]` | recording-state enablement contract | `e2e/voice-fab-lifecycle.spec.ts` `@unauth button enablement follows recording state contract` |
+| `[v]` | `Pause` keeps UI busy until pause resolves (upload-wait semantics) | `e2e/voice-fab-lifecycle.spec.ts` `@unauth Pause keeps controls busy until FAB pause resolves (upload-wait semantics)` |
+| `[v]` | `Done` routes into FAB control | `e2e/voice-fab-lifecycle.spec.ts` `@unauth Done button routes action into FAB control` |
+| `[v]` | cleanup flow removes created session row | `e2e/voice-fab-lifecycle.spec.ts` `@unauth sessions cleanup flow deletes created test session row` |
+| `[v]` | rollback/resend/retry payload contract | `e2e/voice-log.spec.ts` `@unauth triggers rollback, resend and retry actions with proper payloads` |
+| `[v]` | manual summarize payload contract | `e2e/voice-log.spec.ts` `@unauth triggers session ready-to-summarize endpoint payload` |
+| `[v]` | transcript edit/delete payload contract | `e2e/voice-log.spec.ts` `@unauth submits transcript segment edit and delete payloads` |
+| `[~]` | realtime socket push while page idles (without polling fallback) | Covered by closed BD + manual/MCP smoke (`copilot-zpb9`, `copilot-mwdg`), no isolated deterministic e2e case |
+| `[x]` | Telegram ingress e2e (message -> session timeline in browser) | Planned; no Playwright transport harness |
+| `[x]` | live large-file upload + nginx boundary behavior | Planned; current coverage mostly backend/unit/manual |
+
+## Команды запуска
 
 ```bash
 cd /home/strato-space/copilot/app
-PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts --project=chromium-unauth
+PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth
+PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun PLAYWRIGHT_INCLUDE_FIREFOX=1 npm run test:e2e -- e2e/voice-fab-lifecycle.spec.ts --project=firefox-unauth
 ```
 
-Latest result:
-- `10 passed` (voice.spec + voice-log.spec run: runtime mismatch, log actions, transcript edit/delete, trigger summarize)
-
+## Подтверждение из BD
+- `copilot-jm8`: миграция Mode A/Mode B закрыта, chromium+firefox green.
+- `copilot-iy8d`: устранён Firefox flake, repeat-each stress passes.
+- `copilot-ia38`: полный app Playwright sweep закрыт (`53 passed, 4 skipped`).

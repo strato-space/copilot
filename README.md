@@ -59,6 +59,9 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 
 ### Voice migration planning docs
 - Primary frontend migration decision log: `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md`
+- Program-level migration source: `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`
+- Playwright parity source: `docs/PLAYWRIGHT_MIGRATION_MATRIX.md`
+- All three docs are synced from closed `bd list --all` items and use status legend `[v] / [x] / [~]`.
 - This plan is maintained against closed `bd` issues and includes an explicit contradiction section between old assumptions and implemented behavior.
 - Current open migration backlog is tracked only in `bd`; as of the latest refresh there are no open P1 frontend migration tasks.
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`

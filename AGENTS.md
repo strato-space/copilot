@@ -209,6 +209,11 @@ MCP_SESSION_TIMEOUT=1800000
 
 ## Planning Artifacts Placement
 - Voice migration planning artifacts synced from `voicebot/plan` live in `docs/voicebot-plan-sync/`.
+- Primary migration execution plans are:
+  - `docs/MERGING_PROJECTS_VOICEBOT_PLAN.md`
+  - `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md`
+  - `docs/PLAYWRIGHT_MIGRATION_MATRIX.md`
+- These three docs are maintained from closed `bd list --all` issues and use status legend `[v] / [x] / [~]`.
 - Required references include `docs/voicebot-plan-sync/implementation-draft-v1.md` and the session-level transcript versioning/event-log specs (`edit-event-log-plan.md`, `gpt-4o-transcribe-diarize-plan.md`).
 - Copied planning references for local copilot workflow also live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
 - Close-session outcomes for voice migration work must always be reflected in `AGENTS.md`, `README.md`, and `CHANGELOG.md` with matching BD evidence.
