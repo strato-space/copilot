@@ -34,6 +34,10 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Voice workers schedule periodic `PROCESSING` scans in TS runtime; pending-session filtering uses `is_waiting: { $ne: true }` to include legacy rows without explicit flag.
 - TS `processingLoop` now also prioritizes sessions inferred from pending message backlog (including rows with `is_messages_processed=true`) and requeues categorization after quota cooldown via processors queue.
 - TS transcribe handler deduplicates repeated uploads by file hash (`file_hash` / `file_unique_id` / `hash_sha256`) and reuses existing session transcription before new OpenAI requests.
+- Historical WebRTC duplicates can be collapsed by filename per session via backend script:
+  - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:dedupe:webm:dry`
+  - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:dedupe:webm:apply`
+  - rules: only non-Telegram `*.webm` messages, grouped by `(session_id, file_name)`, keep one most relevant message and mark the rest `is_deleted=true`.
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).
@@ -44,11 +48,26 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
 
+### Voice TypeScript migration status (from closed BD issues)
+- Runtime entrypoints migrated to TS:
+  - `backend/src/voicebot_tgbot/runtime.ts` (`copilot-b2t`, `copilot-f1g`, `copilot-h84`)
+  - `backend/src/workers/voicebot/runtime.ts` + manifest/runner (`copilot-ovg`)
+- Core worker handlers migrated to TS (`copilot-6jm`, `copilot-lnu`, `copilot-lcf`):
+  - `backend/src/workers/voicebot/handlers/{transcribe,categorize,finalization,processingLoop,summarize,questions,customPrompt,createTasksFromChunks,doneMultiprompt,...}.ts`
+- Legacy `voicebot_runtime/` is deprecated in this repo and queued for elimination (`copilot-vsen`); active prod/dev PM2 services already use only `backend/dist/*` TS runtime.
+- JS cleanup completed for confirmed dead artifact: removed `sandbox-assets/ui-miniapp/app.js` (no runtime references in copilot).
+
+### Voice migration planning docs
+- Primary frontend migration decision log: `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md`
+- This plan is maintained against closed `bd` issues and includes an explicit contradiction section between old assumptions and implemented behavior.
+- Current open migration backlog is tracked in `bd` issues: `copilot-vsen` (legacy runtime removal) and `copilot-ia38` (full test sweep).
+- Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
+
 
 ### Voice runtime: key configuration map
 - OpenAI key is a shared variable: `OPENAI_API_KEY`.
   - Copilot backend: `backend/src/api/routes/voicebot/llmgate.ts`.
-  - Voice runtime services: `voicebot_runtime/` jobs and processors (transcribe/categorization/task creation/title flows).
+  - TS workers/tgbot runtime: `backend/src/workers/voicebot/*` and `backend/src/voicebot_tgbot/*`.
 - Runtime/instance settings:
   - `VOICE_RUNTIME_ENV` (`prod|dev`) — runtime family.
   - `VOICE_RUNTIME_SERVER_NAME` — host identity (`p2`, etc.).

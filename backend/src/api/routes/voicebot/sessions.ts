@@ -858,9 +858,17 @@ const getSession = async (req: Request, res: Response) => {
         const session_messages = await rawDb.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(
             mergeWithProdAwareRuntimeFilter({
                 session_id: new ObjectId(session_id),
+                is_deleted: { $ne: true },
             })
         ).toArray();
-        const sessionMessagesCleaned = session_messages.map((message) =>
+        const sessionMessagesFiltered = session_messages.filter((message) => {
+            const value = (message as Record<string, unknown>)?.is_deleted;
+            if (value === true) return false;
+            if (typeof value === 'string' && value.trim().toLowerCase() === 'true') return false;
+            return true;
+        });
+
+        const sessionMessagesCleaned = sessionMessagesFiltered.map((message) =>
             cleanupMessageCategorizationForDeletedSegments(message as Record<string, unknown>)
         );
         const cleanupUpdates = sessionMessagesCleaned.filter((entry) => entry.cleanupStats.removed_rows > 0);

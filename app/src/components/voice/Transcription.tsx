@@ -25,6 +25,10 @@ const toTimestampMs = (value: unknown): number | null => {
 };
 
 const hasVisibleTranscriptionContent = (message: Record<string, unknown>): boolean => {
+    const isDeleted = message.is_deleted;
+    if (isDeleted === true) return false;
+    if (typeof isDeleted === 'string' && isDeleted.trim().toLowerCase() === 'true') return false;
+
     const transcription = message.transcription;
     if (transcription && typeof transcription === 'object') {
         const segmentsRaw = (transcription as { segments?: unknown[] }).segments;

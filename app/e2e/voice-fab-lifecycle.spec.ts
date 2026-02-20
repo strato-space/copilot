@@ -8,7 +8,7 @@ const mockAuth = async (
   options: { permissions?: string[] } = {}
 ): Promise<void> => {
   const permissions = Array.isArray(options.permissions) ? options.permissions : [];
-  await page.route('**/api/auth/me', async (route) => {
+  await page.route('**/api/auth/me**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -37,6 +37,33 @@ const addAuthCookie = async (page: Page): Promise<void> => {
       sameSite: 'Lax',
     },
   ]);
+};
+
+const gotoWithBootRetry = async (page: Page, path: string): Promise<void> => {
+  let lastDiagnostic = '';
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => undefined);
+    await page.waitForTimeout(800);
+
+    const ready = await page
+      .evaluate(() => {
+        const root = document.getElementById('root');
+        if (!root || root.childElementCount === 0) return false;
+        return true;
+      })
+      .catch(() => false);
+    if (ready) {
+      return;
+    }
+
+    const currentUrl = page.url();
+    const rootHtml = await page.locator('#root').innerHTML().catch(() => '');
+    lastDiagnostic = `attempt=${attempt} url=${currentUrl} ready=false rootLen=${rootHtml.length}`;
+    await page.waitForTimeout(300);
+  }
+
+  throw new Error(`App bootstrap failed for path "${path}" (${lastDiagnostic || 'no-diagnostic'})`);
 };
 
 const mockSessionApis = async (page: Page): Promise<void> => {
@@ -152,12 +179,16 @@ const getFabCalls = async (page: Page): Promise<string[]> =>
 
 const controlsRow = (page: Page) =>
   page
-    .locator('div.flex.flex-wrap.items-center.gap-2')
-    .filter({ has: page.getByRole('button', { name: /^Done$/ }) })
+    .locator('.voice-meeting-toolbar-buttons')
+    .or(
+      page
+        .locator('div.flex.flex-wrap.items-center.gap-2')
+        .filter({ has: page.getByRole('button', { name: /Done$/ }) })
+    )
     .first();
 
 const actionButton = (page: Page, name: string) =>
-  controlsRow(page).getByRole('button', { name: new RegExp(`^${name}$`) });
+  controlsRow(page).getByRole('button', { name: new RegExp(`${name}$`) });
 
 const mockFabScriptAsset = async (page: Page): Promise<void> => {
   await page.route('**/webrtc/webrtc-voicebot-lib.js**', async (route) => {
@@ -200,12 +231,32 @@ test.describe('Voice FAB lifecycle parity', () => {
   test.beforeEach(async ({ page }) => {
     await mockFabScriptAsset(page);
   });
+
+  test('@unauth session header includes meta row and footer status widget', async ({ page }) => {
+    await installFabControlMock(page);
+    await addAuthCookie(page);
+    await mockAuth(page);
+    await mockSessionApis(page);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
+
+    const metaRow = page.locator('.voice-meeting-meta-row');
+    await expect(metaRow).toBeVisible();
+    await expect(metaRow.getByText('Создано', { exact: true })).toBeVisible();
+    await expect(metaRow.getByText('Session ID', { exact: true })).toBeVisible();
+    await expect(metaRow.getByText('Участники', { exact: true })).toBeVisible();
+    await expect(metaRow.getByText('Доступ', { exact: true })).toBeVisible();
+
+    await expect(page.locator('.voice-session-content .voice-status-card')).toHaveCount(0);
+    const footerStatus = page.locator('.voice-session-status-bottom .voice-status-card');
+    await expect(footerStatus).toBeVisible();
+  });
+
   test('@unauth session action order is New / Rec / Cut / Pause / Done', async ({ page }) => {
     await installFabControlMock(page);
     await addAuthCookie(page);
     await mockAuth(page);
     await mockSessionApis(page);
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
 
     const expected = ['New', 'Rec', 'Cut', 'Pause', 'Done'];
     const boxes = [];
@@ -225,7 +276,7 @@ test.describe('Voice FAB lifecycle parity', () => {
     await addAuthCookie(page);
     await mockAuth(page);
     await mockSessionApis(page);
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
 
     await page.evaluate(() => {
       window.localStorage.removeItem('VOICEBOT_AUTH_TOKEN');
@@ -242,7 +293,7 @@ test.describe('Voice FAB lifecycle parity', () => {
     await addAuthCookie(page);
     await mockAuth(page);
     await mockSessionApis(page);
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
     await attachFabControlRecorder(page);
 
     await actionButton(page, 'New').click();
@@ -256,7 +307,7 @@ test.describe('Voice FAB lifecycle parity', () => {
     await mockAuth(page);
     await mockSessionApis(page);
 
-    await page.goto('/voice');
+    await gotoWithBootRetry(page, '/voice');
     await expect(page.locator('#fab-wrap')).toBeVisible();
 
     await page.getByRole('link', { name: /Analytic/i }).click();
@@ -283,7 +334,7 @@ test.describe('Voice FAB lifecycle parity', () => {
       });
     });
 
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
     await attachFabControlRecorder(page);
     await expect(actionButton(page, 'Rec')).toBeVisible();
     await actionButton(page, 'Rec').click();
@@ -310,7 +361,7 @@ test.describe('Voice FAB lifecycle parity', () => {
       });
     });
 
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
     await attachFabControlRecorder(page, { sessionId: anotherSessionId });
 
     await page.evaluate(() => {
@@ -347,7 +398,7 @@ test.describe('Voice FAB lifecycle parity', () => {
     await addAuthCookie(page);
     await mockAuth(page);
     await mockSessionApis(page);
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
     await attachFabControlRecorder(page, { state: 'recording' });
 
     await page.evaluate((sessionId) => {
@@ -378,7 +429,7 @@ test.describe('Voice FAB lifecycle parity', () => {
     await addAuthCookie(page);
     await mockAuth(page);
     await mockSessionApis(page);
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
 
     await page.evaluate(({ sessionId }) => {
       const win = window as unknown as {
@@ -449,7 +500,7 @@ test.describe('Voice FAB lifecycle parity', () => {
       });
     });
 
-    await page.goto(`/voice/session/${SESSION_ID}`);
+    await gotoWithBootRetry(page, `/voice/session/${SESSION_ID}`);
     await attachFabControlRecorder(page);
     await expect(actionButton(page, 'New')).toBeVisible();
     await expect(actionButton(page, 'Done')).toBeVisible();
@@ -512,7 +563,7 @@ test.describe('Voice FAB lifecycle parity', () => {
       });
     });
 
-    await page.goto('/voice');
+    await gotoWithBootRetry(page, '/voice');
     await expect(page.getByText('Playwright Temp Session')).toBeVisible();
     const sessionRow = page.locator('tr').filter({ hasText: 'Playwright Temp Session' }).first();
     await expect(sessionRow).toBeVisible();

@@ -243,6 +243,15 @@ const voicebotRequest = async <T = unknown>(url: string, data: unknown = {}, sil
 const getMessageRecord = (msg: VoiceBotMessage): Record<string, unknown> =>
     (msg && typeof msg === 'object' ? (msg as unknown as Record<string, unknown>) : {});
 
+const isMessageDeleted = (msg: VoiceBotMessage | null | undefined): boolean => {
+    if (!msg || typeof msg !== 'object') return false;
+    const value = getMessageRecord(msg).is_deleted;
+    if (value === true) return true;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+    return false;
+};
+
 const getNormalizedMessageId = (msg: VoiceBotMessage): string => {
     const raw = msg?.message_id;
     return typeof raw === 'string' ? raw.trim() : '';
@@ -304,6 +313,7 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     const imageRowsByMessageId = new Map<string, VoiceMessageRow[]>();
     const linkedImageAnchorIds = new Set<string>();
     for (const msg of voiceBotMessages) {
+        if (isMessageDeleted(msg)) continue;
         const messageId = getNormalizedMessageId(msg);
         if (messageId) {
             const imageRows = getImageRowsFromMessage(msg);
@@ -319,6 +329,7 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     }
 
     return voiceBotMessages.flatMap((msg) => {
+        if (isMessageDeleted(msg)) return [];
         const messageId = getNormalizedMessageId(msg);
         const ownImageRows = messageId ? (imageRowsByMessageId.get(messageId) ?? []) : [];
         const record = getMessageRecord(msg);
@@ -444,19 +455,29 @@ const upsertVoiceBotMessage = (
     current: VoiceBotMessage[],
     incoming: VoiceBotMessage
 ): VoiceBotMessage[] => {
-    const next = [...current];
     const incomingIdentity = getMessageIdentity(incoming);
+    const matchIncoming = (existing: VoiceBotMessage): boolean => {
+        const existingIdentity = getMessageIdentity(existing);
+        const identityMatch = Boolean(incomingIdentity && existingIdentity && incomingIdentity === existingIdentity);
+        const fallbackMatch = Boolean(
+            (incoming.message_id && existing.message_id && incoming.message_id === existing.message_id) ||
+            (incoming._id && existing._id && incoming._id === existing._id)
+        );
+        return identityMatch || fallbackMatch;
+    };
+
+    if (isMessageDeleted(incoming)) {
+        const withoutIncoming = current.filter((existing) => !matchIncoming(existing) && !isMessageDeleted(existing));
+        return sortVoiceBotMessages(withoutIncoming);
+    }
+
+    const next = [...current];
     let replaced = false;
 
     for (let index = 0; index < next.length; index++) {
         const existing = next[index];
         if (!existing) continue;
-        const existingIdentity = getMessageIdentity(existing);
-        const identityMatch = Boolean(incomingIdentity && existingIdentity && incomingIdentity === existingIdentity);
-        const fallbackMatch =
-            (incoming.message_id && existing.message_id && incoming.message_id === existing.message_id) ||
-            (incoming._id && existing._id && incoming._id === existing._id);
-        if (identityMatch || fallbackMatch) {
+        if (matchIncoming(existing)) {
             next[index] = { ...existing, ...incoming };
             replaced = true;
             break;
@@ -464,7 +485,7 @@ const upsertVoiceBotMessage = (
     }
 
     if (!replaced) next.push(incoming);
-    return sortVoiceBotMessages(next);
+    return sortVoiceBotMessages(next.filter((message) => !isMessageDeleted(message)));
 };
 
 const normalizeAttachmentUri = (value: unknown): string | null => {
@@ -513,6 +534,7 @@ const normalizeSessionAttachment = (value: unknown): VoiceSessionAttachment | nu
 const buildSessionAttachmentsFromMessages = (messages: VoiceBotMessage[]): VoiceSessionAttachment[] => {
     const attachments: VoiceSessionAttachment[] = [];
     for (const message of messages) {
+        if (isMessageDeleted(message)) continue;
         const messageRecord = message as unknown as Record<string, unknown>;
         const messageAttachments = Array.isArray(messageRecord.attachments) ? messageRecord.attachments : [];
         if (messageAttachments.length === 0) continue;
@@ -577,7 +599,8 @@ const buildSessionAttachmentsFromMessages = (messages: VoiceBotMessage[]): Voice
 const normalizeSessionResponse = (response: unknown): VoiceBotSessionResponse => {
     const payload = response as Record<string, unknown>;
     const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
-    const messages = (data.session_messages as VoiceBotMessage[]) || [];
+    const rawMessages = (data.session_messages as VoiceBotMessage[]) || [];
+    const messages = rawMessages.filter((msg) => !isMessageDeleted(msg));
     const explicitAttachments = Array.isArray(data.session_attachments)
         ? data.session_attachments.map(normalizeSessionAttachment).filter((item): item is VoiceSessionAttachment => item !== null)
         : [];

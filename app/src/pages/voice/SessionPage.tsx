@@ -152,24 +152,33 @@ export default function SessionPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-[300px] flex items-center justify-center">
-                Загрузка...
+            <div className="voice-session-shell">
+                <div className="voice-session-shell-bg" />
+                <div className="voice-session-page">
+                    <div className="min-h-[300px] flex items-center justify-center">Загрузка...</div>
+                </div>
             </div>
         );
     }
 
     if (loadError) {
         return (
-            <div className="min-h-[300px] flex items-center justify-center text-center px-6">
-                {loadError}
+            <div className="voice-session-shell">
+                <div className="voice-session-shell-bg" />
+                <div className="voice-session-page">
+                    <div className="min-h-[300px] flex items-center justify-center text-center px-6">{loadError}</div>
+                </div>
             </div>
         );
     }
 
     if (!voiceBotSession) {
         return (
-            <div className="min-h-[300px] flex items-center justify-center">
-                Сессия не найдена
+            <div className="voice-session-shell">
+                <div className="voice-session-shell-bg" />
+                <div className="voice-session-page">
+                    <div className="min-h-[300px] flex items-center justify-center">Сессия не найдена</div>
+                </div>
             </div>
         );
     }
@@ -207,20 +216,25 @@ export default function SessionPage() {
     ];
 
     return (
-        <div className="w-full mx-auto px-6">
-            <SessionStatusWidget />
-            <div className="flex gap-2 w-full mt-2">
-                <div className="flex flex-col gap-2 flex-1">
-                    <MeetingCard onCustomPromptResult={setCustomPromptResult} activeTab={activeTab} />
-                    <div className="bg-white p-1">
-                        <Tabs
-                            activeKey={activeTab}
-                            onChange={setActiveTab}
-                            defaultActiveKey="2"
-                            className="bg-white"
-                            items={tabs}
-                        />
+        <div className="voice-session-shell">
+            <div className="voice-session-shell-bg" />
+            <div className="voice-session-page">
+                <div className="voice-session-content">
+                    <div className="flex flex-col gap-3 flex-1 min-w-0">
+                        <MeetingCard onCustomPromptResult={setCustomPromptResult} activeTab={activeTab} />
+                        <div className="voice-session-tabs-shell">
+                            <Tabs
+                                activeKey={activeTab}
+                                onChange={setActiveTab}
+                                defaultActiveKey="2"
+                                className="bg-transparent"
+                                items={tabs}
+                            />
+                        </div>
                     </div>
+                </div>
+                <div className="voice-session-status-bottom">
+                    <SessionStatusWidget />
                 </div>
             </div>
         </div>

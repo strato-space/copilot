@@ -62,16 +62,16 @@ export default function SessionStatusWidget() {
     const processorsData = (voiceBotSession.processors_data || {}) as Record<string, Record<string, unknown>>;
 
     return (
-        <div className="w-full max-w-[1740px] mx-auto text-[12px] leading-[1.1]">
-            <div className="flex justify-between items-center w-full px-3 py-2 bg-white rounded-lg shadow-sm">
+        <div className="voice-session-status-widget w-full max-w-[1740px] mx-auto text-[12px] leading-[1.1]">
+            <div className="voice-status-card flex justify-between items-center w-full px-3 py-2">
                 <div className="inline-flex flex-col justify-center items-start gap-1 h-auto py-2">
-                    <div className="flex flex-wrap gap-4">
+                    <div className="flex flex-wrap gap-2">
                         {sessionStatus
                             .filter((flag) => flag.isShown)
                             .map((flag) => (
                                 <span
                                     key={flag.key}
-                                    className={`inline-flex items-center gap-1 px-1 py-0.5 text-[11px] leading-[1.1] font-medium ${flag.color}`}
+                                    className={`voice-status-flag inline-flex items-center gap-1 px-2 py-1 text-[11px] leading-[1.1] font-medium ${flag.color}`}
                                 >
                                     <span>{flag.icon}</span>
                                     <span>{flag.label}</span>
@@ -87,7 +87,7 @@ export default function SessionStatusWidget() {
                                 const { icon, color, text } = getProcessorStatus(pdata);
                                 return (
                                     <Tooltip key={proc} title={<span><b>{proc}</b>: {text}</span>} placement="top">
-                                        <span className={`flex items-center gap-1 px-2 py-1 rounded border border-gray-200 ${color} cursor-pointer bg-gray-50 text-[11px] leading-[1.1]`}>
+                                        <span className={`voice-status-processor flex items-center gap-1 px-2 py-1 ${color} cursor-pointer text-[11px] leading-[1.1]`}>
                                             <span>{icon}</span>
                                             <span>{proc}</span>
                                         </span>
@@ -100,6 +100,7 @@ export default function SessionStatusWidget() {
                 <Button
                     type="default"
                     icon={<UploadOutlined />}
+                    className="voice-status-upload-button"
                     onClick={() => setUploaderModalVisible(true)}
                     disabled={Boolean(voiceBotSession.is_deleted)}
                     size="middle"
