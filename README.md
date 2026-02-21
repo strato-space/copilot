@@ -200,3 +200,6 @@ To run authenticated tests:
 Projects:
 - `chromium-unauth`: Tests without authentication (login page, redirects)
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
+
+## Session closeout update
+- Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` (draft) summarizing platform research options for OperOps/FinOps/Guide/Voice and phased implementation recommendations.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-02-21
+### PROBLEM SOLVED
+- **22:00** None.
+
+### FEATURE IMPLEMENTED
+- **22:00** Added a draft OSS platform research report for OperOps/FinOps/Guide/Voice stack selection, including architecture options and a 90-day execution roadmap.
+
+### CHANGES
+- **22:00** Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` (Russian-language draft covering candidate evaluation, architectural recommendations, and migration waves).
+
 ## 2026-02-20
 ### PROBLEM SOLVED
 - **09:20** Session page in Copilot missed the `Возможные задачи` tab even after session postprocessing had produced `CREATE_TASKS.data`, forcing operators to leave the session UI to create tasks.
