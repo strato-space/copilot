@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-22
+### PROBLEM SOLVED
+- **10:10** The STR OpsPortal analysis flow had no fixed, reproducible extraction protocol for deriving ERD candidates from narrative specs, which risked inconsistent entity/attribute/relationship modeling.
+- **10:33** The project lacked a consolidated ERD draft that combines OpsPortal, OperOps, Voice, and FinOps domains into one reviewable model for MVP planning.
+
+### FEATURE IMPLEMENTED
+- **10:10** Added an FPF-based extraction protocol document that defines step-by-step normalization, catalog outputs, quality gates, and ERD projection rules for `STR-OpsPortal.md`.
+- **10:33** Added an extended ERD draft document with cross-domain entity catalogs, relationship mapping, FinOps and OperOps/Voice extensions, and open design questions for next iteration.
+
+### CHANGES
+- **10:10** Added `plan/fpf-erd-extraction-protocol-str-opsportal.md` (protocol-first extraction playbook with templates for Entity/Attribute/Relationship catalogs, bridges, and ERD projection checks).
+- **10:33** Added `plan/str-opsportal-erd-draft-v0.md` (conceptual ERD draft covering Tenant/Client/Project core, Voice/OperOps execution flow, FinOps data model extensions, and unresolved architecture decisions).
+- **22:01** Updated session closeout summaries in `AGENTS.md` and `README.md` to include both new STR OpsPortal planning artifacts.
+
 ## 2026-02-21
 ### PROBLEM SOLVED
 - **22:00** None.
