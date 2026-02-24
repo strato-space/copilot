@@ -135,7 +135,12 @@ const EditProject: React.FC<EditProjectProps> = ({
                         <Input placeholder="Введите название" />
                     </Form.Item>
 
-                    <Form.Item label="Группа проектов" name="project_group" className="w-[30%]">
+                    <Form.Item
+                        label="Группа проектов"
+                        name="project_group"
+                        className="w-[30%]"
+                        rules={project ? [] : [{ required: true, message: 'Выберите группу проекта' }]}
+                    >
                         <Select placeholder="Выберите группу" allowClear>
                             {projectGroups.map((group) => (
                                 <Select.Option key={group._id} value={group._id}>

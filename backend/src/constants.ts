@@ -64,6 +64,7 @@ export const COLLECTIONS = {
   EPICS: 'automation_epic_tasks',
   PROJECTS: 'automation_projects',
   PROJECT_GROUPS: 'automation_project_groups',
+  PROJECT_TREE_LOG: 'automation_project_tree_log',
   TASK_TYPES: 'automation_task_types',
   TASK_SUPERTYPES: 'automation_task_supertypes',
   TASK_TYPES_TREE: 'automation_task_types_tree',

@@ -1,50 +1,139 @@
 /**
- * ProjectsTree Page - Projects management with drag-drop tree
- * Migrated from appkanban/src/pages/ProjectsTree.jsx
+ * ProjectsTree Page - Projects management in hierarchical table mode
  */
 
-import React, { useEffect, useState, ReactNode } from 'react';
-import { Tree, Typography, Button, Card, Space, Modal, Divider, ConfigProvider, message } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    Typography,
+    Button,
+    Card,
+    Space,
+    Modal,
+    Divider,
+    ConfigProvider,
+    Switch,
+    Table,
+    Tag,
+    Select,
+    Input,
+    message,
+} from 'antd';
 import {
     UserOutlined,
     FolderOutlined,
     ProjectOutlined,
     PlusOutlined,
     InboxOutlined,
+    EditOutlined,
+    EyeOutlined,
+    EyeInvisibleOutlined,
+    SwapOutlined,
+    LinkOutlined,
 } from '@ant-design/icons';
 import { useProjectsStore } from '../../store/projectsStore';
+import { useRequestStore } from '../../store/requestStore';
 import { EditCustomer, EditProjectGroup, EditProject } from '../../components/crm/projects';
-import type { TreeNode, Customer, ProjectGroup, ProjectWithGroup } from '../../types/crm';
-import type { TreeProps, TreeDataNode } from 'antd';
-import type { Key } from 'react';
+import type { Customer, ProjectGroup, ProjectWithGroup, TreeNode } from '../../types/crm';
+import type { TableProps } from 'antd';
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
-// Type for drag node
-type DragNode = TreeNode & { type: string };
+type RowType = 'customer' | 'group' | 'project' | 'bucket';
 
-// Helper to find node by key
-const findNodeByKey = (nodes: TreeNode[], key: Key): TreeNode | undefined => {
-    for (const node of nodes) {
-        if (node.key === key) return node;
-        if (node.children) {
-            const found = findNodeByKey(node.children, key);
-            if (found) return found;
-        }
-    }
-    return undefined;
+interface ProjectTreeMetrics {
+    projects_count?: number;
+    voices_count?: number;
+    tasks_count?: number;
+}
+
+interface ProjectTreeApiNode {
+    id?: string;
+    type?: 'customer' | 'group' | 'project';
+    name?: string;
+    is_active?: boolean;
+    metrics?: ProjectTreeMetrics;
+    children?: ProjectTreeApiNode[];
+    data?: Record<string, unknown>;
+}
+
+interface ProjectTreeResponse {
+    tree?: ProjectTreeApiNode[];
+    unassigned_groups?: ProjectTreeApiNode[];
+    unassigned_projects?: ProjectTreeApiNode[];
+}
+
+interface TableRow {
+    key: string;
+    id: string;
+    type: RowType;
+    name: string;
+    parentId?: string;
+    parentName?: string;
+    is_active?: boolean;
+    voices_count: number;
+    tasks_count: number;
+    projects_count: number;
+    children?: TableRow[];
+    data?: Record<string, unknown>;
+}
+
+interface MoveDialogState {
+    open: boolean;
+    row: TableRow | null;
+    targetId: string | null;
+    loading: boolean;
+}
+
+interface MergeDialogState {
+    open: boolean;
+    sourceRow: TableRow | null;
+    targetId: string | null;
+    reason: string;
+    preview: Record<string, unknown> | null;
+    loading: boolean;
+}
+
+const numberValue = (value: unknown): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    return 0;
 };
 
-// Helper to find parent node
-const findParentNodeByChildKey = (nodes: TreeNode[], childKey: Key): TreeNode | undefined => {
-    for (const node of nodes) {
-        if (node.children?.some((c) => c.key === childKey)) return node;
-        if (node.children) {
-            const found = findParentNodeByChildKey(node.children, childKey);
-            if (found) return found;
-        }
-    }
-    return undefined;
+const statusTag = (isActive: boolean | undefined): React.ReactNode =>
+    isActive === false ? <Tag color="orange">Скрыт</Tag> : <Tag color="green">Активен</Tag>;
+
+const typeLabel = (type: RowType): string => {
+    if (type === 'customer') return 'Заказчик';
+    if (type === 'group') return 'Группа';
+    if (type === 'project') return 'Проект';
+    return 'Категория';
+};
+
+const typeIcon = (type: RowType): React.ReactNode => {
+    if (type === 'customer') return <UserOutlined className="text-blue-500" />;
+    if (type === 'group') return <FolderOutlined className="text-orange-500" />;
+    if (type === 'project') return <ProjectOutlined className="text-green-500" />;
+    return <InboxOutlined className="text-gray-500" />;
+};
+
+const mergeProjectMetrics = (rows: TableRow[]): ProjectTreeMetrics =>
+    rows.reduce(
+        (acc, row) => ({
+            projects_count: (acc.projects_count ?? 0) + row.projects_count,
+            voices_count: (acc.voices_count ?? 0) + row.voices_count,
+            tasks_count: (acc.tasks_count ?? 0) + row.tasks_count,
+        }),
+        { projects_count: 0, voices_count: 0, tasks_count: 0 }
+    );
+
+const toTreeNodeFromRow = (row: TableRow): TreeNode | null => {
+    if (row.type === 'bucket') return null;
+    return {
+        key: `${row.type}-${row.id}`,
+        title: row.name,
+        type: row.type as 'customer' | 'group' | 'project',
+        data: row.data as unknown as Customer | ProjectGroup | ProjectWithGroup,
+    };
 };
 
 const ProjectsTree: React.FC = () => {
@@ -52,200 +141,529 @@ const ProjectsTree: React.FC = () => {
         customers,
         projectGroups,
         projects,
-        tree,
         fetchCustomers,
         fetchProjectGroups,
         fetchProjects,
-        buildTree,
-        moveProjectGroup,
-        moveProject,
     } = useProjectsStore();
+    const api_request = useRequestStore((state) => state.api_request);
 
     const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
     const [showCreateCustomer, setShowCreateCustomer] = useState(false);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [showCreateProject, setShowCreateProject] = useState(false);
+    const [showInactive, setShowInactive] = useState(false);
+    const [tableRows, setTableRows] = useState<TableRow[]>([]);
+    const [tableLoading, setTableLoading] = useState(false);
+    const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
+    const [moveDialog, setMoveDialog] = useState<MoveDialogState>({
+        open: false,
+        row: null,
+        targetId: null,
+        loading: false,
+    });
+    const [mergeDialog, setMergeDialog] = useState<MergeDialogState>({
+        open: false,
+        sourceRow: null,
+        targetId: null,
+        reason: '',
+        preview: null,
+        loading: false,
+    });
 
-    // Load data on mount
-    useEffect(() => {
-        const loadData = async () => {
-            await Promise.all([fetchCustomers(), fetchProjectGroups(), fetchProjects()]);
-        };
-        loadData();
-    }, [fetchCustomers, fetchProjectGroups, fetchProjects]);
+    const buildTableRows = useCallback((response: ProjectTreeResponse): TableRow[] => {
+        const convertNode = (
+            node: ProjectTreeApiNode,
+            parent?: { id: string; name: string }
+        ): TableRow => {
+            const rowType = (node.type ?? 'project') as 'customer' | 'group' | 'project';
+            const id = String(node.id ?? node.data?._id ?? `${rowType}-unknown`);
+            const metrics = node.metrics ?? {};
+            const childrenRows = Array.isArray(node.children)
+                ? node.children.map((child) => convertNode(child, { id, name: String(node.name ?? '—') }))
+                : [];
 
-    // Build tree when data changes
-    useEffect(() => {
-        if (customers.length > 0 || projectGroups.length > 0 || projects.length > 0) {
-            buildTree();
-        }
-    }, [customers, projectGroups, projects, buildTree]);
+            const childrenMetrics = mergeProjectMetrics(childrenRows);
+            const hasChildrenMetrics = childrenRows.length > 0;
 
-    // Handle drag enter
-    const onDragEnter: TreeProps['onDragEnter'] = (_info) => {
-        // Placeholder for drag enter effects
-    };
-
-    // Handle drop
-    const onDrop: TreeProps['onDrop'] = async (info) => {
-        const dragKey = info.dragNode.key;
-        const dropKey = info.node.key;
-        const dragType = (info.dragNode as unknown as DragNode).type;
-        const dropType = (info.node as unknown as DragNode).type;
-
-        // Only allow drop inside (dropPosition === 0)
-        if (info.dropPosition === 0) {
-            try {
-                if (dragType === 'group' && dropType === 'customer') {
-                    // Move group to customer
-                    const draggedGroup = findNodeByKey(tree, dragKey);
-                    const sourceCustomer = findParentNodeByChildKey(tree, dragKey);
-                    const destCustomer = findNodeByKey(tree, dropKey);
-
-                    if (draggedGroup && sourceCustomer && destCustomer && sourceCustomer.key !== destCustomer.key) {
-                        await moveProjectGroup(
-                            draggedGroup,
-                            sourceCustomer.data as Customer,
-                            destCustomer.data as Customer
-                        );
-                        message.success(`Группа "${draggedGroup.title}" перемещена`);
-                    }
-                } else if (dragType === 'project' && dropType === 'group') {
-                    // Move project to group
-                    const draggedProject = findNodeByKey(tree, dragKey);
-                    const sourceGroup = findParentNodeByChildKey(tree, dragKey);
-                    const destGroup = findNodeByKey(tree, dropKey);
-
-                    if (draggedProject && destGroup) {
-                        if (sourceGroup?.type === 'unassigned-category') {
-                            // Move from unassigned to group
-                            await moveProject(
-                                draggedProject,
-                                null as unknown as ProjectGroup,
-                                destGroup.data as ProjectGroup
-                            );
-                            message.success(`Проект "${draggedProject.title}" добавлен в группу "${destGroup.title}"`);
-                        } else if (sourceGroup && sourceGroup.key !== destGroup.key) {
-                            await moveProject(
-                                draggedProject,
-                                sourceGroup.data as ProjectGroup,
-                                destGroup.data as ProjectGroup
-                            );
-                            message.success(`Проект "${draggedProject.title}" перемещен в группу "${destGroup.title}"`);
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error during drag and drop:', error);
-                message.error('Ошибка при перемещении элемента');
-            }
-        }
-    };
-
-    // Render tree node title
-    const renderTreeData = (nodes: TreeNode[]): TreeDataNode[] => {
-        return nodes.map((node): TreeDataNode => {
-            if (node.type === 'unassigned-category') {
-                const children = node.children?.map((project): TreeDataNode => ({
-                    key: project.key ?? '',
-                    title: (
-                        <div className="flex items-center gap-2">
-                            <ProjectOutlined className="text-red-500" />
-                            <span>{project.title}</span>
-                            <span className="text-xs text-red-400">не распределен</span>
-                        </div>
-                    ) as ReactNode,
-                })) ?? [];
-
-                return {
-                    key: node.key ?? '',
-                    title: (
-                        <div className="flex items-center gap-2">
-                            <InboxOutlined className="text-gray-500" />
-                            <span className="font-medium text-gray-600">{node.title}</span>
-                            <span className="text-xs text-gray-400">
-                                ({node.children?.length ?? 0} проектов)
-                            </span>
-                        </div>
-                    ) as ReactNode,
-                    children,
-                };
-            }
-
-            // Regular customers
-            const customerChildren = node.children?.map((group): TreeDataNode => {
-                const groupChildren = group.children?.map((project): TreeDataNode => ({
-                    key: project.key ?? '',
-                    title: (
-                        <div className="flex items-center gap-2">
-                            <ProjectOutlined className="text-green-500" />
-                            <span>{project.title}</span>
-                        </div>
-                    ) as ReactNode,
-                })) ?? [];
-
-                return {
-                    key: group.key ?? '',
-                    title: (
-                        <div className="flex items-center gap-2">
-                            <FolderOutlined className="text-orange-500" />
-                            <span>{group.title}</span>
-                            <span className="text-xs text-gray-400">
-                                ({group.children?.length ?? 0} проектов)
-                            </span>
-                        </div>
-                    ) as ReactNode,
-                    children: groupChildren,
-                };
-            }) ?? [];
-
-            return {
-                key: node.key ?? '',
-                title: (
-                    <div className="flex items-center gap-2">
-                        <UserOutlined className="text-blue-500" />
-                        <span className="font-medium">{node.title}</span>
-                        <span className="text-xs text-gray-400">
-                            ({node.children?.length ?? 0} групп)
-                        </span>
-                    </div>
-                ) as ReactNode,
-                children: customerChildren,
+            const baseRow: TableRow = {
+                key: `${rowType}-${id}`,
+                id,
+                type: rowType,
+                name: String(node.name ?? '—'),
+                is_active: node.is_active !== false,
+                voices_count: hasChildrenMetrics
+                    ? numberValue(childrenMetrics.voices_count)
+                    : numberValue(metrics.voices_count),
+                tasks_count: hasChildrenMetrics
+                    ? numberValue(childrenMetrics.tasks_count)
+                    : numberValue(metrics.tasks_count),
+                projects_count: hasChildrenMetrics
+                    ? numberValue(childrenMetrics.projects_count)
+                    : Math.max(numberValue(metrics.projects_count), rowType === 'project' ? 1 : 0),
             };
+
+            if (parent) {
+                baseRow.parentId = parent.id;
+                baseRow.parentName = parent.name;
+            }
+            if (childrenRows.length > 0) {
+                baseRow.children = childrenRows;
+            }
+            if (node.data && typeof node.data === 'object') {
+                baseRow.data = node.data;
+            }
+
+            return baseRow;
+        };
+
+        const rows = Array.isArray(response.tree)
+            ? response.tree.map((node) => convertNode(node))
+            : [];
+
+        const unassignedGroups = Array.isArray(response.unassigned_groups)
+            ? response.unassigned_groups.map((node) =>
+                convertNode(node, { id: 'unassigned-groups', name: 'Нераспределенные группы' })
+            )
+            : [];
+
+        const unassignedProjects = Array.isArray(response.unassigned_projects)
+            ? response.unassigned_projects.map((node) =>
+                convertNode(node, { id: 'unassigned-projects', name: 'Нераспределенные проекты' })
+            )
+            : [];
+
+        if (unassignedGroups.length > 0) {
+            const metrics = mergeProjectMetrics(unassignedGroups);
+            rows.unshift({
+                key: 'bucket-unassigned-groups',
+                id: 'bucket-unassigned-groups',
+                type: 'bucket',
+                name: 'Нераспределенные группы',
+                voices_count: numberValue(metrics.voices_count),
+                tasks_count: numberValue(metrics.tasks_count),
+                projects_count: numberValue(metrics.projects_count),
+                children: unassignedGroups,
+            });
+        }
+
+        if (unassignedProjects.length > 0) {
+            const metrics = mergeProjectMetrics(unassignedProjects);
+            rows.unshift({
+                key: 'bucket-unassigned-projects',
+                id: 'bucket-unassigned-projects',
+                type: 'bucket',
+                name: 'Нераспределенные проекты',
+                voices_count: numberValue(metrics.voices_count),
+                tasks_count: numberValue(metrics.tasks_count),
+                projects_count: numberValue(metrics.projects_count),
+                children: unassignedProjects,
+            });
+        }
+
+        return rows;
+    }, []);
+
+    const loadData = useCallback(async () => {
+        setTableLoading(true);
+        try {
+            await Promise.all([
+                fetchCustomers(showInactive),
+                fetchProjectGroups(showInactive),
+                fetchProjects(showInactive),
+            ]);
+
+            const treeResponse = await api_request<ProjectTreeResponse>(
+                'project_tree/list',
+                { show_inactive: showInactive, include_stats: true },
+                { silent: true }
+            );
+            setTableRows(buildTableRows(treeResponse));
+        } catch (error) {
+            console.error('Failed to load project tree table data', error);
+            message.error('Не удалось загрузить дерево проектов');
+        } finally {
+            setTableLoading(false);
+        }
+    }, [api_request, buildTableRows, fetchCustomers, fetchProjectGroups, fetchProjects, showInactive]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
+
+    const handleSaveAndRefresh = async () => {
+        await loadData();
+    };
+
+    const openEditPanel = (row: TableRow): void => {
+        const node = toTreeNodeFromRow(row);
+        if (node) {
+            setSelectedNode(node);
+        }
+    };
+
+    const handleToggleActive = async (row: TableRow): Promise<void> => {
+        if (row.type === 'bucket') return;
+        const nextActive = row.is_active === false;
+        const loadingKey = `toggle-${row.type}-${row.id}`;
+        setActionLoadingKey(loadingKey);
+        try {
+            if (row.type === 'customer') {
+                await api_request('customers/update', {
+                    customer: {
+                        _id: row.id,
+                        is_active: nextActive,
+                    },
+                });
+            } else if (row.type === 'group') {
+                await api_request('project_groups/update', {
+                    project_group: {
+                        _id: row.id,
+                        is_active: nextActive,
+                    },
+                });
+            } else {
+                await api_request('projects/update', {
+                    project: {
+                        _id: row.id,
+                        is_active: nextActive,
+                    },
+                });
+            }
+
+            message.success(nextActive ? 'Элемент восстановлен' : 'Элемент скрыт');
+            await loadData();
+        } catch (error) {
+            console.error('Failed to toggle active state', error);
+            message.error('Не удалось изменить статус');
+        } finally {
+            setActionLoadingKey(null);
+        }
+    };
+
+    const openMoveDialog = (row: TableRow): void => {
+        if (row.type !== 'group' && row.type !== 'project') return;
+        setMoveDialog({
+            open: true,
+            row,
+            targetId: row.parentId ?? (row.type === 'group' ? '__none__' : null),
+            loading: false,
         });
     };
 
-    const handleTreeSelect = (selectedKeys: Key[]) => {
-        const key = selectedKeys[0];
-        if (key) {
-            setSelectedNode(findNodeByKey(tree, key) ?? null);
-        } else {
-            setSelectedNode(null);
+    const handleMoveConfirm = async (): Promise<void> => {
+        if (!moveDialog.row) return;
+        const row = moveDialog.row;
+        setMoveDialog((prev) => ({ ...prev, loading: true }));
+        try {
+            if (row.type === 'group') {
+                const destinationCustomerId =
+                    moveDialog.targetId === '__none__' ? null : moveDialog.targetId;
+
+                await api_request('project_groups/move', {
+                    project_group_id: row.id,
+                    dest_customer_id: destinationCustomerId,
+                });
+            } else if (row.type === 'project') {
+                if (!moveDialog.targetId) {
+                    message.warning('Выберите группу назначения');
+                    setMoveDialog((prev) => ({ ...prev, loading: false }));
+                    return;
+                }
+
+                await api_request('projects/move', {
+                    project: { _id: row.id },
+                    source_project_group: row.parentId ? { _id: row.parentId } : null,
+                    dest_project_group: { _id: moveDialog.targetId },
+                });
+            }
+
+            message.success('Элемент перемещен');
+            setMoveDialog({ open: false, row: null, targetId: null, loading: false });
+            await loadData();
+        } catch (error) {
+            console.error('Failed to move node', error);
+            message.error('Не удалось переместить элемент');
+            setMoveDialog((prev) => ({ ...prev, loading: false }));
         }
     };
 
-    const handleSaveAndRefresh = async () => {
-        await Promise.all([fetchCustomers(), fetchProjectGroups(), fetchProjects()]);
-        buildTree();
-        setSelectedNode(null);
+    const openMergeDialog = (row: TableRow): void => {
+        if (row.type !== 'project') return;
+        setMergeDialog({
+            open: true,
+            sourceRow: row,
+            targetId: null,
+            reason: '',
+            preview: null,
+            loading: false,
+        });
     };
+
+    const handleMergePreview = async (): Promise<void> => {
+        if (!mergeDialog.sourceRow || !mergeDialog.targetId) {
+            message.warning('Выберите проект-приемник');
+            return;
+        }
+
+        setMergeDialog((prev) => ({ ...prev, loading: true }));
+        try {
+            const preview = await api_request<Record<string, unknown>>(
+                'projects/merge',
+                {
+                    source_project_id: mergeDialog.sourceRow.id,
+                    target_project_id: mergeDialog.targetId,
+                    dry_run: true,
+                    reason: mergeDialog.reason || undefined,
+                },
+                { silent: true }
+            );
+            setMergeDialog((prev) => ({ ...prev, preview, loading: false }));
+            message.success('Предпросмотр merge готов');
+        } catch (error) {
+            console.error('Failed to run merge preview', error);
+            message.error('Не удалось выполнить dry-run merge');
+            setMergeDialog((prev) => ({ ...prev, loading: false }));
+        }
+    };
+
+    const handleMergeConfirm = async (): Promise<void> => {
+        if (!mergeDialog.sourceRow || !mergeDialog.targetId) {
+            message.warning('Выберите проект-приемник');
+            return;
+        }
+
+        setMergeDialog((prev) => ({ ...prev, loading: true }));
+        try {
+            const result = await api_request<Record<string, unknown>>('projects/merge', {
+                source_project_id: mergeDialog.sourceRow.id,
+                target_project_id: mergeDialog.targetId,
+                dry_run: false,
+                reason: mergeDialog.reason || undefined,
+                operation_id: `${Date.now()}-${mergeDialog.sourceRow.id}-${mergeDialog.targetId}`,
+            });
+
+            const movedVoices = numberValue(result.moved_voices_count);
+            const movedTasks = numberValue(result.moved_tasks_count);
+            message.success(`Merge выполнен: сессий ${movedVoices}, задач ${movedTasks}`);
+
+            setMergeDialog({
+                open: false,
+                sourceRow: null,
+                targetId: null,
+                reason: '',
+                preview: null,
+                loading: false,
+            });
+            await loadData();
+        } catch (error) {
+            console.error('Failed to merge projects', error);
+            message.error('Не удалось выполнить merge проектов');
+            setMergeDialog((prev) => ({ ...prev, loading: false }));
+        }
+    };
+
+    const completenessValue = (row: TableRow): string => {
+        if (row.type !== 'project') return '—';
+        const project = row.data as ProjectWithGroup | undefined;
+        if (!project) return '0%';
+
+        const checks = [
+            Boolean(project.name && project.name.trim().length > 0),
+            Boolean(project.project_group),
+            Boolean(project.description && project.description.trim().length > 0),
+            typeof project.time_capacity === 'number' && project.time_capacity >= 0,
+        ];
+
+        const passed = checks.filter(Boolean).length;
+        return `${Math.round((passed / checks.length) * 100)}%`;
+    };
+
+    const columns: TableProps<TableRow>['columns'] = [
+        {
+            title: 'Название',
+            dataIndex: 'name',
+            key: 'name',
+            width: 320,
+            render: (_value: string, row: TableRow) => (
+                <Space size={8}>
+                    {typeIcon(row.type)}
+                    <Text>{row.name}</Text>
+                </Space>
+            ),
+        },
+        {
+            title: 'Тип',
+            dataIndex: 'type',
+            key: 'type',
+            width: 120,
+            render: (_value: RowType, row: TableRow) => (
+                <Tag color={row.type === 'project' ? 'green' : row.type === 'group' ? 'orange' : row.type === 'customer' ? 'blue' : 'default'}>
+                    {typeLabel(row.type)}
+                </Tag>
+            ),
+        },
+        {
+            title: 'Родитель',
+            dataIndex: 'parentName',
+            key: 'parentName',
+            width: 220,
+            render: (value: string | undefined) => value ?? '—',
+        },
+        {
+            title: 'Статус',
+            dataIndex: 'is_active',
+            key: 'is_active',
+            width: 120,
+            render: (value: boolean | undefined, row: TableRow) =>
+                row.type === 'bucket' ? <Tag>—</Tag> : statusTag(value),
+        },
+        {
+            title: 'Voices',
+            dataIndex: 'voices_count',
+            key: 'voices_count',
+            width: 90,
+            align: 'right',
+        },
+        {
+            title: 'Tasks',
+            dataIndex: 'tasks_count',
+            key: 'tasks_count',
+            width: 90,
+            align: 'right',
+        },
+        {
+            title: 'Заполненность',
+            key: 'completeness',
+            width: 140,
+            render: (_value: unknown, row: TableRow) => completenessValue(row),
+        },
+        {
+            title: 'Действия',
+            key: 'actions',
+            width: 420,
+            render: (_value: unknown, row: TableRow) => {
+                if (row.type === 'bucket') return <Text type="secondary">—</Text>;
+                const loadingKeyPrefix = `${row.type}-${row.id}`;
+                const isHidden = row.is_active === false;
+
+                return (
+                    <Space size={4} onClick={(event) => event.stopPropagation()}>
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                openEditPanel(row);
+                            }}
+                        >
+                            Редакт.
+                        </Button>
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={isHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                            loading={actionLoadingKey === `toggle-${loadingKeyPrefix}`}
+                            onClick={async (event) => {
+                                event.stopPropagation();
+                                await handleToggleActive(row);
+                            }}
+                        >
+                            {isHidden ? 'Показать' : 'Скрыть'}
+                        </Button>
+                        {(row.type === 'group' || row.type === 'project') && (
+                            <Button
+                                type="link"
+                                size="small"
+                                icon={<SwapOutlined />}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    openMoveDialog(row);
+                                }}
+                            >
+                                Переместить
+                            </Button>
+                        )}
+                        {row.type === 'project' && (
+                            <Button
+                                type="link"
+                                size="small"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    openMergeDialog(row);
+                                }}
+                            >
+                                Merge
+                            </Button>
+                        )}
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<LinkOutlined />}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                openEditPanel(row);
+                            }}
+                        >
+                            Карточка
+                        </Button>
+                    </Space>
+                );
+            },
+        },
+    ];
+
+    const moveTargetOptions = useMemo(() => {
+        const row = moveDialog.row;
+        if (!row) return [];
+
+        if (row.type === 'group') {
+            return [
+                { value: '__none__', label: 'Без заказчика' },
+                ...customers.map((customer) => ({
+                    value: customer._id,
+                    label: customer.name,
+                })),
+            ];
+        }
+
+        if (row.type === 'project') {
+            return projectGroups
+                .filter((group) => group._id !== row.parentId)
+                .map((group) => ({
+                    value: group._id,
+                    label: group.name,
+                }));
+        }
+
+        return [];
+    }, [customers, moveDialog.row, projectGroups]);
+
+    const mergeTargetOptions = useMemo(() => {
+        if (!mergeDialog.sourceRow) return [];
+        return projects
+            .filter((project) => project._id !== mergeDialog.sourceRow?.id)
+            .filter((project) => project.is_active !== false)
+            .map((project) => ({
+                value: project._id,
+                label: project.name,
+            }));
+    }, [mergeDialog.sourceRow, projects]);
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Page header */}
+            <div className="max-w-[1600px] mx-auto">
                 <div className="mb-6">
                     <Title level={2} className="mb-2">
                         Управление проектами
                     </Title>
                     <Text type="secondary">
-                        Организация проектов по схеме: Заказчик → Группа проектов → Проект
+                        Табличный режим структуры: Заказчик → Группа проектов → Проект
                     </Text>
                 </div>
 
-                {/* Action buttons */}
                 <div className="mb-6">
-                    <Space size="middle">
+                    <Space size="middle" wrap>
                         <Button
                             type="default"
                             icon={<PlusOutlined />}
@@ -270,59 +688,54 @@ const ProjectsTree: React.FC = () => {
                         >
                             Новый проект
                         </Button>
+                        <div className="flex items-center gap-2">
+                            <Switch checked={showInactive} onChange={setShowInactive} />
+                            <Text type="secondary">Показывать скрытые</Text>
+                        </div>
                     </Space>
                 </div>
 
                 <div className="flex gap-6">
-                    {/* Projects tree */}
                     <Card
                         title="Структура проектов"
-                        className="flex-shrink-0 w-[350px]"
-                        styles={{ body: { padding: '16px' } }}
+                        className="flex-1 min-w-0"
+                        styles={{ body: { padding: '12px' } }}
                     >
-                        {Array.isArray(tree) && tree.length > 0 ? (
-                            <Tree
-                                virtual={false}
-                                defaultExpandAll
-                                defaultExpandParent
-                                showLine={{ showLeafIcon: false }}
-                                draggable={(node) => {
-                                    const n = node as unknown as DragNode;
-                                    return n.type === 'project' || n.type === 'group';
-                                }}
-                                allowDrop={({ dragNode, dropNode }) => {
-                                    const drag = dragNode as unknown as DragNode;
-                                    const drop = dropNode as unknown as DragNode;
-                                    // Group can be dropped into customer
-                                    if (drag.type === 'group' && drop.type === 'customer') return true;
-                                    // Project can be dropped into group
-                                    if (drag.type === 'project' && drop.type === 'group') return true;
-                                    return false;
-                                }}
-                                blockNode
-                                height={600}
-                                onDragEnter={onDragEnter}
-                                onDrop={onDrop}
-                                treeData={renderTreeData(tree)}
-                                onSelect={handleTreeSelect}
-                            />
-                        ) : (
-                            <div className="text-center py-8 text-gray-500">
-                                <FolderOutlined className="text-5xl text-[#d9d9d9] mb-4" />
-                                <br />
-                                <Text type="secondary">Нет данных для отображения</Text>
-                                <br />
-                                <Text type="secondary" className="text-xs">
-                                    Создайте первого заказчика, чтобы начать
-                                </Text>
-                            </div>
-                        )}
+                        <Table<TableRow>
+                            rowKey="key"
+                            columns={columns}
+                            dataSource={tableRows}
+                            loading={tableLoading}
+                            pagination={false}
+                            size="small"
+                            expandable={{ defaultExpandAllRows: true }}
+                            scroll={{ x: 1500, y: 650 }}
+                            onRow={(record) => ({
+                                onClick: () => {
+                                    if (record.type !== 'bucket') {
+                                        openEditPanel(record);
+                                    }
+                                },
+                            })}
+                            locale={{
+                                emptyText: (
+                                    <div className="text-center py-8 text-gray-500">
+                                        <FolderOutlined className="text-5xl text-[#d9d9d9] mb-4" />
+                                        <br />
+                                        <Text type="secondary">Нет данных для отображения</Text>
+                                        <br />
+                                        <Text type="secondary" className="text-xs">
+                                            Создайте первого заказчика, чтобы начать
+                                        </Text>
+                                    </div>
+                                ),
+                            }}
+                        />
                     </Card>
 
-                    {/* Edit panel */}
                     <Card
                         title={selectedNode ? `Редактирование: ${selectedNode.title}` : 'Выберите элемент'}
-                        className="flex-grow"
+                        className="w-[520px] flex-shrink-0"
                         styles={{ body: { padding: '24px' } }}
                     >
                         <ConfigProvider
@@ -361,20 +774,6 @@ const ProjectsTree: React.FC = () => {
                                     customer={selectedNode.data as Customer}
                                     onSave={handleSaveAndRefresh}
                                 />
-                            ) : selectedNode?.type === 'unassigned-category' ? (
-                                <div className="text-center py-12">
-                                    <div className="text-gray-400 mb-4">
-                                        <InboxOutlined className="text-5xl" />
-                                    </div>
-                                    <Title level={4} type="secondary">
-                                        Нераспределенные проекты
-                                    </Title>
-                                    <Text type="secondary">
-                                        Проекты, которые еще не привязаны к группам.
-                                        <br />
-                                        Перетащите их в нужные группы для организации.
-                                    </Text>
-                                </div>
                             ) : (
                                 <div className="text-center py-12">
                                     <div className="text-gray-400 mb-4">
@@ -384,7 +783,7 @@ const ProjectsTree: React.FC = () => {
                                         Выберите элемент для редактирования
                                     </Title>
                                     <Text type="secondary">
-                                        Выберите заказчика, группу или проект в дереве слева
+                                        Выберите заказчика, группу или проект в таблице слева
                                     </Text>
                                 </div>
                             )}
@@ -392,7 +791,6 @@ const ProjectsTree: React.FC = () => {
                     </Card>
                 </div>
 
-                {/* Modals */}
                 <Modal
                     open={showCreateCustomer}
                     title={
@@ -403,7 +801,7 @@ const ProjectsTree: React.FC = () => {
                     }
                     footer={null}
                     onCancel={() => setShowCreateCustomer(false)}
-                    width={500}
+                    width={560}
                 >
                     <Divider />
                     <EditCustomer
@@ -424,7 +822,7 @@ const ProjectsTree: React.FC = () => {
                     }
                     footer={null}
                     onCancel={() => setShowCreateGroup(false)}
-                    width={600}
+                    width={640}
                 >
                     <Divider />
                     <EditProjectGroup
@@ -446,7 +844,7 @@ const ProjectsTree: React.FC = () => {
                     }
                     footer={null}
                     onCancel={() => setShowCreateProject(false)}
-                    width={600}
+                    width={760}
                 >
                     <Divider />
                     <EditProject
@@ -457,6 +855,99 @@ const ProjectsTree: React.FC = () => {
                             setShowCreateProject(false);
                         }}
                     />
+                </Modal>
+
+                <Modal
+                    open={moveDialog.open}
+                    title={moveDialog.row?.type === 'group' ? 'Переместить группу' : 'Переместить проект'}
+                    onCancel={() => setMoveDialog({ open: false, row: null, targetId: null, loading: false })}
+                    onOk={handleMoveConfirm}
+                    confirmLoading={moveDialog.loading}
+                    okText="Переместить"
+                    width={560}
+                >
+                    <Space direction="vertical" size={14} className="w-full">
+                        <Text>
+                            {moveDialog.row?.type === 'group'
+                                ? `Группа: ${moveDialog.row?.name ?? '—'}`
+                                : `Проект: ${moveDialog.row?.name ?? '—'}`}
+                        </Text>
+                        <Select
+                            value={moveDialog.targetId}
+                            onChange={(value) => setMoveDialog((prev) => ({ ...prev, targetId: value }))}
+                            placeholder={
+                                moveDialog.row?.type === 'group'
+                                    ? 'Выберите заказчика'
+                                    : 'Выберите группу проекта'
+                            }
+                            options={moveTargetOptions}
+                            className="w-full"
+                        />
+                    </Space>
+                </Modal>
+
+                <Modal
+                    open={mergeDialog.open}
+                    title="Merge проектов"
+                    onCancel={() =>
+                        setMergeDialog({
+                            open: false,
+                            sourceRow: null,
+                            targetId: null,
+                            reason: '',
+                            preview: null,
+                            loading: false,
+                        })
+                    }
+                    footer={[
+                        <Button
+                            key="dry-run"
+                            onClick={handleMergePreview}
+                            loading={mergeDialog.loading}
+                            disabled={!mergeDialog.targetId}
+                        >
+                            Dry run
+                        </Button>,
+                        <Button
+                            key="merge"
+                            type="primary"
+                            danger
+                            onClick={handleMergeConfirm}
+                            loading={mergeDialog.loading}
+                            disabled={!mergeDialog.targetId}
+                        >
+                            Выполнить merge
+                        </Button>,
+                    ]}
+                    width={680}
+                >
+                    <Space direction="vertical" size={14} className="w-full">
+                        <Text>Источник: {mergeDialog.sourceRow?.name ?? '—'}</Text>
+                        <Select
+                            value={mergeDialog.targetId}
+                            onChange={(value) =>
+                                setMergeDialog((prev) => ({ ...prev, targetId: value, preview: null }))
+                            }
+                            placeholder="Выберите проект-приемник"
+                            options={mergeTargetOptions}
+                            className="w-full"
+                        />
+                        <TextArea
+                            rows={3}
+                            value={mergeDialog.reason}
+                            onChange={(event) =>
+                                setMergeDialog((prev) => ({ ...prev, reason: event.target.value }))
+                            }
+                            placeholder="Причина merge (опционально)"
+                        />
+                        {mergeDialog.preview && (
+                            <Card size="small" title="Результат dry-run">
+                                <pre className="text-xs whitespace-pre-wrap m-0">
+                                    {JSON.stringify(mergeDialog.preview, null, 2)}
+                                </pre>
+                            </Card>
+                        )}
+                    </Space>
                 </Modal>
             </div>
         </div>

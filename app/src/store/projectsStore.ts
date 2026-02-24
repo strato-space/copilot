@@ -14,16 +14,16 @@ interface ProjectsState {
     loading: boolean;
     tree: TreeNode[];
 
-    fetchCustomers: () => Promise<void>;
-    fetchProjectGroups: () => Promise<void>;
-    fetchProjects: () => Promise<void>;
+    fetchCustomers: (showInactive?: boolean) => Promise<void>;
+    fetchProjectGroups: (showInactive?: boolean) => Promise<void>;
+    fetchProjects: (showInactive?: boolean) => Promise<void>;
     buildTree: () => TreeNode[];
 
-    createCustomer: (name: string) => Promise<unknown>;
-    updateCustomer: (id: string, name: string) => Promise<unknown>;
+    createCustomer: (name: string, isActive?: boolean) => Promise<unknown>;
+    updateCustomer: (id: string, name: string, isActive?: boolean) => Promise<unknown>;
 
-    createProjectGroup: (name: string, customer: string) => Promise<unknown>;
-    updateProjectGroup: (id: string, name: string, customer: string) => Promise<unknown>;
+    createProjectGroup: (name: string, customer: string, isActive?: boolean) => Promise<unknown>;
+    updateProjectGroup: (id: string, name: string, customer: string, isActive?: boolean) => Promise<unknown>;
     moveProjectGroup: (projectGroupNode: TreeNode, sourceCustomer: Customer, destCustomer: Customer) => Promise<unknown>;
 
     moveProject: (projectNode: TreeNode, sourceProjectGroup: ProjectGroup, destProjectGroup: ProjectGroup) => Promise<unknown>;
@@ -35,10 +35,13 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
     const api_request = useRequestStore.getState().api_request;
     let isFetchingCustomers = false;
     let lastCustomersFetchAt = 0;
+    let lastCustomersShowInactive: boolean | null = null;
     let isFetchingProjectGroups = false;
     let lastProjectGroupsFetchAt = 0;
+    let lastProjectGroupsShowInactive: boolean | null = null;
     let isFetchingProjects = false;
     let lastProjectsFetchAt = 0;
+    let lastProjectsShowInactive: boolean | null = null;
 
     return {
         customers: [],
@@ -47,14 +50,18 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
         loading: false,
         tree: [],
 
-        fetchCustomers: async () => {
+        fetchCustomers: async (showInactive = false) => {
             const now = Date.now();
-            if (isFetchingCustomers || now - lastCustomersFetchAt < 5000) return;
+            if (
+                isFetchingCustomers ||
+                (now - lastCustomersFetchAt < 5000 && lastCustomersShowInactive === showInactive)
+            ) return;
             isFetchingCustomers = true;
             lastCustomersFetchAt = now;
+            lastCustomersShowInactive = showInactive;
             set({ loading: true });
             try {
-                const res = await api_request<Customer[]>('customers/list', {});
+                const res = await api_request<Customer[]>('customers/list', { show_inactive: showInactive });
                 set({ customers: res ?? [], loading: false });
             } catch (error) {
                 console.error('Error fetching customers:', error);
@@ -64,14 +71,18 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             }
         },
 
-        fetchProjectGroups: async () => {
+        fetchProjectGroups: async (showInactive = false) => {
             const now = Date.now();
-            if (isFetchingProjectGroups || now - lastProjectGroupsFetchAt < 5000) return;
+            if (
+                isFetchingProjectGroups ||
+                (now - lastProjectGroupsFetchAt < 5000 && lastProjectGroupsShowInactive === showInactive)
+            ) return;
             isFetchingProjectGroups = true;
             lastProjectGroupsFetchAt = now;
+            lastProjectGroupsShowInactive = showInactive;
             set({ loading: true });
             try {
-                const res = await api_request<ProjectGroup[]>('project_groups/list', {});
+                const res = await api_request<ProjectGroup[]>('project_groups/list', { show_inactive: showInactive });
                 set({ projectGroups: res ?? [], loading: false });
             } catch (error) {
                 console.error('Error fetching project groups:', error);
@@ -81,14 +92,18 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             }
         },
 
-        fetchProjects: async () => {
+        fetchProjects: async (showInactive = false) => {
             const now = Date.now();
-            if (isFetchingProjects || now - lastProjectsFetchAt < 5000) return;
+            if (
+                isFetchingProjects ||
+                (now - lastProjectsFetchAt < 5000 && lastProjectsShowInactive === showInactive)
+            ) return;
             isFetchingProjects = true;
             lastProjectsFetchAt = now;
+            lastProjectsShowInactive = showInactive;
             set({ loading: true });
             try {
-                const res = await api_request<ProjectWithGroup[]>('projects/list', {});
+                const res = await api_request<ProjectWithGroup[]>('projects/list', { show_inactive: showInactive });
                 set({ projects: res ?? [], loading: false });
             } catch (error) {
                 console.error('Error fetching projects:', error);
@@ -154,9 +169,9 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             return tree;
         },
 
-        createCustomer: async (name) => {
+        createCustomer: async (name, isActive = true) => {
             try {
-                const res = await api_request('customers/create', { name });
+                const res = await api_request('customers/create', { customer: { name, is_active: isActive } });
                 await get().fetchCustomers();
                 get().buildTree();
                 return res;
@@ -166,9 +181,13 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             }
         },
 
-        updateCustomer: async (id, name) => {
+        updateCustomer: async (id, name, isActive) => {
             try {
-                const res = await api_request('customers/update', { id, name });
+                const customerPayload: Record<string, unknown> = { _id: id, name };
+                if (typeof isActive === 'boolean') {
+                    customerPayload.is_active = isActive;
+                }
+                const res = await api_request('customers/update', { customer: customerPayload });
                 await get().fetchCustomers();
                 get().buildTree();
                 return res;
@@ -178,9 +197,12 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             }
         },
 
-        createProjectGroup: async (name, customer) => {
+        createProjectGroup: async (name, customer, isActive = true) => {
             try {
-                const res = await api_request('project_groups/create', { name, customer });
+                const res = await api_request('project_groups/create', {
+                    project_group: { name, is_active: isActive },
+                    customer,
+                });
                 await get().fetchProjectGroups();
                 get().buildTree();
                 return res;
@@ -190,9 +212,16 @@ export const useProjectsStore = create<ProjectsState>((set, get) => {
             }
         },
 
-        updateProjectGroup: async (id, name, customer) => {
+        updateProjectGroup: async (id, name, customer, isActive) => {
             try {
-                const res = await api_request('project_groups/update', { id, name, customer });
+                const payload: Record<string, unknown> = {
+                    project_group: { _id: id, name },
+                    customer,
+                };
+                if (typeof isActive === 'boolean') {
+                    (payload.project_group as Record<string, unknown>).is_active = isActive;
+                }
+                const res = await api_request('project_groups/update', payload);
                 await get().fetchProjectGroups();
                 get().buildTree();
                 return res;

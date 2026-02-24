@@ -4,6 +4,7 @@ import _ from 'lodash';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
 import { COLLECTIONS } from '../../../constants.js';
+import { writeProjectTreeAuditLog } from './project-tree-audit.js';
 
 const router = Router();
 const logger = getLogger();
@@ -54,9 +55,14 @@ const toRecord = (value: unknown): Record<string, unknown> => {
 router.post('/list', async (req: Request, res: Response) => {
     try {
         const db = getDb();
+        const showInactive = req.body?.show_inactive as boolean;
+        const filter = showInactive ? {} : { is_active: { $ne: false } };
         const projectGroups = await db
             .collection(COLLECTIONS.PROJECT_GROUPS)
             .aggregate([
+                {
+                    $match: filter,
+                },
                 {
                     $lookup: {
                         from: COLLECTIONS.CUSTOMERS,
@@ -111,6 +117,7 @@ router.post('/create', async (req: Request, res: Response) => {
             ..._.omit(payload, ['_id', 'id']),
             customer: customerId,
             projects_ids: Array.isArray(payload.projects_ids) ? payload.projects_ids : [],
+            is_active: payload.is_active ?? true,
             created_at: now,
             updated_at: now,
         };
@@ -144,6 +151,11 @@ router.post('/update', async (req: Request, res: Response) => {
             res.status(400).json({ error: 'project_group with _id is required' });
             return;
         }
+        const before = await db.collection(COLLECTIONS.PROJECT_GROUPS).findOne({ _id: groupId });
+        if (!before) {
+            res.status(404).json({ error: 'project_group not found' });
+            return;
+        }
 
         const updateData: Record<string, unknown> = _.omit(payload, ['_id', 'id']);
         if ('customer' in updateData) {
@@ -163,6 +175,41 @@ router.post('/update', async (req: Request, res: Response) => {
         const dbRes = await db
             .collection(COLLECTIONS.PROJECT_GROUPS)
             .updateOne({ _id: groupId }, { $set: updateData });
+        const after = await db.collection(COLLECTIONS.PROJECT_GROUPS).findOne({ _id: groupId });
+
+        if ((before.name ?? null) !== (after?.name ?? null)) {
+            await writeProjectTreeAuditLog(db, req, {
+                operationType: 'rename_project_group',
+                entityType: 'project_group',
+                entityId: groupId,
+                payloadBefore: { name: before.name ?? null },
+                payloadAfter: { name: after?.name ?? null },
+            });
+        }
+
+        if ((before.customer ?? null)?.toString?.() !== (after?.customer ?? null)?.toString?.()) {
+            await writeProjectTreeAuditLog(db, req, {
+                operationType: 'move_project_group',
+                entityType: 'project_group',
+                entityId: groupId,
+                relatedEntityIds: {
+                    source_customer_id: before.customer ?? null,
+                    destination_customer_id: after?.customer ?? null,
+                },
+                payloadBefore: { customer: before.customer ?? null },
+                payloadAfter: { customer: after?.customer ?? null },
+            });
+        }
+
+        if ((before.is_active ?? true) !== (after?.is_active ?? true)) {
+            await writeProjectTreeAuditLog(db, req, {
+                operationType: 'set_active_state',
+                entityType: 'project_group',
+                entityId: groupId,
+                payloadBefore: { is_active: before.is_active ?? true },
+                payloadAfter: { is_active: after?.is_active ?? true },
+            });
+        }
 
         res.status(200).json({ db_op_result: dbRes });
     } catch (error) {
@@ -188,6 +235,11 @@ router.post('/move', async (req: Request, res: Response) => {
             res.status(400).json({ error: 'project_group_id is required' });
             return;
         }
+        const before = await db.collection(COLLECTIONS.PROJECT_GROUPS).findOne({ _id: groupId });
+        if (!before) {
+            res.status(404).json({ error: 'project_group not found' });
+            return;
+        }
 
         const updateData: Record<string, unknown> = {
             updated_at: Date.now(),
@@ -207,6 +259,19 @@ router.post('/move', async (req: Request, res: Response) => {
         const dbRes = await db
             .collection(COLLECTIONS.PROJECT_GROUPS)
             .updateOne({ _id: groupId }, { $set: updateData });
+        const after = await db.collection(COLLECTIONS.PROJECT_GROUPS).findOne({ _id: groupId });
+
+        await writeProjectTreeAuditLog(db, req, {
+            operationType: 'move_project_group',
+            entityType: 'project_group',
+            entityId: groupId,
+            relatedEntityIds: {
+                source_customer_id: before.customer ?? null,
+                destination_customer_id: after?.customer ?? null,
+            },
+            payloadBefore: { customer: before.customer ?? null },
+            payloadAfter: { customer: after?.customer ?? null },
+        });
 
         res.status(200).json({ db_op_result: dbRes });
     } catch (error) {

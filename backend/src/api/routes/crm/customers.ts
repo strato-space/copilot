@@ -3,9 +3,47 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
 import { COLLECTIONS } from '../../../constants.js';
+import { writeProjectTreeAuditLog } from './project-tree-audit.js';
 
 const router = Router();
 const logger = getLogger();
+
+const toRecord = (value: unknown): Record<string, unknown> => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+    }
+    return {};
+};
+
+const toIdString = (value: unknown): string | null => {
+    if (value == null) return null;
+    if (typeof value === 'string') return value;
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+
+    if (typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if ('_id' in record) return toIdString(record._id);
+        if ('id' in record) return toIdString(record.id);
+        if ('key' in record) return toIdString(record.key);
+    }
+
+    return null;
+};
+
+const toObjectId = (value: unknown): ObjectId | null => {
+    const id = toIdString(value);
+    if (!id || !ObjectId.isValid(id)) return null;
+    return new ObjectId(id);
+};
+
+const omitIdFields = (value: Record<string, unknown>): Record<string, unknown> => {
+    const next = { ...value };
+    delete next._id;
+    delete next.id;
+    delete next.key;
+    return next;
+};
 
 /**
  * List all customers
@@ -32,9 +70,11 @@ router.post('/list', async (req: Request, res: Response) => {
 router.post('/create', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const customer = req.body.customer as Record<string, unknown>;
+        const body = toRecord(req.body);
+        const nestedCustomer = toRecord(body.customer);
+        const customer = Object.keys(nestedCustomer).length > 0 ? nestedCustomer : body;
 
-        if (!customer) {
+        if (Object.keys(customer).length === 0) {
             res.status(400).json({ error: 'customer data is required' });
             return;
         }
@@ -63,21 +103,49 @@ router.post('/create', async (req: Request, res: Response) => {
 router.post('/update', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const customer = req.body.customer as Record<string, unknown>;
+        const body = toRecord(req.body);
+        const nestedCustomer = toRecord(body.customer);
+        const customer = Object.keys(nestedCustomer).length > 0 ? nestedCustomer : body;
+        const customerId = toObjectId(customer._id ?? customer.id ?? body._id ?? body.id);
 
-        if (!customer || !customer._id) {
+        if (!customerId) {
             res.status(400).json({ error: 'customer with _id is required' });
             return;
         }
 
-        const customerId = customer._id as string;
-        delete customer._id;
+        const before = await db.collection(COLLECTIONS.CUSTOMERS).findOne({ _id: customerId });
+        if (!before) {
+            res.status(404).json({ error: 'customer not found' });
+            return;
+        }
 
-        customer.updated_at = Date.now();
-
+        const updateData = omitIdFields(customer);
+        updateData.updated_at = Date.now();
         const dbRes = await db
             .collection(COLLECTIONS.CUSTOMERS)
-            .updateOne({ _id: new ObjectId(customerId) }, { $set: customer });
+            .updateOne({ _id: customerId }, { $set: updateData });
+
+        const after = await db.collection(COLLECTIONS.CUSTOMERS).findOne({ _id: customerId });
+
+        if ((before.name ?? null) !== (after?.name ?? null)) {
+            await writeProjectTreeAuditLog(db, req, {
+                operationType: 'rename_customer',
+                entityType: 'customer',
+                entityId: customerId,
+                payloadBefore: { name: before.name ?? null },
+                payloadAfter: { name: after?.name ?? null },
+            });
+        }
+
+        if ((before.is_active ?? true) !== (after?.is_active ?? true)) {
+            await writeProjectTreeAuditLog(db, req, {
+                operationType: 'set_active_state',
+                entityType: 'customer',
+                entityId: customerId,
+                payloadBefore: { is_active: before.is_active ?? true },
+                payloadAfter: { is_active: after?.is_active ?? true },
+            });
+        }
 
         res.status(200).json({ db_op_result: dbRes });
     } catch (error) {

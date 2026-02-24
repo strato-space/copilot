@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Input, Button, Form, Select, message } from 'antd';
+import { Input, Button, Form, Select, Switch, message } from 'antd';
 import { useProjectsStore } from '../../../store/projectsStore';
 import type { Customer, ProjectGroup } from '../../../types/crm';
 
@@ -19,6 +19,7 @@ const EditProjectGroup: React.FC<EditProjectGroupProps> = ({ group, customers, o
     const [customer, setCustomer] = useState<string>(
         group?.customer?.toString() ?? (customers[0]?._id ?? '')
     );
+    const [isActive, setIsActive] = useState(group?.is_active ?? true);
     const [loading, setLoading] = useState(false);
     const { createProjectGroup, updateProjectGroup } = useProjectsStore();
 
@@ -35,10 +36,10 @@ const EditProjectGroup: React.FC<EditProjectGroupProps> = ({ group, customers, o
         setLoading(true);
         try {
             if (group) {
-                await updateProjectGroup(group._id, name, customer);
+                await updateProjectGroup(group._id, name, customer, isActive);
                 message.success('Группа обновлена');
             } else {
-                await createProjectGroup(name, customer);
+                await createProjectGroup(name, customer, isActive);
                 message.success('Группа создана');
             }
             onSave?.();
@@ -71,6 +72,14 @@ const EditProjectGroup: React.FC<EditProjectGroupProps> = ({ group, customers, o
                         </Select.Option>
                     ))}
                 </Select>
+            </Form.Item>
+            <Form.Item label="Статус">
+                <Switch
+                    checked={isActive}
+                    onChange={setIsActive}
+                    checkedChildren="Активна"
+                    unCheckedChildren="Скрыта"
+                />
             </Form.Item>
             <Button type="primary" loading={loading} onClick={handleSave}>
                 {group ? 'Сохранить' : 'Создать'}

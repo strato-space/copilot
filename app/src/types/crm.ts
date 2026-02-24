@@ -125,6 +125,8 @@ export interface TreeNode {
 export interface Customer {
     _id: string;
     name: string;
+    is_active?: boolean;
+    description?: string;
     project_groups_ids?: string[];
 }
 
@@ -132,6 +134,8 @@ export interface ProjectGroup {
     _id: string;
     name: string;
     customer?: string;
+    is_active?: boolean;
+    description?: string;
     projects_ids?: string[];
 }
 
@@ -145,6 +149,9 @@ export interface ProjectWithGroup {
     time_capacity?: number;
     description?: string;
     drive_folder_id?: string;
+    telegram_project_chat_url?: string;
+    telegram_work_chat_url?: string;
+    contacts?: string[] | string;
 }
 
 // Figma Sync

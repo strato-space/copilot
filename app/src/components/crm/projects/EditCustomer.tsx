@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Input, Button, Form, message } from 'antd';
+import { Input, Button, Form, Switch, message } from 'antd';
 import { useProjectsStore } from '../../../store/projectsStore';
 import type { Customer } from '../../../types/crm';
 
@@ -15,6 +15,7 @@ interface EditCustomerProps {
 
 const EditCustomer: React.FC<EditCustomerProps> = ({ customer, onSave }) => {
     const [name, setName] = useState(customer?.name ?? '');
+    const [isActive, setIsActive] = useState(customer?.is_active ?? true);
     const [loading, setLoading] = useState(false);
     const { createCustomer, updateCustomer } = useProjectsStore();
 
@@ -27,10 +28,10 @@ const EditCustomer: React.FC<EditCustomerProps> = ({ customer, onSave }) => {
         setLoading(true);
         try {
             if (customer) {
-                await updateCustomer(customer._id, name);
+                await updateCustomer(customer._id, name, isActive);
                 message.success('Заказчик обновлен');
             } else {
-                await createCustomer(name);
+                await createCustomer(name, isActive);
                 message.success('Заказчик создан');
             }
             onSave?.();
@@ -48,6 +49,14 @@ const EditCustomer: React.FC<EditCustomerProps> = ({ customer, onSave }) => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Введите имя"
+                />
+            </Form.Item>
+            <Form.Item label="Статус">
+                <Switch
+                    checked={isActive}
+                    onChange={setIsActive}
+                    checkedChildren="Активен"
+                    unCheckedChildren="Скрыт"
                 />
             </Form.Item>
             <Button type="primary" loading={loading} onClick={handleSave}>
