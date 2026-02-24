@@ -3,22 +3,13 @@ import jwt from 'jsonwebtoken';
 import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,
-  VOICEBOT_JOBS,
-  VOICEBOT_QUEUES,
 } from '../../constants.js';
 import { getDb } from '../../services/db.js';
 import { getLogger } from '../../utils/logger.js';
 import { PermissionManager, type Performer } from '../../permissions/permission-manager.js';
 import { computeSessionAccess } from '../../services/session-socket-auth.js';
 import { mergeWithRuntimeFilter, IS_PROD_RUNTIME } from '../../services/runtimeScope.js';
-import {
-  buildDoneNotifyPreview,
-  writeDoneNotifyRequestedLog,
-} from '../../services/voicebotDoneNotify.js';
-import {
-  clearActiveVoiceSessionBySessionId,
-  clearActiveVoiceSessionForUser,
-} from '../../voicebot_tgbot/activeSessionMapping.js';
+import { completeSessionDoneFlow } from '../../services/voicebotSessionDoneFlow.js';
 
 const logger = getLogger();
 
@@ -214,61 +205,11 @@ const handleSessionDone = async ({
 
     const session = access.session as { chat_id?: unknown; _id?: ObjectId | string };
     const performer = access.performer as Performer | undefined;
-    const chat_id = session?.chat_id;
-    const commonQueue = queues?.[VOICEBOT_QUEUES.COMMON];
-    const db = getDb();
-    const notifyPreview = await buildDoneNotifyPreview({
-      db,
+    const doneFlowParams: Parameters<typeof completeSessionDoneFlow>[0] = {
+      db: getDb(),
+      session_id,
       session: session as Record<string, unknown>,
-      eventName: 'Сессия завершена',
-    });
-    if (!chat_id && commonQueue) {
-      reply({ ok: false, error: 'chat_id_missing' });
-      return;
-    }
-
-    // Close immediately so UI/state reflects closed session even before async post-processing.
-    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-      mergeWithRuntimeFilter(
-        { _id: new ObjectId(session_id) },
-        {
-          field: 'runtime_tag',
-          familyMatch: IS_PROD_RUNTIME,
-          includeLegacyInProd: IS_PROD_RUNTIME,
-        }
-      ),
-      {
-        $set: {
-          is_active: false,
-          to_finalize: true,
-          done_at: new Date(),
-          updated_at: new Date(),
-        },
-        $inc: {
-          done_count: 1,
-        },
-      }
-    );
-
-    if (commonQueue) {
-      await commonQueue.add(VOICEBOT_JOBS.common.DONE_MULTIPROMPT, {
-        session_id,
-        chat_id,
-        telegram_user_id: performer?.telegram_id ? String(performer.telegram_id) : null,
-        notify_preview: notifyPreview,
-        already_closed: true,
-      });
-    }
-
-    await clearActiveVoiceSessionBySessionId({ db, session_id });
-    if (performer?.telegram_id) {
-      await clearActiveVoiceSessionForUser({ db, telegram_user_id: performer.telegram_id });
-    }
-
-    await writeDoneNotifyRequestedLog({
-      db,
-      session_id: new ObjectId(session_id),
-      session: session as Record<string, unknown>,
+      telegram_user_id: performer?.telegram_id ? String(performer.telegram_id) : null,
       actor: performer
         ? {
             type: 'performer',
@@ -280,20 +221,28 @@ const handleSessionDone = async ({
         type: 'socket',
         namespace: '/voicebot',
         event: 'session_done',
-        mode: commonQueue ? 'queued' : 'fallback',
       },
-      preview: notifyPreview,
-    });
+      emitSessionStatus: (statusPayload) => {
+        emitToSession(io, session_id, 'session_status', statusPayload);
+      },
+    };
+    if (queues) {
+      doneFlowParams.queues = queues;
+    }
+    if (session?.chat_id !== undefined) {
+      doneFlowParams.chat_id = session.chat_id as string | number | null;
+    }
 
-    emitToSession(io, session_id, 'session_status', {
-      session_id,
-      status: 'done_queued',
-      timestamp: Date.now(),
-    });
+    const result = await completeSessionDoneFlow(doneFlowParams);
+    if (!result.ok) {
+      replyError(reply, result.error);
+      return;
+    }
+
     reply({
       ok: true,
       notify_preview: {
-        event_name: notifyPreview.event_name,
+        event_name: result.notify_preview?.event_name,
       },
     });
   } catch (error) {

@@ -21,6 +21,8 @@
     "runtime:backfill:apply": "tsx scripts/runtime-tag-backfill.ts --apply",
     "voice:dedupe:webm:dry": "tsx scripts/voicebot-dedupe-webm-filenames.ts",
     "voice:dedupe:webm:apply": "tsx scripts/voicebot-dedupe-webm-filenames.ts --apply",
+    "voice:close-idle:dry": "tsx scripts/voicebot-close-inactive-sessions.ts",
+    "voice:close-idle:apply": "tsx scripts/voicebot-close-inactive-sessions.ts --apply",
     "ontology:typedb:py:setup": "python3 -m venv .venv && ./.venv/bin/pip install --upgrade pip && ./.venv/bin/pip install -r requirements-typedb.txt",
     "ontology:typedb:ingest:dry": "PYTHONUNBUFFERED=1 bash scripts/run-typedb-python.sh scripts/typedb-ontology-ingest.py",
     "ontology:typedb:ingest:apply": "PYTHONUNBUFFERED=1 bash scripts/run-typedb-python.sh scripts/typedb-ontology-ingest.py --apply",

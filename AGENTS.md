@@ -178,6 +178,7 @@ Preferred engineering principles for this repo:
 - Runtime-scoped aggregate queries now auto-scope nested `$lookup` stages for runtime-tagged collections (`prod` family vs exact non-prod), so cross-runtime joins do not leak records.
 - Socket `session_done` authorization is test-covered through `resolveAuthorizedSessionForSocket` export; keep socket handlers bound to backend performer/session auth checks only.
 - `Done` path enforces one-shot auto-upload retry per pending chunk/session and surfaces manual retry for remaining failures.
+- Inactive open sessions can be auto-closed by cron via `backend/scripts/voicebot-close-inactive-sessions.ts` (uses latest session/message/session-log activity timestamps and runs `DONE_MULTIPROMPT` flow for sessions idle above threshold).
 - Full-track archive chunks are tracked as `trackKind='full_track'` with metadata (`sessionId`, `mic`, `duration/start/end`) in voicebot runtime, but upload is intentionally disabled until diarization flow is introduced.
 - Web upload route now returns structured oversize diagnostics (`413 file_too_large` with `max_size_bytes`/`max_size_mb`), and WebRTC upload errors normalize backend payloads into concise UI-safe messages.
 - Upload flow consumes `pending_image_anchor_message_id`/`pending_image_anchor_oid`: first uploaded audio chunk is linked via `image_anchor_message_id`, and pending marker fields are cleared from the session.
@@ -373,3 +374,6 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Synchronized local bd workspace metadata after SQLite rollback (`.beads` config/metadata and import backup artifacts) and normalized claim examples to `bd update <id> --claim`.
 - Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` as a draft architecture research document covering OSS platform options and rollout planning for OperOps/FinOps/Guide/Voice.
 - Added `plan/fpf-erd-extraction-protocol-str-opsportal.md` and `plan/str-opsportal-erd-draft-v0.md` to formalize ERD extraction workflow and provide the first consolidated STR OpsPortal domain draft.
+- Added shared Voice session-finalization helper `backend/src/services/voicebotSessionDoneFlow.ts` and switched socket `session_done` handling to use it for consistent queue/fallback behavior.
+- Added inactivity-driven close automation script `backend/scripts/voicebot-close-inactive-sessions.ts` plus npm aliases `voice:close-idle:dry|apply` for dry-run/apply operational workflows.
+- Added diagnostics helper `backend/scripts/tmp-explain-69981f2e.ts` for one-session transcription/chunk state inspection during incident triage.

@@ -42,6 +42,12 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
   - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:dedupe:webm:dry`
   - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:dedupe:webm:apply`
   - rules: only non-Telegram `*.webm` messages, grouped by `(session_id, file_name)`, keep one most relevant message and mark the rest `is_deleted=true`.
+- Idle active sessions can be auto-closed via backend script:
+  - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-hours=4`
+  - dry run (LLM/automation JSON): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-hours=4 --json`
+  - dry run (streaming JSONL): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-hours=4 --jsonl`
+  - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:apply -- --inactive-hours=4`
+  - activity window uses latest session update/message/session-log timestamps; sessions with no movement above the threshold are closed through `DONE_MULTIPROMPT` flow.
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
@@ -209,3 +215,6 @@ Projects:
 - Synced local bd SQLite metadata/config files and stored Dolt migration import/backup artifacts in `.beads/`.
 - Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` (draft) summarizing platform research options for OperOps/FinOps/Guide/Voice and phased implementation recommendations.
 - Added `plan/fpf-erd-extraction-protocol-str-opsportal.md` and `plan/str-opsportal-erd-draft-v0.md` for STR OpsPortal ERD extraction protocol definition and the initial consolidated ERD draft.
+- Extracted shared Voice `completeSessionDoneFlow` service and switched socket `session_done` path to it for unified close/notify behavior.
+- Added idle-active-session close automation script (`backend/scripts/voicebot-close-inactive-sessions.ts`) and npm commands `voice:close-idle:dry|apply` with JSON/JSONL outputs for operations.
+- Added session-specific diagnostics helper script `backend/scripts/tmp-explain-69981f2e.ts` for transcription/chunk payload inspection.

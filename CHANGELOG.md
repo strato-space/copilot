@@ -8,6 +8,9 @@
 - **19:18** TypeDB ontology ingestion tooling for STR OpsPortal ERD work was not scaffolded in Copilot backend, so setup/ingest/validate steps were ad-hoc.
 - **19:18** Local bd metadata after Dolt->SQLite rollback remained partially unsynced in repo files and claim command examples needed normalization.
 - **19:48** Ontology artifacts stayed outside version control scope, so TypeDB schema and mapping changes could diverge from backend ingestion scripts in follow-up sessions.
+- **22:01** Session `done` logic was duplicated inside socket handlers, which made maintenance flows harder to reuse and increased drift risk across queue/fallback branches.
+- **22:01** Voice runtime had no dedicated automation path to close stale active sessions by real activity timestamps (session/message/session-log), leaving long-idle sessions open.
+- **22:01** Investigating transcript state for session `69981f2e0dc0db172fdde208` required manual ad-hoc DB queries without a checked-in script.
 
 ### FEATURE IMPLEMENTED
 - **19:18** Added TS transcription markdown download route with deterministic message ordering, strict access checks, and filename normalization, and aligned frontend store endpoint usage.
@@ -15,6 +18,9 @@
 - **19:18** Refactored Projects Tree editing UX to modal-based flow with explicit save/close lifecycle handlers.
 - **19:18** Synced `.beads` workspace config/metadata and committed rollback artifacts for reproducible local issue-tracker state.
 - **19:48** Added tracked `ontology/typedb` package to Copilot repository so TypeDB model assets are versioned together with runtime ingestion code.
+- **22:01** Extracted shared `completeSessionDoneFlow` orchestration and reused it in socket `session_done` handling for consistent close/update/log behavior.
+- **22:01** Added idle-session auto-close maintenance script (`voicebot-close-inactive-sessions.ts`) with dry-run/apply, threshold/session filters, and JSON/JSONL output modes.
+- **22:01** Added a focused diagnostics utility (`tmp-explain-69981f2e.ts`) for transcript/chunk inspection on a concrete session id.
 
 ### CHANGES
 - **19:18** Voice transcription download path updates:
@@ -40,6 +46,14 @@
   - `ontology/typedb/queries/validation_v1.tql`
   - `ontology/typedb/docs/rollout_plan_v1.md`
   - `ontology/typedb/README.md`
+- **22:01** Refactored done-flow orchestration:
+  - added `backend/src/services/voicebotSessionDoneFlow.ts` to centralize session close, queue/fallback dispatch, mapping cleanup, and notify log write.
+  - updated `backend/src/api/socket/voicebot.ts` to call shared flow with socket-status emitter callback.
+- **22:01** Added idle auto-close tooling:
+  - added `backend/scripts/voicebot-close-inactive-sessions.ts` (activity scoring across session/message/session-log, `--inactive-hours`, `--session`, `--limit`, `--json`, `--jsonl`, `--apply`).
+  - added `backend/package.json` scripts `voice:close-idle:dry` and `voice:close-idle:apply`.
+  - updated `README.md` and `AGENTS.md` with operation notes for idle close script.
+- **22:01** Added diagnostics script `backend/scripts/tmp-explain-69981f2e.ts` for one-session transcription/chunk state snapshots.
 
 ## 2026-02-22
 ### PROBLEM SOLVED
