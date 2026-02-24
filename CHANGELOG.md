@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-02-24
+### PROBLEM SOLVED
+- **19:18** Voice transcription download from session page used an outdated frontend path (`/transcription/download/:id`), so markdown export could fail behind the current `/api/voicebot/*` routing contract.
+- **19:18** Backend transcription runtime route had no dedicated `GET /transcription/download/:session_id` implementation in TS runtime, which limited parity for safe markdown export and explicit access checks.
+- **19:18** OperOps Projects Tree still used split-pane inline editing, which reduced usable table width and made editing flow less predictable.
+- **19:18** TypeDB ontology ingestion tooling for STR OpsPortal ERD work was not scaffolded in Copilot backend, so setup/ingest/validate steps were ad-hoc.
+- **19:18** Local bd metadata after Dolt->SQLite rollback remained partially unsynced in repo files and claim command examples needed normalization.
+
+### FEATURE IMPLEMENTED
+- **19:18** Added TS transcription markdown download route with deterministic message ordering, strict access checks, and filename normalization, and aligned frontend store endpoint usage.
+- **19:18** Added TypeDB helper toolchain in backend (`venv` setup + ingest/validate scripts + env samples + npm commands) for ontology ingestion workflows.
+- **19:18** Refactored Projects Tree editing UX to modal-based flow with explicit save/close lifecycle handlers.
+- **19:18** Synced `.beads` workspace config/metadata and committed rollback artifacts for reproducible local issue-tracker state.
+
+### CHANGES
+- **19:18** Voice transcription download path updates:
+  - `app/src/store/voiceBotStore.ts` now calls `/voicebot/transcription/download/:session_id`.
+  - `backend/src/api/routes/voicebot/transcription.ts` now exposes `GET /transcription/download/:session_id` with `getRawDb` read path, markdown builder, and access helper reuse.
+  - `backend/__tests__/voicebot/transcriptionRuntimeRoute.test.ts` extended with download route coverage (success + invalid id).
+- **19:18** Added TypeDB tooling:
+  - `backend/requirements-typedb.txt`
+  - `backend/scripts/run-typedb-python.sh`
+  - `backend/scripts/typedb-ontology-ingest.py`
+  - `backend/scripts/typedb-ontology-validate.py`
+  - `backend/package.json` scripts `ontology:typedb:*`
+  - `backend/.env.example` TypeDB variables block.
+- **19:18** OperOps UI update:
+  - `app/src/pages/operops/ProjectsTree.tsx` migrated from split-pane edit card to modal editor workflow.
+- **19:18** Planning/docs and bd workspace sync:
+  - `plan/str-opsportal-erd-draft-v0.md` adjusted domain assumptions (`tenant_scope` note instead of standalone `Tenant` row).
+  - `AGENTS.md` + `README.md` updated with closeout notes and `bd update <id> --claim`.
+  - `.beads/.gitignore`, `.beads/config.yaml`, `.beads/metadata.json`, `.beads/dolt-open-issues-*.{json,jsonl}` synchronized for current SQLite-backed bd state.
+
 ## 2026-02-22
 ### PROBLEM SOLVED
 - **10:10** The STR OpsPortal analysis flow had no fixed, reproducible extraction protocol for deriving ERD candidates from narrative specs, which risked inconsistent entity/attribute/relationship modeling.

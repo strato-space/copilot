@@ -28,7 +28,6 @@ import {
     EyeOutlined,
     EyeInvisibleOutlined,
     SwapOutlined,
-    LinkOutlined,
 } from '@ant-design/icons';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useRequestStore } from '../../store/requestStore';
@@ -151,6 +150,7 @@ const ProjectsTree: React.FC = () => {
     const [showCreateCustomer, setShowCreateCustomer] = useState(false);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [showCreateProject, setShowCreateProject] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
     const [showInactive, setShowInactive] = useState(false);
     const [tableRows, setTableRows] = useState<TableRow[]>([]);
     const [tableLoading, setTableLoading] = useState(false);
@@ -298,7 +298,18 @@ const ProjectsTree: React.FC = () => {
         const node = toTreeNodeFromRow(row);
         if (node) {
             setSelectedNode(node);
+            setShowEditModal(true);
         }
+    };
+
+    const closeEditModal = (): void => {
+        setShowEditModal(false);
+        setSelectedNode(null);
+    };
+
+    const handleEditSave = (): void => {
+        void handleSaveAndRefresh();
+        closeEditModal();
     };
 
     const handleToggleActive = async (row: TableRow): Promise<void> => {
@@ -596,17 +607,6 @@ const ProjectsTree: React.FC = () => {
                                 Merge
                             </Button>
                         )}
-                        <Button
-                            type="link"
-                            size="small"
-                            icon={<LinkOutlined />}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                openEditPanel(row);
-                            }}
-                        >
-                            Карточка
-                        </Button>
                     </Space>
                 );
             },
@@ -695,101 +695,35 @@ const ProjectsTree: React.FC = () => {
                     </Space>
                 </div>
 
-                <div className="flex gap-6">
-                    <Card
-                        title="Структура проектов"
-                        className="flex-1 min-w-0"
-                        styles={{ body: { padding: '12px' } }}
-                    >
-                        <Table<TableRow>
-                            rowKey="key"
-                            columns={columns}
-                            dataSource={tableRows}
-                            loading={tableLoading}
-                            pagination={false}
-                            size="small"
-                            expandable={{ defaultExpandAllRows: true }}
-                            scroll={{ x: 1500, y: 650 }}
-                            onRow={(record) => ({
-                                onClick: () => {
-                                    if (record.type !== 'bucket') {
-                                        openEditPanel(record);
-                                    }
-                                },
-                            })}
-                            locale={{
-                                emptyText: (
-                                    <div className="text-center py-8 text-gray-500">
-                                        <FolderOutlined className="text-5xl text-[#d9d9d9] mb-4" />
-                                        <br />
-                                        <Text type="secondary">Нет данных для отображения</Text>
-                                        <br />
-                                        <Text type="secondary" className="text-xs">
-                                            Создайте первого заказчика, чтобы начать
-                                        </Text>
-                                    </div>
-                                ),
-                            }}
-                        />
-                    </Card>
-
-                    <Card
-                        title={selectedNode ? `Редактирование: ${selectedNode.title}` : 'Выберите элемент'}
-                        className="w-[520px] flex-shrink-0"
-                        styles={{ body: { padding: '24px' } }}
-                    >
-                        <ConfigProvider
-                            theme={{
-                                components: {
-                                    Form: {
-                                        itemMarginBottom: 20,
-                                    },
-                                    Input: {
-                                        borderRadius: 6,
-                                    },
-                                    Button: {
-                                        borderRadius: 6,
-                                    },
-                                },
-                            }}
-                        >
-                            {selectedNode?.type === 'project' ? (
-                                <EditProject
-                                    key={selectedNode.data?._id}
-                                    project={selectedNode.data as ProjectWithGroup}
-                                    projectGroups={projectGroups}
-                                    customers={customers}
-                                    onSave={handleSaveAndRefresh}
-                                />
-                            ) : selectedNode?.type === 'group' ? (
-                                <EditProjectGroup
-                                    key={selectedNode.data?._id}
-                                    group={selectedNode.data as ProjectGroup}
-                                    customers={customers}
-                                    onSave={handleSaveAndRefresh}
-                                />
-                            ) : selectedNode?.type === 'customer' ? (
-                                <EditCustomer
-                                    key={selectedNode.data?._id}
-                                    customer={selectedNode.data as Customer}
-                                    onSave={handleSaveAndRefresh}
-                                />
-                            ) : (
-                                <div className="text-center py-12">
-                                    <div className="text-gray-400 mb-4">
-                                        <ProjectOutlined className="text-5xl" />
-                                    </div>
-                                    <Title level={4} type="secondary">
-                                        Выберите элемент для редактирования
-                                    </Title>
-                                    <Text type="secondary">
-                                        Выберите заказчика, группу или проект в таблице слева
+                <Card
+                    title="Структура проектов"
+                    className="w-full"
+                    styles={{ body: { padding: '12px' } }}
+                >
+                    <Table<TableRow>
+                        rowKey="key"
+                        columns={columns}
+                        dataSource={tableRows}
+                        loading={tableLoading}
+                        pagination={false}
+                        size="small"
+                        expandable={{ defaultExpandAllRows: true }}
+                        scroll={{ x: 1500, y: 650 }}
+                        locale={{
+                            emptyText: (
+                                <div className="text-center py-8 text-gray-500">
+                                    <FolderOutlined className="text-5xl text-[#d9d9d9] mb-4" />
+                                    <br />
+                                    <Text type="secondary">Нет данных для отображения</Text>
+                                    <br />
+                                    <Text type="secondary" className="text-xs">
+                                        Создайте первого заказчика, чтобы начать
                                     </Text>
                                 </div>
-                            )}
-                        </ConfigProvider>
-                    </Card>
-                </div>
+                            ),
+                        }}
+                    />
+                </Card>
 
                 <Modal
                     open={showCreateCustomer}
@@ -855,6 +789,55 @@ const ProjectsTree: React.FC = () => {
                             setShowCreateProject(false);
                         }}
                     />
+                </Modal>
+
+                <Modal
+                    open={showEditModal}
+                    title={selectedNode ? `Редактирование: ${selectedNode.title}` : 'Редактирование'}
+                    footer={null}
+                    onCancel={closeEditModal}
+                    width={860}
+                    destroyOnHidden
+                >
+                    <Divider />
+                    <ConfigProvider
+                        theme={{
+                            components: {
+                                Form: {
+                                    itemMarginBottom: 20,
+                                },
+                                Input: {
+                                    borderRadius: 6,
+                                },
+                                Button: {
+                                    borderRadius: 6,
+                                },
+                            },
+                        }}
+                    >
+                        {selectedNode?.type === 'project' ? (
+                            <EditProject
+                                key={selectedNode.data?._id}
+                                project={selectedNode.data as ProjectWithGroup}
+                                projectGroups={projectGroups}
+                                customers={customers}
+                                onSave={handleEditSave}
+                            />
+                        ) : selectedNode?.type === 'group' ? (
+                            <EditProjectGroup
+                                key={selectedNode.data?._id}
+                                group={selectedNode.data as ProjectGroup}
+                                customers={customers}
+                                onSave={handleEditSave}
+                            />
+                        ) : selectedNode?.type === 'customer' ? (
+                            <EditCustomer
+                                key={selectedNode.data?._id}
+                                customer={selectedNode.data as Customer}
+                                onSave={handleEditSave}
+                            />
+                        ) : null}
+                    </ConfigProvider>
                 </Modal>
 
                 <Modal

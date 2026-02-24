@@ -1425,7 +1425,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         try {
             const backendUrl = getBackendUrl();
             const { authToken } = useAuthStore.getState();
-            const response = await fetch(`${backendUrl}/transcription/download/${sessionId}`, {
+            const response = await fetch(`${backendUrl}/voicebot/transcription/download/${sessionId}`, {
                 method: 'GET',
                 headers: {
                     'X-Authorization': authToken ?? '',

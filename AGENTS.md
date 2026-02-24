@@ -277,7 +277,7 @@ bd create "Issue title" --description="Follow-up found while working" --type bug
 **Claim and update:**
 
 ```bash
-bd update <issue-id> --status in_progress --json
+bd update <issue-id> --claim --json
 bd update <issue-id> --priority 1 --json
 ```
 
@@ -306,7 +306,7 @@ bd close <issue-id> --reason "Completed" --json
 ### Workflow for AI Agents
 
 1. **Check ready work**: `bd ready` shows unblocked issues
-2. **Claim your task**: `bd update <id> --status in_progress`
+2. **Claim your task**: `bd update <id> --claim`
 3. **Work on it**: Implement, test, document
 4. **Discover new work?** Create linked issue:
    - `bd create "Found bug" --description="Details about what was found" --priority 1 --deps discovered-from:<parent-id>`
@@ -366,5 +366,9 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Updated Voice transcription download contract to use `/api/voicebot/transcription/download/:session_id` end-to-end (store path fix, runtime-safe backend route, and Jest coverage for markdown export).
+- Added TypeDB ontology tooling scaffold in backend (`requirements-typedb.txt`, ingest/validate scripts, npm script aliases, and env examples) to support STR OpsPortal ERD ingestion workflows.
+- Updated OperOps Projects Tree UX: editing now opens in a dedicated modal flow instead of the split side panel, with explicit close/save handlers.
+- Synchronized local bd workspace metadata after SQLite rollback (`.beads` config/metadata and import backup artifacts) and normalized claim examples to `bd update <id> --claim`.
 - Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` as a draft architecture research document covering OSS platform options and rollout planning for OperOps/FinOps/Guide/Voice.
 - Added `plan/fpf-erd-extraction-protocol-str-opsportal.md` and `plan/str-opsportal-erd-draft-v0.md` to formalize ERD extraction workflow and provide the first consolidated STR OpsPortal domain draft.

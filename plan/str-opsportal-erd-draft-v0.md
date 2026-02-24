@@ -19,7 +19,6 @@
 
 | Entity | PK | Атрибуты (ключевые) | Источник в доке |
 |---|---|---|---|
-| `Tenant` | `tenant_id` | `name`, `status` | §4.3, §10.1 |
 | `Client` | `client_id` | `name`, `status`, `external_access_mode` | §4.3, §5.1 |
 | `Project` | `project_id` | `client_id`, `name`, `code_slug`, `status`, `project_manager_id`, `lead_designer_id`, `has_finops`, `has_operops`, `has_chatops`, `has_designops`, `delivery_package_rule_id` | §5.2, §10.2 |
 | `ProjectLink` | `project_link_id` | `project_id`, `link_type` (`figma/repo/docs`), `url`, `label` | §5.2, §10.2 |
@@ -64,8 +63,7 @@
 
 | ID | From | Связь | To | Cardinality | Relation kind | Основание |
 |---|---|---|---|---|---|---|
-| R01 | `Tenant` | owns | `Client` | 1:N | structural | §4.3 |
-| R02 | `Client` | owns | `Project` | 1:N | structural | §5.2 |
+| R01 | `Client` | owns | `Project` | 1:N | structural | §5.2 |
 | R03 | `Project` | has | `ProjectLink` | 1:N | structural | §5.2 |
 | R04 | `Person` | member_of via `ProjectMembership` | `Project` | M:N | structural | §5.2, §5.3 |
 | R05 | `Person` | assigned_role via `RoleAssignment` | `Role` | M:N | structural | §5.4 |
@@ -113,7 +111,7 @@
 
 ## 5) Открытые вопросы (до фиксации v1 ERD)
 
-1. `Tenant` и `Client` это разные сущности или в MVP совпадают.
+1. Нужно ли материализовать `tenant_scope` как отдельную сущность в domain-модели или оставить его в auth/session/policy слое.
 2. Нужна ли отдельная сущность `Module` (`FinOps/OperOps/ChatOps/DesignOps`) вместо флагов в `Project`.
 3. Нужно ли делить `Agreement` на типы (`Decision`, `Commitment`, `Constraint`) или оставить единым объектом.
 4. `TaskPackage` должен быть immutable-снимком или редактируемой группой задач.

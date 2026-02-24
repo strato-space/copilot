@@ -202,5 +202,9 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Updated Voice transcription download flow to use `/api/voicebot/transcription/download/:session_id` with runtime-safe markdown export handling and Jest coverage.
+- Added backend TypeDB ontology helper tooling (`requirements-typedb.txt`, ingest/validate scripts, npm aliases, and `.env` sample variables) for STR OpsPortal model ingestion.
+- Switched OperOps Projects Tree editing to modal-based UX and removed split-pane edit card flow.
+- Synced local bd SQLite metadata/config files and stored Dolt migration import/backup artifacts in `.beads/`.
 - Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` (draft) summarizing platform research options for OperOps/FinOps/Guide/Voice and phased implementation recommendations.
 - Added `plan/fpf-erd-extraction-protocol-str-opsportal.md` and `plan/str-opsportal-erd-draft-v0.md` for STR OpsPortal ERD extraction protocol definition and the initial consolidated ERD draft.
