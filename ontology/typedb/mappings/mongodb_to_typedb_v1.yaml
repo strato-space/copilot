@@ -1,0 +1,251 @@
+version: 1
+name: str_opsportal_mongodb_to_typedb
+source_database: stratodb
+schema_file: ../schema/str_opsportal_v1.tql
+
+id_normalization:
+  strategy: stringify
+  rules:
+    - bson.ObjectId -> hex string
+    - int/double ids -> decimal string
+    - null/empty -> skip record and log to deadletter
+
+collections:
+  - collection: automation_customers
+    target_entity: client
+    key:
+      attribute: client_id
+      from: _id
+    attributes:
+      name: name
+      status: is_active
+      created_at: created_at
+      updated_at: updated_at
+
+  - collection: automation_projects
+    target_entity: project
+    key:
+      attribute: project_id
+      from: _id
+    attributes:
+      name: name
+      status: is_active
+      runtime_tag: runtime_tag
+      updated_at: updated_at
+      created_at: created_at
+
+  - collection: automation_performers
+    target_entity: person
+    key:
+      attribute: person_id
+      from: _id
+    attributes:
+      name: real_name
+      external_id: id
+      status: is_deleted
+      updated_at: updated_at
+      created_at: created_at
+    notes:
+      - role/additional_roles are handled as phase-2 relation extraction
+
+  - collection: automation_persons
+    target_entity: person
+    key:
+      attribute: person_id
+      from: _id
+    attributes:
+      name: name
+      status: is_deleted
+      updated_at: updated_at
+      created_at: created_at
+
+  - collection: automation_tasks
+    target_entity: oper_task
+    key:
+      attribute: task_id
+      from: _id
+    attributes:
+      title: name
+      description: description
+      status: task_status
+      due_at: deadline
+      priority_rank: priority
+      project_id: project_id
+      updated_at: updated_at
+      created_at: created_at
+    coalesce:
+      status:
+        - task_status
+        - status
+    relations:
+      - relation: project_has_oper_task
+        owner_role: owner_project
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project_id
+
+  - collection: automation_voice_bot_sessions
+    target_entity: voice_session
+    key:
+      attribute: voice_session_id
+      from: _id
+    attributes:
+      status: status
+      source_type: session_source
+      project_id: project_id
+      is_active: is_active
+      runtime_tag: runtime_tag
+      updated_at: updated_at
+      created_at: created_at
+    relations:
+      - relation: project_has_voice_session
+        owner_role: owner_project
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project_id
+
+  - collection: automation_voice_bot_messages
+    target_entity: voice_message
+    key:
+      attribute: voice_message_id
+      from: _id
+    attributes:
+      source_type: source_type
+      summary: transcription_text
+      status: is_finalized
+      created_at: created_at
+    relations:
+      - relation: voice_session_has_message
+        owner_role: voice_session
+        owner_lookup:
+          entity: voice_session
+          by: voice_session_id
+          from: session_id
+    explode:
+      - source_array: transcription_chunks
+        target_entity: transcript_chunk
+        key_from:
+          compose:
+            - _id
+            - segment_index
+        attributes:
+          summary: text
+          started_at: timestamp
+          ended_at: timestamp
+        relation:
+          name: voice_message_chunked_as_transcript_chunk
+
+  - collection: automation_voice_bot_session_log
+    target_entity: history_step
+    key:
+      attribute: history_step_id
+      from: _id
+    attributes:
+      status: status
+      created_at: event_time
+    relations:
+      - relation: voice_session_has_history_step
+        owner_role: voice_session
+        owner_lookup:
+          entity: voice_session
+          by: voice_session_id
+          from: session_id
+
+  - collection: forecasts_project_month
+    target_entity: forecast_project_month
+    key:
+      attribute: forecast_project_month_id
+      compose:
+        - forecast_version_id
+        - project_id
+        - month
+    attributes:
+      forecast_version_id: forecast_version_id
+      project_id: project_id
+      month_key: month
+      currency: forecast_currency
+      amount_original: forecast_amount_original
+      amount_rub: forecast_amount_rub
+      row_version: row_version
+      updated_at: updated_at
+    relations:
+      - relation: project_has_forecast_month
+        owner_role: owner_project
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project_id
+
+  - collection: finops_expense_categories
+    target_entity: cost_category
+    key:
+      attribute: cost_category_id
+      from: category_id
+    attributes:
+      name: name
+      status: is_active
+
+  - collection: finops_expense_operations
+    target_entity: cost_expense
+    key:
+      attribute: cost_expense_id
+      from: operation_id
+    attributes:
+      month_key: month
+      currency: currency
+      amount_original: amount
+      amount_rub: amount
+      status: is_deleted
+      created_at: created_at
+      project_id: project_id
+      runtime_tag: runtime_tag
+    relations:
+      - relation: cost_category_classifies_expense
+        owner_role: cost_category
+        owner_lookup:
+          entity: cost_category
+          by: cost_category_id
+          from: category_id
+      - relation: project_has_cost_expense
+        owner_role: owner_project
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project_id
+
+  - collection: finops_fx_rates
+    target_entity: fx_monthly
+    key:
+      attribute: fx_monthly_id
+      compose:
+        - month
+        - pair
+    attributes:
+      month_key: month
+      currency: pair
+      value_number: rate
+      created_at: created_at
+
+missing_spec_collections:
+  - facts_project_month
+  - fx_monthly
+  - finops_month_closures
+  - forecast_versions
+  - project_rates
+  - employee_month_cost
+  - timesheets_monthly
+  - agent_requests
+  - alert_settings
+  - audit_events
+
+quality_gates:
+  - name: no_orphan_tasks
+    check: each oper_task must link to exactly one project
+  - name: no_orphan_voice_messages
+    check: each voice_message must link to one voice_session
+  - name: no_forecast_without_project
+    check: each forecast_project_month must link to one project
+  - name: type_normalized_ids
+    check: all key attributes are non-empty strings

@@ -366,6 +366,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Added versioned ontology assets under `ontology/typedb/` to the main repo tree (schema, mapping, validation queries, rollout notes) so TypeDB scaffold is tracked together with backend ingestion scripts.
 - Updated Voice transcription download contract to use `/api/voicebot/transcription/download/:session_id` end-to-end (store path fix, runtime-safe backend route, and Jest coverage for markdown export).
 - Added TypeDB ontology tooling scaffold in backend (`requirements-typedb.txt`, ingest/validate scripts, npm script aliases, and env examples) to support STR OpsPortal ERD ingestion workflows.
 - Updated OperOps Projects Tree UX: editing now opens in a dedicated modal flow instead of the split side panel, with explicit close/save handlers.

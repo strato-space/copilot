@@ -1,0 +1,742 @@
+define
+
+# ==============================
+# Attributes
+# ==============================
+
+attribute external_id, value string;
+attribute name, value string;
+attribute status, value string;
+attribute description, value string;
+attribute title, value string;
+attribute summary, value string;
+attribute link_label, value string;
+attribute url, value string;
+attribute source_type, value string;
+attribute module_name, value string;
+attribute module_scope, value string;
+attribute severity, value string;
+attribute currency, value string;
+attribute month_key, value string;
+attribute row_version, value integer;
+attribute order_index, value integer;
+attribute priority_rank, value integer;
+attribute value_number, value double;
+attribute amount_rub, value double;
+attribute amount_original, value double;
+attribute hours_value, value double;
+attribute runtime_tag, value string;
+attribute is_active, value boolean;
+attribute created_at, value datetime;
+attribute updated_at, value datetime;
+attribute started_at, value datetime;
+attribute ended_at, value datetime;
+attribute decided_at, value datetime;
+attribute due_at, value datetime;
+
+# Core IDs
+
+attribute client_id, value string;
+attribute project_id, value string;
+attribute project_link_id, value string;
+attribute person_id, value string;
+attribute team_id, value string;
+attribute role_id, value string;
+attribute status_id, value string;
+attribute priority_id, value string;
+attribute context_item_id, value string;
+attribute dialog_id, value string;
+attribute segment_id, value string;
+attribute agreement_id, value string;
+attribute task_id, value string;
+attribute agent_id, value string;
+
+# FinOps IDs
+
+attribute project_rate_id, value string;
+attribute employee_id, value string;
+attribute employee_month_cost_id, value string;
+attribute timesheet_monthly_id, value string;
+attribute fact_project_month_id, value string;
+attribute forecast_version_id, value string;
+attribute forecast_project_month_id, value string;
+attribute fx_monthly_id, value string;
+attribute period_id, value string;
+attribute cost_category_id, value string;
+attribute cost_expense_id, value string;
+attribute counterparty_id, value string;
+attribute agent_request_id, value string;
+attribute alert_setting_id, value string;
+attribute alert_event_id, value string;
+attribute notification_item_id, value string;
+
+# Voice / OperOps pipeline IDs
+
+attribute voice_session_id, value string;
+attribute voice_message_id, value string;
+attribute transcript_chunk_id, value string;
+attribute processing_run_id, value string;
+attribute task_draft_id, value string;
+attribute plan_item_id, value string;
+attribute patch_id, value string;
+attribute patch_operation_id, value string;
+attribute apply_attempt_id, value string;
+attribute history_step_id, value string;
+attribute mode_tag_id, value string;
+
+# ==============================
+# Entities
+# ==============================
+
+entity client,
+  owns client_id @key,
+  owns name,
+  owns status,
+  plays client_owns_project:owner_client;
+
+entity project,
+  owns project_id @key,
+  owns name,
+  owns status,
+  owns module_scope,
+  owns runtime_tag,
+  plays client_owns_project:owned_project,
+  plays project_has_project_link:owner_project,
+  plays project_has_oper_task:owner_project,
+  plays project_has_voice_session:owner_project,
+  plays project_has_fact_month:owner_project,
+  plays project_has_forecast_month:owner_project,
+  plays project_has_cost_expense:owner_project,
+  plays project_has_agent_request:owner_project,
+  plays project_has_kpi:owner_project;
+
+entity project_link,
+  owns project_link_id @key,
+  owns source_type,
+  owns url,
+  owns link_label,
+  plays project_has_project_link:linked_project_link;
+
+entity person,
+  owns person_id @key,
+  owns name,
+  owns status,
+  owns external_id,
+  plays oper_task_assigned_to_person:assignee_person,
+  plays transcript_segment_spoken_by_person:speaker_person,
+  plays person_maps_to_employee:source_person;
+
+entity team,
+  owns team_id @key,
+  owns name,
+  owns status;
+
+entity role_dict,
+  owns role_id @key,
+  owns name,
+  owns status;
+
+entity status_dict,
+  owns status_id @key,
+  owns name,
+  owns module_scope,
+  owns order_index,
+  plays oper_task_has_status:task_status;
+
+entity priority_dict,
+  owns priority_id @key,
+  owns name,
+  owns priority_rank,
+  plays oper_task_has_priority:task_priority;
+
+entity voice_context_item,
+  owns context_item_id @key,
+  owns project_id,
+  owns source_type,
+  owns title,
+  owns summary,
+  owns created_at,
+  plays project_has_voice_context_item:context_item,
+  plays dialog_represented_by_context_item:context_item,
+  plays agreement_evidenced_by_context_item:context_item,
+  plays oper_task_evidenced_by_context_item:context_item;
+
+entity dialog,
+  owns dialog_id @key,
+  owns project_id,
+  owns started_at,
+  owns ended_at,
+  plays dialog_represented_by_context_item:dialog,
+  plays dialog_has_transcript_segment:dialog,
+  plays dialog_yields_agreement:dialog;
+
+entity transcript_segment,
+  owns segment_id @key,
+  owns summary,
+  owns started_at,
+  owns ended_at,
+  plays dialog_has_transcript_segment:segment,
+  plays transcript_segment_spoken_by_person:segment;
+
+entity agreement,
+  owns agreement_id @key,
+  owns project_id,
+  owns title,
+  owns summary,
+  owns status,
+  owns decided_at,
+  plays dialog_yields_agreement:agreement,
+  plays agreement_evidenced_by_context_item:agreement,
+  plays agreement_creates_oper_task:agreement;
+
+entity oper_task,
+  owns task_id @key,
+  owns project_id,
+  owns title,
+  owns description,
+  owns status,
+  owns due_at,
+  owns priority_rank,
+  owns created_at,
+  owns updated_at,
+  plays project_has_oper_task:oper_task,
+  plays agreement_creates_oper_task:oper_task,
+  plays oper_task_evidenced_by_context_item:oper_task,
+  plays oper_task_has_status:oper_task,
+  plays oper_task_has_priority:oper_task,
+  plays oper_task_assigned_to_person:oper_task,
+  plays patch_operation_mutates_oper_task:oper_task;
+
+entity agent,
+  owns agent_id @key,
+  owns name,
+  owns module_scope,
+  owns status,
+  plays execution_job_executed_by_agent:agent,
+  plays recommendation_authored_by_agent:agent;
+
+entity execution_job,
+  owns external_id @key,
+  owns status,
+  owns started_at,
+  owns ended_at,
+  plays execution_job_executed_by_agent:execution_job;
+
+entity result_artifact,
+  owns external_id @key,
+  owns source_type,
+  owns url,
+  owns created_at;
+
+entity kpi,
+  owns external_id @key,
+  owns module_name,
+  owns name,
+  owns description,
+  plays project_has_kpi:kpi,
+  plays kpi_observed_as_observation:kpi;
+
+entity kpi_observation,
+  owns external_id @key,
+  owns project_id,
+  owns value_number,
+  owns created_at,
+  plays kpi_observed_as_observation:kpi_observation,
+  plays kpi_observation_fires_trigger_event:kpi_observation;
+
+entity kpi_trigger_event,
+  owns external_id @key,
+  owns severity,
+  owns summary,
+  owns created_at,
+  plays kpi_observation_fires_trigger_event:trigger_event,
+  plays trigger_event_emits_recommendation:trigger_event;
+
+entity recommendation,
+  owns external_id @key,
+  owns summary,
+  owns description,
+  owns status,
+  owns created_at,
+  plays trigger_event_emits_recommendation:recommendation,
+  plays recommendation_authored_by_agent:recommendation;
+
+# FinOps entities
+
+entity project_rate,
+  owns project_rate_id @key,
+  owns project_id,
+  owns month_key,
+  owns amount_rub,
+  owns row_version,
+  plays project_has_project_rate:project_rate;
+
+entity employee,
+  owns employee_id @key,
+  owns external_id,
+  owns name,
+  owns status,
+  plays person_maps_to_employee:target_employee,
+  plays employee_has_month_cost:employee,
+  plays employee_contributes_timesheet:employee;
+
+entity employee_month_cost,
+  owns employee_month_cost_id @key,
+  owns month_key,
+  owns amount_rub,
+  owns hours_value,
+  plays employee_has_month_cost:employee_month_cost;
+
+entity timesheet_monthly,
+  owns timesheet_monthly_id @key,
+  owns project_id,
+  owns month_key,
+  owns hours_value,
+  plays project_has_timesheet:timesheet_monthly,
+  plays employee_contributes_timesheet:timesheet_monthly;
+
+entity fact_project_month,
+  owns fact_project_month_id @key,
+  owns project_id,
+  owns month_key,
+  owns currency,
+  owns amount_original,
+  owns amount_rub,
+  owns row_version,
+  plays project_has_fact_month:fact_project_month,
+  plays period_closes_fact_month:fact_project_month,
+  plays fx_converts_fact_month:fact_project_month;
+
+entity forecast_version,
+  owns forecast_version_id @key,
+  owns name,
+  owns status,
+  plays forecast_version_contains_forecast_month:forecast_version;
+
+entity forecast_project_month,
+  owns forecast_project_month_id @key,
+  owns forecast_version_id,
+  owns project_id,
+  owns month_key,
+  owns currency,
+  owns amount_original,
+  owns amount_rub,
+  owns row_version,
+  plays project_has_forecast_month:forecast_project_month,
+  plays forecast_version_contains_forecast_month:forecast_project_month,
+  plays period_governs_forecast_month:forecast_project_month,
+  plays fx_converts_forecast_month:forecast_project_month;
+
+entity fx_monthly,
+  owns fx_monthly_id @key,
+  owns month_key,
+  owns currency,
+  owns value_number,
+  plays fx_converts_fact_month:fx_monthly,
+  plays fx_converts_forecast_month:fx_monthly;
+
+entity period,
+  owns period_id @key,
+  owns month_key,
+  owns status,
+  owns updated_at,
+  plays period_closes_fact_month:period,
+  plays period_governs_forecast_month:period,
+  plays period_buckets_cost_expense:period;
+
+entity cost_category,
+  owns cost_category_id @key,
+  owns name,
+  owns status,
+  plays cost_category_classifies_expense:cost_category;
+
+entity cost_expense,
+  owns cost_expense_id @key,
+  owns project_id,
+  owns month_key,
+  owns currency,
+  owns amount_original,
+  owns amount_rub,
+  owns status,
+  owns runtime_tag,
+  owns created_at,
+  plays project_has_cost_expense:cost_expense,
+  plays cost_category_classifies_expense:cost_expense,
+  plays period_buckets_cost_expense:cost_expense;
+
+entity counterparty,
+  owns counterparty_id @key,
+  owns name,
+  owns status;
+
+entity agent_request,
+  owns agent_request_id @key,
+  owns project_id,
+  owns month_key,
+  owns status,
+  owns created_at,
+  plays project_has_agent_request:agent_request,
+  plays agent_request_updates_fact_month:agent_request,
+  plays agent_request_updates_forecast_month:agent_request;
+
+entity alert_setting,
+  owns alert_setting_id @key,
+  owns status,
+  plays alert_setting_configures_alert_event:alert_setting;
+
+entity alert_event,
+  owns alert_event_id @key,
+  owns severity,
+  owns status,
+  owns created_at,
+  plays alert_setting_configures_alert_event:alert_event,
+  plays alert_event_creates_notification_item:alert_event;
+
+entity notification_item,
+  owns notification_item_id @key,
+  owns severity,
+  owns status,
+  owns title,
+  owns created_at,
+  plays alert_event_creates_notification_item:notification_item,
+  plays notification_preference_governs_notification_item:notification_item;
+
+entity notification_preference,
+  owns external_id @key,
+  owns status,
+  plays notification_preference_governs_notification_item:notification_preference;
+
+# Voice / OperOps pipeline entities
+
+entity mode_tag,
+  owns mode_tag_id @key,
+  owns name,
+  owns status,
+  plays mode_tag_bound_skill_binding:mode_tag,
+  plays mode_tag_selected_for_voice_session:mode_tag;
+
+entity mode_skill_binding,
+  owns external_id @key,
+  owns name,
+  owns status,
+  owns runtime_tag,
+  plays mode_tag_bound_skill_binding:skill_binding;
+
+entity voice_session,
+  owns voice_session_id @key,
+  owns project_id,
+  owns source_type,
+  owns status,
+  owns is_active,
+  owns runtime_tag,
+  owns created_at,
+  owns updated_at,
+  plays project_has_voice_session:voice_session,
+  plays mode_tag_selected_for_voice_session:voice_session,
+  plays voice_session_has_message:voice_session,
+  plays voice_session_processed_by_run:voice_session,
+  plays voice_session_has_history_step:voice_session,
+  plays voice_session_emits_metric_event:voice_session;
+
+entity voice_message,
+  owns voice_message_id @key,
+  owns source_type,
+  owns summary,
+  owns status,
+  owns created_at,
+  plays voice_session_has_message:voice_message,
+  plays voice_message_chunked_as_transcript_chunk:voice_message;
+
+entity transcript_chunk,
+  owns transcript_chunk_id @key,
+  owns summary,
+  owns started_at,
+  owns ended_at,
+  plays voice_message_chunked_as_transcript_chunk:transcript_chunk;
+
+entity processing_run,
+  owns processing_run_id @key,
+  owns status,
+  owns started_at,
+  owns ended_at,
+  plays voice_session_processed_by_run:processing_run,
+  plays processing_run_produces_task_draft:processing_run;
+
+entity task_draft,
+  owns task_draft_id @key,
+  owns title,
+  owns description,
+  owns status,
+  owns priority_rank,
+  plays processing_run_produces_task_draft:task_draft,
+  plays task_draft_normalized_to_plan_item:task_draft;
+
+entity plan_item,
+  owns plan_item_id @key,
+  owns status,
+  owns priority_rank,
+  owns due_at,
+  plays task_draft_normalized_to_plan_item:plan_item;
+
+entity patch,
+  owns patch_id @key,
+  owns status,
+  owns created_at,
+  plays patch_contains_operation:patch,
+  plays patch_attempted_as_apply_attempt:patch;
+
+entity patch_operation,
+  owns patch_operation_id @key,
+  owns status,
+  plays patch_contains_operation:patch_operation,
+  plays patch_operation_mutates_oper_task:patch_operation;
+
+entity apply_attempt,
+  owns apply_attempt_id @key,
+  owns status,
+  owns created_at,
+  plays patch_attempted_as_apply_attempt:apply_attempt;
+
+entity history_step,
+  owns history_step_id @key,
+  owns status,
+  owns created_at,
+  plays voice_session_has_history_step:history_step;
+
+entity ops_metric_event,
+  owns external_id @key,
+  owns status,
+  owns created_at,
+  plays voice_session_emits_metric_event:ops_metric_event,
+  plays ops_metric_event_aggregated_to_snapshot:ops_metric_event;
+
+entity ops_analytics_snapshot,
+  owns external_id @key,
+  owns month_key,
+  owns value_number,
+  owns created_at,
+  plays ops_metric_event_aggregated_to_snapshot:ops_analytics_snapshot;
+
+# ==============================
+# Relations
+# ==============================
+
+relation client_owns_project,
+  relates owner_client,
+  relates owned_project;
+
+relation project_has_project_link,
+  relates owner_project,
+  relates linked_project_link;
+
+relation project_has_voice_context_item,
+  relates owner_project,
+  relates context_item;
+
+relation dialog_represented_by_context_item,
+  relates dialog,
+  relates context_item;
+
+relation dialog_has_transcript_segment,
+  relates dialog,
+  relates segment;
+
+relation transcript_segment_spoken_by_person,
+  relates segment,
+  relates speaker_person;
+
+relation dialog_yields_agreement,
+  relates dialog,
+  relates agreement;
+
+relation agreement_evidenced_by_context_item,
+  relates agreement,
+  relates context_item;
+
+relation agreement_creates_oper_task,
+  relates agreement,
+  relates oper_task;
+
+relation project_has_oper_task,
+  relates owner_project,
+  relates oper_task;
+
+relation oper_task_evidenced_by_context_item,
+  relates oper_task,
+  relates context_item;
+
+relation oper_task_has_status,
+  relates oper_task,
+  relates task_status;
+
+relation oper_task_has_priority,
+  relates oper_task,
+  relates task_priority;
+
+relation oper_task_assigned_to_person,
+  relates oper_task,
+  relates assignee_person;
+
+relation execution_job_executed_by_agent,
+  relates execution_job,
+  relates agent;
+
+relation project_has_kpi,
+  relates owner_project,
+  relates kpi;
+
+relation kpi_observed_as_observation,
+  relates kpi,
+  relates kpi_observation;
+
+relation kpi_observation_fires_trigger_event,
+  relates kpi_observation,
+  relates trigger_event;
+
+relation trigger_event_emits_recommendation,
+  relates trigger_event,
+  relates recommendation;
+
+relation recommendation_authored_by_agent,
+  relates recommendation,
+  relates agent;
+
+relation project_has_project_rate,
+  relates owner_project,
+  relates project_rate;
+
+relation person_maps_to_employee,
+  relates source_person,
+  relates target_employee;
+
+relation employee_has_month_cost,
+  relates employee,
+  relates employee_month_cost;
+
+relation project_has_timesheet,
+  relates owner_project,
+  relates timesheet_monthly;
+
+relation employee_contributes_timesheet,
+  relates employee,
+  relates timesheet_monthly;
+
+relation project_has_fact_month,
+  relates owner_project,
+  relates fact_project_month;
+
+relation project_has_forecast_month,
+  relates owner_project,
+  relates forecast_project_month;
+
+relation forecast_version_contains_forecast_month,
+  relates forecast_version,
+  relates forecast_project_month;
+
+relation period_closes_fact_month,
+  relates period,
+  relates fact_project_month;
+
+relation period_governs_forecast_month,
+  relates period,
+  relates forecast_project_month;
+
+relation fx_converts_fact_month,
+  relates fx_monthly,
+  relates fact_project_month;
+
+relation fx_converts_forecast_month,
+  relates fx_monthly,
+  relates forecast_project_month;
+
+relation project_has_cost_expense,
+  relates owner_project,
+  relates cost_expense;
+
+relation cost_category_classifies_expense,
+  relates cost_category,
+  relates cost_expense;
+
+relation period_buckets_cost_expense,
+  relates period,
+  relates cost_expense;
+
+relation project_has_agent_request,
+  relates owner_project,
+  relates agent_request;
+
+relation agent_request_updates_fact_month,
+  relates agent_request,
+  relates fact_project_month;
+
+relation agent_request_updates_forecast_month,
+  relates agent_request,
+  relates forecast_project_month;
+
+relation alert_setting_configures_alert_event,
+  relates alert_setting,
+  relates alert_event;
+
+relation alert_event_creates_notification_item,
+  relates alert_event,
+  relates notification_item;
+
+relation notification_preference_governs_notification_item,
+  relates notification_preference,
+  relates notification_item;
+
+relation mode_tag_bound_skill_binding,
+  relates mode_tag,
+  relates skill_binding;
+
+relation project_has_voice_session,
+  relates owner_project,
+  relates voice_session;
+
+relation mode_tag_selected_for_voice_session,
+  relates mode_tag,
+  relates voice_session;
+
+relation voice_session_has_message,
+  relates voice_session,
+  relates voice_message;
+
+relation voice_message_chunked_as_transcript_chunk,
+  relates voice_message,
+  relates transcript_chunk;
+
+relation voice_session_processed_by_run,
+  relates voice_session,
+  relates processing_run;
+
+relation processing_run_produces_task_draft,
+  relates processing_run,
+  relates task_draft;
+
+relation task_draft_normalized_to_plan_item,
+  relates task_draft,
+  relates plan_item;
+
+relation patch_contains_operation,
+  relates patch,
+  relates patch_operation;
+
+relation patch_attempted_as_apply_attempt,
+  relates patch,
+  relates apply_attempt;
+
+relation patch_operation_mutates_oper_task,
+  relates patch_operation,
+  relates oper_task;
+
+relation voice_session_has_history_step,
+  relates voice_session,
+  relates history_step;
+
+relation voice_session_emits_metric_event,
+  relates voice_session,
+  relates ops_metric_event;
+
+relation ops_metric_event_aggregated_to_snapshot,
+  relates ops_metric_event,
+  relates ops_analytics_snapshot;

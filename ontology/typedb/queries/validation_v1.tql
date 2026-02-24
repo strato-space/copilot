@@ -1,0 +1,96 @@
+# Validation queries for STR OpsPortal ontology v1
+# Run after each ingestion batch.
+
+# 1) Basic cardinalities
+match
+  $p isa project;
+get $p;
+count;
+
+match
+  $t isa oper_task;
+get $t;
+count;
+
+match
+  $s isa voice_session;
+get $s;
+count;
+
+# 2) Project -> Task links
+match
+  $rel (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+  $p has project_id $project_id;
+  $t has task_id $task_id;
+get $project_id, $task_id;
+limit 50;
+
+# 3) VoiceSession -> VoiceMessage links
+match
+  $rel (voice_session: $s, voice_message: $m) isa voice_session_has_message;
+  $s has voice_session_id $session_id;
+  $m has voice_message_id $message_id;
+get $session_id, $message_id;
+limit 50;
+
+# 4) Forecast rows linked to project
+match
+  $rel (owner_project: $p, forecast_project_month: $f) isa project_has_forecast_month;
+  $p has project_id $project_id;
+  $f has month_key $month;
+  $f has amount_rub $amount_rub;
+get $project_id, $month, $amount_rub;
+limit 50;
+
+# 5) FinOps expenses linked to category
+match
+  $rel (cost_category: $c, cost_expense: $e) isa cost_category_classifies_expense;
+  $c has name $category_name;
+  $e has cost_expense_id $expense_id;
+get $category_name, $expense_id;
+limit 50;
+
+# 6) High-risk orphan checks (should return 0)
+# 6.1 OperTask without Project relation
+match
+  $t isa oper_task;
+  not {
+    (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+  };
+get $t;
+count;
+
+# 6.2 VoiceMessage without VoiceSession relation
+match
+  $m isa voice_message;
+  not {
+    (voice_session: $s, voice_message: $m) isa voice_session_has_message;
+  };
+get $m;
+count;
+
+# 6.3 ForecastProjectMonth without Project relation
+match
+  $f isa forecast_project_month;
+  not {
+    (owner_project: $p, forecast_project_month: $f) isa project_has_forecast_month;
+  };
+get $f;
+count;
+
+# 7) Spot-check status normalization
+match
+  $t isa oper_task, has status $status;
+get $status;
+limit 20;
+
+# 8) Spot-check ID normalization (all should be string attributes present)
+match
+  $s isa voice_session, has voice_session_id $sid;
+get $sid;
+limit 20;
+
+match
+  $p isa project, has project_id $pid;
+get $pid;
+limit 20;

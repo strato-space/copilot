@@ -7,12 +7,14 @@
 - **19:18** OperOps Projects Tree still used split-pane inline editing, which reduced usable table width and made editing flow less predictable.
 - **19:18** TypeDB ontology ingestion tooling for STR OpsPortal ERD work was not scaffolded in Copilot backend, so setup/ingest/validate steps were ad-hoc.
 - **19:18** Local bd metadata after Dolt->SQLite rollback remained partially unsynced in repo files and claim command examples needed normalization.
+- **19:48** Ontology artifacts stayed outside version control scope, so TypeDB schema and mapping changes could diverge from backend ingestion scripts in follow-up sessions.
 
 ### FEATURE IMPLEMENTED
 - **19:18** Added TS transcription markdown download route with deterministic message ordering, strict access checks, and filename normalization, and aligned frontend store endpoint usage.
 - **19:18** Added TypeDB helper toolchain in backend (`venv` setup + ingest/validate scripts + env samples + npm commands) for ontology ingestion workflows.
 - **19:18** Refactored Projects Tree editing UX to modal-based flow with explicit save/close lifecycle handlers.
 - **19:18** Synced `.beads` workspace config/metadata and committed rollback artifacts for reproducible local issue-tracker state.
+- **19:48** Added tracked `ontology/typedb` package to Copilot repository so TypeDB model assets are versioned together with runtime ingestion code.
 
 ### CHANGES
 - **19:18** Voice transcription download path updates:
@@ -32,6 +34,12 @@
   - `plan/str-opsportal-erd-draft-v0.md` adjusted domain assumptions (`tenant_scope` note instead of standalone `Tenant` row).
   - `AGENTS.md` + `README.md` updated with closeout notes and `bd update <id> --claim`.
   - `.beads/.gitignore`, `.beads/config.yaml`, `.beads/metadata.json`, `.beads/dolt-open-issues-*.{json,jsonl}` synchronized for current SQLite-backed bd state.
+- **19:48** Added ontology assets:
+  - `ontology/typedb/schema/str_opsportal_v1.tql`
+  - `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
+  - `ontology/typedb/queries/validation_v1.tql`
+  - `ontology/typedb/docs/rollout_plan_v1.md`
+  - `ontology/typedb/README.md`
 
 ## 2026-02-22
 ### PROBLEM SOLVED

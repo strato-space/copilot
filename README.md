@@ -202,6 +202,7 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Added tracked ontology package under `ontology/typedb/` (TypeQL schema, Mongo mapping, validation query set, rollout plan) to keep TypeDB model assets versioned in Copilot.
 - Updated Voice transcription download flow to use `/api/voicebot/transcription/download/:session_id` with runtime-safe markdown export handling and Jest coverage.
 - Added backend TypeDB ontology helper tooling (`requirements-typedb.txt`, ingest/validate scripts, npm aliases, and `.env` sample variables) for STR OpsPortal model ingestion.
 - Switched OperOps Projects Tree editing to modal-based UX and removed split-pane edit card flow.
