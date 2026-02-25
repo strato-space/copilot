@@ -5914,6 +5914,20 @@
             if (payloadMsg) return `Upload failed: ${status} ${payloadMsg}`;
             return `Upload failed: ${status} ${String(rawText || '').trim()}`;
         }
+        function normalizeUploadThrownError(error) {
+            const message = String(error?.message || error || '').trim();
+            const lower = message.toLowerCase();
+            if (
+                (error instanceof TypeError && /fetch/i.test(message)) ||
+                lower.includes('failed to fetch') ||
+                lower.includes('networkerror') ||
+                lower.includes('load failed') ||
+                lower.includes('network request failed')
+            ) {
+                return 'Upload failed: backend unavailable (network/upstream). Click Upload again in a few seconds.';
+            }
+            return message || 'Upload failed: unknown error';
+        }
 
         // --- Upload API ---
         async function uploadBlob(blob, filenameOpt, opts = {}) {
@@ -5974,7 +5988,7 @@
                 if (isUnloading && !allowWhileUnloading) {
                     throw new Error('Upload aborted: page is unloading');
                 }
-                throw e;
+                throw new Error(normalizeUploadThrownError(e));
             } finally {
                 activeUploadCount = Math.max(0, activeUploadCount - 1);
             }
@@ -6057,6 +6071,7 @@
           } catch (e) {
             console.error('Upload error', e);
             const msg = String(e || '');
+            const isBackendUnavailable = /backend unavailable/i.test(msg);
             const pageHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
             if (pageHidden || (isUnloading && /unload|AbortError|Failed to fetch/i.test(msg))) {
                 console.warn('[uploadAudio] suppressed error during unload', msg);
@@ -6067,6 +6082,8 @@
             if (statusMark) statusMark.textContent = '✗';
             if (silent) {
                 console.warn('Upload error (silent)', e);
+            } else if (isBackendUnavailable) {
+                console.warn('[uploadAudio] backend unavailable, chunk left for manual retry');
             } else {
                 alert(String(e));
             }

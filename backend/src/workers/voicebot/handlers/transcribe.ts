@@ -1,4 +1,6 @@
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { join, extname } from 'node:path';
+import { tmpdir } from 'node:os';
 import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
 import {
@@ -18,7 +20,7 @@ import {
   buildSegmentsFromChunks,
   resolveMessageDurationSeconds,
 } from '../../../services/transcriptionTimeline.js';
-import { getAudioDurationFromFile } from '../../../utils/audioUtils.js';
+import { getAudioDurationFromFile, splitAudioFileByDuration } from '../../../utils/audioUtils.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const logger = getLogger();
@@ -57,6 +59,8 @@ type VoiceMessageRecord = {
   transcription?: unknown;
   transcription_chunks?: unknown[];
   task?: string;
+  source_type?: string;
+  file_id?: string;
 };
 
 type VoiceSessionRecord = {
@@ -69,6 +73,9 @@ const TRANSCRIBE_RETRY_BASE_DELAY_MS = 60 * 1000;
 const TRANSCRIBE_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
 const INSUFFICIENT_QUOTA_RETRY = 'insufficient_quota';
 const OPENAI_KEY_ENV_NAMES = ['OPENAI_API_KEY'] as const;
+const OPENAI_TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024;
+const OPENAI_TRANSCRIBE_SEGMENT_TARGET_BYTES = 8 * 1024 * 1024;
+const OPENAI_TRANSCRIBE_MIN_SEGMENT_SECONDS = 45;
 
 const runtimeQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, {
@@ -148,6 +155,20 @@ const isQuotaError = (error: unknown): boolean => {
   return false;
 };
 
+const isPayloadTooLargeError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const typed = error as Record<string, unknown>;
+  const statusRaw =
+    typed.status ??
+    (typed.response as Record<string, unknown> | undefined)?.status ??
+    (((typed.response as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined)
+      ?.status as unknown);
+  const status = Number(statusRaw);
+  if (status === 413) return true;
+  const message = getErrorMessage(error).toLowerCase();
+  return /maximum content size limit|request entity too large|payload too large/.test(message);
+};
+
 const getOpenAIKeySource = (): string =>
   OPENAI_KEY_ENV_NAMES.find((name) => Boolean(process.env[name])) || 'OPENAI_API_KEY';
 
@@ -176,6 +197,11 @@ const getTranscriptionErrorContext = ({
   ...(filePath ? { file_path: filePath } : {}),
   error_code: errorCode,
 });
+
+const getFileSizeBytes = (filePath: string): number => {
+  const stats = statSync(filePath);
+  return Math.max(0, Number(stats.size) || 0);
+};
 
 const createOpenAiClient = (): { apiKey: string; client: OpenAI | null } => {
   const source = getOpenAIKeySource();
@@ -392,10 +418,80 @@ export const handleTranscribeJob = async (
 
   const filePath = String(message.file_path || '').trim();
   if (!filePath) {
+    const textFallback = String(message.text || '').trim();
+    if (textFallback) {
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+        $set: {
+          is_transcribed: true,
+          transcription_text: textFallback,
+          transcription_raw: textFallback,
+          transcribe_timestamp: Date.now(),
+          to_transcribe: false,
+          transcription_chunks: [],
+          transcription_method: 'text_fallback',
+          transcribe_attempts: 0,
+        },
+        $unset: {
+          transcription_error: 1,
+          transcription_error_context: 1,
+          error_message: 1,
+          error_timestamp: 1,
+          transcription_retry_reason: 1,
+          transcription_next_attempt_at: 1,
+        },
+      });
+
+      await enqueueCategorizationIfEnabled({
+        db,
+        session,
+        session_id,
+        message_id,
+        messageObjectId,
+      });
+
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'text_fallback',
+        message_id,
+        session_id,
+      };
+    }
+
+    const sourceType = String(message.source_type || '').trim().toLowerCase();
+    const fileId = String(message.file_id || '').trim();
+    const isTelegramTransportMissing = Boolean(fileId) && sourceType === 'telegram';
+    const errorCode = isTelegramTransportMissing ? 'missing_transport' : 'missing_file_path';
+    const errorMessage = isTelegramTransportMissing
+      ? 'Telegram file transport is not configured for this message (file_id present, file_path missing)'
+      : 'Audio file path is missing';
+
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+      $set: {
+        is_transcribed: false,
+        transcription_error: errorCode,
+        error_message: errorMessage,
+        error_timestamp: new Date(),
+        transcribe_timestamp: Date.now(),
+        to_transcribe: false,
+        transcription_error_context: {
+          ...getTranscriptionErrorContext({
+            apiKey: '',
+            filePath: null,
+            errorCode,
+          }),
+          ...(fileId ? { telegram_file_id: fileId } : {}),
+        },
+      },
+      $unset: {
+        transcription_retry_reason: 1,
+        transcription_next_attempt_at: 1,
+      },
+    });
+
     return {
-      ok: true,
-      skipped: true,
-      reason: 'missing_file_path',
+      ok: false,
+      error: errorCode,
       message_id,
       session_id,
     };
@@ -481,11 +577,13 @@ export const handleTranscribeJob = async (
   }
 
   try {
-    const transcription = await client.audio.transcriptions.create({
-      file: createReadStream(filePath),
-      model: 'whisper-1',
-    });
-    const transcription_text = String(transcription.text || '').trim();
+    const sourceFileSizeBytes = getFileSizeBytes(filePath);
+    const sourceExtension = String(extname(filePath) || '.webm').trim() || '.webm';
+    const fallbackTimestampMs = Number(message.message_timestamp)
+      ? Number(message.message_timestamp) * 1000
+      : Date.now();
+    const fallbackTimestampDate = new Date(fallbackTimestampMs);
+
     const durationFromMessage = resolveMessageDurationSeconds({
       message: message as unknown as Record<string, unknown>,
       chunks: [],
@@ -503,24 +601,124 @@ export const handleTranscribeJob = async (
       }
     }
 
-    const transcription_chunks = [
-      {
+    const transcriptionChunks: Array<Record<string, unknown>> = [];
+    const transcriptionTextParts: string[] = [];
+    let transcriptionMethod = 'direct';
+    let transcriptionRaw: unknown = null;
+    let aggregatedDurationSeconds = durationSeconds || 0;
+
+    if (sourceFileSizeBytes <= OPENAI_TRANSCRIBE_MAX_BYTES) {
+      const transcription = await client.audio.transcriptions.create({
+        file: createReadStream(filePath),
+        model: 'whisper-1',
+      });
+      const transcriptionText = String(transcription.text || '').trim();
+      transcriptionTextParts.push(transcriptionText);
+      transcriptionRaw = transcription;
+      transcriptionChunks.push({
         segment_index: 0,
         id: `ch_${new ObjectId().toHexString()}`,
-        text: transcription_text,
-        timestamp: Number(message.message_timestamp)
-          ? new Date(Number(message.message_timestamp) * 1000)
-          : new Date(),
+        text: transcriptionText,
+        timestamp: fallbackTimestampDate,
         duration_seconds: durationSeconds || 0,
-      },
-    ];
+      });
+    } else {
+      transcriptionMethod = 'segmented_by_size';
+      const segmentCount = Math.max(
+        2,
+        Math.ceil(sourceFileSizeBytes / OPENAI_TRANSCRIBE_SEGMENT_TARGET_BYTES)
+      );
+      const segmentDurationSeconds =
+        durationSeconds && durationSeconds > 0
+          ? Math.max(OPENAI_TRANSCRIBE_MIN_SEGMENT_SECONDS, durationSeconds / segmentCount)
+          : 180;
+
+      const tempDir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-split-'));
+      try {
+        const segmentFiles = await splitAudioFileByDuration({
+          filePath,
+          segmentDurationSeconds,
+          outputDir: tempDir,
+          outputPrefix: 'part_',
+          outputExtension: sourceExtension,
+        });
+
+        let currentOffsetSeconds = 0;
+        for (let index = 0; index < segmentFiles.length; index += 1) {
+          const segmentPath = segmentFiles[index];
+          if (!segmentPath) continue;
+
+          const segmentSizeBytes = getFileSizeBytes(segmentPath);
+          if (segmentSizeBytes > OPENAI_TRANSCRIBE_MAX_BYTES) {
+            throw new Error(
+              `oversized_segment_after_split:index=${index}:size=${segmentSizeBytes}`
+            );
+          }
+
+          const transcription = await client.audio.transcriptions.create({
+            file: createReadStream(segmentPath),
+            model: 'whisper-1',
+          });
+          const segmentText = String(transcription.text || '').trim();
+          transcriptionTextParts.push(segmentText);
+
+          let segmentDurationSecondsResolved: number | null = null;
+          try {
+            segmentDurationSecondsResolved = await getAudioDurationFromFile(segmentPath);
+          } catch (durationError) {
+            logger.warn('[voicebot-worker] could not resolve split segment duration', {
+              message_id,
+              session_id,
+              segment_index: index,
+              error: durationError instanceof Error ? durationError.message : String(durationError),
+            });
+          }
+
+          if (segmentDurationSecondsResolved == null || segmentDurationSecondsResolved <= 0) {
+            if (durationSeconds && durationSeconds > 0) {
+              const remainingSegments = Math.max(1, segmentFiles.length - index);
+              const remainingDuration = Math.max(0, durationSeconds - currentOffsetSeconds);
+              segmentDurationSecondsResolved = remainingDuration / remainingSegments;
+            } else {
+              segmentDurationSecondsResolved = segmentDurationSeconds;
+            }
+          }
+
+          transcriptionChunks.push({
+            segment_index: index,
+            id: `ch_${new ObjectId().toHexString()}`,
+            text: segmentText,
+            timestamp: new Date(fallbackTimestampMs + Math.round(currentOffsetSeconds * 1000)),
+            duration_seconds: segmentDurationSecondsResolved || 0,
+          });
+          currentOffsetSeconds += segmentDurationSecondsResolved || 0;
+        }
+
+        aggregatedDurationSeconds =
+          currentOffsetSeconds ||
+          durationSeconds ||
+          segmentDurationSeconds * Math.max(1, transcriptionChunks.length);
+        transcriptionRaw = {
+          mode: 'segmented_by_size',
+          source_file_size_bytes: sourceFileSizeBytes,
+          source_duration_seconds: durationSeconds,
+          segment_count: transcriptionChunks.length,
+        };
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
+
+    const transcription_text = transcriptionTextParts
+      .map((value) => String(value || '').trim())
+      .filter((value) => Boolean(value))
+      .join('\n\n')
+      .trim();
 
     const timeline = buildSegmentsFromChunks({
-      chunks: transcription_chunks,
-      messageDurationSeconds: durationSeconds,
-      fallbackTimestampMs: Number(message.message_timestamp)
-        ? Number(message.message_timestamp) * 1000
-        : Date.now(),
+      chunks: transcriptionChunks,
+      messageDurationSeconds: durationSeconds || aggregatedDurationSeconds || null,
+      fallbackTimestampMs,
     });
 
     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
@@ -529,13 +727,17 @@ export const handleTranscribeJob = async (
         transcription_text,
         task: 'transcribe',
         text: transcription_text,
-        transcription_raw: transcription,
+        transcription_raw: transcriptionRaw,
         transcription: {
           schema_version: 1,
           provider: 'openai',
           model: 'whisper-1',
           task: 'transcribe',
-          duration_seconds: durationSeconds || timeline.derivedDurationSeconds || null,
+          duration_seconds:
+            durationSeconds ||
+            aggregatedDurationSeconds ||
+            timeline.derivedDurationSeconds ||
+            null,
           text: transcription_text,
           segments: timeline.segments.map((segment) => ({
             id: String(segment.id || `ch_${new ObjectId().toHexString()}`),
@@ -548,9 +750,9 @@ export const handleTranscribeJob = async (
           })),
           usage: null,
         },
-        transcription_chunks,
+        transcription_chunks: transcriptionChunks,
         is_transcribed: true,
-        transcription_method: 'direct',
+        transcription_method: transcriptionMethod,
         transcribe_attempts: 0,
         to_transcribe: false,
       },
@@ -589,7 +791,9 @@ export const handleTranscribeJob = async (
       message_id,
       session_id,
       source: 'openai_whisper',
-      method: 'direct',
+      method: transcriptionMethod,
+      source_file_size_bytes: sourceFileSizeBytes,
+      chunks: transcriptionChunks.length,
     });
 
     return {
@@ -599,9 +803,13 @@ export const handleTranscribeJob = async (
     };
   } catch (error) {
     const quotaRetryable = isQuotaError(error);
+    const payloadTooLarge = isPayloadTooLargeError(error);
+    const splitFailedBySize = /oversized_segment_after_split/i.test(getErrorMessage(error));
     const normalizedCode = quotaRetryable
       ? normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
-      : normalizeErrorCode(error) || 'transcription_failed';
+      : payloadTooLarge || splitFailedBySize
+        ? 'audio_too_large'
+        : normalizeErrorCode(error) || 'transcription_failed';
     const nextAttemptAt = new Date(Date.now() + getRetryDelayMs(attempts));
 
     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {

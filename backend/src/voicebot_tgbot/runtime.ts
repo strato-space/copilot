@@ -41,6 +41,31 @@ const tgRawMaxCharsParsed = Number.parseInt(process.env.TG_RAW_LOG_MAX_CHARS || 
 const tgRawMaxChars =
   Number.isFinite(tgRawMaxCharsParsed) && tgRawMaxCharsParsed > 0 ? tgRawMaxCharsParsed : 20000;
 
+const parsePositiveInt = (value: string | undefined, fallback: number): number => {
+  const parsed = Number.parseInt(String(value || '').trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const TG_POLLER_LOCK_KEY = `voicebot:tgbot:poller_lock:${RUNTIME_TAG}`;
+const TG_POLLER_LOCK_TTL_MS = parsePositiveInt(process.env.TG_POLLER_LOCK_TTL_MS, 45_000);
+const TG_POLLER_LOCK_RENEW_MS = Math.max(5_000, Math.floor(TG_POLLER_LOCK_TTL_MS / 3));
+const TG_POLLER_LOCK_RETRY_MS = parsePositiveInt(process.env.TG_POLLER_LOCK_RETRY_MS, 5_000);
+const TG_POLLER_LOCK_OWNER = `${process.pid}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+
+const REDIS_RENEW_LOCK_SCRIPT = `
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+end
+return 0
+`;
+
+const REDIS_RELEASE_LOCK_SCRIPT = `
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+end
+return 0
+`;
+
 const serializeForLog = (value: unknown): string => {
   const seen = new WeakSet();
   let serialized = '';
@@ -131,6 +156,115 @@ const voiceQueue = new Queue(VOICEBOT_QUEUES.VOICE, {
     },
   },
 });
+
+const eventsQueue = new Queue(VOICEBOT_QUEUES.EVENTS, {
+  connection: redis,
+  defaultJobOptions: {
+    removeOnComplete: {
+      age: 3600,
+      count: 100,
+    },
+    removeOnFail: {
+      age: 86400,
+      count: 500,
+    },
+  },
+});
+
+let pollerLockHeld = false;
+let pollerLockTimer: NodeJS.Timeout | null = null;
+
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+const tryAcquirePollerLock = async (): Promise<boolean> => {
+  try {
+    const result = await redis.set(TG_POLLER_LOCK_KEY, TG_POLLER_LOCK_OWNER, 'PX', TG_POLLER_LOCK_TTL_MS, 'NX');
+    return result === 'OK';
+  } catch (error) {
+    logger.error(
+      `[tgbot-runtime] poller_lock_acquire_failed ${serializeForLog({ message: (error as Error)?.message || error })}`
+    );
+    return false;
+  }
+};
+
+const renewPollerLock = async (): Promise<boolean> => {
+  try {
+    const result = await redis.eval(
+      REDIS_RENEW_LOCK_SCRIPT,
+      1,
+      TG_POLLER_LOCK_KEY,
+      TG_POLLER_LOCK_OWNER,
+      String(TG_POLLER_LOCK_TTL_MS)
+    );
+    return Number(result) === 1;
+  } catch (error) {
+    logger.error(
+      `[tgbot-runtime] poller_lock_renew_failed ${serializeForLog({ message: (error as Error)?.message || error })}`
+    );
+    return false;
+  }
+};
+
+const releasePollerLock = async (): Promise<void> => {
+  if (!pollerLockHeld) return;
+  try {
+    await redis.eval(REDIS_RELEASE_LOCK_SCRIPT, 1, TG_POLLER_LOCK_KEY, TG_POLLER_LOCK_OWNER);
+  } catch (error) {
+    logger.error(
+      `[tgbot-runtime] poller_lock_release_failed ${serializeForLog({ message: (error as Error)?.message || error })}`
+    );
+  } finally {
+    pollerLockHeld = false;
+  }
+};
+
+const startPollerLockRenewal = () => {
+  if (pollerLockTimer) return;
+  pollerLockTimer = setInterval(async () => {
+    if (stopping || !pollerLockHeld) return;
+    const renewed = await renewPollerLock();
+    if (renewed) return;
+    logger.error(
+      `[tgbot-runtime] poller_lock_lost key=${TG_POLLER_LOCK_KEY} runtime=${RUNTIME_TAG}; stopping to avoid duplicate pollers`
+    );
+    void shutdown('poller_lock_lost');
+  }, TG_POLLER_LOCK_RENEW_MS);
+  pollerLockTimer.unref?.();
+};
+
+const stopPollerLockRenewal = () => {
+  if (!pollerLockTimer) return;
+  clearInterval(pollerLockTimer);
+  pollerLockTimer = null;
+};
+
+const waitForPollerLock = async () => {
+  while (!stopping) {
+    const acquired = await tryAcquirePollerLock();
+    if (acquired) {
+      pollerLockHeld = true;
+      logger.info(
+        `[tgbot-runtime] poller_lock_acquired key=${TG_POLLER_LOCK_KEY} owner=${TG_POLLER_LOCK_OWNER} ttl_ms=${TG_POLLER_LOCK_TTL_MS}`
+      );
+      startPollerLockRenewal();
+      return;
+    }
+    let holder: string | null = null;
+    try {
+      holder = await redis.get(TG_POLLER_LOCK_KEY);
+    } catch {
+      holder = null;
+    }
+    logger.warn(
+      `[tgbot-runtime] poller_lock_busy key=${TG_POLLER_LOCK_KEY} holder=${holder || 'unknown'} retry_ms=${TG_POLLER_LOCK_RETRY_MS}`
+    );
+    await sleep(TG_POLLER_LOCK_RETRY_MS);
+  }
+  throw new Error('shutdown_requested_before_lock_acquired');
+};
 
 const safeReply = async (ctx: Context, message: string) => {
   try {
@@ -282,6 +416,7 @@ const installCommandHandlers = (bot: Telegraf<Context>) => {
       db: getDb(),
       context: buildCommandContext(ctx),
       commonQueue,
+      eventsQueue,
     });
     await safeReply(ctx, result.message);
   });
@@ -321,8 +456,11 @@ const shutdown = async (signal: string) => {
     if (bot) {
       bot.stop(signal);
     }
+    stopPollerLockRenewal();
+    await releasePollerLock();
     await commonQueue.close();
     await voiceQueue.close();
+    await eventsQueue.close();
     await redis.quit();
     await closeDb();
     logger.info('[tgbot-runtime] shutdown_complete');
@@ -335,6 +473,7 @@ const shutdown = async (signal: string) => {
 
 const main = async () => {
   await connectDb();
+  await waitForPollerLock();
   bot = new Telegraf(resolveToken());
   installRawLogging(bot);
   installAuthorizationMiddleware(bot);

@@ -28,6 +28,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
 - Upload route returns structured oversize diagnostics (`413 file_too_large` with max-size metadata), and WebRTC upload client normalizes these payloads into concise UI-safe error messages.
+- Upload route now has explicit upstream-failure shaping: Nginx intercepts `502/503/504` for `/api/voicebot/upload_audio` and returns structured JSON `503 backend_unavailable`, while WebRTC client keeps chunk in failed/manual-retry state and shows actionable retry guidance.
 - Session upload flow consumes pending image anchors (`pending_image_anchor_message_id` / `pending_image_anchor_oid`): first uploaded chunk is linked with `image_anchor_message_id`, then pending anchor markers are cleared.
 - Categorization updates are now delivered via websocket `message_update` events (no page refresh required): processor workers push `SEND_TO_SOCKET` jobs, backend consumes them and broadcasts to `voicebot:session:<session_id>`.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
@@ -62,8 +63,10 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Screenshort cards keep `https://...` links fully visible, while `data:image/...;base64,...` values are displayed in truncated preview form (`data:image/...;base64,...`) and copied in full through the hover Copy action.
 - Voice task creation in Copilot runtime no longer requires `task_type_id`; missing type is no longer a hard blocker in ticket/task generation.
 - `copilot-voicebot-tgbot-prod` runs TypeScript runtime from `backend/dist/voicebot_tgbot/runtime.js` with `backend/.env.production` as the single env source.
+- TS tgbot runtime protects against duplicate pollers using Redis distributed lock `voicebot:tgbot:poller_lock:<runtime_tag>`; lock loss triggers controlled shutdown to prevent split Telegram update consumption.
 - `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
+- TS transcribe handler never silently skips missing transport now: Telegram messages with `file_id` but without local `file_path` are marked `transcription_error=missing_transport` with diagnostics; text-only chunks without file path are transcribed via `transcription_method=text_fallback` and continue categorization pipeline.
 
 ### Voice TypeScript migration status (from closed BD issues)
 - Runtime entrypoints migrated to TS:
