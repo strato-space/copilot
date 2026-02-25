@@ -22,6 +22,7 @@ import {
     VOICEBOT_COLLECTIONS,
     VOICE_BOT_SESSION_ACCESS,
     VOICEBOT_JOBS,
+    VOICEBOT_QUEUES,
     VOICEBOT_PROCESSORS,
     VOICEBOT_SESSION_SOURCE,
     VOICEBOT_SESSION_TYPES,
@@ -29,6 +30,7 @@ import {
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
+import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { buildRuntimeFilter, IS_PROD_RUNTIME, mergeWithRuntimeFilter, RUNTIME_TAG } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 import { z } from 'zod';
@@ -126,6 +128,45 @@ const activeSessionUrl = (sessionId?: string | null): string => {
     const base = rawBase.includes(LEGACY_INTERFACE_HOST) ? DEFAULT_PUBLIC_INTERFACE_BASE : rawBase;
     if (!sessionId) return base;
     return `${base}/${sessionId}`;
+};
+
+const enqueueVoicebotNotify = async ({
+    sessionId,
+    event,
+    payload = {},
+}: {
+    sessionId: string;
+    event: string;
+    payload?: Record<string, unknown>;
+}): Promise<boolean> => {
+    const queues = getVoicebotQueues();
+    const notifiesQueue = queues?.[VOICEBOT_QUEUES.NOTIFIES];
+    if (!notifiesQueue) {
+        logger.warn('[voicebot.sessions] notifies queue unavailable', {
+            session_id: sessionId,
+            notify_event: event,
+        });
+        return false;
+    }
+
+    try {
+        await notifiesQueue.add(
+            event,
+            {
+                session_id: sessionId,
+                payload,
+            },
+            { attempts: 1 }
+        );
+        return true;
+    } catch (error) {
+        logger.error('[voicebot.sessions] failed to enqueue notify job', {
+            session_id: sessionId,
+            notify_event: event,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+    }
 };
 
 const buildSocketToken = (req: VoicebotRequest): string | null => {
@@ -1529,6 +1570,10 @@ router.post('/update_project', async (req: Request, res: Response) => {
         if (projectChanged) {
             const actor = buildActorFromPerformer(performer);
             const source = buildWebSource(req);
+            const notifyPayload: Record<string, unknown> = {
+                project_id: projectId,
+                old_project_id: oldProjectId,
+            };
 
             await insertSessionLogEvent({
                 db,
@@ -1541,12 +1586,18 @@ router.post('/update_project', async (req: Request, res: Response) => {
                 action: { available: true, type: 'resend' },
                 metadata: {
                     notify_event: VOICEBOT_JOBS.notifies.SESSION_PROJECT_ASSIGNED,
-                    notify_payload: { project_id: projectId, old_project_id: oldProjectId },
+                    notify_payload: notifyPayload,
                     source: 'project_update',
                 },
             });
+            await enqueueVoicebotNotify({
+                sessionId,
+                event: VOICEBOT_JOBS.notifies.SESSION_PROJECT_ASSIGNED,
+                payload: notifyPayload,
+            });
 
             if (session.is_active === false) {
+                const summarizePayload: Record<string, unknown> = { project_id: projectId };
                 await insertSessionLogEvent({
                     db,
                     session_id: new ObjectId(sessionId),
@@ -1558,9 +1609,14 @@ router.post('/update_project', async (req: Request, res: Response) => {
                     action: { available: true, type: 'resend' },
                     metadata: {
                         notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
-                        notify_payload: { project_id: projectId },
+                        notify_payload: summarizePayload,
                         source: 'project_update_after_done',
                     },
+                });
+                await enqueueVoicebotNotify({
+                    sessionId,
+                    event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+                    payload: summarizePayload,
                 });
             }
         }
@@ -2750,6 +2806,11 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
                 source: 'manual_trigger',
             },
         });
+        const notifyEnqueued = await enqueueVoicebotNotify({
+            sessionId,
+            event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+            payload: { project_id: projectIdToUse },
+        });
 
         return res.status(200).json({
             success: true,
@@ -2757,6 +2818,7 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
             project_assigned: projectAssigned,
             event_oid: logEvent?._id ? formatOid('evt', logEvent._id as ObjectId) : null,
             notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+            notify_enqueued: notifyEnqueued,
         });
     } catch (error) {
         logger.error('Error in trigger_session_ready_to_summarize:', error);
@@ -3414,8 +3476,13 @@ router.post('/resend_notify_event', async (req: Request, res: Response) => {
                 notify_payload: notifyPayload,
             },
         });
+        const notifyEnqueued = await enqueueVoicebotNotify({
+            sessionId: sessionObjectId.toHexString(),
+            event: notifyEvent,
+            payload: notifyPayload as Record<string, unknown>,
+        });
 
-        res.status(200).json({ success: true, event: mapEventForApi(resentEvent) });
+        res.status(200).json({ success: true, event: mapEventForApi(resentEvent), notify_enqueued: notifyEnqueued });
     } catch (error) {
         logger.error('Error in resend_notify_event:', error);
         res.status(500).json({ error: String(error) });

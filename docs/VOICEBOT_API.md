@@ -41,6 +41,16 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - Read/update for foreign runtime returns `404`.
 - Upload/attach into foreign runtime returns `409` with `error=runtime_mismatch`.
 
+## Notify delivery + hooks (2026-02-25)
+- `session_ready_to_summarize` and `session_project_assigned` are enqueued from routes (`/update_project`, `/trigger_session_ready_to_summarize`, `/resend_notify_event`) and from done flow (`DONE_MULTIPROMPT` for closed sessions with `project_id`).
+- Notifies worker executes two independent paths per event:
+  - HTTP delivery to `VOICE_BOT_NOTIFIES_URL` with bearer auth (`VOICE_BOT_NOTIFIES_BEARER_TOKEN`).
+  - Local hooks runner from `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON; default `backend/notifies.hooks.yaml`; empty value disables hooks).
+- Session log events are written by worker for observability:
+  - `notify_hook_started`
+  - `notify_http_sent`
+  - `notify_http_failed`
+
 ## Realtime websocket contract (`/voicebot`)
 
 - Frontend voice socket MUST connect to namespace `/voicebot` (not root `/`).

@@ -12,6 +12,7 @@ import {
   buildDoneNotifyPreview,
   writeDoneNotifyRequestedLog,
 } from '../../../services/voicebotDoneNotify.js';
+import { insertSessionLogEvent } from '../../../services/voicebotSessionLog.js';
 import {
   clearActiveVoiceSessionBySessionId,
   clearActiveVoiceSessionForUser,
@@ -36,6 +37,13 @@ type DoneMultipromptResult = {
   ok: boolean;
   session_id?: string;
   error?: string;
+};
+
+const toObjectIdOrNull = (value: unknown): ObjectId | null => {
+  if (value instanceof ObjectId) return value;
+  const raw = String(value || '').trim();
+  if (!raw || !ObjectId.isValid(raw)) return null;
+  return new ObjectId(raw);
 };
 
 const queuePostprocessingJobs = async (session_id: string): Promise<void> => {
@@ -110,6 +118,37 @@ const queueDoneNotify = async (session_id: string): Promise<void> => {
   );
 };
 
+const queueReadyToSummarizeNotify = async ({
+  session_id,
+  project_id,
+}: {
+  session_id: string;
+  project_id: string;
+}): Promise<void> => {
+  const queues = getVoicebotQueues();
+  const notifiesQueue = queues?.[VOICEBOT_QUEUES.NOTIFIES];
+  if (!notifiesQueue) {
+    logger.warn('[voicebot-worker] done_multiprompt notifies queue unavailable for summarize', {
+      session_id,
+    });
+    return;
+  }
+
+  await notifiesQueue.add(
+    VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+    {
+      session_id,
+      payload: {
+        project_id,
+      },
+    },
+    {
+      attempts: 1,
+      deduplication: { id: `${session_id}-SESSION_READY_TO_SUMMARIZE` },
+    }
+  );
+};
+
 export const handleDoneMultipromptJob = async (
   payload: DoneMultipromptJobData
 ): Promise<DoneMultipromptResult> => {
@@ -154,6 +193,38 @@ export const handleDoneMultipromptJob = async (
 
   await queuePostprocessingJobs(session_id);
   await queueDoneNotify(session_id);
+
+  const projectObjectId = toObjectIdOrNull(session.project_id);
+  if (projectObjectId) {
+    await queueReadyToSummarizeNotify({
+      session_id,
+      project_id: projectObjectId.toHexString(),
+    });
+    await insertSessionLogEvent({
+      db,
+      session_id: new ObjectId(session_id),
+      project_id: projectObjectId,
+      event_name: 'notify_requested',
+      status: 'done',
+      actor: {
+        kind: 'worker',
+        id: 'done_multiprompt',
+      },
+      source: {
+        channel: 'system',
+        transport: 'internal_queue',
+        origin_ref: 'done_multiprompt',
+      },
+      action: { available: true, type: 'resend' },
+      metadata: {
+        notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+        notify_payload: {
+          project_id: projectObjectId.toHexString(),
+        },
+        source: 'done_multiprompt_auto',
+      },
+    });
+  }
 
   const preview =
     payload.notify_preview?.telegram_message && payload.notify_preview?.event_name

@@ -2,6 +2,7 @@
 
 ## 2026-02-25
 ### PROBLEM SOLVED
+- **23:55** `session_ready_to_summarize` notify path in Copilot had two blockers: `actions@call` transport instability (`/notify` 502) and missing local hooks parity in TS worker runtime.
 - **17:11** Voice runtime hardening shipped on `origin/main` for upload-outage handling, Telegram poller ownership, and transcription transport diagnostics, but this date block was missing from changelog history.
 - **22:02** Voice sessions list state was not URL-persistent (filters, tab, pagination), and operators could not quickly reassign project directly from the table row.
 - **22:02** Session close (`Done`) UX could stay stale until refresh, and post-close processing did not receive an immediate kick after successful done-flow completion.
@@ -10,6 +11,11 @@
 - **22:02** Public session links in TG-related flows could still inherit legacy host/path variants, which made links inconsistent with the canonical Copilot Voice URL.
 
 ### FEATURE IMPLEMENTED
+- **23:55** Restored notify transport reliability for Copilot voice: fixed `actions@call` launch command in `/home/tools/server/mcp/call.env`; `https://call-actions.stratospace.fun/notify` now returns `200`.
+- **23:55** Implemented TS local notify hooks parity in `backend/src/workers/voicebot/handlers/notify.ts`:
+  - supports `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON, default `./notifies.hooks.yaml`, empty string disables),
+  - runs detached hooks with structured logs,
+  - writes session-log events `notify_hook_started`, `notify_http_sent`, `notify_http_failed`.
 - **17:11** Synced changelog coverage for already-landed runtime hardening on 2026-02-25 (upload outage shaping, tg poller lock, transcribe diagnostics).
 - **22:02** Added URL-driven Sessions list UX in Voice (`tab`, filters, and pagination in query params), plus inline project reassignment and active-project option filtering.
 - **22:02** Added optimistic/real-time done-state propagation: frontend store now reacts to `session_status=done_queued`, `finishSession` applies ack-driven state updates, socket handler emits immediate `session_update`, and done-flow enqueues a deduplicated `PROCESSING` kick.
@@ -18,6 +24,16 @@
 - **22:02** Added deferred migration spec for immediate done notifications and routing-source move to Copilot DB (`plan/session-done-notify-routing-migration.md`, tracking: `copilot-1y3o`).
 
 ### CHANGES
+- **23:55** Added notify hooks sample config: `backend/notifies.hooks.yaml` (StratoProject summarize command wiring).
+- **23:55** Added env sample key in `backend/.env.example`: `VOICE_BOT_NOTIFY_HOOKS_CONFIG`.
+- **23:55** Added regression tests:
+  - `backend/__tests__/voicebot/notifyWorkerHooks.test.ts`
+  - updated targeted notify/done route/worker suites and build checks.
+- **23:55** Updated documentation:
+  - `docs/VOICEBOT_API.md`
+  - `docs/VOICEBOT_API_TESTS.md`
+  - `backend/src/workers/README.md`
+  - `plan/session-done-notify-routing-migration.md`
 - **17:11** Documented 2026-02-25 committed history from `origin/main`:
   - `deploy/nginx-host.conf`, `app/public/webrtc/webrtc-voicebot-lib.js`
   - `backend/src/voicebot_tgbot/runtime.ts`, `backend/src/workers/voicebot/handlers/transcribe.ts`

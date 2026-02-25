@@ -211,6 +211,12 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Restored notify transport path for voice summarize events: `actions@call` command fixed in `/home/tools/server/mcp/call.env`, `/notify` now healthy (`200`).
+- Added TS local notify hooks parity in `backend/src/workers/voicebot/handlers/notify.ts`:
+  - `VOICE_BOT_NOTIFY_HOOKS_CONFIG` support (YAML/JSON, default `./notifies.hooks.yaml`, empty disables),
+  - detached hook spawn + structured logs,
+  - session-log events `notify_hook_started`, `notify_http_sent`, `notify_http_failed`.
+- Added sample hooks config `backend/notifies.hooks.yaml` and targeted regression test `backend/__tests__/voicebot/notifyWorkerHooks.test.ts`.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selectors (`app/src/pages/voice/SessionsListPage.tsx`).
 - Added MeetingCard dialogue-tag editing with remembered local tag options and persisted `dialogue_tag` updates.
 - Updated done UX/state flow: frontend applies immediate ack-driven close projection, listens for `session_status=done_queued`, and backend socket emits immediate `session_update` on `session_done`.

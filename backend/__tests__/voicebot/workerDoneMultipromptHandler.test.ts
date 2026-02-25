@@ -102,6 +102,69 @@ describe('handleDoneMultipromptJob', () => {
     expect(writeDoneNotifyRequestedLogMock).toHaveBeenCalledTimes(1);
   });
 
+  it('enqueues SESSION_READY_TO_SUMMARIZE when closed session has project_id', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const sessionDoc = { _id: sessionId, is_deleted: false, project_id: projectId };
+    const sessionsFindOne = jest.fn(async () => sessionDoc);
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const tgSessionsUpdateMany = jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 }));
+    const sessionLogInsertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const postprocessorsAdd = jest.fn(async () => ({ id: 'post-job' }));
+    const notifiesAdd = jest.fn(async () => ({ id: 'notify-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS) {
+          return {
+            updateMany: tgSessionsUpdateMany,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return {
+            insertOne: sessionLogInsertOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsAdd,
+      },
+      [VOICEBOT_QUEUES.NOTIFIES]: {
+        add: notifiesAdd,
+      },
+    });
+
+    const result = await handleDoneMultipromptJob({
+      session_id: sessionId.toString(),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(notifiesAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.notifies.SESSION_DONE,
+      expect.objectContaining({ session_id: sessionId.toString() }),
+      expect.objectContaining({ attempts: 1 })
+    );
+    expect(notifiesAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        payload: { project_id: projectId.toHexString() },
+      }),
+      expect.objectContaining({ attempts: 1 })
+    );
+    expect(sessionLogInsertOne).toHaveBeenCalled();
+  });
+
   it('returns session_not_found for unknown session', async () => {
     const sessionId = new ObjectId();
     const sessionsFindOne = jest.fn(async () => null);

@@ -193,6 +193,10 @@ Preferred engineering principles for this repo:
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.
 - Finalization backlog scan should prioritize newest sessions (`updated_at`/`_id` descending) with an expanded scan window so stale rows do not starve fresh closed sessions.
 - TS transcribe worker deduplicates repeated chunk uploads by file hash (`file_hash`/`file_unique_id`/`hash_sha256`) and reuses existing transcription payload before calling OpenAI.
+- Notify worker (`backend/src/workers/voicebot/handlers/notify.ts`) now supports both HTTP notify transport and local hooks parity:
+  - HTTP path uses `VOICE_BOT_NOTIFIES_URL` + `VOICE_BOT_NOTIFIES_BEARER_TOKEN`,
+  - local hooks use `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON; default `./notifies.hooks.yaml`; empty value disables),
+  - writes `notify_hook_started`, `notify_http_sent`, `notify_http_failed` into `automation_voice_bot_session_log`.
 - Session payload normalization now removes stale categorization rows that reference already deleted transcript segments (including punctuation/spacing variants), and persists cleanup on read.
 - Categorization handler must treat non-text placeholders (`image`, `[Image]`, `[Screenshot]`) as non-blocking: mark message as processed with empty categorization and emit `message_update` for realtime consistency.
 - WebRTC unload persistence now writes non-recording states as `paused` to prevent stale `recording` state recovery after refresh/unload races.
@@ -207,6 +211,15 @@ Preferred engineering principles for this repo:
 ```
 # Optional for JWT socket auth
 APP_ENCRYPTION_KEY=your-secret-key
+
+# Voice notify transport (call-actions /notify)
+VOICE_BOT_NOTIFIES_URL=
+VOICE_BOT_NOTIFIES_BEARER_TOKEN=
+
+# Optional local notify hooks config (YAML/JSON)
+# unset -> ./notifies.hooks.yaml
+# empty string -> disabled
+VOICE_BOT_NOTIFY_HOOKS_CONFIG=./notifies.hooks.yaml
 
 # Optional for MCP proxy
 MCP_SERVER_URL=http://localhost:3001

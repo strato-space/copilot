@@ -60,3 +60,11 @@ Target requirement:
 
 ## Tracking
 - Deferred BD issue: `copilot-1y3o`.
+
+## Diagnostic update (2026-02-25)
+- Verified on today's sessions (`automation_voice_bot_session_log`) that `notify_requested` for `session_ready_to_summarize` can be created.
+- Route parity fix completed in `copilot-di7n`: enqueue notify jobs from `/update_project`, `/trigger_session_ready_to_summarize`, and `/resend_notify_event` in addition to log writes.
+- Done-flow parity fix completed in `copilot-q57h`: `DONE_MULTIPROMPT` auto-enqueues `session_ready_to_summarize` when `project_id` is present.
+- Transport outage fixed in `copilot-ufc8`: `actions@call` restored; `https://call-actions.stratospace.fun/notify` returns HTTP `200`.
+- Local hooks parity completed in `copilot-8gee`: TS notify worker now supports `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON), detached hook spawn, and worker session-log events (`notify_hook_started`, `notify_http_sent`, `notify_http_failed`).
+- Root diagnostic issue `copilot-4eg9` is closed.

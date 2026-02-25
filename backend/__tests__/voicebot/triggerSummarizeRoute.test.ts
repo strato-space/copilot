@@ -3,13 +3,14 @@ import request from 'supertest';
 import { ObjectId } from 'mongodb';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS } from '../../src/constants.js';
+import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS, VOICEBOT_QUEUES } from '../../src/constants.js';
 import { PERMISSIONS } from '../../src/permissions/permissions-config.js';
 
 const getDbMock = jest.fn();
 const getRawDbMock = jest.fn();
 const getUserPermissionsMock = jest.fn();
 const generateDataFilterMock = jest.fn();
+const getVoicebotQueuesMock = jest.fn();
 
 jest.unstable_mockModule('../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -21,6 +22,10 @@ jest.unstable_mockModule('../../src/permissions/permission-manager.js', () => ({
     getUserPermissions: getUserPermissionsMock,
     generateDataFilter: generateDataFilterMock,
   },
+}));
+
+jest.unstable_mockModule('../../src/services/voicebotQueues.js', () => ({
+  getVoicebotQueues: getVoicebotQueuesMock,
 }));
 
 const { default: sessionsRouter } = await import('../../src/api/routes/voicebot/sessions.js');
@@ -155,14 +160,22 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
     getRawDbMock.mockReset();
     getUserPermissionsMock.mockReset();
     generateDataFilterMock.mockReset();
+    getVoicebotQueuesMock.mockReset();
     getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
     generateDataFilterMock.mockResolvedValue({});
+    getVoicebotQueuesMock.mockReturnValue(null);
   });
 
   it('assigns PMO project when session has no project and emits notify event metadata', async () => {
     const fixture = buildDbStub({ withProject: false });
     getDbMock.mockReturnValue(fixture.dbStub);
     getRawDbMock.mockReturnValue(fixture.dbStub);
+    const addNotifyJobMock = jest.fn(async () => ({ id: 'notify-job-1' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.NOTIFIES]: {
+        add: addNotifyJobMock,
+      },
+    });
 
     const app = createApp(fixture.performerId);
     const response = await request(app)
@@ -174,6 +187,7 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
     expect(response.body.project_assigned).toBe(true);
     expect(response.body.project_id).toBe(fixture.pmoProjectId.toString());
     expect(response.body.notify_event).toBe(VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE);
+    expect(response.body.notify_enqueued).toBe(true);
 
     expect(fixture.projectsCollection.findOne).toHaveBeenCalled();
     expect(fixture.sessionsCollection.updateOne).toHaveBeenCalled();
@@ -182,6 +196,15 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
     expect(fixture.insertedLogs[0]?.event_name).toBe('notify_requested');
     const metadata = fixture.insertedLogs[0]?.metadata as Record<string, unknown>;
     expect(metadata.notify_event).toBe(VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE);
+    expect(addNotifyJobMock).toHaveBeenCalledTimes(1);
+    expect(addNotifyJobMock).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+      expect.objectContaining({
+        session_id: fixture.sessionId.toString(),
+        payload: { project_id: fixture.pmoProjectId.toString() },
+      }),
+      expect.objectContaining({ attempts: 1 })
+    );
   });
 
   it('does not reassign project when session already has project', async () => {
@@ -198,6 +221,7 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
     expect(response.body.success).toBe(true);
     expect(response.body.project_assigned).toBe(false);
     expect(response.body.project_id).toBe(fixture.pmoProjectId.toString());
+    expect(response.body.notify_enqueued).toBe(false);
 
     expect(fixture.projectsCollection.findOne).not.toHaveBeenCalled();
     expect(fixture.sessionsCollection.updateOne).not.toHaveBeenCalledWith(

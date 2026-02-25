@@ -1,0 +1,16 @@
+# Local notify hook config (optional).
+#
+# The notify worker appends the JSON event envelope as the last CLI argument.
+# Set VOICE_BOT_NOTIFY_HOOKS_CONFIG="" to disable hooks explicitly.
+
+session_ready_to_summarize:
+  # Use absolute path to avoid PATH differences under PM2/systemd.
+  - cmd: /usr/local/bin/uv
+    args:
+      - --directory
+      - /home/strato-space/prompt/StratoProject/app
+      - run
+      - StratoProject.py
+      - --model
+      - codex
+      - -m

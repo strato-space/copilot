@@ -31,6 +31,8 @@ npm test -- --runInBand __tests__/voicebot/permissionsRuntimeRoute.test.ts
 npm test -- --runInBand __tests__/voicebot/sessionTelegramMessage.test.ts
 npm test -- --runInBand __tests__/voicebot/doneNotifyService.test.ts
 npm test -- --runInBand __tests__/voicebot/workerDoneMultipromptHandler.test.ts
+npm test -- --runInBand __tests__/voicebot/notifyWorkerHooks.test.ts
+npm test -- --runInBand __tests__/voicebot/notifyWorkerEventLog.test.ts
 npm test -- --runInBand __tests__/voicebot/workerScaffoldHandlers.test.ts
 npm test -- --runInBand __tests__/voicebot/tgSessionRef.test.ts
 npm test -- --runInBand __tests__/voicebot/tgCommandHandlers.test.ts
