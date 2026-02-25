@@ -842,6 +842,43 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 }));
             });
 
+            socket.on(
+                'session_status',
+                (data: { session_id?: string; status?: string; timestamp?: number }) => {
+                    const eventSessionId = String(data?.session_id || '').trim();
+                    const currentSessionId = String(get().currentSessionId || '').trim();
+                    if (!eventSessionId || !currentSessionId || eventSessionId !== currentSessionId) return;
+
+                    if (data?.status === 'done_queued') {
+                        const doneAtIso = new Date(
+                            Number.isFinite(data?.timestamp) ? Number(data.timestamp) : Date.now()
+                        ).toISOString();
+                        set((state) => ({
+                            voiceBotSession: state.voiceBotSession
+                                ? {
+                                    ...state.voiceBotSession,
+                                    is_active: false,
+                                    to_finalize: true,
+                                    done_at: doneAtIso,
+                                    updated_at: doneAtIso,
+                                }
+                                : state.voiceBotSession,
+                            voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
+                                String(session._id || '').trim() === eventSessionId
+                                    ? {
+                                        ...session,
+                                        is_active: false,
+                                        to_finalize: true,
+                                        done_at: doneAtIso,
+                                        updated_at: doneAtIso,
+                                    }
+                                    : session
+                            ),
+                        }));
+                    }
+                }
+            );
+
             socket.on('tickets_prepared', (data: Record<string, unknown>) => {
                 const { openTicketsModal } = useSessionsUIStore.getState();
                 openTicketsModal(data as { tickets?: Array<Record<string, unknown>> });
@@ -999,7 +1036,42 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     finishSession: (sessionId) => {
         const socket = get().socket;
         if (socket && sessionId) {
-            socket.emit(SOCKET_EVENTS.SESSION_DONE, { session_id: sessionId });
+            socket.emit(
+                SOCKET_EVENTS.SESSION_DONE,
+                { session_id: sessionId },
+                (ack?: { ok?: boolean; error?: string }) => {
+                    if (ack && ack.ok === false) {
+                        if (ack.error) {
+                            message.error(`Done failed: ${ack.error}`);
+                        }
+                        return;
+                    }
+                    const doneAtIso = new Date().toISOString();
+                    set((state) => ({
+                        voiceBotSession:
+                            state.voiceBotSession && String(state.voiceBotSession._id || '').trim() === String(sessionId).trim()
+                                ? {
+                                    ...state.voiceBotSession,
+                                    is_active: false,
+                                    to_finalize: true,
+                                    done_at: doneAtIso,
+                                    updated_at: doneAtIso,
+                                }
+                                : state.voiceBotSession,
+                        voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
+                            String(session._id || '').trim() === String(sessionId).trim()
+                                ? {
+                                    ...session,
+                                    is_active: false,
+                                    to_finalize: true,
+                                    done_at: doneAtIso,
+                                    updated_at: doneAtIso,
+                                }
+                                : session
+                        ),
+                    }));
+                }
+            );
         }
     },
 

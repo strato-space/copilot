@@ -96,6 +96,77 @@ describe('postprocessing create tasks + audio merging handlers', () => {
     );
   });
 
+  it('queues missing CATEGORIZE jobs before CREATE_TASKS retry', async () => {
+    const sessionId = new ObjectId();
+    const pendingMessageId = new ObjectId();
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: pendingMessageId,
+            session_id: sessionId,
+            transcription_text: 'Need categorization',
+            processors_data: {
+              categorization: { is_processed: false, is_processing: false },
+            },
+          },
+        ],
+      }),
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const postprocessorsAdd = jest.fn(async () => ({ id: 'create-tasks-retry' }));
+    const processorsAdd = jest.fn(async () => ({ id: 'categorize-retry' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionsFindOne, updateOne: sessionsUpdateOne };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return { find: messagesFind, updateOne: messagesUpdateOne };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsAdd,
+      },
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsAdd,
+      },
+    });
+
+    const result = await handleCreateTasksPostprocessingJob({
+      session_id: sessionId.toString(),
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      skipped: true,
+      reason: 'categorization_pending',
+      requeued: true,
+      session_id: sessionId.toString(),
+    });
+
+    expect(processorsAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.CATEGORIZE,
+      expect.objectContaining({
+        message_id: pendingMessageId.toString(),
+        session_id: sessionId.toString(),
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+    expect(postprocessorsAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+      expect.objectContaining({ session_id: sessionId.toString() }),
+      expect.objectContaining({ delay: 60_000 })
+    );
+  });
+
   it('delegates to createTasksFromChunks and emits SESSION_TASKS_CREATED notify on success', async () => {
     const sessionId = new ObjectId();
     const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));

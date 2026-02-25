@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS } from '../../src/constants.js';
 import {
@@ -25,9 +25,20 @@ const createMockDb = (collections: Record<string, MockCollection>) =>
 describe('voicebot_tgbot command handlers', () => {
   const telegramUserId = 3045664;
   const performerId = new ObjectId('6994ae109d4d36a850c87899');
+  let previousVoiceWebInterfaceUrl: string | undefined;
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    previousVoiceWebInterfaceUrl = process.env.VOICE_WEB_INTERFACE_URL;
+    process.env.VOICE_WEB_INTERFACE_URL = 'https://copilot.stratospace.fun/voice/session/';
+  });
+
+  afterEach(() => {
+    if (previousVoiceWebInterfaceUrl === undefined) {
+      delete process.env.VOICE_WEB_INTERFACE_URL;
+      return;
+    }
+    process.env.VOICE_WEB_INTERFACE_URL = previousVoiceWebInterfaceUrl;
   });
 
   it('issues one-time /login link independent from active session', async () => {
@@ -42,7 +53,7 @@ describe('voicebot_tgbot command handlers', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.message).toMatch(/^https:\/\/voice\.stratospace\.fun\/tg_auth\?token=[a-f0-9]{64}$/);
+    expect(result.message).toMatch(/^https:\/\/copilot\.stratospace\.fun\/tg_auth\?token=[a-f0-9]{64}$/);
     expect(insertOne).toHaveBeenCalledTimes(1);
     const [payload] = insertOne.mock.calls[0] as [Record<string, unknown>];
     expect(payload).toMatchObject({
@@ -84,8 +95,10 @@ describe('voicebot_tgbot command handlers', () => {
 
     expect(result.ok).toBe(true);
     expect(result.session_id).toBe(String(sessionId));
-    expect(result.message.split('\n')).toHaveLength(4);
-    expect(result.message.split('\n')[0]).toBe('Сессия создана');
+    const lines = result.message.split('\n');
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe('Сессия создана');
+    expect(lines[1]).toBe(`https://copilot.stratospace.fun/voice/session/${String(sessionId)}`);
     expect(commonQueue.add).toHaveBeenCalledWith(
       VOICEBOT_JOBS.common.START_MULTIPROMPT,
       expect.objectContaining({ _id: String(sessionId) }),
@@ -153,6 +166,47 @@ describe('voicebot_tgbot command handlers', () => {
     expect(result.message).toBe(NO_ACTIVE_SESSION_MESSAGE);
   });
 
+  it('/session without explicit id returns active session link in expected format', async () => {
+    const sessionId = new ObjectId('6994ae109d4d36a850c87809');
+    const performersFindOne = jest.fn(async () => ({
+      _id: performerId,
+      telegram_id: String(telegramUserId),
+    }));
+    const tgMappingFindOne = jest.fn(async () => ({
+      active_session_id: sessionId,
+      telegram_user_id: String(telegramUserId),
+    }));
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      user_id: performerId,
+      is_deleted: false,
+      is_active: true,
+    }));
+    const projectsFindOne = jest.fn(async () => null);
+
+    const db = createMockDb({
+      [VOICEBOT_COLLECTIONS.PERFORMERS]: { findOne: performersFindOne },
+      [VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS]: { findOne: tgMappingFindOne },
+      [VOICEBOT_COLLECTIONS.SESSIONS]: { findOne: sessionsFindOne },
+      [VOICEBOT_COLLECTIONS.PROJECTS]: { findOne: projectsFindOne },
+    });
+
+    const result = await handleSessionCommand({
+      db,
+      context: {
+        telegram_user_id: telegramUserId,
+        chat_id: telegramUserId,
+        text: '/session',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.session_id).toBe(String(sessionId));
+    const lines = result.message.split('\n');
+    expect(lines[0]).toBe('Активная сессия');
+    expect(lines[1]).toBe(`https://copilot.stratospace.fun/voice/session/${String(sessionId)}`);
+  });
+
   it('/session does not fallback to arbitrary open sessions when mapping is absent', async () => {
     const performersFindOne = jest.fn(async () => ({
       _id: performerId,
@@ -190,6 +244,7 @@ describe('voicebot_tgbot command handlers', () => {
     const tgMappingFindOne = jest.fn(async () => ({ active_session_id: sessionId }));
     const tgMappingUpdateMany = jest.fn(async () => ({ matchedCount: 1 }));
     const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionLogInsertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
     const sessionsFindOne = jest.fn(async () => ({
       _id: sessionId,
       session_name: 'Test',
@@ -206,6 +261,7 @@ describe('voicebot_tgbot command handlers', () => {
         updateMany: tgMappingUpdateMany,
       },
       [VOICEBOT_COLLECTIONS.SESSIONS]: { findOne: sessionsFindOne, updateOne: sessionsUpdateOne },
+      [VOICEBOT_COLLECTIONS.SESSION_LOG]: { insertOne: sessionLogInsertOne },
       [VOICEBOT_COLLECTIONS.PROJECTS]: { findOne: projectsFindOne },
     });
 
@@ -227,10 +283,10 @@ describe('voicebot_tgbot command handlers', () => {
         session_id: String(sessionId),
         telegram_user_id: String(telegramUserId),
         already_closed: true,
-      }),
-      expect.any(Object)
+      })
     );
     expect(sessionsUpdateOne).toHaveBeenCalledTimes(1);
+    expect(sessionLogInsertOne).toHaveBeenCalledTimes(1);
     expect(tgMappingUpdateMany).toHaveBeenCalledTimes(2);
   });
 

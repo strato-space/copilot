@@ -3,7 +3,7 @@ import { extractSessionIdFromText, getSessionIdFromCommand } from '../../src/voi
 
 describe('tg session ref parser', () => {
   it('extracts session id from canonical URL', () => {
-    const text = 'https://voice.stratospace.fun/session/6994ae109d4d36a850c87809';
+    const text = 'https://copilot.stratospace.fun/voice/session/6994ae109d4d36a850c87809';
     expect(extractSessionIdFromText(text)).toBe('6994ae109d4d36a850c87809');
   });
 
@@ -17,4 +17,3 @@ describe('tg session ref parser', () => {
     expect(getSessionIdFromCommand('/session')).toBeNull();
   });
 });
-

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
+  VOICEBOT_QUEUES,
   VOICEBOT_PROCESSORS,
   VOICEBOT_SESSION_SOURCE,
   VOICEBOT_SESSION_TYPES,
@@ -11,10 +12,13 @@ import {
   RUNTIME_TAG,
 } from '../constants.js';
 import { mergeWithRuntimeFilter } from '../services/runtimeScope.js';
-import { formatTelegramSessionEventMessage, getPublicInterfaceBase } from './sessionTelegramMessage.js';
+import { completeSessionDoneFlow } from '../services/voicebotSessionDoneFlow.js';
+import {
+  formatTelegramSessionEventMessage,
+  getPublicInterfaceOrigin,
+} from './sessionTelegramMessage.js';
 import { getSessionIdFromCommand, extractSessionIdFromText } from './sessionRef.js';
 import {
-  clearActiveVoiceSessionBySessionId,
   clearActiveVoiceSessionForUser,
   getActiveVoiceSessionForUser,
   setActiveVoiceSession,
@@ -40,7 +44,7 @@ const helpMessageLines = [
 ];
 
 export type QueueLike = {
-  add: (name: string, data: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
+  add: (name: string, data: any, options?: any) => Promise<any>;
 };
 
 const normalizeTelegramId = (value: unknown): string | null => {
@@ -211,7 +215,7 @@ export const handleLoginCommand = async ({
   return {
     ok: true,
     token,
-    message: `${getPublicInterfaceBase()}/tg_auth?token=${token}`,
+    message: `${getPublicInterfaceOrigin()}/tg_auth?token=${token}`,
   };
 };
 
@@ -339,10 +343,12 @@ export const handleDoneCommand = async ({
   db,
   context,
   commonQueue,
+  eventsQueue,
 }: {
   db: Db;
   context: unknown;
   commonQueue?: QueueLike;
+  eventsQueue?: QueueLike;
 }): Promise<{ ok: boolean; message: string; session_id?: string }> => {
   const parsed = commandContextSchema.safeParse(context);
   if (!parsed.success) return { ok: false, message: 'invalid_context' };
@@ -355,41 +361,35 @@ export const handleDoneCommand = async ({
     return { ok: false, message: noActiveSessionMessage };
   }
   const session_id = String(session._id || '').trim();
+  const queues: Record<string, QueueLike> = {};
+  if (commonQueue) queues[VOICEBOT_QUEUES.COMMON] = commonQueue;
+  if (eventsQueue) queues[VOICEBOT_QUEUES.EVENTS] = eventsQueue;
 
-  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-    mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: 'runtime_tag' }),
-    {
-      $set: {
-        is_active: false,
-        to_finalize: true,
-        done_at: new Date(),
-        updated_at: new Date(),
-      },
-      $inc: { done_count: 1 },
-    }
-  );
-
-  if (commonQueue) {
-    await commonQueue.add(
-      VOICEBOT_JOBS.common.DONE_MULTIPROMPT,
-      {
-        chat_id: normalizeChatId(parsed.data.chat_id),
-        telegram_user_id: normalizeTelegramId(parsed.data.telegram_user_id),
-        session_id,
-        already_closed: true,
-      },
-      {
-        attempts: 1,
-        removeOnComplete: true,
-      }
-    );
-  }
-
-  await clearActiveVoiceSessionBySessionId({ db, session_id });
-  await clearActiveVoiceSessionForUser({
+  const doneResult = await completeSessionDoneFlow({
+    session_id,
     db,
-    telegram_user_id: parsed.data.telegram_user_id,
+    session,
+    chat_id: normalizeChatId(parsed.data.chat_id),
+    telegram_user_id: normalizeTelegramId(parsed.data.telegram_user_id),
+    actor: {
+      kind: 'telegram',
+      telegram_user_id: normalizeTelegramId(parsed.data.telegram_user_id),
+      username: parsed.data.username || null,
+    },
+    source: {
+      flow: 'voicebot_tgbot_command',
+      command: '/done',
+    },
+    queues,
+    queueSessionStatusEvent: Boolean(eventsQueue),
   });
+
+  if (!doneResult.ok) {
+    return {
+      ok: false,
+      message: doneResult.error || 'done_failed',
+    };
+  }
 
   return {
     ok: true,

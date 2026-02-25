@@ -8,40 +8,44 @@ import {
     Select,
     Spin,
     Table,
+    Tabs,
     Tag,
     Tooltip,
     message,
 } from 'antd';
-import type { ColumnsType, FilterDropdownProps } from 'antd/es/table/interface';
+import type { ColumnsType, FilterDropdownProps, FilterValue } from 'antd/es/table/interface';
 import {
     FileTextOutlined,
     KeyOutlined,
     LoadingOutlined,
     MoreOutlined,
     RobotOutlined,
+    SearchOutlined,
     SendOutlined,
     TeamOutlined,
     UserOutlined,
     WarningOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import _ from 'lodash';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuthStore } from '../../store/authStore';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import { useMCPRequestStore } from '../../store/mcpRequestStore';
 import PermissionGate from '../../components/voice/PermissionGate';
+import { buildGroupedProjectOptions } from '../../components/voice/projectSelectOptions';
 import { PERMISSIONS, SESSION_ACCESS_LEVELS, SESSION_ACCESS_LEVELS_NAMES } from '../../constants/permissions';
 import type { VoiceBotSession, VoiceBotProject } from '../../types/voice';
 
 interface SessionProjectGroup {
     name?: string;
+    is_active?: boolean;
 }
 
 interface SessionProject extends VoiceBotProject {
     project_group?: SessionProjectGroup;
+    is_active?: boolean;
 }
 
 interface SessionPerformer {
@@ -63,8 +67,89 @@ type SessionRow = Omit<VoiceBotSession, 'dialogue_tag'> & {
     dialogue_tag?: string | string[];
 };
 
+type SessionProjectTab = 'all' | 'without_project';
+const DEFAULT_SESSIONS_PAGE = 1;
+const DEFAULT_SESSIONS_PAGE_SIZE = 100;
+const SESSIONS_QUERY_KEYS = {
+    TAB: 'tab',
+    PAGE: 'page',
+    PAGE_SIZE: 'pageSize',
+    PROJECT: 'f_project',
+    DIALOGUE_TAG: 'f_tag',
+    SESSION_NAME: 'f_name',
+    ACCESS_LEVEL: 'f_access',
+    CREATOR: 'f_creator',
+    PARTICIPANT: 'f_participant',
+} as const;
+
+const parsePositiveInt = (value: string | null, fallback: number): number => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.floor(parsed);
+};
+
+const parseSingleFilter = (value: string | null): string | null => {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    return normalized.length > 0 ? normalized : null;
+};
+
+const parseMultiFilter = (searchParams: URLSearchParams, key: string): string[] =>
+    searchParams
+        .getAll(key)
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+
+const firstFilterValue = (value: FilterValue | null | undefined): string | null => {
+    if (!Array.isArray(value) || value.length === 0) return null;
+    const normalized = String(value[0] ?? '').trim();
+    return normalized.length > 0 ? normalized : null;
+};
+
+const manyFilterValues = (value: FilterValue | null | undefined): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item) => String(item ?? '').trim())
+        .filter((item) => item.length > 0);
+};
+
+const setSingleFilterParam = (
+    params: URLSearchParams,
+    key: string,
+    value: string | null | undefined
+): void => {
+    params.delete(key);
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    if (normalized.length > 0) params.set(key, normalized);
+};
+
+const setManyFilterParam = (
+    params: URLSearchParams,
+    key: string,
+    values: string[]
+): void => {
+    params.delete(key);
+    for (const value of values) {
+        const normalized = value.trim();
+        if (normalized.length > 0) params.append(key, normalized);
+    }
+};
+
+const hasAssignedProject = (session: SessionRow): boolean => {
+    const projectId = session?.project_id != null ? String(session.project_id).trim() : '';
+    const projectObjectId = session?.project?._id != null ? String(session.project._id).trim() : '';
+    const projectName = typeof session?.project?.name === 'string' ? session.project.name.trim() : '';
+    return Boolean(projectId || projectObjectId || projectName);
+};
+
+const isActiveProjectChain = (project: SessionProject): boolean =>
+    project?.is_active !== false &&
+    project?.project_group?.is_active !== false &&
+    project?.customer?.is_active !== false;
+
 export default function SessionsListPage() {
+    const location = useLocation();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { isAuth } = useAuthStore();
     const {
         fetchVoiceBotSessionsList,
@@ -77,6 +162,7 @@ export default function SessionsListPage() {
         downloadTranscription,
         updateSessionName,
         updateSessionDialogueTag,
+        updateSessionProject,
         getSessionData,
         restartCorruptedSession,
         sendSessionToCrmWithMcp,
@@ -98,6 +184,27 @@ export default function SessionsListPage() {
         const merged = [...new Set([...tags, ...savedTagOptions])];
         return merged.map((tag) => ({ value: tag, label: tag }));
     }, [voiceBotSessionsList, savedTagOptions]);
+
+    const activePreparedProjects = useMemo(
+        () => ((prepared_projects as SessionProject[] | null) ?? []).filter((project) => isActiveProjectChain(project)),
+        [prepared_projects]
+    );
+    const projectSelectOptions = useMemo(
+        () => buildGroupedProjectOptions(activePreparedProjects),
+        [activePreparedProjects]
+    );
+    const projectFilterOptions = projectSelectOptions;
+
+    const projectTab: SessionProjectTab =
+        searchParams.get(SESSIONS_QUERY_KEYS.TAB) === 'without_project' ? 'without_project' : 'all';
+    const currentPage = parsePositiveInt(searchParams.get(SESSIONS_QUERY_KEYS.PAGE), DEFAULT_SESSIONS_PAGE);
+    const pageSize = parsePositiveInt(searchParams.get(SESSIONS_QUERY_KEYS.PAGE_SIZE), DEFAULT_SESSIONS_PAGE_SIZE);
+    const projectFilterValue = parseSingleFilter(searchParams.get(SESSIONS_QUERY_KEYS.PROJECT));
+    const dialogueTagFilterValue = parseSingleFilter(searchParams.get(SESSIONS_QUERY_KEYS.DIALOGUE_TAG));
+    const sessionNameFilterValue = parseSingleFilter(searchParams.get(SESSIONS_QUERY_KEYS.SESSION_NAME));
+    const accessLevelFilterValues = parseMultiFilter(searchParams, SESSIONS_QUERY_KEYS.ACCESS_LEVEL);
+    const creatorFilterValues = parseMultiFilter(searchParams, SESSIONS_QUERY_KEYS.CREATOR);
+    const participantFilterValues = parseMultiFilter(searchParams, SESSIONS_QUERY_KEYS.PARTICIPANT);
 
     useEffect(() => {
         try {
@@ -231,6 +338,49 @@ export default function SessionsListPage() {
         }
     };
 
+    const handleSessionProjectChange = async (
+        sessionId: string,
+        projectId: string | null | undefined
+    ): Promise<void> => {
+        await updateSessionProject(sessionId, projectId ?? null);
+        await fetchVoiceBotSessionsList({ force: true });
+    };
+
+    const updateListParams = (mutate: (params: URLSearchParams) => void): void => {
+        const nextParams = new URLSearchParams(searchParams);
+        mutate(nextParams);
+        if (nextParams.toString() !== searchParams.toString()) {
+            setSearchParams(nextParams);
+        }
+    };
+
+    const updatePaginationParams = (nextPage: number, nextPageSize: number): void => {
+        const normalizedPage = Math.max(DEFAULT_SESSIONS_PAGE, Math.floor(nextPage));
+        const normalizedPageSize = Math.max(1, Math.floor(nextPageSize));
+        updateListParams((params) => {
+            params.set(SESSIONS_QUERY_KEYS.PAGE, String(normalizedPage));
+            params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(normalizedPageSize));
+        });
+    };
+
+    const updateTableStateParams = (
+        nextPage: number,
+        nextPageSize: number,
+        filters: Record<string, FilterValue | null | undefined>
+    ): void => {
+        updateListParams((params) => {
+            params.set(SESSIONS_QUERY_KEYS.PAGE, String(Math.max(DEFAULT_SESSIONS_PAGE, Math.floor(nextPage))));
+            params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(Math.max(1, Math.floor(nextPageSize))));
+
+            setSingleFilterParam(params, SESSIONS_QUERY_KEYS.PROJECT, firstFilterValue(filters.project));
+            setSingleFilterParam(params, SESSIONS_QUERY_KEYS.DIALOGUE_TAG, firstFilterValue(filters.dialogue_tag));
+            setSingleFilterParam(params, SESSIONS_QUERY_KEYS.SESSION_NAME, firstFilterValue(filters.session_name));
+            setManyFilterParam(params, SESSIONS_QUERY_KEYS.ACCESS_LEVEL, manyFilterValues(filters.access_level));
+            setManyFilterParam(params, SESSIONS_QUERY_KEYS.CREATOR, manyFilterValues(filters.performer));
+            setManyFilterParam(params, SESSIONS_QUERY_KEYS.PARTICIPANT, manyFilterValues(filters.participants));
+        });
+    };
+
     useEffect(() => {
         if (!isAuth) return;
         if (!prepared_projects) {
@@ -249,7 +399,7 @@ export default function SessionsListPage() {
         fetchVoiceBotSessionsList,
     ]);
 
-    const filteredSessionsList = useMemo<SessionRow[]>(() => {
+    const enrichedSessionsList = useMemo<SessionRow[]>(() => {
         if (prepared_projects === null || voiceBotSessionsList === null) {
             return [];
         }
@@ -270,6 +420,20 @@ export default function SessionsListPage() {
 
         return filtered;
     }, [voiceBotSessionsList, prepared_projects]);
+
+    const filteredSessionsList = useMemo<SessionRow[]>(() => {
+        if (projectTab === 'without_project') {
+            return enrichedSessionsList.filter((session) => !hasAssignedProject(session));
+        }
+        return enrichedSessionsList;
+    }, [enrichedSessionsList, projectTab]);
+
+    useEffect(() => {
+        const totalPages = Math.max(1, Math.ceil(filteredSessionsList.length / pageSize));
+        if (currentPage > totalPages) {
+            updatePaginationParams(totalPages, pageSize);
+        }
+    }, [currentPage, filteredSessionsList.length, pageSize]);
 
     if (!voiceBotSessionsList || !prepared_projects || !persons_list) {
         return (
@@ -318,21 +482,14 @@ export default function SessionsListPage() {
             title: 'Проект',
             key: 'project',
             width: 100,
+            filteredValue: projectFilterValue ? [projectFilterValue] : null,
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: FilterDropdownProps) => (
                 <div style={{ padding: 8, width: 350 }}>
                     <Select
                         placeholder="Фильтр по проекту"
                         value={(selectedKeys[0] ?? null) as string | number | null}
                         allowClear
-                        options={Object.entries(_.groupBy(prepared_projects as SessionProject[], 'project_group.name')).map(
-                            ([projectGroup, projects]) => ({
-                                label: projectGroup,
-                                title: projectGroup,
-                                options: projects
-                                    .filter((project) => Boolean(project.name))
-                                    .map((project) => ({ label: project.name ?? '', value: project.name ?? '' })),
-                            })
-                        )}
+                        options={projectFilterOptions}
                         showSearch
                         filterOption={(inputValue, option) =>
                             (option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
@@ -340,8 +497,8 @@ export default function SessionsListPage() {
                         style={{ width: '100%', marginBottom: 8 }}
                         popupClassName="w-[350px]"
                         popupMatchSelectWidth={false}
-                        onChange={(projectName) => {
-                            setSelectedKeys(projectName ? [projectName] : []);
+                        onChange={(projectId) => {
+                            setSelectedKeys(projectId ? [projectId] : []);
                             confirm();
                         }}
                         onClear={() => {
@@ -384,14 +541,43 @@ export default function SessionsListPage() {
                     </div>
                 </div>
             ),
-            onFilter: (value, record) => record?.project?.name === value,
+            onFilter: (value, record) => {
+                const selectedProjectId = String(value ?? '').trim();
+                const rowProjectId = String(record?.project?._id ?? record?.project_id ?? '').trim();
+                return selectedProjectId.length > 0 && rowProjectId === selectedProjectId;
+            },
             render: (_text, record) => (
-                <div className="flex flex-col">
-                    <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
-                        {record?.project?.name ?? ''}
-                    </div>
-                    <div className="text-black/50 text-[10px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
-                        {record?.project?.project_group?.name ?? ''}
+                <div data-stop-row-click="true" onClick={(event) => event.stopPropagation()}>
+                    <div className="h-[32px] min-h-[32px] flex items-center">
+                        {hoveredRowId === record._id ? (
+                            <Select
+                                className="w-full"
+                                size="small"
+                                value={(record?.project?._id ?? record?.project_id ?? undefined) as string | undefined}
+                                onChange={(value) => {
+                                    void handleSessionProjectChange(record._id, value ?? null);
+                                }}
+                                allowClear
+                                placeholder="Выбрать проект"
+                                showSearch
+                                options={projectSelectOptions}
+                                popupClassName="voice-project-select-popup"
+                                popupMatchSelectWidth={false}
+                                optionFilterProp="label"
+                                filterOption={(inputValue, option) =>
+                                    String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
+                                }
+                            />
+                        ) : (
+                            <div className="flex flex-col w-full">
+                                <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
+                                    {record?.project?.name ?? '-'}
+                                </div>
+                                <div className="text-black/50 text-[10px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
+                                    {record?.project?.project_group?.name ?? ''}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             ),
@@ -401,6 +587,7 @@ export default function SessionsListPage() {
             dataIndex: 'dialogue_tag',
             key: 'dialogue_tag',
             width: 160,
+            filteredValue: dialogueTagFilterValue ? [dialogueTagFilterValue] : null,
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: FilterDropdownProps) => (
                 <div style={{ padding: 8 }}>
                     <Input
@@ -516,13 +703,18 @@ export default function SessionsListPage() {
             title: 'Название',
             dataIndex: 'session_name',
             key: 'session_name',
+            filteredValue: sessionNameFilterValue ? [sessionNameFilterValue] : null,
+            filterIcon: (filtered) => (
+                <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+            ),
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: FilterDropdownProps) => (
                 <div style={{ padding: 8 }}>
                     <Input
-                        placeholder="Поиск по имени сессии"
+                        placeholder="Поиск по названию сессии"
                         value={selectedKeys[0]}
                         onChange={(event) => setSelectedKeys(event.target.value ? [event.target.value] : [])}
                         onPressEnter={() => confirm()}
+                        allowClear
                         style={{ marginBottom: 8, display: 'block' }}
                     />
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -560,8 +752,13 @@ export default function SessionsListPage() {
                     </div>
                 </div>
             ),
-            onFilter: (value, record) =>
-                (record?.session_name || '').toLowerCase().includes(String(value).toLowerCase()),
+            onFilter: (value, record) => {
+                const query = String(value ?? '').trim().toLowerCase();
+                if (!query) return true;
+                const sessionName = (record?.session_name || '').trim().toLowerCase();
+                if (sessionName) return sessionName.includes(query);
+                return 'нет названия'.includes(query);
+            },
             render: (_text, record) => (
                 <div className="flex items-center gap-2">
                     {record.is_corrupted ? (
@@ -644,6 +841,7 @@ export default function SessionsListPage() {
             key: 'access_level',
             width: 80,
             align: 'right',
+            filteredValue: accessLevelFilterValues.length > 0 ? accessLevelFilterValues : null,
             filters: Object.entries(SESSION_ACCESS_LEVELS_NAMES).map(([key, name]) => ({
                 text: name,
                 value: key,
@@ -677,6 +875,7 @@ export default function SessionsListPage() {
             key: 'performer',
             width: 80,
             align: 'right',
+            filteredValue: creatorFilterValues.length > 0 ? creatorFilterValues : null,
             filters: [...new Set(
                 filteredSessionsList
                     .map((session) => session?.performer?.real_name ?? session?.chat_id)
@@ -709,6 +908,7 @@ export default function SessionsListPage() {
             key: 'participants',
             width: 80,
             align: 'right',
+            filteredValue: participantFilterValues.length > 0 ? participantFilterValues : null,
             filters: [...new Set(
                 filteredSessionsList.flatMap((session) =>
                     (session?.participants || []).map((participant) => {
@@ -829,13 +1029,34 @@ export default function SessionsListPage() {
                     },
                 }}
             >
+                <Tabs
+                    activeKey={projectTab}
+                    onChange={(tabKey) => {
+                        updateListParams((params) => {
+                            const normalizedTab: SessionProjectTab =
+                                tabKey === 'without_project' ? 'without_project' : 'all';
+                            if (normalizedTab === 'without_project') {
+                                params.set(SESSIONS_QUERY_KEYS.TAB, normalizedTab);
+                            } else {
+                                params.delete(SESSIONS_QUERY_KEYS.TAB);
+                            }
+                            params.set(SESSIONS_QUERY_KEYS.PAGE, String(DEFAULT_SESSIONS_PAGE));
+                            params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(pageSize));
+                        });
+                    }}
+                    items={[
+                        { key: 'all', label: 'Все' },
+                        { key: 'without_project', label: 'Без проекта' },
+                    ]}
+                />
                 <Table
                     className="w-full sessions-table"
                     size="small"
                     sticky={{ offsetHeader: 0 }}
                     pagination={{
                         position: ['bottomRight'],
-                        defaultPageSize: 100,
+                        current: currentPage,
+                        pageSize,
                         showSizeChanger: true,
                         showTotal: (total, range) => `${range[0]}-${range[1]} из ${total}`,
                         pageSizeOptions: ['10', '15', '30', '50', '100', '200'],
@@ -844,13 +1065,20 @@ export default function SessionsListPage() {
                     dataSource={filteredSessionsList}
                     rowKey="_id"
                     columns={columns}
+                    onChange={(pagination, filters) => {
+                        updateTableStateParams(
+                            pagination.current ?? DEFAULT_SESSIONS_PAGE,
+                            pagination.pageSize ?? pageSize,
+                            filters
+                        );
+                    }}
                     onRow={(record) => ({
                         onClick: (event) => {
                             if ((event?.target as HTMLElement | null)?.closest?.('[data-stop-row-click="true"]')) {
                                 return;
                             }
                             if (record._id) {
-                                navigate(`/voice/session/${record._id}`);
+                                navigate(`/voice/session/${record._id}${location.search}`);
                             }
                         },
                         onMouseEnter: () => setHoveredRowId(record._id),

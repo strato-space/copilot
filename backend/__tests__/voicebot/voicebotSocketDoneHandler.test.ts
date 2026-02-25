@@ -261,6 +261,10 @@ describe('voicebot socket session_done contract', () => {
     namespace.sockets.set(socket.id, socket);
     await getConnectionHandler()(socket as any);
 
+    const subscribeAck = jest.fn();
+    await handlers.subscribe_on_session({ session_id: sessionId.toString() }, subscribeAck);
+    expect(subscribeAck).toHaveBeenCalledWith({ ok: true });
+
     const ack = jest.fn();
     await handlers.session_done({ session_id: sessionId.toString() }, ack);
 
@@ -276,6 +280,27 @@ describe('voicebot socket session_done contract', () => {
         session_id: sessionId.toString(),
         telegram_user_id: '4242',
         already_closed: true,
+      })
+    );
+    expect(commonQueue.add).toHaveBeenCalledWith(
+      'PROCESSING',
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        reason: 'session_done',
+        limit: 1,
+      }),
+      expect.objectContaining({
+        deduplication: {
+          id: `${sessionId.toString()}-PROCESSING-KICK`,
+        },
+      })
+    );
+    expect(socket.emit).toHaveBeenCalledWith(
+      'session_update',
+      expect.objectContaining({
+        _id: sessionId.toString(),
+        is_active: false,
+        to_finalize: true,
       })
     );
     expect(writeDoneNotifyRequestedLogMock).toHaveBeenCalledWith(

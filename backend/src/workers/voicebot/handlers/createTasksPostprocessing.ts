@@ -161,6 +161,67 @@ const enqueueSessionTasksCreatedNotify = async (session_id: string): Promise<voi
   );
 };
 
+const enqueuePendingCategorizationJobs = async ({
+  session_id,
+  messages,
+}: {
+  session_id: string;
+  messages: MessageRecord[];
+}): Promise<{ enqueued: number; skippedNoQueue: boolean }> => {
+  const queues = getVoicebotQueues();
+  const processorsQueue = queues?.[VOICEBOT_QUEUES.PROCESSORS];
+  if (!processorsQueue) {
+    return { enqueued: 0, skippedNoQueue: true };
+  }
+
+  const db = getDb();
+  let enqueued = 0;
+  const now = Date.now();
+
+  for (const message of messages) {
+    if (!shouldRequireCategorization(message)) continue;
+    if (isCategorizationReady(message)) continue;
+
+    const processorState = (message.processors_data?.[VOICEBOT_PROCESSORS.CATEGORIZATION] ||
+      {}) as Record<string, unknown>;
+    if (processorState.is_processing === true) continue;
+
+    const messageObjectId = new ObjectId(message._id);
+    const messageId = messageObjectId.toString();
+    const jobId = `${session_id}-${messageId}-CATEGORIZE`;
+    const processorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
+
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+      runtimeQuery({ _id: messageObjectId }),
+      {
+        $set: {
+          [`${processorKey}.is_processing`]: true,
+          [`${processorKey}.is_processed`]: false,
+          [`${processorKey}.is_finished`]: false,
+          [`${processorKey}.job_queued_timestamp`]: now,
+        },
+        $unset: {
+          categorization_retry_reason: 1,
+          categorization_next_attempt_at: 1,
+        },
+      }
+    );
+
+    await processorsQueue.add(
+      VOICEBOT_JOBS.voice.CATEGORIZE,
+      {
+        message_id: messageId,
+        session_id,
+        job_id: jobId,
+      },
+      { deduplication: { id: jobId } }
+    );
+    enqueued += 1;
+  }
+
+  return { enqueued, skippedNoQueue: false };
+};
+
 export const handleCreateTasksPostprocessingJob = async (
   payload: CreateTasksPostprocessingJobData
 ): Promise<CreateTasksPostprocessingResult> => {
@@ -198,6 +259,23 @@ export const handleCreateTasksPostprocessingJob = async (
 
   const allCategorized = messages.every(isCategorizationReady);
   if (!allCategorized) {
+    const pendingCategorization = await enqueuePendingCategorizationJobs({
+      session_id,
+      messages,
+    });
+
+    if (pendingCategorization.enqueued > 0) {
+      logger.info('[voicebot-worker] create_tasks queued missing categorization jobs', {
+        session_id,
+        enqueued: pendingCategorization.enqueued,
+      });
+    }
+    if (pendingCategorization.skippedNoQueue) {
+      logger.warn('[voicebot-worker] create_tasks pending without processors queue', {
+        session_id,
+      });
+    }
+
     await markCreateTasksPending({ sessionObjectId, isProcessing: false });
 
     const queues = getVoicebotQueues();

@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { ObjectId } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 import sanitizeHtml from 'sanitize-html';
 import _ from 'lodash';
 import dayjs from 'dayjs';
@@ -26,8 +26,113 @@ const toLogString = (value: unknown): string | null => {
         const record = value as Record<string, unknown>;
         if (typeof record.$oid === 'string') return record.$oid;
         if (typeof record._id === 'string') return record._id;
+        if (record._id instanceof ObjectId) return record._id.toHexString();
+        if (typeof record.id === 'string') return record.id;
     }
     return null;
+};
+
+type PerformerDocument = {
+    _id: ObjectId;
+    id?: string;
+    name?: string;
+    real_name?: string;
+};
+
+type PerformerPayload = {
+    _id?: ObjectId;
+    id: string;
+    name: string;
+    real_name: string;
+};
+
+const toNonEmptyString = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const toObjectId = (value: unknown): ObjectId | undefined => {
+    if (value instanceof ObjectId) return value;
+    if (typeof value === 'string' && ObjectId.isValid(value)) {
+        return new ObjectId(value);
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
+            return new ObjectId(record.$oid);
+        }
+    }
+    return undefined;
+};
+
+const normalizePerformer = async (db: Db, rawPerformer: unknown): Promise<PerformerPayload | null | undefined> => {
+    if (rawPerformer === undefined) return undefined;
+    if (rawPerformer === null) return null;
+    if (typeof rawPerformer === 'string' && rawPerformer.trim().length === 0) return null;
+
+    const performerRecord =
+        rawPerformer && typeof rawPerformer === 'object'
+            ? (rawPerformer as Record<string, unknown>)
+            : null;
+
+    const fallbackName = toNonEmptyString(performerRecord?.name);
+    const fallbackRealName = toNonEmptyString(performerRecord?.real_name);
+
+    const performerLegacyId =
+        toNonEmptyString(performerRecord?.id) ??
+        toNonEmptyString(rawPerformer) ??
+        toNonEmptyString(performerRecord?._id);
+    const performerObjectId =
+        toObjectId(performerRecord?._id) ??
+        toObjectId(rawPerformer) ??
+        (performerLegacyId && ObjectId.isValid(performerLegacyId)
+            ? new ObjectId(performerLegacyId)
+            : undefined);
+
+    const lookupFilters: Array<Record<string, unknown>> = [];
+    if (performerObjectId) {
+        lookupFilters.push({ _id: performerObjectId });
+    }
+    if (performerLegacyId) {
+        lookupFilters.push({ id: performerLegacyId });
+    }
+
+    if (lookupFilters.length > 0) {
+        const lookupQuery =
+            lookupFilters.length === 1
+                ? lookupFilters[0]
+                : {
+                      $or: lookupFilters,
+                  };
+        const performerDoc = await db
+            .collection<PerformerDocument>(COLLECTIONS.PERFORMERS)
+            .findOne(lookupQuery as Record<string, unknown>);
+
+        if (performerDoc) {
+            const id = performerDoc.id ?? performerLegacyId ?? performerDoc._id.toHexString();
+            const name = performerDoc.name ?? performerDoc.real_name ?? fallbackName ?? fallbackRealName ?? '';
+            const realName =
+                performerDoc.real_name ?? performerDoc.name ?? fallbackRealName ?? fallbackName ?? name;
+
+            return {
+                _id: performerDoc._id,
+                id,
+                name,
+                real_name: realName,
+            };
+        }
+    }
+
+    const fallbackId = performerLegacyId ?? performerObjectId?.toHexString();
+    if (!fallbackId) return null;
+
+    return {
+        ...(performerObjectId ? { _id: performerObjectId } : {}),
+        id: fallbackId,
+        name: fallbackName ?? fallbackRealName ?? '',
+        real_name: fallbackRealName ?? fallbackName ?? '',
+    };
 };
 
 /**
@@ -243,6 +348,14 @@ router.post('/update', async (req: Request, res: Response) => {
         if (updateProps.epic) {
             updateProps.epic = new ObjectId(updateProps.epic as string);
         }
+        if (Object.prototype.hasOwnProperty.call(updateProps, 'performer')) {
+            const normalizedPerformer = await normalizePerformer(db, updateProps.performer);
+            if (normalizedPerformer === undefined) {
+                delete updateProps.performer;
+            } else {
+                updateProps.performer = normalizedPerformer;
+            }
+        }
 
         logger.info('[crm.tickets.update] normalized ticket update payload', {
             ticket: ticketId,
@@ -314,6 +427,14 @@ router.post('/create', async (req: Request, res: Response) => {
         }
         if (typeof newTicket.epic === 'string' && ObjectId.isValid(newTicket.epic)) {
             newTicket.epic = new ObjectId(newTicket.epic as string);
+        }
+        if (Object.prototype.hasOwnProperty.call(newTicket, 'performer')) {
+            const normalizedPerformer = await normalizePerformer(db, newTicket.performer);
+            if (normalizedPerformer === undefined) {
+                delete newTicket.performer;
+            } else {
+                newTicket.performer = normalizedPerformer;
+            }
         }
 
         logger.info('[crm.tickets.create] normalized new ticket payload', {

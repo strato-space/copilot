@@ -239,6 +239,15 @@ const handleSessionDone = async ({
       return;
     }
 
+    const doneTimestamp = new Date().toISOString();
+    emitToSession(io, session_id, 'session_update', {
+      _id: session_id,
+      is_active: false,
+      to_finalize: true,
+      done_at: doneTimestamp,
+      updated_at: doneTimestamp,
+    });
+
     reply({
       ok: true,
       notify_preview: {

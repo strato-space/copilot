@@ -137,6 +137,21 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                 res.status(401).json({ error: 'Access denied' });
                 return;
             }
+            const rawUserDbId = req.user?._id;
+            const userDbId =
+                typeof rawUserDbId === 'string'
+                    ? rawUserDbId
+                    : rawUserDbId != null
+                      ? String(rawUserDbId)
+                      : undefined;
+
+            const performerMatch: Record<string, unknown>[] = [{ 'performer.id': userId }, { performer: userId }];
+            if (userDbId) {
+                performerMatch.push({ performer: userDbId });
+                if (ObjectId.isValid(userDbId)) {
+                    performerMatch.push({ 'performer._id': new ObjectId(userDbId) });
+                }
+            }
 
             let data = await db
                 .collection(COLLECTIONS.TASKS)
@@ -144,7 +159,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                     {
                         $match: {
                             is_deleted: { $ne: true },
-                            'performer.id': userId,
+                            $or: performerMatch,
                             task_status: {
                                 $in: [
                                     TASK_STATUSES.READY_10,

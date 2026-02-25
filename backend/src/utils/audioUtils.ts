@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { extname, join } from 'node:path';
+import { mkdirSync, readdirSync } from 'node:fs';
 
 const toPositiveNumber = (value: unknown): number | null => {
   const parsed = Number(value);
@@ -77,4 +79,68 @@ export const getAudioDurationFromFile = async (filePath: string): Promise<number
 export const getFileSha256FromPath = async (filePath: string): Promise<string> => {
   const buffer = await readFile(filePath);
   return createHash('sha256').update(buffer).digest('hex');
+};
+
+export const splitAudioFileByDuration = async ({
+  filePath,
+  segmentDurationSeconds,
+  outputDir,
+  outputPrefix = 'segment_',
+  outputExtension,
+}: {
+  filePath: string;
+  segmentDurationSeconds: number;
+  outputDir: string;
+  outputPrefix?: string;
+  outputExtension?: string;
+}): Promise<string[]> => {
+  const safeDuration = Number(segmentDurationSeconds);
+  if (!Number.isFinite(safeDuration) || safeDuration <= 0) {
+    throw new Error('segmentDurationSeconds must be a positive number');
+  }
+
+  mkdirSync(outputDir, { recursive: true });
+
+  const extension = String(outputExtension || extname(filePath) || '.webm').trim() || '.webm';
+  const outputTemplate = join(outputDir, `${outputPrefix}%03d${extension}`);
+
+  const split = spawnSync(
+    'ffmpeg',
+    [
+      '-v',
+      'error',
+      '-i',
+      filePath,
+      '-f',
+      'segment',
+      '-segment_time',
+      String(safeDuration),
+      '-c',
+      'copy',
+      '-reset_timestamps',
+      '1',
+      outputTemplate,
+    ],
+    { encoding: 'utf8' }
+  );
+
+  if (split.error) {
+    throw new Error(`ffmpeg split failed: ${split.error.message}`);
+  }
+
+  if (split.status !== 0) {
+    const stderr = String(split.stderr || '').trim();
+    throw new Error(stderr || `ffmpeg split exited with status ${split.status}`);
+  }
+
+  const files = readdirSync(outputDir)
+    .filter((name) => name.startsWith(outputPrefix) && name.endsWith(extension))
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => join(outputDir, name));
+
+  if (files.length === 0) {
+    throw new Error('ffmpeg split produced no segments');
+  }
+
+  return files;
 };

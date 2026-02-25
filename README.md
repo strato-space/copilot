@@ -211,6 +211,15 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selectors (`app/src/pages/voice/SessionsListPage.tsx`).
+- Added MeetingCard dialogue-tag editing with remembered local tag options and persisted `dialogue_tag` updates.
+- Updated done UX/state flow: frontend applies immediate ack-driven close projection, listens for `session_status=done_queued`, and backend socket emits immediate `session_update` on `session_done`.
+- Added deduplicated immediate common-queue processing kick in shared done flow (`backend/src/services/voicebotSessionDoneFlow.ts`) to reduce finalize lag after session close.
+- Hardened CREATE_TASKS postprocessing to enqueue pending CATEGORIZE jobs before delayed retry when categorization is incomplete.
+- Added mixed-identifier performer normalization for CRM ticket create/update and Miniapp task performer matching compatibility (`id`/`_id`/ObjectId).
+- Canonicalized Voice/TG public session links to `https://copilot.stratospace.fun/voice/session[/<id>]` and added `VOICE_WEB_INTERFACE_URL` sample default in `backend/.env.example`.
+- Added `splitAudioFileByDuration(...)` ffmpeg helper in backend audio utilities for deterministic segment generation.
+- Added deferred migration spec `plan/session-done-notify-routing-migration.md` for immediate done notifications and routing ownership move from JSON config to Copilot DB targets.
 - Added tracked ontology package under `ontology/typedb/` (TypeQL schema, Mongo mapping, validation query set, rollout plan) to keep TypeDB model assets versioned in Copilot.
 - Updated Voice transcription download flow to use `/api/voicebot/transcription/download/:session_id` with runtime-safe markdown export handling and Jest coverage.
 - Added backend TypeDB ontology helper tooling (`requirements-typedb.txt`, ingest/validate scripts, npm aliases, and `.env` sample variables) for STR OpsPortal model ingestion.

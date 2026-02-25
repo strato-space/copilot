@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-02-25
+### PROBLEM SOLVED
+- **17:11** Voice runtime hardening shipped on `origin/main` for upload-outage handling, Telegram poller ownership, and transcription transport diagnostics, but this date block was missing from changelog history.
+- **22:02** Voice sessions list state was not URL-persistent (filters, tab, pagination), and operators could not quickly reassign project directly from the table row.
+- **22:02** Session close (`Done`) UX could stay stale until refresh, and post-close processing did not receive an immediate kick after successful done-flow completion.
+- **22:02** CRM and Miniapp task payloads used mixed performer identifiers (`id`, `_id`, `ObjectId`), which could break performer resolution across create/update/filter paths.
+- **22:02** CREATE_TASKS postprocessing could remain pending when categorization was incomplete without proactively requeueing missing categorization jobs.
+- **22:02** Public session links in TG-related flows could still inherit legacy host/path variants, which made links inconsistent with the canonical Copilot Voice URL.
+
+### FEATURE IMPLEMENTED
+- **17:11** Synced changelog coverage for already-landed runtime hardening on 2026-02-25 (upload outage shaping, tg poller lock, transcribe diagnostics).
+- **22:02** Added URL-driven Sessions list UX in Voice (`tab`, filters, and pagination in query params), plus inline project reassignment and active-project option filtering.
+- **22:02** Added optimistic/real-time done-state propagation: frontend store now reacts to `session_status=done_queued`, `finishSession` applies ack-driven state updates, socket handler emits immediate `session_update`, and done-flow enqueues a deduplicated `PROCESSING` kick.
+- **22:02** Added robust performer normalization in CRM ticket create/update and identifier-compatible performer matching for Miniapp tasks.
+- **22:02** Added automatic categorization requeue from CREATE_TASKS postprocessing when required categorization rows are pending.
+- **22:02** Added deferred migration spec for immediate done notifications and routing-source move to Copilot DB (`plan/session-done-notify-routing-migration.md`, tracking: `copilot-1y3o`).
+
+### CHANGES
+- **17:11** Documented 2026-02-25 committed history from `origin/main`:
+  - `deploy/nginx-host.conf`, `app/public/webrtc/webrtc-voicebot-lib.js`
+  - `backend/src/voicebot_tgbot/runtime.ts`, `backend/src/workers/voicebot/handlers/transcribe.ts`
+  - tests/docs updates in `backend/__tests__/deploy/nginxUploadLimits.test.ts`, `backend/__tests__/voicebot/workerTranscribeHandler.test.ts`, `README.md`.
+- **22:02** Voice frontend sessions UX updates:
+  - `app/src/pages/voice/SessionsListPage.tsx` (query-param state, `Tabs` for `all/without_project`, filter persistence, inline project `Select`, navigation with preserved search string).
+  - `app/src/index.css` (`.voice-project-select-popup` width override for grouped project selector).
+  - `app/src/components/voice/MeetingCard.tsx` (session dialogue-tag edit control with localStorage-backed remembered tags).
+  - `app/src/store/voiceBotStore.ts` (`session_status` listener for `done_queued`, `session_done` ack callback handling + immediate state projection).
+  - `app/__tests__/voice/voiceSocketRealtimeContract.test.ts` contract assertions for done realtime/ack behavior.
+- **22:02** Voice backend/session flow updates:
+  - `backend/src/api/socket/voicebot.ts` now emits immediate `session_update` payload in `session_done` path.
+  - `backend/src/services/voicebotSessionDoneFlow.ts` enqueues deduplicated common `PROCESSING` kick (`<session>-PROCESSING-KICK`) after done close.
+  - `backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts` requeues pending `CATEGORIZE` jobs before delayed CREATE_TASKS retry.
+  - `backend/src/utils/audioUtils.ts` added `splitAudioFileByDuration(...)` helper via ffmpeg segmentation.
+- **22:02** CRM/Miniapp/TG URL consistency updates:
+  - `backend/src/api/routes/crm/tickets.ts` performer normalization (`id`/`_id`/lookup) on create and update.
+  - `backend/src/miniapp/routes/index.ts` performer matching expanded for `performer.id`, raw `performer`, and `performer._id`.
+  - `backend/src/api/routes/voicebot/sessions.ts` and `backend/src/voicebot_tgbot/sessionTelegramMessage.ts` switched to canonical `https://copilot.stratospace.fun/voice/session[/<id>]` base with legacy-host fallback guard.
+  - `backend/src/voicebot_tgbot/commandHandlers.ts` now uses shared done-flow orchestration and canonical TG auth/session link origin handling.
+  - `backend/.env.example` now declares `VOICE_WEB_INTERFACE_URL=https://copilot.stratospace.fun/voice/session/`.
+- **22:02** Added/updated regression tests:
+  - `backend/__tests__/voicebot/{sessionTelegramMessage,tgCommandHandlers,tgSessionRef,voicebotSocketDoneHandler,workerPostprocessingCreateTasksAudioMergingHandlers}.test.ts`.
+- **22:02** Added planning artifact:
+  - `plan/session-done-notify-routing-migration.md` (deferred spec for immediate done notify + routing source migration).
+
 ## 2026-02-24
 ### PROBLEM SOLVED
 - **19:18** Voice transcription download from session page used an outdated frontend path (`/transcription/download/:id`), so markdown export could fail behind the current `/api/voicebot/*` routing contract.

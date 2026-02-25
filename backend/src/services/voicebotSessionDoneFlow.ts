@@ -112,6 +112,32 @@ const emitSessionStatusViaEventsQueue = async ({
   );
 };
 
+const queueImmediateProcessingKick = async ({
+  commonQueue,
+  session_id,
+}: {
+  commonQueue: QueueLike | null | undefined;
+  session_id: string;
+}): Promise<void> => {
+  if (!commonQueue) return;
+
+  await commonQueue.add(
+    VOICEBOT_JOBS.common.PROCESSING,
+    {
+      session_id,
+      reason: 'session_done',
+      limit: 1,
+    },
+    {
+      attempts: 1,
+      removeOnComplete: true,
+      deduplication: {
+        id: `${session_id}-PROCESSING-KICK`,
+      },
+    }
+  );
+};
+
 export const completeSessionDoneFlow = async ({
   session_id: rawSessionId,
   db = getDb(),
@@ -201,6 +227,20 @@ export const completeSessionDoneFlow = async ({
       return { ok: false, error: fallbackResult.error || 'done_fallback_failed' };
     }
     mode = 'fallback_handler';
+  }
+
+  if (commonQueue) {
+    try {
+      await queueImmediateProcessingKick({
+        commonQueue,
+        session_id,
+      });
+    } catch (error) {
+      logger.warn('[voicebot-done-flow] processing kick enqueue failed', {
+        session_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   await clearActiveVoiceSessionBySessionId({ db, session_id });

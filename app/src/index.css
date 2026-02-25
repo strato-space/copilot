@@ -740,6 +740,10 @@ h5 {
   color: var(--voice-text-main) !important;
 }
 
+.voice-project-select-popup {
+  min-width: 420px !important;
+}
+
 :root[data-voice-theme='dark'] .voice-session-shell .ant-btn,
 :root[data-voice-theme='dark'] .voice-session-shell .ant-tabs-tab-btn,
 :root[data-voice-theme='dark'] .voice-session-shell .ant-select-selection-item,

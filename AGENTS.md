@@ -203,7 +203,7 @@ Preferred engineering principles for this repo:
 - Agents are NOT included - run as separate Python service (see `backend/src/agents/README.md`).
 - Voice UI is native in the Copilot app under `/voice/*` (no iframe embed).
 
-### VoiceBot Environment Variables
+### VoiceB Environment Variables
 ```
 # Optional for JWT socket auth
 APP_ENCRYPTION_KEY=your-secret-key
@@ -367,6 +367,15 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.
+- Added MeetingCard dialogue-tag editor with local remembered tags (`localStorage`) and persisted updates through `updateSessionDialogueTag`.
+- Updated Voice frontend done-state behavior: `voiceBotStore.finishSession` now handles `session_done` ack and applies immediate optimistic close projection; realtime `session_status=done_queued` now updates session/list state without refresh.
+- Updated socket done path to emit immediate `session_update` payload (`is_active=false`, `to_finalize=true`) and extended done flow with a deduplicated common-queue `PROCESSING` kick (`<session>-PROCESSING-KICK`).
+- Hardened CREATE_TASKS postprocessing to enqueue missing `CATEGORIZE` jobs before delayed retry when categorization is incomplete.
+- Added performer normalization for CRM tickets (`id`/`_id`/ObjectId lookup) and expanded Miniapp tasks performer matching (`performer.id`, raw `performer`, `performer._id`) for mixed payload compatibility.
+- Canonicalized public Voice/TG session links to `https://copilot.stratospace.fun/voice/session` (legacy host fallback guarded) and added `VOICE_WEB_INTERFACE_URL` default sample in `backend/.env.example`.
+- Added `splitAudioFileByDuration(...)` ffmpeg utility in `backend/src/utils/audioUtils.ts` for reusable chunk segmentation.
+- Added deferred design spec `plan/session-done-notify-routing-migration.md` for immediate done notification and routing-source migration to Copilot DB (tracking issue: `copilot-1y3o`).
 - Added versioned ontology assets under `ontology/typedb/` to the main repo tree (schema, mapping, validation queries, rollout notes) so TypeDB scaffold is tracked together with backend ingestion scripts.
 - Updated Voice transcription download contract to use `/api/voicebot/transcription/download/:session_id` end-to-end (store path fix, runtime-safe backend route, and Jest coverage for markdown export).
 - Added TypeDB ontology tooling scaffold in backend (`requirements-typedb.txt`, ingest/validate scripts, npm script aliases, and env examples) to support STR OpsPortal ERD ingestion workflows.

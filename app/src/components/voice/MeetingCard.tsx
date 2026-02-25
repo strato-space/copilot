@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button, Select, message, Input, Tooltip } from 'antd';
 import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -47,9 +47,11 @@ const resolvePerformer = (performers: PerformerRecord[] | null, id: string): Per
 
 export default function MeetingCard({ onCustomPromptResult, activeTab }: MeetingCardProps) {
     const SESSION_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_ID';
+    const SESSION_TAGS_STORAGE_KEY = 'voicebot_dialogue_tags';
     const {
         voiceBotSession,
         updateSessionName,
+        updateSessionDialogueTag,
         prepared_projects,
         persons_list,
         performers_list,
@@ -81,6 +83,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const [isCutting, setIsCutting] = useState(false);
     const [isPausing, setIsPausing] = useState(false);
     const [isFinishing, setIsFinishing] = useState(false);
+    const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
 
     const circleIconWrapperStyle: CSSProperties = {
         display: 'flex',
@@ -154,6 +157,17 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     }, [prepared_projects, fetchPreparedProjects]);
 
     useEffect(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem(SESSION_TAGS_STORAGE_KEY) || '[]');
+            if (Array.isArray(saved)) {
+                setSavedTagOptions(saved.filter((value): value is string => typeof value === 'string' && value.trim().length > 0));
+            }
+        } catch (error) {
+            console.warn('Failed to read saved tags', error);
+        }
+    }, []);
+
+    useEffect(() => {
         setSummarizeDisabledUntil(null);
         setIsSummarizing(false);
     }, [voiceBotSession?._id]);
@@ -213,6 +227,21 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         if (voiceBotSession && localSessionName !== voiceBotSession.session_name) {
             await updateSessionName(voiceBotSession._id, localSessionName);
         }
+    };
+
+    const rememberTag = (tag: string | null | undefined): void => {
+        const normalized = String(tag || '').trim();
+        if (!normalized) return;
+        setSavedTagOptions((prev) => {
+            if (prev.includes(normalized)) return prev;
+            const next = [...prev, normalized];
+            try {
+                localStorage.setItem(SESSION_TAGS_STORAGE_KEY, JSON.stringify(next));
+            } catch (error) {
+                console.warn('Failed to persist tag', error);
+            }
+            return next;
+        });
     };
 
     const handleRunCustomPrompt = async (prompt: string): Promise<void> => {
@@ -405,6 +434,14 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const participantsDisplay = participantNames.length > 0
         ? participantNames.map((name) => getInitials(name)).join(' • ')
         : 'Не указаны';
+    const currentDialogueTag = String(voiceBotSession?.dialogue_tag || '').trim();
+    const dialogueTagOptions = useMemo(
+        () => {
+            const merged = [...new Set([...savedTagOptions, ...(currentDialogueTag ? [currentDialogueTag] : [])])];
+            return merged.map((tag) => ({ value: tag, label: tag }));
+        },
+        [savedTagOptions, currentDialogueTag]
+    );
 
     const accessSummary = (() => {
         const accessLevel = (voiceBotSession?.access_level || SESSION_ACCESS_LEVELS.PRIVATE) as SessionAccessLevel;
@@ -709,6 +746,29 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
 
                     <div className="voice-meeting-meta-chip">
                         <span className="voice-meeting-meta-value">{voiceBotSession?._id || 'N/A'}</span>
+                    </div>
+
+                    <div className="voice-meeting-meta-chip voice-meeting-meta-chip-grow">
+                        <Select
+                            className="w-full"
+                            mode="tags"
+                            value={currentDialogueTag ? [currentDialogueTag] : []}
+                            onChange={(values) => {
+                                const nextTag = Array.isArray(values) ? values[values.length - 1] : values;
+                                if (!voiceBotSession?._id) return;
+                                void updateSessionDialogueTag(voiceBotSession._id, nextTag || '');
+                                rememberTag(nextTag);
+                            }}
+                            allowClear
+                            placeholder="Добавить тег"
+                            showSearch
+                            options={dialogueTagOptions}
+                            optionFilterProp="label"
+                            maxTagCount={1}
+                            filterOption={(inputValue, option) =>
+                                String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
+                            }
+                        />
                     </div>
 
                     <div className="voice-meeting-meta-chip voice-meeting-meta-chip-grow">

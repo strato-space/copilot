@@ -118,10 +118,14 @@ const projectFilesUpload = multer({
     },
 });
 
+const LEGACY_INTERFACE_HOST = '176.124.201.53';
+const DEFAULT_PUBLIC_INTERFACE_BASE = 'https://copilot.stratospace.fun/voice/session';
+
 const activeSessionUrl = (sessionId?: string | null): string => {
-    const base = (process.env.VOICE_WEB_INTERFACE_URL || 'https://voice.stratospace.fun').replace(/\/+$/, '');
-    if (!sessionId) return `${base}/session`;
-    return `${base}/session/${sessionId}`;
+    const rawBase = (process.env.VOICE_WEB_INTERFACE_URL || DEFAULT_PUBLIC_INTERFACE_BASE).replace(/\/+$/, '');
+    const base = rawBase.includes(LEGACY_INTERFACE_HOST) ? DEFAULT_PUBLIC_INTERFACE_BASE : rawBase;
+    if (!sessionId) return base;
+    return `${base}/${sessionId}`;
 };
 
 const buildSocketToken = (req: VoicebotRequest): string | null => {

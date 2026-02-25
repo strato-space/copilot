@@ -2,17 +2,28 @@ import { ObjectId, type Db } from 'mongodb';
 import { VOICEBOT_COLLECTIONS } from '../constants.js';
 
 const FALLBACK_VALUE = '—';
+const LEGACY_INTERFACE_HOST = '176.124.201.53';
+const DEFAULT_PUBLIC_INTERFACE_ORIGIN = 'https://copilot.stratospace.fun';
+const DEFAULT_PUBLIC_INTERFACE_BASE = `${DEFAULT_PUBLIC_INTERFACE_ORIGIN}/voice/session`;
 
 export const getPublicInterfaceBase = (): string => {
-  const rawBase = (process.env.VOICE_WEB_INTERFACE_URL || 'https://voice.stratospace.fun').replace(/\/+$/, '');
-  if (rawBase.includes('176.124.201.53')) return 'https://voice.stratospace.fun';
+  const rawBase = (process.env.VOICE_WEB_INTERFACE_URL || DEFAULT_PUBLIC_INTERFACE_BASE).replace(/\/+$/, '');
+  if (rawBase.includes(LEGACY_INTERFACE_HOST)) return DEFAULT_PUBLIC_INTERFACE_BASE;
   return rawBase;
+};
+
+export const getPublicInterfaceOrigin = (): string => {
+  try {
+    return new URL(getPublicInterfaceBase()).origin;
+  } catch {
+    return DEFAULT_PUBLIC_INTERFACE_ORIGIN;
+  }
 };
 
 export const buildSessionLink = (sessionId?: string | null): string => {
   const sid = String(sessionId || '').trim();
-  if (!sid) return `${getPublicInterfaceBase()}/session`;
-  return `${getPublicInterfaceBase()}/session/${sid}`;
+  if (!sid) return getPublicInterfaceBase();
+  return `${getPublicInterfaceBase()}/${sid}`;
 };
 
 const normalizeSessionId = (session: Record<string, unknown>): string => {

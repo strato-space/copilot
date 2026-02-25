@@ -617,23 +617,36 @@ const ProjectsTree: React.FC = () => {
         const row = moveDialog.row;
         if (!row) return [];
 
+        const ensureCurrentTargetOption = (
+            options: Array<{ value: string; label: string }>
+        ): Array<{ value: string; label: string }> => {
+            if (!row.parentId) return options;
+            if (options.some((option) => option.value === row.parentId)) return options;
+
+            const fallbackLabel = row.parentName?.trim() || row.parentId;
+            return [{ value: row.parentId, label: `${fallbackLabel} (текущий)` }, ...options];
+        };
+
         if (row.type === 'group') {
-            return [
-                { value: '__none__', label: 'Без заказчика' },
-                ...customers.map((customer) => ({
+            const customerOptions = customers
+                .filter((customer) => customer.is_active !== false)
+                .map((customer) => ({
                     value: customer._id,
                     label: customer.name,
-                })),
-            ];
+                }));
+
+            return [{ value: '__none__', label: 'Без заказчика' }, ...ensureCurrentTargetOption(customerOptions)];
         }
 
         if (row.type === 'project') {
-            return projectGroups
-                .filter((group) => group._id !== row.parentId)
+            const groupOptions = projectGroups
+                .filter((group) => group.is_active !== false)
                 .map((group) => ({
                     value: group._id,
                     label: group.name,
                 }));
+
+            return ensureCurrentTargetOption(groupOptions);
         }
 
         return [];
