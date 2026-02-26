@@ -386,6 +386,9 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Fixed WebRTC FAB `Done` close reliability on `/voice/session/:id`: `session_done` now retries across socket namespace base candidates (origin + `/api` stripped variants), and close failure no longer silently clears session state.
+- Added close-failure UX guard in WebRTC runtime: when `session_done` is not acknowledged, FAB returns to `paused` with explicit retry toast (`Failed to close session. Retry Done.`) instead of fake `idle/ready`.
+- Updated regression contract `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts` to lock fallback namespace attempts and non-silent failed-close behavior.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.

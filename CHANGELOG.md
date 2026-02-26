@@ -9,6 +9,7 @@
 - **12:22** Runtime accumulated stale empty sessions (no linked messages) with no autonomous cleanup path in TS workers.
 - **12:39** Production deploy script was blocked by TypeScript compile errors introduced by strict type narrowing in voice/permission helper paths.
 - **13:03** Voice Sessions list could remain in the previous `include_deleted` mode when filter intent changed during an in-flight fetch, because the store rejected concurrent list requests even for required mode sync.
+- **13:13** FAB `Done` on `/voice/session/:id` could log `action=done` in browser but leave session open (`State: Ready`) when WebRTC socket namespace was resolved from a non-working base URL variant.
 
 ### FEATURE IMPLEMENTED
 - **12:22** Added realtime-safe transcription visibility: frontend now renders pending/error/audio rows immediately, and worker transcribe flow emits `message_update` across success/failure branches.
@@ -19,6 +20,7 @@
 - **12:39** Restored green backend build for deploy path by fixing strict TS typing regressions in voice routes/runtime integration contracts.
 - **12:22** Added WebRTC monitor resilience UX: explicit chunk states (`local/uploading/uploaded/upload_failed`) and pending-upload snapshot hint after refresh.
 - **13:03** Added forced include-deleted mode synchronization for voice sessions list: the page now detects `showDeletedSessions` vs store-mode mismatch and triggers a forced refetch that can bypass loading lock.
+- **13:13** Added resilient `session_done` delivery in WebRTC runtime: namespace base fallback sequence (`origin`, stripped `/api`, full path) plus strict failure handling that keeps session active and surfaces retry instead of false-success reset.
 
 ### CHANGES
 - **12:22** Voice frontend updates:
@@ -44,6 +46,11 @@
   - `app/src/store/voiceBotStore.ts`: `fetchVoiceBotSessionsList` now permits forced refetch while loading (`if (isSessionsListLoading && !force) return;`).
   - `app/src/pages/voice/SessionsListPage.tsx`: computes `shouldForceSyncIncludeDeleted` and passes `force` when URL/user intent differs from loaded store mode.
   - `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts`: new regression contract for forced-sync and loading-bypass behavior.
+- **13:13** WebRTC `Done` close-path hardening:
+  - `app/public/webrtc/webrtc-voicebot-lib.js`: added `buildSocketBaseCandidates(...)` + per-candidate `session_done` emit attempts; page/FAB close now treat `sessionDoneBrowser=false` as failure.
+  - FAB error path now keeps control in `paused` state with toast `Failed to close session. Retry Done.` and does not clear active-session metadata on failed close.
+  - `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts`: updated contract for fallback namespace attempts and non-silent close failure handling.
+  - Verified by full frontend Jest run: `30` suites / `63` tests passed (`npm test -- --runInBand`).
 
 ## 2026-02-25
 ### PROBLEM SOLVED

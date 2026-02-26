@@ -218,6 +218,9 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Fixed WebRTC FAB `Done` close reliability for `/voice/session/:id`: runtime now retries `session_done` across namespace base candidates (`origin`, stripped `/api`, full API base) and treats all failed attempts as close failure.
+- Added fail-safe close UX: on `session_done` failure FAB stays in `paused` with toast `Failed to close session. Retry Done.` and does not clear active session metadata.
+- Updated regression contract `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts` for fallback namespace attempts and strict failed-close handling.
 - Fixed voice sessions deleted-mode sync (`copilot-nhwu`): `SessionsListPage` now forces list refetch when `sessionsListIncludeDeleted` differs from current `showDeletedSessions` intent.
 - Updated store fetch guard so `fetchVoiceBotSessionsList({ force: true })` can run while list loading is active for required mode synchronization.
 - Added regression test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts`.
