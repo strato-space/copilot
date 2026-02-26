@@ -7520,7 +7520,7 @@
                 handleFabToggle();
             });
             fabButton.addEventListener('dblclick', (e) => {
-                if (!isRecording) return;
+                if (!isRecording && !isPaused) return;
                 if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
                 dispatchControlAction('done');
             });
