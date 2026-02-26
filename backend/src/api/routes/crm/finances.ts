@@ -7,6 +7,33 @@ import { COLLECTIONS } from '../../../constants.js';
 const router = Router();
 const logger = getLogger();
 
+const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
+    $lookup: {
+        from: COLLECTIONS.WORK_HOURS,
+        let: { taskDbId: { $toString: '$_id' } },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $eq: [
+                            {
+                                $convert: {
+                                    input: '$ticket_db_id',
+                                    to: 'string',
+                                    onError: '',
+                                    onNull: '',
+                                },
+                            },
+                            '$$taskDbId',
+                        ],
+                    },
+                },
+            },
+        ],
+        as: 'work_data',
+    },
+});
+
 /**
  * Get expenses
  * POST /api/crm/finances/expenses
@@ -128,12 +155,7 @@ router.post('/margin-projects', async (req: Request, res: Response) => {
             .collection(COLLECTIONS.TASKS)
             .aggregate([
                 {
-                    $lookup: {
-                        from: COLLECTIONS.WORK_HOURS,
-                        localField: 'id',
-                        foreignField: 'ticket_id',
-                        as: 'work_data',
-                    },
+                    ...buildWorkHoursLookupByTicketDbId(),
                 },
                 {
                     $unwind: { path: '$work_data', preserveNullAndEmptyArrays: true },

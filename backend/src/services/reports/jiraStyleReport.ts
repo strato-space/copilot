@@ -17,6 +17,7 @@ dayjs.extend(isSameOrAfter);
 dayjs.extend(weekOfYear);
 
 type TicketRecord = {
+    _id: ObjectId;
     id: string;
     project?: string;
     project_id?: ObjectId | string;
@@ -29,7 +30,7 @@ type TicketRecord = {
 };
 
 type WorkHourRecord = {
-    ticket_id: string;
+    ticket_db_id?: unknown;
     date_timestamp: number;
     work_hours: number;
     description?: string;
@@ -75,6 +76,21 @@ const indexesToA1 = (row: number, column: number): string => {
         'AQ', 'AR', 'AS', 'AT', 'AU', 'AV', 'AW', 'AX', 'AY', 'AZ',
     ];
     return `${columns[column]}${row + 1}`;
+};
+
+const normalizeTicketDbId = (value: unknown): string | null => {
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'string') {
+        const normalized = value.trim();
+        return normalized.length > 0 ? normalized : null;
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
+            return new ObjectId(record.$oid).toHexString();
+        }
+    }
+    return null;
 };
 
 export const generateJiraStyleReport = async (
@@ -129,13 +145,19 @@ export const generateJiraStyleReport = async (
         project_id: { $in: projectIds },
     }).toArray();
 
+    const ticketDbIdsAsString = ticketsData.map((ticket) => ticket._id.toHexString());
+    const ticketDbIdCandidates: Array<string | ObjectId> = _.uniqBy(
+        [...ticketDbIdsAsString, ...ticketsData.map((ticket) => ticket._id)],
+        (value) => value.toString()
+    );
+
     const works = await db.collection<WorkHourRecord>(COLLECTIONS.WORK_HOURS).find({
         date_timestamp: { $gt: reportStart.unix(), $lt: reportEnd.unix() },
-        ticket_id: { $in: ticketsData.map((ticket) => ticket.id) },
+        ticket_db_id: { $in: ticketDbIdCandidates },
     }).toArray();
 
     const tickets = _.reduce(ticketsData, (result, obj) => {
-        result[obj.id] = obj;
+        result[obj._id.toHexString()] = obj;
         return result;
     }, {} as Record<string, TicketRecord>);
 
@@ -157,7 +179,9 @@ export const generateJiraStyleReport = async (
 
     for (const work of works) {
         try {
-            const ticket = tickets[work.ticket_id];
+            const ticketDbId = normalizeTicketDbId(work.ticket_db_id);
+            if (!ticketDbId) continue;
+            const ticket = tickets[ticketDbId];
             if (!ticket) continue;
             const key = dayjs.unix(work.date_timestamp).format('YYYY-MM-DD');
             if (!ticket.hours_data) {
@@ -173,7 +197,7 @@ export const generateJiraStyleReport = async (
         }
     }
 
-    for (const ticket of Object.values(tickets)) {
+    for (const [ticketKey, ticket] of Object.entries(tickets)) {
         let toDelete = true;
         if (ticket.hours_data && !_.isEmpty(ticket.hours_data)) {
             const hasWork = _.some(Object.values(ticket.hours_data), (dayData) =>
@@ -182,7 +206,7 @@ export const generateJiraStyleReport = async (
             toDelete = !hasWork;
         }
         if (toDelete) {
-            delete tickets[ticket.id];
+            delete tickets[ticketKey];
         }
     }
 

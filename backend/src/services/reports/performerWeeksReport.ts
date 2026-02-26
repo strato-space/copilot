@@ -17,13 +17,14 @@ dayjs.extend(isSameOrAfter);
 dayjs.extend(weekOfYear);
 
 type WorkHourRecord = {
-    ticket_id: string;
+    ticket_db_id?: unknown;
     date_timestamp: number;
     work_hours: number;
     description?: string;
 };
 
 type TicketRecord = {
+    _id: ObjectId;
     id: string;
     project?: string;
     name?: string;
@@ -59,6 +60,21 @@ const indexesToA1 = (row: number, column: number): string => {
         'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
     ];
     return `${columns[column]}${row + 1}`;
+};
+
+const normalizeTicketDbId = (value: unknown): string | null => {
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'string') {
+        const normalized = value.trim();
+        return normalized.length > 0 ? normalized : null;
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
+            return new ObjectId(record.$oid).toHexString();
+        }
+    }
+    return null;
 };
 
 export const generatePerformerWeeksReport = async (
@@ -109,12 +125,18 @@ export const generatePerformerWeeksReport = async (
         created_by: params.performerId,
     }).toArray();
 
+    const ticketDbIds = _.uniq(
+        works
+            .map((work) => normalizeTicketDbId(work.ticket_db_id))
+            .filter((value): value is string => value !== null && ObjectId.isValid(value))
+    );
+
     const ticketsData = await db.collection<TicketRecord>(COLLECTIONS.TASKS).find({
-        id: { $in: works.map((work) => work.ticket_id) },
+        _id: { $in: ticketDbIds.map((value) => new ObjectId(value)) },
     }).toArray();
 
     const tickets = _.reduce(ticketsData, (result, obj) => {
-        result[obj.id] = obj;
+        result[obj._id.toHexString()] = obj;
         return result;
     }, {} as Record<string, TicketRecord>);
 
@@ -135,7 +157,9 @@ export const generatePerformerWeeksReport = async (
 
     for (const work of works) {
         try {
-            const ticket = tickets[work.ticket_id];
+            const ticketDbId = normalizeTicketDbId(work.ticket_db_id);
+            if (!ticketDbId) continue;
+            const ticket = tickets[ticketDbId];
             if (!ticket) continue;
             const key = dayjs.unix(work.date_timestamp).format('YYYY-MM-DD');
             if (!ticket.hours_data) {

@@ -1172,16 +1172,16 @@
                 });
                 const payload = await resp.json().catch(() => ({}));
                 if (!resp.ok) {
-                    try { console.warn('[closeSessionViaRest] close failed', { status: resp.status, payload }); } catch {}
+                    try { console.warn('[closeSessionViaRest] close failed', { status: resp.status, payload, session_id: sid }); } catch {}
                     return false;
                 }
                 if (payload && typeof payload === 'object' && payload.error) {
-                    try { console.warn('[closeSessionViaRest] close rejected', payload); } catch {}
+                    try { console.warn('[closeSessionViaRest] close rejected', { payload, session_id: sid }); } catch {}
                     return false;
                 }
                 return true;
             } catch (e) {
-                try { console.warn('[closeSessionViaRest] request failed', e); } catch {}
+                try { console.warn('[closeSessionViaRest] request failed', { error: String(e?.message || e), session_id: sid }); } catch {}
                 return false;
             } finally {
                 if (timeoutId) clearTimeout(timeoutId);

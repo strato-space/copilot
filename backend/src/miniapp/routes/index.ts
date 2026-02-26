@@ -32,6 +32,48 @@ export interface MiniappDeps {
 
 type MiniappRequest = Request & { user?: Record<string, unknown> };
 
+const normalizeTicketDbId = (value: unknown): string | null => {
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'string') {
+        const normalized = value.trim();
+        return normalized.length > 0 ? normalized : null;
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
+            return new ObjectId(record.$oid).toHexString();
+        }
+    }
+    return null;
+};
+
+const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
+    $lookup: {
+        from: COLLECTIONS.WORK_HOURS,
+        let: { taskDbId: { $toString: '$_id' } },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $eq: [
+                            {
+                                $convert: {
+                                    input: '$ticket_db_id',
+                                    to: 'string',
+                                    onError: '',
+                                    onNull: '',
+                                },
+                            },
+                            '$$taskDbId',
+                        ],
+                    },
+                },
+            },
+        ],
+        as: 'work_data',
+    },
+});
+
 export const createMiniappRouter = ({ db, notificationQueue, logger, testData }: MiniappDeps): Router => {
     const router = express.Router();
 
@@ -174,12 +216,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                         },
                     },
                     {
-                        $lookup: {
-                            from: COLLECTIONS.WORK_HOURS,
-                            localField: 'id',
-                            foreignField: 'ticket_id',
-                            as: 'work_data',
-                        },
+                        ...buildWorkHoursLookupByTicketDbId(),
                     },
                     {
                         $lookup: {
@@ -412,7 +449,23 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
             await db.collection(COLLECTIONS.WORK_HOURS).insertOne(workHoursObj);
             await notificationQueue.add(NOTIFICATIONS.NEW_WORK_HOURS_DATA, workHoursObj);
 
-            const workHours = await db.collection(COLLECTIONS.WORK_HOURS).find({ ticket_id: ticket.id }).toArray();
+            const normalizedTicketDbId = normalizeTicketDbId(ticketId);
+            const ticketDbIdCandidates: Array<string | ObjectId> = [];
+            if (normalizedTicketDbId) {
+                ticketDbIdCandidates.push(normalizedTicketDbId);
+                if (ObjectId.isValid(normalizedTicketDbId)) {
+                    ticketDbIdCandidates.push(new ObjectId(normalizedTicketDbId));
+                }
+            }
+
+            const workHours = await db
+                .collection(COLLECTIONS.WORK_HOURS)
+                .find({
+                    ticket_db_id: {
+                        $in: ticketDbIdCandidates,
+                    },
+                })
+                .toArray();
             const totalHours = workHours.reduce((total, wh) => total + parseFloat(String(wh.work_hours)), 0.0);
             const estimatedTime = ticket.estimated_time as string | undefined;
 

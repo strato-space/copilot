@@ -66,6 +66,48 @@ const toObjectId = (value: unknown): ObjectId | undefined => {
     return undefined;
 };
 
+const normalizeTicketDbId = (value: unknown): string | null => {
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'string') {
+        const normalized = value.trim();
+        return normalized.length > 0 ? normalized : null;
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
+            return new ObjectId(record.$oid).toHexString();
+        }
+    }
+    return null;
+};
+
+const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
+    $lookup: {
+        from: COLLECTIONS.WORK_HOURS,
+        let: { taskDbId: { $toString: '$_id' } },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $eq: [
+                            {
+                                $convert: {
+                                    input: '$ticket_db_id',
+                                    to: 'string',
+                                    onError: '',
+                                    onNull: '',
+                                },
+                            },
+                            '$$taskDbId',
+                        ],
+                    },
+                },
+            },
+        ],
+        as: 'work_data',
+    },
+});
+
 const normalizePerformer = async (db: Db, rawPerformer: unknown): Promise<PerformerPayload | null | undefined> => {
     if (rawPerformer === undefined) return undefined;
     if (rawPerformer === null) return null;
@@ -157,12 +199,7 @@ router.post('/', async (req: Request, res: Response) => {
                     },
                 },
                 {
-                    $lookup: {
-                        from: COLLECTIONS.WORK_HOURS,
-                        localField: 'id',
-                        foreignField: 'ticket_id',
-                        as: 'work_data',
-                    },
+                    ...buildWorkHoursLookupByTicketDbId(),
                 },
                 {
                     $lookup: {
@@ -272,12 +309,7 @@ router.post('/get-by-id', async (req: Request, res: Response) => {
             .aggregate([
                 { $match: matchCondition },
                 {
-                    $lookup: {
-                        from: COLLECTIONS.WORK_HOURS,
-                        localField: 'id',
-                        foreignField: 'ticket_id',
-                        as: 'work_data',
-                    },
+                    ...buildWorkHoursLookupByTicketDbId(),
                 },
                 {
                     $lookup: {
@@ -532,14 +564,37 @@ router.post('/add-work-hours', async (req: Request, res: Response) => {
         const db = getDb();
         const workHour = req.body.work_hour as Record<string, unknown>;
 
-        if (!workHour || !workHour.ticket_id) {
-            res.status(400).json({ error: 'work_hour with ticket_id is required' });
+        if (!workHour) {
+            res.status(400).json({ error: 'work_hour is required' });
             return;
         }
 
         const now = Date.now();
-        const newWorkHour = {
+        let ticketDbId = normalizeTicketDbId(workHour.ticket_db_id);
+
+        if (!ticketDbId) {
+            const legacyTicketId = typeof workHour.ticket_id === 'string' ? workHour.ticket_id.trim() : '';
+            if (legacyTicketId.length > 0) {
+                const task = await db.collection(COLLECTIONS.TASKS).findOne(
+                    {
+                        $or: [{ id: legacyTicketId }, ...(ObjectId.isValid(legacyTicketId) ? [{ _id: new ObjectId(legacyTicketId) }] : [])],
+                    },
+                    { projection: { _id: 1 } }
+                );
+                if (task?._id instanceof ObjectId) {
+                    ticketDbId = task._id.toHexString();
+                }
+            }
+        }
+
+        if (!ticketDbId) {
+            res.status(400).json({ error: 'work_hour with ticket_db_id is required' });
+            return;
+        }
+
+        const newWorkHour: Record<string, unknown> = {
             ...workHour,
+            ticket_db_id: ticketDbId,
             created_at: now,
         };
 

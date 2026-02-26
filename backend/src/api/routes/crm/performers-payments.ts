@@ -22,6 +22,21 @@ const logger = getLogger();
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+const normalizeTicketDbId = (value: unknown): string | null => {
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'string') {
+        const normalized = value.trim();
+        return normalized.length > 0 ? normalized : null;
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
+            return new ObjectId(record.$oid).toHexString();
+        }
+    }
+    return null;
+};
+
 const getRootFolderId = (): string => {
     const rootFolderId = process.env.PERFORMERS_PAYMENTS_ROOT_FOLDER_ID;
     if (!rootFolderId) {
@@ -68,11 +83,17 @@ router.post('/finances', async (req: Request, res: Response) => {
             })
             .toArray();
 
+        const ticketDbIds = _.uniq(
+            works
+                .map((work) => normalizeTicketDbId(work.ticket_db_id))
+                .filter((value): value is string => value !== null && ObjectId.isValid(value))
+        );
+
         const tickets = await db
             .collection(COLLECTIONS.TASKS)
             .aggregate([
                 {
-                    $match: { _id: { $in: works.map((w) => new ObjectId(w.ticket_db_id)) } },
+                    $match: { _id: { $in: ticketDbIds.map((value) => new ObjectId(value)) } },
                 },
                 {
                     $lookup: {
@@ -85,6 +106,13 @@ router.post('/finances', async (req: Request, res: Response) => {
             ])
             .toArray();
 
+        const ticketsByDbId = new Map<string, Record<string, unknown>>();
+        for (const ticket of tickets as Array<Record<string, unknown>>) {
+            const ticketDbId = normalizeTicketDbId(ticket._id);
+            if (!ticketDbId) continue;
+            ticketsByDbId.set(ticketDbId, ticket);
+        }
+
         type WorkEntry = {
             date?: unknown;
             work_hours?: unknown;
@@ -92,10 +120,12 @@ router.post('/finances', async (req: Request, res: Response) => {
         };
 
         const worksGroupedByTicket = works.reduce((acc, work) => {
-            const ticket = tickets.find((t) => t.id === work.ticket_id);
+            const ticketDbId = normalizeTicketDbId(work.ticket_db_id);
+            if (!ticketDbId) return acc;
+            const ticket = ticketsByDbId.get(ticketDbId);
             if (!ticket) return acc;
 
-            const ticketKey = ticket.id as string;
+            const ticketKey = ticketDbId;
             const entry: { ticket: Record<string, unknown>; works: WorkEntry[] } = acc[ticketKey] ?? {
                 ticket,
                 works: [],

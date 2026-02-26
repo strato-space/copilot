@@ -12,6 +12,8 @@
 - **13:13** FAB `Done` on `/voice/session/:id` could log `action=done` in browser but leave session open (`State: Ready`) when WebRTC socket namespace was resolved from a non-working base URL variant.
 - **14:17** Session close initiation still depended on client-to-server Socket.IO `session_done` emits, so browser namespace/path variance could break close requests even when API auth/session state were valid.
 - **14:17** Voice Sessions list ordering in UI was not deterministic across mixed timestamp formats (`Date`, seconds, ms, ISO strings), so active/newest conversations could appear below stale rows.
+- **16:30** CRM/miniapp/reporting paths still mixed legacy `ticket_id` joins with current task storage, so work-hours could disappear from margins/payments/reports when only `ticket_db_id` was present.
+- **16:30** WebRTC close failure diagnostics lacked stable `session_id` in warning payloads, which made FAB `Done` incident triage slower in shared logs.
 
 ### FEATURE IMPLEMENTED
 - **12:22** Added realtime-safe transcription visibility: frontend now renders pending/error/audio rows immediately, and worker transcribe flow emits `message_update` across success/failure branches.
@@ -26,6 +28,9 @@
 - **14:17** Added canonical REST close path for Voice sessions: `POST /api/voicebot/session_done` (`/close_session` alias) now executes the shared done-flow and emits realtime `session_status`/`session_update` to room subscribers.
 - **14:17** Switched all frontend close senders to REST (`voiceBotStore`, WebRTC FAB/page close, yesterday auto-close), keeping websocket as receive-only realtime channel for backend events.
 - **14:17** Added deterministic Voice Sessions list sorting by active state, latest voice activity timestamp, and created time with mixed-format timestamp normalization.
+- **16:30** Unified work-hours linkage on canonical `ticket_db_id` (`automation_tasks._id`) across CRM finances, performer payments, tickets API, miniapp routes, and week/jira reports.
+- **16:30** Added migration utility to backfill missing `ticket_db_id` in historical work-hours rows from legacy `ticket_id`.
+- **16:30** Added richer WebRTC REST close warnings with `session_id` for direct browser↔backend correlation.
 
 ### CHANGES
 - **12:22** Voice frontend updates:
@@ -64,6 +69,15 @@
   - Updated frontend contracts: `app/__tests__/voice/{voiceSocketRealtimeContract,webrtcSessionDoneSocketContract}.test.ts`.
 - **14:17** Voice Sessions list ordering hardening:
   - `app/src/pages/voice/SessionsListPage.tsx`: added timestamp normalization helper and stable sort (`is_active` desc, `last_voice_timestamp` desc, `created_at` desc), plus timestamp-safe time range rendering.
+- **16:30** CRM/miniapp/reporting canonical ticket linkage:
+  - `backend/src/api/routes/crm/{finances,performers-payments,tickets}.ts`
+  - `backend/src/miniapp/routes/index.ts`
+  - `backend/src/services/reports/{jiraStyleReport,performerWeeksReport}.ts`
+  - switched joins/lookups/aggregations from legacy `ticket_id` to canonical `ticket_db_id` (`tasks._id`) with safe ObjectId/string normalization.
+- **16:30** Added backfill script:
+  - `backend/scripts/backfill-work-hours-ticket-db-id.ts` (`--apply` optional; default dry-run).
+- **16:30** WebRTC close diagnostics polish:
+  - `app/public/webrtc/webrtc-voicebot-lib.js` now logs `session_id` in `closeSessionViaRest` fail/reject/request warnings.
 
 ## 2026-02-25
 ### PROBLEM SOLVED

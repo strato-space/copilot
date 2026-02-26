@@ -20,6 +20,8 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Routes accessible at `/operops/*` with OperOpsNav horizontal navigation.
 - CRM Kanban task details link must resolve by `id || _id` to prevent `/operops/task/undefined` navigation for records without public `id`.
 - CRM project display/filtering should resolve project name from `project_data`/`project_id`/`project`; performer filter must handle mixed `_id` and legacy `id` values.
+- CRM work-hours linkage is canonical by `ticket_db_id` (`automation_tasks._id`) across CRM API, Miniapp routes, and reporting services; legacy `ticket_id` is tolerated only as migration input.
+- Added backfill utility for historical work-hours rows missing `ticket_db_id`: `cd backend && npx tsx scripts/backfill-work-hours-ticket-db-id.ts --apply` (use without `--apply` for dry-run).
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
@@ -36,6 +38,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` (legacy alias `POST /api/voicebot/close_session`), while websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
+- WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - WebRTC close path no longer emits `session_done` from browser Socket.IO; FAB/page/yesterday close flows use the same REST close endpoint for deterministic behavior across host/path variants.
 - WebRTC unload persistence now stores any non-recording state as `paused` to avoid stale auto-resume after refresh/unload races.
