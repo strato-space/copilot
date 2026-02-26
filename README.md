@@ -54,6 +54,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Empty stale sessions can be cleaned in worker runtime by scheduled `CLEANUP_EMPTY_SESSIONS` jobs (no-message sessions older than configured threshold are marked `is_deleted=true`):
   - env knobs: `VOICEBOT_EMPTY_SESSION_CLEANUP_INTERVAL_MS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_AGE_HOURS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_BATCH_LIMIT`.
 - Voice sessions list supports deleted-session mode (`include_deleted` / `Показывать удаленные`); creator/participant filters suppress numeric identity placeholders and keep only human-readable labels.
+- Voice sessions list forces a mode-sync refetch when `showDeletedSessions` intent changes during an in-flight load (`force=true` bypasses loading short-circuit for this case).
 - Voice sessions list supports bulk delete for selected active rows (`Удалить выбранные`) with confirmation and safe exclusion of already deleted sessions.
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
@@ -217,6 +218,9 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Fixed voice sessions deleted-mode sync (`copilot-nhwu`): `SessionsListPage` now forces list refetch when `sessionsListIncludeDeleted` differs from current `showDeletedSessions` intent.
+- Updated store fetch guard so `fetchVoiceBotSessionsList({ force: true })` can run while list loading is active for required mode synchronization.
+- Added regression test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts`.
 - Restored notify transport path for voice summarize events: `actions@call` command fixed in `/home/tools/server/mcp/call.env`, `/notify` now healthy (`200`).
 - Added TS local notify hooks parity in `backend/src/workers/voicebot/handlers/notify.ts`:
   - `VOICE_BOT_NOTIFY_HOOKS_CONFIG` support (YAML/JSON, default `./notifies.hooks.yaml`, empty disables),

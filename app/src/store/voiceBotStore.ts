@@ -1115,7 +1115,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         const includeDeleted = options?.includeDeleted === true;
         const { force = false } = options ?? {};
         const { isSessionsListLoading, sessionsListLoadedAt, sessionsListIncludeDeleted } = get();
-        if (isSessionsListLoading) return;
+        if (isSessionsListLoading && !force) return;
         if (!force && sessionsListLoadedAt && sessionsListIncludeDeleted === includeDeleted) return;
 
         set({ isSessionsListLoading: true });

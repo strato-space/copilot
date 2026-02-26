@@ -208,6 +208,7 @@ export default function SessionsListPage() {
         getSessionData,
         restartCorruptedSession,
         sendSessionToCrmWithMcp,
+        sessionsListIncludeDeleted,
     } = useVoiceBotStore();
     const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
     const { generateSessionTitle } = useSessionsUIStore();
@@ -437,11 +438,17 @@ export default function SessionsListPage() {
         if (!persons_list) {
             void fetchPersonsList();
         }
-        void fetchVoiceBotSessionsList({ includeDeleted: showDeletedSessions });
+        const shouldForceSyncIncludeDeleted =
+            sessionsListIncludeDeleted !== null && sessionsListIncludeDeleted !== showDeletedSessions;
+        void fetchVoiceBotSessionsList({
+            includeDeleted: showDeletedSessions,
+            force: shouldForceSyncIncludeDeleted,
+        });
     }, [
         isAuth,
         prepared_projects,
         persons_list,
+        sessionsListIncludeDeleted,
         showDeletedSessions,
         fetchPreparedProjects,
         fetchPersonsList,

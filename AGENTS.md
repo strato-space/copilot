@@ -197,6 +197,7 @@ Preferred engineering principles for this repo:
 - TS transcribe worker deduplicates repeated chunk uploads by file hash (`file_hash`/`file_unique_id`/`hash_sha256`) and reuses existing transcription payload before calling OpenAI.
 - Voice workers schedule `CLEANUP_EMPTY_SESSIONS` on `VOICEBOT_QUEUES.COMMON`; cleanup marks stale empty sessions (`message_count=0`) as `is_deleted=true` with configurable cadence/age/batch limits via env.
 - Voice sessions list supports `include_deleted` server filter and frontend `Показывать удаленные`; creator/participant filters drop numeric identity placeholders so only human labels are shown.
+- Voice sessions list must force a refetch when `include_deleted` intent changes during an in-flight list load; loading guard should not block `force=true` mode sync.
 - Voice sessions list supports bulk delete for selected non-deleted rows (`Удалить выбранные` with confirmation) while preserving row-click navigation behavior.
 - Notify worker (`backend/src/workers/voicebot/handlers/notify.ts`) now supports both HTTP notify transport and local hooks parity:
   - HTTP path uses `VOICE_BOT_NOTIFIES_URL` + `VOICE_BOT_NOTIFIES_BEARER_TOKEN`,
@@ -385,6 +386,8 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
+- Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.
 - Added MeetingCard dialogue-tag editor with local remembered tags (`localStorage`) and persisted updates through `updateSessionDialogueTag`.
 - Updated Voice frontend done-state behavior: `voiceBotStore.finishSession` now handles `session_done` ack and applies immediate optimistic close projection; realtime `session_status=done_queued` now updates session/list state without refresh.

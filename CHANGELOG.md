@@ -8,6 +8,7 @@
 - **12:22** Sessions list filters could show raw numeric identities (chat ids) in creator/participant dropdowns, and deleted sessions had no explicit opt-in list mode for operators.
 - **12:22** Runtime accumulated stale empty sessions (no linked messages) with no autonomous cleanup path in TS workers.
 - **12:39** Production deploy script was blocked by TypeScript compile errors introduced by strict type narrowing in voice/permission helper paths.
+- **13:03** Voice Sessions list could remain in the previous `include_deleted` mode when filter intent changed during an in-flight fetch, because the store rejected concurrent list requests even for required mode sync.
 
 ### FEATURE IMPLEMENTED
 - **12:22** Added realtime-safe transcription visibility: frontend now renders pending/error/audio rows immediately, and worker transcribe flow emits `message_update` across success/failure branches.
@@ -17,6 +18,7 @@
 - **12:22** Added sessions list bulk delete flow for selected non-deleted rows with confirmation and clear result feedback.
 - **12:39** Restored green backend build for deploy path by fixing strict TS typing regressions in voice routes/runtime integration contracts.
 - **12:22** Added WebRTC monitor resilience UX: explicit chunk states (`local/uploading/uploaded/upload_failed`) and pending-upload snapshot hint after refresh.
+- **13:03** Added forced include-deleted mode synchronization for voice sessions list: the page now detects `showDeletedSessions` vs store-mode mismatch and triggers a forced refetch that can bypass loading lock.
 
 ### CHANGES
 - **12:22** Voice frontend updates:
@@ -38,6 +40,10 @@
 - **12:39** TS compile compatibility fixes for deploy:
   - `backend/src/api/routes/voicebot/{permissions,sessions}.ts` (safe array typing + canonical transcription helper call signature).
   - `backend/src/{api/socket.ts,permissions/permission-manager.ts,services/{db,transcriptionTimeline}.ts,voicebot_tgbot/commandHandlers.ts}` (type contracts aligned with runtime signatures).
+- **13:03** Voice sessions `include_deleted` sync hardening:
+  - `app/src/store/voiceBotStore.ts`: `fetchVoiceBotSessionsList` now permits forced refetch while loading (`if (isSessionsListLoading && !force) return;`).
+  - `app/src/pages/voice/SessionsListPage.tsx`: computes `shouldForceSyncIncludeDeleted` and passes `force` when URL/user intent differs from loaded store mode.
+  - `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts`: new regression contract for forced-sync and loading-bypass behavior.
 
 ## 2026-02-25
 ### PROBLEM SOLVED
