@@ -989,7 +989,7 @@ const getSession = async (req: Request, res: Response) => {
         const normalizedSessionMessages = sessionMessagesCleaned.map((entry) => entry.message);
 
         // Get participants info
-        let participants: Array<{ _id: ObjectId; name?: string; contacts?: unknown[] }> = [];
+        let participants: any[] = [];
         const sessionRecord = session as VoiceSessionRecord;
         const participantIds = toObjectIdArray(sessionRecord.participants);
         if (participantIds.length > 0) {
@@ -1003,14 +1003,7 @@ const getSession = async (req: Request, res: Response) => {
         }
 
         // Get allowed_users info for RESTRICTED sessions
-        let allowed_users: Array<{
-            _id: ObjectId;
-            name?: string;
-            real_name?: string;
-            corporate_email?: string;
-            role?: string;
-            email?: string;
-        }> = [];
+        let allowed_users: any[] = [];
         const allowedUserIds = toObjectIdArray(sessionRecord.allowed_users);
         if (allowedUserIds.length > 0) {
             allowed_users = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).find({
@@ -2941,7 +2934,7 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
             });
         }
 
-        const ensured = await ensureMessageCanonicalTranscription({ db, logger, message: messageDoc });
+        const ensured = await ensureMessageCanonicalTranscription({ db, message: messageDoc });
         const transcription = ensured.transcription;
         const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
         const segIdx = segments.findIndex((seg) => seg?.id === segment_oid);
@@ -3124,7 +3117,7 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
             });
         }
 
-        const ensured = await ensureMessageCanonicalTranscription({ db, logger, message: messageDoc });
+        const ensured = await ensureMessageCanonicalTranscription({ db, message: messageDoc });
         const transcription = ensured.transcription;
         const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
         const segIdx = segments.findIndex((seg) => seg?.id === segment_oid);
@@ -3327,7 +3320,7 @@ router.post('/rollback_event', async (req: Request, res: Response) => {
             });
         }
 
-        const ensured = await ensureMessageCanonicalTranscription({ db, logger, message });
+        const ensured = await ensureMessageCanonicalTranscription({ db, message });
         const transcription = ensured.transcription;
         const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
         const segIdx = segments.findIndex((seg) => seg?.id === segmentOid);

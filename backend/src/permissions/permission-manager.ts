@@ -5,7 +5,7 @@
  * Migrated from voicebot/permissions/permission-manager.js
  */
 
-import { ObjectId, type Db, type UpdateFilter } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 import type { Request, Response, NextFunction } from 'express';
 import { PERMISSIONS, ROLES, type Permission, type RoleKey } from './permissions-config.js';
 import { COLLECTIONS, VOICEBOT_COLLECTIONS, VOICE_BOT_SESSION_ACCESS } from '../constants.js';
@@ -370,7 +370,7 @@ export class PermissionManager {
         {
           $pull: { projects_access: new ObjectId(projectId) },
           $set: { permissions_updated_at: new Date() },
-        } as UpdateFilter<Performer>
+        } as any
       );
       return result.modifiedCount > 0;
     } catch (error) {

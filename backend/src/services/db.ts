@@ -280,14 +280,12 @@ export const createRuntimeScopedCollectionProxy = <TSchema extends Document>(
           update: UpdateFilter<TSchema> | Document[],
           options?: Record<string, unknown>
         ) => {
-          const collection = target as Collection<TSchema>;
           const scopedFilter = runtimeFilterForCollection(filter);
           const nextUpdate = options?.upsert ? patchRuntimeTagIntoSetOnInsert(update) : update;
-          const typedOptions = options as Parameters<Collection<TSchema>['findOneAndUpdate']>[2] | undefined;
-          if (typedOptions) {
-            return collection.findOneAndUpdate(scopedFilter, nextUpdate, typedOptions);
+          if (options) {
+            return (target as any).findOneAndUpdate(scopedFilter, nextUpdate, options);
           }
-          return collection.findOneAndUpdate(scopedFilter, nextUpdate);
+          return (target as any).findOneAndUpdate(scopedFilter, nextUpdate);
         };
       }
 

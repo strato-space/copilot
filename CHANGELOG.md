@@ -7,18 +7,21 @@
 - **12:22** Upload incident diagnostics lacked a stable correlation key between browser errors and backend logs, slowing down triage for `Failed to fetch` / transport issues.
 - **12:22** Sessions list filters could show raw numeric identities (chat ids) in creator/participant dropdowns, and deleted sessions had no explicit opt-in list mode for operators.
 - **12:22** Runtime accumulated stale empty sessions (no linked messages) with no autonomous cleanup path in TS workers.
+- **12:39** Production deploy script was blocked by TypeScript compile errors introduced by strict type narrowing in voice/permission helper paths.
 
 ### FEATURE IMPLEMENTED
 - **12:22** Added realtime-safe transcription visibility: frontend now renders pending/error/audio rows immediately, and worker transcribe flow emits `message_update` across success/failure branches.
 - **12:22** Added upload correlation ids end-to-end (`request_id`): browser sends `X-Request-ID`, backend echoes/returns it in success and error payloads, and logs every upload stage with the same id.
 - **12:22** Added worker-level empty-session cleanup pipeline: new `CLEANUP_EMPTY_SESSIONS` job + scheduler in TS runner with env-configurable interval/age/batch limits.
 - **12:22** Added sessions list UX hardening: `include_deleted` fetch mode + `Показывать удаленные` toggle, and numeric placeholder suppression in creator/participant filters.
+- **12:22** Added sessions list bulk delete flow for selected non-deleted rows with confirmation and clear result feedback.
+- **12:39** Restored green backend build for deploy path by fixing strict TS typing regressions in voice routes/runtime integration contracts.
 - **12:22** Added WebRTC monitor resilience UX: explicit chunk states (`local/uploading/uploaded/upload_failed`) and pending-upload snapshot hint after refresh.
 
 ### CHANGES
 - **12:22** Voice frontend updates:
   - `app/src/components/voice/Transcription.tsx`, `app/src/components/voice/TranscriptionTableRow.tsx` (pending/error fallback rendering).
-  - `app/src/pages/voice/SessionsListPage.tsx`, `app/src/store/voiceBotStore.ts` (`include_deleted` state/query support, numeric identity filtering).
+  - `app/src/pages/voice/SessionsListPage.tsx`, `app/src/store/voiceBotStore.ts` (`include_deleted` state/query support, numeric identity filtering, bulk delete for selected rows).
   - `app/public/webrtc/webrtc-voicebot-lib.js` (chunk state labels, upload `request_id`, backend-unavailable diagnostics, pending-upload snapshot restore hint).
 - **12:22** Voice backend/runtime updates:
   - `backend/src/workers/voicebot/handlers/transcribe.ts` (safe `message_update` emit helper + branch coverage).
@@ -32,6 +35,9 @@
   - `backend/__tests__/voicebot/{workerTranscribeHandler,workerScaffoldHandlers,workerAncillaryHandlers}.test.ts`.
 - **12:22** Added persisted attachment artifact for regression context:
   - `backend/uploads/voicebot/attachments/699ebd71eaf48b3aa41c2010/wa_63a675fb495defe0_mm31mc9s.png`.
+- **12:39** TS compile compatibility fixes for deploy:
+  - `backend/src/api/routes/voicebot/{permissions,sessions}.ts` (safe array typing + canonical transcription helper call signature).
+  - `backend/src/{api/socket.ts,permissions/permission-manager.ts,services/{db,transcriptionTimeline}.ts,voicebot_tgbot/commandHandlers.ts}` (type contracts aligned with runtime signatures).
 
 ## 2026-02-25
 ### PROBLEM SOLVED

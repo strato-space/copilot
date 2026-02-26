@@ -1,6 +1,7 @@
 import { type MouseEvent, useEffect, useMemo, useState } from 'react';
 import {
     Avatar,
+    Button,
     Checkbox,
     ConfigProvider,
     Dropdown,
@@ -217,6 +218,8 @@ export default function SessionsListPage() {
     const [sendingToCrmId, setSendingToCrmId] = useState<string | null>(null);
     const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
     const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
+    const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
     const dialogueTagOptions = useMemo(() => {
         const tags = (voiceBotSessionsList || [])
@@ -474,12 +477,62 @@ export default function SessionsListPage() {
         return enrichedSessionsList;
     }, [enrichedSessionsList, projectTab]);
 
+    const selectableSessionIds = useMemo(
+        () => new Set(filteredSessionsList.filter((session) => !session.is_deleted).map((session) => session._id)),
+        [filteredSessionsList]
+    );
+
+    useEffect(() => {
+        setSelectedSessionIds((prev) => prev.filter((sessionId) => selectableSessionIds.has(sessionId)));
+    }, [selectableSessionIds]);
+
     useEffect(() => {
         const totalPages = Math.max(1, Math.ceil(filteredSessionsList.length / pageSize));
         if (currentPage > totalPages) {
             updatePaginationParams(totalPages, pageSize);
         }
     }, [currentPage, filteredSessionsList.length, pageSize]);
+
+    const handleDeleteSelectedSessions = async (): Promise<void> => {
+        const selectedSessions = filteredSessionsList.filter(
+            (session) => selectedSessionIds.includes(session._id) && !session.is_deleted
+        );
+
+        if (selectedSessions.length === 0) {
+            message.info('Нет сессий для удаления');
+            setSelectedSessionIds([]);
+            return;
+        }
+
+        setIsBulkDeleting(true);
+        let deletedCount = 0;
+        let failedCount = 0;
+
+        for (const session of selectedSessions) {
+            try {
+                await deleteSession(session._id);
+                deletedCount += 1;
+            } catch (error) {
+                console.error('Ошибка при групповом удалении сессии:', error);
+                failedCount += 1;
+            }
+        }
+
+        setSelectedSessionIds([]);
+        setIsBulkDeleting(false);
+
+        if (deletedCount > 0 && failedCount === 0) {
+            message.success(`Удалено сессий: ${deletedCount}`);
+            return;
+        }
+
+        if (deletedCount > 0) {
+            message.warning(`Удалено: ${deletedCount}, с ошибкой: ${failedCount}`);
+            return;
+        }
+
+        message.error('Не удалось удалить выбранные сессии');
+    };
 
     if (!voiceBotSessionsList || !prepared_projects || !persons_list) {
         return (
@@ -1105,6 +1158,26 @@ export default function SessionsListPage() {
                         Показывать удаленные
                     </Checkbox>
                 </div>
+                {selectedSessionIds.length > 0 ? (
+                    <div className="mb-2 flex items-center justify-between rounded border border-red-200 bg-red-50 px-3 py-2">
+                        <div className="text-[12px] text-red-800">
+                            Выбрано сессий: {selectedSessionIds.length}
+                        </div>
+                        <Popconfirm
+                            title="Удалить выбранные сессии"
+                            description={`Будет удалено: ${selectedSessionIds.length}`}
+                            okText="Удалить"
+                            cancelText="Отмена"
+                            okType="danger"
+                            onConfirm={() => void handleDeleteSelectedSessions()}
+                            disabled={isBulkDeleting}
+                        >
+                            <Button danger size="small" loading={isBulkDeleting}>
+                                Удалить выбранные
+                            </Button>
+                        </Popconfirm>
+                    </div>
+                ) : null}
                 <Table
                     className="w-full sessions-table"
                     size="small"
@@ -1121,6 +1194,14 @@ export default function SessionsListPage() {
                     dataSource={filteredSessionsList}
                     rowKey="_id"
                     rowClassName={(record) => (record.is_deleted ? 'sessions-row-deleted' : '')}
+                    rowSelection={{
+                        selectedRowKeys: selectedSessionIds,
+                        onChange: (nextSelectedKeys) =>
+                            setSelectedSessionIds(nextSelectedKeys.map((key) => String(key))),
+                        getCheckboxProps: (record) => ({
+                            disabled: Boolean(record.is_deleted),
+                        }),
+                    }}
                     columns={columns}
                     onChange={(pagination, filters) => {
                         updateTableStateParams(
@@ -1131,6 +1212,9 @@ export default function SessionsListPage() {
                     }}
                     onRow={(record) => ({
                         onClick: (event) => {
+                            if ((event?.target as HTMLElement | null)?.closest?.('.ant-table-selection-column')) {
+                                return;
+                            }
                             if ((event?.target as HTMLElement | null)?.closest?.('[data-stop-row-click="true"]')) {
                                 return;
                             }
