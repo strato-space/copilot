@@ -239,6 +239,10 @@ Projects:
   - detached hook spawn + structured logs,
   - session-log events `notify_hook_started`, `notify_http_sent`, `notify_http_failed`.
 - Added sample hooks config `backend/notifies.hooks.yaml` and targeted regression test `backend/__tests__/voicebot/notifyWorkerHooks.test.ts`.
+- Hardened TS notify hooks diagnostics:
+  - per-hook stdout/stderr is persisted into `VOICE_BOT_NOTIFY_HOOKS_LOG_DIR` (default `./logs/voicebot-notify-hooks`);
+  - `notify_hook_started.metadata.log_path` now stores exact hook log path;
+  - hook spawn failures are persisted as `notify_hook_failed` in `automation_voice_bot_session_log`.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selectors (`app/src/pages/voice/SessionsListPage.tsx`).
 - Added MeetingCard dialogue-tag editing with remembered local tag options and persisted `dialogue_tag` updates.
 - Updated done UX/state flow: frontend applies immediate ack-driven close projection, listens for `session_status=done_queued`, and backend socket emits immediate `session_update` on `session_done`.

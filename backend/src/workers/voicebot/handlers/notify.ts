@@ -2,6 +2,7 @@ import { getLogger } from '../../../utils/logger.js';
 import * as childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import YAML from 'yaml';
 import { z } from 'zod';
@@ -43,6 +44,48 @@ let hooksCache: HooksCache | null = null;
 
 export const resetNotifyHooksCacheForTests = (): void => {
   hooksCache = null;
+};
+
+const sanitizeLogToken = (value: string, fallback: string): string => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return normalized.length > 0 ? normalized.slice(0, 120) : fallback;
+};
+
+const resolveHooksLogDir = (): string => {
+  const raw = String(process.env.VOICE_BOT_NOTIFY_HOOKS_LOG_DIR || '').trim();
+  const configured = raw || './logs/voicebot-notify-hooks';
+  return path.isAbsolute(configured)
+    ? configured
+    : path.resolve(process.cwd(), configured);
+};
+
+const ensureHooksLogDir = (dirPath: string): void => {
+  if (fs.existsSync(dirPath)) return;
+  fs.mkdirSync(dirPath, { recursive: true });
+};
+
+const buildHookLogPath = ({
+  event,
+  session_id,
+  hookIndex,
+}: {
+  event: string;
+  session_id: string;
+  hookIndex: number;
+}): string => {
+  const dirPath = resolveHooksLogDir();
+  ensureHooksLogDir(dirPath);
+  const now = new Date().toISOString().replace(/[:.]/g, '-');
+  const eventPart = sanitizeLogToken(event, 'event');
+  const sessionPart = sanitizeLogToken(session_id, 'no_session');
+  const seqPart = String(hookIndex + 1).padStart(2, '0');
+  const fileName = `${now}__${eventPart}__${sessionPart}__${seqPart}__${randomUUID()}.log`;
+  return path.join(dirPath, fileName);
 };
 
 const resolveHooksConfigPath = (): string | null => {
@@ -213,14 +256,48 @@ const runNotifyHooks = async ({
     const logContext = await buildSessionLogContext({ event, session_id, payload });
 
     let started = 0;
-    for (const hook of hooks as NotifyHook[]) {
+    for (const [hookIndex, hook] of (hooks as NotifyHook[]).entries()) {
       const cmd = hook.cmd;
       const args = Array.isArray(hook.args) ? hook.args : [];
+      const logPath = buildHookLogPath({ event, session_id, hookIndex });
+      fs.appendFileSync(
+        logPath,
+        [
+          `[start] ${new Date().toISOString()}`,
+          `event=${event}`,
+          `session_id=${session_id || '-'}`,
+          `cmd=${cmd}`,
+          `args=${JSON.stringify(args)}`,
+          '---',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+      let logFd: number | null = null;
+      try {
+        logFd = fs.openSync(logPath, 'a');
+      } catch (openErr) {
+        logger.error('[voicebot-worker] notify hook log open failed', {
+          event,
+          session_id: session_id || null,
+          cmd,
+          args,
+          log_path: logPath,
+          error: String(openErr),
+        });
+        continue;
+      }
+
       const child = childProcess.spawn(cmd, [...args, eventJsonArg], {
         detached: true,
-        stdio: 'ignore',
+        stdio: ['ignore', logFd, logFd],
         env: { ...process.env },
       });
+      if (logFd !== null) {
+        try {
+          fs.closeSync(logFd);
+        } catch {}
+      }
 
       child.on('error', (spawnErr) => {
         logger.error('[voicebot-worker] notify hook spawn failed', {
@@ -228,7 +305,21 @@ const runNotifyHooks = async ({
           session_id: session_id || null,
           cmd,
           args,
+          log_path: logPath,
           error: String(spawnErr),
+        });
+        void writeNotifyLog({
+          context: logContext,
+          eventName: 'notify_hook_failed',
+          status: 'error',
+          sourceTransport: 'local_hook',
+          metadata: {
+            cmd,
+            args,
+            log_path: logPath,
+            error: String(spawnErr),
+            hooks_config_path: loaded.resolvedPath,
+          },
         });
       });
 
@@ -240,6 +331,7 @@ const runNotifyHooks = async ({
         session_id: session_id || null,
         cmd,
         args,
+        log_path: logPath,
         pid: child.pid ?? null,
       });
 
@@ -250,6 +342,7 @@ const runNotifyHooks = async ({
         metadata: {
           cmd,
           args,
+          log_path: logPath,
           pid: child.pid ?? null,
           hooks_config_path: loaded.resolvedPath,
         },

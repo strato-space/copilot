@@ -14,6 +14,7 @@
 - **14:17** Voice Sessions list ordering in UI was not deterministic across mixed timestamp formats (`Date`, seconds, ms, ISO strings), so active/newest conversations could appear below stale rows.
 - **16:30** CRM/miniapp/reporting paths still mixed legacy `ticket_id` joins with current task storage, so work-hours could disappear from margins/payments/reports when only `ticket_db_id` was present.
 - **16:30** WebRTC close failure diagnostics lacked stable `session_id` in warning payloads, which made FAB `Done` incident triage slower in shared logs.
+- **22:01** Local notify hooks in TS worker had no per-run stdout/stderr artifact and no explicit failure event for hook spawn errors, which made post-mortem diagnostics dependent on transient process logs.
 
 ### FEATURE IMPLEMENTED
 - **12:22** Added realtime-safe transcription visibility: frontend now renders pending/error/audio rows immediately, and worker transcribe flow emits `message_update` across success/failure branches.
@@ -31,6 +32,7 @@
 - **16:30** Unified work-hours linkage on canonical `ticket_db_id` (`automation_tasks._id`) across CRM finances, performer payments, tickets API, miniapp routes, and week/jira reports.
 - **16:30** Added migration utility to backfill missing `ticket_db_id` in historical work-hours rows from legacy `ticket_id`.
 - **16:30** Added richer WebRTC REST close warnings with `session_id` for direct browser↔backend correlation.
+- **22:01** Added hook-run log persistence for TS notify hooks with configurable log directory (`VOICE_BOT_NOTIFY_HOOKS_LOG_DIR`) and session-log coverage for spawn failures via `notify_hook_failed`.
 
 ### CHANGES
 - **12:22** Voice frontend updates:
@@ -78,6 +80,10 @@
   - `backend/scripts/backfill-work-hours-ticket-db-id.ts` (`--apply` optional; default dry-run).
 - **16:30** WebRTC close diagnostics polish:
   - `app/public/webrtc/webrtc-voicebot-lib.js` now logs `session_id` in `closeSessionViaRest` fail/reject/request warnings.
+- **22:01** Notify hooks diagnostics hardening:
+  - `backend/src/workers/voicebot/handlers/notify.ts`: per-hook log file creation (`stdout/stderr` redirection), configurable log directory, `log_path` metadata, and `notify_hook_failed` session-log write on spawn error.
+  - `backend/__tests__/voicebot/notifyWorkerHooks.test.ts`: asserts hook log creation and detached `stdio` fd wiring.
+  - `backend/src/workers/README.md`: documented `VOICE_BOT_NOTIFY_HOOKS_LOG_DIR` and updated notify event list.
 
 ## 2026-02-25
 ### PROBLEM SOLVED

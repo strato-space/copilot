@@ -49,6 +49,8 @@ Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly 
 - `sendToSocket` handler remains a controlled skip in standalone workers (`socket_runtime_not_available`) by design; socket delivery is handled by backend runtime (`backend/src/services/voicebotSocketEventsWorker.ts`) consuming `VOICEBOT_JOBS.events.SEND_TO_SOCKET` from `voicebot--events-*`.
 - Notify handler supports both HTTP webhook delivery and optional local hooks runner parity:
   - `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON, default `./notifies.hooks.yaml`, empty value disables).
-  - writes worker session-log events: `notify_hook_started`, `notify_http_sent`, `notify_http_failed`.
+  - `VOICE_BOT_NOTIFY_HOOKS_LOG_DIR` (default `./logs/voicebot-notify-hooks`) to persist stdout/stderr per hook run.
+  - writes worker session-log events: `notify_hook_started`, `notify_hook_failed`, `notify_http_sent`, `notify_http_failed`.
+  - `notify_hook_started.metadata.log_path` stores the exact log file path for post-mortem diagnostics.
 - `audioMerging` handler in TS runtime is intentionally a controlled skip unless Telegram merge transport/tooling is wired in worker process context.
 - Telegram voice-file download path remains pending in transcribe pipeline (current TS transcribe path expects local `file_path`).

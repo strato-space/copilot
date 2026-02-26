@@ -55,6 +55,7 @@ describe('voicebot notify worker hooks runner', () => {
     );
 
     process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = hooksPath;
+    process.env.VOICE_BOT_NOTIFY_HOOKS_LOG_DIR = path.join(tempDir, 'hook-logs');
 
     const childStub = {
       pid: 4242,
@@ -76,7 +77,7 @@ describe('voicebot notify worker hooks runner', () => {
     expect(result.config_path).toBe(hooksPath);
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [cmd, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const [cmd, args, options] = spawnMock.mock.calls[0] as [string, string[], Record<string, unknown>];
     expect(cmd).toBe('/usr/local/bin/uv');
     expect(args.slice(0, 7)).toEqual([
       '--directory',
@@ -95,6 +96,17 @@ describe('voicebot notify worker hooks runner', () => {
       project_id: 'pmo-id',
       session_id: 'abc',
     });
+    expect(options.detached).toBe(true);
+    const stdio = options.stdio as unknown[];
+    expect(Array.isArray(stdio)).toBe(true);
+    expect(typeof stdio[1]).toBe('number');
+    expect(typeof stdio[2]).toBe('number');
+
+    const logFiles = fs.readdirSync(path.join(tempDir, 'hook-logs'));
+    expect(logFiles.length).toBe(1);
+    const logContent = fs.readFileSync(path.join(tempDir, 'hook-logs', logFiles[0]!), 'utf8');
+    expect(logContent).toContain('event=session_ready_to_summarize');
+    expect(logContent).toContain('session_id=abc');
   });
 
   it('supports explicit disable via empty VOICE_BOT_NOTIFY_HOOKS_CONFIG', async () => {
@@ -122,6 +134,7 @@ describe('voicebot notify worker hooks runner', () => {
     );
 
     process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = hooksPath;
+    process.env.VOICE_BOT_NOTIFY_HOOKS_LOG_DIR = path.join(tempDir, 'hook-logs');
     process.env.VOICE_BOT_NOTIFIES_URL = 'https://call-actions.stratospace.fun/notify';
     process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = 'token';
 
@@ -156,5 +169,8 @@ describe('voicebot notify worker hooks runner', () => {
         session_id: 'abc',
       },
     });
+
+    const logFiles = fs.readdirSync(path.join(tempDir, 'hook-logs'));
+    expect(logFiles.length).toBe(1);
   });
 });

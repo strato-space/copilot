@@ -204,7 +204,9 @@ Preferred engineering principles for this repo:
 - Notify worker (`backend/src/workers/voicebot/handlers/notify.ts`) now supports both HTTP notify transport and local hooks parity:
   - HTTP path uses `VOICE_BOT_NOTIFIES_URL` + `VOICE_BOT_NOTIFIES_BEARER_TOKEN`,
   - local hooks use `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON; default `./notifies.hooks.yaml`; empty value disables),
-  - writes `notify_hook_started`, `notify_http_sent`, `notify_http_failed` into `automation_voice_bot_session_log`.
+  - per-hook stdout/stderr logs are persisted to `VOICE_BOT_NOTIFY_HOOKS_LOG_DIR` (default `./logs/voicebot-notify-hooks`),
+  - writes `notify_hook_started`, `notify_hook_failed`, `notify_http_sent`, `notify_http_failed` into `automation_voice_bot_session_log`,
+  - `notify_hook_started.metadata.log_path` stores exact hook-run log file path for diagnostics.
 - Session payload normalization now removes stale categorization rows that reference already deleted transcript segments (including punctuation/spacing variants), and persists cleanup on read.
 - Categorization handler must treat non-text placeholders (`image`, `[Image]`, `[Screenshot]`) as non-blocking: mark message as processed with empty categorization and emit `message_update` for realtime consistency.
 - WebRTC unload persistence now writes non-recording states as `paused` to prevent stale `recording` state recovery after refresh/unload races.
@@ -228,6 +230,8 @@ VOICE_BOT_NOTIFIES_BEARER_TOKEN=
 # unset -> ./notifies.hooks.yaml
 # empty string -> disabled
 VOICE_BOT_NOTIFY_HOOKS_CONFIG=./notifies.hooks.yaml
+# Optional hooks execution logs directory
+VOICE_BOT_NOTIFY_HOOKS_LOG_DIR=./logs/voicebot-notify-hooks
 
 # Optional for MCP proxy
 MCP_SERVER_URL=http://localhost:3001
@@ -416,3 +420,4 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added shared Voice session-finalization helper `backend/src/services/voicebotSessionDoneFlow.ts` and switched socket `session_done` handling to use it for consistent queue/fallback behavior.
 - Added inactivity-driven close automation script `backend/scripts/voicebot-close-inactive-sessions.ts` plus npm aliases `voice:close-idle:dry|apply` for dry-run/apply operational workflows.
 - Added diagnostics helper `backend/scripts/tmp-explain-69981f2e.ts` for one-session transcription/chunk state inspection during incident triage.
+- Updated TS notify hooks runner to persist per-run stdout/stderr logs under `VOICE_BOT_NOTIFY_HOOKS_LOG_DIR` and include `log_path` in session-log metadata; hook spawn errors are now persisted as `notify_hook_failed` events.
