@@ -91,6 +91,27 @@ const parsePositiveInt = (value: string | null, fallback: number): number => {
     return Math.floor(parsed);
 };
 
+const parseSessionTimestamp = (value: unknown): number => {
+    if (value instanceof Date) {
+        const timestamp = value.getTime();
+        return Number.isFinite(timestamp) ? timestamp : 0;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value > 1_000_000_000_000 ? value : value * 1000;
+    }
+    if (typeof value === 'string') {
+        const normalized = value.trim();
+        if (!normalized) return 0;
+        const numeric = Number(normalized);
+        if (Number.isFinite(numeric)) {
+            return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+        }
+        const parsed = Date.parse(normalized);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+};
+
 const parseSingleFilter = (value: string | null): string | null => {
     const normalized = typeof value === 'string' ? value.trim() : '';
     return normalized.length > 0 ? normalized : null;
@@ -484,6 +505,26 @@ export default function SessionsListPage() {
         return enrichedSessionsList;
     }, [enrichedSessionsList, projectTab]);
 
+    const sortedSessionsList = useMemo<SessionRow[]>(() => {
+        return [...filteredSessionsList].sort((left, right) => {
+            const leftActive = left.is_active === true ? 1 : 0;
+            const rightActive = right.is_active === true ? 1 : 0;
+            if (leftActive !== rightActive) {
+                return rightActive - leftActive;
+            }
+
+            const leftLastVoiceTs = parseSessionTimestamp(left.last_voice_timestamp);
+            const rightLastVoiceTs = parseSessionTimestamp(right.last_voice_timestamp);
+            if (leftLastVoiceTs !== rightLastVoiceTs) {
+                return rightLastVoiceTs - leftLastVoiceTs;
+            }
+
+            const leftCreatedTs = parseSessionTimestamp(left.created_at);
+            const rightCreatedTs = parseSessionTimestamp(right.created_at);
+            return rightCreatedTs - leftCreatedTs;
+        });
+    }, [filteredSessionsList]);
+
     const selectableSessionIds = useMemo(
         () => new Set(filteredSessionsList.filter((session) => !session.is_deleted).map((session) => session._id)),
         [filteredSessionsList]
@@ -565,24 +606,27 @@ export default function SessionsListPage() {
             dataIndex: 'created_at',
             key: 'created_at',
             width: 104,
-            render: (_text, record) => (
-                <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap relative pl-2">
-                    <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap flex items-center gap-1 ">
-                        {record.created_at ? dayjs(record.created_at).format('HH:mm ') : ''}-
-                        {record.last_voice_timestamp
-                            ? dayjs(Number(record.last_voice_timestamp)).format(' HH:mm')
-                            : record.done_at
-                                ? dayjs(record.done_at).format('HH:mm')
-                                : ''}
+            render: (_text, record) => {
+                const createdTimestamp = parseSessionTimestamp(record.created_at);
+                const lastVoiceTimestamp = parseSessionTimestamp(record.last_voice_timestamp);
+                const doneTimestamp = parseSessionTimestamp(record.done_at);
+                const endTimestamp = lastVoiceTimestamp || doneTimestamp;
+
+                return (
+                    <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap relative pl-2">
+                        <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap flex items-center gap-1 ">
+                            {createdTimestamp > 0 ? dayjs(createdTimestamp).format('HH:mm ') : ''}-
+                            {endTimestamp > 0 ? dayjs(endTimestamp).format(' HH:mm') : ''}
+                        </div>
+                        <div className="text-black/50 text-[10px] font-normal sf-pro leading-[13px] whitespace-pre-wrap ">
+                            {createdTimestamp > 0 ? dayjs(createdTimestamp).format('DD MMM YY') : ''}
+                        </div>
+                        {record.is_active ? (
+                            <span className="absolute inline-block w-[6px] h-[6px] rounded bg-red-500 -left-[4px] top-1/2 -mt-[2px]"></span>
+                        ) : null}
                     </div>
-                    <div className="text-black/50 text-[10px] font-normal sf-pro leading-[13px] whitespace-pre-wrap ">
-                        {record.created_at ? dayjs(record.created_at).format('DD MMM YY') : ''}
-                    </div>
-                    {record.done_at && !record.is_active ? null : (
-                        <span className="absolute inline-block w-[6px] h-[6px] rounded bg-red-500 -left-[4px] top-1/2 -mt-[2px]"></span>
-                    )}
-                </div>
-            ),
+                );
+            },
         },
         {
             title: 'Проект',
@@ -1198,7 +1242,7 @@ export default function SessionsListPage() {
                         pageSizeOptions: ['10', '15', '30', '50', '100', '200'],
                         className: 'bg-white p-4 !m-0 !mb-2 rounded-lg shadow-sm',
                     }}
-                    dataSource={filteredSessionsList}
+                    dataSource={sortedSessionsList}
                     rowKey="_id"
                     rowClassName={(record) => (record.is_deleted ? 'sessions-row-deleted' : '')}
                     rowSelection={{

@@ -386,6 +386,10 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Switched voice session close initiation to REST-only client path: frontend store and WebRTC runtime now call `POST /api/voicebot/session_done` (`/close_session` alias supported), and browser-side `session_done` socket emits are removed.
+- Added canonical backend close route in `backend/src/api/routes/voicebot/sessions.ts` with Zod request validation, permission/access checks, shared `completeSessionDoneFlow` orchestration, and realtime `session_status`/`session_update` broadcast.
+- Added backend regression suite `backend/__tests__/voicebot/sessionDoneRoute.test.ts` to lock REST close contract, alias parity, and validation behavior.
+- Updated Voice Sessions list ordering in `app/src/pages/voice/SessionsListPage.tsx`: active rows first, then latest voice activity timestamp, then creation time with mixed-format timestamp normalization.
 - Fixed WebRTC FAB `Done` close reliability on `/voice/session/:id`: `session_done` now retries across socket namespace base candidates (origin + `/api` stripped variants), and close failure no longer silently clears session state.
 - Added close-failure UX guard in WebRTC runtime: when `session_done` is not acknowledged, FAB returns to `paused` with explicit retry toast (`Failed to close session. Retry Done.`) instead of fake `idle/ready`.
 - Updated regression contract `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts` to lock fallback namespace attempts and non-silent failed-close behavior.

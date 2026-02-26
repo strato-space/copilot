@@ -25,9 +25,9 @@ describe('Voice socket realtime contract', () => {
     expect(source).toContain('to_finalize: true');
   });
 
-  it('uses session_done ack callback to apply immediate optimistic closed state', () => {
-    expect(source).toContain('SOCKET_EVENTS.SESSION_DONE');
-    expect(source).toContain('(ack?: { ok?: boolean; error?: string }) =>');
-    expect(source).toContain('message.error(`Done failed: ${ack.error}`)');
+  it('closes session through REST API and reports backend close errors', () => {
+    expect(source).toContain("await voicebotRequest('voicebot/session_done', { session_id: normalizedSessionId });");
+    expect(source).toContain("message.error(errorText ? `Done failed: ${errorText}` : 'Done failed');");
+    expect(source).not.toContain('SOCKET_EVENTS.SESSION_DONE');
   });
 });

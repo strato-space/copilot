@@ -1153,100 +1153,39 @@
         function getSessionId(s) {
             return String(s?._id || s?.id || s?.session_id || '');
         }
-        // Dynamically load Socket.IO client if needed
-        async function ensureSocketIo() {
-            if (window.io && typeof window.io === 'function') return true;
-            return await new Promise((resolve) => {
-                try {
-                    const s = document.createElement('script');
-                    s.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
-                    s.onload = () => resolve(true);
-                    s.onerror = () => resolve(false);
-                    document.head.appendChild(s);
-                } catch { resolve(false); }
-            });
-        }
-        function buildSocketBaseCandidates(base) {
-            const out = [];
-            const push = (value) => {
-                const normalized = String(value || '').trim().replace(/\/+$/, '');
-                if (!normalized) return;
-                if (!out.includes(normalized)) out.push(normalized);
-            };
+        async function closeSessionViaRest(sessionId, opts = {}) {
+            const sid = String(sessionId || '').trim();
+            if (!sid || !AUTH_TOKEN) return false;
+            const timeoutMs = Math.max(500, Number(opts.timeoutMs || 5000));
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
             try {
-                const u = new URL(String(base || ''), location.origin);
-                const pathname = String(u.pathname || '').replace(/\/+$/, '');
-                push(u.origin);
-                if (pathname) {
-                    const stripped = pathname.replace(/\/api(?:\/.*)?$/i, '');
-                    if (stripped && stripped !== pathname) {
-                        push(`${u.origin}${stripped}`);
-                    }
-                    push(`${u.origin}${pathname}`);
-                }
-            } catch {
-                const raw = String(base || '').trim().replace(/\/+$/, '');
-                if (raw) {
-                    push(raw.replace(/\/api(?:\/.*)?$/i, ''));
-                    push(raw);
-                }
-            }
-            push(location.origin);
-            return out;
-        }
-
-        async function emitSessionDoneToNamespace(voicebotNs, sessionId, opts = {}) {
-            if (!window.io || !voicebotNs) return false;
-            const sio = window.io(voicebotNs, {
-                path: '/socket.io',
-                // Prefer polling to avoid noisy WS errors in mixed/proxied environments
-                transports: ['polling'],
-                forceNew: true,
-                reconnection: false,
-                auth: { token: AUTH_TOKEN, 'X-Authorization': AUTH_TOKEN }
-            });
-            return await new Promise((resolve) => {
-                let settled = false;
-                const done = (v)=>{ if (!settled){ settled=true; try{ sio.close(); }catch{} resolve(!!v); } };
-                const timer = setTimeout(()=> done(false), Math.max(500, opts.timeoutMs||5000));
-                sio.on('connect', () => {
-                    try {
-                        const payload = { session_id: sessionId };
-                        sio.timeout(3000).emit('session_done', payload, (err, ack) => {
-                            clearTimeout(timer);
-                            if (err) return done(false);
-                            if (ack && typeof ack === 'object' && ack.ok === false) {
-                                try { console.warn('[sessionDoneBrowser] session_done rejected', ack); } catch {}
-                                return done(false);
-                            }
-                            done(true);
-                        });
-                    } catch { clearTimeout(timer); done(false); }
+                const resp = await fetch(endpoints.closeSession(), {
+                    method: 'POST',
+                    headers: {
+                        'X-Authorization': AUTH_TOKEN,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ session_id: sid }),
+                    ...(controller ? { signal: controller.signal } : {}),
                 });
-                sio.on('connect_error', () => { clearTimeout(timer); done(false); });
-                sio.on('error', () => { clearTimeout(timer); done(false); });
-            });
-        }
-
-        // Emit session_done via Socket.IO from the browser (best-effort)
-        async function sessionDoneBrowser(sessionId, opts={}) {
-            try {
-                const okLoaded = await ensureSocketIo();
-                if (!okLoaded || !window.io) return false;
-                const base = API_BASE;
-                const secure = window.isSecureContext || location.protocol === 'https:';
-                const candidates = buildSocketBaseCandidates(base).map((candidate) => {
-                    if (!secure || !/^http:\/\//i.test(candidate)) return candidate;
-                    return candidate.replace(/^http:/i, 'https:');
-                });
-                for (const candidateBase of candidates) {
-                    const voicebotNs = `${String(candidateBase || '').replace(/\/+$/, '')}/voicebot`;
-                    const ok = await emitSessionDoneToNamespace(voicebotNs, sessionId, opts);
-                    if (ok) return true;
-                    try { console.warn('[sessionDoneBrowser] namespace attempt failed', { voicebotNs }); } catch {}
+                const payload = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    try { console.warn('[closeSessionViaRest] close failed', { status: resp.status, payload }); } catch {}
+                    return false;
                 }
+                if (payload && typeof payload === 'object' && payload.error) {
+                    try { console.warn('[closeSessionViaRest] close rejected', payload); } catch {}
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                try { console.warn('[closeSessionViaRest] request failed', e); } catch {}
                 return false;
-            } catch (e) { console.warn('sessionDoneBrowser failed', e); return false; }
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+            }
         }
         let API_BASE = localStorage.getItem('VOICEBOT_API_URL') || schemeBasedDefault;
         // Migration: older builds defaulted to https://voice.stratospace.fun even on voice-dev.
@@ -1746,6 +1685,7 @@
             updateSessionName: () => `${API_BASE.replace(/\/$/, '')}/voicebot/update_session_name`,
             updateSessionProject: () => `${API_BASE.replace(/\/$/, '')}/voicebot/update_session_project`,
             createSession: () => `${API_BASE.replace(/\/$/, '')}/voicebot/create_session`,
+            closeSession: () => `${API_BASE.replace(/\/$/, '')}/voicebot/session_done`,
         };
 
         const ME_TELEGRAM_ID_KEY = 'VOICEBOT_TELEGRAM_ID';
@@ -1811,7 +1751,7 @@
                         if (sid) {
                             console.log('Closing yesterday session:', sid);
                             try {
-                                await sessionDoneBrowser(sid, { timeoutMs: 3000 });
+                                await closeSessionViaRest(sid, { timeoutMs: 3000 });
                             } catch (e) {
                                 console.warn('Failed to close session', sid, e);
                             }
@@ -2034,7 +1974,7 @@
             const sid = String(sessionId || '').trim();
             if (!sid) return false;
             try {
-                const closed = await sessionDoneBrowser(sid, { timeoutMs: 4000 });
+                const closed = await closeSessionViaRest(sid, { timeoutMs: 4000 });
                 if (!closed) return false;
                 try { invalidateSessionsCache(); } catch {}
                 return true;
@@ -3904,7 +3844,7 @@
                 }
 
                 // Close session (best-effort).
-                const closeOk = await sessionDoneBrowser(prevSid, { timeoutMs: 4000 });
+                const closeOk = await closeSessionViaRest(prevSid, { timeoutMs: 4000 });
                 if (!closeOk) throw new Error('session_done_failed');
 
                 clearActiveSessionUi();
@@ -6585,7 +6525,7 @@
                     }
                 }
             } catch {}
-            try { if (prevSid) { await sessionDoneBrowser(prevSid, { timeoutMs: 4000 }); } } catch {}
+            try { if (prevSid) { await closeSessionViaRest(prevSid, { timeoutMs: 4000 }); } } catch {}
 
             if (sidEl) sidEl.value = '';
             if (snameEl) { snameEl.value = ''; snameEl.disabled = false; }

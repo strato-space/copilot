@@ -35,7 +35,9 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
+- Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` (legacy alias `POST /api/voicebot/close_session`), while websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
+- WebRTC close path no longer emits `session_done` from browser Socket.IO; FAB/page/yesterday close flows use the same REST close endpoint for deterministic behavior across host/path variants.
 - WebRTC unload persistence now stores any non-recording state as `paused` to avoid stale auto-resume after refresh/unload races.
 - Full-track recording segments are represented as `full_track` in Monitor/UI with duration and timestamp metadata, but upload to backend is intentionally disabled until diarization workflow is enabled.
 - Voice workers schedule periodic `PROCESSING` scans in TS runtime; pending-session filtering uses `is_waiting: { $ne: true }` to include legacy rows without explicit flag.
@@ -218,6 +220,10 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Switched voice session close initiation to REST-only client path: frontend store and WebRTC runtime now call `POST /api/voicebot/session_done` (with `/close_session` alias support), and no longer emit browser-side `session_done` over Socket.IO.
+- Added canonical backend close route in sessions API (`backend/src/api/routes/voicebot/sessions.ts`) with Zod payload validation, permission/access checks, shared `completeSessionDoneFlow` execution, and realtime `session_status/session_update` emissions.
+- Added backend regression test `backend/__tests__/voicebot/sessionDoneRoute.test.ts` to lock REST close behavior and alias parity.
+- Updated Voice Sessions list ordering in `app/src/pages/voice/SessionsListPage.tsx`: active sessions first, then latest voice activity, then creation time with mixed-format timestamp normalization.
 - Fixed WebRTC FAB `Done` close reliability for `/voice/session/:id`: runtime now retries `session_done` across namespace base candidates (`origin`, stripped `/api`, full API base) and treats all failed attempts as close failure.
 - Added fail-safe close UX: on `session_done` failure FAB stays in `paused` with toast `Failed to close session. Retry Done.` and does not clear active session metadata.
 - Updated regression contract `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts` for fallback namespace attempts and strict failed-close handling.

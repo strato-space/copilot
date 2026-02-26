@@ -49,6 +49,7 @@ import {
 } from './messageHelpers.js';
 import { findObjectLocatorByOid, upsertObjectLocator } from '../../../services/voicebotObjectLocator.js';
 import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
+import { completeSessionDoneFlow } from '../../../services/voicebotSessionDoneFlow.js';
 
 // TODO: Import MCPProxyClient when MCP integration is needed
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -58,6 +59,9 @@ const logger = getLogger();
 
 const activeSessionInputSchema = z.object({
     session_id: z.string().trim().min(1).optional(),
+});
+const sessionDoneInputSchema = z.object({
+    session_id: z.string().trim().min(1),
 });
 const listSessionsInputSchema = z.object({
     include_deleted: z.union([z.boolean(), z.number(), z.string()]).optional(),
@@ -103,6 +107,7 @@ const uploadProjectFileInputSchema = z.object({
 const getFileContentInputSchema = z.object({
     file_id: z.string().trim().min(1),
 });
+type SessionDoneInput = z.input<typeof sessionDoneInputSchema>;
 
 const projectFilesUploadDir = resolve(VOICEBOT_FILE_STORAGE.uploadsDir, 'project-files');
 if (!existsSync(projectFilesUploadDir)) {
@@ -217,6 +222,7 @@ registerPostAlias('/update_session_person', '/update_participants');
 registerPostAlias('/update_session_allowed_users', '/update_allowed_users');
 registerPostAlias('/sessions_in_crm', '/in_crm');
 registerPostAlias('/delete_session', '/delete');
+registerPostAlias('/close_session', '/session_done');
 
 /**
  * Extended Express Request with voicebot-specific fields
@@ -1119,6 +1125,98 @@ router.post('/activate_session', async (req: Request, res: Response) => {
         return res.status(500).json({ error: String(error) });
     }
 });
+
+router.post(
+    '/session_done',
+    PermissionManager.requirePermission(PERMISSIONS.VOICEBOT_SESSIONS.UPDATE),
+    async (req: Request, res: Response) => {
+        const vreq = req as VoicebotRequest;
+        const { performer } = vreq;
+        const db = getDb();
+
+        try {
+            const parsedBody = sessionDoneInputSchema.safeParse(req.body || {});
+            if (!parsedBody.success) {
+                return res.status(400).json({ error: 'session_id is required' });
+            }
+
+            const payload: SessionDoneInput = parsedBody.data;
+            const sessionId = payload.session_id;
+            if (!ObjectId.isValid(sessionId)) {
+                return res.status(400).json({ error: 'invalid_session_id' });
+            }
+
+            const { session, hasAccess } = await resolveSessionAccess({
+                db,
+                performer,
+                sessionId,
+            });
+            if (!session) return res.status(404).json({ error: 'session_not_found' });
+            if (!hasAccess) return res.status(403).json({ error: 'forbidden' });
+
+            const queues = getVoicebotQueues();
+            const io = req.app.get('io') as SocketIOServer | undefined;
+            const namespace = io?.of('/voicebot');
+            const room = getVoicebotSessionRoom(sessionId);
+            const doneFlowParams: Parameters<typeof completeSessionDoneFlow>[0] = {
+                db,
+                session_id: sessionId,
+                session,
+                telegram_user_id: performer?.telegram_id ? String(performer.telegram_id) : null,
+                actor: buildActorFromPerformer(performer),
+                source: {
+                    type: 'rest',
+                    route: '/api/voicebot/session_done',
+                    method: 'POST',
+                },
+                emitSessionStatus: (statusPayload) => {
+                    if (!namespace) return;
+                    namespace.to(room).emit('session_status', statusPayload);
+                },
+            };
+            if (queues) {
+                doneFlowParams.queues = queues as NonNullable<Parameters<typeof completeSessionDoneFlow>[0]['queues']>;
+            }
+            if (session.chat_id !== undefined) {
+                doneFlowParams.chat_id = session.chat_id as string | number | null;
+            }
+
+            const result = await completeSessionDoneFlow(doneFlowParams);
+            if (!result.ok) {
+                const statusCode = result.error === 'invalid_session_id'
+                    ? 400
+                    : result.error === 'session_not_found'
+                        ? 404
+                        : result.error === 'chat_id_missing'
+                            ? 409
+                            : 500;
+                return res.status(statusCode).json({ error: result.error || 'internal_error' });
+            }
+
+            const doneTimestamp = new Date().toISOString();
+            if (namespace) {
+                namespace.to(room).emit('session_update', {
+                    _id: sessionId,
+                    session_id: sessionId,
+                    is_active: false,
+                    to_finalize: true,
+                    done_at: doneTimestamp,
+                    updated_at: doneTimestamp,
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                notify_preview: {
+                    event_name: result.notify_preview?.event_name,
+                },
+            });
+        } catch (error) {
+            logger.error('Error in session_done:', error);
+            return res.status(500).json({ error: String(error) });
+        }
+    }
+);
 
 router.post('/create_session', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;

@@ -1036,45 +1036,46 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     },
 
     finishSession: (sessionId) => {
-        const socket = get().socket;
-        if (socket && sessionId) {
-            socket.emit(
-                SOCKET_EVENTS.SESSION_DONE,
-                { session_id: sessionId },
-                (ack?: { ok?: boolean; error?: string }) => {
-                    if (ack && ack.ok === false) {
-                        if (ack.error) {
-                            message.error(`Done failed: ${ack.error}`);
-                        }
-                        return;
-                    }
-                    const doneAtIso = new Date().toISOString();
-                    set((state) => ({
-                        voiceBotSession:
-                            state.voiceBotSession && String(state.voiceBotSession._id || '').trim() === String(sessionId).trim()
-                                ? {
-                                    ...state.voiceBotSession,
-                                    is_active: false,
-                                    to_finalize: true,
-                                    done_at: doneAtIso,
-                                    updated_at: doneAtIso,
-                                }
-                                : state.voiceBotSession,
-                        voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
-                            String(session._id || '').trim() === String(sessionId).trim()
-                                ? {
-                                    ...session,
-                                    is_active: false,
-                                    to_finalize: true,
-                                    done_at: doneAtIso,
-                                    updated_at: doneAtIso,
-                                }
-                                : session
-                        ),
-                    }));
-                }
-            );
-        }
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) return;
+
+        void (async () => {
+            try {
+                await voicebotRequest('voicebot/session_done', { session_id: normalizedSessionId });
+                const doneAtIso = new Date().toISOString();
+                set((state) => ({
+                    voiceBotSession:
+                        state.voiceBotSession && String(state.voiceBotSession._id || '').trim() === normalizedSessionId
+                            ? {
+                                ...state.voiceBotSession,
+                                is_active: false,
+                                to_finalize: true,
+                                done_at: doneAtIso,
+                                updated_at: doneAtIso,
+                            }
+                            : state.voiceBotSession,
+                    voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
+                        String(session._id || '').trim() === normalizedSessionId
+                            ? {
+                                ...session,
+                                is_active: false,
+                                to_finalize: true,
+                                done_at: doneAtIso,
+                                updated_at: doneAtIso,
+                            }
+                            : session
+                    ),
+                }));
+            } catch (error) {
+                const axiosErrorData = axios.isAxiosError(error)
+                    ? (error.response?.data as Record<string, unknown> | undefined)
+                    : null;
+                const backendError = typeof axiosErrorData?.error === 'string' ? axiosErrorData.error.trim() : '';
+                const fallbackError = error instanceof Error ? error.message : '';
+                const errorText = backendError || fallbackError;
+                message.error(errorText ? `Done failed: ${errorText}` : 'Done failed');
+            }
+        })();
     },
 
     updateSessionAccessLevel: async (sessionId, accessLevel) => {

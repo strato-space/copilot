@@ -10,6 +10,8 @@
 - **12:39** Production deploy script was blocked by TypeScript compile errors introduced by strict type narrowing in voice/permission helper paths.
 - **13:03** Voice Sessions list could remain in the previous `include_deleted` mode when filter intent changed during an in-flight fetch, because the store rejected concurrent list requests even for required mode sync.
 - **13:13** FAB `Done` on `/voice/session/:id` could log `action=done` in browser but leave session open (`State: Ready`) when WebRTC socket namespace was resolved from a non-working base URL variant.
+- **14:17** Session close initiation still depended on client-to-server Socket.IO `session_done` emits, so browser namespace/path variance could break close requests even when API auth/session state were valid.
+- **14:17** Voice Sessions list ordering in UI was not deterministic across mixed timestamp formats (`Date`, seconds, ms, ISO strings), so active/newest conversations could appear below stale rows.
 
 ### FEATURE IMPLEMENTED
 - **12:22** Added realtime-safe transcription visibility: frontend now renders pending/error/audio rows immediately, and worker transcribe flow emits `message_update` across success/failure branches.
@@ -21,6 +23,9 @@
 - **12:22** Added WebRTC monitor resilience UX: explicit chunk states (`local/uploading/uploaded/upload_failed`) and pending-upload snapshot hint after refresh.
 - **13:03** Added forced include-deleted mode synchronization for voice sessions list: the page now detects `showDeletedSessions` vs store-mode mismatch and triggers a forced refetch that can bypass loading lock.
 - **13:13** Added resilient `session_done` delivery in WebRTC runtime: namespace base fallback sequence (`origin`, stripped `/api`, full path) plus strict failure handling that keeps session active and surfaces retry instead of false-success reset.
+- **14:17** Added canonical REST close path for Voice sessions: `POST /api/voicebot/session_done` (`/close_session` alias) now executes the shared done-flow and emits realtime `session_status`/`session_update` to room subscribers.
+- **14:17** Switched all frontend close senders to REST (`voiceBotStore`, WebRTC FAB/page close, yesterday auto-close), keeping websocket as receive-only realtime channel for backend events.
+- **14:17** Added deterministic Voice Sessions list sorting by active state, latest voice activity timestamp, and created time with mixed-format timestamp normalization.
 
 ### CHANGES
 - **12:22** Voice frontend updates:
@@ -51,6 +56,14 @@
   - FAB error path now keeps control in `paused` state with toast `Failed to close session. Retry Done.` and does not clear active-session metadata on failed close.
   - `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts`: updated contract for fallback namespace attempts and non-silent close failure handling.
   - Verified by full frontend Jest run: `30` suites / `63` tests passed (`npm test -- --runInBand`).
+- **14:17** REST-first session close migration:
+  - `backend/src/api/routes/voicebot/sessions.ts`: added `POST /session_done` (Zod payload validation, permission/access checks, `completeSessionDoneFlow` execution, realtime `session_status` + `session_update` emit), and aliased `/close_session` to the same handler.
+  - `backend/__tests__/voicebot/sessionDoneRoute.test.ts`: new regression coverage for `session_done` success, alias parity, and validation errors.
+  - `app/src/store/voiceBotStore.ts`: `finishSession` now calls `voicebot/session_done` via HTTP and preserves optimistic close projection on success.
+  - `app/public/webrtc/webrtc-voicebot-lib.js`: removed socket namespace close sender/fallback logic and introduced `closeSessionViaRest(...)` for FAB/page/yesterday close flows.
+  - Updated frontend contracts: `app/__tests__/voice/{voiceSocketRealtimeContract,webrtcSessionDoneSocketContract}.test.ts`.
+- **14:17** Voice Sessions list ordering hardening:
+  - `app/src/pages/voice/SessionsListPage.tsx`: added timestamp normalization helper and stable sort (`is_active` desc, `last_voice_timestamp` desc, `created_at` desc), plus timestamp-safe time range rendering.
 
 ## 2026-02-25
 ### PROBLEM SOLVED
