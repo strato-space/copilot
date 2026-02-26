@@ -744,6 +744,14 @@ h5 {
   min-width: 420px !important;
 }
 
+.sessions-table .ant-table-tbody > tr.sessions-row-deleted > td {
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+.sessions-table .ant-table-tbody > tr.sessions-row-deleted:hover > td {
+  background: rgba(239, 68, 68, 0.18) !important;
+}
+
 :root[data-voice-theme='dark'] .voice-session-shell .ant-btn,
 :root[data-voice-theme='dark'] .voice-session-shell .ant-tabs-tab-btn,
 :root[data-voice-theme='dark'] .voice-session-shell .ant-select-selection-item,

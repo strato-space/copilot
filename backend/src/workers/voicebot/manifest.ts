@@ -75,6 +75,10 @@ import {
   handleAudioMergingJob,
   type AudioMergingJobData,
 } from './handlers/audioMerging.js';
+import {
+  handleCleanupEmptySessionsJob,
+  type CleanupEmptySessionsJobData,
+} from './handlers/cleanupEmptySessions.js';
 
 export type VoicebotWorkerHandler = (payload: unknown) => Promise<unknown>;
 
@@ -83,6 +87,8 @@ export const VOICEBOT_WORKER_MANIFEST: Record<string, VoicebotWorkerHandler> = {
     handleDoneMultipromptJob(payload as DoneMultipromptJobData),
   [VOICEBOT_JOBS.common.PROCESSING]: async (payload: unknown) =>
     handleProcessingLoopJob(payload as ProcessingLoopJobData),
+  [VOICEBOT_JOBS.common.CLEANUP_EMPTY_SESSIONS]: async (payload: unknown) =>
+    handleCleanupEmptySessionsJob(payload as CleanupEmptySessionsJobData),
   [VOICEBOT_JOBS.common.HANDLE_VOICE]: async (payload: unknown) =>
     handleVoiceJob(payload as HandleVoiceJobData),
   [VOICEBOT_JOBS.common.HANDLE_TEXT]: async (payload: unknown) =>

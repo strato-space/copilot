@@ -171,7 +171,9 @@ Preferred engineering principles for this repo:
 - Permission system: `backend/src/permissions/permission-manager.ts` (ported from voicebot).
 - Socket.IO namespace: `/voicebot` for real-time session updates.
 - Voice upload path must broadcast `new_message` and `session_update` into room `voicebot:session:<session_id>` immediately after successful upload.
+- Voice upload API now propagates `request_id` in both success and error payloads (`X-Request-ID` passthrough or generated), and backend logs each upload stage with the same correlation id.
 - Categorization pipeline must emit `message_update` over websocket (through `SEND_TO_SOCKET` events queue) so Categorization tab updates without manual refresh.
+- TS transcribe worker now emits `message_update` for both success and failure branches (including quota/missing-file retries) so Transcription UI updates live without refresh.
 - Frontend voice socket must connect to `/voicebot` namespace (not `/`) and subscribe via `subscribe_on_session`; otherwise live session updates will be dropped.
 - Frontend voice socket reconnect flow must rehydrate current session and keep deterministic message ordering for `new_message`/`message_update` upserts.
 - Backend API process owns socket event delivery for `voicebot--events-*` queue via dedicated runtime (`startVoicebotSocketEventsWorker`); standalone workers should not consume `EVENTS` queue.
@@ -193,6 +195,8 @@ Preferred engineering principles for this repo:
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.
 - Finalization backlog scan should prioritize newest sessions (`updated_at`/`_id` descending) with an expanded scan window so stale rows do not starve fresh closed sessions.
 - TS transcribe worker deduplicates repeated chunk uploads by file hash (`file_hash`/`file_unique_id`/`hash_sha256`) and reuses existing transcription payload before calling OpenAI.
+- Voice workers schedule `CLEANUP_EMPTY_SESSIONS` on `VOICEBOT_QUEUES.COMMON`; cleanup marks stale empty sessions (`message_count=0`) as `is_deleted=true` with configurable cadence/age/batch limits via env.
+- Voice sessions list supports `include_deleted` server filter and frontend `Показывать удаленные`; creator/participant filters drop numeric identity placeholders so only human labels are shown.
 - Notify worker (`backend/src/workers/voicebot/handlers/notify.ts`) now supports both HTTP notify transport and local hooks parity:
   - HTTP path uses `VOICE_BOT_NOTIFIES_URL` + `VOICE_BOT_NOTIFIES_BEARER_TOKEN`,
   - local hooks use `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON; default `./notifies.hooks.yaml`; empty value disables),

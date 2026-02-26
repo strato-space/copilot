@@ -143,6 +143,44 @@ const extractImageAttachment = (row: VoiceBotMessage): { url: string; name: stri
     return null;
 };
 
+const formatTranscriptionErrorLabel = (errorCode: string): string => {
+    const normalized = errorCode.trim().toLowerCase();
+    const labels: Record<string, string> = {
+        insufficient_quota: 'Недостаточно квоты OpenAI',
+        openai_api_key_missing: 'Не настроен OPENAI_API_KEY',
+        file_not_found: 'Файл не найден на сервере',
+        missing_file_path: 'Не передан путь к файлу',
+        missing_transport: 'Не настроен транспорт Telegram-файлов',
+        max_attempts_exceeded: 'Превышено число попыток транскрибации',
+        audio_too_large: 'Файл слишком большой для транскрибации',
+    };
+    return labels[normalized] || normalized;
+};
+
+const resolveFallbackBodyText = (row: VoiceBotMessage): string => {
+    const transcriptionText = typeof row.transcription_text === 'string' ? row.transcription_text.trim() : '';
+    if (transcriptionText) return transcriptionText;
+
+    const plainText = typeof row.text === 'string' ? row.text.trim() : '';
+    if (plainText) return plainText;
+
+    const errorCode =
+        typeof (row as Record<string, unknown>).transcription_error === 'string'
+            ? String((row as Record<string, unknown>).transcription_error).trim()
+            : '';
+    if (errorCode) return `⚠ ${formatTranscriptionErrorLabel(errorCode)}`;
+
+    if ((row as Record<string, unknown>).to_transcribe === true) {
+        return '⏳ Обработка аудио...';
+    }
+
+    if ((row as Record<string, unknown>).is_transcribed === true) {
+        return '—';
+    }
+
+    return '⏳ Ожидание транскрибации...';
+};
+
 const getSegmentEndSeconds = (segment: TranscriptionSegment, row: VoiceBotMessage, startSeconds: number): number | null => {
     const explicitEnd = parseSecondsValue(segment?.end);
     if (explicitEnd != null && explicitEnd > startSeconds) return explicitEnd;
@@ -639,7 +677,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                         })
                     ) : (
                         <div className="self-stretch text-black/90 text-[10px] font-normal leading-3 p-1 whitespace-pre-wrap break-words">
-                            {row.transcription_text || ''}
+                            {resolveFallbackBodyText(row)}
                             {imageAttachment ? (
                                 <a
                                     href={imageAttachment.url}

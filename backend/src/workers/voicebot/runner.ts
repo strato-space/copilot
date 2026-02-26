@@ -72,6 +72,33 @@ const resolveProcessingLoopIntervalMs = (): number => {
   return raw;
 };
 
+const resolveEmptySessionCleanupIntervalMs = (): number => {
+  const raw = Number.parseInt(
+    String(process.env.VOICEBOT_EMPTY_SESSION_CLEANUP_INTERVAL_MS || ''),
+    10
+  );
+  if (!Number.isFinite(raw) || raw < 60_000) return 60 * 60 * 1000;
+  return raw;
+};
+
+const resolveEmptySessionCleanupMaxAgeHours = (): number => {
+  const raw = Number.parseInt(
+    String(process.env.VOICEBOT_EMPTY_SESSION_CLEANUP_AGE_HOURS || ''),
+    10
+  );
+  if (!Number.isFinite(raw) || raw < 1) return 48;
+  return raw;
+};
+
+const resolveEmptySessionCleanupBatchLimit = (): number => {
+  const raw = Number.parseInt(
+    String(process.env.VOICEBOT_EMPTY_SESSION_CLEANUP_BATCH_LIMIT || ''),
+    10
+  );
+  if (!Number.isFinite(raw) || raw < 1) return 500;
+  return raw;
+};
+
 export const resolveQueueConcurrency = (queueName: string): number => {
   return queueConcurrency.get(queueName) ?? 1;
 };
@@ -146,6 +173,11 @@ export const startVoicebotWorkers = async ({
 
   const processingLoopIntervalMs = resolveProcessingLoopIntervalMs();
   const processingSchedulerId = `processing-loop-${RUNTIME_TAG}`;
+  const cleanupEmptySessionsSchedulerId = `cleanup-empty-sessions-${RUNTIME_TAG}`;
+  const emptySessionCleanupIntervalMs = resolveEmptySessionCleanupIntervalMs();
+  const emptySessionCleanupMaxAgeHours = resolveEmptySessionCleanupMaxAgeHours();
+  const emptySessionCleanupBatchLimit = resolveEmptySessionCleanupBatchLimit();
+
   await commonQueue.upsertJobScheduler(
     processingSchedulerId,
     { every: processingLoopIntervalMs },
@@ -163,6 +195,30 @@ export const startVoicebotWorkers = async ({
     queue: VOICEBOT_QUEUES.COMMON,
     scheduler_id: processingSchedulerId,
     every_ms: processingLoopIntervalMs,
+  });
+
+  await commonQueue.upsertJobScheduler(
+    cleanupEmptySessionsSchedulerId,
+    { every: emptySessionCleanupIntervalMs },
+    {
+      name: VOICEBOT_JOBS.common.CLEANUP_EMPTY_SESSIONS,
+      data: {
+        max_age_hours: emptySessionCleanupMaxAgeHours,
+        batch_limit: emptySessionCleanupBatchLimit,
+      },
+      opts: {
+        removeOnComplete: true,
+        removeOnFail: 50,
+      },
+    }
+  );
+  logger.info('[voicebot-workers] empty_sessions_cleanup_scheduler_ready', {
+    runtime_tag: RUNTIME_TAG,
+    queue: VOICEBOT_QUEUES.COMMON,
+    scheduler_id: cleanupEmptySessionsSchedulerId,
+    every_ms: emptySessionCleanupIntervalMs,
+    max_age_hours: emptySessionCleanupMaxAgeHours,
+    batch_limit: emptySessionCleanupBatchLimit,
   });
 
   const workers = queueNames.map(
@@ -215,6 +271,7 @@ export const startVoicebotWorkers = async ({
       await Promise.allSettled(workers.map((worker) => worker.close()));
       await Promise.allSettled([
         commonQueue.removeJobScheduler(processingSchedulerId),
+        commonQueue.removeJobScheduler(cleanupEmptySessionsSchedulerId),
       ]);
       await Promise.allSettled([commonQueue.close()]);
       await closeVoicebotQueues();

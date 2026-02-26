@@ -656,6 +656,94 @@
         function getChunksList() {
             try { return resolveChunkListTarget().list || null; } catch { return null; }
         }
+        const PENDING_UPLOAD_SNAPSHOT_KEY = 'voicebot.pending.upload.snapshot.v1';
+        function collectPendingUploadSnapshot() {
+            const list = getChunksList();
+            if (!list) return null;
+            const sid = getSessionIdValue() || '';
+            const items = Array.from(list.querySelectorAll('li'))
+                .map((li) => {
+                    const uploaded = li?.dataset?.uploaded === '1';
+                    const trackKind = String(li?.dataset?.trackKind || '').trim();
+                    if (uploaded || trackKind === 'full_track') return null;
+                    const filename = String(li?.dataset?.filename || '').trim();
+                    const label = li.querySelector('span')?.textContent?.trim() || filename || 'chunk';
+                    const size = Number(li?._blob?.size || 0);
+                    return {
+                        filename,
+                        label,
+                        size,
+                        state: String(li?.dataset?.chunkState || 'local'),
+                    };
+                })
+                .filter(Boolean);
+            return {
+                session_id: sid,
+                count: items.length,
+                items: items.slice(0, 8),
+                ts: Date.now(),
+            };
+        }
+        function persistPendingUploadSnapshot(reason = '') {
+            try {
+                const snapshot = collectPendingUploadSnapshot();
+                if (!snapshot || !Number.isFinite(snapshot.count) || snapshot.count <= 0) {
+                    sessionStorage.removeItem(PENDING_UPLOAD_SNAPSHOT_KEY);
+                    return;
+                }
+                snapshot.reason = String(reason || '');
+                sessionStorage.setItem(PENDING_UPLOAD_SNAPSHOT_KEY, JSON.stringify(snapshot));
+            } catch {}
+        }
+        function consumePendingUploadSnapshot() {
+            try {
+                const raw = sessionStorage.getItem(PENDING_UPLOAD_SNAPSHOT_KEY);
+                if (!raw) return null;
+                sessionStorage.removeItem(PENDING_UPLOAD_SNAPSHOT_KEY);
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object') return null;
+                const count = Number(parsed.count || 0);
+                if (!Number.isFinite(count) || count <= 0) return null;
+                return parsed;
+            } catch {
+                return null;
+            }
+        }
+        function showPendingUploadRecoveryHint() {
+            const snapshot = consumePendingUploadSnapshot();
+            if (!snapshot) return;
+            const currentSid = getSessionIdValue() || '';
+            const snapSid = String(snapshot.session_id || '');
+            if (currentSid && snapSid && currentSid !== snapSid) return;
+            const list = getChunksList();
+            if (!list || !list.parentElement) return;
+
+            const hint = document.createElement('div');
+            hint.className = 'webrtc-upload-hint';
+            hint.style.margin = '8px 0';
+            hint.style.padding = '8px 10px';
+            hint.style.border = '1px solid #f59e0b';
+            hint.style.borderRadius = '8px';
+            hint.style.background = '#fffbeb';
+            hint.style.color = '#92400e';
+            hint.style.fontSize = '12px';
+            hint.style.lineHeight = '1.35';
+
+            const count = Number(snapshot.count || 0);
+            const preview = Array.isArray(snapshot.items)
+                ? snapshot.items
+                    .map((item) => String(item?.filename || item?.label || '').trim())
+                    .filter(Boolean)
+                    .slice(0, 3)
+                : [];
+            const previewText = preview.length ? ` Examples: ${preview.join(', ')}` : '';
+            hint.textContent = `Detected ${count} local non-uploaded chunk(s) before refresh. Local monitor buffer is not server storage.${previewText} Use Upload for retry.`;
+
+            list.parentElement.insertBefore(hint, list);
+            setTimeout(() => {
+                try { hint.remove(); } catch {}
+            }, 20000);
+        }
         function getLatestChunkLi() {
             const list = getChunksList();
             if (!list) return null;
@@ -5900,21 +5988,28 @@
         }
         function normalizeUploadErrorMessage(status, rawText) {
             const payload = parseUploadErrorPayload(rawText);
+            const requestId = String(payload?.request_id || '').trim();
             const payloadMsg = String(payload?.message || payload?.error || '').trim();
             if (status === 413 || String(payload?.error || '').trim() === 'file_too_large') {
                 const maxBytes = Number(payload?.max_size_bytes || 0);
                 const maxLabel = formatBytesShort(maxBytes);
-                return maxLabel
+                const base = maxLabel
                     ? `Upload failed: 413 File too large (max ${maxLabel})`
                     : 'Upload failed: 413 File too large';
+                return requestId ? `${base} [request_id=${requestId}]` : base;
             }
             if (status === 500 && /file too large/i.test(`${rawText || ''}`)) {
-                return 'Upload failed: 500 File too large';
+                const base = 'Upload failed: 500 File too large';
+                return requestId ? `${base} [request_id=${requestId}]` : base;
             }
-            if (payloadMsg) return `Upload failed: ${status} ${payloadMsg}`;
-            return `Upload failed: ${status} ${String(rawText || '').trim()}`;
+            if (payloadMsg) {
+                const base = `Upload failed: ${status} ${payloadMsg}`;
+                return requestId ? `${base} [request_id=${requestId}]` : base;
+            }
+            const base = `Upload failed: ${status} ${String(rawText || '').trim()}`;
+            return requestId ? `${base} [request_id=${requestId}]` : base;
         }
-        function normalizeUploadThrownError(error) {
+        function normalizeUploadThrownError(error, requestId = '') {
             const message = String(error?.message || error || '').trim();
             const lower = message.toLowerCase();
             if (
@@ -5924,9 +6019,11 @@
                 lower.includes('load failed') ||
                 lower.includes('network request failed')
             ) {
-                return 'Upload failed: backend unavailable (network/upstream). Click Upload again in a few seconds.';
+                const suffix = requestId ? ` [request_id=${requestId}]` : '';
+                return `Upload failed: backend unavailable (network/upstream). Click Upload again in a few seconds.${suffix}`;
             }
-            return message || 'Upload failed: unknown error';
+            if (message) return requestId ? `${message} [request_id=${requestId}]` : message;
+            return requestId ? `Upload failed: unknown error [request_id=${requestId}]` : 'Upload failed: unknown error';
         }
 
         // --- Upload API ---
@@ -5943,6 +6040,8 @@
             const name = filenameOpt && typeof filenameOpt === 'string' && filenameOpt.trim()
                 ? filenameOpt.trim()
                 : `chunk_${new Date().toISOString().replace(/[:.]/g,'-')}${autoExt}`;
+            const uploadRequestId = String(opts?.requestId || '').trim()
+                || `upl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
             activeUploadCount += 1;
             const fd = new FormData();
             const file = new File([blob], name, { type: blob.type || 'audio/webm' });
@@ -5980,7 +6079,11 @@
             try {
                 resp = await fetch(endpoints.uploadAudio(), {
                     method: 'POST',
-                    headers: { 'X-Authorization': AUTH_TOKEN, 'Accept': 'application/json' },
+                    headers: {
+                        'X-Authorization': AUTH_TOKEN,
+                        'Accept': 'application/json',
+                        'X-Request-ID': uploadRequestId,
+                    },
                     body: fd,
                     keepalive: useKeepalive
                 });
@@ -5988,12 +6091,12 @@
                 if (isUnloading && !allowWhileUnloading) {
                     throw new Error('Upload aborted: page is unloading');
                 }
-                throw new Error(normalizeUploadThrownError(e));
+                throw new Error(normalizeUploadThrownError(e, uploadRequestId));
             } finally {
                 activeUploadCount = Math.max(0, activeUploadCount - 1);
             }
             const text = await resp.text();
-            logApi('upload_audio', { status: resp.status, ok: resp.ok, session_id: sid, size: blob?.size || 0 });
+            logApi('upload_audio', { status: resp.status, ok: resp.ok, session_id: sid, size: blob?.size || 0, request_id: uploadRequestId });
             if (!resp.ok) {
                 console.error('Upload failed', resp.status, text);
                 if (resp.status === 404) {
@@ -6009,6 +6112,7 @@
                 throw new Error(normalizeUploadErrorMessage(resp.status, text));
             }
             const data = text ? JSON.parse(text) : {};
+            if (data && typeof data === 'object' && !data.request_id) data.request_id = uploadRequestId;
             return data;
         }
 
@@ -6018,7 +6122,10 @@
           const silent = !!opts?.silent;
           try {
             if (upBtn) upBtn.disabled = true;
-            if (statusMark) statusMark.textContent = '…';
+            if (statusMark) {
+                statusMark.textContent = ' · uploading...';
+                statusMark.style.color = '#2563eb';
+            }
             const fname = (li && li.dataset && li.dataset.filename) ? li.dataset.filename : undefined;
             const speaker = inferSpeakerForLi(li);
             let sessionId = li?.dataset?.sessionId ? String(li.dataset.sessionId).trim() : '';
@@ -6057,9 +6164,15 @@
             success = true;
             if (li && li.dataset) {
                 li.dataset.uploaded = '1';
+                li.dataset.chunkState = 'uploaded';
                 delete li.dataset.uploadError;
             }
             try { if (typeof li?._onUploadSuccess === 'function') li._onUploadSuccess(); } catch {}
+            if (statusMark) {
+                statusMark.textContent = ' · uploaded';
+                statusMark.style.color = '#16a34a';
+                statusMark.title = '';
+            }
             // Replace the upload button with a checkmark in-place
             if (upBtn) {
                 upBtn.textContent = '✓';
@@ -6077,9 +6190,28 @@
                 console.warn('[uploadAudio] suppressed error during unload', msg);
                 return success;
             }
-            if (li?.dataset) li.dataset.uploadError = msg;
+            if (li?.dataset) {
+                li.dataset.uploadError = msg;
+                li.dataset.chunkState = 'upload_failed';
+            }
+            try {
+                const detail = {
+                    session_id: String(li?.dataset?.sessionId || getSessionIdValue() || '').trim(),
+                    chunk: String(li?.dataset?.filename || '').trim(),
+                    message: msg,
+                    backend_unavailable: isBackendUnavailable,
+                    unloading: Boolean(isUnloading),
+                    ts: Date.now(),
+                };
+                logApi('upload_audio_error', detail);
+                window.dispatchEvent(new CustomEvent('voicebot-upload-error', { detail }));
+            } catch {}
             try { if (typeof li?._onUploadError === 'function') li._onUploadError(msg); } catch {}
-            if (statusMark) statusMark.textContent = '✗';
+            if (statusMark) {
+                statusMark.textContent = ' · local / upload failed';
+                statusMark.style.color = '#dc2626';
+                statusMark.title = msg;
+            }
             if (silent) {
                 console.warn('Upload error (silent)', e);
             } else if (isBackendUnavailable) {
@@ -6145,10 +6277,11 @@
             } catch {}
           }
           const statusEl = doc.createElement('small');
-          statusEl.style.color = '#94a3b8';
-          statusEl.textContent = '';
+          statusEl.style.color = '#f59e0b';
+          statusEl.textContent = ' · local';
           nameWrap.appendChild(statusEl);
           li._statusEl = statusEl;
+          try { if (li?.dataset) li.dataset.chunkState = 'local'; } catch {}
           try {
             if (typeof durationSeconds === 'number' && isFinite(durationSeconds)) {
               li.dataset.durationMs = String(Math.max(0, Math.round(durationSeconds * 1000)));
@@ -6275,7 +6408,11 @@
               try { if (li?.dataset) { delete li.dataset.corrupt; delete li.dataset.corruptReason; } } catch {}
               try { btnToggle.disabled = false; } catch {}
               try { if (upBtn && upBtn.getAttribute('data-role') === 'upload') upBtn.disabled = false; } catch {}
-              try { statusEl.textContent = ''; statusEl.style.color = '#94a3b8'; } catch {}
+              try {
+                  const uploaded = li?.dataset?.uploaded === '1';
+                  statusEl.textContent = uploaded ? ' · uploaded' : ' · local';
+                  statusEl.style.color = uploaded ? '#16a34a' : '#f59e0b';
+              } catch {}
           };
           const markCorrupt = (reason = '') => {
               try { if (li?.dataset) { li.dataset.corrupt = '1'; if (reason) li.dataset.corruptReason = String(reason); } } catch {}
@@ -6313,6 +6450,20 @@
           li._setBlob = setBlob;
           li._markCorrupt = markCorrupt;
           li._clearCorrupt = clearCorrupt;
+          li._onUploadSuccess = () => {
+              try {
+                  statusEl.textContent = ' · uploaded';
+                  statusEl.style.color = '#16a34a';
+                  statusEl.title = '';
+              } catch {}
+          };
+          li._onUploadError = (reason = '') => {
+              try {
+                  statusEl.textContent = ' · local / upload failed';
+                  statusEl.style.color = '#dc2626';
+                  statusEl.title = String(reason || '');
+              } catch {}
+          };
 
           audio.addEventListener('error', () => { try { markCorrupt('audio_error'); } catch {} });
           li._validatePromise = validateAndMaybeRepairChunkLi(li, { maxScanBytes: 16384 });
@@ -7037,22 +7188,30 @@
             const reasons = [];
             if (hasOpenSession) reasons.push('session is open');
             if (hasUpload) reasons.push('upload is in progress');
+            try { persistPendingUploadSnapshot('beforeunload'); } catch {}
             const reasonText = reasons.length ? ` (${reasons.join(', ')})` : '';
             const msg = `VoiceBot has unsaved activity${reasonText}${suffix ? ` ${suffix}` : ''}. Are you sure you want to close this tab?`;
             e.preventDefault();
             e.returnValue = msg;
             return msg;
         });
-        window.addEventListener('pagehide', () => { if (!IS_EMBEDDED) isUnloading = true; });
+        window.addEventListener('pagehide', () => {
+            if (!IS_EMBEDDED) isUnloading = true;
+            try { persistPendingUploadSnapshot('pagehide'); } catch {}
+        });
         window.addEventListener('pageshow', () => { resetUnloadingFlag('pageshow'); });
         window.addEventListener('focus', () => { resetUnloadingFlag('focus'); });
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
                 if (!IS_EMBEDDED) isUnloading = true;
+                try { persistPendingUploadSnapshot('visibility-hidden'); } catch {}
                 return;
             }
             if (document.visibilityState === 'visible') resetUnloadingFlag('visibilitychange');
         });
+        setTimeout(() => {
+            try { showPendingUploadRecoveryHint(); } catch {}
+        }, 250);
         // Periodic sync for same-tab iframe auth flows
         setInterval(() => { if (PAGE_MODE === 'index') syncAuthFromStorage(); }, 2000);
         // Auto-login only on index when saved credentials exist and no token yet.

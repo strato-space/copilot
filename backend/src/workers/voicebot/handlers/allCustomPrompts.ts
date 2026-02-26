@@ -1,5 +1,4 @@
 import { existsSync, readdirSync } from 'node:fs';
-import path from 'node:path';
 import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,

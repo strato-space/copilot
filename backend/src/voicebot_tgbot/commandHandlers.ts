@@ -44,7 +44,7 @@ const helpMessageLines = [
 ];
 
 export type QueueLike = {
-  add: (name: string, data: any, options?: any) => Promise<any>;
+  add: (name: string, data: unknown, options?: unknown) => Promise<unknown>;
 };
 
 const normalizeTelegramId = (value: unknown): string | null => {

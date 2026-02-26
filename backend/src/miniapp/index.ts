@@ -65,7 +65,7 @@ if (existsSync(frontendDistPath)) {
 }
 
 const TEST_DATA = {
-    user: '{"id":214255344,"first_name":"Антон","last_name":"Б.","username":"tonybit","language_code":"ru","is_premium":true,"allows_write_to_pm":true,"photo_url":"https:\/\/t.me\/i\/userpic\/320\/wDaP5a5Shm1UsJdjf1tCYr5nIvDeaMOA9c8Lb_vVtYU.svg"}',
+    user: '{"id":214255344,"first_name":"Антон","last_name":"Б.","username":"tonybit","language_code":"ru","is_premium":true,"allows_write_to_pm":true,"photo_url":"https://t.me/i/userpic/320/wDaP5a5Shm1UsJdjf1tCYr5nIvDeaMOA9c8Lb_vVtYU.svg"}',
     chat_instance: '-1308406666679671713',
     chat_type: 'private',
     auth_date: '1732784816',

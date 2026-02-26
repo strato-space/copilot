@@ -18,15 +18,27 @@ describe('voicebot ancillary worker handlers', () => {
   const originalFetch = global.fetch;
   const originalNotifyUrl = process.env.VOICE_BOT_NOTIFIES_URL;
   const originalNotifyToken = process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN;
+  const originalNotifyHooksConfig = process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG;
+
+  const sessionFindOne = jest.fn(async () => ({ project_id: null }));
 
   beforeEach(() => {
     getDbMock.mockReset();
+    sessionFindOne.mockClear();
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) return { findOne: sessionFindOne };
+        return {};
+      },
+    });
     (global as any).fetch = jest.fn();
+    process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = '';
   });
 
   afterEach(() => {
     process.env.VOICE_BOT_NOTIFIES_URL = originalNotifyUrl;
     process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = originalNotifyToken;
+    process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = originalNotifyHooksConfig;
   });
 
   afterAll(() => {
@@ -87,11 +99,13 @@ describe('voicebot ancillary worker handlers', () => {
       VOICEBOT_JOBS.notifies.SESSION_DONE
     );
 
-    expect(result).toEqual({
-      ok: true,
-      skipped: true,
-      reason: 'notify_url_or_token_not_configured',
-    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        skipped: true,
+        reason: 'notify_url_or_token_not_configured',
+      })
+    );
     expect((global.fetch as unknown as jest.Mock).mock.calls.length).toBe(0);
   });
 
@@ -114,7 +128,12 @@ describe('voicebot ancillary worker handlers', () => {
       VOICEBOT_JOBS.notifies.SESSION_DONE
     );
 
-    expect(result).toEqual({ ok: true, status: 200 });
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        status: 200,
+      })
+    );
     expect(global.fetch).toHaveBeenCalledTimes(1);
 
     const [url, options] = (global.fetch as unknown as jest.Mock).mock.calls[0] as [string, Record<string, unknown>];

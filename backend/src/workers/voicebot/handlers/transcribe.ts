@@ -289,6 +289,78 @@ const enqueueCategorizationIfEnabled = async ({
   );
 };
 
+const queueMessageUpdateEvent = async ({
+  session_id,
+  message_id,
+  message,
+}: {
+  session_id: string;
+  message_id: string;
+  message: Record<string, unknown>;
+}): Promise<void> => {
+  const queues = getVoicebotQueues();
+  const eventsQueue = queues?.[VOICEBOT_QUEUES.EVENTS];
+  if (!eventsQueue) return;
+
+  await eventsQueue.add(VOICEBOT_JOBS.events.SEND_TO_SOCKET, {
+    session_id,
+    event: 'message_update',
+    payload: {
+      message_id,
+      message,
+    },
+  });
+};
+
+const emitMessageUpdateById = async ({
+  db,
+  messageObjectId,
+  message_id,
+  session_id,
+}: {
+  db: ReturnType<typeof getDb>;
+  messageObjectId: ObjectId;
+  message_id: string;
+  session_id: string;
+}): Promise<void> => {
+  const updatedMessage = (await db
+    .collection(VOICEBOT_COLLECTIONS.MESSAGES)
+    .findOne(runtimeQuery({ _id: messageObjectId }))) as Record<string, unknown> | null;
+  if (!updatedMessage) return;
+
+  await queueMessageUpdateEvent({
+    session_id,
+    message_id,
+    message: {
+      ...updatedMessage,
+      _id: String(updatedMessage._id || message_id),
+      session_id: String(updatedMessage.session_id || session_id),
+    },
+  });
+};
+
+const emitMessageUpdateByIdSafe = async ({
+  db,
+  messageObjectId,
+  message_id,
+  session_id,
+}: {
+  db: ReturnType<typeof getDb>;
+  messageObjectId: ObjectId;
+  message_id: string;
+  session_id: string;
+}): Promise<void> => {
+  try {
+    await emitMessageUpdateById({ db, messageObjectId, message_id, session_id });
+  } catch (error) {
+    logger.warn('[voicebot-worker] transcribe message_update emit failed', {
+      message_id,
+      session_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
 export const handleTranscribeJob = async (
   payload: TranscribeJobData
 ): Promise<TranscribeResult> => {
@@ -398,6 +470,12 @@ export const handleTranscribeJob = async (
         message_id,
         messageObjectId,
       });
+      await emitMessageUpdateByIdSafe({
+        db,
+        messageObjectId,
+        message_id,
+        session_id,
+      });
 
       logger.info('[voicebot-worker] transcribe reused by hash', {
         message_id,
@@ -448,6 +526,12 @@ export const handleTranscribeJob = async (
         message_id,
         messageObjectId,
       });
+      await emitMessageUpdateByIdSafe({
+        db,
+        messageObjectId,
+        message_id,
+        session_id,
+      });
 
       return {
         ok: true,
@@ -488,6 +572,12 @@ export const handleTranscribeJob = async (
         transcription_next_attempt_at: 1,
       },
     });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
+    });
 
     return {
       ok: false,
@@ -512,6 +602,12 @@ export const handleTranscribeJob = async (
           errorCode,
         }),
       },
+    });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
     });
     return {
       ok: false,
@@ -542,6 +638,12 @@ export const handleTranscribeJob = async (
         transcription_next_attempt_at: 1,
       },
     });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
+    });
     return {
       ok: false,
       error: 'max_attempts_exceeded',
@@ -567,6 +669,12 @@ export const handleTranscribeJob = async (
           errorCode,
         }),
       },
+    });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
     });
     return {
       ok: false,
@@ -786,6 +894,12 @@ export const handleTranscribeJob = async (
       message_id,
       messageObjectId,
     });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
+    });
 
     logger.info('[voicebot-worker] transcribe handled', {
       message_id,
@@ -873,6 +987,12 @@ export const handleTranscribeJob = async (
             errorCode: normalizedCode,
           }),
         },
+    });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
     });
 
     logger.error('[voicebot-worker] transcribe failed', {

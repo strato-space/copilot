@@ -33,6 +33,12 @@ import { getAudioDurationFromFile, getFileSha256FromPath } from '../../../utils/
 
 const router = Router();
 const logger = getLogger();
+const resolveUploadRequestId = (req: Request): string => {
+    const raw = req.header('x-request-id');
+    const normalized = typeof raw === 'string' ? raw.trim() : '';
+    if (normalized) return normalized;
+    return `upl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+};
 
 const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> =>
     mergeWithRuntimeFilter(query, {
@@ -106,6 +112,7 @@ const resolveImageExtension = (file: Express.Multer.File): string => {
 
 const uploadAnyWithErrorHandling: RequestHandler = (req, res, next) => {
     upload.any()(req, res, (error: unknown) => {
+        const requestId = resolveUploadRequestId(req);
         if (!error) {
             next();
             return;
@@ -119,6 +126,7 @@ const uploadAnyWithErrorHandling: RequestHandler = (req, res, next) => {
                     message: 'File too large',
                     max_size_bytes: maxBytes,
                     max_size_mb: Number((maxBytes / (1024 * 1024)).toFixed(1)),
+                    request_id: requestId,
                 });
             }
 
@@ -126,6 +134,7 @@ const uploadAnyWithErrorHandling: RequestHandler = (req, res, next) => {
                 error: 'upload_error',
                 message: error.message || 'Upload failed',
                 code: error.code,
+                request_id: requestId,
             });
         }
 
@@ -133,12 +142,14 @@ const uploadAnyWithErrorHandling: RequestHandler = (req, res, next) => {
             return res.status(400).json({
                 error: 'upload_error',
                 message: error.message || 'Upload failed',
+                request_id: requestId,
             });
         }
 
         return res.status(400).json({
             error: 'upload_error',
             message: 'Upload failed',
+            request_id: requestId,
         });
     });
 };
@@ -421,21 +432,32 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
     const ureq = req as UploadsRequest;
     const { performer } = ureq;
     const db = getDb();
+    const requestId = resolveUploadRequestId(req);
 
     try {
         const session_id = String(req.body?.session_id || '').trim();
         if (!session_id) {
-            return res.status(400).json({ error: 'session_id is required' });
+            return res.status(400).json({ error: 'session_id is required', request_id: requestId });
         }
 
         const filesArray = collectUploadedFiles(ureq);
         if (filesArray.length === 0) {
-            return res.status(400).json({ error: 'audio file is required' });
+            return res.status(400).json({ error: 'audio file is required', request_id: requestId });
         }
+
+        logger.info('[voicebot.upload_audio] started', {
+            request_id: requestId,
+            session_id,
+            files: filesArray.map((file) => ({
+                name: file.originalname,
+                size: file.size,
+                mime_type: file.mimetype,
+            })),
+        });
 
         const sessionCheck = await checkSessionAccess({ sessionId: session_id, req: ureq });
         if (sessionCheck.status !== 200) {
-            return res.status(sessionCheck.status).json({ error: sessionCheck.error });
+            return res.status(sessionCheck.status).json({ error: sessionCheck.error, request_id: requestId });
         }
         const session = sessionCheck.session as Record<string, unknown>;
         const chatId = Number(session.chat_id);
@@ -585,6 +607,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             results.push({
                 success: true,
                 message_id: String(op.insertedId),
+                request_id: requestId,
                 file_info: {
                     duration,
                     file_size: file.size,
@@ -593,6 +616,15 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                     file_hash: fileHash,
                 },
                 processing_status: 'queued',
+                deduplicated_previous_count: deduplicatedCount,
+            });
+            logger.info('[voicebot.upload_audio] file_processed', {
+                request_id: requestId,
+                session_id,
+                message_id: String(op.insertedId),
+                file_name: file.originalname,
+                file_size: file.size,
+                mime_type: file.mimetype,
                 deduplicated_previous_count: deduplicatedCount,
             });
 
@@ -625,6 +657,12 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         );
 
         logger.info(`Audio uploaded for session ${session_id}: files=${filesArray.length}`);
+        logger.info('[voicebot.upload_audio] completed', {
+            request_id: requestId,
+            session_id,
+            files_count: filesArray.length,
+            results_count: results.length,
+        });
 
         const io = req.app.get('io') as SocketIOServer | undefined;
         if (io) {
@@ -646,23 +684,27 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             return res.status(200).json({
                 ...results[0],
                 session_id,
+                request_id: requestId,
             });
         }
         return res.status(200).json({
             success: true,
             session_id,
             results,
+            request_id: requestId,
         });
     } catch (error) {
-        logger.error('Error in upload_audio:', error);
-        return res.status(500).json({ error: String(error) });
+        logger.error('[voicebot.upload_audio] failed', {
+            request_id: requestId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return res.status(500).json({ error: String(error), request_id: requestId });
     }
 };
 
 const uploadAttachmentHandler = async (req: Request, res: Response) => {
     const ureq = req as UploadsRequest;
     const { performer } = ureq;
-    const db = getDb();
 
     try {
         const session_id = String(req.body?.session_id || '').trim();

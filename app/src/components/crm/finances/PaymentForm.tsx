@@ -44,7 +44,7 @@ interface PaymentFormValues {
 
 const PaymentForm: React.FC<PaymentFormProps> = ({ performer }) => {
     const [form] = Form.useForm();
-    const [lastChanged, setLastChanged] = useState(Date.now());
+    const [lastChanged, setLastChanged] = useState<number>(0);
 
     const fetchPerfrormerFinances = useKanbanStore((state) => state.fetchPerfrormerFinances);
     const performerFinancesData = useKanbanStore((state) => state.performerFinancesData) as

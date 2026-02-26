@@ -24,7 +24,7 @@ const onConnection = (socket: Socket): void => {
 export const registerSocketHandlers = (
   io: Server,
   options?: {
-    queues?: Record<string, { add: (...args: any[]) => Promise<unknown> }>;
+    queues?: Record<string, { add: (...args: unknown[]) => Promise<unknown> }>;
   }
 ): void => {
   // Main namespace handlers

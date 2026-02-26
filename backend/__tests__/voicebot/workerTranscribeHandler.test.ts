@@ -99,9 +99,13 @@ describe('handleTranscribeJob', () => {
     createTranscriptionMock.mockResolvedValue({ text: 'hello world' });
     getAudioDurationFromFileMock.mockResolvedValue(12);
     const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-1' }));
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-1' }));
     getVoicebotQueuesMock.mockReturnValue({
       [VOICEBOT_QUEUES.PROCESSORS]: {
         add: processorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
       },
     });
 
@@ -133,6 +137,16 @@ describe('handleTranscribeJob', () => {
         session_id: sessionId.toString(),
       }),
       expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+    expect(eventsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.events.SEND_TO_SOCKET,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        event: 'message_update',
+        payload: expect.objectContaining({
+          message_id: messageId.toString(),
+        }),
+      })
     );
   });
 
@@ -323,6 +337,12 @@ describe('handleTranscribeJob', () => {
         return {};
       },
     });
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-quota' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
 
     createTranscriptionMock.mockRejectedValue({
       status: 429,
@@ -350,6 +370,16 @@ describe('handleTranscribeJob', () => {
     expect(String(context.file_path || '')).toBe(filePath);
     expect(String(context.openai_key_mask || '')).toMatch(/^sk-\.\.\.[A-Za-z0-9_-]{4}$/);
     expect(String(context.error_code || '')).toBe('insufficient_quota');
+    expect(eventsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.events.SEND_TO_SOCKET,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        event: 'message_update',
+        payload: expect.objectContaining({
+          message_id: messageId.toString(),
+        }),
+      })
+    );
   });
 
   it('marks file_not_found and stores diagnostics when local file is missing', async () => {

@@ -38,7 +38,7 @@ const hasVisibleTranscriptionContent = (message: Record<string, unknown>): boole
         if (segments.some((segment) => {
             if (!segment || typeof segment !== 'object') return false;
             const item = segment as Record<string, unknown>;
-            if (Boolean(item.is_deleted)) return false;
+            if (item.is_deleted === true) return false;
             const text = typeof item.text === 'string' ? item.text.trim() : '';
             return text.length > 0;
         })) {
@@ -52,7 +52,7 @@ const hasVisibleTranscriptionContent = (message: Record<string, unknown>): boole
     if (legacyChunks.some((chunk) => {
         if (!chunk || typeof chunk !== 'object') return false;
         const item = chunk as Record<string, unknown>;
-        if (Boolean(item.is_deleted)) return false;
+        if (item.is_deleted === true) return false;
         const text = typeof item.text === 'string' ? item.text.trim() : '';
         return text.length > 0;
     })) {
@@ -67,7 +67,25 @@ const hasVisibleTranscriptionContent = (message: Record<string, unknown>): boole
     const plainText = typeof message.text === 'string' ? message.text.trim() : '';
     if (plainText.length > 0) return true;
 
-    return false;
+    const hasAudioPayload = [
+        message.file_path,
+        message.file_name,
+        message.file_unique_id,
+        message.file_hash,
+    ].some((value) => typeof value === 'string' && value.trim().length > 0);
+    if (hasAudioPayload) return true;
+
+    const mimeType = typeof message.mime_type === 'string' ? message.mime_type.toLowerCase().trim() : '';
+    if (mimeType.startsWith('audio/')) return true;
+
+    const hasRetryFlag = message.to_transcribe === true;
+    if (hasRetryFlag) return true;
+
+    const hasTranscriptionError =
+        typeof message.transcription_error === 'string' && message.transcription_error.trim().length > 0;
+    if (hasTranscriptionError) return true;
+
+    return message.is_transcribed === true;
 };
 
 export default function Transcription() {

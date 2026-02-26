@@ -1,5 +1,4 @@
 import { Db, ObjectId } from 'mongodb';
-import type { Logger } from 'winston';
 import type { Request } from 'express';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { VOICEBOT_COLLECTIONS, VOICEBOT_PROCESSORS } from '../../../constants.js';
@@ -270,12 +269,10 @@ const ensureSegmentsHaveIds = (segments: VoiceBotSegment[]): VoiceBotSegment[] =
 
 export const ensureMessageCanonicalTranscription = async ({
   db,
-  logger,
   message,
 }: {
   db: Db;
   message: VoiceBotMessageDocument;
-  logger?: Logger;
 }): Promise<{ message: VoiceBotMessageDocument; transcription: VoiceBotTranscription }> => {
   if (!message || !message._id) {
     throw new Error('Message not found');

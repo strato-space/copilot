@@ -424,7 +424,7 @@ router.post('/users/projects',
             }
 
             const projectIds = user.projects_access || [];
-            let projects: any[] = [];
+            let projects: Array<{ _id: ObjectId; name?: string }> = [];
 
             if (projectIds.length > 0) {
                 projects = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).find({

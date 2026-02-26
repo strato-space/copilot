@@ -94,7 +94,6 @@ router.post('/save-income', async (req: Request, res: Response) => {
 router.post('/margin-performers', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const filters = req.body.filters as Record<string, unknown> | undefined;
 
         // Aggregate work hours by performer
         const workHours = await db

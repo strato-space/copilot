@@ -41,6 +41,7 @@ interface VoiceBotState {
     performers_for_tasks_list: Array<Record<string, unknown>> | null;
     isSessionsListLoading: boolean;
     sessionsListLoadedAt: number | null;
+    sessionsListIncludeDeleted: boolean | null;
 
     updateSessionName: (sessionId: string, newName: string) => Promise<void>;
     updateSessionDialogueTag: (sessionId: string, dialogueTag: string) => Promise<void>;
@@ -78,7 +79,7 @@ interface VoiceBotState {
     restartCorruptedSession: (sessionId: string) => Promise<unknown>;
     setHighlightedMessageId: (messageId: string | null) => void;
     getSessionData: (sessionId: string) => Promise<VoiceBotSessionResponse>;
-    fetchVoiceBotSessionsList: (options?: { force?: boolean }) => Promise<void>;
+    fetchVoiceBotSessionsList: (options?: { force?: boolean; includeDeleted?: boolean }) => Promise<void>;
     postProcessSession: (sessionId: string) => Promise<void>;
     createTasksFromChunks: (sessionId: string, chunks: CreateTaskChunk[]) => void;
     createTasksFromRows: (sessionId: string, rows: Array<{ text?: string }>) => void;
@@ -639,6 +640,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     performers_for_tasks_list: null,
     isSessionsListLoading: false,
     sessionsListLoadedAt: null,
+    sessionsListIncludeDeleted: null,
 
     updateSessionName: async (sessionId, newName) => {
         try {
@@ -1110,28 +1112,35 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     },
 
     fetchVoiceBotSessionsList: async (options) => {
+        const includeDeleted = options?.includeDeleted === true;
         const { force = false } = options ?? {};
-        const { isSessionsListLoading, sessionsListLoadedAt } = get();
+        const { isSessionsListLoading, sessionsListLoadedAt, sessionsListIncludeDeleted } = get();
         if (isSessionsListLoading) return;
-        if (!force && sessionsListLoadedAt) return;
+        if (!force && sessionsListLoadedAt && sessionsListIncludeDeleted === includeDeleted) return;
 
         set({ isSessionsListLoading: true });
         try {
-            const response = await voicebotRequest<VoiceBotSession[]>('voicebot/sessions/list');
+            const response = await voicebotRequest<VoiceBotSession[]>('voicebot/sessions/list', {
+                include_deleted: includeDeleted,
+            });
             if (response && Array.isArray(response)) {
                 const sorted = [...response].sort((a, b) => {
                     const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
                     const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
                     return bTime - aTime;
                 });
-                set({ voiceBotSessionsList: sorted, sessionsListLoadedAt: Date.now() });
+                set({
+                    voiceBotSessionsList: sorted,
+                    sessionsListLoadedAt: Date.now(),
+                    sessionsListIncludeDeleted: includeDeleted,
+                });
             } else {
                 console.error('Ошибка при получении списка сессий:', response);
-                set({ voiceBotSessionsList: [] });
+                set({ voiceBotSessionsList: [], sessionsListIncludeDeleted: includeDeleted });
             }
         } catch (error) {
             console.error('Ошибка при получении списка сессий:', error);
-            set({ voiceBotSessionsList: [] });
+            set({ voiceBotSessionsList: [], sessionsListIncludeDeleted: includeDeleted });
         } finally {
             set({ isSessionsListLoading: false });
         }
@@ -1485,7 +1494,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     deleteSession: async (sessionId) => {
         try {
             await voicebotRequest('voicebot/sessions/delete', { session_id: sessionId }, true);
-            await get().fetchVoiceBotSessionsList({ force: true });
+            const includeDeleted = get().sessionsListIncludeDeleted === true;
+            await get().fetchVoiceBotSessionsList({ force: true, includeDeleted });
             return true;
         } catch (e) {
             console.error('Ошибка при удалении сессии:', e);

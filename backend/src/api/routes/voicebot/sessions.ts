@@ -8,7 +8,7 @@
  */
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { ObjectId, type Db, type Collection } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -58,6 +58,9 @@ const logger = getLogger();
 
 const activeSessionInputSchema = z.object({
     session_id: z.string().trim().min(1).optional(),
+});
+const listSessionsInputSchema = z.object({
+    include_deleted: z.union([z.boolean(), z.number(), z.string()]).optional(),
 });
 const createSessionInputSchema = z.object({
     session_name: z.string().trim().optional().nullable(),
@@ -783,8 +786,18 @@ const listSessions = async (req: Request, res: Response) => {
     const rawDb = getRawDb();
 
     try {
+        const parsedBody = listSessionsInputSchema.safeParse(req.body || {});
+        const includeDeletedRaw = parsedBody.success ? parsedBody.data.include_deleted : undefined;
+        const includeDeleted =
+            includeDeletedRaw === true
+            || includeDeletedRaw === 1
+            || String(includeDeletedRaw ?? '').trim().toLowerCase() === 'true'
+            || String(includeDeletedRaw ?? '').trim() === '1';
+
         // Generate access filter based on user permissions
-        const dataFilter = await PermissionManager.generateDataFilter(performer, db);
+        const dataFilter = await PermissionManager.generateDataFilter(performer, db, {
+            includeDeleted,
+        });
         const sessionsRuntimeFilter = buildRuntimeFilter({
             field: 'runtime_tag',
             familyMatch: IS_PROD_RUNTIME,
@@ -877,9 +890,9 @@ const listSessions = async (req: Request, res: Response) => {
             }
         ]).toArray();
 
-        // Filter sessions with messages or active status
-        const result = sessions.filter((session: any) =>
-            (session.message_count ?? 0) > 0 || (session.is_active ?? false) !== false
+        // Filter sessions with messages or active status (always include deleted when explicitly requested)
+        const result = sessions.filter((session: { message_count?: number; is_active?: boolean; is_deleted?: boolean }) =>
+            session.is_deleted === true || (session.message_count ?? 0) > 0 || (session.is_active ?? false) !== false
         );
 
         res.status(200).json(result);
@@ -976,7 +989,7 @@ const getSession = async (req: Request, res: Response) => {
         const normalizedSessionMessages = sessionMessagesCleaned.map((entry) => entry.message);
 
         // Get participants info
-        let participants: any[] = [];
+        let participants: Array<{ _id: ObjectId; name?: string; contacts?: unknown[] }> = [];
         const sessionRecord = session as VoiceSessionRecord;
         const participantIds = toObjectIdArray(sessionRecord.participants);
         if (participantIds.length > 0) {
@@ -990,7 +1003,14 @@ const getSession = async (req: Request, res: Response) => {
         }
 
         // Get allowed_users info for RESTRICTED sessions
-        let allowed_users: any[] = [];
+        let allowed_users: Array<{
+            _id: ObjectId;
+            name?: string;
+            real_name?: string;
+            corporate_email?: string;
+            role?: string;
+            email?: string;
+        }> = [];
         const allowedUserIds = toObjectIdArray(sessionRecord.allowed_users);
         if (allowedUserIds.length > 0) {
             allowed_users = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).find({

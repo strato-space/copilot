@@ -5,7 +5,7 @@
  * Migrated from voicebot/permissions/permission-manager.js
  */
 
-import { ObjectId, type Db, type Collection } from 'mongodb';
+import { ObjectId, type Db, type UpdateFilter } from 'mongodb';
 import type { Request, Response, NextFunction } from 'express';
 import { PERMISSIONS, ROLES, type Permission, type RoleKey } from './permissions-config.js';
 import { COLLECTIONS, VOICEBOT_COLLECTIONS, VOICE_BOT_SESSION_ACCESS } from '../constants.js';
@@ -260,19 +260,25 @@ export class PermissionManager {
   /**
    * Generate MongoDB filter for data access restriction
    */
-  static async generateDataFilter(performer: Performer, db: Db): Promise<Record<string, unknown>> {
+  static async generateDataFilter(
+    performer: Performer,
+    db: Db,
+    options?: { includeDeleted?: boolean }
+  ): Promise<Record<string, unknown>> {
     const userPermissions = await this.getUserPermissions(performer, db);
     const performerIdStr = performer._id?.toString() || '';
+    const includeDeleted = options?.includeDeleted === true;
+    const notDeletedFilter = includeDeleted ? {} : { is_deleted: { $ne: true } };
 
     // Super admins with READ_ALL permission
     if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL)) {
       // With READ_PRIVATE permission
       if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_PRIVATE)) {
-        return { is_deleted: { $ne: true } };
+        return notDeletedFilter;
       }
       return {
         $and: [
-          { is_deleted: { $ne: true } },
+          notDeletedFilter,
           {
             $or: [
               { chat_id: Number(performer.telegram_id) },
@@ -310,7 +316,7 @@ export class PermissionManager {
       if (accessibleProjectIds.length > 0) {
         return {
           $and: [
-            { is_deleted: { $ne: true } },
+            notDeletedFilter,
             {
               $or: [
                 baseFilter,
@@ -330,7 +336,7 @@ export class PermissionManager {
     // Default: own data only
     return {
       $and: [
-        { is_deleted: { $ne: true } },
+        notDeletedFilter,
         baseFilter,
       ],
     };
@@ -361,11 +367,10 @@ export class PermissionManager {
     try {
       const result = await db.collection(COLLECTIONS.PERFORMERS).updateOne(
         { _id: new ObjectId(performerId) },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {
           $pull: { projects_access: new ObjectId(projectId) },
           $set: { permissions_updated_at: new Date() },
-        } as any
+        } as UpdateFilter<Performer>
       );
       return result.modifiedCount > 0;
     } catch (error) {

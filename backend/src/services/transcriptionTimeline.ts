@@ -188,7 +188,16 @@ export const buildSegmentsFromChunks = ({
     previousEnd = current.end ?? previousEnd;
   }
 
-  const segments = draft.map(({ durationCandidate, ...segment }) => segment);
+  const segments = draft.map((segment) => ({
+    id: segment.id,
+    speaker: segment.speaker,
+    text: segment.text,
+    start: segment.start,
+    end: segment.end,
+    file_name: segment.file_name,
+    created_at: segment.created_at,
+    source_index: segment.source_index,
+  }));
   const derivedDurationSeconds = segments.reduce((maxEnd, seg) => {
     if (isFiniteNumber(seg.end) && seg.end! > maxEnd) return seg.end!;
     return maxEnd;

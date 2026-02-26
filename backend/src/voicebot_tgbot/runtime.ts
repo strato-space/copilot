@@ -5,7 +5,6 @@ import {
   IS_PROD_RUNTIME,
   RUNTIME_TAG,
   VOICEBOT_COLLECTIONS,
-  VOICEBOT_JOBS,
   VOICEBOT_QUEUES,
 } from '../constants.js';
 import { connectDb, getDb, closeDb } from '../services/db.js';
@@ -291,7 +290,10 @@ const buildCommandContext = (ctx: Context): Record<string, unknown> => ({
 });
 
 const installRawLogging = (bot: Telegraf<Context>) => {
-  const telegramApi = bot.telegram as any;
+  type TelegramApiLike = {
+    callApi: (method: string, payload?: unknown, ...args: unknown[]) => Promise<unknown>;
+  };
+  const telegramApi = bot.telegram as unknown as TelegramApiLike;
   const originalCallApi = telegramApi.callApi.bind(telegramApi) as (
     method: string,
     payload?: unknown,

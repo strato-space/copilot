@@ -8,7 +8,8 @@ describe('webrtc upload error handling', () => {
   it('normalizes file-too-large responses to concise diagnostics', () => {
     expect(source).toContain('function normalizeUploadErrorMessage(status, rawText)');
     expect(source).toContain("String(payload?.error || '').trim() === 'file_too_large'");
-    expect(source).toContain("return 'Upload failed: 500 File too large';");
+    expect(source).toContain("const base = 'Upload failed: 500 File too large';");
+    expect(source).toContain('return requestId ? `${base} [request_id=${requestId}]` : base;');
     expect(source).toContain('File too large (max ${maxLabel})');
   });
 

@@ -171,7 +171,7 @@ router.post('/create',
                 return res.status(400).json({ error: "name is required" });
             }
 
-            const person: any = {
+            const person: Record<string, unknown> = {
                 name,
                 contacts: contacts || [],
                 projects: projects || [],
@@ -209,7 +209,7 @@ router.post('/update',
                 return res.status(400).json({ error: "person_id is required" });
             }
 
-            const updateFields: any = {
+            const updateFields: Record<string, unknown> = {
                 updated_at: new Date()
             };
 

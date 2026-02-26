@@ -1,6 +1,7 @@
 import { type MouseEvent, useEffect, useMemo, useState } from 'react';
 import {
     Avatar,
+    Checkbox,
     ConfigProvider,
     Dropdown,
     Input,
@@ -80,6 +81,7 @@ const SESSIONS_QUERY_KEYS = {
     ACCESS_LEVEL: 'f_access',
     CREATOR: 'f_creator',
     PARTICIPANT: 'f_participant',
+    SHOW_DELETED: 'show_deleted',
 } as const;
 
 const parsePositiveInt = (value: string | null, fallback: number): number => {
@@ -139,6 +141,45 @@ const hasAssignedProject = (session: SessionRow): boolean => {
     const projectObjectId = session?.project?._id != null ? String(session.project._id).trim() : '';
     const projectName = typeof session?.project?.name === 'string' ? session.project.name.trim() : '';
     return Boolean(projectId || projectObjectId || projectName);
+};
+
+const isNumericIdentity = (value: unknown): boolean => {
+    if (typeof value !== 'string') return false;
+    return /^-?\d+$/.test(value.trim());
+};
+
+const resolveCreatorFilterLabel = (session: SessionRow): string | null => {
+    const performerName = typeof session?.performer?.real_name === 'string'
+        ? session.performer.real_name.trim()
+        : '';
+    if (performerName) return performerName;
+
+    const chatIdLabel = session?.chat_id != null ? String(session.chat_id).trim() : '';
+    if (!chatIdLabel || isNumericIdentity(chatIdLabel)) return null;
+    return chatIdLabel;
+};
+
+const resolveParticipantFilterLabel = (participant: unknown): string | null => {
+    if (!participant) return null;
+
+    if (typeof participant === 'string') {
+        const normalized = participant.trim();
+        if (!normalized || isNumericIdentity(normalized)) return null;
+        return normalized;
+    }
+
+    if (typeof participant === 'object') {
+        const record = participant as { name?: unknown; full_name?: unknown };
+        const candidate = typeof record.name === 'string' && record.name.trim()
+            ? record.name.trim()
+            : typeof record.full_name === 'string' && record.full_name.trim()
+                ? record.full_name.trim()
+                : '';
+        if (!candidate || isNumericIdentity(candidate)) return null;
+        return candidate;
+    }
+
+    return null;
 };
 
 const isActiveProjectChain = (project: SessionProject): boolean =>
@@ -205,6 +246,10 @@ export default function SessionsListPage() {
     const accessLevelFilterValues = parseMultiFilter(searchParams, SESSIONS_QUERY_KEYS.ACCESS_LEVEL);
     const creatorFilterValues = parseMultiFilter(searchParams, SESSIONS_QUERY_KEYS.CREATOR);
     const participantFilterValues = parseMultiFilter(searchParams, SESSIONS_QUERY_KEYS.PARTICIPANT);
+    const showDeletedSessions = (() => {
+        const rawValue = String(searchParams.get(SESSIONS_QUERY_KEYS.SHOW_DELETED) || '').trim().toLowerCase();
+        return rawValue === '1' || rawValue === 'true';
+    })();
 
     useEffect(() => {
         try {
@@ -312,7 +357,7 @@ export default function SessionsListPage() {
                 const errorText = (result as { error?: string } | null)?.error || 'Не удалось перезапустить обработку';
                 message.warning(errorText);
             }
-            await fetchVoiceBotSessionsList({ force: true });
+            await fetchVoiceBotSessionsList({ force: true, includeDeleted: showDeletedSessions });
         } catch (error) {
             console.error('Ошибка при перезапуске обработки сессии:', error);
             message.error('Ошибка при перезапуске обработки');
@@ -343,7 +388,7 @@ export default function SessionsListPage() {
         projectId: string | null | undefined
     ): Promise<void> => {
         await updateSessionProject(sessionId, projectId ?? null);
-        await fetchVoiceBotSessionsList({ force: true });
+        await fetchVoiceBotSessionsList({ force: true, includeDeleted: showDeletedSessions });
     };
 
     const updateListParams = (mutate: (params: URLSearchParams) => void): void => {
@@ -389,11 +434,12 @@ export default function SessionsListPage() {
         if (!persons_list) {
             void fetchPersonsList();
         }
-        void fetchVoiceBotSessionsList();
+        void fetchVoiceBotSessionsList({ includeDeleted: showDeletedSessions });
     }, [
         isAuth,
         prepared_projects,
         persons_list,
+        showDeletedSessions,
         fetchPreparedProjects,
         fetchPersonsList,
         fetchVoiceBotSessionsList,
@@ -878,7 +924,7 @@ export default function SessionsListPage() {
             filteredValue: creatorFilterValues.length > 0 ? creatorFilterValues : null,
             filters: [...new Set(
                 filteredSessionsList
-                    .map((session) => session?.performer?.real_name ?? session?.chat_id)
+                    .map((session) => resolveCreatorFilterLabel(session))
                     .filter(Boolean)
                     .map((value) => String(value))
             )].map((creatorName) => ({
@@ -886,7 +932,7 @@ export default function SessionsListPage() {
                 value: creatorName,
             })),
             onFilter: (value, record) => {
-                const creatorName = record?.performer?.real_name ?? record?.chat_id;
+                const creatorName = resolveCreatorFilterLabel(record as SessionRow);
                 return String(creatorName ?? '') === String(value);
             },
             render: (_text, record) => (
@@ -912,11 +958,8 @@ export default function SessionsListPage() {
             filters: [...new Set(
                 filteredSessionsList.flatMap((session) =>
                     (session?.participants || []).map((participant) => {
-                        if (!participant) return null;
-                        const name = typeof participant === 'string'
-                            ? participant
-                            : participant?.name ?? participant?.full_name;
-                        return getInitials(name);
+                        const label = resolveParticipantFilterLabel(participant);
+                        return label ? getInitials(label) : null;
                     })
                 )
             )]
@@ -924,24 +967,18 @@ export default function SessionsListPage() {
                 .map((participantName) => ({
                     text: participantName,
                     value: participantName,
-                })),
+            })),
             onFilter: (value, record) => {
                 const participantNames = (record?.participants || []).map((participant) => {
-                    if (!participant) return null;
-                    const name = typeof participant === 'string'
-                        ? participant
-                        : participant?.name ?? participant?.full_name;
-                    return getInitials(name);
+                    const label = resolveParticipantFilterLabel(participant);
+                    return label ? getInitials(label) : null;
                 });
                 return participantNames.includes(String(value));
             },
             render: (_text, record) => {
                 const participantNames = (record?.participants || []).map((participant) => {
-                    if (!participant) return null;
-                    const name = typeof participant === 'string'
-                        ? participant
-                        : participant?.name ?? participant?.full_name;
-                    return getInitials(name);
+                    const label = resolveParticipantFilterLabel(participant);
+                    return label ? getInitials(label) : null;
                 });
                 const participantCount = participantNames.filter(Boolean).length;
                 return (
@@ -1049,6 +1086,25 @@ export default function SessionsListPage() {
                         { key: 'without_project', label: 'Без проекта' },
                     ]}
                 />
+                <div className="flex justify-end mb-2">
+                    <Checkbox
+                        checked={showDeletedSessions}
+                        onChange={(event) => {
+                            const nextChecked = event.target.checked;
+                            updateListParams((params) => {
+                                if (nextChecked) {
+                                    params.set(SESSIONS_QUERY_KEYS.SHOW_DELETED, '1');
+                                } else {
+                                    params.delete(SESSIONS_QUERY_KEYS.SHOW_DELETED);
+                                }
+                                params.set(SESSIONS_QUERY_KEYS.PAGE, String(DEFAULT_SESSIONS_PAGE));
+                                params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(pageSize));
+                            });
+                        }}
+                    >
+                        Показывать удаленные
+                    </Checkbox>
+                </div>
                 <Table
                     className="w-full sessions-table"
                     size="small"
@@ -1064,6 +1120,7 @@ export default function SessionsListPage() {
                     }}
                     dataSource={filteredSessionsList}
                     rowKey="_id"
+                    rowClassName={(record) => (record.is_deleted ? 'sessions-row-deleted' : '')}
                     columns={columns}
                     onChange={(pagination, filters) => {
                         updateTableStateParams(
