@@ -54,6 +54,8 @@ describe('handleTranscribeJob', () => {
     getVoicebotQueuesMock.mockReset();
     openAiCtorMock.mockClear();
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcd';
+    delete process.env.TG_VOICE_BOT_TOKEN;
+    delete process.env.TG_VOICE_BOT_BETA_TOKEN;
     getFileSha256FromPathMock.mockResolvedValue('sha256-transcribe-test');
     getVoicebotQueuesMock.mockReturnValue(null);
   });
@@ -484,6 +486,140 @@ describe('handleTranscribeJob', () => {
     const context = setPayload.transcription_error_context as Record<string, unknown>;
     expect(String(context.telegram_file_id || '')).toBe('AQAD-tele-file-id');
     expect(String(context.error_code || '')).toBe('missing_transport');
+  });
+
+  it('downloads telegram transport by file_id and continues transcription when file_path is missing', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const originalFetch = global.fetch;
+    process.env.TG_VOICE_BOT_TOKEN = '123456:test-token';
+
+    const metadataResponse = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        result: {
+          file_path: 'voice/file_11.ogg',
+        },
+      }),
+      arrayBuffer: async () => new ArrayBuffer(0),
+      headers: {
+        get: (_name: string) => null,
+      },
+    };
+    const binaryPayload = Buffer.from('fake-telegram-audio');
+    const downloadResponse = {
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      arrayBuffer: async () =>
+        binaryPayload.buffer.slice(binaryPayload.byteOffset, binaryPayload.byteOffset + binaryPayload.byteLength),
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/ogg' : null),
+      },
+    };
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(metadataResponse as unknown)
+      .mockResolvedValueOnce(downloadResponse as unknown);
+    global.fetch = fetchMock as typeof global.fetch;
+
+    try {
+      const messagesFindOne = jest.fn(async () => ({
+        _id: messageId,
+        session_id: sessionId,
+        is_transcribed: false,
+        transcribe_attempts: 0,
+        source_type: 'telegram',
+        file_id: 'AQAD-tele-file-id',
+        mime_type: 'audio/ogg',
+        message_timestamp: 1770489126,
+        duration: 12,
+      }));
+      const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+      const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+      const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+      const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-tele-transport' }));
+      const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-tele-transport' }));
+      getVoicebotQueuesMock.mockReturnValue({
+        [VOICEBOT_QUEUES.PROCESSORS]: {
+          add: processorsQueueAdd,
+        },
+        [VOICEBOT_QUEUES.EVENTS]: {
+          add: eventsQueueAdd,
+        },
+      });
+
+      getDbMock.mockReturnValue({
+        collection: (name: string) => {
+          if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+            return {
+              findOne: messagesFindOne,
+              updateOne: messagesUpdateOne,
+            };
+          }
+          if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+            return {
+              findOne: sessionsFindOne,
+              updateOne: sessionsUpdateOne,
+            };
+          }
+          return {};
+        },
+      });
+
+      createTranscriptionMock.mockResolvedValue({ text: 'telegram voice text' });
+
+      const result = await handleTranscribeJob({ message_id: messageId.toString() });
+      expect(result).toMatchObject({
+        ok: true,
+        message_id: messageId.toString(),
+        session_id: sessionId.toString(),
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0]?.[0]).toEqual(expect.stringContaining('/getFile?file_id='));
+      expect(fetchMock.mock.calls[1]?.[0]).toEqual(expect.stringContaining('/file/bot'));
+
+      const transportUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+        const update = call?.[1] as Record<string, unknown> | undefined;
+        const setPayload = (update?.$set || {}) as Record<string, unknown>;
+        return setPayload.file_transport === 'telegram_download';
+      });
+      expect(transportUpdateCall).toBeTruthy();
+      const transportSetPayload = ((transportUpdateCall?.[1] as Record<string, unknown>).$set ||
+        {}) as Record<string, unknown>;
+      const downloadedPath = String(transportSetPayload.file_path || '');
+      expect(downloadedPath).toContain('/uploads/voicebot/audio/telegram/');
+      expect(downloadedPath.endsWith('.ogg')).toBe(true);
+
+      const transcribeInput = createTranscriptionMock.mock.calls[0]?.[0] as Record<string, unknown>;
+      const transcribeStream = transcribeInput.file as { path?: string };
+      expect(String(transcribeStream?.path || '')).toBe(downloadedPath);
+
+      const finalUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+        const update = call?.[1] as Record<string, unknown> | undefined;
+        const setPayload = (update?.$set || {}) as Record<string, unknown>;
+        return setPayload.is_transcribed === true;
+      });
+      expect(finalUpdateCall).toBeTruthy();
+      const finalSetPayload = ((finalUpdateCall?.[1] as Record<string, unknown>).$set || {}) as Record<string, unknown>;
+      expect(finalSetPayload.transcription_text).toBe('telegram voice text');
+      expect(finalSetPayload.to_transcribe).toBe(false);
+      expect(processorsQueueAdd).toHaveBeenCalledTimes(1);
+      expect(eventsQueueAdd).toHaveBeenCalledWith(
+        VOICEBOT_JOBS.events.SEND_TO_SOCKET,
+        expect.objectContaining({
+          session_id: sessionId.toString(),
+          event: 'message_update',
+          payload: expect.objectContaining({
+            message_id: messageId.toString(),
+          }),
+        })
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 
   it('uses text fallback transcription when file_path is absent but text exists', async () => {

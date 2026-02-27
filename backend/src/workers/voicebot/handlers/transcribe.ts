@@ -1,9 +1,10 @@
-import { createReadStream, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
 import {
+  VOICEBOT_FILE_STORAGE,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
   VOICEBOT_PROCESSORS,
@@ -61,6 +62,7 @@ type VoiceMessageRecord = {
   task?: string;
   source_type?: string;
   file_id?: string;
+  mime_type?: string;
 };
 
 type VoiceSessionRecord = {
@@ -76,6 +78,19 @@ const OPENAI_KEY_ENV_NAMES = ['OPENAI_API_KEY'] as const;
 const OPENAI_TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024;
 const OPENAI_TRANSCRIBE_SEGMENT_TARGET_BYTES = 8 * 1024 * 1024;
 const OPENAI_TRANSCRIBE_MIN_SEGMENT_SECONDS = 45;
+const TELEGRAM_BOT_API_BASE_URL = 'https://api.telegram.org';
+
+const TELEGRAM_EXTENSION_BY_MIME: Record<string, string> = {
+  'audio/ogg': '.ogg',
+  'audio/opus': '.ogg',
+  'audio/webm': '.webm',
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/x-m4a': '.m4a',
+  'audio/mp4': '.m4a',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+};
 
 const runtimeQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, {
@@ -201,6 +216,202 @@ const getTranscriptionErrorContext = ({
 const getFileSizeBytes = (filePath: string): number => {
   const stats = statSync(filePath);
   return Math.max(0, Number(stats.size) || 0);
+};
+
+const normalizeMimeType = (value: unknown): string | null => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized || null;
+};
+
+const sanitizeExtension = (rawExtension: unknown): string => {
+  const normalized = String(rawExtension || '').trim().toLowerCase();
+  if (!normalized) return '';
+  const dotted = normalized.startsWith('.') ? normalized : `.${normalized}`;
+  const safe = dotted.replace(/[^a-z0-9.]/g, '');
+  if (!safe || safe === '.') return '';
+  return safe;
+};
+
+const resolveTelegramAudioExtension = ({
+  telegramFilePath,
+  mimeType,
+}: {
+  telegramFilePath: string;
+  mimeType: string | null;
+}): string => {
+  const fromPath = sanitizeExtension(extname(telegramFilePath || ''));
+  if (fromPath) return fromPath;
+  const byMime = mimeType ? TELEGRAM_EXTENSION_BY_MIME[mimeType] : null;
+  return byMime || '.ogg';
+};
+
+const resolveTelegramBotToken = (): string | null => {
+  const prodToken =
+    typeof process.env.TG_VOICE_BOT_TOKEN === 'string' ? process.env.TG_VOICE_BOT_TOKEN.trim() : '';
+  const betaToken =
+    typeof process.env.TG_VOICE_BOT_BETA_TOKEN === 'string' ? process.env.TG_VOICE_BOT_BETA_TOKEN.trim() : '';
+  if (IS_PROD_RUNTIME) return prodToken || betaToken || null;
+  return betaToken || prodToken || null;
+};
+
+type TelegramTransportDownloadResult =
+  | {
+    ok: true;
+    file_path: string;
+    telegram_file_path: string;
+    mime_type: string | null;
+    file_size: number;
+  }
+  | {
+    ok: false;
+    error_code: string;
+    error_message: string;
+    context?: Record<string, unknown>;
+  };
+
+type TelegramFetchResponse = {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  headers: {
+    get: (name: string) => string | null;
+  };
+};
+
+const downloadTelegramFileToLocal = async ({
+  fileId,
+  sessionId,
+  messageId,
+  mimeTypeHint,
+}: {
+  fileId: string;
+  sessionId: string;
+  messageId: string;
+  mimeTypeHint: string | null;
+}): Promise<TelegramTransportDownloadResult> => {
+  const token = resolveTelegramBotToken();
+  if (!token) {
+    return {
+      ok: false,
+      error_code: 'telegram_bot_token_missing',
+      error_message: 'Telegram bot token is not configured',
+    };
+  }
+
+  const metadataUrl = `${TELEGRAM_BOT_API_BASE_URL}/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`;
+  let metadataResponse: TelegramFetchResponse;
+  try {
+    metadataResponse = (await fetch(metadataUrl, { method: 'GET' })) as unknown as TelegramFetchResponse;
+  } catch (error) {
+    return {
+      ok: false,
+      error_code: 'telegram_get_file_request_failed',
+      error_message: getErrorMessage(error),
+    };
+  }
+
+  if (!metadataResponse.ok) {
+    return {
+      ok: false,
+      error_code: 'telegram_get_file_http_error',
+      error_message: `Telegram getFile failed (${metadataResponse.status})`,
+      context: { status: metadataResponse.status },
+    };
+  }
+
+  type TelegramGetFileResponse = {
+    ok?: boolean;
+    description?: string;
+    result?: {
+      file_path?: string;
+    };
+  };
+
+  let metadataBody: TelegramGetFileResponse | null = null;
+  try {
+    metadataBody = (await metadataResponse.json()) as TelegramGetFileResponse;
+  } catch (error) {
+    return {
+      ok: false,
+      error_code: 'telegram_get_file_invalid_json',
+      error_message: getErrorMessage(error),
+    };
+  }
+
+  const telegramFilePath =
+    typeof metadataBody?.result?.file_path === 'string' ? metadataBody.result.file_path.trim() : '';
+  if (!metadataBody?.ok || !telegramFilePath) {
+    return {
+      ok: false,
+      error_code: 'telegram_file_path_missing',
+      error_message: metadataBody?.description || 'Telegram file path not found',
+    };
+  }
+
+  const downloadUrl = `${TELEGRAM_BOT_API_BASE_URL}/file/bot${token}/${telegramFilePath}`;
+  let downloadResponse: TelegramFetchResponse;
+  try {
+    downloadResponse = (await fetch(downloadUrl, { method: 'GET' })) as unknown as TelegramFetchResponse;
+  } catch (error) {
+    return {
+      ok: false,
+      error_code: 'telegram_file_download_request_failed',
+      error_message: getErrorMessage(error),
+    };
+  }
+
+  if (!downloadResponse.ok) {
+    return {
+      ok: false,
+      error_code: 'telegram_file_download_http_error',
+      error_message: `Telegram file download failed (${downloadResponse.status})`,
+      context: { status: downloadResponse.status },
+    };
+  }
+
+  let binary: Buffer;
+  try {
+    binary = Buffer.from(await downloadResponse.arrayBuffer());
+  } catch (error) {
+    return {
+      ok: false,
+      error_code: 'telegram_file_download_read_failed',
+      error_message: getErrorMessage(error),
+    };
+  }
+  if (binary.length <= 0) {
+    return {
+      ok: false,
+      error_code: 'telegram_file_download_empty',
+      error_message: 'Telegram file download returned empty payload',
+    };
+  }
+
+  const mimeType =
+    normalizeMimeType(downloadResponse.headers.get('content-type')) || normalizeMimeType(mimeTypeHint);
+  const extension = resolveTelegramAudioExtension({
+    telegramFilePath,
+    mimeType,
+  });
+
+  const transportDir = resolve(VOICEBOT_FILE_STORAGE.audioDir, 'telegram', sessionId);
+  mkdirSync(transportDir, { recursive: true });
+  const safeMessageId = messageId.replace(/[^a-zA-Z0-9_-]/g, '').slice(-32) || 'message';
+  const safeFileId = fileId.replace(/[^a-zA-Z0-9_-]/g, '').slice(-24) || 'file';
+  const localFilePath = join(
+    transportDir,
+    `tg_${Date.now().toString(36)}_${safeMessageId}_${safeFileId}${extension}`
+  );
+  writeFileSync(localFilePath, binary);
+
+  return {
+    ok: true,
+    file_path: localFilePath,
+    telegram_file_path: telegramFilePath,
+    mime_type: mimeType,
+    file_size: binary.length,
+  };
 };
 
 const createOpenAiClient = (): { apiKey: string; client: OpenAI | null } => {
@@ -494,7 +705,8 @@ export const handleTranscribeJob = async (
     }
   }
 
-  const filePath = String(message.file_path || '').trim();
+  let filePath = String(message.file_path || '').trim();
+  let telegramTransportError: Record<string, unknown> | null = null;
   if (!filePath) {
     const textFallback = String(message.text || '').trim();
     if (textFallback) {
@@ -544,11 +756,60 @@ export const handleTranscribeJob = async (
 
     const sourceType = String(message.source_type || '').trim().toLowerCase();
     const fileId = String(message.file_id || '').trim();
+    if (sourceType === 'telegram' && fileId) {
+      const transportDownload = await downloadTelegramFileToLocal({
+        fileId,
+        sessionId: session_id,
+        messageId: message_id,
+        mimeTypeHint: normalizeMimeType(message.mime_type),
+      });
+      if (transportDownload.ok) {
+        filePath = transportDownload.file_path;
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+          $set: {
+            file_path: transportDownload.file_path,
+            telegram_file_path: transportDownload.telegram_file_path,
+            file_transport: 'telegram_download',
+            file_size: transportDownload.file_size,
+            ...(transportDownload.mime_type ? { mime_type: transportDownload.mime_type } : {}),
+          },
+        });
+      } else {
+        telegramTransportError = {
+          code: transportDownload.error_code,
+          message: transportDownload.error_message,
+          ...(transportDownload.context ? { context: transportDownload.context } : {}),
+        };
+        logger.warn('[voicebot-worker] telegram transport download failed', {
+          message_id,
+          session_id,
+          file_id: fileId,
+          ...telegramTransportError,
+        });
+      }
+    }
+  }
+  if (!filePath) {
+    const sourceType = String(message.source_type || '').trim().toLowerCase();
+    const fileId = String(message.file_id || '').trim();
     const isTelegramTransportMissing = Boolean(fileId) && sourceType === 'telegram';
+    const telegramTransportErrorCode = String(telegramTransportError?.code || '').trim();
+    const telegramTransportErrorMessage = String(telegramTransportError?.message || '').trim();
     const errorCode = isTelegramTransportMissing ? 'missing_transport' : 'missing_file_path';
+    const defaultTelegramMessage =
+      'Telegram file transport is not configured for this message (file_id present, file_path missing)';
     const errorMessage = isTelegramTransportMissing
-      ? 'Telegram file transport is not configured for this message (file_id present, file_path missing)'
+      ? telegramTransportErrorMessage || defaultTelegramMessage
       : 'Audio file path is missing';
+    const transportContext = isTelegramTransportMissing && telegramTransportError
+      ? {
+        ...(telegramTransportErrorCode ? { code: telegramTransportErrorCode } : {}),
+        ...(telegramTransportErrorMessage ? { message: telegramTransportErrorMessage } : {}),
+        ...(telegramTransportError.context && typeof telegramTransportError.context === 'object'
+          ? { context: telegramTransportError.context as Record<string, unknown> }
+          : {}),
+      }
+      : null;
 
     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
       $set: {
@@ -565,6 +826,7 @@ export const handleTranscribeJob = async (
             errorCode,
           }),
           ...(fileId ? { telegram_file_id: fileId } : {}),
+          ...(transportContext ? { telegram_transport_error: transportContext } : {}),
         },
       },
       $unset: {

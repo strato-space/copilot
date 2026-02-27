@@ -59,8 +59,10 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Empty stale sessions can be cleaned in worker runtime by scheduled `CLEANUP_EMPTY_SESSIONS` jobs (no-message sessions older than configured threshold are marked `is_deleted=true`):
   - env knobs: `VOICEBOT_EMPTY_SESSION_CLEANUP_INTERVAL_MS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_AGE_HOURS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_BATCH_LIMIT`.
 - Voice sessions list supports deleted-session mode (`include_deleted` / `Показывать удаленные`); creator/participant filters suppress numeric identity placeholders and keep only human-readable labels.
+- Voice sessions list now persists active tab + filter set in local storage and restores them on reopen; current quick tabs are `Все`, `Без проекта`, `Активные`, `Мои`.
 - Voice sessions list forces a mode-sync refetch when `showDeletedSessions` intent changes during an in-flight load (`force=true` bypasses loading short-circuit for this case).
 - Voice sessions list supports bulk delete for selected active rows (`Удалить выбранные`) with confirmation and safe exclusion of already deleted sessions.
+- Voice sessions list state marker is now a dedicated pictogram column aligned with session state semantics (`recording`, `cutting`, `paused`, `final_uploading`, `closed`, `ready`, `error`).
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
@@ -79,6 +81,8 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
 - TS transcribe handler never silently skips missing transport now: Telegram messages with `file_id` but without local `file_path` are marked `transcription_error=missing_transport` with diagnostics; text-only chunks without file path are transcribed via `transcription_method=text_fallback` and continue categorization pipeline.
+- TS transcribe handler additionally supports Telegram transport recovery: for `source_type=telegram` + `file_id` + missing local file path it resolves `getFile`, downloads audio into local storage, persists `file_path`, and continues transcription in the same job.
+- Voice backend exposes session-merge scaffolding (`voicebot/sessions/merge`) with explicit confirmation phrase and merge-log collection support (`automation_voice_bot_session_merge_log`).
 
 ### Voice TypeScript migration status (from closed BD issues)
 - Runtime entrypoints migrated to TS:
@@ -98,6 +102,7 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Current open migration backlog is tracked only in `bd`; as of the latest refresh there are no open P1 frontend migration tasks.
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
 - Synced legacy planning references copied for context now live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
+- Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
 
 
 ### Voice runtime: key configuration map

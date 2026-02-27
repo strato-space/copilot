@@ -89,17 +89,7 @@ const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
             {
                 $match: {
                     $expr: {
-                        $eq: [
-                            {
-                                $convert: {
-                                    input: '$ticket_db_id',
-                                    to: 'string',
-                                    onError: '',
-                                    onNull: '',
-                                },
-                            },
-                            '$$taskDbId',
-                        ],
+                        $eq: ['$ticket_db_id', '$$taskDbId'],
                     },
                 },
             },

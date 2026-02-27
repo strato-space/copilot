@@ -399,6 +399,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Fixed WebRTC FAB `Done` close reliability on `/voice/session/:id`: `session_done` now retries across socket namespace base candidates (origin + `/api` stripped variants), and close failure no longer silently clears session state.
 - Added close-failure UX guard in WebRTC runtime: when `session_done` is not acknowledged, FAB returns to `paused` with explicit retry toast (`Failed to close session. Retry Done.`) instead of fake `idle/ready`.
 - Updated regression contract `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts` to lock fallback namespace attempts and non-silent failed-close behavior.
+- Added sessions-list persistence contract: quick tabs (`all/without_project/active/mine`) and filter state are restored from local storage between page opens.
+- Added dedicated session-state pictogram column in Voice sessions list and removed legacy active-dot semantics from date-cell rendering contracts.
+- Added merge-session API/store scaffolding (`voicebot/sessions/merge`, `mergeSessions(...)`) with explicit confirmation phrase and merge-log collection constant (`automation_voice_bot_session_merge_log`).
+- Added TS transcribe Telegram transport recovery flow (`getFile` -> download -> persist `file_path` -> transcribe) and matching regression coverage in `workerTranscribeHandler` tests.
+- Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.

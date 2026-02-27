@@ -80,6 +80,7 @@ const RUNTIME_SCOPED_COLLECTION_NAMES = [
   'automation_agents_run_results',
   'automation_permissions_log',
   'automation_voice_bot_session_log',
+  'automation_voice_bot_session_merge_log',
   'automation_object_locator',
   'automation_object_types',
   'automation_tasks',

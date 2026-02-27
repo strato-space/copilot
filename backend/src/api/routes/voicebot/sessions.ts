@@ -8,7 +8,7 @@
  */
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { ObjectId, type Db } from 'mongodb';
+import { ObjectId, type ClientSession, type Db, type MongoClient } from 'mongodb';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -107,6 +107,12 @@ const uploadProjectFileInputSchema = z.object({
 const getFileContentInputSchema = z.object({
     file_id: z.string().trim().min(1),
 });
+const mergeSessionsInputSchema = z.object({
+    session_ids: z.array(z.string().trim().min(1)).min(2),
+    target_session_id: z.string().trim().min(1),
+    confirmation_phrase: z.string().trim().min(1),
+    operation_id: z.string().trim().optional(),
+});
 type SessionDoneInput = z.input<typeof sessionDoneInputSchema>;
 
 const projectFilesUploadDir = resolve(VOICEBOT_FILE_STORAGE.uploadsDir, 'project-files');
@@ -130,6 +136,7 @@ const projectFilesUpload = multer({
 
 const LEGACY_INTERFACE_HOST = '176.124.201.53';
 const DEFAULT_PUBLIC_INTERFACE_BASE = 'https://copilot.stratospace.fun/voice/session';
+const SESSION_MERGE_CONFIRM_PHRASE = 'СЛИТЬ СЕССИИ';
 
 const activeSessionUrl = (sessionId?: string | null): string => {
     const rawBase = (process.env.VOICE_WEB_INTERFACE_URL || DEFAULT_PUBLIC_INTERFACE_BASE).replace(/\/+$/, '');
@@ -557,6 +564,123 @@ const resolveSessionAccess = async ({
     }
 
     return { session: session as Record<string, unknown>, hasAccess };
+};
+
+const dedupeObjectIds = (ids: ObjectId[]): ObjectId[] => {
+    const seen = new Set<string>();
+    const result: ObjectId[] = [];
+    for (const id of ids) {
+        const key = id.toHexString();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(id);
+    }
+    return result;
+};
+
+const compactRecord = (value: unknown): unknown => {
+    if (value === null || value === undefined) return undefined;
+    if (Array.isArray(value)) {
+        return value
+            .map((entry) => compactRecord(entry))
+            .filter((entry) => entry !== undefined);
+    }
+    if (typeof value !== 'object') return value;
+
+    const record = value as Record<string, unknown>;
+    const entries = Object.entries(record)
+        .map(([key, entry]) => [key, compactRecord(entry)] as const)
+        .filter(([, entry]) => entry !== undefined);
+    return Object.fromEntries(entries);
+};
+
+const toIdString = (value: unknown): string | null => {
+    if (value == null) return null;
+    if (typeof value === 'string') return value;
+    if (value instanceof ObjectId) return value.toHexString();
+    if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+    if (typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        if ('_id' in record) return toIdString(record._id);
+        if ('id' in record) return toIdString(record.id);
+        if ('key' in record) return toIdString(record.key);
+    }
+    return null;
+};
+
+const resolveActorId = (req: Request): string | null => {
+    const record = req as Request & {
+        user?: { userId?: string };
+        performer?: { _id?: ObjectId | string };
+    };
+
+    const userId = String(record.user?.userId || '').trim();
+    if (userId) return userId;
+
+    return toIdString(record.performer?._id);
+};
+
+const buildMessagesBySessionFilter = (sessionIds: ObjectId[]): Record<string, unknown> => {
+    const stringIds = sessionIds.map((id) => id.toHexString());
+    return {
+        $or: [
+            { session_id: { $in: sessionIds } },
+            { session_id: { $in: stringIds } },
+        ],
+    };
+};
+
+const writeSessionMergeAuditLog = async ({
+    db,
+    req,
+    result,
+    targetSessionId,
+    sourceSessionIds,
+    payloadBefore,
+    payloadAfter,
+    statsBefore,
+    statsAfter,
+    errorMessage,
+    requestId,
+    session,
+}: {
+    db: Db;
+    req: Request;
+    result: 'success' | 'failed';
+    targetSessionId: ObjectId;
+    sourceSessionIds: ObjectId[];
+    payloadBefore?: unknown;
+    payloadAfter?: unknown;
+    statsBefore?: unknown;
+    statsAfter?: unknown;
+    errorMessage?: string;
+    requestId?: string | undefined;
+    session?: ClientSession;
+}): Promise<void> => {
+    const now = Date.now();
+    const logDoc = {
+        operation_type: 'merge_sessions',
+        entity_type: 'voice_session',
+        entity_id: targetSessionId.toHexString(),
+        related_entity_ids: compactRecord({
+            target_session_id: targetSessionId.toHexString(),
+            source_session_ids: sourceSessionIds.map((id) => id.toHexString()),
+        }) ?? null,
+        payload_before: compactRecord(payloadBefore) ?? null,
+        payload_after: compactRecord(payloadAfter) ?? null,
+        stats_before: compactRecord(statsBefore) ?? null,
+        stats_after: compactRecord(statsAfter) ?? null,
+        request_id: requestId ?? req.header('x-request-id') ?? undefined,
+        performed_by: resolveActorId(req),
+        performed_at: now,
+        result,
+        error_message: errorMessage ?? null,
+        created_at: now,
+        updated_at: now,
+    };
+
+    const options = session ? { session } : undefined;
+    await db.collection(VOICEBOT_COLLECTIONS.SESSION_MERGE_LOG).insertOne(logDoc, options);
 };
 
 const getActiveSessionMapping = async ({
@@ -2025,6 +2149,417 @@ router.post('/delete', async (req: Request, res: Response) => {
     } catch (error) {
         logger.error('Error in sessions/delete:', error);
         res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * POST /sessions/merge
+ * Merge selected sessions into target session
+ */
+router.post('/merge', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+    const rawDb = getRawDb();
+
+    const parsed = mergeSessionsInputSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        return res.status(400).json({
+            error: 'Invalid payload',
+            details: parsed.error.issues.map((issue) => issue.message),
+        });
+    }
+
+    const payload = parsed.data;
+    const confirmationPhrase = payload.confirmation_phrase.trim().toUpperCase();
+    if (confirmationPhrase !== SESSION_MERGE_CONFIRM_PHRASE) {
+        return res.status(400).json({
+            error: `Confirmation phrase must be "${SESSION_MERGE_CONFIRM_PHRASE}"`,
+        });
+    }
+
+    const invalidSessionIds = payload.session_ids.filter((id) => !ObjectId.isValid(id));
+    if (invalidSessionIds.length > 0) {
+        return res.status(400).json({
+            error: 'session_ids must contain valid ObjectId values',
+            invalid_session_ids: invalidSessionIds,
+        });
+    }
+    if (!ObjectId.isValid(payload.target_session_id)) {
+        return res.status(400).json({ error: 'target_session_id must be a valid ObjectId' });
+    }
+
+    const selectedSessionIds = dedupeObjectIds(payload.session_ids.map((id) => new ObjectId(id)));
+    if (selectedSessionIds.length < 2) {
+        return res.status(400).json({ error: 'At least 2 unique sessions must be selected' });
+    }
+
+    const targetSessionObjectId = new ObjectId(payload.target_session_id);
+    const targetSessionHex = targetSessionObjectId.toHexString();
+    if (!selectedSessionIds.some((id) => id.equals(targetSessionObjectId))) {
+        return res.status(400).json({ error: 'target_session_id must be included in session_ids' });
+    }
+
+    const sourceSessionObjectIds = selectedSessionIds.filter((id) => !id.equals(targetSessionObjectId));
+    if (sourceSessionObjectIds.length === 0) {
+        return res.status(400).json({ error: 'At least one source session is required' });
+    }
+
+    try {
+        const userPermissions = await PermissionManager.getUserPermissions(performer, db);
+        const canMerge =
+            userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.UPDATE) ||
+            userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.DELETE);
+        if (!canMerge) {
+            return res.status(403).json({ error: 'Access denied to merge sessions' });
+        }
+
+        const accessEntries = await Promise.all(
+            selectedSessionIds.map(async (sessionObjectId) => ({
+                sessionId: sessionObjectId.toHexString(),
+                ...(await resolveSessionAccess({
+                    db,
+                    performer,
+                    sessionId: sessionObjectId.toHexString(),
+                })),
+            }))
+        );
+
+        const missingSessionIds = accessEntries
+            .filter((entry) => !entry.session)
+            .map((entry) => entry.sessionId);
+        if (missingSessionIds.length > 0) {
+            return res.status(404).json({
+                error: 'Some sessions were not found',
+                missing_session_ids: missingSessionIds,
+            });
+        }
+
+        const forbiddenSessionIds = accessEntries
+            .filter((entry) => entry.session && !entry.hasAccess)
+            .map((entry) => entry.sessionId);
+        if (forbiddenSessionIds.length > 0) {
+            return res.status(403).json({
+                error: 'Access denied to one or more selected sessions',
+                forbidden_session_ids: forbiddenSessionIds,
+            });
+        }
+
+        const targetSessionEntry = accessEntries.find((entry) => entry.sessionId === targetSessionHex);
+        if (!targetSessionEntry?.session) {
+            return res.status(404).json({ error: 'Target session not found' });
+        }
+        const targetProjectIdBeforeMerge = toIdString(targetSessionEntry.session.project_id);
+
+        const mongoClient = (rawDb as unknown as { client?: MongoClient }).client;
+        if (!mongoClient) {
+            return res.status(500).json({ error: 'mongo client is not available' });
+        }
+
+        const mergeTransactionSession = mongoClient.startSession();
+
+        let mergeResult: {
+            sourceSessionsMarkedDeleted: number;
+            movedMessagesCount: number;
+            sourceMessagesBefore: number;
+            targetMessagesBefore: number;
+            targetMessagesAfter: number;
+            targetMessageIds: string[];
+        } | null = null;
+
+        try {
+            mergeResult = (await mergeTransactionSession.withTransaction(async () => {
+                const sessionsCollection = rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS);
+                const messagesCollection = rawDb.collection(VOICEBOT_COLLECTIONS.MESSAGES);
+                const nowDate = new Date();
+                const nowTimestamp = Date.now();
+
+                const sourceMessagesFilter = mergeWithProdAwareRuntimeFilter({
+                    ...buildMessagesBySessionFilter(sourceSessionObjectIds),
+                    is_deleted: { $ne: true },
+                });
+                const sourceSessionsFilter = mergeWithProdAwareRuntimeFilter({
+                    _id: { $in: sourceSessionObjectIds },
+                    is_deleted: { $ne: true },
+                });
+                const targetMessagesFilter = mergeWithProdAwareRuntimeFilter({
+                    ...buildMessagesBySessionFilter([targetSessionObjectId]),
+                    is_deleted: { $ne: true },
+                });
+                const targetSessionFilter = mergeWithProdAwareRuntimeFilter({
+                    _id: targetSessionObjectId,
+                    is_deleted: { $ne: true },
+                });
+
+                const [sourceMessagesBefore, targetMessagesBefore] = await Promise.all([
+                    messagesCollection.countDocuments(sourceMessagesFilter, { session: mergeTransactionSession }),
+                    messagesCollection.countDocuments(targetMessagesFilter, { session: mergeTransactionSession }),
+                ]);
+
+                const movedMessages = await messagesCollection.updateMany(
+                    sourceMessagesFilter,
+                    {
+                        $set: {
+                            session_id: targetSessionObjectId,
+                            updated_at: nowDate,
+                            is_finalized: false,
+                        },
+                    },
+                    { session: mergeTransactionSession }
+                );
+
+                const sourceSessionsUpdated = await sessionsCollection.updateMany(
+                    sourceSessionsFilter,
+                    {
+                        $set: {
+                            is_deleted: true,
+                            deleted_at: nowDate,
+                            merged_into_session_id: targetSessionObjectId,
+                            merged_at: nowDate,
+                            updated_at: nowDate,
+                        },
+                    },
+                    { session: mergeTransactionSession }
+                );
+
+                await messagesCollection.updateMany(
+                    targetMessagesFilter,
+                    [
+                        {
+                            $set: {
+                                session_id: targetSessionObjectId,
+                                processors_data: {
+                                    [VOICEBOT_PROCESSORS.TRANSCRIPTION]: {
+                                        $ifNull: [`$processors_data.${VOICEBOT_PROCESSORS.TRANSCRIPTION}`, {}],
+                                    },
+                                    [VOICEBOT_PROCESSORS.CATEGORIZATION]: {
+                                        is_processing: false,
+                                        is_processed: false,
+                                        is_finished: false,
+                                        job_queued_timestamp: nowTimestamp,
+                                    },
+                                },
+                                categorization: [],
+                                categorization_data: [],
+                                categorization_attempts: 0,
+                                is_finalized: false,
+                                updated_at: nowDate,
+                            },
+                        },
+                        {
+                            $unset: [
+                                'categorization_error',
+                                'categorization_error_message',
+                                'categorization_error_timestamp',
+                                'categorization_retry_reason',
+                                'categorization_next_attempt_at',
+                            ],
+                        },
+                    ],
+                    { session: mergeTransactionSession }
+                );
+
+                await sessionsCollection.updateOne(
+                    targetSessionFilter,
+                    [
+                        {
+                            $set: {
+                                processors_data: {
+                                    [VOICEBOT_PROCESSORS.TRANSCRIPTION]: {
+                                        $ifNull: [`$processors_data.${VOICEBOT_PROCESSORS.TRANSCRIPTION}`, {}],
+                                    },
+                                    [VOICEBOT_PROCESSORS.CATEGORIZATION]: {
+                                        is_processing: false,
+                                        is_processed: false,
+                                        is_finished: false,
+                                        job_queued_timestamp: nowTimestamp,
+                                    },
+                                },
+                                is_messages_processed: false,
+                                is_finalized: false,
+                                is_postprocessing: false,
+                                to_finalize: false,
+                                is_corrupted: false,
+                                updated_at: nowDate,
+                            },
+                        },
+                        {
+                            $unset: [
+                                'error_source',
+                                'transcription_error',
+                                'error_message',
+                                'error_timestamp',
+                                'error_message_id',
+                            ],
+                        },
+                    ],
+                    { session: mergeTransactionSession }
+                );
+
+                const targetMessageIdDocs = await messagesCollection
+                    .find(targetMessagesFilter, {
+                        session: mergeTransactionSession,
+                        projection: { _id: 1 },
+                    })
+                    .toArray();
+
+                const targetMessageIds = targetMessageIdDocs
+                    .map((doc) => toIdString(doc._id))
+                    .filter((id): id is string => Boolean(id && ObjectId.isValid(id)));
+
+                const targetMessagesAfter = targetMessageIds.length;
+
+                await writeSessionMergeAuditLog({
+                    db,
+                    req,
+                    result: 'success',
+                    targetSessionId: targetSessionObjectId,
+                    sourceSessionIds: sourceSessionObjectIds,
+                    payloadBefore: {
+                        target_project_id: targetProjectIdBeforeMerge,
+                    },
+                    payloadAfter: {
+                        target_project_id: targetProjectIdBeforeMerge,
+                    },
+                    statsBefore: {
+                        source_messages_count: sourceMessagesBefore,
+                        target_messages_count: targetMessagesBefore,
+                    },
+                    statsAfter: {
+                        moved_messages_count: movedMessages.modifiedCount,
+                        source_sessions_marked_deleted: sourceSessionsUpdated.modifiedCount,
+                        target_messages_count: targetMessagesAfter,
+                    },
+                    requestId: payload.operation_id,
+                    session: mergeTransactionSession,
+                });
+
+                return {
+                    sourceSessionsMarkedDeleted: sourceSessionsUpdated.modifiedCount,
+                    movedMessagesCount: movedMessages.modifiedCount,
+                    sourceMessagesBefore,
+                    targetMessagesBefore,
+                    targetMessagesAfter,
+                    targetMessageIds,
+                };
+            })) ?? null;
+        } catch (transactionError) {
+            try {
+                await writeSessionMergeAuditLog({
+                    db,
+                    req,
+                    result: 'failed',
+                    targetSessionId: targetSessionObjectId,
+                    sourceSessionIds: sourceSessionObjectIds,
+                    payloadBefore: {
+                        target_project_id: targetProjectIdBeforeMerge,
+                    },
+                    errorMessage: transactionError instanceof Error ? transactionError.message : String(transactionError),
+                    requestId: payload.operation_id,
+                });
+            } catch (logError) {
+                logger.error('[voicebot.sessions.merge] failed to write failed audit log', {
+                    error: logError instanceof Error ? logError.message : String(logError),
+                    target_session_id: targetSessionHex,
+                });
+            }
+            throw transactionError;
+        } finally {
+            await mergeTransactionSession.endSession();
+        }
+
+        if (!mergeResult) {
+            return res.status(500).json({ error: 'merge transaction failed' });
+        }
+
+        const queues = getVoicebotQueues();
+        const processorsQueue = queues?.[VOICEBOT_QUEUES.PROCESSORS];
+        let categorizationJobsQueued = 0;
+        let categorizationJobsFailed = 0;
+
+        if (!processorsQueue) {
+            logger.warn('[voicebot.sessions.merge] processors queue unavailable', {
+                target_session_id: targetSessionHex,
+            });
+        } else {
+            for (const messageId of mergeResult.targetMessageIds) {
+                const jobId = `${targetSessionHex}-${messageId}-CATEGORIZE-MERGE-${Date.now()}`;
+                try {
+                    await processorsQueue.add(
+                        VOICEBOT_JOBS.voice.CATEGORIZE,
+                        {
+                            message_id: messageId,
+                            session_id: targetSessionHex,
+                            job_id: jobId,
+                            reason: 'session_merge',
+                            force: true,
+                        },
+                        {
+                            attempts: 1,
+                            removeOnComplete: true,
+                        }
+                    );
+                    categorizationJobsQueued += 1;
+                } catch (queueError) {
+                    categorizationJobsFailed += 1;
+                    logger.error('[voicebot.sessions.merge] failed to enqueue categorization job', {
+                        target_session_id: targetSessionHex,
+                        message_id: messageId,
+                        error: queueError instanceof Error ? queueError.message : String(queueError),
+                    });
+                }
+            }
+        }
+
+        const projectIdToUse = targetProjectIdBeforeMerge ? String(targetProjectIdBeforeMerge) : '';
+        const projectAssigned = false;
+
+        const logEvent = await insertSessionLogEvent({
+            db,
+            session_id: targetSessionObjectId,
+            project_id: ObjectId.isValid(projectIdToUse) ? new ObjectId(projectIdToUse) : null,
+            event_name: 'notify_requested',
+            status: 'done',
+            actor: buildActorFromPerformer(performer),
+            source: buildWebSource(req),
+            action: { available: true, type: 'resend' },
+            metadata: {
+                notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+                notify_payload: { project_id: projectIdToUse || null },
+                source: 'session_merge',
+                merged_source_session_ids: sourceSessionObjectIds.map((id) => id.toHexString()),
+            },
+        });
+
+        const notifyEnqueued = await enqueueVoicebotNotify({
+            sessionId: targetSessionHex,
+            event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+            payload: { project_id: projectIdToUse || null },
+        });
+
+        return res.status(200).json({
+            success: true,
+            target_session_id: targetSessionHex,
+            source_session_ids: sourceSessionObjectIds.map((id) => id.toHexString()),
+            source_sessions_marked_deleted: mergeResult.sourceSessionsMarkedDeleted,
+            moved_messages_count: mergeResult.movedMessagesCount,
+            source_messages_count_before: mergeResult.sourceMessagesBefore,
+            target_messages_count_before: mergeResult.targetMessagesBefore,
+            target_messages_count_after: mergeResult.targetMessagesAfter,
+            recategorization_jobs_queued: categorizationJobsQueued,
+            recategorization_jobs_failed: categorizationJobsFailed,
+            project_id: projectIdToUse || null,
+            project_assigned: projectAssigned,
+            notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+            notify_enqueued: notifyEnqueued,
+            event_oid: logEvent?._id ? formatOid('evt', logEvent._id as ObjectId) : null,
+        });
+    } catch (error) {
+        logger.error('[voicebot.sessions.merge] failed', {
+            error: error instanceof Error ? error.message : String(error),
+            target_session_id: targetSessionHex,
+        });
+        return res.status(500).json({ error: String(error) });
     }
 });
 

@@ -65,6 +65,7 @@ export const COLLECTIONS = {
   PROJECTS: 'automation_projects',
   PROJECT_GROUPS: 'automation_project_groups',
   PROJECT_TREE_LOG: 'automation_project_tree_log',
+  VOICEBOT_SESSION_MERGE_LOG: 'automation_voice_bot_session_merge_log',
   TASK_TYPES: 'automation_task_types',
   TASK_SUPERTYPES: 'automation_task_supertypes',
   TASK_TYPES_TREE: 'automation_task_types_tree',
@@ -126,6 +127,44 @@ export const COLLECTIONS = {
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
+
+// =============================================================================
+// MongoDB Indexes
+// =============================================================================
+export const MONGO_INDEX_NAMES = {
+  ID: '_id_',
+
+  TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG: 'idx_tasks_is_deleted_task_status_runtime_tag',
+  WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG: 'idx_work_hours_ticket_db_id_runtime_tag',
+} as const;
+
+export const MONGO_EXISTING_INDEX_NAMES_BY_COLLECTION: Record<string, readonly string[]> = {
+  [COLLECTIONS.TASKS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.WORK_HOURS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.PROJECTS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.PROJECT_GROUPS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.CUSTOMERS]: [MONGO_INDEX_NAMES.ID],
+} as const;
+
+export const MONGO_STARTUP_INDEXES = [
+  {
+    collection: COLLECTIONS.TASKS,
+    name: MONGO_INDEX_NAMES.TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG,
+    key: {
+      is_deleted: 1,
+      task_status: 1,
+      runtime_tag: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.WORK_HOURS,
+    name: MONGO_INDEX_NAMES.WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG,
+    key: {
+      ticket_db_id: 1,
+      runtime_tag: 1,
+    },
+  },
+] as const;
 
 // =============================================================================
 // Notification Types
@@ -453,6 +492,7 @@ export const VOICEBOT_COLLECTIONS = {
   PERSONS: 'automation_persons',
   PERMISSIONS_LOG: 'automation_permissions_log',
   SESSION_LOG: 'automation_voice_bot_session_log',
+  SESSION_MERGE_LOG: 'automation_voice_bot_session_merge_log',
   OBJECT_LOCATOR: 'automation_object_locator',
   // Google Drive
   GOOGLE_DRIVE_PROJECTS_FILES: 'automation_google_drive_projects_files',

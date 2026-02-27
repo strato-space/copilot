@@ -53,4 +53,4 @@ Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly 
   - writes worker session-log events: `notify_hook_started`, `notify_hook_failed`, `notify_http_sent`, `notify_http_failed`.
   - `notify_hook_started.metadata.log_path` stores the exact log file path for post-mortem diagnostics.
 - `audioMerging` handler in TS runtime is intentionally a controlled skip unless Telegram merge transport/tooling is wired in worker process context.
-- Telegram voice-file download path remains pending in transcribe pipeline (current TS transcribe path expects local `file_path`).
+- Transcribe handler now attempts Telegram transport recovery for voice chunks with `source_type=telegram` and `file_id` but missing local `file_path`: it resolves `getFile`, downloads to local storage under `uploads/voicebot/audio/telegram/<session_id>/`, persists `file_path`, and continues transcription.

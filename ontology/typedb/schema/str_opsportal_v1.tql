@@ -387,7 +387,7 @@ entity alert_setting,
 entity alert_event,
   owns alert_event_id @key,
   owns severity,
-  owns status,
+  owns status,strato-space/copilot/ontology/typedb/docs
   owns created_at,
   plays alert_setting_configures_alert_event:alert_event,
   plays alert_event_creates_notification_item:alert_event;

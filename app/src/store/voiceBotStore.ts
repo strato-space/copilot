@@ -115,6 +115,12 @@ interface VoiceBotState {
     rejectAllTickets: () => void;
     deleteTaskFromSession: (taskId: string) => Promise<boolean>;
     deleteSession: (sessionId: string) => Promise<boolean>;
+    mergeSessions: (payload: {
+        sessionIds: string[];
+        targetSessionId: string;
+        confirmationPhrase: string;
+        operationId?: string;
+    }) => Promise<Record<string, unknown>>;
     downloadTranscription: (sessionId: string) => Promise<void>;
     fetchProjectTopics: (projectId: string, sessionId?: string | null) => Promise<unknown>;
     runCustomPrompt: (
@@ -1115,9 +1121,8 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     fetchVoiceBotSessionsList: async (options) => {
         const includeDeleted = options?.includeDeleted === true;
         const { force = false } = options ?? {};
-        const { isSessionsListLoading, sessionsListLoadedAt, sessionsListIncludeDeleted } = get();
+        const { isSessionsListLoading, sessionsListIncludeDeleted } = get();
         if (isSessionsListLoading && !force) return;
-        if (!force && sessionsListLoadedAt && sessionsListIncludeDeleted === includeDeleted) return;
 
         set({ isSessionsListLoading: true });
         try {
@@ -1501,6 +1506,23 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         } catch (e) {
             console.error('Ошибка при удалении сессии:', e);
             throw e;
+        }
+    },
+
+    mergeSessions: async ({ sessionIds, targetSessionId, confirmationPhrase, operationId }) => {
+        try {
+            const response = await voicebotRequest<Record<string, unknown>>('voicebot/sessions/merge', {
+                session_ids: sessionIds,
+                target_session_id: targetSessionId,
+                confirmation_phrase: confirmationPhrase,
+                operation_id: operationId,
+            }, true);
+            const includeDeleted = get().sessionsListIncludeDeleted === true;
+            await get().fetchVoiceBotSessionsList({ force: true, includeDeleted });
+            return response;
+        } catch (error) {
+            console.error('Ошибка при слиянии сессий:', error);
+            throw error;
         }
     },
 

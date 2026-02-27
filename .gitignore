@@ -14,6 +14,7 @@ miniapp/.env.production
 node_modules/
 dist/
 backend/logs/
+backend/uploads/
 logs/
 
 # Google service account

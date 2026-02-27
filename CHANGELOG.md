@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-02-27
+### PROBLEM SOLVED
+- **20:26** Voice session list behavior stayed inconsistent after repeated opens: stale list cache could survive between page visits, and filter state (including deleted-mode) was not fully persistent across navigation.
+- **20:26** Session-list visual status used mixed legacy markers (including noisy red-dot semantics), which made quick status scanning harder and did not match the session-page state model.
+- **20:26** Operators had no backend-native way to merge duplicate/fragmented voice sessions into one target session with explicit confirmation and audit payload.
+- **20:26** TS transcribe handler still depended on pre-downloaded local file paths for Telegram audio in some cases; missing local transport path could leave messages without transcription progress.
+- **20:26** Current Voice↔OperOps↔Codex taskflow requirements were distributed across chat context without a single agreed planning artifact for upcoming implementation waves.
+
+### FEATURE IMPLEMENTED
+- **20:26** Added persistent sessions-list UX model with tab expansion (`all`, `without_project`, `active`, `mine`), localStorage-backed filter restore, and include-deleted synchronization test coverage.
+- **20:26** Added state-pictogram-driven session list rendering aligned to session lifecycle semantics (`recording/cutting/paused/final_uploading/closed/ready/error`) and removed legacy active-dot contract from date cell.
+- **20:26** Added backend/API/store scaffolding for session merge workflow with explicit confirmation phrase support and dedicated merge-log collection constants.
+- **20:26** Added Telegram transport recovery path in TS transcribe worker: resolve Telegram file metadata, download binary to local storage, persist file path, then continue transcription.
+- **20:26** Added unified planning draft for Voice↔OperOps↔Codex taskflow and recorded confirmed defaults for Codex performer, `@task` auto-session behavior, deferred worker model, and tab filtering contracts.
+
+### CHANGES
+- **20:26** Voice sessions list/front:
+  - `app/src/pages/voice/SessionsListPage.tsx` updated for richer tab/filter model, state pictogram column, and persistence helpers.
+  - `app/src/store/voiceBotStore.ts` removed stale list-cache short-circuit and added `mergeSessions(...)`.
+  - `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` expanded with contracts for cache behavior, sorting, pictograms, and persisted filters.
+- **20:26** Session controls / meeting card:
+  - `app/src/components/voice/MeetingCard.tsx` added explicit "restart processing" control path wired through store actions.
+- **20:26** Backend voice runtime:
+  - `backend/src/api/routes/voicebot/sessions.ts` added merge-session schemas/helpers/routes and merge constants.
+  - `backend/src/workers/voicebot/handlers/transcribe.ts` added Telegram file transport fallback download flow.
+  - `backend/__tests__/voicebot/workerTranscribeHandler.test.ts` added Telegram fallback regression coverage.
+- **20:26** Backend infra/runtime:
+  - `backend/src/constants.ts`, `backend/src/services/runtimeScope.ts`, `backend/src/services/db.ts` extended with merge-log collection awareness and startup index scaffolding.
+  - `backend/src/api/routes/crm/tickets.ts` simplified work-hours lookup matching on canonical `ticket_db_id`.
+  - `backend/src/workers/README.md` updated to document Telegram transport recovery behavior.
+- **20:26** Repo/planning updates:
+  - `.gitignore` now excludes `backend/uploads/`.
+  - Added planning artifact: `plan/voice-operops-codex-taskflow-spec.md`.
+- **20:26** Build-env note:
+  - `app/.env.production` currently includes explicit `VITE_BUILD_MINIFY` and `VITE_BUILD_SOURCEMAP` overrides as part of this checkpoint.
+
 ## 2026-02-26
 ### PROBLEM SOLVED
 - **12:22** In active recording sessions, Transcription tab could stay visually empty while chunks were already uploaded/queued, because rows without immediate text payload were filtered out from rendering.

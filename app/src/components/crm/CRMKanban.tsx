@@ -19,7 +19,7 @@ import {
 import type { TableColumnType, TableProps } from 'antd';
 import cn from 'classnames';
 import _ from 'lodash';
-import dayjs from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
 import {
@@ -46,6 +46,7 @@ import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
 import { TASK_STATUSES } from '../../constants/crm';
+import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import type { Ticket, Performer, Epic, TaskType } from '../../types/crm';
 
 import AvatarName from './AvatarName';
@@ -120,14 +121,14 @@ const CRMKanban = (props: CRMKanbanProps) => {
     const [selectedNewStatus, setSelectedNewStatus] = useState<string | null>(null);
     const tableRef = useRef<HTMLDivElement>(null);
 
-    const getCustomerNameByGroup = (group: { customer?: string }) => {
+    const getCustomerNameByGroup = useCallback((group: { customer?: string }) => {
         const customer = customers.find(
             (c) => c._id && group.customer && c._id.toString() === group.customer.toString()
         );
         return customer?.name ?? 'Без заказчика';
-    };
+    }, [customers]);
 
-    const toLookupValue = (value: unknown): string => {
+    const toLookupValue = useCallback((value: unknown): string => {
         if (typeof value === 'string') return value;
         if (typeof value === 'number') return String(value);
         if (!value || typeof value !== 'object') return '';
@@ -139,9 +140,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
             if (directValue && directValue !== '[object Object]') return directValue;
         }
         return '';
-    };
+    }, []);
 
-    const getProjectByValue = (projectValue?: unknown) => {
+    const getProjectByValue = useCallback((projectValue?: unknown) => {
         const targetValue = toLookupValue(projectValue);
         if (!targetValue) return null;
 
@@ -149,9 +150,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
             projectsData.find((p) => p._id.toString() === targetValue) ??
             projectsData.find((p) => p.name === targetValue)
         );
-    };
+    }, [projectsData, toLookupValue]);
 
-    const getProjectInfo = (project_id?: string | null, project_name?: string | null) => {
+    const getProjectInfo = useCallback((project_id?: string | null, project_name?: string | null) => {
         const project = getProjectByValue(project_id) ?? getProjectByValue(project_name);
         if (!project) {
             return project_name || project_id
@@ -171,9 +172,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
             group: group?.name ?? 'Unassigned',
             customer: customer?.name ?? 'Unknown',
         };
-    };
+    }, [customers, getProjectByValue, projectGroups]);
 
-    const getProjectDisplayName = (record: Ticket): string => {
+    const getProjectDisplayName = useCallback((record: Ticket): string => {
         const projectData = (record as Ticket & { project_data?: unknown }).project_data;
         const projectDataName =
             projectData &&
@@ -187,7 +188,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                         ?.name
                   : '';
         return projectDataName || getProjectByValue(record.project_id)?.name || getProjectByValue(record.project)?.name || record.project || '—';
-    };
+    }, [getProjectByValue]);
 
     useEffect(() => {
         if (isAuth) {
@@ -238,6 +239,211 @@ const CRMKanban = (props: CRMKanbanProps) => {
         const nb = `${tb?.supertype ?? ''}: ${tb?.name ?? ''}`;
         return na.localeCompare(nb);
     }, [getTaskType]);
+
+    const isInlineEditing = useCallback(
+        (record: Ticket, column: string): boolean => {
+            if (!editingColumn.ticket || !editingColumn.column) return false;
+            const editingTicketId = editingColumn.ticket._id || editingColumn.ticket.id;
+            const recordId = record._id || record.id;
+            return editingColumn.column === column && editingTicketId === recordId;
+        },
+        [editingColumn]
+    );
+
+    const closeInlineEditor = useCallback(() => {
+        setEditingColumn(null, null);
+    }, [setEditingColumn]);
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                closeInlineEditor();
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [closeInlineEditor]);
+
+    const groupedProjectOptions = useMemo(() => {
+        const projectsByGroup: Record<string, Array<{ _id: string; name: string }>> = {};
+
+        projectsData.forEach((project) => {
+            const group = projectGroups.find(
+                (g) =>
+                    g._id &&
+                    project.project_group &&
+                    g._id.toString() === project.project_group.toString()
+            );
+            const customer = group
+                ? customers.find(
+                      (c) =>
+                          c._id &&
+                          group.customer &&
+                          c._id.toString() === group.customer.toString()
+                  )
+                : null;
+
+            const groupKey = group
+                ? `${customer?.name ?? 'Unknown'} / ${group.name}`
+                : 'Unassigned';
+
+            if (!projectsByGroup[groupKey]) {
+                projectsByGroup[groupKey] = [];
+            }
+            projectsByGroup[groupKey].push({
+                _id: project._id,
+                name: project.name,
+            });
+        });
+
+        return Object.entries(projectsByGroup).map(([groupName, values]) => ({
+            label: groupName,
+            title: groupName,
+            options: values.map((value) => ({
+                label: value.name,
+                value: value._id,
+            })),
+        }));
+    }, [customers, projectGroups, projectsData]);
+
+    const performerOptions = useMemo(
+        () =>
+            performers.map((performer) => ({
+                value: performer._id ?? performer.id,
+                label: performer.real_name ?? performer.name,
+            })),
+        [performers]
+    );
+
+    const taskTypeOptions = useMemo(
+        () =>
+            Object.entries(
+                _.groupBy(
+                    Object.values(Array.isArray(task_types) ? task_types : []),
+                    'supertype'
+                )
+            ).map(([supertype, groupedTaskTypes]: [string, TaskType[]]) => ({
+                label: supertype,
+                title: supertype,
+                options: groupedTaskTypes.map((tt) => ({
+                    label: `${tt.task_id ?? ''} ${tt.name}`,
+                    value: tt._id,
+                })),
+            })),
+        [task_types]
+    );
+
+    const priorityOptions = useMemo(
+        () =>
+            NOTION_TICKET_PRIORITIES.map((value) => ({
+                value,
+                label: value,
+            })),
+        []
+    );
+
+    const statusOptions = useMemo(
+        () =>
+            Object.values(TASK_STATUSES).map((value) => ({
+                value,
+                label: value,
+            })),
+        []
+    );
+
+    const handleProjectUpdate = useCallback(
+        (record: Ticket, projectId: string | null) => {
+            if (!projectId) {
+                closeInlineEditor();
+                return;
+            }
+
+            const projectInfo = projectsData.find((project) => project._id === projectId);
+            const updatePayload: Partial<Ticket> = {
+                project_id: projectId,
+                project: projectInfo?.name ?? projectId,
+            };
+            if (projectInfo) {
+                updatePayload.project_data = {
+                    _id: projectInfo._id,
+                    name: projectInfo.name,
+                };
+            }
+            updateTicket(record, updatePayload);
+            closeInlineEditor();
+        },
+        [closeInlineEditor, projectsData, updateTicket]
+    );
+
+    const handleTitleUpdate = useCallback(
+        (record: Ticket, nextValue: string) => {
+            const normalized = nextValue.trim();
+            if (!normalized || normalized === record.name) {
+                closeInlineEditor();
+                return;
+            }
+
+            updateTicket(record, { name: normalized });
+            closeInlineEditor();
+        },
+        [closeInlineEditor, updateTicket]
+    );
+
+    const handlePerformerUpdate = useCallback(
+        (record: Ticket, performerId: string | null) => {
+            if (!performerId) {
+                updateTicket(record, { performer: '' });
+                closeInlineEditor();
+                return;
+            }
+
+            const performer =
+                performers.find((p) => p._id === performerId || p.id === performerId) ??
+                performerId;
+            updateTicket(record, { performer });
+            closeInlineEditor();
+        },
+        [closeInlineEditor, performers, updateTicket]
+    );
+
+    const handlePriorityUpdate = useCallback(
+        (record: Ticket, priority: string | null) => {
+            updateTicket(record, { priority: priority ?? '' });
+            closeInlineEditor();
+        },
+        [closeInlineEditor, updateTicket]
+    );
+
+    const handleStatusUpdate = useCallback(
+        (record: Ticket, taskStatus: string | null) => {
+            if (!taskStatus) {
+                closeInlineEditor();
+                return;
+            }
+            updateTicket(record, { task_status: taskStatus });
+            closeInlineEditor();
+        },
+        [closeInlineEditor, updateTicket]
+    );
+
+    const handleTaskTypeUpdate = useCallback(
+        (record: Ticket, taskType: string | null) => {
+            updateTicket(record, { task_type: taskType ?? '' });
+            closeInlineEditor();
+        },
+        [closeInlineEditor, updateTicket]
+    );
+
+    const handleShipmentDateUpdate = useCallback(
+        (record: Ticket, shipmentDate: Dayjs | null) => {
+            updateTicket(record, {
+                shipment_date: shipmentDate ? shipmentDate.format('YYYY-MM-DD') : '',
+            });
+            closeInlineEditor();
+        },
+        [closeInlineEditor, updateTicket]
+    );
 
     const rowSelection: TableProps<Ticket>['rowSelection'] = {
         selectedRowKeys: selectedRows,
@@ -331,6 +537,38 @@ const CRMKanban = (props: CRMKanbanProps) => {
             render: (_, record) => {
                 const projectInfo = getProjectInfo(record.project_id, record.project);
                 const projectName = getProjectDisplayName(record);
+                const currentProject =
+                    getProjectByValue(record.project_id) ?? getProjectByValue(record.project);
+                const currentProjectValue = currentProject?._id ?? toLookupValue(record.project_id);
+
+                if (isInlineEditing(record, 'project')) {
+                    return (
+                        <div onClick={(event) => event.stopPropagation()}>
+                            <Select
+                                autoFocus
+                                defaultOpen
+                                value={currentProjectValue || null}
+                                options={groupedProjectOptions}
+                                showSearch
+                                filterOption={(inputValue, option) =>
+                                    (option?.label ?? '')
+                                        .toLowerCase()
+                                        .includes(inputValue.toLowerCase())
+                                }
+                                onChange={(value) =>
+                                    handleProjectUpdate(record, String(value))
+                                }
+                                onOpenChange={(isOpen) => {
+                                    if (!isOpen) closeInlineEditor();
+                                }}
+                                className="w-full min-w-[220px]"
+                                popupClassName="w-[380px]"
+                                popupMatchSelectWidth={false}
+                            />
+                        </div>
+                    );
+                }
+
                 return (
                     <div
                         className="flex flex-col cursor-pointer"
@@ -340,6 +578,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
                             color: 'black',
                             height: projectInfo ? 'auto' : '48px',
                             padding: projectInfo ? '4px' : '0px',
+                        }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingColumn(record, 'project');
                         }}
                     >
                         {projectName && projectName !== '—' ? (
@@ -399,16 +641,46 @@ const CRMKanban = (props: CRMKanbanProps) => {
             ),
             filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />,
             onFilter: (value, record) => record.name.toString().toLowerCase().includes(String(value).toLowerCase()),
-            render: (_, record) => (
-                <div className="flex gap-2 cursor-pointer" onClick={() => setEditingColumn(record, 'title')}>
-                    {record.notion_url ? (
-                        <a target="_blank" href={record.notion_url} rel="noopener noreferrer">
-                            <LinkOutlined />
-                        </a>
-                    ) : null}
-                    <div>{record.name}</div>
-                </div>
-            ),
+            render: (_, record) => {
+                if (isInlineEditing(record, 'title')) {
+                    return (
+                        <div onClick={(event) => event.stopPropagation()}>
+                            <Input
+                                autoFocus
+                                defaultValue={record.name}
+                                onPressEnter={(event) =>
+                                    handleTitleUpdate(record, event.currentTarget.value)
+                                }
+                                onBlur={(event) =>
+                                    handleTitleUpdate(record, event.currentTarget.value)
+                                }
+                            />
+                        </div>
+                    );
+                }
+
+                return (
+                    <div
+                        className="flex gap-2 cursor-pointer"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingColumn(record, 'title');
+                        }}
+                    >
+                        {record.notion_url ? (
+                            <a
+                                target="_blank"
+                                href={record.notion_url}
+                                rel="noopener noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <LinkOutlined />
+                            </a>
+                        ) : null}
+                        <div>{record.name}</div>
+                    </div>
+                );
+            },
         },
         {
             title: (
@@ -449,8 +721,48 @@ const CRMKanban = (props: CRMKanbanProps) => {
                         ? (record.performer as Performer)
                         : performers.find((p) => p.id === record.performer || p._id === record.performer);
                 const performerName = performerInfo?.real_name ?? performerInfo?.name ?? '';
+                const performerValue =
+                    typeof record.performer === 'object' && record.performer
+                        ? (record.performer as Performer)._id ?? (record.performer as Performer).id
+                        : record.performer
+                          ? String(record.performer)
+                          : undefined;
+
+                if (isInlineEditing(record, 'performer')) {
+                    return (
+                        <div onClick={(event) => event.stopPropagation()}>
+                            <Select
+                                autoFocus
+                                defaultOpen
+                                value={performerValue ?? null}
+                                allowClear
+                                options={performerOptions}
+                                showSearch
+                                onChange={(value) =>
+                                    handlePerformerUpdate(
+                                        record,
+                                        value ? String(value) : null
+                                    )
+                                }
+                                onOpenChange={(isOpen) => {
+                                    if (!isOpen) closeInlineEditor();
+                                }}
+                                className="w-[180px]"
+                                popupClassName="w-[240px]"
+                                popupMatchSelectWidth={false}
+                            />
+                        </div>
+                    );
+                }
+
                 return (
-                    <div className="flex gap-2 flex-wrap h-[32px] items-center justify-start cursor-pointer">
+                    <div
+                        className="flex gap-2 flex-wrap h-[32px] items-center justify-start cursor-pointer"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingColumn(record, 'performer');
+                        }}
+                    >
                         <AvatarName name={performerName} size={28} />
                     </div>
                 );
@@ -461,41 +773,104 @@ const CRMKanban = (props: CRMKanbanProps) => {
             key: 'priority',
             width: 80,
             sorter: (a, b) => compareStrings(a.priority, b.priority),
-            render: (_, record) => (
-                <div
-                    className="flex gap-2 flex-wrap h-[32px] items-center cursor-pointer"
-                    style={{
-                        justifyContent: 'center',
-                        alignItems: 'start',
-                        color: 'black',
-                        height: record.priority ? 'auto' : '24px',
-                        padding: record.priority ? '4px' : '0px',
-                    }}
-                >
-                    {record.priority || '🍄'}
-                </div>
-            ),
+            render: (_, record) => {
+                if (isInlineEditing(record, 'priority')) {
+                    return (
+                        <div onClick={(event) => event.stopPropagation()}>
+                            <Select
+                                autoFocus
+                                defaultOpen
+                                value={record.priority ?? null}
+                                allowClear
+                                options={priorityOptions}
+                                onChange={(value) =>
+                                    handlePriorityUpdate(
+                                        record,
+                                        value ? String(value) : null
+                                    )
+                                }
+                                onOpenChange={(isOpen) => {
+                                    if (!isOpen) closeInlineEditor();
+                                }}
+                                popupClassName="w-[120px]"
+                                popupMatchSelectWidth={false}
+                            />
+                        </div>
+                    );
+                }
+
+                return (
+                    <div
+                        className="flex gap-2 flex-wrap h-[32px] items-center cursor-pointer"
+                        style={{
+                            justifyContent: 'center',
+                            alignItems: 'start',
+                            color: 'black',
+                            height: record.priority ? 'auto' : '24px',
+                            padding: record.priority ? '4px' : '0px',
+                        }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingColumn(record, 'priority');
+                        }}
+                    >
+                        {record.priority || '🍄'}
+                    </div>
+                );
+            },
         },
         {
             title: 'Статус',
             key: 'task_status',
             sorter: (a, b) => compareStrings(a.task_status, b.task_status),
             width: 180,
-            render: (_, record) => (
-                <div
-                    className="flex gap-2 flex-wrap h-[32px] items-center cursor-pointer"
-                    style={{
-                        alignItems: 'center',
-                        justifyContent: 'start',
-                        color: 'black',
-                        fontSize: 12,
-                        height: record.task_status ? 'auto' : '24px',
-                        padding: record.task_status ? '4px' : '0px',
-                    }}
-                >
-                    {record.task_status}
-                </div>
-            ),
+            render: (_, record) => {
+                if (isInlineEditing(record, 'task_status')) {
+                    return (
+                        <div onClick={(event) => event.stopPropagation()}>
+                            <Select
+                                autoFocus
+                                defaultOpen
+                                value={record.task_status ?? null}
+                                options={statusOptions}
+                                showSearch
+                                onChange={(value) =>
+                                    handleStatusUpdate(
+                                        record,
+                                        value ? String(value) : null
+                                    )
+                                }
+                                onOpenChange={(isOpen) => {
+                                    if (!isOpen) closeInlineEditor();
+                                }}
+                                className="w-[180px]"
+                                popupClassName="w-[220px]"
+                                popupMatchSelectWidth={false}
+                            />
+                        </div>
+                    );
+                }
+
+                return (
+                    <div
+                        className="flex gap-2 flex-wrap h-[32px] items-center cursor-pointer"
+                        style={{
+                            alignItems: 'center',
+                            justifyContent: 'start',
+                            color: 'black',
+                            fontSize: 12,
+                            height: record.task_status ? 'auto' : '24px',
+                            padding: record.task_status ? '4px' : '0px',
+                        }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingColumn(record, 'task_status');
+                        }}
+                    >
+                        {record.task_status}
+                    </div>
+                );
+            },
         },
         {
             title: 'Тип',
@@ -504,6 +879,40 @@ const CRMKanban = (props: CRMKanbanProps) => {
             width: 140,
             render: (_, record) => {
                 const tt = getTaskType(record.task_type);
+
+                if (isInlineEditing(record, 'task_type')) {
+                    return (
+                        <div onClick={(event) => event.stopPropagation()}>
+                            <Select
+                                autoFocus
+                                defaultOpen
+                                value={record.task_type ?? null}
+                                allowClear
+                                options={taskTypeOptions}
+                                showSearch
+                                filterOption={(inputValue, option) =>
+                                    (option?.label ?? '')
+                                        .toString()
+                                        .toLowerCase()
+                                        .includes(inputValue.toLowerCase())
+                                }
+                                onChange={(value) =>
+                                    handleTaskTypeUpdate(
+                                        record,
+                                        value ? String(value) : null
+                                    )
+                                }
+                                onOpenChange={(isOpen) => {
+                                    if (!isOpen) closeInlineEditor();
+                                }}
+                                className="w-[140px]"
+                                popupClassName="w-[380px]"
+                                popupMatchSelectWidth={false}
+                            />
+                        </div>
+                    );
+                }
+
                 return (
                     <div
                         className="flex gap-2 flex-wrap h-[32px] cursor-pointer"
@@ -514,6 +923,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
                             color: 'black',
                             height: record.task_type ? 'auto' : '24px',
                             padding: record.task_type ? '4px' : '0px',
+                        }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingColumn(record, 'task_type');
                         }}
                     >
                         {tt ? (
@@ -534,20 +947,45 @@ const CRMKanban = (props: CRMKanbanProps) => {
             key: 'shipment_date',
             width: 72,
             sorter: (a, b) => dayjs(a.shipment_date ?? '').unix() - dayjs(b.shipment_date ?? '').unix(),
-            render: (_, record) => (
-                <div
-                    className="flex gap-2 flex-wrap h-[32px] items-center cursor-pointer"
-                    style={{
-                        justifyContent: 'center',
-                        alignItems: 'start',
-                        color: 'black',
-                        height: record.shipment_date ? 'auto' : '24px',
-                        padding: record.shipment_date ? '4px' : '0px',
-                    }}
-                >
-                    {record.shipment_date ? dayjs(record.shipment_date).format('DD.MM') : '☠️'}
-                </div>
-            ),
+            render: (_, record) => {
+                if (isInlineEditing(record, 'shipment_date')) {
+                    return (
+                        <div onClick={(event) => event.stopPropagation()}>
+                            <DatePicker
+                                autoFocus
+                                defaultOpen
+                                value={record.shipment_date ? dayjs(record.shipment_date) : null}
+                                onChange={(value) =>
+                                    handleShipmentDateUpdate(record, value)
+                                }
+                                onOpenChange={(isOpen) => {
+                                    if (!isOpen) closeInlineEditor();
+                                }}
+                                inputReadOnly
+                            />
+                        </div>
+                    );
+                }
+
+                return (
+                    <div
+                        className="flex gap-2 flex-wrap h-[32px] items-center cursor-pointer"
+                        style={{
+                            justifyContent: 'center',
+                            alignItems: 'start',
+                            color: 'black',
+                            height: record.shipment_date ? 'auto' : '24px',
+                            padding: record.shipment_date ? '4px' : '0px',
+                        }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingColumn(record, 'shipment_date');
+                        }}
+                    >
+                        {record.shipment_date ? dayjs(record.shipment_date).format('DD.MM') : '☠️'}
+                    </div>
+                );
+            },
         },
         {
             title: (
@@ -612,22 +1050,34 @@ const CRMKanban = (props: CRMKanbanProps) => {
         compareStrings,
         compareTaskTypes,
         getTaskType,
-        customers,
-        projectGroups,
         projectGroupFilter,
-        projectsData,
         performers,
+        performerOptions,
+        groupedProjectOptions,
         epics,
-        task_types,
+        taskTypeOptions,
+        priorityOptions,
+        statusOptions,
         props.column_width,
         props.filter,
+        getProjectByValue,
+        getProjectDisplayName,
+        getProjectInfo,
+        isInlineEditing,
+        closeInlineEditor,
+        handleProjectUpdate,
+        handleTitleUpdate,
+        handlePerformerUpdate,
+        handlePriorityUpdate,
+        handleStatusUpdate,
+        handleTaskTypeUpdate,
+        handleShipmentDateUpdate,
         setProjectFilter,
         setProjectGroupFilter,
         setEditingColumn,
         setEditingTicket,
         setEditingWorkHours,
         setCommentedTicket,
-        setApproveModalOpen,
     ]);
 
     const normalizeColumnKeys = (keys: string[]) => {

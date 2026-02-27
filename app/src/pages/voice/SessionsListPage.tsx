@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
     Avatar,
     Button,
@@ -6,6 +6,7 @@ import {
     ConfigProvider,
     Dropdown,
     Input,
+    Modal,
     Popconfirm,
     Select,
     Spin,
@@ -69,9 +70,14 @@ type SessionRow = Omit<VoiceBotSession, 'dialogue_tag'> & {
     dialogue_tag?: string | string[];
 };
 
-type SessionProjectTab = 'all' | 'without_project';
+type SessionProjectTab = 'all' | 'without_project' | 'active' | 'mine';
+type SessionVisualState = 'recording' | 'cutting' | 'paused' | 'final_uploading' | 'closed' | 'ready' | 'error';
+
+const SESSION_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_ID';
+const SESSIONS_LIST_FILTERS_STORAGE_KEY = 'voicebot_sessions_list_filters_v1';
 const DEFAULT_SESSIONS_PAGE = 1;
 const DEFAULT_SESSIONS_PAGE_SIZE = 100;
+const MERGE_CONFIRMATION_PHRASE = 'СЛИТЬ СЕССИИ';
 const SESSIONS_QUERY_KEYS = {
     TAB: 'tab',
     PAGE: 'page',
@@ -84,6 +90,19 @@ const SESSIONS_QUERY_KEYS = {
     PARTICIPANT: 'f_participant',
     SHOW_DELETED: 'show_deleted',
 } as const;
+const LEGACY_STATUS_QUERY_KEY = 'f_state';
+const PERSISTED_QUERY_KEYS = [
+    SESSIONS_QUERY_KEYS.TAB,
+    SESSIONS_QUERY_KEYS.PAGE,
+    SESSIONS_QUERY_KEYS.PAGE_SIZE,
+    SESSIONS_QUERY_KEYS.PROJECT,
+    SESSIONS_QUERY_KEYS.DIALOGUE_TAG,
+    SESSIONS_QUERY_KEYS.SESSION_NAME,
+    SESSIONS_QUERY_KEYS.ACCESS_LEVEL,
+    SESSIONS_QUERY_KEYS.CREATOR,
+    SESSIONS_QUERY_KEYS.PARTICIPANT,
+    SESSIONS_QUERY_KEYS.SHOW_DELETED,
+] as const;
 
 const parsePositiveInt = (value: string | null, fallback: number): number => {
     const parsed = Number(value);
@@ -209,11 +228,44 @@ const isActiveProjectChain = (project: SessionProject): boolean =>
     project?.project_group?.is_active !== false &&
     project?.customer?.is_active !== false;
 
+const resolveSessionVisualState = (
+    record: SessionRow,
+    fabSessionState: string,
+    fabActiveSessionId: string
+): SessionVisualState => {
+    const sessionId = String(record._id || '').trim();
+    const normalizedFabState = String(fabSessionState || '').trim().toLowerCase();
+    const isThisSessionActiveInFab = Boolean(sessionId && fabActiveSessionId && sessionId === fabActiveSessionId);
+
+    if (isThisSessionActiveInFab) {
+        if (normalizedFabState === 'recording') return 'recording';
+        if (normalizedFabState === 'cutting') return 'cutting';
+        if (normalizedFabState === 'paused') return 'paused';
+        if (normalizedFabState === 'final_uploading') return 'final_uploading';
+        if (normalizedFabState === 'error') return 'error';
+    }
+
+    if (record.is_corrupted) return 'error';
+    if (!record.is_active) return 'closed';
+    return 'ready';
+};
+
+const isSessionMine = (session: SessionRow, userId: string): boolean => {
+    const normalizedUserId = String(userId || '').trim();
+    if (!normalizedUserId) return false;
+    const ownerId = String((session as Record<string, unknown>)?.user_id ?? '').trim();
+    if (ownerId && ownerId === normalizedUserId) return true;
+    const performerRecord = session.performer as unknown as Record<string, unknown> | undefined;
+    const performerId = String(performerRecord?._id ?? '').trim();
+    if (performerId && performerId === normalizedUserId) return true;
+    return false;
+};
+
 export default function SessionsListPage() {
     const location = useLocation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { isAuth } = useAuthStore();
+    const { isAuth, user } = useAuthStore();
     const {
         fetchVoiceBotSessionsList,
         voiceBotSessionsList,
@@ -230,6 +282,7 @@ export default function SessionsListPage() {
         restartCorruptedSession,
         sendSessionToCrmWithMcp,
         sessionsListIncludeDeleted,
+        mergeSessions,
     } = useVoiceBotStore();
     const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
     const { generateSessionTitle } = useSessionsUIStore();
@@ -242,6 +295,12 @@ export default function SessionsListPage() {
     const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
     const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+    const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+    const [isBulkMerging, setIsBulkMerging] = useState(false);
+    const [mergeTargetSessionId, setMergeTargetSessionId] = useState<string>('');
+    const [mergeConfirmationPhrase, setMergeConfirmationPhrase] = useState('');
+    const [fabSessionState, setFabSessionState] = useState('idle');
+    const [fabActiveSessionId, setFabActiveSessionId] = useState('');
 
     const dialogueTagOptions = useMemo(() => {
         const tags = (voiceBotSessionsList || [])
@@ -261,8 +320,11 @@ export default function SessionsListPage() {
     );
     const projectFilterOptions = projectSelectOptions;
 
+    const rawProjectTab = searchParams.get(SESSIONS_QUERY_KEYS.TAB);
     const projectTab: SessionProjectTab =
-        searchParams.get(SESSIONS_QUERY_KEYS.TAB) === 'without_project' ? 'without_project' : 'all';
+        rawProjectTab === 'without_project' || rawProjectTab === 'active' || rawProjectTab === 'mine'
+            ? rawProjectTab
+            : 'all';
     const currentPage = parsePositiveInt(searchParams.get(SESSIONS_QUERY_KEYS.PAGE), DEFAULT_SESSIONS_PAGE);
     const pageSize = parsePositiveInt(searchParams.get(SESSIONS_QUERY_KEYS.PAGE_SIZE), DEFAULT_SESSIONS_PAGE_SIZE);
     const projectFilterValue = parseSingleFilter(searchParams.get(SESSIONS_QUERY_KEYS.PROJECT));
@@ -275,6 +337,55 @@ export default function SessionsListPage() {
         const rawValue = String(searchParams.get(SESSIONS_QUERY_KEYS.SHOW_DELETED) || '').trim().toLowerCase();
         return rawValue === '1' || rawValue === 'true';
     })();
+
+    useEffect(() => {
+        if (!searchParams.has(LEGACY_STATUS_QUERY_KEY)) return;
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete(LEGACY_STATUS_QUERY_KEY);
+        setSearchParams(nextParams);
+    }, [searchParams, setSearchParams]);
+
+    useEffect(() => {
+        if (searchParams.toString()) return;
+        try {
+            const raw = localStorage.getItem(SESSIONS_LIST_FILTERS_STORAGE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw) as Record<string, string[]>;
+            const nextParams = new URLSearchParams();
+            for (const key of PERSISTED_QUERY_KEYS) {
+                const values = Array.isArray(parsed?.[key]) ? parsed[key] : [];
+                for (const value of values) {
+                    const normalized = String(value ?? '').trim();
+                    if (normalized.length > 0) nextParams.append(key, normalized);
+                }
+            }
+            if (nextParams.toString()) {
+                setSearchParams(nextParams, { replace: true });
+            }
+        } catch (error) {
+            console.warn('Failed to restore sessions list filters', error);
+        }
+    }, [searchParams, setSearchParams]);
+
+    useEffect(() => {
+        try {
+            const snapshot: Record<string, string[]> = {};
+            for (const key of PERSISTED_QUERY_KEYS) {
+                const values = searchParams
+                    .getAll(key)
+                    .map((value) => value.trim())
+                    .filter((value) => value.length > 0);
+                if (values.length > 0) snapshot[key] = values;
+            }
+            if (Object.keys(snapshot).length > 0) {
+                localStorage.setItem(SESSIONS_LIST_FILTERS_STORAGE_KEY, JSON.stringify(snapshot));
+            } else {
+                localStorage.removeItem(SESSIONS_LIST_FILTERS_STORAGE_KEY);
+            }
+        } catch (error) {
+            console.warn('Failed to persist sessions list filters', error);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         try {
@@ -502,15 +613,22 @@ export default function SessionsListPage() {
         if (projectTab === 'without_project') {
             return enrichedSessionsList.filter((session) => !hasAssignedProject(session));
         }
+        if (projectTab === 'active') {
+            return enrichedSessionsList.filter((session) => session.is_active === true);
+        }
+        if (projectTab === 'mine') {
+            const currentUserId = String(user?.id || '').trim();
+            return enrichedSessionsList.filter((session) => isSessionMine(session, currentUserId));
+        }
         return enrichedSessionsList;
-    }, [enrichedSessionsList, projectTab]);
+    }, [enrichedSessionsList, projectTab, user?.id]);
 
     const sortedSessionsList = useMemo<SessionRow[]>(() => {
         return [...filteredSessionsList].sort((left, right) => {
-            const leftActive = left.is_active === true ? 1 : 0;
-            const rightActive = right.is_active === true ? 1 : 0;
-            if (leftActive !== rightActive) {
-                return rightActive - leftActive;
+            const leftCreatedTs = parseSessionTimestamp(left.created_at);
+            const rightCreatedTs = parseSessionTimestamp(right.created_at);
+            if (leftCreatedTs !== rightCreatedTs) {
+                return rightCreatedTs - leftCreatedTs;
             }
 
             const leftLastVoiceTs = parseSessionTimestamp(left.last_voice_timestamp);
@@ -519,9 +637,7 @@ export default function SessionsListPage() {
                 return rightLastVoiceTs - leftLastVoiceTs;
             }
 
-            const leftCreatedTs = parseSessionTimestamp(left.created_at);
-            const rightCreatedTs = parseSessionTimestamp(right.created_at);
-            return rightCreatedTs - leftCreatedTs;
+            return String(right._id ?? '').localeCompare(String(left._id ?? ''));
         });
     }, [filteredSessionsList]);
 
@@ -541,10 +657,166 @@ export default function SessionsListPage() {
         }
     }, [currentPage, filteredSessionsList.length, pageSize]);
 
-    const handleDeleteSelectedSessions = async (): Promise<void> => {
-        const selectedSessions = filteredSessionsList.filter(
-            (session) => selectedSessionIds.includes(session._id) && !session.is_deleted
+    useEffect(() => {
+        const syncFromGlobals = (): void => {
+            try {
+                const stateGetter = (window as { __voicebotState?: { get?: () => { state?: string } } }).__voicebotState?.get;
+                if (typeof stateGetter === 'function') {
+                    const state = stateGetter();
+                    const nextState = typeof state?.state === 'string' ? state.state : 'idle';
+                    setFabSessionState(nextState);
+                }
+            } catch {
+                // ignore
+            }
+            try {
+                const sid = String(window.localStorage.getItem(SESSION_ID_STORAGE_KEY) || '').trim();
+                setFabActiveSessionId(sid);
+            } catch {
+                // ignore
+            }
+        };
+
+        const onActiveSessionUpdated = (event: Event): void => {
+            const detail = (event as CustomEvent<{ session_id?: string }>).detail;
+            const sid = String(detail?.session_id || '').trim();
+            if (sid) {
+                setFabActiveSessionId(sid);
+                return;
+            }
+            syncFromGlobals();
+        };
+
+        syncFromGlobals();
+        const timer = window.setInterval(syncFromGlobals, 500);
+        window.addEventListener('voicebot:active-session-updated', onActiveSessionUpdated as EventListener);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener('voicebot:active-session-updated', onActiveSessionUpdated as EventListener);
+        };
+    }, []);
+
+    const renderSessionStateIcon = (state: SessionVisualState): ReactNode => {
+        if (state === 'recording') {
+            return <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />;
+        }
+        if (state === 'cutting') {
+            return <span className="text-[11px] leading-none text-slate-500">✂️</span>;
+        }
+        if (state === 'paused') {
+            return (
+                <div className="inline-flex items-center justify-center gap-[2px]">
+                    <span className="block h-3 w-[2px] rounded-sm bg-amber-500" />
+                    <span className="block h-3 w-[2px] rounded-sm bg-amber-500" />
+                </div>
+            );
+        }
+        if (state === 'final_uploading') {
+            return <span className="text-[12px] font-semibold leading-none text-emerald-500">✓</span>;
+        }
+        if (state === 'error') {
+            return <span className="text-[12px] font-semibold leading-none text-rose-500">!</span>;
+        }
+        if (state === 'closed') {
+            return null;
+        }
+        return (
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                <circle cx="5" cy="5" r="3.6" fill="none" stroke="#64748b" strokeWidth="1.4" />
+            </svg>
         );
+    };
+
+    const stateTitleByState: Record<SessionVisualState, string> = {
+        recording: 'Recording',
+        cutting: 'Cutting',
+        paused: 'Paused',
+        final_uploading: 'Final upload',
+        closed: 'Closed',
+        ready: 'Ready',
+        error: 'Error',
+    };
+
+    const selectedNonDeletedSessions = useMemo(
+        () =>
+            filteredSessionsList.filter(
+                (session) => selectedSessionIds.includes(session._id) && !session.is_deleted
+            ),
+        [filteredSessionsList, selectedSessionIds]
+    );
+
+    const mergeTargetOptions = useMemo(
+        () =>
+            selectedNonDeletedSessions.map((session) => {
+                const sessionName = session.session_name?.trim() || 'Без названия';
+                return {
+                    value: session._id,
+                    label: `${sessionName} (${session._id.slice(-6)})`,
+                };
+            }),
+        [selectedNonDeletedSessions]
+    );
+
+    const openMergeModal = (): void => {
+        if (selectedNonDeletedSessions.length < 2) {
+            message.info('Для слияния выберите минимум 2 сессии');
+            return;
+        }
+        const defaultTarget = selectedNonDeletedSessions[0]?._id ?? '';
+        setMergeTargetSessionId(defaultTarget);
+        setMergeConfirmationPhrase('');
+        setIsMergeModalOpen(true);
+    };
+
+    const closeMergeModal = (): void => {
+        if (isBulkMerging) return;
+        setIsMergeModalOpen(false);
+        setMergeConfirmationPhrase('');
+    };
+
+    const handleMergeSelectedSessions = async (): Promise<void> => {
+        if (selectedNonDeletedSessions.length < 2) {
+            message.info('Для слияния выберите минимум 2 сессии');
+            return;
+        }
+        if (!mergeTargetSessionId) {
+            message.error('Выберите целевую сессию');
+            return;
+        }
+        if (!selectedNonDeletedSessions.some((session) => session._id === mergeTargetSessionId)) {
+            message.error('Целевая сессия должна быть из выбранных');
+            return;
+        }
+
+        const normalizedPhrase = mergeConfirmationPhrase.trim().toUpperCase();
+        if (normalizedPhrase !== MERGE_CONFIRMATION_PHRASE) {
+            message.error(`Введите подтверждение: ${MERGE_CONFIRMATION_PHRASE}`);
+            return;
+        }
+
+        setIsBulkMerging(true);
+        try {
+            const operationId = `${Date.now()}-${mergeTargetSessionId}`;
+            await mergeSessions({
+                sessionIds: selectedNonDeletedSessions.map((session) => session._id),
+                targetSessionId: mergeTargetSessionId,
+                confirmationPhrase: normalizedPhrase,
+                operationId,
+            });
+            message.success('Сессии успешно слиты');
+            setSelectedSessionIds([]);
+            setIsMergeModalOpen(false);
+            setMergeConfirmationPhrase('');
+        } catch (error) {
+            console.error('Ошибка при слиянии сессий:', error);
+            message.error('Не удалось выполнить слияние сессий');
+        } finally {
+            setIsBulkMerging(false);
+        }
+    };
+
+    const handleDeleteSelectedSessions = async (): Promise<void> => {
+        const selectedSessions = selectedNonDeletedSessions;
 
         if (selectedSessions.length === 0) {
             message.info('Нет сессий для удаления');
@@ -602,6 +874,24 @@ export default function SessionsListPage() {
 
     const columns: ColumnsType<SessionRow> = [
         {
+            title: '',
+            key: 'session_state',
+            width: 20,
+            align: 'center',
+            render: (_text, record) => {
+                const state = resolveSessionVisualState(record, fabSessionState, fabActiveSessionId);
+                const icon = renderSessionStateIcon(state);
+                if (!icon) return null;
+                return (
+                    <Tooltip title={`State: ${stateTitleByState[state]}`}>
+                        <div className="inline-flex h-4 w-4 items-center justify-center">
+                            {icon}
+                        </div>
+                    </Tooltip>
+                );
+            },
+        },
+        {
             title: 'Дата',
             dataIndex: 'created_at',
             key: 'created_at',
@@ -621,9 +911,6 @@ export default function SessionsListPage() {
                         <div className="text-black/50 text-[10px] font-normal sf-pro leading-[13px] whitespace-pre-wrap ">
                             {createdTimestamp > 0 ? dayjs(createdTimestamp).format('DD MMM YY') : ''}
                         </div>
-                        {record.is_active ? (
-                            <span className="absolute inline-block w-[6px] h-[6px] rounded bg-red-500 -left-[4px] top-1/2 -mt-[2px]"></span>
-                        ) : null}
                     </div>
                 );
             },
@@ -1172,61 +1459,76 @@ export default function SessionsListPage() {
             >
                 <Tabs
                     activeKey={projectTab}
+                    tabBarExtraContent={(
+                        <Checkbox
+                            checked={showDeletedSessions}
+                            onChange={(event) => {
+                                const nextChecked = event.target.checked;
+                                updateListParams((params) => {
+                                    if (nextChecked) {
+                                        params.set(SESSIONS_QUERY_KEYS.SHOW_DELETED, '1');
+                                    } else {
+                                        params.delete(SESSIONS_QUERY_KEYS.SHOW_DELETED);
+                                    }
+                                    params.set(SESSIONS_QUERY_KEYS.PAGE, String(DEFAULT_SESSIONS_PAGE));
+                                    params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(pageSize));
+                                });
+                            }}
+                        >
+                            Показывать удаленные
+                        </Checkbox>
+                    )}
                     onChange={(tabKey) => {
                         updateListParams((params) => {
                             const normalizedTab: SessionProjectTab =
-                                tabKey === 'without_project' ? 'without_project' : 'all';
-                            if (normalizedTab === 'without_project') {
-                                params.set(SESSIONS_QUERY_KEYS.TAB, normalizedTab);
-                            } else {
-                                params.delete(SESSIONS_QUERY_KEYS.TAB);
-                            }
-                            params.set(SESSIONS_QUERY_KEYS.PAGE, String(DEFAULT_SESSIONS_PAGE));
+                                tabKey === 'without_project' || tabKey === 'active' || tabKey === 'mine'
+                                    ? tabKey
+                                        : 'all';
+                                if (normalizedTab !== 'all') {
+                                    params.set(SESSIONS_QUERY_KEYS.TAB, normalizedTab);
+                                } else {
+                                    params.delete(SESSIONS_QUERY_KEYS.TAB);
+                                }
+                                params.set(SESSIONS_QUERY_KEYS.PAGE, String(DEFAULT_SESSIONS_PAGE));
                             params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(pageSize));
                         });
                     }}
                     items={[
                         { key: 'all', label: 'Все' },
                         { key: 'without_project', label: 'Без проекта' },
+                        { key: 'active', label: 'Активные' },
+                        { key: 'mine', label: 'Мои' },
                     ]}
                 />
-                <div className="flex justify-end mb-2">
-                    <Checkbox
-                        checked={showDeletedSessions}
-                        onChange={(event) => {
-                            const nextChecked = event.target.checked;
-                            updateListParams((params) => {
-                                if (nextChecked) {
-                                    params.set(SESSIONS_QUERY_KEYS.SHOW_DELETED, '1');
-                                } else {
-                                    params.delete(SESSIONS_QUERY_KEYS.SHOW_DELETED);
-                                }
-                                params.set(SESSIONS_QUERY_KEYS.PAGE, String(DEFAULT_SESSIONS_PAGE));
-                                params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(pageSize));
-                            });
-                        }}
-                    >
-                        Показывать удаленные
-                    </Checkbox>
-                </div>
                 {selectedSessionIds.length > 0 ? (
                     <div className="mb-2 flex items-center justify-between rounded border border-red-200 bg-red-50 px-3 py-2">
                         <div className="text-[12px] text-red-800">
                             Выбрано сессий: {selectedSessionIds.length}
                         </div>
-                        <Popconfirm
-                            title="Удалить выбранные сессии"
-                            description={`Будет удалено: ${selectedSessionIds.length}`}
-                            okText="Удалить"
-                            cancelText="Отмена"
-                            okType="danger"
-                            onConfirm={() => void handleDeleteSelectedSessions()}
-                            disabled={isBulkDeleting}
-                        >
-                            <Button danger size="small" loading={isBulkDeleting}>
-                                Удалить выбранные
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="small"
+                                type="primary"
+                                onClick={openMergeModal}
+                                disabled={selectedNonDeletedSessions.length < 2 || isBulkDeleting || isBulkMerging}
+                                loading={isBulkMerging}
+                            >
+                                Слить выбранные сессии
                             </Button>
-                        </Popconfirm>
+                            <Popconfirm
+                                title="Удалить выбранные сессии"
+                                description={`Будет удалено: ${selectedSessionIds.length}`}
+                                okText="Удалить"
+                                cancelText="Отмена"
+                                okType="danger"
+                                onConfirm={() => void handleDeleteSelectedSessions()}
+                                disabled={isBulkDeleting}
+                            >
+                                <Button danger size="small" loading={isBulkDeleting}>
+                                    Удалить выбранные
+                                </Button>
+                            </Popconfirm>
+                        </div>
                     </div>
                 ) : null}
                 <Table
@@ -1278,6 +1580,72 @@ export default function SessionsListPage() {
                         style: { cursor: 'pointer' },
                     })}
                 />
+                <Modal
+                    title="Слить выбранные сессии"
+                    open={isMergeModalOpen}
+                    onCancel={closeMergeModal}
+                    onOk={() => void handleMergeSelectedSessions()}
+                    okText="Слить сессии"
+                    cancelText="Отмена"
+                    confirmLoading={isBulkMerging}
+                    okButtonProps={{
+                        danger: true,
+                        disabled:
+                            selectedNonDeletedSessions.length < 2 ||
+                            !mergeTargetSessionId ||
+                            mergeConfirmationPhrase.trim().toUpperCase() !== MERGE_CONFIRMATION_PHRASE,
+                    }}
+                    destroyOnHidden
+                >
+                    <div className="flex flex-col gap-3">
+                        <div className="rounded border border-red-200 bg-red-50 p-2 text-[12px] text-red-700">
+                            Операция необратима. Исходные сессии будут помечены как удалённые.
+                        </div>
+                        <div>
+                            <div className="mb-1 text-[12px] font-medium text-gray-700">Сессии для слияния</div>
+                            <div className="max-h-48 overflow-y-auto rounded border border-gray-200 bg-white p-2">
+                                {selectedNonDeletedSessions.map((session) => {
+                                    const sessionName = session.session_name?.trim() || 'Без названия';
+                                    const isTarget = session._id === mergeTargetSessionId;
+                                    return (
+                                        <div
+                                            key={session._id}
+                                            className="flex items-center justify-between border-b border-gray-100 py-1 text-[12px] last:border-b-0"
+                                        >
+                                            <span className="truncate pr-2">
+                                                {sessionName}
+                                                <span className="ml-1 text-gray-500">({session._id})</span>
+                                            </span>
+                                            {isTarget ? <Tag color="blue">Целевая</Tag> : null}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="mb-1 text-[12px] font-medium text-gray-700">Целевая сессия</div>
+                            <Select
+                                style={{ width: '100%' }}
+                                options={mergeTargetOptions}
+                                value={mergeTargetSessionId || undefined}
+                                onChange={(value) => setMergeTargetSessionId(String(value))}
+                                placeholder="Выберите целевую сессию"
+                                disabled={isBulkMerging}
+                            />
+                        </div>
+                        <div>
+                            <div className="mb-1 text-[12px] font-medium text-gray-700">
+                                Введите фразу подтверждения: <span className="font-semibold">{MERGE_CONFIRMATION_PHRASE}</span>
+                            </div>
+                            <Input
+                                value={mergeConfirmationPhrase}
+                                onChange={(event) => setMergeConfirmationPhrase(event.target.value)}
+                                placeholder={MERGE_CONFIRMATION_PHRASE}
+                                disabled={isBulkMerging}
+                            />
+                        </div>
+                    </div>
+                </Modal>
             </ConfigProvider>
         </div>
     );

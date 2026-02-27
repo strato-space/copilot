@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button, Select, message, Input, Tooltip } from 'antd';
-import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
+import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, RedoOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
@@ -61,9 +61,11 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         downloadTranscription,
         runCustomPrompt,
         getSessionData,
+        fetchVoiceBotSession,
         voiceBotMessages,
         activateSession,
         finishSession,
+        restartCorruptedSession,
         triggerSessionReadyToSummarize,
     } = useVoiceBotStore();
 
@@ -83,6 +85,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const [isCutting, setIsCutting] = useState(false);
     const [isPausing, setIsPausing] = useState(false);
     const [isFinishing, setIsFinishing] = useState(false);
+    const [isRestartingProcessing, setIsRestartingProcessing] = useState(false);
     const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
 
     const circleIconWrapperStyle: CSSProperties = {
@@ -339,6 +342,31 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         }
     };
 
+    const handleRestartProcessing = async (): Promise<void> => {
+        const sessionId = String(voiceBotSession?._id || '').trim();
+        if (!sessionId) return;
+        setIsRestartingProcessing(true);
+        try {
+            const result = await restartCorruptedSession(sessionId) as { success?: boolean; error?: string; restarted_messages?: number } | null;
+            if (result?.success) {
+                const restarted = Number(result.restarted_messages || 0) || 0;
+                if (restarted > 0) {
+                    messageApi.success(`Реанимация запущена: ${restarted} сообщений`);
+                } else {
+                    messageApi.success('Реанимация запущена');
+                }
+            } else {
+                messageApi.warning(result?.error || 'Не удалось запустить реанимацию');
+            }
+            await fetchVoiceBotSession(sessionId);
+        } catch (error) {
+            console.error('Ошибка при реанимации обработки сессии:', error);
+            messageApi.error('Ошибка при запуске реанимации');
+        } finally {
+            setIsRestartingProcessing(false);
+        }
+    };
+
     const runFabControlAction = async ({
         action,
         ensurePageSessionActive = false,
@@ -574,6 +602,19 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         <Tooltip title="Запустить произвольный промпт">
                             <button className="voice-meeting-icon-button" onClick={() => setCustomPromptModalVisible(true)}>
                                 <MoreOutlined />
+                            </button>
+                        </Tooltip>
+
+                        <Tooltip title="Реанимировать обработку">
+                            <button
+                                className="voice-meeting-icon-button"
+                                onClick={() => {
+                                    void handleRestartProcessing();
+                                }}
+                                disabled={!voiceBotSession?._id || isRestartingProcessing}
+                                aria-label="Реанимировать обработку"
+                            >
+                                <RedoOutlined spin={isRestartingProcessing} />
                             </button>
                         </Tooltip>
 
