@@ -19,6 +19,7 @@ import {
   isRuntimeScopedCollection,
   mergeWithRuntimeFilter,
 } from './runtimeScope.js';
+import { seedCopilotProjectGitRepo } from './projectGitRepoSeed.js';
 
 let client: MongoClient | null = null;
 let rawDatabase: Db | null = null;
@@ -399,6 +400,7 @@ export const connectDb = async (): Promise<Db> => {
   await client.connect();
   rawDatabase = client.db(dbName);
   await ensureStartupIndexes(rawDatabase);
+  await seedCopilotProjectGitRepo({ db: rawDatabase, logger });
   scopedDatabase = createRuntimeScopedDbProxy(rawDatabase);
   return scopedDatabase;
 };
