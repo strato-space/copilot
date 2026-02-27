@@ -105,6 +105,17 @@ describe('POST /voicebot/auth/list-users', () => {
         { is_deleted: { $ne: true } },
         { is_active: { $ne: false } },
         { active: { $ne: false } },
+        {
+          $nor: [
+            { corporate_email: { $in: [/^gatitulin@strato\.space$/i, /^vilco@yandex\.ru$/i] } },
+            { email: { $in: [/^gatitulin@strato\.space$/i, /^vilco@yandex\.ru$/i] } },
+            { name: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+            { real_name: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+            { username: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+            { telegram_username: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+            { login: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+          ],
+        },
       ],
     });
   });
@@ -168,6 +179,17 @@ describe('POST /voicebot/auth/list-users', () => {
             { is_deleted: { $ne: true } },
             { is_active: { $ne: false } },
             { active: { $ne: false } },
+            {
+              $nor: [
+                { corporate_email: { $in: [/^gatitulin@strato\.space$/i, /^vilco@yandex\.ru$/i] } },
+                { email: { $in: [/^gatitulin@strato\.space$/i, /^vilco@yandex\.ru$/i] } },
+                { name: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+                { real_name: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+                { username: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+                { telegram_username: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+                { login: { $in: [/^d1zmens$/i, /^vilco_o$/i] } },
+              ],
+            },
           ],
         },
         { _id: { $in: [includeId] } },
