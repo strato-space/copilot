@@ -10,7 +10,8 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { TASK_STATUSES, NOTION_TICKET_PRIORITIES } from '../../constants/crm';
-import type { Project, TaskType } from '../../types/crm';
+import { isPerformerSelectable } from '../../utils/performerLifecycle';
+import type { Performer, Project, TaskType } from '../../types/crm';
 
 interface TicketFormValues {
     _id?: string | null;
@@ -41,6 +42,17 @@ const toIdString = (value: unknown): string | undefined => {
         }
     }
     return undefined;
+};
+
+const getPerformerLabel = (performer: Record<string, unknown> | Performer | null | undefined, fallback: string): string => {
+    if (!performer || typeof performer !== 'object') return fallback;
+    const realName = typeof performer.real_name === 'string' ? performer.real_name.trim() : '';
+    if (realName) return realName;
+    const name = typeof performer.name === 'string' ? performer.name.trim() : '';
+    if (name) return name;
+    const email = typeof performer.email === 'string' ? performer.email.trim() : '';
+    if (email) return email;
+    return fallback;
 };
 
 const CRMCreateTicket = () => {
@@ -120,11 +132,67 @@ const CRMCreateTicket = () => {
         }
     }, [projects.length, fetchTickets, editingTicket, form, setEditTiketProject]);
 
-    if (!editingTicket) return null;
+    const projectEpics = useMemo(
+        () => (editingTicket ? getProjectEpics(editTiketProject ?? '').filter((e) => !e.is_deleted) : []),
+        [editTiketProject, editingTicket, getProjectEpics]
+    );
+    const initialPerformer = toIdString(editingTicket?.performer);
+    const initialTaskType = toIdString(editingTicket?.task_type);
+    const historicalPerformerIds = useMemo(() => {
+        if (!editingTicket) return [];
+        const ids: string[] = [];
+        if (initialPerformer) ids.push(initialPerformer);
 
-    const projectEpics = getProjectEpics(editTiketProject ?? '').filter((e) => !e.is_deleted);
-    const initialPerformer = toIdString(editingTicket.performer);
-    const initialTaskType = toIdString(editingTicket.task_type);
+        const notifications = Array.isArray(editingTicket.notifications) ? editingTicket.notifications : [];
+        for (const notification of notifications) {
+            const notificationId = toIdString(notification);
+            if (!notificationId) continue;
+            ids.push(notificationId);
+        }
+
+        return Array.from(new Set(ids));
+    }, [editingTicket, initialPerformer]);
+
+    const historicalPerformerLabels = useMemo(() => {
+        const map = new Map<string, string>();
+        if (editingTicket?.performer && typeof editingTicket.performer === 'object') {
+            const performerRecord = editingTicket.performer as Record<string, unknown>;
+            const value = toIdString(performerRecord);
+            if (value) {
+                map.set(value, getPerformerLabel(performerRecord, value));
+            }
+        }
+        return map;
+    }, [editingTicket?.performer]);
+
+    const performerOptions = useMemo(() => {
+        const result: Array<{ value: string; label: string }> = [];
+        const seen = new Set<string>();
+        const historicalPerformerIdSet = new Set(historicalPerformerIds);
+
+        for (const performer of performers) {
+            const value = toIdString(performer);
+            if (!value || seen.has(value)) continue;
+            if (!isPerformerSelectable(performer) && !historicalPerformerIdSet.has(value)) continue;
+
+            const baseLabel = getPerformerLabel(performer, value);
+            const label = !isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)
+                ? `${baseLabel} (архив)`
+                : baseLabel;
+            result.push({ value, label });
+            seen.add(value);
+        }
+
+        for (const performerId of historicalPerformerIds) {
+            if (!performerId || seen.has(performerId)) continue;
+            result.push({ value: performerId, label: historicalPerformerLabels.get(performerId) ?? performerId });
+            seen.add(performerId);
+        }
+
+        return result;
+    }, [historicalPerformerIds, historicalPerformerLabels, performers]);
+
+    if (!editingTicket) return null;
 
     return (
         <div className="text-black flex flex-col pt-3">
@@ -258,10 +326,7 @@ const CRMCreateTicket = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                                     <Form.Item label="Исполнитель:" name="performer" className="w-full">
                                         <Select
-                                            options={performers.map((performer) => ({
-                                                value: toIdString(performer),
-                                                label: performer.real_name ?? performer.name,
-                                            }))}
+                                            options={performerOptions}
                                         />
                                     </Form.Item>
                                     <Form.Item label="Приоритет:" name="priority" className="w-full">
@@ -315,10 +380,7 @@ const CRMCreateTicket = () => {
                                         className="w-full"
                                     >
                                         <Select
-                                            options={performers.map((performer) => ({
-                                                value: toIdString(performer),
-                                                label: performer.real_name ?? performer.name,
-                                            }))}
+                                            options={performerOptions}
                                             mode="multiple"
                                         />
                                     </Form.Item>

@@ -15,6 +15,7 @@ import { useRequestStore } from '../../store/requestStore';
 import { useMCPRequestStore } from '../../store/mcpRequestStore';
 import { TASK_STATUSES } from '../../constants/crm';
 import { useCRMSocket } from '../../hooks/useCRMSocket';
+import { isPerformerSelectable } from '../../utils/performerLifecycle';
 
 interface VoiceSession {
     _id: string;
@@ -642,10 +643,12 @@ const CRMPage = () => {
                                     <Select
                                         showSearch
                                         placeholder="Выберите исполнителя"
-                                        options={performers.map((performer) => ({
-                                            value: performer.id ?? performer._id,
-                                            label: performer.real_name ?? performer.name ?? performer.id ?? performer._id,
-                                        }))}
+                                        options={performers
+                                            .filter((performer) => isPerformerSelectable(performer))
+                                            .map((performer) => ({
+                                                value: performer.id ?? performer._id,
+                                                label: performer.real_name ?? performer.name ?? performer.id ?? performer._id,
+                                            }))}
                                         filterOption={(input, option) =>
                                             (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
                                         }

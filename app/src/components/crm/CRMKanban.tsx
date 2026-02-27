@@ -47,6 +47,7 @@ import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
 import { TASK_STATUSES } from '../../constants/crm';
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
+import { isPerformerSelectable } from '../../utils/performerLifecycle';
 import type { Ticket, Performer, Epic, TaskType } from '../../types/crm';
 
 import AvatarName from './AvatarName';
@@ -60,6 +61,17 @@ const roundTo = (value: number, precision = 0): number => {
     if (!Number.isFinite(value)) return 0;
     const factor = 10 ** precision;
     return Math.round(value * factor) / factor;
+};
+
+const getPerformerLabel = (performer: Record<string, unknown> | Performer | null | undefined, fallback: string): string => {
+    if (!performer || typeof performer !== 'object') return fallback;
+    const realName = typeof performer.real_name === 'string' ? performer.real_name.trim() : '';
+    if (realName) return realName;
+    const name = typeof performer.name === 'string' ? performer.name.trim() : '';
+    if (name) return name;
+    const email = typeof performer.email === 'string' ? performer.email.trim() : '';
+    if (email) return email;
+    return fallback;
 };
 
 interface CRMKanbanProps {
@@ -307,13 +319,60 @@ const CRMKanban = (props: CRMKanbanProps) => {
         }));
     }, [customers, projectGroups, projectsData]);
 
+    const historicalPerformerLabels = useMemo(() => {
+        const labels = new Map<string, string>();
+        for (const ticket of tickets) {
+            const rawPerformer = ticket.performer;
+            if (!rawPerformer) continue;
+
+            if (typeof rawPerformer === 'object') {
+                const performerRecord = rawPerformer as Record<string, unknown>;
+                const performerId = toLookupValue(performerRecord._id) || toLookupValue(performerRecord.id);
+                if (!performerId) continue;
+                labels.set(performerId, getPerformerLabel(performerRecord, performerId));
+                continue;
+            }
+
+            const performerId = toLookupValue(rawPerformer);
+            if (!performerId) continue;
+            if (!labels.has(performerId)) labels.set(performerId, performerId);
+        }
+        return labels;
+    }, [tickets, toLookupValue]);
+
+    const historicalPerformerIds = useMemo(
+        () => Array.from(historicalPerformerLabels.keys()),
+        [historicalPerformerLabels]
+    );
+
     const performerOptions = useMemo(
-        () =>
-            performers.map((performer) => ({
-                value: performer._id ?? performer.id,
-                label: performer.real_name ?? performer.name,
-            })),
-        [performers]
+        () => {
+            const result: Array<{ value: string; label: string }> = [];
+            const seen = new Set<string>();
+            const historicalPerformerIdSet = new Set(historicalPerformerIds);
+
+            for (const performer of performers) {
+                const value = performer._id ?? performer.id;
+                if (!value || seen.has(value)) continue;
+                if (!isPerformerSelectable(performer) && !historicalPerformerIdSet.has(value)) continue;
+
+                const baseLabel = getPerformerLabel(performer, value);
+                const label = !isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)
+                    ? `${baseLabel} (архив)`
+                    : baseLabel;
+                result.push({ value, label });
+                seen.add(value);
+            }
+
+            for (const performerId of historicalPerformerIds) {
+                if (!performerId || seen.has(performerId)) continue;
+                result.push({ value: performerId, label: historicalPerformerLabels.get(performerId) ?? performerId });
+                seen.add(performerId);
+            }
+
+            return result;
+        },
+        [historicalPerformerIds, historicalPerformerLabels, performers]
     );
 
     const taskTypeOptions = useMemo(
@@ -695,7 +754,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 const bName = typeof b.performer === 'object' ? (b.performer as Performer)?.name : '';
                 return compareStrings(aName, bName);
             },
-            filters: performers.map((performer) => ({ text: performer.name, value: performer._id ?? performer.id })),
+            filters: performerOptions.map((performer) => ({ text: performer.label, value: performer.value })),
             onFilter: (value, record) => {
                 const valueStr = String(value);
                 if (typeof record.performer === 'object' && record.performer) {
@@ -720,13 +779,14 @@ const CRMKanban = (props: CRMKanbanProps) => {
                     typeof record.performer === 'object'
                         ? (record.performer as Performer)
                         : performers.find((p) => p.id === record.performer || p._id === record.performer);
-                const performerName = performerInfo?.real_name ?? performerInfo?.name ?? '';
                 const performerValue =
                     typeof record.performer === 'object' && record.performer
                         ? (record.performer as Performer)._id ?? (record.performer as Performer).id
                         : record.performer
                           ? String(record.performer)
                           : undefined;
+                const performerFallbackLabel = performerValue ? (historicalPerformerLabels.get(performerValue) ?? performerValue) : '';
+                const performerNameWithFallback = performerInfo?.real_name ?? performerInfo?.name ?? performerFallbackLabel;
 
                 if (isInlineEditing(record, 'performer')) {
                     return (
@@ -763,7 +823,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                             setEditingColumn(record, 'performer');
                         }}
                     >
-                        <AvatarName name={performerName} size={28} />
+                        <AvatarName name={performerNameWithFallback} size={28} />
                     </div>
                 );
             },
@@ -1052,6 +1112,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         getTaskType,
         projectGroupFilter,
         performers,
+        historicalPerformerLabels,
         performerOptions,
         groupedProjectOptions,
         epics,

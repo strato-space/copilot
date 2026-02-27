@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import _ from 'lodash';
 import { Form, Input, DatePicker, Button, Select, Drawer, ConfigProvider } from 'antd';
@@ -6,6 +6,7 @@ import { CloseOutlined, EditOutlined } from '@ant-design/icons';
 
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
+import { isPerformerSelectable } from '../../utils/performerLifecycle';
 import type { WorkData } from '../../types/crm';
 
 interface WorkFormValues {
@@ -26,6 +27,23 @@ const emptyForm: WorkFormValues = {
     result_link: '',
 };
 
+type PerformerLabelRecord = {
+    real_name?: unknown;
+    name?: unknown;
+    email?: unknown;
+};
+
+const getPerformerLabel = (performer: PerformerLabelRecord | null | undefined, fallback: string): string => {
+    if (!performer) return fallback;
+    const realName = typeof performer.real_name === 'string' ? performer.real_name.trim() : '';
+    if (realName) return realName;
+    const name = typeof performer.name === 'string' ? performer.name.trim() : '';
+    if (name) return name;
+    const email = typeof performer.email === 'string' ? performer.email.trim() : '';
+    if (email) return email;
+    return fallback;
+};
+
 const WorkHoursSidebar = () => {
     const {
         performers,
@@ -43,6 +61,47 @@ const WorkHoursSidebar = () => {
     const customerName = editingWorkHours ? getCustomerByProject(editingWorkHours.project) : '';
     const projectGroupName = editingWorkHours ? getProjectGroupByProject(editingWorkHours.project) : '';
     const projectName = editingWorkHours ? getProjectByName(editingWorkHours.project)?.name || editingWorkHours.project : '';
+    const historicalPerformerIds = useMemo(
+        () =>
+            Array.from(
+                new Set(
+                    (editingWorkHours?.work_data ?? [])
+                        .map((workData) => (typeof workData.created_by === 'string' ? workData.created_by.trim() : ''))
+                        .filter(Boolean)
+                )
+            ),
+        [editingWorkHours?.work_data]
+    );
+    const performerOptions = useMemo(() => {
+        const result: Array<{ value: string; label: string }> = [];
+        const seen = new Set<string>();
+        const historicalPerformerIdSet = new Set(historicalPerformerIds);
+
+        for (const performer of performers) {
+            const value = performer.id ?? performer._id;
+            if (!value || seen.has(value)) continue;
+            if (!isPerformerSelectable(performer) && !historicalPerformerIdSet.has(value)) continue;
+
+            const baseLabel = getPerformerLabel(performer, value);
+            const label = !isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)
+                ? `${baseLabel} (архив)`
+                : baseLabel;
+            result.push({ value, label });
+            seen.add(value);
+        }
+
+        for (const performerId of historicalPerformerIds) {
+            if (!performerId || seen.has(performerId)) continue;
+            result.push({ value: performerId, label: performerId });
+            seen.add(performerId);
+        }
+
+        return result;
+    }, [historicalPerformerIds, performers]);
+    const performerLabelById = useMemo(
+        () => new Map(performerOptions.map((performer) => [performer.value, performer.label])),
+        [performerOptions]
+    );
 
     useEffect(() => {
         setEditingData(emptyForm);
@@ -115,7 +174,8 @@ const WorkHoursSidebar = () => {
                         {editingWorkHours?.work_data
                             ?.sort((a: WorkData, b: WorkData) => (b.date_timestamp ?? 0) - (a.date_timestamp ?? 0))
                             .map((work_data: WorkData) => {
-                                const performer = performers.find((p) => p.id === work_data.created_by);
+                                const performerId = typeof work_data.created_by === 'string' ? work_data.created_by : '';
+                                const performerLabel = performerLabelById.get(performerId) ?? performerId;
                                 return (
                                     <div className="flex flex-col" key={work_data._id}>
                                         <div className="flex text-[14px] justify-between">
@@ -136,7 +196,7 @@ const WorkHoursSidebar = () => {
                                         </div>
                                         <div className="flex justify-between">
                                             <div className="text-[12px] text-slate-500">
-                                                {performer?.real_name ?? performer?.name ?? ''}
+                                                {performerLabel}
                                             </div>
                                             <div className="text-[12px] text-slate-500">{work_data.work_hours} ч.</div>
                                         </div>
@@ -178,10 +238,7 @@ const WorkHoursSidebar = () => {
                             rules={[{ required: true, message: 'Выберите исполнителя' }]}
                         >
                             <Select
-                                options={performers.map((performer) => ({
-                                    value: performer.id,
-                                    label: performer.name,
-                                }))}
+                                options={performerOptions}
                                 className="w-[180px]"
                             />
                         </Form.Item>
