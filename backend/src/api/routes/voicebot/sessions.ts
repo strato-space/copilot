@@ -31,7 +31,14 @@ import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
-import { buildRuntimeFilter, IS_PROD_RUNTIME, mergeWithRuntimeFilter, RUNTIME_TAG } from '../../../services/runtimeScope.js';
+import {
+    buildRuntimeFilter,
+    IS_PROD_RUNTIME,
+    mergeWithRuntimeFilter,
+    recordMatchesRuntime,
+    RUNTIME_TAG,
+} from '../../../services/runtimeScope.js';
+import { buildPerformerSelectorFilter } from '../../../services/performerLifecycle.js';
 import { getLogger } from '../../../utils/logger.js';
 import { z } from 'zod';
 import { insertSessionLogEvent, mapEventForApi } from '../../../services/voicebotSessionLog.js';
@@ -50,6 +57,7 @@ import {
 import { findObjectLocatorByOid, upsertObjectLocator } from '../../../services/voicebotObjectLocator.js';
 import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
 import { completeSessionDoneFlow } from '../../../services/voicebotSessionDoneFlow.js';
+import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 
 // TODO: Import MCPProxyClient when MCP integration is needed
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -284,6 +292,30 @@ const toTaskText = (value: unknown): string => {
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
     return '';
+};
+
+const normalizeGitRepo = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    return value.trim();
+};
+
+const isCodexPerformer = (value: unknown): boolean => {
+    if (!value || typeof value !== 'object') return false;
+    const performer = value as Record<string, unknown>;
+    const nameCandidates = [
+        performer.name,
+        performer.real_name,
+        performer.username,
+        performer.display_name,
+    ]
+        .map((entry) => toTaskText(entry).toLowerCase())
+        .filter(Boolean);
+    if (nameCandidates.some((entry) => entry === 'codex')) return true;
+
+    const email = toTaskText(performer.corporate_email ?? performer.email).toLowerCase();
+    if (!email) return false;
+    const localPart = email.split('@')[0] || '';
+    return localPart === 'codex';
 };
 
 const toTaskDependencies = (value: unknown): string[] => {
@@ -525,9 +557,10 @@ const resolveSessionAccess = async ({
 }): Promise<{
     session: Record<string, unknown> | null;
     hasAccess: boolean;
+    runtimeMismatch: boolean;
 }> => {
     if (!ObjectId.isValid(sessionId)) {
-        return { session: null, hasAccess: false };
+        return { session: null, hasAccess: false, runtimeMismatch: false };
     }
     const rawDb = getRawDb();
     const session = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
@@ -536,7 +569,23 @@ const resolveSessionAccess = async ({
             is_deleted: { $ne: true },
         })
     );
-    if (!session) return { session: null, hasAccess: false };
+    if (!session) {
+        const rawSession = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+            _id: new ObjectId(sessionId),
+            is_deleted: { $ne: true },
+        });
+        if (
+            rawSession &&
+            !recordMatchesRuntime(rawSession as Record<string, unknown>, {
+                field: 'runtime_tag',
+                familyMatch: IS_PROD_RUNTIME,
+                includeLegacyInProd: IS_PROD_RUNTIME,
+            })
+        ) {
+            return { session: null, hasAccess: false, runtimeMismatch: true };
+        }
+        return { session: null, hasAccess: false, runtimeMismatch: false };
+    }
 
     const userPermissions = await PermissionManager.getUserPermissions(performer, db);
     let hasAccess = false;
@@ -563,7 +612,7 @@ const resolveSessionAccess = async ({
         }
     }
 
-    return { session: session as Record<string, unknown>, hasAccess };
+    return { session: session as Record<string, unknown>, hasAccess, runtimeMismatch: false };
 };
 
 const dedupeObjectIds = (ids: ObjectId[]): ObjectId[] => {
@@ -1065,12 +1114,15 @@ const getSession = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "session_id is required" });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess, runtimeMismatch } = await resolveSessionAccess({
             db,
             performer,
             sessionId: session_id,
         });
         if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
             return res.status(404).json({ error: "Session not found" });
         }
 
@@ -1476,6 +1528,7 @@ router.post('/projects', async (req: Request, res: Response) => {
                         created_at: 1,
                         board_id: 1,
                         drive_folder_id: 1,
+                        git_repo: 1,
                         design_files: 1,
                         status: 1,
                         is_active: 1,
@@ -1507,14 +1560,20 @@ router.post('/projects', async (req: Request, res: Response) => {
 });
 
 router.post('/auth/list-users', async (_req: Request, res: Response) => {
+    const req = _req as Request & { body?: { include_ids?: unknown } };
     const db = getDb();
 
     try {
+        const includeIds = toObjectIdArray(req.body?.include_ids);
         const users = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS)
-            .find({
-                is_deleted: { $ne: true },
-                is_banned: { $ne: true },
-            })
+            .find(
+                buildPerformerSelectorFilter({
+                    extraFilter: {
+                        is_banned: { $ne: true },
+                    },
+                    includeIds,
+                })
+            )
             .project({
                 _id: 1,
                 name: 1,
@@ -2835,6 +2894,11 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
 
         const now = new Date();
         const tasksToSave: Array<Record<string, unknown>> = [];
+        const performerCache = new Map<string, Record<string, unknown> | null>();
+        const projectCache = new Map<string, Record<string, unknown> | null>();
+        const reservedPublicTaskIds = new Set<string>();
+        const creatorId = performer?._id?.toHexString?.() ?? '';
+        const creatorName = String(performer?.real_name || performer?.name || '').trim();
         for (const rawTicket of tickets) {
             if (!rawTicket || typeof rawTicket !== 'object') continue;
             const ticket = rawTicket as Record<string, unknown>;
@@ -2848,11 +2912,42 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             const canAccess = await canAccessProject({ db, performer, projectId });
             if (!canAccess) continue;
 
-            const taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId });
+            const performerCacheKey = performerId.toHexString();
+            let taskPerformer = performerCache.get(performerCacheKey);
+            if (taskPerformer === undefined) {
+                taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId }) as Record<string, unknown> | null;
+                performerCache.set(performerCacheKey, taskPerformer);
+            }
             if (!taskPerformer) continue;
 
+            if (isCodexPerformer(taskPerformer)) {
+                const projectCacheKey = projectId.toHexString();
+                let projectDoc = projectCache.get(projectCacheKey);
+                if (projectDoc === undefined) {
+                    projectDoc = await db
+                        .collection(COLLECTIONS.PROJECTS)
+                        .findOne(
+                            { _id: projectId },
+                            { projection: { _id: 1, git_repo: 1 } }
+                        ) as Record<string, unknown> | null;
+                    projectCache.set(projectCacheKey, projectDoc);
+                }
+                if (!projectDoc || !normalizeGitRepo(projectDoc.git_repo)) {
+                    return res.status(400).json({
+                        error: 'Codex assignment requires project git_repo',
+                        project_id: projectCacheKey,
+                    });
+                }
+            }
+
+            const publicTaskId = await ensureUniqueTaskPublicId({
+                db,
+                preferredId: ticket.id,
+                reservedIds: reservedPublicTaskIds,
+            });
+
             tasksToSave.push({
-                id: String(ticket.id || randomUUID()),
+                id: publicTaskId,
                 name,
                 project_id: projectId,
                 project: projectName,
@@ -2877,6 +2972,8 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                     session_name: String((session as Record<string, unknown>).session_name || ''),
                     session_id: new ObjectId(sessionId),
                 },
+                ...(creatorId ? { created_by: creatorId } : {}),
+                ...(creatorName ? { created_by_name: creatorName } : {}),
                 runtime_tag: RUNTIME_TAG,
             });
         }

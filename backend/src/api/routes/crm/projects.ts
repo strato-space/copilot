@@ -45,6 +45,11 @@ const toObjectId = (value: unknown): ObjectId | null => {
     return new ObjectId(id);
 };
 
+const normalizeGitRepo = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    return value.trim();
+};
+
 const buildProjectIdFilter = (projectId: ObjectId): Record<string, unknown> => ({
     $or: [{ project_id: projectId }, { project_id: projectId.toHexString() }],
 });
@@ -101,6 +106,9 @@ router.post('/create', async (req: Request, res: Response) => {
             created_at: now,
             updated_at: now,
         };
+        if (Object.prototype.hasOwnProperty.call(project, 'git_repo')) {
+            newProject.git_repo = normalizeGitRepo(project.git_repo);
+        }
 
         const dbRes = await db.collection(COLLECTIONS.PROJECTS).insertOne(newProject);
 
@@ -189,6 +197,9 @@ router.post('/update', async (req: Request, res: Response) => {
             ..._.omit(project, '_id'),
             updated_at: Date.now(),
         };
+        if (Object.prototype.hasOwnProperty.call(project, 'git_repo')) {
+            updateData.git_repo = normalizeGitRepo(project.git_repo);
+        }
         if (hasProjectGroupField) {
             updateData.project_group = newGroupObjectId ?? null;
         }

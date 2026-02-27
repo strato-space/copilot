@@ -447,6 +447,7 @@ export class PermissionManager {
           created_at: 1,
           board_id: 1,
           drive_folder_id: 1,
+          git_repo: 1,
           design_files: 1,
           status: 1,
           is_active: 1,

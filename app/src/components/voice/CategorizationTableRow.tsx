@@ -1,6 +1,7 @@
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import type { CategorizationRow } from '../../store/sessionsUIStore';
+import { formatTimelineSecondsLabel } from '../../utils/voiceTimeline';
 
 interface CategorizationTableRowProps {
     row: CategorizationRow;
@@ -48,8 +49,12 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
             onClick={handleRowClick}
         >
             <div className="w-12 flex flex-col justify-center items-start p-1">
-                <span className="text-black/60 text-[8px] font-normal leading-[10px]">{row.timeStart ?? ''}</span>
-                <span className="text-black/60 text-[8px] font-normal leading-[10px]">{row.timeEnd ?? ''}</span>
+                <span className="text-black/60 text-[8px] font-normal leading-[10px]">
+                    {formatTimelineSecondsLabel(row.timeStart)}
+                </span>
+                <span className="text-black/60 text-[8px] font-normal leading-[10px]">
+                    {formatTimelineSecondsLabel(row.timeEnd)}
+                </span>
             </div>
             <div className="w-[88px] flex items-start gap-1 p-1 overflow-hidden">
                 <span className="w-3 h-3 bg-black/40 rounded-full flex items-start justify-center text-white text-[6px] font-semibold leading-[11px]">

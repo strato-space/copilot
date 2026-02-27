@@ -32,6 +32,12 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useAuthStore } from '../../store/authStore';
 import type { Ticket, Performer } from '../../types/crm';
+import {
+    resolveCanonicalTaskId,
+    resolveTaskCreator,
+    resolveTaskProjectName,
+    resolveTaskSourceInfo,
+} from './taskPageUtils';
 
 dayjs.extend(relativeTime);
 
@@ -46,7 +52,7 @@ interface TaskTypeInfo {
 
 const TaskPage = () => {
     const { taskId } = useParams<{ taskId: string }>();
-    const { performers, fetchTicketById, fetchDictionary, epics } = useKanbanStore();
+    const { performers, fetchTicketById, fetchDictionary, epics, projectsData } = useKanbanStore();
     const { setEditingTicket } = useCRMStore();
     const { isAuth, loading: authLoading } = useAuthStore();
     const [loading, setLoading] = useState(true);
@@ -144,6 +150,10 @@ const TaskPage = () => {
 
     const workHoursTotal = task.total_hours ?? 0;
     const workHoursData = task.work_data ?? [];
+    const canonicalTaskId = resolveCanonicalTaskId(task, taskId);
+    const projectName = resolveTaskProjectName(task, projectsData);
+    const creatorName = resolveTaskCreator(task, performers);
+    const sourceInfo = resolveTaskSourceInfo(task);
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -151,10 +161,18 @@ const TaskPage = () => {
             <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div>
+                        <Text type="secondary" className="block text-xs uppercase tracking-wide">
+                            Task ID
+                        </Text>
+                        <Text code copyable={{ text: canonicalTaskId }} className="block mb-1">
+                            {canonicalTaskId}
+                        </Text>
+                        <Text type="secondary" className="block text-xs uppercase tracking-wide">
+                            Title
+                        </Text>
                         <Title level={2} className="mb-0">
                             {task.name}
                         </Title>
-                        <Text type="secondary">ID: {task.id || task._id}</Text>
                     </div>
                 </div>
                 <Button type="primary" icon={<EditOutlined />} onClick={() => setEditingTicket(task)}>
@@ -194,7 +212,7 @@ const TaskPage = () => {
                                             </span>
                                         }
                                     >
-                                        {task.project ?? 'N/A'}
+                                        {projectName}
                                     </Descriptions.Item>
                                 </Descriptions>
                             </div>
@@ -209,6 +227,33 @@ const TaskPage = () => {
                                         }
                                     >
                                         {performer?.real_name ?? performer?.name ?? 'Not assigned'}
+                                    </Descriptions.Item>
+                                    <Descriptions.Item
+                                        label={
+                                            <span className="flex items-center gap-2">
+                                                <UserOutlined /> Created by
+                                            </span>
+                                        }
+                                    >
+                                        {creatorName}
+                                    </Descriptions.Item>
+                                    <Descriptions.Item
+                                        label={
+                                            <span className="flex items-center gap-2">
+                                                <LinkOutlined /> Source
+                                            </span>
+                                        }
+                                    >
+                                        <div className="flex flex-col">
+                                            <Text>{sourceInfo.label}</Text>
+                                            {sourceInfo.link ? (
+                                                <a href={sourceInfo.link} target="_blank" rel="noreferrer">
+                                                    {sourceInfo.reference}
+                                                </a>
+                                            ) : (
+                                                <Text type="secondary">{sourceInfo.reference}</Text>
+                                            )}
+                                        </div>
                                     </Descriptions.Item>
 
                                     {epic && (

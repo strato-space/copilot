@@ -1,7 +1,9 @@
 import { ObjectId, type Db } from 'mongodb';
 import { z } from 'zod';
 import {
+  COLLECTIONS,
   RUNTIME_TAG,
+  TASK_STATUSES,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
   VOICEBOT_PROCESSORS,
@@ -16,6 +18,7 @@ import {
   setActiveVoiceSession,
 } from './activeSessionMapping.js';
 import { extractSessionIdFromText } from './sessionRef.js';
+import { buildSessionLink } from './sessionTelegramMessage.js';
 
 export type QueueLike = {
   add: (name: string, data: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
@@ -73,12 +76,42 @@ type IngressSession = {
   session_type?: string;
   chat_id?: number;
   user_id?: ObjectId | null;
+  project_id?: ObjectId | string | null;
+  project?: string | null;
+  session_name?: string | null;
   is_active?: boolean;
 };
 
 type IngressPerformer = {
   _id: ObjectId;
   telegram_id?: string;
+  id?: string;
+  name?: string;
+  real_name?: string;
+};
+
+type CodexProject = {
+  _id: ObjectId;
+  name?: string;
+  title?: string;
+  git_repo?: string | null;
+};
+
+type CodexTaskPayload = {
+  trigger: '@task';
+  text: string;
+  normalized_text: string;
+  session_id: string;
+  message_db_id: string;
+  telegram_user_id: string;
+  chat_id: number;
+  telegram_message_id: string;
+  source_type: string;
+  message_type: string;
+  attachments: Array<Record<string, unknown>>;
+  external_ref: string;
+  source_ref: string | null;
+  created_at: string;
 };
 
 type NormalizedIngressContext = {
@@ -141,6 +174,329 @@ const toObjectIdOrNull = (value: unknown): ObjectId | null => {
 
 const runtimeQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+
+const TASK_SIGNATURE_PATTERN = /(^|\s)@task\b/i;
+const TASK_SIGNATURE_REPLACE_PATTERN = /(^|\s)@task\b/gi;
+const DEFAULT_CODEX_TASK_TITLE = 'Telegram @task';
+const DEFAULT_CODEX_TASK_DESCRIPTION = 'Created from @task payload.';
+
+const hasTaskSignature = (value: string): boolean => TASK_SIGNATURE_PATTERN.test(value);
+
+const stripTaskSignature = (value: string): string =>
+  value.replace(TASK_SIGNATURE_REPLACE_PATTERN, ' ').replace(/\s+/g, ' ').trim();
+
+const toTaskTitle = (normalizedText: string): string => {
+  const firstLine = normalizedText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  const title = firstLine || DEFAULT_CODEX_TASK_TITLE;
+  return title.slice(0, 180);
+};
+
+const buildTelegramMessageLink = (chatId: number, messageId: string): string | null => {
+  const normalizedMessageId = String(Math.trunc(Number(messageId))).trim();
+  if (!normalizedMessageId || !Number.isFinite(Number(normalizedMessageId)) || Number(normalizedMessageId) <= 0) {
+    return null;
+  }
+
+  const rawChatId = String(chatId).trim();
+  if (!rawChatId) return null;
+  if (rawChatId.startsWith('-100')) {
+    const channelId = rawChatId.slice(4);
+    if (!channelId) return null;
+    return `https://t.me/c/${channelId}/${normalizedMessageId}`;
+  }
+
+  const directId = rawChatId.replace(/^-/, '');
+  if (!directId) return null;
+  return `https://t.me/${directId}/${normalizedMessageId}`;
+};
+
+const normalizeTaskAttachments = (attachments: Array<Record<string, unknown>>): Array<Record<string, unknown>> =>
+  attachments.map((attachment) => ({
+    ...(normalizeString(attachment.kind) ? { kind: normalizeString(attachment.kind) } : {}),
+    ...(normalizeString(attachment.source) ? { source: normalizeString(attachment.source) } : {}),
+    ...(normalizeString(attachment.file_id) ? { file_id: normalizeString(attachment.file_id) } : {}),
+    ...(normalizeString(attachment.file_unique_id)
+      ? { file_unique_id: normalizeString(attachment.file_unique_id) }
+      : {}),
+    ...(normalizeString(attachment.name) ? { name: normalizeString(attachment.name) } : {}),
+    ...(normalizeString(attachment.mimeType) ? { mimeType: normalizeString(attachment.mimeType) } : {}),
+    ...(normalizeString(attachment.url) ? { url: normalizeString(attachment.url) } : {}),
+    ...(normalizeString(attachment.uri) ? { uri: normalizeString(attachment.uri) } : {}),
+    ...(Number.isFinite(Number(attachment.size)) ? { size: Number(attachment.size) } : {}),
+    ...(Number.isFinite(Number(attachment.width)) ? { width: Number(attachment.width) } : {}),
+    ...(Number.isFinite(Number(attachment.height)) ? { height: Number(attachment.height) } : {}),
+  }));
+
+const resolveAttachmentReference = (attachment: Record<string, unknown>): string | null => {
+  const url = normalizeString(attachment.url);
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+
+  const uri = normalizeString(attachment.uri);
+  if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
+
+  const fileId = normalizeString(attachment.file_id);
+  if (fileId) return `telegram_file_id:${fileId}`;
+
+  return null;
+};
+
+const buildTaskDescription = ({
+  normalizedText,
+  payload,
+}: {
+  normalizedText: string;
+  payload: CodexTaskPayload;
+}): string => {
+  const baseText = normalizedText || DEFAULT_CODEX_TASK_DESCRIPTION;
+  const attachmentRefs = payload.attachments.map(resolveAttachmentReference).filter((value): value is string => Boolean(value));
+  if (attachmentRefs.length === 0) return baseText;
+  return `${baseText}\n\nAttachments:\n${attachmentRefs.map((ref) => `- ${ref}`).join('\n')}`;
+};
+
+const buildCodexTaskPayload = ({
+  context,
+  sessionId,
+  messageDbId,
+  text,
+  messageType,
+  attachments,
+}: {
+  context: NormalizedIngressContext;
+  sessionId: ObjectId;
+  messageDbId: ObjectId;
+  text: string;
+  messageType: string;
+  attachments: Array<Record<string, unknown>>;
+}): CodexTaskPayload => {
+  const normalizedText = stripTaskSignature(text);
+  return {
+    trigger: '@task',
+    text,
+    normalized_text: normalizedText,
+    session_id: sessionId.toHexString(),
+    message_db_id: messageDbId.toHexString(),
+    telegram_user_id: context.telegram_user_id,
+    chat_id: context.chat_id,
+    telegram_message_id: context.message_id,
+    source_type: context.source_type,
+    message_type: messageType,
+    attachments: normalizeTaskAttachments(attachments),
+    external_ref: buildSessionLink(sessionId.toHexString()),
+    source_ref: buildTelegramMessageLink(context.chat_id, context.message_id),
+    created_at: new Date().toISOString(),
+  };
+};
+
+const findCodexProject = async ({
+  deps,
+  session,
+}: {
+  deps: IngressDeps;
+  session: IngressSession;
+}): Promise<CodexProject | null> => {
+  const sessionProjectId = toObjectIdOrNull(session.project_id);
+  if (sessionProjectId) {
+    const sessionProject = await deps.db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne(
+      runtimeQuery({
+        _id: sessionProjectId,
+        is_deleted: { $ne: true },
+      })
+    ) as CodexProject | null;
+    if (sessionProject && normalizeString(sessionProject.git_repo)) {
+      return sessionProject;
+    }
+  }
+
+  return deps.db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne(
+    runtimeQuery({
+      name: { $regex: /^copilot$/i },
+      is_deleted: { $ne: true },
+      git_repo: { $type: 'string', $nin: [''] },
+    })
+  ) as Promise<CodexProject | null>;
+};
+
+const findCodexPerformer = async (deps: IngressDeps): Promise<IngressPerformer | null> =>
+  deps.db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).findOne(
+    {
+      is_deleted: { $ne: true },
+      is_banned: { $ne: true },
+      $or: [
+        { id: { $regex: /^codex$/i } },
+        { name: { $regex: /^codex$/i } },
+        { real_name: { $regex: /^codex$/i } },
+      ],
+    },
+    {
+      projection: { _id: 1, id: 1, name: 1, real_name: 1 },
+    }
+  ) as Promise<IngressPerformer | null>;
+
+const attachCodexPayloadToSession = async ({
+  deps,
+  sessionId,
+  payload,
+}: {
+  deps: IngressDeps;
+  sessionId: ObjectId;
+  payload: CodexTaskPayload;
+}): Promise<void> => {
+  const updatePayload: Record<string, unknown> = {
+    $push: {
+      'processors_data.CODEX_TASKS.data': payload,
+    },
+    $set: {
+      'processors_data.CODEX_TASKS.is_processing': false,
+      'processors_data.CODEX_TASKS.is_processed': true,
+      'processors_data.CODEX_TASKS.job_finished_timestamp': Date.now(),
+      updated_at: new Date(),
+    },
+  };
+
+  await deps.db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+    runtimeQuery({ _id: sessionId }),
+    updatePayload
+  );
+};
+
+const createCodexTaskFromPayload = async ({
+  deps,
+  session,
+  actor,
+  payload,
+}: {
+  deps: IngressDeps;
+  session: IngressSession;
+  actor: IngressPerformer;
+  payload: CodexTaskPayload;
+}): Promise<ObjectId | null> => {
+  const project = await findCodexProject({ deps, session });
+  if (!project) {
+    logWarn(deps, '[voicebot-tgbot] @task codex task skipped: project not found', {
+      session_id: payload.session_id,
+      message_id: payload.message_db_id,
+    });
+    return null;
+  }
+
+  const codexPerformer = await findCodexPerformer(deps);
+  const normalizedText = payload.normalized_text;
+  const now = new Date();
+  const deferredUntil = new Date(now.getTime() + 15 * 60 * 1000);
+
+  const taskDoc: Record<string, unknown> = {
+    id: `codex-${new ObjectId().toHexString()}`,
+    name: toTaskTitle(normalizedText),
+    description: buildTaskDescription({ normalizedText, payload }),
+    priority: 'P2',
+    priority_reason: '@task',
+    project_id: project._id,
+    project: normalizeString(project.name) || normalizeString(project.title) || 'Copilot',
+    performer_id: codexPerformer?._id || null,
+    ...(codexPerformer
+      ? {
+        performer: {
+          _id: codexPerformer._id,
+          id: codexPerformer.id || codexPerformer._id.toHexString(),
+          name: codexPerformer.name || codexPerformer.real_name || 'Codex',
+          real_name: codexPerformer.real_name || codexPerformer.name || 'Codex',
+        },
+      }
+      : {}),
+    created_by_performer_id: actor._id,
+    source_kind: 'telegram',
+    source_ref: payload.source_ref || payload.session_id,
+    external_ref: payload.external_ref,
+    source: 'VOICE_BOT',
+    source_data: {
+      session_id: new ObjectId(payload.session_id),
+      message_id: payload.telegram_message_id,
+      message_db_id: new ObjectId(payload.message_db_id),
+      trigger: payload.trigger,
+      payload,
+    },
+    codex_task: true,
+    codex_review_state: 'deferred',
+    codex_review_due_at: deferredUntil,
+    task_status: TASK_STATUSES.NEW_10,
+    task_status_history: [],
+    last_status_update: now,
+    status_update_checked: false,
+    is_deleted: false,
+    created_at: now,
+    updated_at: now,
+    runtime_tag: RUNTIME_TAG,
+  };
+
+  const insert = await deps.db.collection(COLLECTIONS.TASKS).insertOne(taskDoc);
+  await deps.db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+    runtimeQuery({ _id: new ObjectId(payload.session_id) }),
+    {
+      $set: {
+        'processors_data.CODEX_TASKS.last_task_id': insert.insertedId.toHexString(),
+        updated_at: new Date(),
+      },
+    }
+  );
+
+  return insert.insertedId;
+};
+
+const processTaskSignatureIngress = async ({
+  deps,
+  context,
+  session,
+  actor,
+  messageObjectId,
+  text,
+  messageType,
+  attachments,
+}: {
+  deps: IngressDeps;
+  context: NormalizedIngressContext;
+  session: IngressSession;
+  actor: IngressPerformer;
+  messageObjectId: ObjectId;
+  text: string;
+  messageType: string;
+  attachments: Array<Record<string, unknown>>;
+}): Promise<void> => {
+  const rawText = String(text || '').trim();
+  if (!rawText || !hasTaskSignature(rawText)) return;
+
+  const payload = buildCodexTaskPayload({
+    context,
+    sessionId: new ObjectId(session._id),
+    messageDbId: messageObjectId,
+    text: rawText,
+    messageType,
+    attachments,
+  });
+
+  await attachCodexPayloadToSession({
+    deps,
+    sessionId: new ObjectId(session._id),
+    payload,
+  });
+
+  const taskId = await createCodexTaskFromPayload({
+    deps,
+    session,
+    actor,
+    payload,
+  });
+
+  if (taskId) {
+    logInfo(deps, '[voicebot-tgbot] @task codex task created', {
+      session_id: payload.session_id,
+      message_id: payload.message_db_id,
+      task_id: taskId.toHexString(),
+    });
+  }
+};
 
 const logInfo = (deps: IngressDeps, message: string, meta?: Record<string, unknown>) => {
   deps.logger?.info?.(message, meta);
@@ -516,6 +872,25 @@ export const handleTextIngress = async ({
 
   await updateSessionAfterMessage(deps, sessionId, context);
 
+  try {
+    await processTaskSignatureIngress({
+      deps,
+      context,
+      session,
+      actor: performer,
+      messageObjectId,
+      text: parsed.data.text,
+      messageType: 'text',
+      attachments: [],
+    });
+  } catch (error) {
+    logWarn(deps, '[voicebot-tgbot] @task processing failed for text ingress', {
+      session_id: sessionId.toHexString(),
+      message_id: messageObjectId.toHexString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   logInfo(deps, '[voicebot-tgbot] text ingress accepted', {
     session_id: sessionId.toHexString(),
     message_id: messageObjectId.toHexString(),
@@ -609,6 +984,25 @@ export const handleAttachmentIngress = async ({
   const messageObjectId = insert.insertedId;
 
   await updateSessionAfterMessage(deps, sessionId, context);
+
+  try {
+    await processTaskSignatureIngress({
+      deps,
+      context,
+      session,
+      actor: performer,
+      messageObjectId,
+      text: messageText,
+      messageType: normalizeString(parsed.data.message_type) || 'screenshot',
+      attachments,
+    });
+  } catch (error) {
+    logWarn(deps, '[voicebot-tgbot] @task processing failed for attachment ingress', {
+      session_id: sessionId.toHexString(),
+      message_id: messageObjectId.toHexString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   logInfo(deps, '[voicebot-tgbot] attachment ingress accepted', {
     session_id: sessionId.toHexString(),

@@ -2,6 +2,47 @@
 
 Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfaces. Deprecated code is archived in `old_code/`.
 
+## Critical Decisions For Future Agents
+
+Use this as a fast guardrail before implementing anything:
+
+- Copilot is the active Voice platform (`/voice/*` + `/api/voicebot/*`); do not design new behavior against legacy `voice.stratospace.fun`.
+- Session closing is REST-driven (`POST /api/voicebot/session_done`, alias `/close_session`), with websocket used for server-to-client updates only.
+- Voice control semantics are fixed to `New / Rec / Cut / Pause / Done` and must stay aligned between session page toolbar and FAB.
+- Full-track chunks are intentionally non-uploading until diarization is introduced; do not re-enable implicit uploads.
+- Runtime isolation with `runtime_tag` is required across voice operational data (`prod` family accepts `prod` and `prod-*`; legacy missing tags are treated as `prod`).
+- Realtime updates are required: uploads and workers must emit session/message events so Transcription/Categorization update without refresh.
+- Session list contracts are user-facing:
+  - quick tabs: `Все`, `Без проекта`, `Активные`, `Мои`,
+  - deleted toggle `Показывать удаленные`,
+  - filter state persistence across navigation/reload.
+- Possible Tasks contract:
+  - canonical payload shape `id/name/description/priority/...`,
+  - `task_type_id` stays optional.
+
+## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
+
+This is the smallest set of changes agents must keep in mind when touching Voice/ontology code:
+
+- Session close is REST-driven only (`POST /api/voicebot/session_done`, alias `/close_session`), and websocket is receive-only for close lifecycle.
+- `Done` is expected to work from paused and recording states; failed close must not silently reset UI to closed/idle.
+- Realtime message/session updates are mandatory (`new_message`, `session_update`, `message_update`) to avoid refresh-only workflows.
+- Sessions list behavior is contract-bound:
+  - quick tabs (`Все`, `Без проекта`, `Активные`, `Мои`),
+  - persisted filter/toggle state,
+  - forced include-deleted mode sync under load.
+- Sessions status in list uses state pictograms aligned with session page semantics; legacy red-dot-only marker is deprecated.
+- TS transcribe worker supports Telegram file recovery before transcription when local file path is missing.
+- TypeDB tooling was hard-moved to `ontology/typedb/scripts/*`; backend npm aliases call those canonical scripts.
+
+## Interface Contracts (High Impact)
+
+- `POST /api/voicebot/upload_audio`
+- `POST /api/voicebot/session_done` and `POST /api/voicebot/close_session` (alias)
+- `POST /api/voicebot/upload_attachment` and `POST /api/voicebot/attachment` (alias)
+- Socket namespace `/voicebot` with room subscription `subscribe_on_session`
+- Canonical session links: `https://copilot.stratospace.fun/voice/session/:id`
+
 ## FinOps notes
 - FX rates are managed in `app/src/store/fxStore.ts` and recalculate RUB values in analytics, KPIs, and plan-fact tables.
 - The Employees directory supports a chat-driven form fill that prompts for missing fields.
@@ -22,6 +63,10 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - CRM project display/filtering should resolve project name from `project_data`/`project_id`/`project`; performer filter must handle mixed `_id` and legacy `id` values.
 - CRM work-hours linkage is canonical by `ticket_db_id` (`automation_tasks._id`) across CRM API, Miniapp routes, and reporting services; legacy `ticket_id` is tolerated only as migration input.
 - Added backfill utility for historical work-hours rows missing `ticket_db_id`: `cd backend && npx tsx scripts/backfill-work-hours-ticket-db-id.ts --apply` (use without `--apply` for dry-run).
+- Short-link generation/collision/route-resolution contract is documented in `docs/OPEROPS_TASK_SHORT_LINKS.md`.
+- OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
+- OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
+- Performer selectors now include synthetic system performer `Codex` (deduped) in CRM and Voice task-assignment flows.
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
@@ -37,6 +82,8 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
+- `POST /api/voicebot/sessions/get` now differentiates missing vs runtime-scoped sessions: `404 Session not found` for true absence and `409 runtime_mismatch` when session exists outside current runtime scope.
+- Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + sortable categorization content.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` (legacy alias `POST /api/voicebot/close_session`), while websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
@@ -228,6 +275,11 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Completed Wave 1 voice-operops-codex rollout items and closed `copilot-b1k5`, `copilot-s33e`, `copilot-u976`, `copilot-xuec`; epic `copilot-bq81` stays in progress for later waves.
+- Canonicalized performer lifecycle filtering (`is_deleted` primary, legacy `is_active/active` compatibility) across Voice/CRM selectors with historical-id passthrough for edit safety.
+- Added `git_repo` project contract support end-to-end (backend create/update/list + frontend types/edit form) and enforced Codex assignment guard in `POST /api/voicebot/create_tickets`.
+- Extended Telegram `@task` ingress path to persist normalized task payload to session and create Codex task from the same payload contract.
+- Increased Voice possible-task performer selector popup height with responsive desktop/mobile sizing and contract tests.
 - Switched voice session close initiation to REST-only client path: frontend store and WebRTC runtime now call `POST /api/voicebot/session_done` (with `/close_session` alias support), and no longer emit browser-side `session_done` over Socket.IO.
 - Added canonical backend close route in sessions API (`backend/src/api/routes/voicebot/sessions.ts`) with Zod payload validation, permission/access checks, shared `completeSessionDoneFlow` execution, and realtime `session_status/session_update` emissions.
 - Added backend regression test `backend/__tests__/voicebot/sessionDoneRoute.test.ts` to lock REST close behavior and alias parity.

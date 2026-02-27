@@ -174,6 +174,7 @@ export interface VoiceBotProject {
     _id: string;
     name?: string;
     title?: string;
+    git_repo?: string | null;
     project_group?: {
         _id?: string;
         name?: string;

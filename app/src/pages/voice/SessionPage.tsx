@@ -83,8 +83,12 @@ export default function SessionPage() {
         void fetchVoiceBotSession(sessionId)
             .catch((error: unknown) => {
                 if (disposed) return;
-                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                if (axios.isAxiosError(error) && error.response?.status === 409) {
                     setLoadError('Сессия недоступна в текущем runtime (prod/dev mismatch)');
+                    return;
+                }
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                    setLoadError('Сессия не найдена');
                     return;
                 }
                 setLoadError('Не удалось загрузить сессию');

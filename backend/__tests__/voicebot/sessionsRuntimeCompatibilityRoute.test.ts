@@ -528,4 +528,79 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
     expect(setPayload.transcription_text).toBe('Second segment');
   });
 
+  it('POST /voicebot/session returns 404 when session does not exist in raw DB', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => null);
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return {
+          find: jest.fn(() => ({ toArray: async () => [] })),
+        };
+      },
+    };
+
+    const dbStub = {
+      collection: (_name: string) => ({
+        find: jest.fn(() => ({ toArray: async () => [] })),
+      }),
+    };
+
+    getRawDbMock.mockReturnValue(rawDbStub);
+    getDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session')
+      .send({ session_id: sessionId.toHexString() });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe('Session not found');
+    expect(sessionFindOne).toHaveBeenCalledTimes(2);
+  });
+
+  it('POST /voicebot/session returns 409 runtime_mismatch when session exists outside runtime scope', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        _id: sessionId,
+        runtime_tag: 'dev-p2',
+        is_deleted: false,
+      });
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return {
+          find: jest.fn(() => ({ toArray: async () => [] })),
+        };
+      },
+    };
+
+    const dbStub = {
+      collection: (_name: string) => ({
+        find: jest.fn(() => ({ toArray: async () => [] })),
+      }),
+    };
+
+    getRawDbMock.mockReturnValue(rawDbStub);
+    getDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session')
+      .send({ session_id: sessionId.toHexString() });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('runtime_mismatch');
+    expect(sessionFindOne).toHaveBeenCalledTimes(2);
+  });
+
 });

@@ -18,6 +18,7 @@ jest.unstable_mockModule('../../src/services/db.js', () => ({
 
 jest.unstable_mockModule('../../src/permissions/permission-manager.js', () => ({
   PermissionManager: {
+    requirePermission: () => (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
     getUserPermissions: getUserPermissionsMock,
     generateDataFilter: generateDataFilterMock,
   },
@@ -100,6 +101,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         }
         if (name === COLLECTIONS.TASKS) {
           return {
+            findOne: jest.fn(async () => null),
             insertMany: insertManySpy,
           };
         }
@@ -145,6 +147,86 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(insertedDocs).toHaveLength(1);
     expect(insertedDocs[0]?.runtime_tag).toBe(RUNTIME_TAG);
     expect((insertedDocs[0]?.source_data as Record<string, unknown>)?.session_id).toBeInstanceOf(ObjectId);
+  });
+
+  it('create_tickets rejects codex assignment when project git_repo is empty', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const taskPerformerId = new ObjectId();
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: taskPerformerId,
+              name: 'Codex',
+              corporate_email: 'codex@strato.space',
+            })),
+          };
+        }
+        if (name === COLLECTIONS.PROJECTS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: projectId,
+              git_repo: '',
+            })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            findOne: jest.fn(async () => null),
+            insertMany: insertManySpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [
+          {
+            id: 'ticket-1',
+            name: 'Implement feature',
+            description: 'Details',
+            performer_id: taskPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Codex assignment requires project git_repo');
+    expect(response.body.project_id).toBe(projectId.toHexString());
+    expect(insertManySpy).not.toHaveBeenCalled();
   });
 
   it('task_types reads execution plans with prod-family runtime filter', async () => {

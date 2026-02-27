@@ -35,4 +35,12 @@ describe('PossibleTasks design contract', () => {
     expect(source.includes('Зависимости')).toBe(true);
     expect(source.includes('Источник')).toBe(true);
   });
+
+  it('uses taller responsive popup height for performer selector', () => {
+    expect(source.includes('const PERFORMER_PICKER_POPUP_HEIGHT = {')).toBe(true);
+    expect(source.includes('mobile: 320')).toBe(true);
+    expect(source.includes('desktop: 520')).toBe(true);
+    expect(source.includes('const performerPickerListHeight = screens.md')).toBe(true);
+    expect(source.includes('listHeight={performerPickerListHeight}')).toBe(true);
+  });
 });

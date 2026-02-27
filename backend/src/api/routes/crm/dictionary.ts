@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import _ from 'lodash';
 import { getDb } from '../../../services/db.js';
+import { buildPerformerSelectorFilter } from '../../../services/performerLifecycle.js';
 import { getLogger } from '../../../utils/logger.js';
 import { COLLECTIONS, TASK_CLASSES } from '../../../constants.js';
 
@@ -168,10 +169,10 @@ router.post('/', async (req: Request, res: Response) => {
             tree.push(trackNode);
         }
 
-        // Keep legacy performers visible in edit forms: include docs without is_active flag.
+        // Canonical lifecycle flag is is_deleted; legacy active/is_active=false is treated as inactive.
         const performersFilter = showInactive
             ? {}
-            : { $or: [{ is_active: true }, { is_active: { $exists: false } }] };
+            : buildPerformerSelectorFilter();
         const performers = await db.collection(COLLECTIONS.PERFORMERS).find(performersFilter).toArray();
 
         // Build task types from TASK_TYPES_TREE to keep compatibility with legacy ticket.task_type ids.

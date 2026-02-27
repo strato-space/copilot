@@ -3,6 +3,7 @@ import { Button, Modal, Select } from 'antd';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
+import { isPerformerSelectable } from '../../utils/performerLifecycle';
 
 export default function AccessUsersModal() {
     const { performers_list, fetchPerformersList, updateSessionAllowedUsers } = useVoiceBotStore();
@@ -22,9 +23,9 @@ export default function AccessUsersModal() {
 
     useEffect(() => {
         if (accessUsersModal.visible) {
-            void fetchPerformersList();
+            void fetchPerformersList(accessUsersModal.selectedUserIds);
         }
-    }, [accessUsersModal.visible, fetchPerformersList]);
+    }, [accessUsersModal.selectedUserIds, accessUsersModal.visible, fetchPerformersList]);
 
     const getDisplayName = (user: Record<string, unknown> | undefined): string => {
         if (!user) return '';
@@ -34,6 +35,7 @@ export default function AccessUsersModal() {
     };
 
     const filteredUsers = (performers_list || []).filter((user) =>
+        isPerformerSelectable(user) &&
         getDisplayName(user).toLowerCase().includes(accessUsersModal.searchValue.toLowerCase()) &&
         !accessUsersModal.selectedUserIds.includes(user._id as string)
     );

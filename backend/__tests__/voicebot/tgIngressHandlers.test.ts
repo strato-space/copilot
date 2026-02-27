@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 
-import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS, VOICEBOT_QUEUES } from '../../src/constants.js';
+import { COLLECTIONS, VOICEBOT_COLLECTIONS, VOICEBOT_JOBS, VOICEBOT_QUEUES } from '../../src/constants.js';
 
 const getActiveVoiceSessionForUserMock = jest.fn();
 const setActiveVoiceSessionMock = jest.fn();
@@ -20,18 +20,23 @@ const {
 
 const makeDb = ({
   performer,
+  codexPerformer,
   activeSession,
   explicitSession,
+  codexProject,
   createdSessionId,
 }: {
   performer?: Record<string, unknown> | null;
+  codexPerformer?: Record<string, unknown> | null;
   activeSession?: Record<string, unknown> | null;
   explicitSession?: Record<string, unknown> | null;
+  codexProject?: Record<string, unknown> | null;
   createdSessionId?: ObjectId;
 }) => {
   const messagesInsertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
   const sessionsInsertOne = jest.fn(async () => ({ insertedId: createdSessionId || new ObjectId() }));
   const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+  const tasksInsertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
 
   const sessionsFindOne = jest.fn(async (query: Record<string, unknown>) => {
     const queryAnd = Array.isArray(query?.$and) ? (query.$and as Record<string, unknown>[]) : [];
@@ -48,7 +53,28 @@ const makeDb = ({
     return null;
   });
 
-  const performersFindOne = jest.fn(async () => performer || null);
+  const performersFindOne = jest.fn(async (query: Record<string, unknown>) => {
+    if (query && Object.prototype.hasOwnProperty.call(query, 'telegram_id')) {
+      return performer || null;
+    }
+    if (query && Object.prototype.hasOwnProperty.call(query, '$or')) {
+      return codexPerformer || null;
+    }
+    return performer || null;
+  });
+  const projectsFindOne = jest.fn(async (query: Record<string, unknown>) => {
+    const queryAnd = Array.isArray(query?.$and) ? (query.$and as Record<string, unknown>[]) : [];
+    const firstClause = (queryAnd[0] || query) as Record<string, unknown>;
+    const projectId = firstClause?._id as ObjectId | undefined;
+
+    if (projectId && codexProject && String(codexProject._id) === projectId.toHexString()) {
+      return codexProject;
+    }
+    if (firstClause?.name && codexProject) {
+      return codexProject;
+    }
+    return null;
+  });
 
   const db = {
     collection: (name: string) => {
@@ -69,6 +95,16 @@ const makeDb = ({
           insertOne: messagesInsertOne,
         };
       }
+      if (name === VOICEBOT_COLLECTIONS.PROJECTS) {
+        return {
+          findOne: projectsFindOne,
+        };
+      }
+      if (name === COLLECTIONS.TASKS) {
+        return {
+          insertOne: tasksInsertOne,
+        };
+      }
       return {};
     },
   } as any;
@@ -81,6 +117,8 @@ const makeDb = ({
       sessionsInsertOne,
       sessionsUpdateOne,
       messagesInsertOne,
+      tasksInsertOne,
+      projectsFindOne,
     },
   };
 };
@@ -304,5 +342,66 @@ describe('voicebot tgbot ingress handlers', () => {
     expect(result.ok).toBe(true);
     const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(inserted.forwarded_context).toEqual(forwardedContext);
+  });
+
+  it('stores @task payload on session and creates codex task from that payload', async () => {
+    const performerId = new ObjectId();
+    const codexPerformerId = new ObjectId();
+    const projectId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '2010' },
+      codexPerformer: { _id: codexPerformerId, id: 'codex', name: 'Codex', real_name: 'Codex' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        project_id: projectId,
+        is_active: true,
+      },
+      codexProject: {
+        _id: projectId,
+        name: 'Copilot',
+        git_repo: 'git@github.com:strato-space/copilot.git',
+      },
+    });
+
+    const result = await handleTextIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 2010,
+        chat_id: -1003001,
+        username: 'codex-task-user',
+        message_id: 120,
+        message_timestamp: 1770500500,
+        text: '@task Investigate billing mismatch for February',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(spies.tasksInsertOne).toHaveBeenCalledTimes(1);
+
+    const insertedTask = spies.tasksInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(insertedTask.source_kind).toBe('telegram');
+    expect(insertedTask.created_by_performer_id).toEqual(performerId);
+    expect(insertedTask.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
+    expect(insertedTask.description).toContain('Investigate billing mismatch for February');
+
+    const sourceData = insertedTask.source_data as Record<string, unknown>;
+    const payload = sourceData.payload as Record<string, unknown>;
+    expect(payload.trigger).toBe('@task');
+    expect(payload.session_id).toBe(sessionId.toHexString());
+    expect(payload.message_db_id).toBe(result.message_id);
+
+    const codexPayloadUpdate = spies.sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call[1] as Record<string, unknown> | undefined;
+      const push = update?.$push as Record<string, unknown> | undefined;
+      return Boolean(push && Object.prototype.hasOwnProperty.call(push, 'processors_data.CODEX_TASKS.data'));
+    });
+    expect(codexPayloadUpdate).toBeDefined();
   });
 });

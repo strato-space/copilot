@@ -19,6 +19,7 @@ export interface Project {
     name: string;
     epics?: Epic[];
     is_active?: boolean;
+    git_repo?: string;
     figma_dev_url?: string;
     figma_des_url?: string;
     project_group?: string;
@@ -108,6 +109,13 @@ export interface Ticket {
     shipment_date?: string;
     estimated_time?: number;
     notion_url?: string;
+    created_by?: unknown;
+    created_by_name?: string;
+    source?: unknown;
+    source_data?: unknown;
+    source_kind?: string;
+    source_ref?: string;
+    external_ref?: string;
 }
 
 // Tree structures
@@ -144,6 +152,7 @@ export interface ProjectWithGroup {
     name: string;
     project_group?: string;
     is_active?: boolean;
+    git_repo?: string;
     start_date?: string;
     end_date?: string;
     time_capacity?: number;

@@ -185,3 +185,82 @@ Legacy поля (`Task ID`, `Task Title`, `Description`, `Priority`) читае�
 4. В voice `Возможные задачи` -> создание задач -> видны во вкладке `Задачи`.
 5. `@task` и `Codex/Кодекс` сценарии создают codex issue и связывают его с voice сессией.
 6. Материалы привязываются к целевым строкам категоризации и отображаются в `Materials`.
+
+## Additional backlog (2026-02-27)
+
+This section is a decomposition source for bd tasks. Each task references this spec path:
+`/home/strato-space/copilot/plan/voice-operops-codex-taskflow-spec.md`.
+
+### Task card / links / source traceability
+1. Show canonical `task-id` in OperOps task card header.
+2. Investigate duplicate short links and eliminate collisions (generation + render path).
+3. Add explicit short-link generation/validation docs for operators and developers.
+4. Fix project mismatch (`Project: N/A` in card while list shows actual project).
+5. Show `Created by` in task card.
+6. Show source block in task card with external links to Voice session / Telegram message.
+
+### Voice tabs and task views
+7. Add `Задачи` tab in Voice session (same visual model as OperOps Backlog, filtered by session source).
+8. Add `Codex` tab in Voice session (filtered by `external_ref`, chronological, status-agnostic).
+9. Add in-place task detail preview in Voice `Codex` tab equivalent to `bd show <id>`.
+
+### Codex performer / project constraints / external refs
+10. Add system performer `Codex` to performer selectors.
+11. Add project field `git_repo`; enforce Codex task assignment only for projects with non-empty `git_repo`.
+12. Seed `git_repo` for project `Copilot`.
+13. Ensure Codex task creation writes `external_ref = canonical voice session URL`.
+
+### Telegram and voice command automations
+14. Extend `@strato_voice_bot`: `@task` should create Codex task from message + attachments, linked to active session.
+15. If `@task` arrives without active session, auto-create a new session and assign project `Codex`.
+16. Voice command trigger: if first transcribed word is `Codex`/`Кодекс`, create Codex task.
+17. When creating task from message with attachments, append normalized Copilot public attachment URLs to description after `\n\n`.
+
+### Deferred review workflow (15 minutes)
+18. New Codex tasks are created in deferred state for 15 minutes.
+19. Add backend deferred-review worker (fast-agent + console codex) to generate ultra-short customer summary.
+20. Persist review summary into issue notes and post the issue to Telegram topic with Start/Cancel buttons.
+21. Start button clears deferred state and opens task; Cancel closes task with `canceled by user`.
+
+### OperOps Codex board view
+22. Add `Codex` tab after `Archive` in OperOps; show latest 500 items from `bd list`.
+
+### Performer selector quality
+23. Add `active`/`is_deleted` performer lifecycle flag (canonicalize one field and migration policy).
+24. Hide inactive performers in selectors but keep historical visibility on existing tasks.
+25. Explicitly hide `gatitulin@strato.space/d1zmens` and `vilco@yandex.ru/ViLco_O` from active selectors.
+26. Increase selector popup height so all active performers fit without vertical scroll.
+
+### Categorization UI and materials model
+27. Remove `Quick Summary` and `Src` columns from Categorization.
+28. Render pale metadata signature (same style as Transcription) in Categorization rows.
+29. Hide speaker `Unknown` as non-informative label.
+30. Investigate/fix timestamp formatting gaps in session `699ec60739cbeaee2a40c8c7` (`002-1.webm`, `009-*`, `full-mic1-seg*`).
+31. Replace `Quick Summary` with `Materials` column.
+32. Bind screenshot + subsequent text logically into one row group with cross-links in data model.
+33. Add explicit row-level material target selection (click cell in Transcription/Categorization to attach screenshot to selected row).
+
+---
+
+## Waves 
+
+### Wave A (foundation) — wave-a-foundation
+copilot-njhf, copilot-fhla, copilot-1znt, copilot-ij43, copilot-60jr, copilot-s33e, copilot-yqst, copilot-0t2c, copilot-b1k5, copilot-dkj6, copilot-8yuq, copilot-wuch
+
+### Wave B (voice tabs) — wave-b-tabs
+copilot-l3j6, copilot-c1xj, copilot-gb72, copilot-ex9q
+
+### Wave C (ingest/triggers) — wave-c-ingest-triggers
+copilot-z40e, copilot-xuec, copilot-m2uw, copilot-upqs, copilot-su2v
+
+### Wave D (deferred review) — wave-d-deferred-review
+copilot-grg4, copilot-03gp, copilot-zwjl, copilot-2psh
+
+### Wave E (categorization/materials) — wave-e-categorization-materials
+copilot-eejo, copilot-a3k0, copilot-hfvd, copilot-q3cx, copilot-c4bd, copilot-p31k, copilot-250m, copilot-u976
+
+## Epic binding
+
+- Master epic for this spec: `copilot-bq81` — `[voice-operops-codex] Epic: unified taskflow rollout`.
+- All decomposition tasks in this spec are linked with dependency `discovered-from -> copilot-bq81`.
+- Execution dependencies between waves are modeled as `blocks` relations, while `copilot-bq81` remains the single parent epic.

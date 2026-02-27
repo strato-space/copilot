@@ -9,6 +9,7 @@ import weekOfYear from 'dayjs/plugin/weekOfYear.js';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
 import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
+import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(isSameOrAfter);
@@ -81,6 +82,24 @@ const normalizeTicketDbId = (value: unknown): string | null => {
     return null;
 };
 
+const resolveRequestActor = (req: Request): { id?: string; name?: string } => {
+    const authReq = req as Request & {
+        user?: {
+            userId?: unknown;
+            name?: unknown;
+            email?: unknown;
+        };
+    };
+
+    const id = toNonEmptyString(authReq.user?.userId);
+    const name = toNonEmptyString(authReq.user?.name) ?? toNonEmptyString(authReq.user?.email);
+
+    return {
+        ...(id ? { id } : {}),
+        ...(name ? { name } : {}),
+    };
+};
+
 const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
     $lookup: {
         from: COLLECTIONS.WORK_HOURS,
@@ -97,6 +116,32 @@ const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
         as: 'work_data',
     },
 });
+
+const aggregateTicketByMatch = async ({
+    db,
+    matchCondition,
+}: {
+    db: Db;
+    matchCondition: Record<string, unknown>;
+}): Promise<Array<Record<string, unknown>>> =>
+    db
+        .collection(COLLECTIONS.TASKS)
+        .aggregate([
+            { $match: matchCondition },
+            { $sort: { updated_at: -1, created_at: -1, _id: -1 } },
+            {
+                ...buildWorkHoursLookupByTicketDbId(),
+            },
+            {
+                $lookup: {
+                    from: COLLECTIONS.PROJECTS,
+                    localField: 'project_id',
+                    foreignField: '_id',
+                    as: 'project_data',
+                },
+            },
+        ])
+        .toArray();
 
 const normalizePerformer = async (db: Db, rawPerformer: unknown): Promise<PerformerPayload | null | undefined> => {
     if (rawPerformer === undefined) return undefined;
@@ -290,38 +335,40 @@ router.post('/get-by-id', async (req: Request, res: Response) => {
         }
 
         const isValidObjectId = ObjectId.isValid(ticketId) && /^[0-9a-fA-F]{24}$/.test(ticketId);
-        const matchCondition = isValidObjectId
-            ? { $or: [{ _id: new ObjectId(ticketId) }, { id: ticketId }] }
-            : { id: ticketId };
+        let ticketData: Array<Record<string, unknown>> = [];
 
-        const ticketData = await db
-            .collection(COLLECTIONS.TASKS)
-            .aggregate([
-                { $match: matchCondition },
-                {
-                    ...buildWorkHoursLookupByTicketDbId(),
-                },
-                {
-                    $lookup: {
-                        from: COLLECTIONS.PROJECTS,
-                        localField: 'project_id',
-                        foreignField: '_id',
-                        as: 'project_data',
-                    },
-                },
-            ])
-            .toArray();
+        if (isValidObjectId) {
+            ticketData = await aggregateTicketByMatch({
+                db,
+                matchCondition: { _id: new ObjectId(ticketId) },
+            });
+        }
+
+        if (ticketData.length === 0) {
+            ticketData = await aggregateTicketByMatch({
+                db,
+                matchCondition: { id: ticketId },
+            });
+        }
 
         if (!ticketData || ticketData.length === 0) {
             res.status(404).json({ error: 'Ticket not found' });
             return;
         }
 
+        if (ticketData.length > 1) {
+            logger.warn('[crm.tickets.get-by-id] duplicate public ids detected; returning deterministic latest match', {
+                ticket_id: ticketId,
+                matched_count: ticketData.length,
+            });
+        }
+
         const ticket = ticketData[0]!;
-        ticket.total_hours = ticket.work_data?.reduce(
-            (total: number, wh: { work_hours: number }) => total + wh.work_hours,
-            0
-        );
+        const workData = Array.isArray(ticket.work_data) ? ticket.work_data : [];
+        ticket.total_hours = workData.reduce((total: number, entry: unknown) => {
+            const workHours = (entry as { work_hours?: unknown }).work_hours;
+            return total + (typeof workHours === 'number' ? workHours : 0);
+        }, 0);
 
         res.status(200).json({ ticket });
     } catch (error) {
@@ -407,6 +454,7 @@ router.post('/update', async (req: Request, res: Response) => {
 router.post('/create', async (req: Request, res: Response) => {
     try {
         const db = getDb();
+        const actor = resolveRequestActor(req);
         const body = req.body as {
             ticket?: Record<string, unknown>;
             data?: Record<string, unknown>;
@@ -459,12 +507,28 @@ router.post('/create', async (req: Request, res: Response) => {
             }
         }
 
+        const createdByExisting = toLogString(newTicket.created_by);
+        if (!createdByExisting && actor.id) {
+            newTicket.created_by = actor.id;
+        }
+        const createdByNameExisting = toNonEmptyString(newTicket.created_by_name);
+        if (!createdByNameExisting && actor.name) {
+            newTicket.created_by_name = actor.name;
+        }
+
+        newTicket.id = await ensureUniqueTaskPublicId({
+            db,
+            preferredId: newTicket.id,
+        });
+
         logger.info('[crm.tickets.create] normalized new ticket payload', {
             project: rawProject,
             project_id_before: rawProjectId,
             project_id_after: toLogString(newTicket.project_id),
             performer: toLogString(newTicket.performer),
-            has_public_id: typeof newTicket.id === 'string' && newTicket.id.length > 0,
+            public_id: toLogString(newTicket.id),
+            created_by: toLogString(newTicket.created_by),
+            created_by_name: toNonEmptyString(newTicket.created_by_name),
         });
 
         const dbRes = await db.collection(COLLECTIONS.TASKS).insertOne(newTicket);

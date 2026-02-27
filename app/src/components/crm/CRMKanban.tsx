@@ -1038,12 +1038,12 @@ const CRMKanban = (props: CRMKanbanProps) => {
             title: '',
             key: 'edit_action',
             render: (_, record) => (
-                <div className="flex gap-4">
-                    <EditOutlined className="hover:text-cyan-500" onClick={() => setEditingTicket(record)} />
-                    <a href={`/operops/task/${record.id || record._id}`} target="_blank" rel="noopener noreferrer">
-                        <EyeOutlined className="hover:text-cyan-500" />
-                    </a>
-                </div>
+                    <div className="flex gap-4">
+                        <EditOutlined className="hover:text-cyan-500" onClick={() => setEditingTicket(record)} />
+                        <a href={`/operops/task/${record._id || record.id}`} target="_blank" rel="noopener noreferrer">
+                            <EyeOutlined className="hover:text-cyan-500" />
+                        </a>
+                    </div>
             ),
         },
     ], [

@@ -38,6 +38,7 @@ interface ProjectFormValues {
     time_capacity?: number | undefined;
     description?: string | undefined;
     drive_folder_id?: string | undefined;
+    git_repo?: string | undefined;
 }
 
 const EditProject: React.FC<EditProjectProps> = ({
@@ -62,6 +63,7 @@ const EditProject: React.FC<EditProjectProps> = ({
                 time_capacity: proj.time_capacity,
                 description: proj.description,
                 drive_folder_id: proj.drive_folder_id,
+                git_repo: proj.git_repo,
             };
         }
         return {
@@ -91,6 +93,9 @@ const EditProject: React.FC<EditProjectProps> = ({
             }
             if (values.drive_folder_id !== undefined) {
                 projectData.drive_folder_id = values.drive_folder_id;
+            }
+            if (values.git_repo !== undefined) {
+                projectData.git_repo = values.git_repo;
             }
             if (values.start_date) {
                 projectData.start_date = values.start_date.toISOString();
@@ -192,6 +197,9 @@ const EditProject: React.FC<EditProjectProps> = ({
                 {/* Google Drive */}
                 <Form.Item label="Google Drive Folder ID" name="drive_folder_id">
                     <Input placeholder="ID папки Google Drive" />
+                </Form.Item>
+                <Form.Item label="Git Repo" name="git_repo">
+                    <Input placeholder="https://github.com/org/repo или owner/repo" />
                 </Form.Item>
                 <Divider />
 

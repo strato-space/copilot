@@ -16,6 +16,7 @@ jest.unstable_mockModule('../../src/services/db.js', () => ({
 
 jest.unstable_mockModule('../../src/permissions/permission-manager.js', () => ({
   PermissionManager: {
+    requirePermission: () => (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
     getUserPermissions: getUserPermissionsMock,
     getUserAccessibleProjects: getUserAccessibleProjectsMock,
     generateDataFilter: generateDataFilterMock,
@@ -66,6 +67,7 @@ describe('VoiceBot /projects parity', () => {
                   {
                     _id: new ObjectId(),
                     name: 'PMO',
+                    git_repo: 'strato-space/copilot',
                     project_group: { name: 'Operations' },
                   },
                 ],
@@ -87,6 +89,7 @@ describe('VoiceBot /projects parity', () => {
     expect(Array.isArray(response.body)).toBe(true);
     expect(response.body).toHaveLength(1);
     expect(response.body[0]?.name).toBe('PMO');
+    expect(response.body[0]?.git_repo).toBe('strato-space/copilot');
 
     const [pipeline] = aggregateCalls;
     expect(Array.isArray(pipeline)).toBe(true);
@@ -104,6 +107,7 @@ describe('VoiceBot /projects parity', () => {
 
     expect(projectStage?.$project).toEqual(
       expect.objectContaining({
+        git_repo: 1,
         project_group: expect.any(Object),
         customer: expect.any(Object),
       })

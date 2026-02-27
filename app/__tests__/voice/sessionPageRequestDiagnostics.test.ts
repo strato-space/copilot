@@ -7,9 +7,11 @@ describe('Session fetch UX and request diagnostics parity', () => {
   const sessionPageSource = fs.readFileSync(sessionPagePath, 'utf8');
   const storeSource = fs.readFileSync(storePath, 'utf8');
 
-  it('shows dedicated runtime-mismatch message for 404 session fetch', () => {
-    expect(sessionPageSource).toContain('axios.isAxiosError(error) && error.response?.status === 404');
+  it('maps session fetch errors to dedicated 404/409 UX states', () => {
+    expect(sessionPageSource).toContain('axios.isAxiosError(error) && error.response?.status === 409');
     expect(sessionPageSource).toContain('Сессия недоступна в текущем runtime (prod/dev mismatch)');
+    expect(sessionPageSource).toContain('axios.isAxiosError(error) && error.response?.status === 404');
+    expect(sessionPageSource).toContain("setLoadError('Сессия не найдена')");
     expect(sessionPageSource).toContain("setLoadError('Не удалось загрузить сессию')");
   });
 
@@ -18,7 +20,9 @@ describe('Session fetch UX and request diagnostics parity', () => {
     expect(storeSource).toContain('endpoint,');
     expect(storeSource).toContain('targetUrl,');
     expect(storeSource).toContain('status: status ?? null');
-    expect(storeSource).toContain('runtimeMismatch: status === 404');
+    expect(storeSource).toContain('runtimeMismatch =');
+    expect(storeSource).toContain('status === 409');
+    expect(storeSource).toContain("error === 'runtime_mismatch'");
     expect(storeSource).toContain('response: error.response?.data ?? null');
   });
 });

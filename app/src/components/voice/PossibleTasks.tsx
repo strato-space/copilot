@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Checkbox,
+  Grid,
   Input,
   message,
   Popconfirm,
@@ -18,6 +19,7 @@ import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
 import type { TaskTypeNode } from '../../types/voice';
+import { isPerformerSelectable } from '../../utils/performerLifecycle';
 
 type RawTaskRecord = Record<string, unknown>;
 
@@ -49,6 +51,11 @@ const DIALOGUE_TAG_OPTIONS = [
   { value: 'doc', label: 'Док', color: 'purple' },
   { value: 'call', label: 'Звонок', color: 'orange' },
 ];
+
+const PERFORMER_PICKER_POPUP_HEIGHT = {
+  mobile: 320,
+  desktop: 520,
+} as const;
 
 const toText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
@@ -170,6 +177,7 @@ const buildTaskTypeOptions = (taskTypes: TaskTypeNode[] | null): TaskTypeOptionG
 };
 
 export default function PossibleTasks() {
+  const screens = Grid.useBreakpoint();
   const { hasPermission } = useCurrentUserPermissions();
   const {
     voiceBotSession,
@@ -190,11 +198,9 @@ export default function PossibleTasks() {
   const [onlySelected, setOnlySelected] = useState(false);
 
   const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
-
-  useEffect(() => {
-    if (!performers_for_tasks_list) void fetchPerformersForTasksList();
-    if (!task_types) void fetchTaskTypes();
-  }, [performers_for_tasks_list, task_types, fetchPerformersForTasksList, fetchTaskTypes]);
+  const performerPickerListHeight = screens.md
+    ? PERFORMER_PICKER_POPUP_HEIGHT.desktop
+    : PERFORMER_PICKER_POPUP_HEIGHT.mobile;
 
   useEffect(() => {
     setSelectedRowKeys([]);
@@ -214,6 +220,44 @@ export default function PossibleTasks() {
     return rawTasks.map((task, index) => parseTask(task, index, defaultProjectId));
   }, [voiceBotSession?.processors_data, defaultProjectId]);
 
+  const historicalPerformerIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          sourceTasks
+            .map((task) => toText(task.performer_id))
+            .filter(Boolean)
+        )
+      ),
+    [sourceTasks]
+  );
+
+  const availablePerformerIds = useMemo(
+    () =>
+      new Set(
+        (performers_for_tasks_list || [])
+          .map((performer) => toText(performer._id))
+          .filter(Boolean)
+      ),
+    [performers_for_tasks_list]
+  );
+
+  const missingHistoricalPerformer = historicalPerformerIds.some((id) => !availablePerformerIds.has(id));
+
+  useEffect(() => {
+    if (!performers_for_tasks_list || missingHistoricalPerformer) {
+      void fetchPerformersForTasksList(historicalPerformerIds);
+    }
+    if (!task_types) void fetchTaskTypes();
+  }, [
+    fetchPerformersForTasksList,
+    fetchTaskTypes,
+    historicalPerformerIds,
+    missingHistoricalPerformer,
+    performers_for_tasks_list,
+    task_types,
+  ]);
+
   const rows = useMemo(
     () =>
       sourceTasks.map((row) => ({
@@ -231,27 +275,39 @@ export default function PossibleTasks() {
     return map;
   }, [rows]);
 
-  const performerOptions = useMemo(
-    () =>
-      Array.isArray(performers_for_tasks_list)
-        ? performers_for_tasks_list
-            .map((performer) => {
-              const value = toText(performer._id);
-              if (!value) return null;
-              return {
-                value,
-                label:
-                  toText(performer.full_name) ||
-                  toText(performer.name) ||
-                  toText(performer.username) ||
-                  toText(performer.email) ||
-                  value,
-              };
-            })
-            .filter((entry): entry is { value: string; label: string } => entry !== null)
-        : [],
-    [performers_for_tasks_list]
-  );
+  const performerOptions = useMemo(() => {
+    const result: Array<{ value: string; label: string }> = [];
+    const seen = new Set<string>();
+    const historicalPerformerIdSet = new Set(historicalPerformerIds);
+
+    if (Array.isArray(performers_for_tasks_list)) {
+      for (const performer of performers_for_tasks_list) {
+        const value = toText(performer._id);
+        if (!value || seen.has(value)) continue;
+        if (!isPerformerSelectable(performer) && !historicalPerformerIdSet.has(value)) continue;
+
+        const baseLabel =
+          toText(performer.full_name) ||
+          toText(performer.name) ||
+          toText(performer.username) ||
+          toText(performer.email) ||
+          value;
+        const label = !isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)
+          ? `${baseLabel} (архив)`
+          : baseLabel;
+        result.push({ value, label });
+        seen.add(value);
+      }
+    }
+
+    for (const performerId of historicalPerformerIds) {
+      if (!performerId || seen.has(performerId)) continue;
+      result.push({ value: performerId, label: performerId });
+      seen.add(performerId);
+    }
+
+    return result;
+  }, [historicalPerformerIds, performers_for_tasks_list]);
 
   const taskTypeOptions = useMemo(() => buildTaskTypeOptions(task_types), [task_types]);
 
@@ -577,6 +633,7 @@ export default function PossibleTasks() {
                 options={performerOptions}
                 showSearch
                 optionFilterProp="label"
+                listHeight={performerPickerListHeight}
                 style={{ width: '100%' }}
                 placeholder="Исполнитель"
               />

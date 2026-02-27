@@ -107,6 +107,8 @@ describe('handleCategorizeJob', () => {
     expect(categorization[0]?.topic_keywords).toBe('roadmap, jira');
     expect(categorization[0]?.mentioned_roles).toBe('PM, Dev');
     expect(categorization[0]?.referenced_systems).toBe('Jira');
+    expect(categorization[0]?.start).toBe('00:00');
+    expect(categorization[0]?.end).toBe('00:30');
     expect(categorization[0]?.speaker).toBe('Alex');
     expect(String(categorization[0]?.keywords_grouped || '')).toContain('planning');
     expect(eventsQueueAdd).toHaveBeenCalledWith(
@@ -171,6 +173,58 @@ describe('handleCategorizeJob', () => {
     expect(setPayload.categorization_error).toBe('insufficient_quota');
     expect(setPayload.categorization_retry_reason).toBe('insufficient_quota');
     expect(setPayload.categorization_next_attempt_at).toBeInstanceOf(Date);
+  });
+
+  it('normalizes empty start/end timestamps to 00:00', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      transcription_text: 'Quick update',
+      categorization_attempts: 0,
+    }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createResponseMock.mockResolvedValue({
+      output_text: JSON.stringify([
+        {
+          start: '',
+          end: '',
+          text: 'Quick update',
+          topic_keywords: [],
+        },
+      ]),
+    });
+
+    const result = await handleCategorizeJob({ message_id: messageId.toString() });
+    expect(result.ok).toBe(true);
+
+    const updatePayload = messagesUpdateOne.mock.calls[messagesUpdateOne.mock.calls.length - 1]?.[1] as Record<string, unknown>;
+    const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    const categorization = (setPayload.categorization as Array<Record<string, unknown>>) || [];
+
+    expect(categorization).toHaveLength(1);
+    expect(categorization[0]?.start).toBe('00:00');
+    expect(categorization[0]?.end).toBe('00:00');
   });
 
   it('marks openai_api_key_missing when key is absent', async () => {

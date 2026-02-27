@@ -21,6 +21,8 @@ import type {
     VoiceSessionLogEvent,
 } from '../types/voice';
 import { getVoicebotSocket, SOCKET_EVENTS } from '../services/socket';
+import { normalizeTimelineRangeSeconds } from '../utils/voiceTimeline';
+import { ensureCodexPerformerRecords } from '../utils/codexPerformer';
 
 interface VoiceBotState {
     currentSessionId: string | null;
@@ -109,8 +111,8 @@ interface VoiceBotState {
         }
     ) => Promise<void>;
     updateSessionAllowedUsers: (sessionId: string, allowedUserIds: string[]) => Promise<boolean>;
-    fetchPerformersList: () => Promise<Array<Record<string, unknown>>>;
-    fetchPerformersForTasksList: () => Promise<Array<Record<string, unknown>>>;
+    fetchPerformersList: (includeIds?: string[]) => Promise<Array<Record<string, unknown>>>;
+    fetchPerformersForTasksList: (includeIds?: string[]) => Promise<Array<Record<string, unknown>>>;
     confirmSelectedTickets: (selectedTicketIds: string[], updatedTickets?: Array<Record<string, unknown>> | null) => Promise<boolean>;
     rejectAllTickets: () => void;
     deleteTaskFromSession: (taskId: string) => Promise<boolean>;
@@ -165,6 +167,17 @@ const resolveAgentsMcpServerUrl = (): string | null => {
     return 'http://127.0.0.1:8722';
 };
 
+const normalizeIncludeIds = (includeIds: string[] | undefined): string[] => {
+    if (!Array.isArray(includeIds)) return [];
+    return Array.from(
+        new Set(
+            includeIds
+                .map((value) => String(value ?? '').trim())
+                .filter(Boolean)
+        )
+    );
+};
+
 const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
     const lines = messages
         .map((msg) => {
@@ -186,12 +199,16 @@ const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
 const logVoicebotRequestError = (endpoint: string, targetUrl: string, error: unknown): void => {
     if (axios.isAxiosError(error)) {
         const status = error.response?.status;
+        const runtimeMismatch =
+            status === 409 ||
+            (typeof error.response?.data === 'object' &&
+                (error.response?.data as { error?: unknown }).error === 'runtime_mismatch');
         console.error('[voicebot] request failed', {
             endpoint,
             targetUrl,
             status: status ?? null,
             code: error.code ?? null,
-            runtimeMismatch: status === 404,
+            runtimeMismatch,
             response: error.response?.data ?? null,
             message: error.message,
         });
@@ -353,14 +370,15 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
         }
 
         const categorizationRows: VoiceMessageRow[] = (msg.categorization || []).map((cat) => {
+            const { startSeconds, endSeconds } = normalizeTimelineRangeSeconds(cat.start, cat.end);
             let avatar = 'U';
             const speaker = typeof cat.speaker === 'string' ? cat.speaker : '';
             if (speaker && speaker !== 'Unknown' && speaker.length > 0) {
                 avatar = speaker[0]?.toUpperCase() ?? 'U';
             }
             return {
-                timeStart: cat.start,
-                timeEnd: cat.end,
+                timeStart: startSeconds,
+                timeEnd: endSeconds,
                 avatar,
                 name: cat.speaker,
                 text: typeof cat.text === 'string' ? cat.text.trim() : '',
@@ -1386,9 +1404,13 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         }
     },
 
-    fetchPerformersList: async () => {
+    fetchPerformersList: async (includeIds = []) => {
         try {
-            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/auth/list-users');
+            const normalizedIncludeIds = normalizeIncludeIds(includeIds);
+            const payload = normalizedIncludeIds.length > 0
+                ? { include_ids: normalizedIncludeIds }
+                : {};
+            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/auth/list-users', payload);
             if (data && Array.isArray(data)) {
                 set({ performers_list: data });
                 return data;
@@ -1401,12 +1423,17 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         }
     },
 
-    fetchPerformersForTasksList: async () => {
+    fetchPerformersForTasksList: async (includeIds = []) => {
         try {
-            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/persons/list_performers');
+            const normalizedIncludeIds = normalizeIncludeIds(includeIds);
+            const payload = normalizedIncludeIds.length > 0
+                ? { include_ids: normalizedIncludeIds }
+                : {};
+            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/persons/list_performers', payload);
             if (data && Array.isArray(data)) {
-                set({ performers_for_tasks_list: data });
-                return data;
+                const performersWithCodex = ensureCodexPerformerRecords(data);
+                set({ performers_for_tasks_list: performersWithCodex });
+                return performersWithCodex;
             }
             console.error('Ошибка при получении списка исполнителей:', data);
             return [];

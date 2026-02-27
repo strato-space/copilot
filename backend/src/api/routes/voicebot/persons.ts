@@ -9,6 +9,7 @@ import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb } from '../../../services/db.js';
+import { buildPerformerSelectorFilter } from '../../../services/performerLifecycle.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const router = Router();
@@ -280,14 +281,27 @@ router.post('/list_performers',
         const db = getDb();
 
         try {
-            const performers = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).find({
-                is_deleted: { $ne: true }
-            }).project({
+            const includeIds = Array.isArray(req.body?.include_ids)
+                ? req.body.include_ids
+                    .map((value: unknown) => {
+                        const raw = String(value ?? '').trim();
+                        return raw && ObjectId.isValid(raw) ? new ObjectId(raw) : null;
+                    })
+                    .filter((value): value is ObjectId => value !== null)
+                : [];
+
+            const performers = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).find(
+                buildPerformerSelectorFilter({ includeIds })
+            ).project({
                 _id: 1,
                 name: 1,
                 real_name: 1,
                 corporate_email: 1,
                 projects_access: 1
+            }).sort({
+                name: 1,
+                real_name: 1,
+                corporate_email: 1,
             }).toArray();
 
             // Format names

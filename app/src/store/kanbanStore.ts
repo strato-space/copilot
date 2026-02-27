@@ -12,6 +12,7 @@ import type { Dayjs } from 'dayjs';
 import { useRequestStore } from './requestStore';
 import { useCRMStore } from './crmStore';
 import { TASK_STATUSES, TASK_CLASSES } from '../constants/crm';
+import { ensureCodexPerformerForKanban } from '../utils/codexPerformer';
 import type {
     Ticket,
     Performer,
@@ -277,9 +278,10 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
     const fetchDictionary = async (): Promise<void> => {
         const show_inactive = useCRMStore.getState().isInActiveVisible;
         const data = await api_request<DictionaryResponse>('dictionary', { show_inactive });
+        const performers = ensureCodexPerformerForKanban(data.performers);
         set({
             projects: data.projects.map((p) => p.name),
-            performers: data.performers,
+            performers,
             projectsData: data.projects,
             customers: data.customers,
             projectGroups: data.projectGroups,

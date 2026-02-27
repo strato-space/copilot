@@ -1,7 +1,101 @@
 # Changelog
 
+## 2026-02-28
+### PROBLEM SOLVED
+- **02:37** Performer lifecycle filtering was inconsistent across Voice/CRM selectors (`is_deleted`, `is_active`, legacy `active`), so inactive historical performers could disappear from edit flows while still being referenced in saved tasks.
+- **02:37** Codex assignment had no hard project readiness guard, which allowed creating Codex tickets for projects without `git_repo` and broke downstream repo-linked automation assumptions.
+- **02:37** Telegram `@task` ingest path attached payloads to sessions but did not guarantee Codex task creation from the same normalized payload, creating mismatch between voice evidence and OperOps backlog entries.
+- **02:37** Performer dropdown in Voice possible tasks had limited popup height and required excessive scrolling when active performer count was high.
+- **01:49** Categorization table still rendered `Src` and `Quick Summary` columns, which duplicated low-value metadata and reduced usable width for primary categorization content.
+- **01:25** Performer selectors lacked system assignee `Codex`, which blocked assignment workflows that depend on explicit Codex performer visibility.
+- **01:21** `/voice/session/:id` UI treated any `404` from `sessions/get` as runtime mismatch, masking true missing-session incidents and producing false diagnostics.
+- **01:16** OperOps task card did not provide source traceability (voice/telegram/manual), forcing operators to inspect raw task payloads to locate original conversation context.
+- **01:11** OperOps task card metadata did not expose who created the task, so operators had to inspect raw payloads/logs to identify task origin.
+- **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
+
+### FEATURE IMPLEMENTED
+- **02:37** Canonicalized performer lifecycle contract around `is_deleted` with compatibility for legacy `is_active/active` flags and explicit historical-performer passthrough (`include_ids`) for selector edit safety.
+- **02:37** Added project `git_repo` surface area (project CRUD/types/listing) and enforced Codex ticket guard: Codex performer assignment now requires non-empty project `git_repo`.
+- **02:37** Extended Telegram `@task` ingress to create Codex tasks from the same normalized payload persisted to `processors_data.CODEX_TASKS.data`, with non-blocking ingest behavior and regression coverage.
+- **02:37** Increased Voice possible-task performer popup height with responsive desktop/mobile values to improve dense selector usability without mobile layout regression.
+- **01:49** Removed `Src` and `Quick Summary` columns from Categorization table layout, leaving status + sorted categorization content as the canonical view for this phase.
+- **01:25** Added synthetic system performer `Codex` to assignment selector datasets (CRM + Voice possible tasks) with deduplication guard.
+- **01:21** Added explicit `404` vs `409 runtime_mismatch` contract for `sessions/get` and aligned SessionPage/store diagnostics so runtime mismatch is shown only for `409`.
+- **01:16** Added TaskPage source metadata block with canonical source-kind resolution and new-tab external links for voice sessions and telegram references, including robust fallbacks for legacy payload shapes.
+- **01:11** Added explicit `Created by` metadata block in TaskPage with canonical creator-name resolution (`created_by_name` -> creator object labels -> performer lookup by `created_by` identity -> raw value -> `N/A`).
+- **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
+
+### CHANGES
+- **02:37** Performer lifecycle canonicalization (`copilot-b1k5`):
+  - Added backend lifecycle filter helper `backend/src/services/performerLifecycle.ts` and frontend selector helper `app/src/utils/performerLifecycle.ts`.
+  - Updated selector-producing routes and consumers:
+    - `backend/src/api/routes/voicebot/sessions.ts` (`/auth/list-users` with `include_ids` support),
+    - `backend/src/api/routes/voicebot/persons.ts`,
+    - `backend/src/api/routes/crm/dictionary.ts`,
+    - `app/src/store/voiceBotStore.ts`,
+    - `app/src/components/voice/PossibleTasks.tsx`,
+    - `app/src/components/voice/AccessUsersModal.tsx`.
+  - Added regression tests:
+    - `backend/__tests__/voicebot/personsListPerformersRoute.test.ts`,
+    - `backend/__tests__/api/crmDictionaryPerformerLifecycleContract.test.ts`,
+    - `app/__tests__/voice/possibleTasksPerformerLifecycleContract.test.ts`,
+    - `app/__tests__/voice/accessUsersPerformerLifecycleContract.test.ts`.
+- **02:37** Project `git_repo` + Codex assignment guard (`copilot-s33e`):
+  - Extended project contracts/types/forms:
+    - `backend/src/api/routes/crm/projects.ts`,
+    - `backend/src/permissions/permission-manager.ts` (project projection includes `git_repo`),
+    - `app/src/types/crm.ts`,
+    - `app/src/types/voice.ts`,
+    - `app/src/components/crm/projects/EditProject.tsx`,
+    - `backend/src/api/routes/voicebot/sessions.ts` (`/projects` projection includes `git_repo`).
+  - Added Codex ticket creation guard in `POST /voicebot/create_tickets` (`backend/src/api/routes/voicebot/sessions.ts`): returns `400 Codex assignment requires project git_repo` when project repo is missing.
+  - Added/updated tests:
+    - `backend/__tests__/voicebot/projectsRouteParity.test.ts`,
+    - `backend/__tests__/voicebot/sessionUtilityRuntimeBehavior.test.ts`.
+- **02:37** Telegram `@task` -> Codex task parity (`copilot-xuec`):
+  - `backend/src/voicebot_tgbot/ingressHandlers.ts` now persists normalized `@task` payload to session and creates Codex task from the same payload contract.
+  - Added regression coverage: `backend/__tests__/voicebot/tgIngressHandlers.test.ts`.
+- **02:37** Performer popup height usability (`copilot-u976`):
+  - `app/src/components/voice/PossibleTasks.tsx` now uses responsive popup heights (`desktop: 520`, `mobile: 320`) via `listHeight`.
+  - Updated regression contract: `app/__tests__/voice/possibleTasksDesignContract.test.ts`.
+- **01:49** Categorization column contract update (`copilot-eejo`):
+  - `app/src/components/voice/Categorization.tsx`: removed `Src` header/body cell rendering and removed `Quick Summary` header/body summary column rendering.
+  - Added regression coverage `app/__tests__/voice/categorizationColumnsContract.test.ts` to lock absence of both removed columns.
+- **01:25** Codex performer selector support:
+  - Added `app/src/utils/codexPerformer.ts` (`ensureCodexPerformerForKanban`, `ensureCodexPerformerRecords`).
+  - `app/src/store/kanbanStore.ts`: dictionary performers now pass through Codex injection helper before writing to store.
+  - `app/src/store/voiceBotStore.ts`: `fetchPerformersForTasksList` now injects Codex into performer options payload.
+  - Added regression coverage: `app/__tests__/operops/codexPerformerSelectorsContract.test.ts`.
+- **01:21** Session get/runtime mismatch diagnostics:
+  - `backend/src/api/routes/voicebot/sessions.ts`: `resolveSessionAccess` now checks raw DB when runtime-scoped lookup misses and returns `runtime_mismatch` signal for out-of-scope sessions.
+  - `backend/src/api/routes/voicebot/sessions.ts`: `POST /voicebot/session` (`/sessions/get` alias) now returns `409 { error: 'runtime_mismatch' }` for runtime-only misses, keeps `404 Session not found` for true absence.
+  - `app/src/pages/voice/SessionPage.tsx`: maps `409` to mismatch message and `404` to `Сессия не найдена`.
+  - `app/src/store/voiceBotStore.ts`: request diagnostics now flag runtime mismatch for `409`/`error=runtime_mismatch` instead of `404`.
+  - Updated tests:
+    - `backend/__tests__/voicebot/sessionsRuntimeCompatibilityRoute.test.ts`
+    - `app/__tests__/voice/sessionPageRequestDiagnostics.test.ts`
+- **01:16** Task source traceability in OperOps card:
+  - Added `resolveTaskSourceInfo(...)` and source parsing/link helpers in `app/src/pages/operops/taskPageUtils.ts`.
+  - Updated `app/src/pages/operops/TaskPage.tsx` with dedicated `Source` metadata block and external link opening in a new tab.
+  - Extended ticket contract in `app/src/types/crm.ts` with source fields (`source/source_data/source_kind/source_ref/external_ref`).
+  - Added regression coverage: `app/__tests__/operops/taskPageSourceContract.test.ts`.
+- **01:11** OperOps task creator metadata:
+  - Added `resolveTaskCreator(...)` in `app/src/pages/operops/taskPageUtils.ts`.
+  - Updated `app/src/pages/operops/TaskPage.tsx` to render `Created by` via canonical resolver.
+  - Extended ticket type contract in `app/src/types/crm.ts` with optional creator fields.
+  - Added regression coverage: `app/__tests__/operops/taskPageCreatorContract.test.ts`.
+  - Persisted creator metadata on new task creation paths:
+    - `backend/src/api/routes/crm/tickets.ts` (`created_by` / `created_by_name` from request actor when available),
+    - `backend/src/api/routes/voicebot/sessions.ts` (`create_tickets` writes creator metadata from current performer).
+- **01:05** Added `docs/OPEROPS_TASK_SHORT_LINKS.md` as the canonical short-link contract reference.
+- **01:05** Updated `README.md` (OperOps/CRM notes) with direct link to the new short-link contract doc.
+
 ## 2026-02-27
 ### PROBLEM SOLVED
+- **00:58** Categorization rows could surface missing or inconsistent time ranges (`start/end` empty strings, raw seconds without canonical formatting), causing invalid timeline labels in affected session chunks like `002-1.webm` and `009-*`.
+- **00:47** OperOps task card could show `Project: N/A` while Kanban list displayed a valid project, because card rendering only used `task.project` and ignored `project_data`/`project_id` lookup sources.
+- **00:41** OperOps task short links could collide because list/card links were opened by public `id` first while create flows accepted duplicate public IDs, causing ambiguous card resolution for repeated IDs like `task-1`.
+- **23:59** OperOps task page header did not expose the canonical, copyable `Task ID` as the first metadata block, which made quick investigation/debug handoffs slower.
 - **20:26** Voice session list behavior stayed inconsistent after repeated opens: stale list cache could survive between page visits, and filter state (including deleted-mode) was not fully persistent across navigation.
 - **20:26** Session-list visual status used mixed legacy markers (including noisy red-dot semantics), which made quick status scanning harder and did not match the session-page state model.
 - **20:26** Operators had no backend-native way to merge duplicate/fragmented voice sessions into one target session with explicit confirmation and audit payload.
@@ -12,6 +106,12 @@
 - **22:00** Backend TypeDB script locations were physically moved to `ontology/typedb/scripts`, so leaving old `backend/scripts` copies would now be stale and could cause accidental script drift.
 
 ### FEATURE IMPLEMENTED
+- **00:58** Added dual-path timestamp normalization for categorization:
+  - worker write-path now canonicalizes `start/end` to stable `MM:SS`/`HH:MM:SS` labels with non-empty fallback (`00:00`);
+  - frontend read/render path now normalizes legacy/invalid ranges and renders timeline labels from normalized seconds.
+- **00:47** Unified task-card project rendering with Kanban fallback chain: `project_data` name -> dictionary lookup by `project_id`/`project` -> direct `project` -> `N/A`.
+- **00:41** Added deterministic short-link collision handling: Kanban task preview links now route by `_id` first, task creation reserves unique public ids with numeric suffix fallback, and `tickets/get-by-id` resolves ObjectId first with deterministic fallback ordering.
+- **23:59** Added canonical Task ID rendering for OperOps task card header with copy action and deterministic resolver fallback (`id` -> route `taskId` -> `_id`).
 - **20:26** Added persistent sessions-list UX model with tab expansion (`all`, `without_project`, `active`, `mine`), localStorage-backed filter restore, and include-deleted synchronization test coverage.
 - **20:26** Added state-pictogram-driven session list rendering aligned to session lifecycle semantics (`recording/cutting/paused/final_uploading/closed/ready/error`) and removed legacy active-dot contract from date cell.
 - **20:26** Added backend/API/store scaffolding for session merge workflow with explicit confirmation phrase support and dedicated merge-log collection constants.
@@ -24,6 +124,27 @@
   - moved ERD draft/protocol docs from `plan/` into `ontology/` with updated references in AGENTS/README.
 
 ### CHANGES
+- **00:58** Categorization timestamp hardening:
+  - `backend/src/workers/voicebot/handlers/categorize.ts` now normalizes timeline ranges before persisting categorization rows.
+  - `app/src/utils/voiceTimeline.ts` added parse/normalize/format helpers for timeline values.
+  - `app/src/store/voiceBotStore.ts` now maps categorization `start/end` through normalized range seconds.
+  - `app/src/components/voice/CategorizationTableRow.tsx` now renders formatted timeline labels.
+  - Added tests:
+    - `app/__tests__/voice/categorizationTimelineNormalization.test.ts`
+    - `backend/__tests__/voicebot/workerCategorizeHandler.test.ts` (timestamp normalization assertions).
+- **00:47** Task card project-name consistency:
+  - extended `app/src/pages/operops/taskPageUtils.ts` with canonical project resolver;
+  - updated `app/src/pages/operops/TaskPage.tsx` to render `projectName` from resolver instead of direct `task.project`;
+  - added regression coverage in `app/__tests__/operops/taskPageProjectNameContract.test.ts`.
+- **00:41** Task short-link collision hardening:
+  - Added `backend/src/services/taskPublicId.ts` and wired unique public-id reservation into `backend/src/api/routes/crm/tickets.ts` and `backend/src/api/routes/voicebot/sessions.ts`.
+  - Updated `backend/src/api/routes/crm/tickets.ts` `get-by-id` path to resolve `_id` first and apply deterministic latest-first fallback for duplicate public IDs.
+  - Updated `app/src/components/crm/CRMKanban.tsx` task-card link generation to `_id || id`.
+  - Added regression tests: `backend/__tests__/services/taskPublicId.test.ts`, `app/__tests__/operops/taskShortLinkRouteContract.test.ts`.
+- **23:59** OperOps task card ID contract:
+  - `app/src/pages/operops/TaskPage.tsx` now renders explicit `Task ID` as the first header block and enables one-click copy.
+  - Added resolver utility `app/src/pages/operops/taskPageUtils.ts` to prefer canonical public id before route/db fallbacks.
+  - Added regression coverage in `app/__tests__/operops/taskPageCanonicalTaskIdContract.test.ts`.
 - **20:26** Voice sessions list/front:
   - `app/src/pages/voice/SessionsListPage.tsx` updated for richer tab/filter model, state pictogram column, and persistence helpers.
   - `app/src/store/voiceBotStore.ts` removed stale list-cache short-circuit and added `mergeSessions(...)`.
