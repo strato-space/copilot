@@ -19,8 +19,20 @@ collections:
     attributes:
       name: name
       status: is_active
+      project_groups_ids: project_groups_ids
       created_at: created_at
       updated_at: updated_at
+
+  - collection: automation_clients
+    target_entity: legacy_client
+    key:
+      attribute: legacy_client_id
+      from: _id
+    attributes:
+      name: name
+      status: is_active
+      drive_folder_id: drive_folder_id
+      project_groups_ids: projects_ids
 
   - collection: automation_projects
     target_entity: project
@@ -30,9 +42,94 @@ collections:
     attributes:
       name: name
       status: is_active
+      project_group_ref: project_group
+      board_id: board_id
+      description: description
+      drive_folder_id: drive_folder_id
+      figma_project_link: figma_project_link
+      design_files: design_files
+      start_date: start_date
+      end_date: end_date
+      merged_at: merged_at
+      merged_into_project_id: merged_into_project_id
       runtime_tag: runtime_tag
       updated_at: updated_at
       created_at: created_at
+    relations:
+      - relation: project_group_has_project
+        owner_role: linked_project
+        owner_lookup:
+          entity: project_group
+          by: project_group_id
+          from: project_group
+
+  - collection: automation_project_groups
+    target_entity: project_group
+    key:
+      attribute: project_group_id
+      from: _id
+    attributes:
+      name: name
+      status: is_active
+      project_groups_ids: projects_ids
+      client_id: customer
+      updated_at: updated_at
+      created_at: created_at
+    relations:
+      - relation: client_has_project_group
+        owner_role: owned_project_group
+        owner_lookup:
+          entity: client
+          by: client_id
+          from: customer
+
+  - collection: automation_task_types
+    target_entity: task_type
+    key:
+      attribute: task_type_id
+      from: _id
+    attributes:
+      name: name
+
+  - collection: automation_task_types_tree
+    target_entity: task_type_tree
+    key:
+      attribute: task_type_tree_id
+      from: _id
+    attributes:
+      title: title
+      description: description
+      type_class: type_class
+      execution_plan: execution_plan
+      roles: roles
+      parent_type_id: parent_type_id
+      task_id: task_id
+    relations:
+      - relation: task_type_tree_classifies_oper_task
+        owner_role: task_type_tree
+        owner_lookup:
+          entity: oper_task
+          by: task_id
+          from: task_id
+
+  - collection: automation_epic_tasks
+    target_entity: epic_task
+    key:
+      attribute: epic_task_id
+      from: _id
+    attributes:
+      is_deleted: is_deleted
+      name: name
+      description: description
+      project_id: project
+      created_at: created_at
+    relations:
+      - relation: project_has_epic_task
+        owner_role: epic_task
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project
 
   - collection: automation_performers
     target_entity: person
@@ -42,11 +139,30 @@ collections:
     attributes:
       name: real_name
       external_id: id
-      status: is_deleted
-      updated_at: updated_at
-      created_at: created_at
-    notes:
-      - role/additional_roles are handled as phase-2 relation extraction
+      role_name: role
+      additional_roles: additional_roles
+      corporate_email: corporate_email
+      telegram_user_id: telegram_id
+      telegram_name: telegram_name
+      board_url: board_url
+      drive_folder_id: drive_folder_id
+      google_drive_name: google_drive_name
+      is_active: is_active
+      is_active_legacy: "is_active:"
+      is_banned: is_banned
+      is_employee: is_employee
+      is_deleted: is_deleted
+      monthly_salary: monthly_salary
+      monthly_payment: monthly_payment
+      salary_currency: salary_currency
+      monthly_salary_by_month: monthly_salary_by_month
+      projects_access: projects_access
+      custom_permissions: custom_permissions
+      notifications: notifications
+      payments_settings: payments_settings
+      password_hash: password_hash
+      password_updated_at: password_updated_at
+      permissions_updated_at: permissions_updated_at
 
   - collection: automation_persons
     target_entity: person
@@ -55,7 +171,9 @@ collections:
       from: _id
     attributes:
       name: name
-      status: is_deleted
+      notifications: contacts
+      projects_access: projects
+      performer_id: performer_id
       updated_at: updated_at
       created_at: created_at
 
@@ -65,12 +183,39 @@ collections:
       attribute: task_id
       from: _id
     attributes:
+      external_id: id
+      old_id: old_id
       title: name
       description: description
       status: task_status
+      last_status: last_status
+      last_status_update: last_status_update
       due_at: deadline
       priority_rank: priority
+      priority: priority
       project_id: project_id
+      project_ref: project
+      task_type_name: task_type
+      task_type_id: task_type_id
+      performer: performer
+      performer_id: performer_id
+      epic_task_id: epic
+      planned_time: planned_time
+      status_history: status_history
+      task_status_history: task_status_history
+      comments_list: comments_list
+      dashboard_comment: dashboard_comment
+      order_index: order
+      source: source
+      notion_url: notion_url
+      notion_board_id: notion_board_id
+      sprint: sprint
+      score_min_hours: score_min_hours
+      score_max_hours: score_max_hours
+      shipment_date: shipment_date
+      status_update_checked: status_update_checked
+      stop_comment_parsing: stop_comment_parsing
+      is_deleted: is_deleted
       updated_at: updated_at
       created_at: created_at
     coalesce:
@@ -84,6 +229,51 @@ collections:
           entity: project
           by: project_id
           from: project_id
+      - relation: oper_task_classified_as_task_type
+        owner_role: oper_task
+        owner_lookup:
+          entity: task_type
+          by: task_type_id
+          from: task_type_id
+      - relation: oper_task_assigned_to_person
+        owner_role: oper_task
+        owner_lookup:
+          entity: person
+          by: person_id
+          from: performer_id
+
+  - collection: automation_work_hours
+    target_entity: work_log
+    key:
+      attribute: work_log_id
+      from: _id
+    attributes:
+      ticket_id: ticket_id
+      ticket_db_id: ticket_db_id
+      created_by: created_by
+      date: date
+      date_timestamp: date_timestamp
+      comment: comment
+      comment_id: comment_id
+      description: description
+      work_hours: work_hours
+      created_at: created_at
+      edited_at: edited_at
+      raw_date: raw_date
+      result_link: result_link
+    relations:
+      - relation: oper_task_has_work_log
+        owner_role: work_log
+        owner_lookup:
+          entity: oper_task
+          by: task_id
+          from: ticket_db_id
+      - relation: person_creates_work_log
+        owner_role: work_log
+        owner_lookup:
+          entity: person
+          by: person_id
+          from: created_by
 
   - collection: automation_voice_bot_sessions
     target_entity: voice_session
@@ -93,8 +283,38 @@ collections:
     attributes:
       status: status
       source_type: session_source
+      session_name: session_name
+      session_type: session_type
       project_id: project_id
+      chat_id: chat_id
+      user_id: user_id
+      access_level: access_level
       is_active: is_active
+      is_active_legacy: "is_active:"
+      is_deleted: is_deleted
+      is_messages_processed: is_messages_processed
+      is_waiting: is_waiting
+      is_corrupted: is_corrupted
+      is_postprocessing: is_postprocessing
+      is_finished: is_finished
+      is_finalized: is_finalized
+      to_finalize: to_finalize
+      participants: participants
+      allowed_users: allowed_users
+      processors: processors
+      session_processors: session_processors
+      processors_data: processors_data
+      last_message_id: last_message_id
+      last_message_timestamp: last_message_timestamp
+      last_voice_timestamp: last_voice_timestamp
+      postprocessing_job_queued_timestamp: postprocessing_job_queued_timestamp
+      title_generated_at: title_generated_at
+      title_generated_by: title_generated_by
+      finished_at: finished_at
+      done_at: done_at
+      deleted_at: deleted_at
+      deletion_reason: deletion_reason
+      current_spreadsheet_file_id: current_spreadsheet_file_id
       runtime_tag: runtime_tag
       updated_at: updated_at
       created_at: created_at
@@ -113,9 +333,35 @@ collections:
       from: _id
     attributes:
       source_type: source_type
+      session_id: session_id
+      session_type: session_type
+      message_id: message_id
+      chat_id: chat_id
+      file_id: file_id
+      file_unique_id: file_unique_id
+      file_path: file_path
+      duration: duration
+      text: text
+      message_timestamp: message_timestamp
+      timestamp: timestamp
+      transcribe_timestamp: transcribe_timestamp
+      is_transcribed: is_transcribed
+      transcription: transcription
+      transcription_text: transcription_text
       summary: transcription_text
-      status: is_finalized
+      categorization: categorization
+      processors_data: processors_data
+      status: status
+      is_finalized: is_finalized
+      is_deleted: is_deleted
+      is_image_anchor: is_image_anchor
+      to_transcribe: to_transcribe
+      uploaded_by: uploaded_by
+      user_id: user_id
+      username: username
+      runtime_tag: runtime_tag
       created_at: created_at
+      updated_at: updated_at
     relations:
       - relation: voice_session_has_message
         owner_role: voice_session
@@ -123,19 +369,33 @@ collections:
           entity: voice_session
           by: voice_session_id
           from: session_id
-    explode:
-      - source_array: transcription_chunks
-        target_entity: transcript_chunk
-        key_from:
-          compose:
-            - _id
-            - segment_index
-        attributes:
-          summary: text
-          started_at: timestamp
-          ended_at: timestamp
-        relation:
-          name: voice_message_chunked_as_transcript_chunk
+
+  - collection: automation_voice_bot_topics
+    target_entity: voice_topic
+    key:
+      attribute: voice_topic_id
+      from: _id
+    attributes:
+      session_id: session_id
+      project_id: project_id
+      topic_title: topic_title
+      topic_description: topic_description
+      chunks: chunks
+      assignment_reasoning: assignment_reasoning
+      created_at: created_at
+    relations:
+      - relation: voice_session_has_topic
+        owner_role: voice_topic
+        owner_lookup:
+          entity: voice_session
+          by: voice_session_id
+          from: session_id
+      - relation: project_has_voice_topic
+        owner_role: voice_topic
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project_id
 
   - collection: automation_voice_bot_session_log
     target_entity: history_step
@@ -144,6 +404,21 @@ collections:
       from: _id
     attributes:
       status: status
+      event_name: event_name
+      event_version: event_version
+      action: action
+      actor: actor
+      source: source
+      project_id: project_id
+      message_id: message_id
+      diff: diff
+      reason: reason
+      target: target
+      metadata: metadata
+      event_group: event_group
+      correlation_id: correlation_id
+      source_event_id: source_event_id
+      is_replay: is_replay
       created_at: event_time
     relations:
       - relation: voice_session_has_history_step
@@ -152,6 +427,149 @@ collections:
           entity: voice_session
           by: voice_session_id
           from: session_id
+
+  - collection: automation_tg_voice_sessions
+    target_entity: tg_voice_session
+    key:
+      attribute: tg_voice_session_id
+      from: _id
+    attributes:
+      telegram_user_id: telegram_user_id
+      chat_id: chat_id
+      username: username
+      active_session_id: active_session_id
+      runtime_tag: runtime_tag
+      created_at: created_at
+      updated_at: updated_at
+    relations:
+      - relation: tg_voice_session_bound_to_voice_session
+        owner_role: tg_voice_session
+        owner_lookup:
+          entity: voice_session
+          by: voice_session_id
+          from: active_session_id
+
+  - collection: automation_google_drive_projects_files
+    target_entity: drive_project_file
+    key:
+      attribute: drive_project_file_id
+      from: _id
+    attributes:
+      created_time: created_time
+      drive_folder_id: drive_folder_id
+      file_id: file_id
+      file_name: file_name
+      file_path: file_path
+      file_size: file_size
+      last_scanned_at: last_scanned_at
+      mime_type: mime_type
+      modified_time: modified_time
+      parents: parents
+      project_id: project_id
+      project_name: project_name
+      web_view_link: web_view_link
+      created_at: created_at
+    relations:
+      - relation: project_has_google_drive_file
+        owner_role: drive_project_file
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project_id
+
+  - collection: automation_google_drive_events_channels
+    target_entity: drive_event_channel
+    key:
+      attribute: drive_event_channel_id
+      from: _id
+    attributes:
+      channel_id: channelId
+      resource_id: resourceId
+      expiration: expiration
+      token: token
+      page_token: pageToken
+      is_active: is_active
+
+  - collection: automation_google_drive_structure
+    target_entity: drive_node
+    key:
+      attribute: drive_node_id
+      from: _id
+    attributes:
+      node_id: id
+      name: name
+      parent_node_id: parentId
+      date_indexed: dateIndexed
+      is_folder: isFolder
+      mime_type: mimeType
+
+  - collection: automation_object_locator
+    target_entity: object_locator
+    key:
+      attribute: object_locator_id
+      from: _id
+    attributes:
+      oid: oid
+      entity_type: entity_type
+      parent_collection: parent_collection
+      parent_id: parent_id
+      parent_prefix: parent_prefix
+      path: path
+      created_at: created_at
+      updated_at: updated_at
+
+  - collection: automation_finances_expenses
+    target_entity: legacy_finance_expense
+    key:
+      attribute: legacy_finance_expense_id
+      from: _id
+    attributes:
+      month_number: month
+      year_number: year
+      performer_id: performer_id
+      payments: payments
+    relations:
+      - relation: person_has_legacy_finance_expense
+        owner_role: legacy_finance_expense
+        owner_lookup:
+          entity: person
+          by: person_id
+          from: performer_id
+
+  - collection: automation_finances_income
+    target_entity: legacy_finance_income
+    key:
+      attribute: legacy_finance_income_id
+      from: _id
+    attributes:
+      month_number: month
+      year_number: year
+      performer: performer
+      project_ref: project
+      task_type_name: task_type
+      hours_amount: hours_amount
+      hour_price: hour_price
+    relations:
+      - relation: project_has_legacy_finance_income
+        owner_role: legacy_finance_income
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project
+      - relation: legacy_finance_income_has_type
+        owner_role: legacy_finance_income
+        owner_lookup:
+          entity: legacy_finance_income_type
+          by: name
+          from: task_type
+
+  - collection: automation_finances_income_types
+    target_entity: legacy_finance_income_type
+    key:
+      attribute: legacy_finance_income_type_id
+      from: _id
+    attributes:
+      name: name
 
   - collection: forecasts_project_month
     target_entity: forecast_project_month
@@ -165,10 +583,16 @@ collections:
       forecast_version_id: forecast_version_id
       project_id: project_id
       month_key: month
+      source_type: type
       currency: forecast_currency
       amount_original: forecast_amount_original
       amount_rub: forecast_amount_rub
+      forecast_hours: forecast_hours
+      forecast_cost_rub: forecast_cost_rub
+      comment: comment
       row_version: row_version
+      updated_by: updated_by
+      updated_source: updated_source
       updated_at: updated_at
     relations:
       - relation: project_has_forecast_month
@@ -186,6 +610,8 @@ collections:
     attributes:
       name: name
       status: is_active
+      created_by: created_by
+      updated_by: updated_by
 
   - collection: finops_expense_operations
     target_entity: cost_expense
@@ -199,8 +625,15 @@ collections:
       amount_rub: amount
       status: is_deleted
       created_at: created_at
+      updated_at: updated_at
       project_id: project_id
       runtime_tag: runtime_tag
+      fx_used: fx_used
+      vendor: vendor
+      comment: comment
+      created_by: created_by
+      updated_by: updated_by
+      attachments: attachments
     relations:
       - relation: cost_category_classifies_expense
         owner_role: cost_category
@@ -215,6 +648,28 @@ collections:
           by: project_id
           from: project_id
 
+  - collection: finops_expense_operations_log
+    target_entity: finops_expense_operation_log
+    key:
+      attribute: finops_expense_operation_log_id
+      from: log_id
+    attributes:
+      operation_id: operation_id
+      action: action
+      before_payload: before
+      after_payload: after
+      changed_at: changed_at
+      changed_by: changed_by
+      comment: comment
+      runtime_tag: runtime_tag
+    relations:
+      - relation: expense_operation_has_log
+        owner_role: expense_operation_log
+        owner_lookup:
+          entity: cost_expense
+          by: cost_expense_id
+          from: operation_id
+
   - collection: finops_fx_rates
     target_entity: fx_monthly
     key:
@@ -226,11 +681,12 @@ collections:
       month_key: month
       currency: pair
       value_number: rate
+      source: source
+      created_by: created_by
       created_at: created_at
 
 missing_spec_collections:
   - facts_project_month
-  - fx_monthly
   - finops_month_closures
   - forecast_versions
   - project_rates
@@ -239,6 +695,16 @@ missing_spec_collections:
   - agent_requests
   - alert_settings
   - audit_events
+  - automation_comments
+  - automation_task_supertypes
+  - automation_performer_payments
+  - automation_reports_log
+  - automation_permissions_log
+  - automation_project_tree_log
+  - automation_tasks_histrory
+  - automation_agents_status
+  - automation_agents_run_results
+  - automation_calendar_month_work_hours
 
 quality_gates:
   - name: no_orphan_tasks

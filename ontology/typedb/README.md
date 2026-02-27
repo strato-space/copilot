@@ -3,6 +3,23 @@
 This folder contains a first executable scaffold of the STR OpsPortal ontology in TypeDB/TypeQL, derived from:
 - `/home/strato-space/copilot/ontology/str-opsportal-erd-draft-v0.md`
 
+## Source Of Truth And Boundaries
+
+- Ontology scope and coordination rules are documented in:
+  - `/home/strato-space/copilot/ontology/README.md`
+  - `/home/strato-space/copilot/ontology/AGENTS.md`
+  - `/home/strato-space/copilot/ontology/typedb/AGENTS.md`
+- This `typedb/` directory is for ontology assets and tooling only.
+- Runtime API behavior for Copilot Voice/OperOps/FinOps stays in repo root docs (`AGENTS.md`, `README.md`) and backend/app code contracts.
+- Do not introduce alternative ontology entrypoints in `backend/scripts`; canonical tooling paths are `ontology/typedb/scripts/*`.
+
+## Minimal Context From 2026-02-27 Migration
+
+- TypeDB tooling paths were hard-switched from backend-local scripts to `ontology/typedb/scripts/*`.
+- `backend/package.json` `ontology:typedb:*` commands are the stable operator interface and now resolve into `ontology/typedb`.
+- For ingestion defaults, keep schema/deadletter locations script-relative to avoid cwd-dependent behavior.
+- Future ontology updates must not restore old backend-local script copies (`backend/scripts/typedb-*`, `backend/requirements-typedb.txt`).
+
 ## Contents
 
 - `scripts/typedb-ontology-ingest.py` - MongoDB -> TypeDB ingestion tool
@@ -54,6 +71,15 @@ From `copilot/backend`:
 - `npm run ontology:typedb:ingest:dry`
 - `npm run ontology:typedb:ingest:apply -- --init-schema`
 - `npm run ontology:typedb:validate`
+
+## Operational Contract
+
+- `backend/package.json` npm aliases `ontology:typedb:*` are the stable operator interface; keep names backward-compatible.
+- Script defaults are script-relative and must continue to work from `copilot/backend` commands.
+- Any schema/mapping breaking change must be reflected in:
+  - `ontology/typedb/docs/rollout_plan_v1.md`
+  - `CHANGELOG.md` (repo root)
+  - `AGENTS.md` (repo root) if operational workflow changes.
 
 Optional runtime args/env:
 

@@ -3,9 +3,11 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from bson import ObjectId
@@ -13,16 +15,36 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.database import Database
 from typedb.driver import Credentials, DriverOptions, TransactionType, TypeDB
+import yaml
 
 SUPPORTED_COLLECTIONS = [
     "automation_customers",
+    "automation_clients",
     "automation_projects",
+    "automation_project_groups",
+    "automation_task_types",
+    "automation_task_types_tree",
+    "automation_epic_tasks",
+    "automation_performers",
+    "automation_persons",
     "automation_tasks",
+    "automation_work_hours",
     "automation_voice_bot_sessions",
     "automation_voice_bot_messages",
+    "automation_voice_bot_topics",
+    "automation_voice_bot_session_log",
+    "automation_tg_voice_sessions",
+    "automation_google_drive_projects_files",
+    "automation_google_drive_events_channels",
+    "automation_google_drive_structure",
+    "automation_object_locator",
+    "automation_finances_expenses",
+    "automation_finances_income",
+    "automation_finances_income_types",
     "forecasts_project_month",
     "finops_expense_categories",
     "finops_expense_operations",
+    "finops_expense_operations_log",
     "finops_fx_rates",
 ]
 
@@ -32,6 +54,7 @@ VOICE_TRANSCRIPT_CHUNK_BYTES = 60_000
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 TYPEDB_ROOT_DIR = SCRIPT_DIR.parent
 DEFAULT_SCHEMA_PATH = TYPEDB_ROOT_DIR / "schema" / "str_opsportal_v1.tql"
+DEFAULT_MAPPING_PATH = TYPEDB_ROOT_DIR / "mappings" / "mongodb_to_typedb_v1.yaml"
 DEFAULT_DEADLETTER_PATH = TYPEDB_ROOT_DIR / "logs" / "typedb-ontology-ingest-deadletter.ndjson"
 
 
@@ -49,6 +72,7 @@ class CliOptions:
     typedb_tls_enabled: bool
     typedb_database: str
     schema_path: pathlib.Path
+    mapping_path: pathlib.Path
 
 
 @dataclass
@@ -60,6 +84,7 @@ class CollectionStats:
     skipped: int = 0
     relations_inserted: int = 0
     relation_failed: int = 0
+    relations_skipped: int = 0
 
 
 @dataclass
@@ -68,6 +93,11 @@ class IngestContext:
     typedb_driver: Any
     options: CliOptions
     deadletter: "DeadletterWriter"
+    mapping_by_collection: dict[str, dict[str, Any]]
+    schema_attr_types: dict[str, str]
+    entity_owned_attrs: dict[str, set[str]]
+    relation_roles: dict[str, list[str]]
+    entity_relation_roles: dict[tuple[str, str], set[str]]
 
 
 class DeadletterWriter:
@@ -117,6 +147,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=str(DEFAULT_SCHEMA_PATH),
         help="Path to TypeQL schema",
+    )
+    parser.add_argument(
+        "--mapping",
+        type=str,
+        default=str(DEFAULT_MAPPING_PATH),
+        help="Path to MongoDB->TypeDB mapping YAML",
     )
     return parser.parse_args()
 
@@ -200,6 +236,7 @@ def parse_options(args: argparse.Namespace) -> CliOptions:
         typedb_tls_enabled=parse_bool(args.typedb_tls_enabled or os.getenv("TYPEDB_TLS_ENABLED"), default=False),
         typedb_database=args.typedb_database or os.getenv("TYPEDB_DATABASE") or "str_opsportal_v1",
         schema_path=pathlib.Path(args.schema).resolve(),
+        mapping_path=pathlib.Path(args.mapping).resolve(),
     )
 
 
@@ -336,6 +373,17 @@ def lit_number(value: float) -> str:
     return str(value)
 
 
+def lit_bool(value: bool) -> str:
+    return "true" if value else "false"
+
+
+def lit_datetime(value: datetime) -> str:
+    normalized = value
+    if normalized.tzinfo is not None and normalized.utcoffset() is not None:
+        normalized = normalized.astimezone(timezone.utc).replace(tzinfo=None)
+    return normalized.isoformat()
+
+
 def append_string_attr(parts: list[str], attr: str, value: Optional[str]) -> None:
     if value is None:
         return
@@ -348,6 +396,61 @@ def append_number_attr(parts: list[str], attr: str, value: Optional[float]) -> N
     parts.append(f"has {attr} {lit_number(value)}")
 
 
+def append_bool_attr(parts: list[str], attr: str, value: Optional[bool]) -> None:
+    if value is None:
+        return
+    parts.append(f"has {attr} {lit_bool(value)}")
+
+
+def append_datetime_attr(parts: list[str], attr: str, value: Optional[datetime]) -> None:
+    if value is None:
+        return
+    parts.append(f"has {attr} {lit_datetime(value)}")
+
+
+def as_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        normalized = text.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+    return None
+
+
+def to_stringish(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
+            return None
+        return str(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped if stripped else None
+    if isinstance(value, (list, dict)):
+        try:
+            return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+        except Exception:
+            return None
+    return None
+
+
+def mapping_key_component(value: Any) -> Optional[str]:
+    return normalize_id(value) or to_stringish(value)
+
+
 def print_stats(stats: list[CollectionStats]) -> None:
     print("")
     print("[typedb-ontology-ingest] summary")
@@ -355,7 +458,7 @@ def print_stats(stats: list[CollectionStats]) -> None:
         print(
             f"  - {item.collection}: scanned={item.scanned} inserted={item.inserted} "
             f"failed={item.failed} skipped={item.skipped} rel_inserted={item.relations_inserted} "
-            f"rel_failed={item.relation_failed}"
+            f"rel_failed={item.relation_failed} rel_skipped={item.relations_skipped}"
         )
 
 
@@ -377,6 +480,25 @@ def execute_query_in_transaction(driver: Any, database: str, tx_type: Transactio
             print(f"[typedb-ontology-ingest] closeTransaction warning: {close_error}", file=sys.stderr)
 
 
+def query_has_rows(driver: Any, database: str, query: str) -> bool:
+    tx = driver.transaction(database, TransactionType.READ)
+    try:
+        answer = tx.query(query).resolve()
+        if not answer.is_concept_rows():
+            return False
+        iterator = answer.as_concept_rows().iterator
+        try:
+            next(iterator)
+            return True
+        except StopIteration:
+            return False
+    finally:
+        try:
+            tx.close()
+        except Exception as close_error:
+            print(f"[typedb-ontology-ingest] closeTransaction warning: {close_error}", file=sys.stderr)
+
+
 def insert_query(
     ctx: IngestContext,
     stats: CollectionStats,
@@ -384,15 +506,32 @@ def insert_query(
     source_id: Optional[str],
     query: str,
     payload: Any,
-) -> None:
+    *,
+    entity: Optional[str] = None,
+    key_attr: Optional[str] = None,
+    key_value: Optional[str] = None,
+) -> bool:
     if not ctx.options.apply or ctx.typedb_driver is None:
         stats.inserted += 1
-        return
+        return True
+
+    if entity and key_attr and key_value:
+        exists_query = (
+            f"match $x isa {entity}, has {key_attr} {lit_string(key_value)}; "
+            "limit 1;"
+        )
+        if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+            stats.skipped += 1
+            return False
 
     try:
         execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, query)
         stats.inserted += 1
+        return True
     except Exception as error:
+        if "[CNT9]" in str(error):
+            stats.skipped += 1
+            return False
         stats.failed += 1
         ctx.deadletter.write(
             {
@@ -404,6 +543,7 @@ def insert_query(
                 "payload": payload,
             }
         )
+        return False
 
 
 def insert_relation_query(
@@ -413,15 +553,26 @@ def insert_relation_query(
     source_id: Optional[str],
     query: str,
     payload: Any,
-) -> None:
+    *,
+    exists_query: Optional[str] = None,
+) -> bool:
     if not ctx.options.apply or ctx.typedb_driver is None:
         stats.relations_inserted += 1
-        return
+        return True
+
+    if exists_query is not None:
+        if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+            stats.relations_skipped += 1
+            return False
 
     try:
         execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, query)
         stats.relations_inserted += 1
+        return True
     except Exception as error:
+        if "[CNT9]" in str(error):
+            stats.relations_skipped += 1
+            return False
         stats.relation_failed += 1
         ctx.deadletter.write(
             {
@@ -433,6 +584,7 @@ def insert_relation_query(
                 "payload": payload,
             }
         )
+        return False
 
 
 def for_each_doc(
@@ -479,7 +631,17 @@ def ingest_customers(ctx: IngestContext) -> CollectionStats:
         append_string_attr(fields, "name", as_string(doc.get("name")))
         append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_active")))
         query = f"{', '.join(fields)};"
-        insert_query(ctx, stats, "automation_customers", doc_id, query, {"_id": doc_id})
+        insert_query(
+            ctx,
+            stats,
+            "automation_customers",
+            doc_id,
+            query,
+            {"_id": doc_id},
+            entity="client",
+            key_attr="client_id",
+            key_value=doc_id,
+        )
 
     return for_each_doc(ctx, "automation_customers", handler)
 
@@ -504,7 +666,17 @@ def ingest_projects(ctx: IngestContext) -> CollectionStats:
         append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_active")))
         append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
         query = f"{', '.join(fields)};"
-        insert_query(ctx, stats, "automation_projects", doc_id, query, {"_id": doc_id})
+        insert_query(
+            ctx,
+            stats,
+            "automation_projects",
+            doc_id,
+            query,
+            {"_id": doc_id},
+            entity="project",
+            key_attr="project_id",
+            key_value=doc_id,
+        )
 
     return for_each_doc(ctx, "automation_projects", handler)
 
@@ -532,7 +704,17 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
         append_number_attr(fields, "priority_rank", as_number(doc.get("priority")))
         append_string_attr(fields, "project_id", normalize_id(doc.get("project_id")))
         query = f"{', '.join(fields)};"
-        insert_query(ctx, stats, "automation_tasks", doc_id, query, {"_id": doc_id})
+        insert_query(
+            ctx,
+            stats,
+            "automation_tasks",
+            doc_id,
+            query,
+            {"_id": doc_id},
+            entity="oper_task",
+            key_attr="task_id",
+            key_value=doc_id,
+        )
 
         project_id = normalize_id(doc.get("project_id"))
         if not project_id:
@@ -550,6 +732,11 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             doc_id,
             relation_query,
             {"task_id": doc_id, "project_id": project_id},
+            exists_query=(
+                f"match $p isa project, has project_id {lit_string(project_id)}; "
+                f"$t isa oper_task, has task_id {lit_string(doc_id)}; "
+                "(owner_project: $p, oper_task: $t) isa project_has_oper_task; limit 1;"
+            ),
         )
 
     return for_each_doc(ctx, "automation_tasks", handler)
@@ -577,7 +764,17 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
         append_string_attr(fields, "project_id", normalize_id(doc.get("project_id")))
         append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
         query = f"{', '.join(fields)};"
-        insert_query(ctx, stats, "automation_voice_bot_sessions", doc_id, query, {"_id": doc_id})
+        insert_query(
+            ctx,
+            stats,
+            "automation_voice_bot_sessions",
+            doc_id,
+            query,
+            {"_id": doc_id},
+            entity="voice_session",
+            key_attr="voice_session_id",
+            key_value=doc_id,
+        )
 
         project_id = normalize_id(doc.get("project_id"))
         if not project_id:
@@ -595,6 +792,11 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
             doc_id,
             relation_query,
             {"voice_session_id": doc_id, "project_id": project_id},
+            exists_query=(
+                f"match $p isa project, has project_id {lit_string(project_id)}; "
+                f"$s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
+                "(owner_project: $p, voice_session: $s) isa project_has_voice_session; limit 1;"
+            ),
         )
 
     return for_each_doc(ctx, "automation_voice_bot_sessions", handler)
@@ -632,7 +834,17 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
         append_string_attr(fields, "summary", summary_text)
         append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_finalized")))
         query = f"{', '.join(fields)};"
-        insert_query(ctx, stats, "automation_voice_bot_messages", doc_id, query, {"_id": doc_id})
+        insert_query(
+            ctx,
+            stats,
+            "automation_voice_bot_messages",
+            doc_id,
+            query,
+            {"_id": doc_id},
+            entity="voice_message",
+            key_attr="voice_message_id",
+            key_value=doc_id,
+        )
 
         if raw_transcript is not None and capped_transcript is not None and raw_transcript != capped_transcript:
             ctx.deadletter.write(
@@ -666,6 +878,10 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                         "transcript_chunk_id": chunk_id,
                         "chunk_index": index,
                     },
+                    exists_query=(
+                        f"match $c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}; "
+                        "limit 1;"
+                    ),
                 )
 
                 chunk_relation_query = (
@@ -684,6 +900,11 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                         "transcript_chunk_id": chunk_id,
                         "chunk_index": index,
                     },
+                    exists_query=(
+                        f"match $m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
+                        f"$c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}; "
+                        "(voice_message: $m, transcript_chunk: $c) isa voice_message_chunked_as_transcript_chunk; limit 1;"
+                    ),
                 )
 
         session_id = normalize_id(doc.get("session_id"))
@@ -702,6 +923,11 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
             doc_id,
             relation_query,
             {"voice_message_id": doc_id, "voice_session_id": session_id},
+            exists_query=(
+                f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
+                f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
+                "(voice_session: $s, voice_message: $m) isa voice_session_has_message; limit 1;"
+            ),
         )
 
     return for_each_doc(ctx, "automation_voice_bot_messages", handler)
@@ -747,6 +973,9 @@ def ingest_forecasts(ctx: IngestContext) -> CollectionStats:
             synthetic_id,
             query,
             {"project_id": project_id, "month": month, "forecast_version_id": forecast_version},
+            entity="forecast_project_month",
+            key_attr="forecast_project_month_id",
+            key_value=synthetic_id,
         )
 
         relation_query = (
@@ -761,6 +990,11 @@ def ingest_forecasts(ctx: IngestContext) -> CollectionStats:
             synthetic_id,
             relation_query,
             {"project_id": project_id, "forecast_project_month_id": synthetic_id},
+            exists_query=(
+                f"match $p isa project, has project_id {lit_string(project_id)}; "
+                f"$f isa forecast_project_month, has forecast_project_month_id {lit_string(synthetic_id)}; "
+                "(owner_project: $p, forecast_project_month: $f) isa project_has_forecast_month; limit 1;"
+            ),
         )
 
     return for_each_doc(ctx, "forecasts_project_month", handler)
@@ -792,6 +1026,9 @@ def ingest_expense_categories(ctx: IngestContext) -> CollectionStats:
             doc_id,
             query,
             {"category_id": doc_id},
+            entity="cost_category",
+            key_attr="cost_category_id",
+            key_value=doc_id,
         )
 
     return for_each_doc(ctx, "finops_expense_categories", handler)
@@ -828,6 +1065,9 @@ def ingest_expense_operations(ctx: IngestContext) -> CollectionStats:
             doc_id,
             query,
             {"operation_id": doc_id},
+            entity="cost_expense",
+            key_attr="cost_expense_id",
+            key_value=doc_id,
         )
 
         category_id = normalize_id(doc.get("category_id"))
@@ -844,6 +1084,11 @@ def ingest_expense_operations(ctx: IngestContext) -> CollectionStats:
                 doc_id,
                 rel_category_query,
                 {"cost_expense_id": doc_id, "category_id": category_id},
+                exists_query=(
+                    f"match $c isa cost_category, has cost_category_id {lit_string(category_id)}; "
+                    f"$e isa cost_expense, has cost_expense_id {lit_string(doc_id)}; "
+                    "(cost_category: $c, cost_expense: $e) isa cost_category_classifies_expense; limit 1;"
+                ),
             )
 
         project_id = normalize_id(doc.get("project_id"))
@@ -860,6 +1105,11 @@ def ingest_expense_operations(ctx: IngestContext) -> CollectionStats:
                 doc_id,
                 rel_project_query,
                 {"cost_expense_id": doc_id, "project_id": project_id},
+                exists_query=(
+                    f"match $p isa project, has project_id {lit_string(project_id)}; "
+                    f"$e isa cost_expense, has cost_expense_id {lit_string(doc_id)}; "
+                    "(owner_project: $p, cost_expense: $e) isa project_has_cost_expense; limit 1;"
+                ),
             )
 
     return for_each_doc(ctx, "finops_expense_operations", handler)
@@ -890,9 +1140,310 @@ def ingest_fx_rates(ctx: IngestContext) -> CollectionStats:
         ]
         append_number_attr(fields, "value_number", as_number(doc.get("rate")))
         query = f"{', '.join(fields)};"
-        insert_query(ctx, stats, "finops_fx_rates", synthetic_id, query, {"month": month, "pair": pair})
+        insert_query(
+            ctx,
+            stats,
+            "finops_fx_rates",
+            synthetic_id,
+            query,
+            {"month": month, "pair": pair},
+            entity="fx_monthly",
+            key_attr="fx_monthly_id",
+            key_value=synthetic_id,
+        )
 
     return for_each_doc(ctx, "finops_fx_rates", handler)
+
+
+def load_mapping_by_collection(path: pathlib.Path) -> dict[str, dict[str, Any]]:
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    collections = payload.get("collections") or []
+    by_collection: dict[str, dict[str, Any]] = {}
+    for item in collections:
+        name = item.get("collection")
+        if isinstance(name, str) and name:
+            by_collection[name] = item
+    return by_collection
+
+
+def parse_schema_metadata(
+    schema_path: pathlib.Path,
+) -> tuple[
+    dict[str, str],
+    dict[str, set[str]],
+    dict[str, list[str]],
+    dict[tuple[str, str], set[str]],
+]:
+    text = schema_path.read_text(encoding="utf-8")
+
+    attr_types: dict[str, str] = {}
+    for match in re.finditer(r"^attribute\s+([a-zA-Z0-9_]+),\s+value\s+([a-zA-Z0-9_]+);", text, flags=re.M):
+        attr_types[match.group(1)] = match.group(2)
+
+    relation_roles: dict[str, list[str]] = {}
+    current_relation: Optional[str] = None
+    current_roles: list[str] = []
+
+    entity_owned_attrs: dict[str, set[str]] = {}
+    entity_relation_roles: dict[tuple[str, str], set[str]] = {}
+    current_entity: Optional[str] = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("entity "):
+            current_entity = line.split()[1].rstrip(",")
+            continue
+
+        if current_entity is not None and line.startswith("plays "):
+            match = re.match(r"plays\s+([a-zA-Z0-9_]+):([a-zA-Z0-9_]+)", line)
+            if match:
+                relation_name, role_name = match.group(1), match.group(2)
+                entity_relation_roles.setdefault((current_entity, relation_name), set()).add(role_name)
+        if current_entity is not None and line.startswith("owns "):
+            attr_name = line.split()[1].rstrip(",;")
+            if attr_name:
+                entity_owned_attrs.setdefault(current_entity, set()).add(attr_name)
+        if current_entity is not None and line.endswith(";"):
+            current_entity = None
+
+        if line.startswith("relation "):
+            current_relation = line.split()[1].rstrip(",")
+            current_roles = []
+            continue
+        if current_relation is not None and line.startswith("relates "):
+            current_roles.append(line.split()[1].rstrip(",;"))
+            if line.endswith(";"):
+                relation_roles[current_relation] = list(current_roles)
+                current_relation = None
+                current_roles = []
+
+    return attr_types, entity_owned_attrs, relation_roles, entity_relation_roles
+
+
+def build_key_from_mapping(doc: dict[str, Any], key_cfg: dict[str, Any]) -> Optional[str]:
+    from_field = key_cfg.get("from")
+    if isinstance(from_field, str) and from_field:
+        return mapping_key_component(doc.get(from_field))
+
+    compose_fields = key_cfg.get("compose")
+    if isinstance(compose_fields, list) and compose_fields:
+        parts: list[str] = []
+        for field in compose_fields:
+            if not isinstance(field, str) or not field:
+                return None
+            part = mapping_key_component(doc.get(field))
+            if part is None:
+                return None
+            parts.append(part)
+        return ":".join(parts)
+
+    return None
+
+
+def append_mapped_attr(
+    parts: list[str],
+    attr: str,
+    attr_type: str,
+    raw_value: Any,
+) -> None:
+    if attr_type == "string":
+        append_string_attr(parts, attr, to_stringish(raw_value))
+        return
+    if attr_type == "double":
+        append_number_attr(parts, attr, as_number(raw_value))
+        return
+    if attr_type == "integer":
+        numeric = as_number(raw_value)
+        append_number_attr(parts, attr, int(numeric) if numeric is not None else None)
+        return
+    if attr_type == "boolean":
+        append_bool_attr(parts, attr, as_bool(raw_value))
+        return
+    if attr_type == "datetime":
+        append_datetime_attr(parts, attr, as_datetime(raw_value))
+        return
+
+
+def resolve_relation_roles_for_entities(
+    ctx: IngestContext,
+    relation_name: str,
+    source_entity: str,
+    owner_entity: str,
+    owner_role_hint: Optional[str],
+) -> Optional[tuple[str, str]]:
+    source_roles = set(ctx.entity_relation_roles.get((source_entity, relation_name), set()))
+    owner_roles = set(ctx.entity_relation_roles.get((owner_entity, relation_name), set()))
+    declared_roles = list(ctx.relation_roles.get(relation_name, []))
+
+    if len(source_roles) == 1 and len(owner_roles) == 1:
+        return next(iter(source_roles)), next(iter(owner_roles))
+
+    if len(source_roles) == 1 and declared_roles:
+        source_role = next(iter(source_roles))
+        owner_role = next((role for role in declared_roles if role != source_role), None)
+        if owner_role:
+            return source_role, owner_role
+
+    if len(owner_roles) == 1 and declared_roles:
+        owner_role = next(iter(owner_roles))
+        source_role = next((role for role in declared_roles if role != owner_role), None)
+        if source_role:
+            return source_role, owner_role
+
+    if owner_role_hint and len(declared_roles) == 2 and owner_role_hint in declared_roles:
+        source_role = next((role for role in declared_roles if role != owner_role_hint), None)
+        if source_role:
+            return source_role, owner_role_hint
+
+    if len(declared_roles) == 2:
+        return declared_roles[0], declared_roles[1]
+
+    return None
+
+
+def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> CollectionStats:
+    mapping_cfg = ctx.mapping_by_collection.get(collection)
+    if mapping_cfg is None:
+        raise ValueError(f"Collection is not defined in mapping: {collection}")
+
+    target_entity = mapping_cfg.get("target_entity")
+    key_cfg = mapping_cfg.get("key") or {}
+    attributes_cfg = mapping_cfg.get("attributes") or {}
+    relations_cfg = mapping_cfg.get("relations") or []
+
+    if not isinstance(target_entity, str) or not target_entity:
+        raise ValueError(f"Mapping for {collection} has no target_entity")
+    if not isinstance(key_cfg, dict):
+        raise ValueError(f"Mapping for {collection} has invalid key config")
+
+    key_attr = key_cfg.get("attribute")
+    if not isinstance(key_attr, str) or not key_attr:
+        raise ValueError(f"Mapping for {collection} has invalid key attribute")
+
+    def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
+        source_id = build_key_from_mapping(doc, key_cfg)
+        if source_id is None:
+            stats.skipped += 1
+            ctx.deadletter.write(
+                {
+                    "collection": collection,
+                    "source_id": None,
+                    "reason": "missing_key",
+                    "payload": doc,
+                }
+            )
+            return
+
+        fields = [f"insert $e isa {target_entity}", f"has {key_attr} {lit_string(source_id)}"]
+        owned_attrs = ctx.entity_owned_attrs.get(target_entity, set())
+        if isinstance(attributes_cfg, dict):
+            for attr, source_field in attributes_cfg.items():
+                if not isinstance(attr, str) or not isinstance(source_field, str):
+                    continue
+                if attr not in owned_attrs:
+                    continue
+                attr_type = ctx.schema_attr_types.get(attr)
+                if not attr_type:
+                    continue
+                append_mapped_attr(fields, attr, attr_type, doc.get(source_field))
+
+        query = f"{', '.join(fields)};"
+        insert_query(
+            ctx,
+            stats,
+            collection,
+            source_id,
+            query,
+            {"_id": source_id},
+            entity=target_entity,
+            key_attr=key_attr,
+            key_value=source_id,
+        )
+
+        if not isinstance(relations_cfg, list):
+            return
+
+        for rel_cfg in relations_cfg:
+            if not isinstance(rel_cfg, dict):
+                continue
+            relation_name = rel_cfg.get("relation")
+            owner_lookup = rel_cfg.get("owner_lookup") or {}
+            owner_role_hint = rel_cfg.get("owner_role")
+            if not isinstance(relation_name, str) or not relation_name:
+                continue
+            if not isinstance(owner_lookup, dict):
+                continue
+
+            owner_entity = owner_lookup.get("entity")
+            owner_by = owner_lookup.get("by")
+            owner_from = owner_lookup.get("from")
+            if not isinstance(owner_entity, str) or not owner_entity:
+                continue
+            if not isinstance(owner_by, str) or not owner_by:
+                continue
+            if not isinstance(owner_from, str) or not owner_from:
+                continue
+
+            owner_value = mapping_key_component(doc.get(owner_from))
+            if owner_value is None:
+                continue
+
+            roles = resolve_relation_roles_for_entities(
+                ctx=ctx,
+                relation_name=relation_name,
+                source_entity=target_entity,
+                owner_entity=owner_entity,
+                owner_role_hint=owner_role_hint if isinstance(owner_role_hint, str) else None,
+            )
+            if roles is None:
+                stats.relation_failed += 1
+                ctx.deadletter.write(
+                    {
+                        "collection": collection,
+                        "source_id": source_id,
+                        "reason": "relation_roles_unresolved",
+                        "payload": {
+                            "relation": relation_name,
+                            "source_entity": target_entity,
+                            "owner_entity": owner_entity,
+                            "owner_role_hint": owner_role_hint,
+                        },
+                    }
+                )
+                continue
+
+            source_role, owner_role = roles
+
+            relation_query = (
+                f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
+                f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
+                f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
+            )
+            exists_query = (
+                f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
+                f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
+                f"({source_role}: $e, {owner_role}: $o) isa {relation_name}; limit 1;"
+            )
+            insert_relation_query(
+                ctx,
+                stats,
+                collection,
+                source_id,
+                relation_query,
+                {
+                    "source_id": source_id,
+                    "relation": relation_name,
+                    "owner_entity": owner_entity,
+                    "owner_by": owner_by,
+                    "owner_value": owner_value,
+                },
+                exists_query=exists_query,
+            )
+
+    return for_each_doc(ctx, collection, handler)
 
 
 def init_typedb(options: CliOptions) -> Any:
@@ -931,6 +1482,21 @@ INGESTERS: dict[str, Callable[[IngestContext], CollectionStats]] = {
 def main() -> int:
     load_dotenv()
     options = parse_options(parse_args())
+    mapping_by_collection = load_mapping_by_collection(options.mapping_path)
+    missing_from_mapping = [collection for collection in options.collections if collection not in mapping_by_collection]
+    if missing_from_mapping:
+        print(
+            f"[typedb-ontology-ingest] failed: missing collections in mapping "
+            f"{', '.join(missing_from_mapping)}",
+            file=sys.stderr,
+        )
+        return 1
+    (
+        schema_attr_types,
+        entity_owned_attrs,
+        relation_roles,
+        entity_relation_roles,
+    ) = parse_schema_metadata(options.schema_path)
 
     print(
         f"[typedb-ontology-ingest] mode={'apply' if options.apply else 'dry-run'} "
@@ -949,17 +1515,32 @@ def main() -> int:
         if options.apply:
             typedb_driver = init_typedb(options)
 
-        ctx = IngestContext(db=db, typedb_driver=typedb_driver, options=options, deadletter=deadletter)
+        ctx = IngestContext(
+            db=db,
+            typedb_driver=typedb_driver,
+            options=options,
+            deadletter=deadletter,
+            mapping_by_collection=mapping_by_collection,
+            schema_attr_types=schema_attr_types,
+            entity_owned_attrs=entity_owned_attrs,
+            relation_roles=relation_roles,
+            entity_relation_roles=entity_relation_roles,
+        )
         stats: list[CollectionStats] = []
 
         for collection in options.collections:
             start = time.time()
-            result = INGESTERS[collection](ctx)
+            ingester = INGESTERS.get(collection)
+            if ingester is not None:
+                result = ingester(ctx)
+            else:
+                result = ingest_collection_from_mapping(ctx, collection)
             duration_ms = int((time.time() - start) * 1000)
             print(
                 f"[typedb-ontology-ingest] done {collection}: scanned={result.scanned} "
                 f"inserted={result.inserted} failed={result.failed} "
                 f"rel_inserted={result.relations_inserted} rel_failed={result.relation_failed} "
+                f"rel_skipped={result.relations_skipped} "
                 f"duration_ms={duration_ms}"
             )
             stats.append(result)

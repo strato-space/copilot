@@ -12,12 +12,14 @@ attribute title, value string;
 attribute summary, value string;
 attribute link_label, value string;
 attribute url, value string;
-attribute source_type, value string;
+attribute link, value string;
 attribute module_name, value string;
 attribute module_scope, value string;
 attribute severity, value string;
 attribute currency, value string;
 attribute month_key, value string;
+attribute month_number, value integer;
+attribute year_number, value integer;
 attribute row_version, value integer;
 attribute order_index, value integer;
 attribute priority_rank, value integer;
@@ -25,18 +27,205 @@ attribute value_number, value double;
 attribute amount_rub, value double;
 attribute amount_original, value double;
 attribute hours_value, value double;
+attribute hour_price, value double;
+attribute hours_amount, value double;
 attribute runtime_tag, value string;
 attribute is_active, value boolean;
+attribute is_active_legacy, value boolean;
+attribute is_deleted, value boolean;
+attribute is_banned, value boolean;
+attribute is_employee, value boolean;
+attribute is_corrupted, value boolean;
+attribute is_postprocessing, value boolean;
+attribute is_finished, value boolean;
+attribute is_messages_processed, value boolean;
+attribute is_waiting, value boolean;
+attribute is_transcribed, value boolean;
+attribute is_finalized, value boolean;
+attribute to_finalize, value boolean;
+attribute is_replay, value boolean;
+attribute status_update_checked, value boolean;
+attribute is_folder, value boolean;
 attribute created_at, value datetime;
 attribute updated_at, value datetime;
 attribute started_at, value datetime;
 attribute ended_at, value datetime;
 attribute decided_at, value datetime;
 attribute due_at, value datetime;
+attribute merged_at, value datetime;
+attribute done_at, value datetime;
+attribute finished_at, value datetime;
+attribute deleted_at, value datetime;
+attribute changed_at, value datetime;
+attribute title_generated_at, value datetime;
+attribute shipment_date, value datetime;
+attribute date_indexed, value datetime;
+attribute created_time, value datetime;
+attribute modified_time, value datetime;
+attribute last_scanned_at, value datetime;
+attribute event_time, value datetime;
+attribute last_status_update, value datetime;
+attribute password_updated_at, value datetime;
+attribute permissions_updated_at, value datetime;
+attribute date, value string;
+attribute raw_date, value string;
+attribute source, value string;
+attribute source_type, value string;
+attribute stream_source, value string;
+attribute runtime_source, value string;
+attribute created_by, value string;
+attribute updated_by, value string;
+attribute changed_by, value string;
+attribute date_timestamp, value double;
+attribute duration, value double;
+attribute duration_ms, value double;
+attribute duration_min, value double;
+attribute work_hours, value double;
+attribute monthly_salary, value double;
+attribute monthly_payment, value double;
+attribute estimated_time, value double;
+attribute planned_time, value double;
+attribute message_timestamp, value double;
+attribute timestamp, value double;
+attribute transcribe_timestamp, value double;
+attribute last_message_timestamp, value double;
+attribute last_voice_timestamp, value double;
+attribute postprocessing_job_queued_timestamp, value double;
+attribute ticket_id, value string;
+attribute ticket_db_id, value string;
+attribute edited_at, value string;
+attribute result_link, value string;
+attribute comment_id, value string;
+attribute comment, value string;
+attribute comments_list, value string;
+attribute dashboard_comment, value string;
+attribute task_status_history, value string;
+attribute last_status, value string;
+attribute status_history, value string;
+attribute row_id, value string;
+attribute role_name, value string;
+attribute roles, value string;
+attribute additional_roles, value string;
+attribute corporate_email, value string;
+attribute board_url, value string;
+attribute salary_currency, value string;
+attribute monthly_salary_by_month, value string;
+attribute projects_access, value string;
+attribute custom_permissions, value string;
+attribute password_hash, value string;
+attribute google_drive_name, value string;
+attribute telegram_name, value string;
+attribute notifications, value string;
+attribute payments_settings, value string;
+attribute payments, value string;
+attribute payment_data, value string;
+attribute works, value string;
+attribute project_groups_ids, value string;
+attribute performer_id, value string;
+attribute performer, value string;
+attribute priority, value string;
+attribute start_date, value string;
+attribute end_date, value string;
+attribute board_id, value string;
+attribute project_group_ref, value string;
+attribute project_ref, value string;
+attribute project_name, value string;
+attribute task_type_name, value string;
+attribute type_class, value string;
+attribute execution_plan, value string;
+attribute parent_type_id, value string;
+attribute sprint, value string;
+attribute score_min_hours, value double;
+attribute score_max_hours, value double;
+attribute stop_comment_parsing, value string;
+attribute design_files, value string;
+attribute figma_project_link, value string;
+attribute notion_url, value string;
+attribute notion_board_id, value string;
+attribute old_id, value string;
+attribute merged_into_project_id, value string;
+attribute session_name, value string;
+attribute session_type, value string;
+attribute chat_id, value string;
+attribute user_id, value string;
+attribute telegram_user_id, value string;
+attribute access_level, value string;
+attribute participants, value string;
+attribute allowed_users, value string;
+attribute processors, value string;
+attribute session_processors, value string;
+attribute processors_data, value string;
+attribute current_spreadsheet_file_id, value string;
+attribute last_message_id, value string;
+attribute deletion_reason, value string;
+attribute active_session_id, value string;
+attribute title_generated_by, value string;
+attribute message_id, value string;
+attribute session_id, value string;
+attribute file_id, value string;
+attribute file_name, value string;
+attribute file_unique_id, value string;
+attribute file_path, value string;
+attribute web_view_link, value string;
+attribute transcription, value string;
+attribute transcription_text, value string;
+attribute transcription_chunks, value string;
+attribute categorization, value string;
+attribute uploaded_by, value string;
+attribute username, value string;
+attribute text, value string;
+attribute action, value string;
+attribute actor, value string;
+attribute event_name, value string;
+attribute event_version, value string;
+attribute diff, value string;
+attribute reason, value string;
+attribute target, value string;
+attribute metadata, value string;
+attribute event_group, value string;
+attribute correlation_id, value string;
+attribute source_event_id, value string;
+attribute topic_title, value string;
+attribute topic_description, value string;
+attribute chunks, value string;
+attribute assignment_reasoning, value string;
+attribute file_size, value integer;
+attribute parents, value string;
+attribute mime_type, value string;
+attribute drive_folder_id, value string;
+attribute forecast_hours, value double;
+attribute forecast_cost_rub, value double;
+attribute updated_source, value string;
+attribute fx_used, value string;
+attribute vendor, value string;
+attribute attachments, value string;
+attribute to_transcribe, value boolean;
+attribute is_image_anchor, value boolean;
+attribute channel_id, value string;
+attribute resource_id, value string;
+attribute expiration, value string;
+attribute page_token, value string;
+attribute token, value string;
+attribute node_id, value string;
+attribute parent_node_id, value string;
+attribute oid, value string;
+attribute entity_type, value string;
+attribute parent_collection, value string;
+attribute parent_id, value string;
+attribute parent_prefix, value string;
+attribute path, value string;
+attribute log_id, value string;
+attribute operation_id, value string;
+attribute before_payload, value string;
+attribute after_payload, value string;
+attribute data_file_name, value string;
+attribute forecast_version_id_ref, value string;
 
 # Core IDs
 
 attribute client_id, value string;
+attribute legacy_client_id, value string;
+attribute project_group_id, value string;
 attribute project_id, value string;
 attribute project_link_id, value string;
 attribute person_id, value string;
@@ -48,7 +237,11 @@ attribute context_item_id, value string;
 attribute dialog_id, value string;
 attribute segment_id, value string;
 attribute agreement_id, value string;
+attribute task_type_id, value string;
+attribute task_type_tree_id, value string;
 attribute task_id, value string;
+attribute epic_task_id, value string;
+attribute work_log_id, value string;
 attribute agent_id, value string;
 
 # FinOps IDs
@@ -69,11 +262,21 @@ attribute agent_request_id, value string;
 attribute alert_setting_id, value string;
 attribute alert_event_id, value string;
 attribute notification_item_id, value string;
+attribute legacy_finance_expense_id, value string;
+attribute legacy_finance_income_id, value string;
+attribute legacy_finance_income_type_id, value string;
+attribute finops_expense_operation_log_id, value string;
 
 # Voice / OperOps pipeline IDs
 
 attribute voice_session_id, value string;
 attribute voice_message_id, value string;
+attribute voice_topic_id, value string;
+attribute tg_voice_session_id, value string;
+attribute drive_project_file_id, value string;
+attribute object_locator_id, value string;
+attribute drive_event_channel_id, value string;
+attribute drive_node_id, value string;
 attribute transcript_chunk_id, value string;
 attribute processing_run_id, value string;
 attribute task_draft_id, value string;
@@ -92,18 +295,55 @@ entity client,
   owns client_id @key,
   owns name,
   owns status,
-  plays client_owns_project:owner_client;
+  owns project_groups_ids,
+  owns created_at,
+  owns updated_at,
+  plays client_owns_project:owner_client,
+  plays client_has_project_group:owner_client;
+
+entity legacy_client,
+  owns legacy_client_id @key,
+  owns name,
+  owns status,
+  owns drive_folder_id,
+  owns project_groups_ids;
+
+entity project_group,
+  owns project_group_id @key,
+  owns name,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays client_has_project_group:owned_project_group,
+  plays project_group_has_project:project_group;
 
 entity project,
   owns project_id @key,
   owns name,
   owns status,
+  owns project_group_ref,
+  owns board_id,
+  owns description,
+  owns drive_folder_id,
+  owns figma_project_link,
+  owns design_files,
+  owns start_date,
+  owns end_date,
+  owns merged_at,
+  owns merged_into_project_id,
+  owns created_at,
+  owns updated_at,
   owns module_scope,
   owns runtime_tag,
   plays client_owns_project:owned_project,
+  plays project_group_has_project:linked_project,
   plays project_has_project_link:owner_project,
   plays project_has_oper_task:owner_project,
   plays project_has_voice_session:owner_project,
+  plays project_has_epic_task:owner_project,
+  plays project_has_google_drive_file:owner_project,
+  plays project_has_voice_topic:owner_project,
+  plays project_has_legacy_finance_income:owner_project,
   plays project_has_fact_month:owner_project,
   plays project_has_forecast_month:owner_project,
   plays project_has_cost_expense:owner_project,
@@ -122,9 +362,37 @@ entity person,
   owns name,
   owns status,
   owns external_id,
+  owns role_name,
+  owns additional_roles,
+  owns corporate_email,
+  owns board_url,
+  owns is_active,
+  owns is_active_legacy,
+  owns is_banned,
+  owns is_deleted,
+  owns is_employee,
+  owns monthly_salary,
+  owns monthly_payment,
+  owns salary_currency,
+  owns monthly_salary_by_month,
+  owns projects_access,
+  owns custom_permissions,
+  owns password_hash,
+  owns password_updated_at,
+  owns permissions_updated_at,
+  owns drive_folder_id,
+  owns google_drive_name,
+  owns telegram_user_id,
+  owns telegram_name,
+  owns notifications,
+  owns payments_settings,
+  owns created_at,
+  owns updated_at,
   plays oper_task_assigned_to_person:assignee_person,
   plays transcript_segment_spoken_by_person:speaker_person,
-  plays person_maps_to_employee:source_person;
+  plays person_maps_to_employee:source_person,
+  plays person_creates_work_log:author_person,
+  plays person_has_legacy_finance_expense:person;
 
 entity team,
   owns team_id @key,
@@ -148,6 +416,22 @@ entity priority_dict,
   owns name,
   owns priority_rank,
   plays oper_task_has_priority:task_priority;
+
+entity task_type,
+  owns task_type_id @key,
+  owns name,
+  plays oper_task_classified_as_task_type:task_type;
+
+entity task_type_tree,
+  owns task_type_tree_id @key,
+  owns title,
+  owns description,
+  owns type_class,
+  owns execution_plan,
+  owns roles,
+  owns parent_type_id,
+  owns task_id,
+  plays task_type_tree_classifies_oper_task:task_type_tree;
 
 entity voice_context_item,
   owns context_item_id @key,
@@ -192,20 +476,76 @@ entity agreement,
 entity oper_task,
   owns task_id @key,
   owns project_id,
+  owns external_id,
+  owns old_id,
+  owns project_ref,
   owns title,
   owns description,
   owns status,
+  owns last_status,
+  owns last_status_update,
+  owns status_history,
+  owns task_status_history,
+  owns priority,
   owns due_at,
   owns priority_rank,
+  owns task_type_name,
+  owns task_type_id,
+  owns sprint,
+  owns shipment_date,
+  owns score_min_hours,
+  owns score_max_hours,
+  owns planned_time,
+  owns performer,
+  owns performer_id,
+  owns epic_task_id,
+  owns notion_url,
+  owns notion_board_id,
+  owns status_update_checked,
+  owns comments_list,
+  owns dashboard_comment,
+  owns order_index,
+  owns source,
+  owns stop_comment_parsing,
   owns created_at,
   owns updated_at,
   plays project_has_oper_task:oper_task,
+  plays oper_task_classified_as_task_type:oper_task,
+  plays task_type_tree_classifies_oper_task:oper_task,
+  plays oper_task_has_work_log:oper_task,
   plays agreement_creates_oper_task:oper_task,
   plays oper_task_evidenced_by_context_item:oper_task,
   plays oper_task_has_status:oper_task,
   plays oper_task_has_priority:oper_task,
   plays oper_task_assigned_to_person:oper_task,
   plays patch_operation_mutates_oper_task:oper_task;
+
+entity epic_task,
+  owns epic_task_id @key,
+  owns project_id,
+  owns name,
+  owns description,
+  owns is_deleted,
+  owns created_at,
+  plays project_has_epic_task:epic_task;
+
+entity work_log,
+  owns work_log_id @key,
+  owns ticket_id,
+  owns ticket_db_id,
+  owns created_by,
+  owns date,
+  owns date_timestamp,
+  owns comment,
+  owns comment_id,
+  owns description,
+  owns work_hours,
+  owns created_at,
+  owns edited_at,
+  owns raw_date,
+  owns result_link,
+  plays oper_task_has_work_log:work_log,
+  plays person_creates_work_log:work_log;
 
 entity agent,
   owns agent_id @key,
@@ -360,9 +700,54 @@ entity cost_expense,
   owns status,
   owns runtime_tag,
   owns created_at,
+  owns updated_at,
+  owns fx_used,
+  owns vendor,
+  owns comment,
+  owns created_by,
+  owns updated_by,
+  owns attachments,
   plays project_has_cost_expense:cost_expense,
   plays cost_category_classifies_expense:cost_expense,
-  plays period_buckets_cost_expense:cost_expense;
+  plays period_buckets_cost_expense:cost_expense,
+  plays expense_operation_has_log:cost_expense;
+
+entity finops_expense_operation_log,
+  owns finops_expense_operation_log_id @key,
+  owns operation_id,
+  owns action,
+  owns before_payload,
+  owns after_payload,
+  owns changed_at,
+  owns changed_by,
+  owns comment,
+  owns runtime_tag,
+  plays expense_operation_has_log:expense_operation_log;
+
+entity legacy_finance_expense,
+  owns legacy_finance_expense_id @key,
+  owns month_number,
+  owns year_number,
+  owns performer_id,
+  owns payments,
+  plays person_has_legacy_finance_expense:legacy_finance_expense;
+
+entity legacy_finance_income,
+  owns legacy_finance_income_id @key,
+  owns month_number,
+  owns year_number,
+  owns performer,
+  owns project_ref,
+  owns task_type_name,
+  owns hours_amount,
+  owns hour_price,
+  plays project_has_legacy_finance_income:legacy_finance_income,
+  plays legacy_finance_income_has_type:legacy_finance_income;
+
+entity legacy_finance_income_type,
+  owns legacy_finance_income_type_id @key,
+  owns name,
+  plays legacy_finance_income_has_type:legacy_finance_income_type;
 
 entity counterparty,
   owns counterparty_id @key,
@@ -387,7 +772,7 @@ entity alert_setting,
 entity alert_event,
   owns alert_event_id @key,
   owns severity,
-  owns status,strato-space/copilot/ontology/typedb/docs
+  owns status,
   owns created_at,
   plays alert_setting_configures_alert_event:alert_event,
   plays alert_event_creates_notification_item:alert_event;
@@ -426,26 +811,153 @@ entity voice_session,
   owns voice_session_id @key,
   owns project_id,
   owns source_type,
+  owns session_name,
+  owns session_type,
+  owns chat_id,
+  owns access_level,
+  owns participants,
+  owns allowed_users,
+  owns processors,
+  owns session_processors,
+  owns processors_data,
+  owns last_message_id,
+  owns last_message_timestamp,
+  owns last_voice_timestamp,
+  owns done_at,
+  owns is_messages_processed,
+  owns is_waiting,
+  owns is_corrupted,
+  owns is_postprocessing,
+  owns is_finished,
+  owns is_finalized,
+  owns to_finalize,
+  owns finished_at,
+  owns title_generated_at,
+  owns title_generated_by,
+  owns postprocessing_job_queued_timestamp,
+  owns current_spreadsheet_file_id,
+  owns deleted_at,
+  owns deletion_reason,
   owns status,
   owns is_active,
+  owns is_active_legacy,
+  owns is_deleted,
   owns runtime_tag,
   owns created_at,
   owns updated_at,
   plays project_has_voice_session:voice_session,
   plays mode_tag_selected_for_voice_session:voice_session,
   plays voice_session_has_message:voice_session,
+  plays voice_session_has_topic:voice_session,
+  plays tg_voice_session_bound_to_voice_session:bound_voice_session,
   plays voice_session_processed_by_run:voice_session,
   plays voice_session_has_history_step:voice_session,
   plays voice_session_emits_metric_event:voice_session;
 
 entity voice_message,
   owns voice_message_id @key,
+  owns session_id,
+  owns message_id,
+  owns chat_id,
+  owns session_type,
+  owns file_id,
+  owns file_unique_id,
+  owns file_path,
+  owns duration,
+  owns message_timestamp,
+  owns timestamp,
+  owns transcribe_timestamp,
   owns source_type,
+  owns text,
+  owns transcription,
+  owns transcription_text,
+  owns categorization,
+  owns processors_data,
+  owns is_transcribed,
+  owns is_finalized,
+  owns is_deleted,
+  owns to_transcribe,
+  owns is_image_anchor,
+  owns uploaded_by,
+  owns user_id,
+  owns username,
+  owns runtime_tag,
   owns summary,
   owns status,
   owns created_at,
+  owns updated_at,
   plays voice_session_has_message:voice_message,
   plays voice_message_chunked_as_transcript_chunk:voice_message;
+
+entity voice_topic,
+  owns voice_topic_id @key,
+  owns session_id,
+  owns project_id,
+  owns topic_title,
+  owns topic_description,
+  owns chunks,
+  owns assignment_reasoning,
+  owns created_at,
+  plays voice_session_has_topic:voice_topic,
+  plays project_has_voice_topic:voice_topic;
+
+entity tg_voice_session,
+  owns tg_voice_session_id @key,
+  owns telegram_user_id,
+  owns chat_id,
+  owns username,
+  owns active_session_id,
+  owns runtime_tag,
+  owns created_at,
+  owns updated_at,
+  plays tg_voice_session_bound_to_voice_session:tg_voice_session;
+
+entity drive_project_file,
+  owns drive_project_file_id @key,
+  owns created_time,
+  owns drive_folder_id,
+  owns file_id,
+  owns file_name,
+  owns file_path,
+  owns file_size,
+  owns last_scanned_at,
+  owns mime_type,
+  owns modified_time,
+  owns parents,
+  owns project_id,
+  owns project_name,
+  owns web_view_link,
+  owns created_at,
+  plays project_has_google_drive_file:drive_project_file;
+
+entity drive_event_channel,
+  owns drive_event_channel_id @key,
+  owns channel_id,
+  owns resource_id,
+  owns expiration,
+  owns token,
+  owns page_token,
+  owns is_active;
+
+entity drive_node,
+  owns drive_node_id @key,
+  owns node_id,
+  owns name,
+  owns parent_node_id,
+  owns date_indexed,
+  owns is_folder,
+  owns mime_type;
+
+entity object_locator,
+  owns object_locator_id @key,
+  owns oid,
+  owns entity_type,
+  owns parent_collection,
+  owns parent_id,
+  owns parent_prefix,
+  owns path,
+  owns created_at,
+  owns updated_at;
 
 entity transcript_chunk,
   owns transcript_chunk_id @key,
@@ -525,6 +1037,14 @@ relation client_owns_project,
   relates owner_client,
   relates owned_project;
 
+relation client_has_project_group,
+  relates owner_client,
+  relates owned_project_group;
+
+relation project_group_has_project,
+  relates project_group,
+  relates linked_project;
+
 relation project_has_project_link,
   relates owner_project,
   relates linked_project_link;
@@ -561,6 +1081,14 @@ relation project_has_oper_task,
   relates owner_project,
   relates oper_task;
 
+relation oper_task_classified_as_task_type,
+  relates oper_task,
+  relates task_type;
+
+relation task_type_tree_classifies_oper_task,
+  relates task_type_tree,
+  relates oper_task;
+
 relation oper_task_evidenced_by_context_item,
   relates oper_task,
   relates context_item;
@@ -576,6 +1104,18 @@ relation oper_task_has_priority,
 relation oper_task_assigned_to_person,
   relates oper_task,
   relates assignee_person;
+
+relation project_has_epic_task,
+  relates owner_project,
+  relates epic_task;
+
+relation oper_task_has_work_log,
+  relates oper_task,
+  relates work_log;
+
+relation person_creates_work_log,
+  relates author_person,
+  relates work_log;
 
 relation execution_job_executed_by_agent,
   relates execution_job,
@@ -653,6 +1193,10 @@ relation project_has_cost_expense,
   relates owner_project,
   relates cost_expense;
 
+relation expense_operation_has_log,
+  relates cost_expense,
+  relates expense_operation_log;
+
 relation cost_category_classifies_expense,
   relates cost_category,
   relates cost_expense;
@@ -660,6 +1204,18 @@ relation cost_category_classifies_expense,
 relation period_buckets_cost_expense,
   relates period,
   relates cost_expense;
+
+relation person_has_legacy_finance_expense,
+  relates person,
+  relates legacy_finance_expense;
+
+relation project_has_legacy_finance_income,
+  relates owner_project,
+  relates legacy_finance_income;
+
+relation legacy_finance_income_has_type,
+  relates legacy_finance_income,
+  relates legacy_finance_income_type;
 
 relation project_has_agent_request,
   relates owner_project,
@@ -693,6 +1249,14 @@ relation project_has_voice_session,
   relates owner_project,
   relates voice_session;
 
+relation project_has_google_drive_file,
+  relates owner_project,
+  relates drive_project_file;
+
+relation project_has_voice_topic,
+  relates owner_project,
+  relates voice_topic;
+
 relation mode_tag_selected_for_voice_session,
   relates mode_tag,
   relates voice_session;
@@ -700,6 +1264,14 @@ relation mode_tag_selected_for_voice_session,
 relation voice_session_has_message,
   relates voice_session,
   relates voice_message;
+
+relation voice_session_has_topic,
+  relates voice_session,
+  relates voice_topic;
+
+relation tg_voice_session_bound_to_voice_session,
+  relates tg_voice_session,
+  relates bound_voice_session;
 
 relation voice_message_chunked_as_transcript_chunk,
   relates voice_message,

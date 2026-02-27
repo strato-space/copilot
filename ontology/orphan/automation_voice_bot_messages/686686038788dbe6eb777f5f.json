@@ -1,0 +1,52 @@
+{
+  "_id": {
+    "$oid": "686686038788dbe6eb777f5f"
+  },
+  "file_unique_id": "AgAD4XEAAjszIUs",
+  "file_id": "AwACAgIAAxkBAAIMYmhmWGPpyQOY_BuAopNFEmZm6C1GAALhcQACOzMhS41F6mqROtClNgQ",
+  "chat_id": 214255344,
+  "message_id": 3192,
+  "message_timestamp": 1751549448,
+  "duration": 1,
+  "timestamp": 1751549443282.0,
+  "processors_data": {
+    "categorization": {
+      "is_processed": true,
+      "is_processing": false,
+      "is_saved": true,
+      "is_saving": false,
+      "is_finished": true
+    },
+    "transcription": {
+      "is_saved": true,
+      "is_saving": false,
+      "is_finished": true
+    }
+  },
+  "session_id": {
+    "$oid": "686686038788dbe6eb777f5e"
+  },
+  "session_type": "multiprompt_voice_session",
+  "is_transcribed": true,
+  "created_at": {
+    "$date": "2025-07-03T13:30:43.813Z"
+  },
+  "transcription_text": "Благодарствую, Антон Владимирович.",
+  "categorization": [
+    {
+      "start": "00:00:00",
+      "end": "00:00:05",
+      "speaker": "Неопределён",
+      "text": "Благодарствую, Антон Владимирович.",
+      "related_goal": "",
+      "segment_type": "gratitude",
+      "new_pattern_detected": "",
+      "quality_flag": "normal",
+      "topic_keywords": "благодарность",
+      "keywords_grouped": "{\"gratitude\":[\"благодарю\",\"Антон Владимирович\"]}",
+      "certainty_level": "high",
+      "mentioned_roles": "",
+      "referenced_systems": ""
+    }
+  ]
+}
