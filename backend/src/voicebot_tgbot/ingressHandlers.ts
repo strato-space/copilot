@@ -290,6 +290,42 @@ const buildCodexTaskPayload = ({
   };
 };
 
+const findProjectByName = async ({
+  deps,
+  name,
+  requireGitRepo,
+}: {
+  deps: IngressDeps;
+  name: 'codex' | 'copilot';
+  requireGitRepo: boolean;
+}): Promise<CodexProject | null> =>
+  deps.db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne(
+    runtimeQuery({
+      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      is_deleted: { $ne: true },
+      ...(requireGitRepo
+        ? {
+          git_repo: { $type: 'string', $nin: [''] },
+        }
+        : {}),
+    })
+  ) as Promise<CodexProject | null>;
+
+const findSessionBootstrapCodexProject = async (deps: IngressDeps): Promise<CodexProject | null> => {
+  const codexProject = await findProjectByName({
+    deps,
+    name: 'codex',
+    requireGitRepo: false,
+  });
+  if (codexProject) return codexProject;
+
+  return findProjectByName({
+    deps,
+    name: 'copilot',
+    requireGitRepo: true,
+  });
+};
+
 const findCodexProject = async ({
   deps,
   session,
@@ -310,13 +346,18 @@ const findCodexProject = async ({
     }
   }
 
-  return deps.db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne(
-    runtimeQuery({
-      name: { $regex: /^copilot$/i },
-      is_deleted: { $ne: true },
-      git_repo: { $type: 'string', $nin: [''] },
-    })
-  ) as Promise<CodexProject | null>;
+  const codexProject = await findProjectByName({
+    deps,
+    name: 'codex',
+    requireGitRepo: true,
+  });
+  if (codexProject) return codexProject;
+
+  return findProjectByName({
+    deps,
+    name: 'copilot',
+    requireGitRepo: true,
+  });
 };
 
 const findCodexPerformer = async (deps: IngressDeps): Promise<IngressPerformer | null> =>
@@ -568,7 +609,8 @@ const findActiveSession = async (
 const createSession = async (
   deps: IngressDeps,
   context: NormalizedIngressContext,
-  performer: IngressPerformer | null
+  performer: IngressPerformer | null,
+  initialProject: CodexProject | null = null
 ): Promise<IngressSession> => {
   const createdAt = new Date();
   const sessionDoc: Record<string, unknown> = {
@@ -590,6 +632,7 @@ const createSession = async (
       VOICEBOT_PROCESSORS.FINALIZATION,
     ],
     session_processors: [VOICEBOT_JOBS.postprocessing.CREATE_TASKS],
+    ...(initialProject ? { project_id: initialProject._id } : {}),
   };
 
   const op = await deps.db.collection(VOICEBOT_COLLECTIONS.SESSIONS).insertOne(sessionDoc);
@@ -625,7 +668,10 @@ const normalizeIngressContext = (input: z.infer<typeof ingressBaseSchema>): Norm
 const resolveSessionForIngress = async (
   deps: IngressDeps,
   context: NormalizedIngressContext,
-  performer: IngressPerformer | null
+  performer: IngressPerformer | null,
+  options: {
+    preferCodexProjectForCreatedSession?: boolean;
+  } = {}
 ): Promise<{ session: IngressSession; created: boolean }> => {
   const explicitSessionRef =
     extractSessionIdFromText(context.text) ||
@@ -663,7 +709,11 @@ const resolveSessionForIngress = async (
     return { session: activeSession, created: false };
   }
 
-  const createdSession = await createSession(deps, context, performer);
+  const initialProject = options.preferCodexProjectForCreatedSession
+    ? await findSessionBootstrapCodexProject(deps)
+    : null;
+
+  const createdSession = await createSession(deps, context, performer, initialProject);
   await setActiveVoiceSession({
     db: deps.db,
     telegram_user_id: context.telegram_user_id,
@@ -842,7 +892,10 @@ export const handleTextIngress = async ({
   const performer = await findPerformerByTelegram(deps, context.telegram_user_id);
   if (!performer) return { ok: false, error: 'not_authorized' };
 
-  const { session, created } = await resolveSessionForIngress(deps, context, performer);
+  const shouldPreferCodexProject = hasTaskSignature(String(parsed.data.text || ''));
+  const { session, created } = await resolveSessionForIngress(deps, context, performer, {
+    preferCodexProjectForCreatedSession: shouldPreferCodexProject,
+  });
   const sessionId = new ObjectId(session._id);
 
   const transcriptionPayload = buildReadyTextTranscription(parsed.data.text, context.message_timestamp);
@@ -936,11 +989,14 @@ export const handleAttachmentIngress = async ({
   const performer = await findPerformerByTelegram(deps, context.telegram_user_id);
   if (!performer) return { ok: false, error: 'not_authorized' };
 
-  const { session, created } = await resolveSessionForIngress(deps, context, performer);
+  const messageText = normalizeString(parsed.data.text || parsed.data.caption || '');
+  const shouldPreferCodexProject = hasTaskSignature(messageText);
+  const { session, created } = await resolveSessionForIngress(deps, context, performer, {
+    preferCodexProjectForCreatedSession: shouldPreferCodexProject,
+  });
   const sessionId = new ObjectId(session._id);
 
   const attachments = normalizeAttachments(parsed.data.attachments);
-  const messageText = normalizeString(parsed.data.text || parsed.data.caption || '');
 
   const doc: Record<string, unknown> = {
     chat_id: context.chat_id,

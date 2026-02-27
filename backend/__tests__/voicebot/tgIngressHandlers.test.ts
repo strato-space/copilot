@@ -404,4 +404,54 @@ describe('voicebot tgbot ingress handlers', () => {
     });
     expect(codexPayloadUpdate).toBeDefined();
   });
+
+  it('auto-creates session with Codex project for @task when active session is missing', async () => {
+    const performerId = new ObjectId();
+    const codexPerformerId = new ObjectId();
+    const createdSessionId = new ObjectId();
+    const projectId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue(null);
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '3010' },
+      codexPerformer: { _id: codexPerformerId, id: 'codex', name: 'Codex', real_name: 'Codex' },
+      createdSessionId,
+      codexProject: {
+        _id: projectId,
+        name: 'Codex',
+        git_repo: 'git@github.com:strato-space/copilot.git',
+      },
+    });
+
+    const result = await handleTextIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 3010,
+        chat_id: 3010,
+        username: 'codex-autocreate-user',
+        message_id: 150,
+        message_timestamp: 1770500600,
+        text: '@task Prepare Codex delivery checklist',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.created_session).toBe(true);
+    expect(spies.sessionsInsertOne).toHaveBeenCalledTimes(1);
+    expect(spies.tasksInsertOne).toHaveBeenCalledTimes(1);
+    expect(setActiveVoiceSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session_id: createdSessionId,
+      })
+    );
+
+    const insertedSession = spies.sessionsInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(insertedSession.project_id).toEqual(projectId);
+
+    const insertedTask = spies.tasksInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    const sourceData = insertedTask.source_data as Record<string, unknown>;
+    expect(sourceData.session_id).toEqual(createdSessionId);
+    expect(insertedTask.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${createdSessionId.toHexString()}`);
+  });
 });
