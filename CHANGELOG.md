@@ -7,6 +7,9 @@
 - **20:26** Operators had no backend-native way to merge duplicate/fragmented voice sessions into one target session with explicit confirmation and audit payload.
 - **20:26** TS transcribe handler still depended on pre-downloaded local file paths for Telegram audio in some cases; missing local transport path could leave messages without transcription progress.
 - **20:26** Current Voice↔OperOps↔Codex taskflow requirements were distributed across chat context without a single agreed planning artifact for upcoming implementation waves.
+- **21:58** ERD and TypeDB tooling artifacts were split across `plan/` and `backend/scripts`, which fragmented ownership and caused path drift in docs/commands.
+- **21:58** Backend ontology npm scripts referenced legacy backend-local script paths and requirements file, creating migration risk after repository structure cleanup.
+- **22:00** Backend TypeDB script locations were physically moved to `ontology/typedb/scripts`, so leaving old `backend/scripts` copies would now be stale and could cause accidental script drift.
 
 ### FEATURE IMPLEMENTED
 - **20:26** Added persistent sessions-list UX model with tab expansion (`all`, `without_project`, `active`, `mine`), localStorage-backed filter restore, and include-deleted synchronization test coverage.
@@ -14,6 +17,11 @@
 - **20:26** Added backend/API/store scaffolding for session merge workflow with explicit confirmation phrase support and dedicated merge-log collection constants.
 - **20:26** Added Telegram transport recovery path in TS transcribe worker: resolve Telegram file metadata, download binary to local storage, persist file path, then continue transcription.
 - **20:26** Added unified planning draft for Voice↔OperOps↔Codex taskflow and recorded confirmed defaults for Codex performer, `@task` auto-session behavior, deferred worker model, and tab filtering contracts.
+- **21:58** Relocated ERD protocol/draft docs and TypeDB ingestion tooling into canonical ontology structure (`ontology/`, `ontology/typedb/scripts`) and switched backend npm commands to new paths (hard-switch, no wrappers).
+- **22:00** Added explicit canonical path migration for TypeDB script assets:
+  - deleted backend-local scripts at `backend/requirements-typedb.txt` and `backend/scripts/{run-typedb-python.sh,typedb-ontology-ingest.py,typedb-ontology-validate.py}`;
+  - added corresponding files at `ontology/typedb/scripts/requirements-typedb.txt`, `ontology/typedb/scripts/{run-typedb-python.sh,typedb-ontology-ingest.py,typedb-ontology-validate.py}`;
+  - moved ERD draft/protocol docs from `plan/` into `ontology/` with updated references in AGENTS/README.
 
 ### CHANGES
 - **20:26** Voice sessions list/front:
@@ -35,6 +43,19 @@
   - Added planning artifact: `plan/voice-operops-codex-taskflow-spec.md`.
 - **20:26** Build-env note:
   - `app/.env.production` currently includes explicit `VITE_BUILD_MINIFY` and `VITE_BUILD_SOURCEMAP` overrides as part of this checkpoint.
+- **21:58** Ontology/ERD relocation:
+  - moved `plan/str-opsportal-erd-draft-v0.md` -> `ontology/str-opsportal-erd-draft-v0.md`.
+  - moved `plan/fpf-erd-extraction-protocol-str-opsportal.md` -> `ontology/fpf-erd-extraction-protocol-str-opsportal.md`.
+  - moved TypeDB tools:
+    - `backend/requirements-typedb.txt` -> `ontology/typedb/scripts/requirements-typedb.txt`
+    - `backend/scripts/typedb-ontology-ingest.py` -> `ontology/typedb/scripts/typedb-ontology-ingest.py`
+    - `backend/scripts/typedb-ontology-validate.py` -> `ontology/typedb/scripts/typedb-ontology-validate.py`
+    - `backend/scripts/run-typedb-python.sh` -> `ontology/typedb/scripts/run-typedb-python.sh`
+- **21:58** Hard-switch paths:
+  - updated `backend/package.json` `ontology:typedb:*` scripts to run from `ontology/typedb/scripts` and use `../ontology/typedb/.venv`.
+  - updated default ingest paths in `ontology/typedb/scripts/typedb-ontology-ingest.py` to script-relative schema/deadletter locations.
+- **21:58** Documentation sync:
+  - updated references in `README.md`, `AGENTS.md`, and `ontology/typedb/README.md` to canonical ontology paths.
 
 ## 2026-02-26
 ### PROBLEM SOLVED

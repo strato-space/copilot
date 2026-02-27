@@ -417,11 +417,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added deferred design spec `plan/session-done-notify-routing-migration.md` for immediate done notification and routing-source migration to Copilot DB (tracking issue: `copilot-1y3o`).
 - Added versioned ontology assets under `ontology/typedb/` to the main repo tree (schema, mapping, validation queries, rollout notes) so TypeDB scaffold is tracked together with backend ingestion scripts.
 - Updated Voice transcription download contract to use `/api/voicebot/transcription/download/:session_id` end-to-end (store path fix, runtime-safe backend route, and Jest coverage for markdown export).
-- Added TypeDB ontology tooling scaffold in backend (`requirements-typedb.txt`, ingest/validate scripts, npm script aliases, and env examples) to support STR OpsPortal ERD ingestion workflows.
+- Added TypeDB ontology tooling scaffold with canonical scripts in `ontology/typedb/scripts/` (requirements, ingest/validate scripts, npm script aliases, and env examples) to support STR OpsPortal ERD ingestion workflows.
 - Updated OperOps Projects Tree UX: editing now opens in a dedicated modal flow instead of the split side panel, with explicit close/save handlers.
 - Synchronized local bd workspace metadata after SQLite rollback (`.beads` config/metadata and import backup artifacts) and normalized claim examples to `bd update <id> --claim`.
 - Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` as a draft architecture research document covering OSS platform options and rollout planning for OperOps/FinOps/Guide/Voice.
-- Added `plan/fpf-erd-extraction-protocol-str-opsportal.md` and `plan/str-opsportal-erd-draft-v0.md` to formalize ERD extraction workflow and provide the first consolidated STR OpsPortal domain draft.
+- Added `ontology/fpf-erd-extraction-protocol-str-opsportal.md` and `ontology/str-opsportal-erd-draft-v0.md` to formalize ERD extraction workflow and provide the first consolidated STR OpsPortal domain draft.
 - Added shared Voice session-finalization helper `backend/src/services/voicebotSessionDoneFlow.ts` and switched socket `session_done` handling to use it for consistent queue/fallback behavior.
 - Added inactivity-driven close automation script `backend/scripts/voicebot-close-inactive-sessions.ts` plus npm aliases `voice:close-idle:dry|apply` for dry-run/apply operational workflows.
 - Added diagnostics helper `backend/scripts/tmp-explain-69981f2e.ts` for one-session transcription/chunk state inspection during incident triage.

@@ -29,6 +29,10 @@ SUPPORTED_COLLECTIONS = [
 TYPEDB_SAFE_STRING_BYTES = 60_000
 VOICE_TRANSCRIPT_MAX_BYTES = 1_048_576
 VOICE_TRANSCRIPT_CHUNK_BYTES = 60_000
+SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+TYPEDB_ROOT_DIR = SCRIPT_DIR.parent
+DEFAULT_SCHEMA_PATH = TYPEDB_ROOT_DIR / "schema" / "str_opsportal_v1.tql"
+DEFAULT_DEADLETTER_PATH = TYPEDB_ROOT_DIR / "logs" / "typedb-ontology-ingest-deadletter.ndjson"
 
 
 @dataclass
@@ -100,7 +104,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--deadletter",
         type=str,
-        default="./logs/typedb-ontology-ingest-deadletter.ndjson",
+        default=str(DEFAULT_DEADLETTER_PATH),
         help="Path to deadletter NDJSON",
     )
     parser.add_argument("--typedb-addresses", type=str, default=None)
@@ -111,7 +115,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--schema",
         type=str,
-        default="../ontology/typedb/schema/str_opsportal_v1.tql",
+        default=str(DEFAULT_SCHEMA_PATH),
         help="Path to TypeQL schema",
     )
     return parser.parse_args()

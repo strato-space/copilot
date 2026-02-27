@@ -1,10 +1,14 @@
 # STR OpsPortal Ontology (TypeDB)
 
 This folder contains a first executable scaffold of the STR OpsPortal ontology in TypeDB/TypeQL, derived from:
-- `/home/strato-space/copilot/plan/str-opsportal-erd-draft-v0.md`
+- `/home/strato-space/copilot/ontology/str-opsportal-erd-draft-v0.md`
 
 ## Contents
 
+- `scripts/typedb-ontology-ingest.py` - MongoDB -> TypeDB ingestion tool
+- `scripts/typedb-ontology-validate.py` - ontology validation checks
+- `scripts/run-typedb-python.sh` - helper launcher for ontology Python venv
+- `scripts/requirements-typedb.txt` - Python dependencies for ontology tooling
 - `schema/str_opsportal_v1.tql` - ontology schema (entities, attributes, relations)
 - `mappings/mongodb_to_typedb_v1.yaml` - MongoDB to TypeDB mapping contract
 - `queries/validation_v1.tql` - validation and smoke-check queries

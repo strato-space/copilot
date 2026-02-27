@@ -259,11 +259,11 @@ Projects:
 - Added deferred migration spec `plan/session-done-notify-routing-migration.md` for immediate done notifications and routing ownership move from JSON config to Copilot DB targets.
 - Added tracked ontology package under `ontology/typedb/` (TypeQL schema, Mongo mapping, validation query set, rollout plan) to keep TypeDB model assets versioned in Copilot.
 - Updated Voice transcription download flow to use `/api/voicebot/transcription/download/:session_id` with runtime-safe markdown export handling and Jest coverage.
-- Added backend TypeDB ontology helper tooling (`requirements-typedb.txt`, ingest/validate scripts, npm aliases, and `.env` sample variables) for STR OpsPortal model ingestion.
+- Added backend TypeDB ontology helper tooling (canonical paths under `ontology/typedb/scripts/`, npm aliases, and `.env` sample variables) for STR OpsPortal model ingestion.
 - Switched OperOps Projects Tree editing to modal-based UX and removed split-pane edit card flow.
 - Synced local bd SQLite metadata/config files and stored Dolt migration import/backup artifacts in `.beads/`.
 - Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md` (draft) summarizing platform research options for OperOps/FinOps/Guide/Voice and phased implementation recommendations.
-- Added `plan/fpf-erd-extraction-protocol-str-opsportal.md` and `plan/str-opsportal-erd-draft-v0.md` for STR OpsPortal ERD extraction protocol definition and the initial consolidated ERD draft.
+- Added `ontology/fpf-erd-extraction-protocol-str-opsportal.md` and `ontology/str-opsportal-erd-draft-v0.md` for STR OpsPortal ERD extraction protocol definition and the initial consolidated ERD draft.
 - Extracted shared Voice `completeSessionDoneFlow` service and switched socket `session_done` path to it for unified close/notify behavior.
 - Added idle-active-session close automation script (`backend/scripts/voicebot-close-inactive-sessions.ts`) and npm commands `voice:close-idle:dry|apply` with JSON/JSONL outputs for operations.
 - Added session-specific diagnostics helper script `backend/scripts/tmp-explain-69981f2e.ts` for transcription/chunk payload inspection.
