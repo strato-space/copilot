@@ -86,6 +86,10 @@ const createTicketsInputSchema = z.object({
     tickets: z.array(z.object({}).passthrough()).min(1),
 });
 
+const sessionCodexTasksInputSchema = z.object({
+    session_id: z.string().trim().min(1),
+});
+
 const deleteTaskFromSessionInputSchema = z.object({
     session_id: z.string().trim().min(1),
     task_id: z.union([z.string(), z.number()]),
@@ -298,6 +302,39 @@ const toTaskText = (value: unknown): string => {
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
     return '';
+};
+
+const normalizeDateField = (value: unknown): string | number | null => {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const parsed = Date.parse(trimmed);
+        if (Number.isNaN(parsed)) return trimmed;
+        return new Date(parsed).toISOString();
+    }
+    return null;
+};
+
+const normalizeCodexTaskForApi = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object') return null;
+    const task = value as Record<string, unknown>;
+    const objectId = toIdString(task._id);
+    if (!objectId) return null;
+
+    return {
+        _id: objectId,
+        id: toTaskText(task.id),
+        name: toTaskText(task.name),
+        description: toTaskText(task.description),
+        task_status: toTaskText(task.task_status),
+        priority: toTaskText(task.priority),
+        codex_review_state: toTaskText(task.codex_review_state),
+        external_ref: toTaskText(task.external_ref),
+        created_at: normalizeDateField(task.created_at),
+        updated_at: normalizeDateField(task.updated_at),
+    };
 };
 
 const normalizeGitRepo = (value: unknown): string => {
@@ -3003,6 +3040,77 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         return res.status(200).json({ success: true, insertedCount: insertResult.insertedCount });
     } catch (error) {
         logger.error('Error in create_tickets:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/codex_tasks', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = sessionCodexTasksInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess, runtimeMismatch } = await resolveSessionAccess({ db, performer, sessionId });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const externalRef = canonicalVoiceSessionUrl(sessionId);
+        const codexTasks = await db
+            .collection(COLLECTIONS.TASKS)
+            .find(
+                mergeWithRuntimeFilter(
+                    {
+                        external_ref: externalRef,
+                        is_deleted: { $ne: true },
+                    },
+                    {
+                        field: 'runtime_tag',
+                        familyMatch: IS_PROD_RUNTIME,
+                        includeLegacyInProd: IS_PROD_RUNTIME,
+                    }
+                ),
+                {
+                    projection: {
+                        _id: 1,
+                        id: 1,
+                        name: 1,
+                        description: 1,
+                        task_status: 1,
+                        priority: 1,
+                        codex_review_state: 1,
+                        external_ref: 1,
+                        created_at: 1,
+                        updated_at: 1,
+                    },
+                }
+            )
+            .sort({ created_at: -1, _id: -1 })
+            .toArray();
+
+        return res
+            .status(200)
+            .json(
+                codexTasks
+                    .map((task) => normalizeCodexTaskForApi(task))
+                    .filter((task): task is Record<string, unknown> => task !== null)
+            );
+    } catch (error) {
+        logger.error('Error in codex_tasks:', error);
         return res.status(500).json({ error: String(error) });
     }
 });

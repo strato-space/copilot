@@ -187,6 +187,19 @@ export interface VoiceBotProject {
     } | null;
 }
 
+export interface CodexTask {
+    _id: string;
+    id?: string;
+    name?: string;
+    description?: string;
+    task_status?: string;
+    priority?: string;
+    codex_review_state?: string;
+    external_ref?: string;
+    created_at?: string | number | null;
+    updated_at?: string | number | null;
+}
+
 export interface VoiceBotPerformer {
     _id: string;
     name?: string;

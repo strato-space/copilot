@@ -8,6 +8,7 @@ describe('Voicebot utility routes parity contract', () => {
 
   it('keeps utility endpoints required by voicebot parity', () => {
     expect(source).toContain("router.post('/create_tickets'");
+    expect(source).toContain("router.post('/codex_tasks'");
     expect(source).toContain("router.post('/delete_task_from_session'");
     expect(source).toContain("router.post('/task_types'");
     expect(source).toContain("router.post('/topics'");

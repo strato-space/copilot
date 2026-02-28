@@ -10,6 +10,7 @@ import MeetingCard from '../../components/voice/MeetingCard';
 import Transcription from '../../components/voice/Transcription';
 import Categorization from '../../components/voice/Categorization';
 import PossibleTasks from '../../components/voice/PossibleTasks';
+import CodexTasks from '../../components/voice/CodexTasks';
 import CustomPromptResult from '../../components/voice/CustomPromptResult';
 import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
@@ -294,6 +295,11 @@ export default function SessionPage() {
                     />
                 </div>
             ),
+        },
+        {
+            key: 'codex',
+            label: 'Codex',
+            children: <CodexTasks />,
         },
         {
             key: 'screenshort',

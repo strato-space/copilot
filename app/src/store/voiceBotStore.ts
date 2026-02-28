@@ -19,6 +19,7 @@ import type {
     VoiceBotSessionResponse,
     VoiceSessionAttachment,
     VoiceSessionLogEvent,
+    CodexTask,
 } from '../types/voice';
 import { getVoicebotSocket, SOCKET_EVENTS } from '../services/socket';
 import { normalizeTimelineRangeSeconds } from '../utils/voiceTimeline';
@@ -54,6 +55,7 @@ interface VoiceBotState {
     activateSession: (sessionId: string) => Promise<boolean>;
     triggerSessionReadyToSummarize: (sessionId: string) => Promise<Record<string, unknown>>;
     fetchSessionLog: (sessionId: string, options?: { silent?: boolean }) => Promise<void>;
+    fetchSessionCodexTasks: (sessionId: string) => Promise<CodexTask[]>;
     editTranscriptChunk: (
         payload: { session_id: string; message_id: string; segment_oid: string; new_text: string; reason?: string },
         options?: { silent?: boolean }
@@ -971,6 +973,21 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 message.error('Не удалось загрузить лог сессии');
             }
             set({ sessionLogEvents: [] });
+            throw error;
+        }
+    },
+
+    fetchSessionCodexTasks: async (sessionId) => {
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) return [];
+        try {
+            const response = await voicebotRequest<CodexTask[]>('voicebot/codex_tasks', {
+                session_id: normalizedSessionId,
+            });
+            if (!Array.isArray(response)) return [];
+            return response;
+        } catch (error) {
+            console.error('Ошибка при загрузке Codex-задач сессии:', error);
             throw error;
         }
     },
