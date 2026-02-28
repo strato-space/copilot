@@ -196,6 +196,16 @@ export interface CodexTask {
     priority?: string;
     codex_review_state?: string;
     external_ref?: string;
+    issue_type?: string;
+    assignee?: string;
+    owner?: string;
+    created_by?: string;
+    created_by_name?: string;
+    source_kind?: string;
+    source_ref?: string;
+    labels?: string[];
+    dependencies?: string[];
+    notes?: string;
     created_at?: string | number | null;
     updated_at?: string | number | null;
 }

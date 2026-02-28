@@ -332,6 +332,16 @@ const normalizeCodexTaskForApi = (value: unknown): Record<string, unknown> | nul
         priority: toTaskText(task.priority),
         codex_review_state: toTaskText(task.codex_review_state),
         external_ref: toTaskText(task.external_ref),
+        issue_type: toTaskText(task.issue_type),
+        assignee: toTaskText(task.assignee),
+        owner: toTaskText(task.owner),
+        created_by: toTaskText(task.created_by),
+        created_by_name: toTaskText(task.created_by_name),
+        source_kind: toTaskText(task.source_kind),
+        source_ref: toTaskText(task.source_ref),
+        labels: toTaskList(task.labels),
+        dependencies: toTaskReferenceList(task.dependencies ?? task.dependencies_from_ai),
+        notes: toTaskText(task.notes),
         created_at: normalizeDateField(task.created_at),
         updated_at: normalizeDateField(task.updated_at),
     };
@@ -368,6 +378,37 @@ const toTaskDependencies = (value: unknown): string[] => {
     return value
         .map((entry) => toTaskText(entry))
         .filter(Boolean);
+};
+
+const toTaskList = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((entry) => toTaskText(entry))
+        .filter(Boolean);
+};
+
+const toTaskReferenceList = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    const references: string[] = [];
+    for (const entry of value) {
+        if (typeof entry === 'string' || typeof entry === 'number') {
+            const text = toTaskText(entry);
+            if (text) references.push(text);
+            continue;
+        }
+        if (!entry || typeof entry !== 'object') {
+            continue;
+        }
+        const record = entry as Record<string, unknown>;
+        const text =
+            toTaskText(record.id) ||
+            toTaskText(record.task_id) ||
+            toTaskText(record.title) ||
+            toTaskText(record.name) ||
+            toTaskText(record.reference);
+        if (text) references.push(text);
+    }
+    return Array.from(new Set(references));
 };
 
 const normalizeCreateTaskForStorage = (
@@ -3094,6 +3135,17 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
                         priority: 1,
                         codex_review_state: 1,
                         external_ref: 1,
+                        issue_type: 1,
+                        assignee: 1,
+                        owner: 1,
+                        created_by: 1,
+                        created_by_name: 1,
+                        source_kind: 1,
+                        source_ref: 1,
+                        labels: 1,
+                        dependencies: 1,
+                        dependencies_from_ai: 1,
+                        notes: 1,
                         created_at: 1,
                         updated_at: 1,
                     },
