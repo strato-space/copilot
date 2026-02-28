@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
 import {
+  COLLECTIONS,
+  RUNTIME_TAG,
+  TASK_STATUSES,
   VOICEBOT_FILE_STORAGE,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
@@ -23,6 +26,7 @@ import {
 } from '../../../services/transcriptionTimeline.js';
 import { getAudioDurationFromFile, splitAudioFileByDuration } from '../../../utils/audioUtils.js';
 import { getLogger } from '../../../utils/logger.js';
+import { buildSessionLink } from '../../../voicebot_tgbot/sessionTelegramMessage.js';
 
 const logger = getLogger();
 
@@ -44,6 +48,7 @@ type TranscribeResult = {
 type VoiceMessageRecord = {
   _id: ObjectId;
   session_id?: ObjectId | string;
+  user_id?: ObjectId | string | null;
   is_transcribed?: boolean;
   transcribe_attempts?: number;
   transcription_retry_reason?: string;
@@ -61,13 +66,44 @@ type VoiceMessageRecord = {
   transcription_chunks?: unknown[];
   task?: string;
   source_type?: string;
+  message_type?: string;
   file_id?: string;
   mime_type?: string;
 };
 
 type VoiceSessionRecord = {
   _id: ObjectId;
+  user_id?: ObjectId | string | null;
+  project_id?: ObjectId | string | null;
   processors?: unknown[];
+};
+
+type CodexProject = {
+  _id: ObjectId;
+  name?: string;
+  title?: string;
+  git_repo?: string | null;
+};
+
+type CodexPerformer = {
+  _id: ObjectId;
+  id?: string;
+  name?: string;
+  real_name?: string;
+};
+
+type CodexVoiceTaskPayload = {
+  trigger: 'voice_command';
+  trigger_word: 'codex' | 'кодекс';
+  text: string;
+  normalized_text: string;
+  session_id: string;
+  message_db_id: string;
+  source_type: string;
+  message_type: string;
+  external_ref: string;
+  source_ref: string;
+  created_at: string;
 };
 
 const HARD_MAX_TRANSCRIBE_ATTEMPTS = 10;
@@ -79,6 +115,11 @@ const OPENAI_TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024;
 const OPENAI_TRANSCRIBE_SEGMENT_TARGET_BYTES = 8 * 1024 * 1024;
 const OPENAI_TRANSCRIBE_MIN_SEGMENT_SECONDS = 45;
 const TELEGRAM_BOT_API_BASE_URL = 'https://api.telegram.org';
+const CODEX_VOICE_TRIGGER_PATTERN = /^\s*(codex|кодекс)(?=\s|$|[,:;.!?-])/iu;
+const CODEX_VOICE_TRIGGER_STRIP_PATTERN = /^\s*(?:codex|кодекс)(?:\s+|[,:;.!?-]\s*)?/iu;
+const CODEX_VOICE_TASK_TRIGGER = 'voice_command';
+const DEFAULT_CODEX_VOICE_TASK_TITLE = 'Voice Codex command';
+const DEFAULT_CODEX_VOICE_TASK_DESCRIPTION = 'Created from voice command trigger.';
 
 const TELEGRAM_EXTENSION_BY_MIME: Record<string, string> = {
   'audio/ogg': '.ogg',
@@ -98,6 +139,316 @@ const runtimeQuery = (query: Record<string, unknown>) =>
     familyMatch: IS_PROD_RUNTIME,
     includeLegacyInProd: IS_PROD_RUNTIME,
   });
+
+const normalizeString = (value: unknown): string => String(value ?? '').trim();
+
+const toObjectIdOrNull = (value: unknown): ObjectId | null => {
+  if (value instanceof ObjectId) return value;
+  const normalized = normalizeString(value);
+  if (!normalized || !ObjectId.isValid(normalized)) return null;
+  return new ObjectId(normalized);
+};
+
+const detectCodexVoiceTriggerWord = (value: string): 'codex' | 'кодекс' | null => {
+  const match = value.match(CODEX_VOICE_TRIGGER_PATTERN);
+  if (!match) return null;
+  const normalized = normalizeString(match[1]).toLowerCase();
+  if (normalized === 'codex') return 'codex';
+  if (normalized === 'кодекс') return 'кодекс';
+  return null;
+};
+
+const stripCodexVoiceTrigger = (value: string): string =>
+  value.replace(CODEX_VOICE_TRIGGER_STRIP_PATTERN, '').replace(/\s+/g, ' ').trim();
+
+const toCodexTaskTitle = (normalizedText: string): string => {
+  const firstLine = normalizedText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  const title = firstLine || DEFAULT_CODEX_VOICE_TASK_TITLE;
+  return title.slice(0, 180);
+};
+
+const findCodexProject = async ({
+  db,
+  session,
+}: {
+  db: ReturnType<typeof getDb>;
+  session: VoiceSessionRecord;
+}): Promise<CodexProject | null> => {
+  const sessionProjectId = toObjectIdOrNull(session.project_id);
+  if (sessionProjectId) {
+    const sessionProject = (await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne(
+      runtimeQuery({
+        _id: sessionProjectId,
+        is_deleted: { $ne: true },
+      })
+    )) as CodexProject | null;
+    if (sessionProject && normalizeString(sessionProject.git_repo)) {
+      return sessionProject;
+    }
+  }
+
+  return db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne(
+    runtimeQuery({
+      name: { $regex: /^copilot$/i },
+      is_deleted: { $ne: true },
+      git_repo: { $type: 'string', $nin: [''] },
+    })
+  ) as Promise<CodexProject | null>;
+};
+
+const findCodexPerformer = async (db: ReturnType<typeof getDb>): Promise<CodexPerformer | null> =>
+  db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).findOne(
+    runtimeQuery({
+      is_deleted: { $ne: true },
+      is_banned: { $ne: true },
+      $or: [
+        { id: { $regex: /^codex$/i } },
+        { name: { $regex: /^codex$/i } },
+        { real_name: { $regex: /^codex$/i } },
+      ],
+    }),
+    {
+      projection: { _id: 1, id: 1, name: 1, real_name: 1 },
+    }
+  ) as Promise<CodexPerformer | null>;
+
+const upsertSessionCodexPayload = async ({
+  db,
+  sessionObjectId,
+  message_id,
+  payload,
+}: {
+  db: ReturnType<typeof getDb>;
+  sessionObjectId: ObjectId;
+  message_id: string;
+  payload: CodexVoiceTaskPayload;
+}): Promise<void> => {
+  const metadataSet = {
+    'processors_data.CODEX_TASKS.is_processing': false,
+    'processors_data.CODEX_TASKS.is_processed': true,
+    'processors_data.CODEX_TASKS.job_finished_timestamp': Date.now(),
+    updated_at: new Date(),
+  };
+
+  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {
+    $set: metadataSet,
+  });
+
+  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+    runtimeQuery({
+      _id: sessionObjectId,
+      'processors_data.CODEX_TASKS.data': {
+        $not: {
+          $elemMatch: {
+            trigger: CODEX_VOICE_TASK_TRIGGER,
+            message_db_id: message_id,
+          },
+        },
+      },
+    }),
+    {
+      $push: {
+        'processors_data.CODEX_TASKS.data': payload,
+      },
+      $set: {
+        updated_at: new Date(),
+      },
+    } as Record<string, unknown>
+  );
+};
+
+const maybeCreateCodexTaskFromVoiceCommand = async ({
+  db,
+  session,
+  sessionObjectId,
+  session_id,
+  message,
+  messageObjectId,
+  message_id,
+  transcriptionText,
+}: {
+  db: ReturnType<typeof getDb>;
+  session: VoiceSessionRecord;
+  sessionObjectId: ObjectId;
+  session_id: string;
+  message: VoiceMessageRecord;
+  messageObjectId: ObjectId;
+  message_id: string;
+  transcriptionText: string;
+}): Promise<void> => {
+  const rawText = normalizeString(transcriptionText);
+  const triggerWord = detectCodexVoiceTriggerWord(rawText);
+  if (!triggerWord) return;
+
+  const normalizedText = stripCodexVoiceTrigger(rawText);
+  const timestampMs = Number(message.message_timestamp)
+    ? Number(message.message_timestamp) * 1000
+    : Date.now();
+  const payload: CodexVoiceTaskPayload = {
+    trigger: CODEX_VOICE_TASK_TRIGGER,
+    trigger_word: triggerWord,
+    text: rawText,
+    normalized_text: normalizedText,
+    session_id,
+    message_db_id: message_id,
+    source_type: normalizeString(message.source_type) || 'voice',
+    message_type: normalizeString(message.message_type) || 'voice',
+    external_ref: buildSessionLink(session_id),
+    source_ref: session_id,
+    created_at: new Date(timestampMs).toISOString(),
+  };
+
+  await upsertSessionCodexPayload({
+    db,
+    sessionObjectId,
+    message_id,
+    payload,
+  });
+
+  const existingTask = (await db.collection(COLLECTIONS.TASKS).findOne(
+    runtimeQuery({
+      is_deleted: { $ne: true },
+      codex_task: true,
+      'source_data.trigger': CODEX_VOICE_TASK_TRIGGER,
+      $or: [
+        { 'source_data.message_db_id': messageObjectId },
+        { 'source_data.message_db_id': message_id },
+      ],
+    }),
+    {
+      projection: { _id: 1 },
+    }
+  )) as { _id: ObjectId } | null;
+
+  if (existingTask?._id) {
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {
+      $set: {
+        'processors_data.CODEX_TASKS.last_task_id': existingTask._id.toHexString(),
+        updated_at: new Date(),
+      },
+    });
+    logger.info('[voicebot-worker] codex voice command task already exists', {
+      session_id,
+      message_id,
+      task_id: existingTask._id.toHexString(),
+    });
+    return;
+  }
+
+  const project = await findCodexProject({ db, session });
+  if (!project) {
+    logger.warn('[voicebot-worker] codex voice command skipped: project not found', {
+      session_id,
+      message_id,
+    });
+    return;
+  }
+
+  const codexPerformer = await findCodexPerformer(db);
+  const actorId = toObjectIdOrNull(message.user_id) || toObjectIdOrNull(session.user_id);
+  const now = new Date();
+  const deferredUntil = new Date(now.getTime() + 15 * 60 * 1000);
+
+  const taskDoc: Record<string, unknown> = {
+    id: `codex-${new ObjectId().toHexString()}`,
+    name: toCodexTaskTitle(normalizedText),
+    description: normalizedText || DEFAULT_CODEX_VOICE_TASK_DESCRIPTION,
+    priority: 'P2',
+    priority_reason: CODEX_VOICE_TASK_TRIGGER,
+    project_id: project._id,
+    project: normalizeString(project.name) || normalizeString(project.title) || 'Copilot',
+    performer_id: codexPerformer?._id || null,
+    ...(codexPerformer
+      ? {
+        performer: {
+          _id: codexPerformer._id,
+          id: codexPerformer.id || codexPerformer._id.toHexString(),
+          name: codexPerformer.name || codexPerformer.real_name || 'Codex',
+          real_name: codexPerformer.real_name || codexPerformer.name || 'Codex',
+        },
+      }
+      : {}),
+    created_by_performer_id: actorId || null,
+    source_kind: 'voice_session',
+    source_ref: session_id,
+    external_ref: payload.external_ref,
+    source: 'VOICE_BOT',
+    source_data: {
+      session_id: sessionObjectId,
+      message_db_id: messageObjectId,
+      trigger: payload.trigger,
+      payload,
+    },
+    codex_task: true,
+    codex_review_state: 'deferred',
+    codex_review_due_at: deferredUntil,
+    task_status: TASK_STATUSES.NEW_10,
+    task_status_history: [],
+    last_status_update: now,
+    status_update_checked: false,
+    is_deleted: false,
+    created_at: now,
+    updated_at: now,
+    runtime_tag: RUNTIME_TAG,
+  };
+
+  const insert = await db.collection(COLLECTIONS.TASKS).insertOne(taskDoc);
+  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {
+    $set: {
+      'processors_data.CODEX_TASKS.last_task_id': insert.insertedId.toHexString(),
+      updated_at: new Date(),
+    },
+  });
+
+  logger.info('[voicebot-worker] codex voice command task created', {
+    session_id,
+    message_id,
+    task_id: insert.insertedId.toHexString(),
+    trigger_word: triggerWord,
+  });
+};
+
+const maybeCreateCodexTaskFromVoiceCommandSafe = async ({
+  db,
+  session,
+  sessionObjectId,
+  session_id,
+  message,
+  messageObjectId,
+  message_id,
+  transcriptionText,
+}: {
+  db: ReturnType<typeof getDb>;
+  session: VoiceSessionRecord;
+  sessionObjectId: ObjectId;
+  session_id: string;
+  message: VoiceMessageRecord;
+  messageObjectId: ObjectId;
+  message_id: string;
+  transcriptionText: string;
+}): Promise<void> => {
+  try {
+    await maybeCreateCodexTaskFromVoiceCommand({
+      db,
+      session,
+      sessionObjectId,
+      session_id,
+      message,
+      messageObjectId,
+      message_id,
+      transcriptionText,
+    });
+  } catch (error) {
+    logger.warn('[voicebot-worker] codex voice command trigger failed', {
+      session_id,
+      message_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
 
 const getRetryDelayMs = (attempts: number): number => {
   const safeAttempts = Math.max(1, Number(attempts) || 1);
@@ -674,6 +1025,18 @@ export const handleTranscribeJob = async (
         },
       });
 
+      const reusedText = String(reuseSource.transcription_text || reuseSource.text || '').trim();
+      await maybeCreateCodexTaskFromVoiceCommandSafe({
+        db,
+        session,
+        sessionObjectId,
+        session_id,
+        message,
+        messageObjectId,
+        message_id,
+        transcriptionText: reusedText,
+      });
+
       await enqueueCategorizationIfEnabled({
         db,
         session,
@@ -729,6 +1092,17 @@ export const handleTranscribeJob = async (
           transcription_retry_reason: 1,
           transcription_next_attempt_at: 1,
         },
+      });
+
+      await maybeCreateCodexTaskFromVoiceCommandSafe({
+        db,
+        session,
+        sessionObjectId,
+        session_id,
+        message,
+        messageObjectId,
+        message_id,
+        transcriptionText: textFallback,
       });
 
       await enqueueCategorizationIfEnabled({
@@ -1149,6 +1523,18 @@ export const handleTranscribeJob = async (
         error_message_id: 1,
       },
     });
+
+    await maybeCreateCodexTaskFromVoiceCommandSafe({
+      db,
+      session,
+      sessionObjectId,
+      session_id,
+      message,
+      messageObjectId,
+      message_id,
+      transcriptionText: transcription_text,
+    });
+
     await enqueueCategorizationIfEnabled({
       db,
       session,

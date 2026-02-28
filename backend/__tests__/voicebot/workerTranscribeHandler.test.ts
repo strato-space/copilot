@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 
 import {
+  COLLECTIONS,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
   VOICEBOT_QUEUES,
@@ -150,6 +151,125 @@ describe('handleTranscribeJob', () => {
         }),
       })
     );
+  });
+
+  it('creates deferred codex task when transcription starts with Кодекс trigger word', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const actorId = new ObjectId();
+    const codexPerformerId = new ObjectId();
+    const projectId = new ObjectId();
+    const codexTaskId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-codex-trigger-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      user_id: actorId,
+      source_type: 'web',
+      message_type: 'voice',
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      message_timestamp: 1770489126,
+      duration: 12,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      project_id: projectId,
+      user_id: actorId,
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const projectsFindOne = jest.fn(async () => ({
+      _id: projectId,
+      name: 'Copilot',
+      git_repo: 'git@github.com:strato-space/copilot.git',
+    }));
+    const performersFindOne = jest.fn(async () => ({
+      _id: codexPerformerId,
+      id: 'codex',
+      name: 'Codex',
+      real_name: 'Codex',
+    }));
+    const tasksFindOne = jest.fn(async () => null);
+    const tasksInsertOne = jest.fn(async () => ({ insertedId: codexTaskId }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.PROJECTS) {
+          return {
+            findOne: projectsFindOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: performersFindOne,
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            findOne: tasksFindOne,
+            insertOne: tasksInsertOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValue({ text: 'Кодекс подготовь план релиза' });
+    getAudioDurationFromFileMock.mockResolvedValue(12);
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    expect(tasksFindOne).toHaveBeenCalledTimes(1);
+    expect(tasksInsertOne).toHaveBeenCalledTimes(1);
+    const insertedTask = tasksInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(insertedTask.source_kind).toBe('voice_session');
+    expect(insertedTask.created_by_performer_id).toEqual(actorId);
+    expect(insertedTask.priority_reason).toBe('voice_command');
+    expect(insertedTask.codex_review_state).toBe('deferred');
+    expect(insertedTask.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
+
+    const sourceData = insertedTask.source_data as Record<string, unknown>;
+    const payload = sourceData.payload as Record<string, unknown>;
+    expect(payload.trigger).toBe('voice_command');
+    expect(payload.trigger_word).toBe('кодекс');
+    expect(payload.session_id).toBe(sessionId.toHexString());
+    expect(payload.message_db_id).toBe(messageId.toHexString());
+    expect(payload.normalized_text).toBe('подготовь план релиза');
+
+    const codexPayloadUpdate = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call[1] as Record<string, unknown> | undefined;
+      const push = update?.$push as Record<string, unknown> | undefined;
+      return Boolean(push && Object.prototype.hasOwnProperty.call(push, 'processors_data.CODEX_TASKS.data'));
+    });
+    expect(codexPayloadUpdate).toBeDefined();
+    const codexTaskIdUpdate = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload['processors_data.CODEX_TASKS.last_task_id'] === codexTaskId.toHexString();
+    });
+    expect(codexTaskIdUpdate).toBeDefined();
   });
 
   it('splits oversized audio and transcribes it in multiple parts', async () => {
