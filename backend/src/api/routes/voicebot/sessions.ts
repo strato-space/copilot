@@ -384,6 +384,14 @@ const CODEX_PERFORMER_ALIASES = new Set([
     'codex',
     'codex-system',
 ]);
+const CODEX_PERFORMER_TEXT_KEYS = [
+    'name',
+    'real_name',
+    'full_name',
+    'username',
+    'email',
+    'corporate_email',
+];
 
 const normalizeCodexPerformerIdentifier = (value: unknown): string => {
     const raw = String(toIdString(value) ?? toTaskText(value)).trim().toLowerCase();
@@ -398,18 +406,33 @@ const isCodexPerformerIdOrAlias = (value: unknown): boolean => {
     return normalized === CODEX_PERFORMER_ID || CODEX_PERFORMER_ALIASES.has(normalized);
 };
 
+const isCodexPerformerTextValue = (value: unknown): boolean => {
+    const normalized = normalizeCodexPerformerIdentifier(value);
+    if (!normalized) return false;
+    if (CODEX_PERFORMER_ALIASES.has(normalized)) return true;
+
+    const emailLocalPart = normalized.includes('@') ? normalized.split('@')[0] : normalized;
+    return Boolean(emailLocalPart && CODEX_PERFORMER_ALIASES.has(emailLocalPart));
+};
+
 const isCodexPerformer = (value: unknown): boolean => {
     if (!value || typeof value !== 'object') return false;
     const performer = value as Record<string, unknown>;
-    return isCodexPerformerIdOrAlias(performer._id) ||
+    if (isCodexPerformerIdOrAlias(performer._id) ||
         isCodexPerformerIdOrAlias(performer.id) ||
-        isCodexPerformerIdOrAlias(performer.performer_id);
+        isCodexPerformerIdOrAlias(performer.performer_id)) {
+        return true;
+    }
+
+    return CODEX_PERFORMER_TEXT_KEYS.some((key) => isCodexPerformerTextValue(performer[key]));
 };
 
 const isCodexTaskDocument = (value: unknown): boolean => {
     if (!value || typeof value !== 'object') return false;
     const task = value as Record<string, unknown>;
-    return isCodexPerformerIdOrAlias(task.performer_id) || isCodexPerformer(task.performer);
+    return task.codex_task === true ||
+        isCodexPerformerIdOrAlias(task.performer_id) ||
+        isCodexPerformer(task.performer);
 };
 
 type CreateTicketsRowRejectionReason =
@@ -3130,6 +3153,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             const description = String(ticket.description || '').trim();
             const rawPerformerId = toTaskText(ticket.performer_id);
             const performerId = toObjectIdOrNull(rawPerformerId);
+            const isCodexPerformerByInput = isCodexPerformerIdOrAlias(rawPerformerId);
             const projectId = toObjectIdOrNull(ticket.project_id);
             const projectName = String(ticket.project || '').trim();
 
@@ -3163,7 +3187,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                 );
                 continue;
             }
-            if (!performerId) {
+            if (!isCodexPerformerByInput && !performerId) {
                 pushRejectedRow(
                     'performer_id',
                     'invalid_performer_id',
@@ -3174,27 +3198,44 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                 );
                 continue;
             }
-            if (!name || !description || !performerId || !projectId || !projectName) continue;
+            if (!name || !description || !projectId || !projectName) continue;
 
             const canAccess = await canAccessProject({ db, performer, projectId });
             if (!canAccess) continue;
 
-            const performerCacheKey = performerId.toHexString();
-            let taskPerformer = performerCache.get(performerCacheKey);
-            if (taskPerformer === undefined) {
-                taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId }) as Record<string, unknown> | null;
-                performerCache.set(performerCacheKey, taskPerformer);
-            }
-            if (!taskPerformer) {
-                pushRejectedRow(
-                    'performer_id',
-                    'performer_not_found',
-                    'Исполнитель не найден в automation_performers',
-                    {
-                        performer_id: rawPerformerId,
-                    }
-                );
-                continue;
+            let performerCacheKey = performerId?.toHexString() ?? rawPerformerId;
+            let taskPerformer: Record<string, unknown> | null = null;
+            if (!isCodexPerformerByInput) {
+                if (!performerId) {
+                    pushRejectedRow(
+                        'performer_id',
+                        'invalid_performer_id',
+                        'Некорректный performer_id: ожидается Mongo ObjectId',
+                        {
+                            performer_id: rawPerformerId,
+                        }
+                    );
+                    continue;
+                }
+                performerCacheKey = performerId.toHexString();
+                const cachedPerformer = performerCache.get(performerCacheKey);
+                if (cachedPerformer === undefined) {
+                    taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId }) as Record<string, unknown> | null;
+                    performerCache.set(performerCacheKey, taskPerformer);
+                } else {
+                    taskPerformer = cachedPerformer;
+                }
+                if (!taskPerformer) {
+                    pushRejectedRow(
+                        'performer_id',
+                        'performer_not_found',
+                        'Исполнитель не найден в automation_performers',
+                        {
+                            performer_id: rawPerformerId,
+                        }
+                    );
+                    continue;
+                }
             }
 
             const publicTaskId = await ensureUniqueTaskPublicId({
@@ -3204,7 +3245,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                 reservedIds: reservedPublicTaskIds,
             });
 
-            const isCodexTask = isCodexPerformerIdOrAlias(rawPerformerId) ||
+            const isCodexTask = isCodexPerformerByInput ||
                 isCodexPerformerIdOrAlias(performerId) ||
                 isCodexPerformer(taskPerformer);
             logger.info('[voicebot.create_tickets] routing decision', {
@@ -3246,6 +3287,13 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                 continue;
             }
 
+            if (!performerId || !taskPerformer) {
+                logger.warn('[voicebot.create_tickets] skipped non-codex task due unresolved performer payload', {
+                    ticket_id: ticketId,
+                    performer_id: rawPerformerId,
+                });
+                continue;
+            }
 
             tasksToSave.push({
                 id: publicTaskId,

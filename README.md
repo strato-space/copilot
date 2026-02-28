@@ -276,6 +276,10 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Executed swarm waves for `top_open_in_progress_ids_by_priority`: closed `copilot-g0bd` (Codex routing fix) and `copilot-603` (placeholder cleanup), and recorded verification-only audit notes for remaining `copilot-ztlv*`/`copilot-ib30` backlog items.
+- Hardened backend Codex routing in `POST /api/voicebot/create_tickets` (`backend/src/api/routes/voicebot/sessions.ts`) so Codex aliases/labels are resolved before strict ObjectId checks and cannot leak into Mongo task inserts.
+- Added regression coverage for alias/name-based Codex routing and malformed non-Codex performer paths in `backend/__tests__/voicebot/sessionUtilityRuntimeBehavior.test.ts`.
+- Documented active blocker for `copilot-ib30`: `POST /api/voicebot/activate_session` currently fails with `ERR_EMPTY_RESPONSE` in browser, blocking end-to-end screenshot paste verification.
 - Added Codex API runtime recovery for out-of-sync `bd` state: `/api/crm/codex/issue` and `/api/crm/codex/issues` now auto-run `bd sync --import-only` and retry once before returning an error.
 - Fixed OperOps Codex issue page loading for valid BD IDs (`copilot-f7w7`): `app/src/pages/operops/CodexTaskPage.tsx` now supports mixed `/api/crm/codex/issue` payload envelopes and posts both `id` + `issue_id`; added coverage in `app/__tests__/operops/codexTaskPageContract.test.ts`.
 - Fixed Voice session Codex row visual artifact (`copilot-oh19`): removed unintended inline `Открыть задачу в OperOps` text fragment from row content while preserving OperOps navigation action; updated `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.

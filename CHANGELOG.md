@@ -2,6 +2,8 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **09:42** `POST /voicebot/create_tickets` still had edge paths where Codex-intended rows (`codex-system`, Codex-labeled performer payloads) could be rejected as malformed performer IDs before Codex routing, which risked inconsistent bd-only behavior (`copilot-g0bd`).
+- **09:42** End-to-end validation for `copilot-ib30` revealed a runtime blocker: Voice UI could not activate page session (`POST /api/voicebot/activate_session` -> `ERR_EMPTY_RESPONSE`), preventing screenshot paste flow verification from the browser.
 - **09:10** Production `POST /api/crm/codex/issue` and `POST /api/crm/codex/issues` could fail with `502` when `bd --no-daemon` returned `Database out of sync with JSONL`, so valid Codex issues were unavailable until manual CLI sync (`copilot-f7w7` follow-up).
 - **09:04** OperOps Codex issue page could fail with `Не удалось загрузить задачу из BD/Codex` for valid IDs like `copilot-ib30` because frontend parsing expected a narrow response envelope while backend/route variants returned object/array wrappers (`copilot-f7w7`).
 - **09:04** Voice session Codex task rows rendered an unintended one-character-width text artifact (`Открыть задачу в OperOps`) between Issue and Title, which degraded table readability (`copilot-oh19`).
@@ -22,6 +24,8 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **09:42** Hardened Codex routing guard in `create_tickets`: Codex classification now runs before strict performer ObjectId validation, includes text-identity heuristics (`name/real_name/full_name/username/email/corporate_email`), and treats `codex_task=true` as Codex-safe bd-only path (`copilot-g0bd`).
+- **09:42** Executed multi-agent wave processing for top-priority open/in-progress `bd` IDs and persisted verification findings into issue notes without unapproved code changes; closed placeholder/no-op `copilot-603`.
 - **09:10** Added backend auto-recovery for Codex `bd` calls: when out-of-sync JSONL state is detected, route now runs `bd sync --import-only` and retries `bd list/show` once before returning failure.
 - **09:04** Added resilient Codex issue page payload normalization: frontend now accepts direct issue objects plus wrapped payload variants (`issue`, `data`, array) and sends both `id` and `issue_id` for backward-compatible route contracts (`copilot-f7w7`).
 - **09:04** Reworked Voice Codex row action rendering to icon+tooltip behavior so navigation remains available without inline stray text in the content flow (`copilot-oh19`).
@@ -42,6 +46,16 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **09:42** Codex performer routing hardening (`copilot-g0bd`):
+  - Updated `backend/src/api/routes/voicebot/sessions.ts`:
+    - added Codex text-key detection (`name`, `real_name`, `full_name`, `username`, `email`, `corporate_email`),
+    - moved Codex classification ahead of strict ObjectId guard,
+    - ensured alias IDs like `codex-system` route to bd sync without performer lookup/Mongo insert,
+    - fail-closed unresolved non-Codex rows before `insertMany`.
+  - Updated regression suite `backend/__tests__/voicebot/sessionUtilityRuntimeBehavior.test.ts` with alias/name-based Codex routing cases.
+- **09:42** Swarm execution status updates:
+  - Closed: `copilot-g0bd`, `copilot-603`.
+  - Verified and documented (kept open per audit-only contract): `copilot-ztlv`, `copilot-ztlv.12`, `copilot-ztlv.15`, `copilot-ztlv.16`, `copilot-ztlv.17`, `copilot-ztlv.18`, `copilot-ztlv.19`, `copilot-ztlv.20`, `copilot-ztlv.21`, `copilot-ztlv.22`, `copilot-ztlv.23`, `copilot-ztlv.24`, `copilot-ztlv.25`, `copilot-ib30`.
 - **09:10** Codex backend resilience hotfix:
   - Updated `backend/src/api/routes/crm/codex.ts` with out-of-sync detector, `bd sync --import-only` recovery path, and one-shot retry wrapper for `bd list/show`.
   - Updated contract guard in `backend/__tests__/api/crmCodexRouteContract.test.ts`.
