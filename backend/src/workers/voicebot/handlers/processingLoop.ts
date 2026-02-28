@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb';
 import {
+  COLLECTIONS,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
   VOICEBOT_PROCESSORS,
@@ -30,6 +31,9 @@ type ProcessingLoopResult = {
   skipped_finalize: number;
   skipped_requeue_no_queue: number;
   skipped_requeue_no_processors: number;
+  pending_codex_deferred_reviews: number;
+  queued_codex_deferred_reviews: number;
+  skipped_codex_deferred_reviews_no_queue: number;
 };
 
 type QueueLike = {
@@ -69,6 +73,10 @@ type MessageRecord = {
   categorization_retry_reason?: string;
   categorization_next_attempt_at?: number | Date | string;
   processors_data?: Record<string, unknown>;
+};
+
+type TaskRecord = {
+  _id: ObjectId;
 };
 
 const PROCESSOR_STUCK_DELAY_MS = 10 * 60 * 1000;
@@ -171,6 +179,8 @@ export const handleProcessingLoopJob = async (
   const rawSessionId = String(payload.session_id || '').trim();
   const now = Date.now();
   const runtimeQueues = getVoicebotQueues();
+  const commonQueue =
+    options.queues?.[VOICEBOT_QUEUES.COMMON] || runtimeQueues?.[VOICEBOT_QUEUES.COMMON] || null;
   const voiceQueue = options.queues?.[VOICEBOT_QUEUES.VOICE] || runtimeQueues?.[VOICEBOT_QUEUES.VOICE] || null;
   const processorsQueue =
     options.queues?.[VOICEBOT_QUEUES.PROCESSORS] || runtimeQueues?.[VOICEBOT_QUEUES.PROCESSORS] || null;
@@ -263,6 +273,9 @@ export const handleProcessingLoopJob = async (
   let resetCategorizationLocks = 0;
   let skippedRequeueNoQueue = 0;
   let skippedRequeueNoProcessors = 0;
+  let pendingCodexDeferredReviews = 0;
+  let queuedCodexDeferredReviews = 0;
+  let skippedCodexDeferredReviewsNoQueue = 0;
 
   for (const session of sessions) {
     const sessionObjectId = new ObjectId(session._id);
@@ -460,6 +473,91 @@ export const handleProcessingLoopJob = async (
     }
   }
 
+  const tasksCollection = db.collection(COLLECTIONS.TASKS) as {
+    find?: (query: Record<string, unknown>, options?: Record<string, unknown>) => {
+      sort: (sortSpec: Record<string, 1 | -1>) => {
+        limit: (value: number) => {
+          toArray: () => Promise<TaskRecord[]>;
+        };
+      };
+    };
+    countDocuments?: (query: Record<string, unknown>) => Promise<number>;
+  };
+
+  if (typeof tasksCollection.find === 'function' && typeof tasksCollection.countDocuments === 'function') {
+    const nowDate = new Date(now);
+    const dueCodexReviewFilter = runtimeQuery({
+      is_deleted: { $ne: true },
+      codex_task: true,
+      codex_review_state: 'deferred',
+      codex_review_summary_processing: { $ne: true },
+      $and: [
+        {
+          $or: [
+            { codex_review_due_at: { $exists: false } },
+            { codex_review_due_at: null },
+            { codex_review_due_at: { $lte: nowDate } },
+          ],
+        },
+        {
+          $or: [
+            { codex_review_summary_generated_at: { $exists: false } },
+            { codex_review_summary_generated_at: null },
+          ],
+        },
+        {
+          $or: [
+            { codex_review_summary_next_attempt_at: { $exists: false } },
+            { codex_review_summary_next_attempt_at: null },
+            { codex_review_summary_next_attempt_at: { $lte: nowDate } },
+          ],
+        },
+      ],
+    });
+
+    pendingCodexDeferredReviews = await tasksCollection.countDocuments(dueCodexReviewFilter);
+
+    const dueCodexReviewTasks = await tasksCollection
+      .find(dueCodexReviewFilter, { projection: { _id: 1 } })
+      .sort({
+        codex_review_due_at: 1,
+        updated_at: 1,
+        _id: 1,
+      })
+      .limit(sessionLimit)
+      .toArray();
+
+    if (!commonQueue) {
+      skippedCodexDeferredReviewsNoQueue += dueCodexReviewTasks.length;
+    } else {
+      for (const task of dueCodexReviewTasks) {
+        const taskId = task._id.toHexString();
+        const jobId = `${taskId}-CODEX_DEFERRED_REVIEW`;
+
+        try {
+          await commonQueue.add(
+            VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW,
+            {
+              task_id: taskId,
+              job_id: jobId,
+            },
+            {
+              deduplication: { id: jobId },
+              removeOnComplete: true,
+              removeOnFail: 50,
+            }
+          );
+          queuedCodexDeferredReviews += 1;
+        } catch (error) {
+          logger.error('[voicebot-worker] processing_loop codex deferred review enqueue failed', {
+            task_id: taskId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+  }
+
   const finalizeScanLimit = Math.max(sessionLimit * 20, 500);
 
   const sessionsToFinalize = (await db
@@ -548,6 +646,9 @@ export const handleProcessingLoopJob = async (
     skipped_finalize: skippedFinalize,
     skipped_requeue_no_queue: skippedRequeueNoQueue,
     skipped_requeue_no_processors: skippedRequeueNoProcessors,
+    pending_codex_deferred_reviews: pendingCodexDeferredReviews,
+    queued_codex_deferred_reviews: queuedCodexDeferredReviews,
+    skipped_codex_deferred_reviews_no_queue: skippedCodexDeferredReviewsNoQueue,
     mode: 'runtime',
   });
 
@@ -564,5 +665,8 @@ export const handleProcessingLoopJob = async (
     skipped_finalize: skippedFinalize,
     skipped_requeue_no_queue: skippedRequeueNoQueue,
     skipped_requeue_no_processors: skippedRequeueNoProcessors,
+    pending_codex_deferred_reviews: pendingCodexDeferredReviews,
+    queued_codex_deferred_reviews: queuedCodexDeferredReviews,
+    skipped_codex_deferred_reviews_no_queue: skippedCodexDeferredReviewsNoQueue,
   };
 };

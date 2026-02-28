@@ -150,6 +150,7 @@ describe('voicebot worker scaffold handlers', () => {
 
   it('manifest includes processing/transcribe/categorize/finalization handlers', () => {
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.PROCESSING]).toBeDefined();
+    expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.HANDLE_VOICE]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.HANDLE_TEXT]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.HANDLE_ATTACHMENT]).toBeDefined();

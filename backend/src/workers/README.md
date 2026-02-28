@@ -27,6 +27,7 @@ Job dispatch uses `VOICEBOT_WORKER_MANIFEST`. Unknown job names fail explicitly 
 ## Implemented TS Handlers
 - `handlers/doneMultiprompt.ts`
 - `handlers/processingLoop.ts`
+- `handlers/codexDeferredReview.ts`
 - `handlers/handleVoice.ts`
 - `handlers/handleText.ts`
 - `handlers/handleAttachment.ts`

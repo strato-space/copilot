@@ -79,6 +79,10 @@ import {
   handleCleanupEmptySessionsJob,
   type CleanupEmptySessionsJobData,
 } from './handlers/cleanupEmptySessions.js';
+import {
+  handleCodexDeferredReviewJob,
+  type CodexDeferredReviewJobData,
+} from './handlers/codexDeferredReview.js';
 
 export type VoicebotWorkerHandler = (payload: unknown) => Promise<unknown>;
 
@@ -89,6 +93,8 @@ export const VOICEBOT_WORKER_MANIFEST: Record<string, VoicebotWorkerHandler> = {
     handleProcessingLoopJob(payload as ProcessingLoopJobData),
   [VOICEBOT_JOBS.common.CLEANUP_EMPTY_SESSIONS]: async (payload: unknown) =>
     handleCleanupEmptySessionsJob(payload as CleanupEmptySessionsJobData),
+  [VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW]: async (payload: unknown) =>
+    handleCodexDeferredReviewJob(payload as CodexDeferredReviewJobData),
   [VOICEBOT_JOBS.common.HANDLE_VOICE]: async (payload: unknown) =>
     handleVoiceJob(payload as HandleVoiceJobData),
   [VOICEBOT_JOBS.common.HANDLE_TEXT]: async (payload: unknown) =>

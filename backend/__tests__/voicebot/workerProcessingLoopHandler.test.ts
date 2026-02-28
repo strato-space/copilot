@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 
 import {
+  COLLECTIONS,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
   VOICEBOT_QUEUES,
@@ -669,6 +670,85 @@ describe('handleProcessingLoopJob', () => {
           is_finalized: true,
           is_postprocessing: true,
         }),
+      })
+    );
+  });
+
+  it('queues due deferred codex tasks for review on common queue', async () => {
+    const deferredTaskId = new ObjectId();
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() => makeFindCursor([]))
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([])
+      )
+      .mockImplementation(() =>
+        makeFindCursor([])
+      );
+
+    const tasksCountDocuments = jest.fn().mockResolvedValue(1);
+    const tasksFind = jest.fn(() =>
+      makeFindCursor([
+        {
+          _id: deferredTaskId,
+        },
+      ])
+    );
+
+    const commonQueueAdd = jest.fn(async () => ({ id: 'common-job-codex-review' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: jest.fn(),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: jest.fn(),
+            countDocuments: jest.fn().mockResolvedValue(0),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            countDocuments: tasksCountDocuments,
+            find: tasksFind,
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.COMMON]: {
+            add: commonQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.pending_codex_deferred_reviews).toBe(1);
+    expect(result.queued_codex_deferred_reviews).toBe(1);
+    expect(result.skipped_codex_deferred_reviews_no_queue).toBe(0);
+    expect(commonQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW,
+      expect.objectContaining({
+        task_id: deferredTaskId.toHexString(),
+      }),
+      expect.objectContaining({
+        deduplication: expect.any(Object),
       })
     );
   });
