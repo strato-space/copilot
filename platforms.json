@@ -35,36 +35,59 @@
         "id": "app-e2e-install",
         "platform": "app",
         "workdir": "app",
+        "stage": 0,
         "command": "npm run e2e:install"
       },
       {
         "id": "app-unit",
         "platform": "app",
         "workdir": "app",
+        "stage": 1,
         "command": "npm run test"
       },
       {
-        "id": "backend-unit",
+        "id": "backend-unit-parallel",
         "platform": "backend",
         "workdir": "backend",
-        "command": "npm run test"
+        "stage": 1,
+        "command": "npm run test:parallel-safe"
+      },
+      {
+        "id": "backend-unit-serial",
+        "platform": "backend",
+        "workdir": "backend",
+        "stage": 2,
+        "command": "npm run test:serialized"
       },
       {
         "id": "miniapp-unit",
         "platform": "miniapp",
         "workdir": "miniapp",
+        "stage": 1,
         "command": "npm run test"
       },
       {
-        "id": "app-e2e",
+        "id": "app-e2e-shard-1of2",
         "platform": "app",
         "workdir": "app",
-        "command": "npm run test:e2e"
+        "stage": 3,
+        "resource_lock": "playwright:app",
+        "command": "npm run test:e2e:shard:1of2"
+      },
+      {
+        "id": "app-e2e-shard-2of2",
+        "platform": "app",
+        "workdir": "app",
+        "stage": 3,
+        "resource_lock": "playwright:app",
+        "command": "npm run test:e2e:shard:2of2"
       },
       {
         "id": "miniapp-e2e",
         "platform": "miniapp",
         "workdir": "miniapp",
+        "stage": 3,
+        "resource_lock": "playwright:miniapp",
         "command": "npm run test:e2e"
       }
     ],
@@ -73,28 +96,44 @@
         "id": "app-voice-unit",
         "platform": "app",
         "workdir": "app",
+        "stage": 0,
         "command": "npm run test -- __tests__/voice"
       },
       {
         "id": "backend-voicebot-unit",
         "platform": "backend",
         "workdir": "backend",
+        "stage": 0,
         "command": "npm run test -- __tests__/voicebot"
       },
       {
         "id": "backend-voicebot-smoke",
         "platform": "backend",
         "workdir": "backend",
+        "stage": 0,
         "command": "npm run test -- __tests__/smoke/voicebotApiSmoke.test.ts __tests__/smoke/voicebotAttachmentSmoke.test.ts"
       },
       {
-        "id": "app-voice-e2e",
+        "id": "app-voice-e2e-shard-1of2",
         "platform": "app",
         "workdir": "app",
+        "stage": 1,
+        "resource_lock": "playwright:app",
         "env": {
           "PLAYWRIGHT_BASE_URL": "https://copilot.stratospace.fun"
         },
-        "command": "npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth"
+        "command": "npm run test:e2e:voice:shard:1of2"
+      },
+      {
+        "id": "app-voice-e2e-shard-2of2",
+        "platform": "app",
+        "workdir": "app",
+        "stage": 1,
+        "resource_lock": "playwright:app",
+        "env": {
+          "PLAYWRIGHT_BASE_URL": "https://copilot.stratospace.fun"
+        },
+        "command": "npm run test:e2e:voice:shard:2of2"
       }
     ],
     "full": [
@@ -102,64 +141,82 @@
         "id": "app-e2e-install",
         "platform": "app",
         "workdir": "app",
+        "stage": 0,
         "command": "npm run e2e:install"
       },
       {
         "id": "app-unit",
         "platform": "app",
         "workdir": "app",
+        "stage": 1,
         "command": "npm run test"
       },
       {
-        "id": "backend-unit",
+        "id": "backend-unit-parallel",
         "platform": "backend",
         "workdir": "backend",
-        "command": "npm run test"
+        "stage": 1,
+        "command": "npm run test:parallel-safe"
+      },
+      {
+        "id": "backend-unit-serial",
+        "platform": "backend",
+        "workdir": "backend",
+        "stage": 2,
+        "command": "npm run test:serialized"
       },
       {
         "id": "miniapp-unit",
         "platform": "miniapp",
         "workdir": "miniapp",
+        "stage": 1,
         "command": "npm run test"
       },
       {
-        "id": "app-e2e",
+        "id": "app-e2e-shard-1of2",
         "platform": "app",
         "workdir": "app",
-        "command": "npm run test:e2e"
+        "stage": 3,
+        "resource_lock": "playwright:app",
+        "command": "npm run test:e2e:shard:1of2"
+      },
+      {
+        "id": "app-e2e-shard-2of2",
+        "platform": "app",
+        "workdir": "app",
+        "stage": 3,
+        "resource_lock": "playwright:app",
+        "command": "npm run test:e2e:shard:2of2"
       },
       {
         "id": "miniapp-e2e",
         "platform": "miniapp",
         "workdir": "miniapp",
+        "stage": 3,
+        "resource_lock": "playwright:miniapp",
         "command": "npm run test:e2e"
       },
       {
-        "id": "app-voice-unit",
+        "id": "app-voice-e2e-shard-1of2",
         "platform": "app",
         "workdir": "app",
-        "command": "npm run test -- __tests__/voice"
-      },
-      {
-        "id": "backend-voicebot-unit",
-        "platform": "backend",
-        "workdir": "backend",
-        "command": "npm run test -- __tests__/voicebot"
-      },
-      {
-        "id": "backend-voicebot-smoke",
-        "platform": "backend",
-        "workdir": "backend",
-        "command": "npm run test -- __tests__/smoke/voicebotApiSmoke.test.ts __tests__/smoke/voicebotAttachmentSmoke.test.ts"
-      },
-      {
-        "id": "app-voice-e2e",
-        "platform": "app",
-        "workdir": "app",
+        "stage": 4,
+        "resource_lock": "playwright:app",
         "env": {
           "PLAYWRIGHT_BASE_URL": "https://copilot.stratospace.fun"
         },
-        "command": "npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth"
+        "command": "npm run test:e2e:voice:shard:1of2"
+      },
+      {
+        "id": "app-voice-e2e-shard-2of2",
+        "platform": "app",
+        "workdir": "app",
+        "stage": 4,
+        "resource_lock": "playwright:app",
+        "env": {
+          "PLAYWRIGHT_BASE_URL": "https://copilot.stratospace.fun"
+        },
+        "command": "npm run test:e2e:voice:shard:2of2"
       }
     ]
   }

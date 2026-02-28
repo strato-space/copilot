@@ -337,9 +337,13 @@ MCP_SESSION_TIMEOUT=1800000
   - `./scripts/run-test-suite.sh full`
 - Structured test procedure is documented in `docs/TESTING_PROCEDURE.md`.
 - Module-level commands:
-  - `app`: `npm run test`, `npm run e2e:install`, `npm run test:e2e`
-  - `backend`: `npm run test`
+  - `app`: `npm run test`, `npm run test:serial`, `npm run e2e:install`, `npm run test:e2e`
+  - `backend`: `npm run test`, `npm run test:parallel-safe`, `npm run test:serialized`
   - `miniapp`: `npm run test`, `npm run test:e2e`
+- Default worker strategy:
+  - `app`/`miniapp` unit tests use `--maxWorkers=${JEST_MAX_WORKERS:-50%}`
+  - `backend` unit tests are split into parallel-safe + serialized groups (`BACKEND_JEST_MAX_WORKERS` tunes parallel-safe workers)
+- `full` suite executes app e2e and voice e2e as explicit shard jobs from `platforms.json`.
 - `app` E2E requires explicit `PLAYWRIGHT_BASE_URL` (default `http://127.0.0.1:3002`).
 - Scope options:
   - unauthenticated smoke: `cd app && npm run test:e2e:unauth`
@@ -474,6 +478,8 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Closed testing modernization epic `copilot-2gs1` (stages 1-8): unified test runner now executes by parallel stages with fail-fast abort, backend tests are split into explicit parallel-safe and serialized groups, and app/voice Playwright suites run via shard jobs declared in `platforms.json`.
+- Final full-suite benchmark for this wave: `163.97s -> 80.01s` (`+51.20%` wall-clock improvement).
 - Closed `copilot-sxq1.8` and synced contract coverage with extracted helper modules in voice/frontend (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus TaskPage sanitize rendering contracts.
 - Updated backend contract/runtime tests for current route shapes and ESM execution:
   - imported `jest` from `@jest/globals` in `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts`,

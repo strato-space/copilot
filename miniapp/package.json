@@ -10,7 +10,8 @@
         "build-test": "tsc -p tsconfig.json && vite build --mode test",
         "preview": "vite preview",
         "lint": "eslint \"src/**/*.{ts,tsx}\"",
-        "test": "jest --runInBand",
+        "test": "jest --maxWorkers=${JEST_MAX_WORKERS:-50%}",
+        "test:serial": "jest --runInBand",
         "test:e2e": "playwright test --config=playwright.config.ts --pass-with-no-tests",
         "test:e2e:ui": "playwright test --config=playwright.config.ts --ui --pass-with-no-tests",
         "test:e2e:headed": "playwright test --config=playwright.config.ts --headed --pass-with-no-tests"

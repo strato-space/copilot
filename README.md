@@ -274,9 +274,13 @@ The Finance Ops SPA is served by Nginx, and `/api` is proxied to the backend. Fo
   - `./scripts/run-test-suite.sh full`
 - Detailed structured procedure: `docs/TESTING_PROCEDURE.md`.
 - Module-level commands:
-  - `app`: `npm run test`, `npm run e2e:install`, `npm run test:e2e`
-  - `backend`: `npm run test`
+  - `app`: `npm run test`, `npm run test:serial`, `npm run e2e:install`, `npm run test:e2e`
+  - `backend`: `npm run test`, `npm run test:parallel-safe`, `npm run test:serialized`
   - `miniapp`: `npm run test`, `npm run test:e2e`
+- Default worker strategy:
+  - `app`/`miniapp` unit tests use `--maxWorkers=${JEST_MAX_WORKERS:-50%}`
+  - `backend` unit tests are split into parallel-safe + serialized groups (`BACKEND_JEST_MAX_WORKERS` controls parallel-safe group)
+- `full` suite now executes app e2e and voice e2e as explicit shard jobs declared in `platforms.json`.
 - `app` E2E requires explicit target URL via `PLAYWRIGHT_BASE_URL` (default config uses `http://127.0.0.1:3002`).
 - Useful `app` E2E scopes:
   - `npm run test:e2e:ui`
@@ -310,6 +314,8 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Closed testing modernization epic `copilot-2gs1` (stages 1-8): unified runner is stage-parallel with fail-fast stage control, backend tests are split into parallel-safe/serialized groups, app+voice e2e run via shard jobs, and testing docs are synchronized (`README`/`AGENTS`/`docs/TESTING_PROCEDURE.md`) with benchmark history.
+- Final full-suite benchmark for this wave: `163.97s -> 80.01s` (`+51.20%`).
 - Closed `copilot-sxq1.8` and aligned contract tests with extracted voice/frontend helper modules (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus sanitized TaskPage render contract updates.
 - Updated backend contract/runtime tests for ESM-safe execution and current route contracts:
   - `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts` (`jest` from `@jest/globals`),

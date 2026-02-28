@@ -2,6 +2,7 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **18:18** Unified monorepo test execution remained partially sequential and undocumented by stage, which made runtime optimization hard to measure and caused hidden duplicate execution (notably overlapping app/voice e2e coverage).
 - **17:18** Session closeout quality gate was blocked because `make test` is not defined in this repo and refactoring of Voice/CRM helpers left string-contract tests out of sync, causing initial `full` suite failures in app/backend checks.
 - **14:12** Voice session inline Codex details (`Подробности Codex задачи`) used a narrower side panel and plain-text rendering, so Description/Notes paragraph breaks were collapsed and the layout diverged from OperOps Codex task view (`copilot-4o2c`).
 - **13:52** Wave-1 technical debt from `desloppify` (`copilot-y9qy`) still left noisy runtime logs and duplicated helper logic across app/backend/voice-worker paths, which increased incident-triage time and made behavior changes harder to verify.
@@ -31,6 +32,11 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **18:18** Completed and closed test-pipeline epic `copilot-2gs1`:
+  - implemented stage-based parallel runner in `scripts/run-test-suite.sh`,
+  - introduced explicit backend split (`parallel-safe` + `serialized`) and bounded frontend/backend Jest worker strategy,
+  - introduced shard-based Playwright execution for app non-voice e2e and dedicated voice e2e shards,
+  - published benchmark history and operational defaults in testing documentation.
 - **17:18** Completed closeout validation for current wave (`copilot-sxq1.8`): updated frontend/backend contract tests to match extracted helper boundaries (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) and ESM-safe backend test runtime (`@jest/globals` `jest` import, `import.meta.url` path resolution).
 - **14:12** Implemented shared Codex details presentation between OperOps and Voice:
   - introduced reusable `CodexIssueDetailsCard` and switched both OperOps Codex task page and Voice inline drawer to the same component;
@@ -75,6 +81,16 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **18:18** Test platform/runtime contract updates:
+  - `scripts/run-test-suite.sh`: stage-aware parallel execution with per-job logs, stage summaries, and fail-fast stage abort behavior.
+  - `platforms.json`: explicit stage metadata, backend split jobs (`backend-unit-parallel` + `backend-unit-serial`), app e2e shard jobs, and voice e2e shard jobs.
+  - `app/package.json`, `miniapp/package.json`: default Jest worker mode (`--maxWorkers=${JEST_MAX_WORKERS:-50%}`) and serial override scripts.
+  - `backend/package.json`: split test commands (`test:parallel-safe`, `test:serialized`) and composed default `test` command.
+  - `docs/TESTING_PROCEDURE.md`, `README.md`, `AGENTS.md`: synchronized canonical testing contract, worker knobs, shard model, benchmark table, and recommended local/CI defaults.
+- **18:18** Final benchmark for `./scripts/run-test-suite.sh full` after stage 8:
+  - baseline: `163.97s`;
+  - final: `80.01s`;
+  - improvement: `+51.20%` wall-clock with stable `163` suites (`641` executed tests after removing duplicate voice execution in non-voice app shards).
 - **17:18** Test contract/runtime sync updates:
   - frontend contracts updated for refactored Voice store and sanitized task description rendering:
     - `app/__tests__/voice/{voiceImageAnchorGroupingContract,voiceSocketRealtimeContract,meetingCardSummarizeAndIconContract,accessUsersPerformerLifecycleContract,activateSessionResilienceContract,sessionPageRequestDiagnostics}.test.ts`
