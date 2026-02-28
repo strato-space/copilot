@@ -27,7 +27,7 @@ import {
     VOICEBOT_SESSION_SOURCE,
     VOICEBOT_SESSION_TYPES,
 } from '../../../constants.js';
-import { PermissionManager } from '../../../permissions/permission-manager.js';
+import { PermissionManager, type Performer } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
@@ -1432,7 +1432,6 @@ router.post('/activate_session', async (req: Request, res: Response) => {
 
 router.post(
     '/session_done',
-    PermissionManager.requirePermission(PERMISSIONS.VOICEBOT_SESSIONS.UPDATE),
     async (req: Request, res: Response) => {
         const vreq = req as VoicebotRequest;
         const { performer } = vreq;
@@ -1442,6 +1441,11 @@ router.post(
             const parsedBody = sessionDoneInputSchema.safeParse(req.body || {});
             if (!parsedBody.success) {
                 return res.status(400).json({ error: 'session_id is required' });
+            }
+
+            const userPermissions = await PermissionManager.getUserPermissions(performer as Performer, db);
+            if (!userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.UPDATE)) {
+                return res.status(403).json({ error: 'insufficient_permissions' });
             }
 
             const payload: SessionDoneInput = parsedBody.data;

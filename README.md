@@ -345,3 +345,5 @@ Projects:
   - `copilot-250m`: explicit row-level material targeting with `image_anchor_linked_message_id`.
 - Closed dependency branch `copilot-eejo -> (copilot-a3k0,copilot-c4bd,copilot-hfvd) -> copilot-p31k -> copilot-250m`.
 - Closed coordinating epic `copilot-bq81`; `bd ready` queue is empty.
+- Fixed `/session_done` permission compatibility in `backend/src/api/routes/voicebot/sessions.ts`: replaced unavailable route-level `requirePermission` call with inline `getUserPermissions` + `VOICEBOT_SESSIONS.UPDATE` check.
+- Re-ran full test scope after the fix: `app` Jest (`50` suites, `113` tests) and `backend` Jest (`76` suites, `365` tests) both passed.

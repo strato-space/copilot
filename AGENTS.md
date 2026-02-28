@@ -517,3 +517,5 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
   - explicit image/text row-group cross-links (`material_*` fields),
   - explicit row-level material targeting with `image_anchor_linked_message_id` validation/persistence and realtime propagation.
 - Closed remaining dependency chain issues (`copilot-eejo`, `copilot-a3k0`, `copilot-c4bd`, `copilot-hfvd`, `copilot-p31k`, `copilot-250m`) and closed coordinating epic `copilot-bq81`; `bd ready` is now empty.
+- Fixed `/session_done` permission compatibility in `backend/src/api/routes/voicebot/sessions.ts`: replaced route-level `PermissionManager.requirePermission(...)` call with inline `getUserPermissions(...)` check for `VOICEBOT_SESSIONS.UPDATE`.
+- Re-ran full Jest suites after the fix: `app` (`50` suites, `113` tests) and `backend` (`76` suites, `365` tests) passed with zero failures.

@@ -1343,3 +1343,5 @@
 - **04:08** Added OperOps Codex backend route `POST /api/crm/codex/issues` and OperOps `Codex` UI tab in `CRMPage`.
 - **04:35** Added explicit row-target material targeting across frontend state/UI and backend add routes (`image_anchor_linked_message_id` validation/persistence + realtime payload updates).
 - **04:36** Validation run: targeted app/backend Jest suites for every wave (`voice tabs`, `codex routes`, `deferred callbacks`, `categorization/materials grouping`) passed; `app/backend` full builds remain blocked by pre-existing unrelated TypeScript errors in CRM and voicebot-persons files.
+- **04:48** `/session_done` permission compatibility fix: replaced unavailable route middleware call with inline permission resolution (`PermissionManager.getUserPermissions`) and explicit `VOICEBOT_SESSIONS.UPDATE` guard in `backend/src/api/routes/voicebot/sessions.ts`.
+- **04:49** Validation run (full): `cd app && npm test -- --runInBand` (`50 suites`, `113 tests`) and `cd backend && npm test -- --runInBand` (`76 suites`, `365 tests`) both passed.
