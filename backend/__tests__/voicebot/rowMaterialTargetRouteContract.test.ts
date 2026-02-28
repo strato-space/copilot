@@ -6,7 +6,8 @@ describe('voice row material targeting route contract', () => {
   const source = fs.readFileSync(routePath, 'utf8');
 
   it('resolves explicit image target reference within the current session scope', () => {
-    expect(source).toContain('const resolveLinkedImageTargetMessageRef = async');
+    expect(source).toContain('const linkedImageMessageResolver = {');
+    expect(source).toContain('async resolveTargetMessageRef({');
     expect(source).toContain('image_anchor_linked_message_id');
     expect(source).toContain("return res.status(400).json({ error: 'image_anchor_linked_message_id is invalid for this session' });");
   });
@@ -15,4 +16,3 @@ describe('voice row material targeting route contract', () => {
     expect(source).toContain('image_anchor_linked_message_id: messageDoc.image_anchor_linked_message_id ?? null,');
   });
 });
-

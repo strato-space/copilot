@@ -1,0 +1,178 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 2,
+  "assessments": {
+    "abstraction_fitness": 73.8,
+    "mid_level_elegance": 71.9,
+    "low_level_elegance": 78.4
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "`app/src/store/sessionsUIStore.ts` defines many single-field setter actions for two nearly identical modal state slices (`participantModal` and `accessUsersModal`), plus duplicated open/close/add/remove flows.",
+        "`app/src/store/permissionsStore.ts` and `app/src/store/voiceBotStore.ts` each re-implement backend/proxy URL resolution and custom request wrappers instead of sharing one client abstraction.",
+        "`backend/src/services/reports/performerWeeksReport.ts` re-implements helpers (`setWeekStart`, `indexesToA1`) already abstracted in `backend/src/services/reports/jiraReportUtils.ts` and used by `jiraStyleReport.ts`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 68.9,
+        "indirection_cost": 74.2,
+        "interface_honesty": 78.3
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/sessions.ts` combines many boundary concerns (session listing/get, activation, participants/access, CRM ticket creation, merge flow, file upload/read, transcript edit/rollback/retry) in one 4911-line route module, so integration seams are implicit rather than explicit.",
+        "`backend/src/voicebot_tgbot/commandHandlers.ts` and `backend/src/voicebot_tgbot/ingressHandlers.ts` duplicate context-normalization logic (`normalizeTelegramId`, `normalizeChatId`, `toObjectIdOrNull`) instead of sharing a single ingress identity seam.",
+        "`backend/src/api/routes/voicebot/uploads.ts` and `backend/src/api/routes/voicebot/sessions.ts` both define runtime query wrappers and attachment/session access checks locally, creating parallel request pipelines with duplicated coordination logic."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "`backend/src/services/reports/performerWeeksReport.ts` and `backend/src/services/reports/jiraStyleReport.ts` contain long procedural blocks that repeat day/week aggregation, row construction, and sheet formula wiring with local ad-hoc loops and mutation.",
+        "`miniapp/src/components/ASChangeStatus.tsx` and `miniapp/src/components/ASRejectTicket.tsx` duplicate the same action-sheet footer/back-button SVG block, adding local UI duplication noise in small components.",
+        "`backend/src/permissions/permission-manager.ts` includes mixed low-level concerns (Express middleware, permission checks, contextual ownership checks, project pipeline building, mutation helper generation) in one class, which increases local branching and mutation paths."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_store_transport_layer",
+      "summary": "Frontend stores duplicate transport abstractions and drift in endpoint contract usage",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/kanbanStore.ts"
+      ],
+      "evidence": [
+        "`permissionsStore.ts` and `voiceBotStore.ts` both define their own `getBackendUrl`/`getProxyConfig` logic and custom request wrappers instead of a shared client seam.",
+        "In `permissionsStore.ts`, most calls use `voicebot/permissions/...`, but `getUserPermissions` uses `permissions/users/permissions` (missing `voicebot/`), showing contract drift enabled by duplicated wrappers."
+      ],
+      "suggestion": "Extract a shared typed voicebot API client module (URL resolution, proxy routing, auth headers, error normalization) and move permission-related route paths into constants so all stores call the same endpoint contract.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "boundary_client_duplication"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "voice_sessions_route_orchestration_blob",
+      "summary": "Voice sessions route collapses too many seams into a single orchestration module",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` is 4911 LOC and registers many endpoint families (`list/get/active/activate/session_done/create_session/.../merge/.../edit_transcript_chunk/rollback_event/...`) in one file.",
+        "The same module mixes permission filtering, runtime scoping, socket emission, file/project operations, CRM/bd task flows, and transcript event-log mutation.",
+        "`uploads.ts` carries overlapping runtime/session access and attachment-serving concerns, indicating seam split by URL shape rather than by domain workflow."
+      ],
+      "suggestion": "Split voice routes by capability boundary (session lifecycle, transcript editing, tasks/CRM, project files, attachments) and move shared access/runtime checks into reusable service-level guards used by both `sessions.ts` and `uploads.ts`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voice_boundary_overload"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "telegram_identity_normalization_duplication",
+      "summary": "Telegram command and ingress paths duplicate identity normalization rules",
+      "related_files": [
+        "backend/src/voicebot_tgbot/commandHandlers.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/src/voicebot_tgbot/runtimeNonCommandHandlers.ts"
+      ],
+      "evidence": [
+        "Both `commandHandlers.ts` and `ingressHandlers.ts` define local `normalizeTelegramId`, `normalizeChatId`, and `toObjectIdOrNull` with parallel behavior.",
+        "Both modules also re-implement runtime-scoped session lookup patterns around these conversions, while `runtimeNonCommandHandlers.ts` composes both command/non-command flows."
+      ],
+      "suggestion": "Introduce a shared Telegram identity/context normalizer module (IDs, ObjectId conversion, runtime-scoped lookup builders) and make both command and ingress handlers consume it to keep one authoritative normalization contract.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "telegram_context_duplication"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "sessions_ui_store_micro_setter_overfragmentation",
+      "summary": "Sessions UI store exposes many low-leverage micro-setters for mirrored modal state",
+      "related_files": [
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/pages/voice/SessionsListPage.tsx"
+      ],
+      "evidence": [
+        "`sessionsUIStore.ts` defines large action surfaces for `participantModal` and `accessUsersModal` with nearly duplicated `set/open/close/reset/add/remove` methods.",
+        "Most actions are single-property pass-through setters (`set(...state => ({ modal: { ...modal, field } }))`) that add API surface without adding invariants or translation logic.",
+        "This broad store API couples callers to internal shape and increases synchronization burden with session-level actions in `voiceBotStore.ts`/UI pages."
+      ],
+      "suggestion": "Replace field-level setters with a small command-style modal API (`open`, `close`, `toggleSelection`, `setSearch`) and share one generic modal state factory for participant/access user flows.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "state_api_overexposure"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "report_generation_local_helper_regression",
+      "summary": "Report services duplicate low-level spreadsheet/date helpers instead of reusing utility seam",
+      "related_files": [
+        "backend/src/services/reports/jiraStyleReport.ts",
+        "backend/src/services/reports/performerWeeksReport.ts"
+      ],
+      "evidence": [
+        "`jiraStyleReport.ts` imports shared helpers from `jiraReportUtils` (`setWeekStartMonday`, `indexesToA1`, day-bucket helpers).",
+        "`performerWeeksReport.ts` redefines equivalent helpers locally (`setWeekStart`, `indexesToA1`) and reimplements parallel date/week aggregation and formula addressing logic."
+      ],
+      "suggestion": "Move shared spreadsheet/date primitive operations into one report utility module and reuse it in both report generators; keep report-specific behavior only in high-level orchestration.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "reporting_helper_divergence"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "miniapp_actionsheet_footer_duplication",
+      "summary": "Miniapp action sheet components duplicate identical footer/back-button UI blocks",
+      "related_files": [
+        "miniapp/src/components/ASChangeStatus.tsx",
+        "miniapp/src/components/ASRejectTicket.tsx"
+      ],
+      "evidence": [
+        "Both components inline the same large footer markup and identical back-arrow SVG/button wrapper.",
+        "Only the primary action label/handler changes, but the repeated JSX block must be edited in both files for style/interaction changes."
+      ],
+      "suggestion": "Extract a shared `ActionSheetFooter` component with props for primary label/click handler and optional disabled state; keep icon markup in one place.",
+      "confidence": "high",
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "miniapp_ui_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Boundary utilities are repeatedly redefined per module instead of being centralized at subsystem seams.",
+      "Large legacy files carry migration-era additive code paths, causing orchestration and helper concerns to accumulate in-place.",
+      "Store APIs favor field-level mutators over intent-level commands, inflating abstraction surface without stronger invariants."
+    ],
+    "likely_symptoms": [
+      "duplicated_store_transport_layer",
+      "telegram_identity_normalization_duplication",
+      "report_generation_local_helper_regression",
+      "sessions_ui_store_micro_setter_overfragmentation"
+    ],
+    "possible_false_positives": [
+      "Some duplicated helpers may be intentionally isolated for deployment/runtime independence, but current overlap is high enough to be a maintenance defect."
+    ]
+  }
+}

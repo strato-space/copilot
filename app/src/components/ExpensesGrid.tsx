@@ -105,264 +105,201 @@ const TYPE_COL_WIDTH = 96;
 const NAME_COL_WIDTH = 240;
 const ACTION_COL_WIDTH = 32;
 const MONTH_COL_WIDTH = 112;
+const CLOSED_MONTH_MESSAGE = 'Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».';
 
-const buildRows = (
-  employees: EmployeeDirectoryEntry[],
-  categories: ExpenseCategory[],
-  operations: ExpenseOperation[],
-  months: string[],
-  fxRatesByMonth: Record<string, number>,
-): ExpenseRow[] => {
-  const salaryRows: ExpenseRow[] = employees.map((employee, index) => {
-    const monthCells: Record<string, ExpenseMonthCell> = {};
-    months.forEach((month, monthIndex) => {
-      monthCells[month] = {
-        amount: getEmployeeMonthlySalary(employee, month),
-        hours: getEmployeeMonthlyHours(employee, month),
-      };
-    });
-    return {
-      key: `salary-${employee.id}`,
-      kind: 'salary',
-      typeLabel: 'З/П',
-      employee_id: employee.id,
-      name: employee.name,
-      role: employee.role,
-      team: employee.team,
-      months: monthCells,
-    };
-  });
+const expenseGridUtils = {
+  notifyClosedMonth(): void {
+    message.warning(CLOSED_MONTH_MESSAGE);
+  },
+  buildColumns(
+    months: string[],
+    focusMonth: string,
+    onFocusMonthChange: (month: string) => void,
+    pinnedMonths: string[],
+    onTogglePin: (month: string) => void,
+    searchValue: string,
+    onSearchChange: (value: string) => void,
+    autoCompleteOptions: { label: string; options: { value: string }[] }[],
+    onOpenCategoryMonth: (row: ExpenseRow, month: string) => void,
+    isMonthClosed: (month: string) => boolean,
+  ): ColumnsType<ExpenseRow> {
+    const pinnedSet = new Set(pinnedMonths);
+    const orderedMonths = [
+      ...months.filter((month) => pinnedSet.has(month)),
+      ...months.filter((month) => !pinnedSet.has(month)),
+    ];
 
-  const otherRows: ExpenseRow[] = categories
-    .filter((category) => category.is_active || operations.some((op) => op.category_id === category.id))
-    .map((category) => {
-      const monthCells: Record<string, ExpenseMonthCell> = {};
-      months.forEach((month) => {
-        const monthOps = operations.filter(
-          (operation) => operation.category_id === category.id && operation.month === month,
-        );
-        const amount = monthOps.reduce((sum, op) => sum + convertToRub(op, fxRatesByMonth[month] ?? 0), 0);
-        monthCells[month] = { amount, count: monthOps.length };
-      });
-      return {
-        key: `other-${category.id}`,
-        kind: 'other',
-        typeLabel: 'Другие',
-        category_id: category.id,
-        name: category.name,
-        months: monthCells,
-      };
-    });
-
-  return [...salaryRows, ...otherRows];
-};
-
-const buildTotals = (rows: ExpenseRow[], months: string[]): Record<string, ExpenseMonthCell> => {
-  const totals: Record<string, ExpenseMonthCell> = {};
-  months.forEach((month) => {
-    totals[month] = { amount: 0, hours: 0 };
-  });
-  rows.forEach((row) => {
-    months.forEach((month) => {
-      const cell = row.months[month] ?? { amount: 0, hours: 0 };
-      const current = totals[month] ?? { amount: 0, hours: 0 };
-      totals[month] = {
-        amount: current.amount + cell.amount,
-        hours: (current.hours ?? 0) + (cell.hours ?? 0),
-      };
-    });
-  });
-  return totals;
-};
-
-const buildColumns = (
-  months: string[],
-  focusMonth: string,
-  onFocusMonthChange: (month: string) => void,
-  pinnedMonths: string[],
-  onTogglePin: (month: string) => void,
-  searchValue: string,
-  onSearchChange: (value: string) => void,
-  autoCompleteOptions: { label: string; options: { value: string }[] }[],
-  onOpenCategoryMonth: (row: ExpenseRow, month: string) => void,
-  isMonthClosed: (month: string) => boolean,
-): ColumnsType<ExpenseRow> => {
-  const pinnedSet = new Set(pinnedMonths);
-  const orderedMonths = [
-    ...months.filter((month) => pinnedSet.has(month)),
-    ...months.filter((month) => !pinnedSet.has(month)),
-  ];
-
-  const baseColumns: ColumnsType<ExpenseRow> = [
-    {
-      title: 'Тип',
-      dataIndex: 'typeLabel',
-      key: 'type',
-      width: TYPE_COL_WIDTH,
-      fixed: 'left',
-      render: (value: string, row: ExpenseRow): ReactElement => (
-        <Tag color={row.kind === 'salary' ? 'blue' : 'gold'} className="text-xs">
-          {value}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Вид',
-      dataIndex: 'name',
-      key: 'name',
-      filteredValue: searchValue ? [searchValue] : null,
-      filterIcon: (filtered: boolean): ReactElement => (
-        <FilterOutlined className={filtered ? 'text-blue-600' : 'text-slate-400'} />
-      ),
-      filterDropdown: ({ confirm, clearFilters }): ReactElement => (
-        <div className="ant-table-filter-dropdown" style={{ width: 320 }}>
-          <div className="ant-table-filter-dropdown-search">
-            <AutoComplete
-              style={{ width: '100%' }}
-              options={autoCompleteOptions}
-              placeholder="Поиск"
-              value={searchValue}
-              onSearch={onSearchChange}
-              onSelect={(value): void => {
-                onSearchChange(value);
-                confirm({ closeDropdown: true });
-              }}
-              allowClear
-              onClear={(): void => {
-                onSearchChange('');
-                clearFilters?.();
-              }}
-            />
-          </div>
-          <div className="ant-table-filter-dropdown-btns">
-            <Button
-              size="small"
-              onClick={(): void => {
-                onSearchChange('');
-                clearFilters?.();
-                confirm({ closeDropdown: true });
-              }}
-            >
-              Сброс
-            </Button>
-            <Button type="primary" size="small" onClick={(): void => confirm({ closeDropdown: true })}>
-              ОК
-            </Button>
-          </div>
-        </div>
-      ),
-      width: NAME_COL_WIDTH,
-      fixed: 'left',
-      render: (_: string, row: ExpenseRow): ReactElement => (
-        <div>
-          <div className="text-sm font-semibold text-slate-900">{row.name}</div>
-          {row.kind === 'salary' ? (
-            <div className="text-xs text-slate-500">{row.team} • {row.role}</div>
-          ) : (
-            <div className="text-xs text-slate-500">Прочие расходы</div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: '',
-      key: 'actions',
-      width: ACTION_COL_WIDTH,
-      fixed: 'left',
-      className: 'finops-actions-col',
-      onHeaderCell: (): { className: string } => ({ className: 'finops-actions-col' }),
-      render: (_: unknown, row: ExpenseRow): ReactElement => {
-        if (row.kind !== 'salary' || !row.employee_id) {
-          return <span className="inline-block w-6" />;
-        }
-        return (
-          <div className="flex items-start justify-end">
-            <Tooltip title="Редактировать исполнителя">
-              <Link
-                to={`/guide/employees-salaries?employeeId=${row.employee_id}`}
-                className="finops-row-action"
-                aria-label="Редактировать исполнителя"
-              >
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<ArrowRightOutlined />}
-                  className="text-slate-400 hover:text-slate-900"
-                />
-              </Link>
-            </Tooltip>
-          </div>
-        );
+    const baseColumns: ColumnsType<ExpenseRow> = [
+      {
+        title: 'Тип',
+        dataIndex: 'typeLabel',
+        key: 'type',
+        width: TYPE_COL_WIDTH,
+        fixed: 'left',
+        render: (value: string, row: ExpenseRow): ReactElement => (
+          <Tag color={row.kind === 'salary' ? 'blue' : 'gold'} className="text-xs">
+            {value}
+          </Tag>
+        ),
       },
-    },
-  ];
-
-  const monthColumns = orderedMonths.map((month) => {
-    const isPinned = pinnedSet.has(month);
-    const isHighlighted = isPinned || month === focusMonth;
-    const focusClass = isHighlighted ? 'finops-focus-left finops-focus-right' : '';
-    const fixedProps = isPinned ? { fixed: 'left' as const } : {};
-    return {
-      title: (
-        <div className={`finops-month-header ${isPinned ? 'is-pinned' : ''}`}>
-          <button
-            type="button"
-            onClick={(): void => onFocusMonthChange(month)}
-            className="finops-month-button finops-month-label text-slate-700 bg-transparent border-0 p-0 m-0 shadow-none rounded-none focus:outline-none focus-visible:outline-none focus-visible:ring-0"
-          >
-            <span className="font-semibold">{formatMonthLabel(month)}</span>
-          </button>
-          <button
-            type="button"
-            onClick={(): void => onTogglePin(month)}
-            aria-label={isPinned ? 'Снять закрепление' : 'Закрепить месяц'}
-            className="finops-pin-button"
-          >
-            {isPinned ? <PushpinFilled /> : <PushpinOutlined />}
-          </button>
-        </div>
-      ),
-      key: month,
-      width: MONTH_COL_WIDTH,
-      className: focusClass,
-      onHeaderCell: (): { className: string } => ({ className: focusClass }),
-      align: 'center' as const,
-      ...fixedProps,
-      onCell: (row: ExpenseRow): TdHTMLAttributes<HTMLTableCellElement> => ({
-        onClick: (): void => {
-          if (row.kind === 'other') {
-            if (isMonthClosed(month)) {
-              message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
-              return;
-            }
-            onOpenCategoryMonth(row, month);
-          }
-        },
-        className: row.kind === 'other' ? 'cursor-pointer' : undefined,
-      }),
-      render: (_: unknown, row: ExpenseRow): ReactElement => {
-        const cell = row.months[month] ?? { amount: 0, hours: 0 };
-        const amountClass = cell.amount ? 'text-[10px] font-semibold text-slate-900' : 'text-[10px] font-semibold text-slate-400';
-        const hoursValue = row.kind === 'salary' ? cell.hours ?? 0 : 0;
-        const countValue = row.kind === 'other' ? cell.count ?? 0 : 0;
-        return (
-          <div className="finops-cell-text px-2">
-            <div className={amountClass}>{cell.amount ? formatCurrency(cell.amount) : '—'}</div>
-            <div className={row.kind === 'salary'
-              ? (hoursValue ? 'text-[8px] text-slate-500' : 'text-[8px] text-slate-400')
-              : (countValue ? 'text-[8px] text-slate-500' : 'text-[8px] text-slate-400')
-            }>
-              {row.kind === 'salary'
-                ? (hoursValue ? formatHours(hoursValue) : '—')
-                : (countValue ? `${countValue} оп.` : '—')}
+      {
+        title: 'Вид',
+        dataIndex: 'name',
+        key: 'name',
+        filteredValue: searchValue ? [searchValue] : null,
+        filterIcon: (filtered: boolean): ReactElement => (
+          <FilterOutlined className={filtered ? 'text-blue-600' : 'text-slate-400'} />
+        ),
+        filterDropdown: ({ confirm, clearFilters }): ReactElement => (
+          <div className="ant-table-filter-dropdown" style={{ width: 320 }}>
+            <div className="ant-table-filter-dropdown-search">
+              <AutoComplete
+                style={{ width: '100%' }}
+                options={autoCompleteOptions}
+                placeholder="Поиск"
+                value={searchValue}
+                onSearch={onSearchChange}
+                onSelect={(value): void => {
+                  onSearchChange(value);
+                  confirm({ closeDropdown: true });
+                }}
+                allowClear
+                onClear={(): void => {
+                  onSearchChange('');
+                  clearFilters?.();
+                }}
+              />
+            </div>
+            <div className="ant-table-filter-dropdown-btns">
+              <Button
+                size="small"
+                onClick={(): void => {
+                  onSearchChange('');
+                  clearFilters?.();
+                  confirm({ closeDropdown: true });
+                }}
+              >
+                Сброс
+              </Button>
+              <Button type="primary" size="small" onClick={(): void => confirm({ closeDropdown: true })}>
+                ОК
+              </Button>
             </div>
           </div>
-        );
+        ),
+        width: NAME_COL_WIDTH,
+        fixed: 'left',
+        render: (_: string, row: ExpenseRow): ReactElement => (
+          <div>
+            <div className="text-sm font-semibold text-slate-900">{row.name}</div>
+            {row.kind === 'salary' ? (
+              <div className="text-xs text-slate-500">{row.team} • {row.role}</div>
+            ) : (
+              <div className="text-xs text-slate-500">Прочие расходы</div>
+            )}
+          </div>
+        ),
       },
-    };
-  });
+      {
+        title: '',
+        key: 'actions',
+        width: ACTION_COL_WIDTH,
+        fixed: 'left',
+        className: 'finops-actions-col',
+        onHeaderCell: (): { className: string } => ({ className: 'finops-actions-col' }),
+        render: (_: unknown, row: ExpenseRow): ReactElement => {
+          if (row.kind !== 'salary' || !row.employee_id) {
+            return <span className="inline-block w-6" />;
+          }
+          return (
+            <div className="flex items-start justify-end">
+              <Tooltip title="Редактировать исполнителя">
+                <Link
+                  to={`/guide/employees-salaries?employeeId=${row.employee_id}`}
+                  className="finops-row-action"
+                  aria-label="Редактировать исполнителя"
+                >
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<ArrowRightOutlined />}
+                    className="text-slate-400 hover:text-slate-900"
+                  />
+                </Link>
+              </Tooltip>
+            </div>
+          );
+        },
+      },
+    ];
 
-  return [...baseColumns, ...monthColumns];
+    const monthColumns = orderedMonths.map((month) => {
+      const isPinned = pinnedSet.has(month);
+      const isHighlighted = isPinned || month === focusMonth;
+      const focusClass = isHighlighted ? 'finops-focus-left finops-focus-right' : '';
+      const fixedProps = isPinned ? { fixed: 'left' as const } : {};
+      return {
+        title: (
+          <div className={`finops-month-header ${isPinned ? 'is-pinned' : ''}`}>
+            <button
+              type="button"
+              onClick={(): void => onFocusMonthChange(month)}
+              className="finops-month-button finops-month-label text-slate-700 bg-transparent border-0 p-0 m-0 shadow-none rounded-none focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+            >
+              <span className="font-semibold">{formatMonthLabel(month)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={(): void => onTogglePin(month)}
+              aria-label={isPinned ? 'Снять закрепление' : 'Закрепить месяц'}
+              className="finops-pin-button"
+            >
+              {isPinned ? <PushpinFilled /> : <PushpinOutlined />}
+            </button>
+          </div>
+        ),
+        key: month,
+        width: MONTH_COL_WIDTH,
+        className: focusClass,
+        onHeaderCell: (): { className: string } => ({ className: focusClass }),
+        align: 'center' as const,
+        ...fixedProps,
+        onCell: (row: ExpenseRow): TdHTMLAttributes<HTMLTableCellElement> => ({
+          onClick: (): void => {
+            if (row.kind === 'other') {
+              if (isMonthClosed(month)) {
+                expenseGridUtils.notifyClosedMonth();
+                return;
+              }
+              onOpenCategoryMonth(row, month);
+            }
+          },
+          className: row.kind === 'other' ? 'cursor-pointer' : undefined,
+        }),
+        render: (_: unknown, row: ExpenseRow): ReactElement => {
+          const cell = row.months[month] ?? { amount: 0, hours: 0 };
+          const amountClass = cell.amount ? 'text-[10px] font-semibold text-slate-900' : 'text-[10px] font-semibold text-slate-400';
+          const hoursValue = row.kind === 'salary' ? cell.hours ?? 0 : 0;
+          const countValue = row.kind === 'other' ? cell.count ?? 0 : 0;
+          return (
+            <div className="finops-cell-text px-2">
+              <div className={amountClass}>{cell.amount ? formatCurrency(cell.amount) : '—'}</div>
+              <div className={row.kind === 'salary'
+                ? (hoursValue ? 'text-[8px] text-slate-500' : 'text-[8px] text-slate-400')
+                : (countValue ? 'text-[8px] text-slate-500' : 'text-[8px] text-slate-400')
+              }>
+                {row.kind === 'salary'
+                  ? (hoursValue ? formatHours(hoursValue) : '—')
+                  : (countValue ? `${countValue} оп.` : '—')}
+              </div>
+            </div>
+          );
+        },
+      };
+    });
+
+    return [...baseColumns, ...monthColumns];
+  },
 };
 
 const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
@@ -407,36 +344,74 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
   const [drawerMonth, setDrawerMonth] = useState<string>('');
   const [form] = Form.useForm<ExpenseFormValues>();
 
-  const mapCategory = (payload: { category_id: string; name: string; is_active: boolean }): ExpenseCategory => ({
-    id: payload.category_id,
-    name: payload.name,
-    is_active: payload.is_active,
-  });
+  const withMutationToast = async (
+    action: () => Promise<void>,
+    errorMessage: string,
+    onError?: (error: unknown) => void,
+  ): Promise<boolean> => {
+    try {
+      await action();
+      return true;
+    } catch (error) {
+      onError?.(error);
+      message.error(errorMessage);
+      return false;
+    }
+  };
 
-  const mapOperation = (payload: {
-    operation_id: string;
-    category_id: string;
-    month: string;
-    amount: number;
-    currency: ExpenseCurrency;
-    fx_used?: number | null;
-    vendor?: string | null;
-    comment?: string | null;
-    attachments?: string[];
-  }): ExpenseOperation => ({
-    id: payload.operation_id,
-    category_id: payload.category_id,
-    month: payload.month,
-    amount: payload.amount,
-    currency: payload.currency,
-    ...(typeof payload.fx_used === 'number' ? { fx_used: payload.fx_used } : {}),
-    ...(payload.vendor ? { vendor: payload.vendor } : {}),
-    ...(payload.comment ? { comment: payload.comment } : {}),
-    ...(payload.attachments ? { attachments: payload.attachments } : {}),
-  });
+  const ensureMonthIsOpen = (month: string): boolean => {
+    if (!isMonthClosed(month)) {
+      return true;
+    }
+    expenseGridUtils.notifyClosedMonth();
+    return false;
+  };
 
   const rows = useMemo(
-    (): ExpenseRow[] => buildRows(employees, categories, operations, months, fxRatesByMonth),
+    (): ExpenseRow[] => {
+      const salaryRows = employees.map((employee) => {
+        const monthCells: Record<string, ExpenseMonthCell> = {};
+        months.forEach((month) => {
+          monthCells[month] = {
+            amount: getEmployeeMonthlySalary(employee, month),
+            hours: getEmployeeMonthlyHours(employee, month),
+          };
+        });
+        return {
+          key: `salary-${employee.id}`,
+          kind: 'salary' as const,
+          typeLabel: 'З/П',
+          employee_id: employee.id,
+          name: employee.name,
+          role: employee.role,
+          team: employee.team,
+          months: monthCells,
+        };
+      });
+
+      const otherRows = categories
+        .filter((category) => category.is_active || operations.some((op) => op.category_id === category.id))
+        .map((category) => {
+          const monthCells: Record<string, ExpenseMonthCell> = {};
+          months.forEach((month) => {
+            const monthOps = operations.filter(
+              (operation) => operation.category_id === category.id && operation.month === month,
+            );
+            const amount = monthOps.reduce((sum, op) => sum + convertToRub(op, fxRatesByMonth[month] ?? 0), 0);
+            monthCells[month] = { amount, count: monthOps.length };
+          });
+          return {
+            key: `other-${category.id}`,
+            kind: 'other' as const,
+            typeLabel: 'Другие',
+            category_id: category.id,
+            name: category.name,
+            months: monthCells,
+          };
+        });
+
+      return [...salaryRows, ...otherRows];
+    },
     [employees, categories, operations, months, fxRatesByMonth],
   );
 
@@ -463,7 +438,23 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
   }, [rows, searchValue]);
 
   const totalsByMonth = useMemo(
-    (): Record<string, ExpenseMonthCell> => buildTotals(filteredRows, months),
+    (): Record<string, ExpenseMonthCell> => {
+      const totals: Record<string, ExpenseMonthCell> = {};
+      months.forEach((month) => {
+        totals[month] = { amount: 0, hours: 0 };
+      });
+      filteredRows.forEach((row) => {
+        months.forEach((month) => {
+          const cell = row.months[month] ?? { amount: 0, hours: 0 };
+          const current = totals[month] ?? { amount: 0, hours: 0 };
+          totals[month] = {
+            amount: current.amount + cell.amount,
+            hours: (current.hours ?? 0) + (cell.hours ?? 0),
+          };
+        });
+      });
+      return totals;
+    },
     [filteredRows, months],
   );
 
@@ -482,34 +473,9 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
     setPinnedMonths((prev) => togglePinnedMonth(prev, month, focusMonth));
   };
 
-  const handleAddCategory = async (): Promise<void> => {
-    const trimmed = categoryInput.trim();
-    if (!trimmed) {
-      return;
-    }
-    try {
-      const response = await apiClient.post('/finops/expenses/categories', {
-        name: trimmed,
-        is_active: true,
-      });
-      const payload = response.data?.data as { category_id: string; name: string; is_active: boolean } | undefined;
-      if (!payload) {
-        throw new Error('Invalid response');
-      }
-      const newCategory = mapCategory(payload);
-      addCategory(newCategory);
-      setCategoryInput('');
-      form.setFieldValue('categoryId', newCategory.id);
-      message.success('Категория добавлена');
-    } catch {
-      message.error('Не удалось добавить категорию');
-    }
-  };
-
   const openExpenseModal = (categoryId?: string, month?: string, operation?: ExpenseOperation): void => {
     const targetMonth = month ?? focusMonth;
-    if (isMonthClosed(targetMonth)) {
-      message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
+    if (!ensureMonthIsOpen(targetMonth)) {
       return;
     }
     setEditingOperation(operation ?? null);
@@ -551,87 +517,152 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
     },
   }));
 
-  const handleSaveExpense = async (): Promise<void> => {
-    try {
-      const values = await form.validateFields();
-      const month = values.month.format('YYYY-MM');
-      const fxAuto = fxRatesByMonth[month];
-      const fxUsed = values.currency === 'USD' ? (fxAuto ?? values.fxManual ?? 0) : undefined;
-      const payload = {
-        category_id: values.categoryId,
-        month,
-        amount: values.amount,
-        currency: values.currency,
-        ...(typeof fxUsed === 'number' ? { fx_used: fxUsed } : {}),
-        ...(values.vendor ? { vendor: values.vendor } : {}),
-        ...(values.comment ? { comment: values.comment } : {}),
-        ...(values.attachments?.length
-          ? { attachments: values.attachments.map((file) => (file.response as { name?: string })?.name ?? file.name) }
-          : {}),
-      };
-
-      if (editingOperation) {
-        const response = await apiClient.patch(`/finops/expenses/operations/${editingOperation.id}`, payload);
-        const updated = mapOperation(response.data?.data);
-        updateOperation(updated);
-        message.success('Расход обновлён');
-      } else {
-        const response = await apiClient.post('/finops/expenses/operations', payload);
-        const created = mapOperation(response.data?.data);
-        addOperation(created);
-        message.success('Расход добавлен');
+  const expenseActions = {
+    addCategory: async (): Promise<void> => {
+      const trimmed = categoryInput.trim();
+      if (!trimmed) {
+        return;
       }
-      setExpenseModalOpen(false);
-      setEditingOperation(null);
-      form.resetFields();
-    } catch {
-      // validation errors
-    }
-  };
+      await withMutationToast(async () => {
+        const response = await apiClient.post('/finops/expenses/categories', {
+          name: trimmed,
+          is_active: true,
+        });
+        const payload = response.data?.data as { category_id: string; name: string; is_active: boolean } | undefined;
+        if (!payload) {
+          throw new Error('Invalid response');
+        }
+        const newCategory: ExpenseCategory = {
+          id: payload.category_id,
+          name: payload.name,
+          is_active: payload.is_active,
+        };
+        addCategory(newCategory);
+        setCategoryInput('');
+        form.setFieldValue('categoryId', newCategory.id);
+        message.success('Категория добавлена');
+      }, 'Не удалось добавить категорию');
+    },
+    saveExpense: async (): Promise<void> => {
+      try {
+        const values = await form.validateFields();
+        const month = values.month.format('YYYY-MM');
+        const fxAuto = fxRatesByMonth[month];
+        const fxUsed = values.currency === 'USD' ? (fxAuto ?? values.fxManual ?? 0) : undefined;
+        const payload = {
+          category_id: values.categoryId,
+          month,
+          amount: values.amount,
+          currency: values.currency,
+          ...(typeof fxUsed === 'number' ? { fx_used: fxUsed } : {}),
+          ...(values.vendor ? { vendor: values.vendor } : {}),
+          ...(values.comment ? { comment: values.comment } : {}),
+          ...(values.attachments?.length
+            ? { attachments: values.attachments.map((file) => (file.response as { name?: string })?.name ?? file.name) }
+            : {}),
+        };
 
-  const handleDeleteOperation = async (operationId: string): Promise<void> => {
-    const operation = operations.find((item) => item.id === operationId);
-    if (operation && isMonthClosed(operation.month)) {
-      message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
-      return;
-    }
-    try {
-      await apiClient.delete(`/finops/expenses/operations/${operationId}`);
-      deleteOperation(operationId);
-      message.success('Операция удалена');
-    } catch {
-      message.error('Не удалось удалить операцию');
-    }
-  };
-
-  const handleUpload: UploadProps['customRequest'] = async (options) => {
-    const { file, onSuccess, onError } = options;
-    try {
-      const formData = new FormData();
-      formData.append('file', file as Blob);
-      const response = await apiClient.post('/uploads/expense-attachments', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        if (editingOperation) {
+          const response = await apiClient.patch(`/finops/expenses/operations/${editingOperation.id}`, payload);
+          const payloadData = response.data?.data as {
+            operation_id: string;
+            category_id: string;
+            month: string;
+            amount: number;
+            currency: ExpenseCurrency;
+            fx_used?: number | null;
+            vendor?: string | null;
+            comment?: string | null;
+            attachments?: string[];
+          };
+          const updated: ExpenseOperation = {
+            id: payloadData.operation_id,
+            category_id: payloadData.category_id,
+            month: payloadData.month,
+            amount: payloadData.amount,
+            currency: payloadData.currency,
+            ...(typeof payloadData.fx_used === 'number' ? { fx_used: payloadData.fx_used } : {}),
+            ...(payloadData.vendor ? { vendor: payloadData.vendor } : {}),
+            ...(payloadData.comment ? { comment: payloadData.comment } : {}),
+            ...(payloadData.attachments ? { attachments: payloadData.attachments } : {}),
+          };
+          updateOperation(updated);
+          message.success('Расход обновлён');
+        } else {
+          const response = await apiClient.post('/finops/expenses/operations', payload);
+          const payloadData = response.data?.data as {
+            operation_id: string;
+            category_id: string;
+            month: string;
+            amount: number;
+            currency: ExpenseCurrency;
+            fx_used?: number | null;
+            vendor?: string | null;
+            comment?: string | null;
+            attachments?: string[];
+          };
+          const created: ExpenseOperation = {
+            id: payloadData.operation_id,
+            category_id: payloadData.category_id,
+            month: payloadData.month,
+            amount: payloadData.amount,
+            currency: payloadData.currency,
+            ...(typeof payloadData.fx_used === 'number' ? { fx_used: payloadData.fx_used } : {}),
+            ...(payloadData.vendor ? { vendor: payloadData.vendor } : {}),
+            ...(payloadData.comment ? { comment: payloadData.comment } : {}),
+            ...(payloadData.attachments ? { attachments: payloadData.attachments } : {}),
+          };
+          addOperation(created);
+          message.success('Расход добавлен');
+        }
+        setExpenseModalOpen(false);
+        setEditingOperation(null);
+        form.resetFields();
+      } catch {
+        // validation errors
+      }
+    },
+    deleteOperation: async (operationId: string): Promise<void> => {
+      const operation = operations.find((item) => item.id === operationId);
+      if (operation && !ensureMonthIsOpen(operation.month)) {
+        return;
+      }
+      await withMutationToast(async () => {
+        await apiClient.delete(`/finops/expenses/operations/${operationId}`);
+        deleteOperation(operationId);
+        message.success('Операция удалена');
+      }, 'Не удалось удалить операцию');
+    },
+    upload: async (options: Parameters<NonNullable<UploadProps['customRequest']>>[0]): Promise<void> => {
+      const { file, onSuccess, onError } = options;
+      await withMutationToast(async () => {
+        const formData = new FormData();
+        formData.append('file', file as Blob);
+        const response = await apiClient.post('/uploads/expense-attachments', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        onSuccess?.(response.data?.data ?? response.data);
+        message.success('Файл загружен');
+      }, 'Не удалось загрузить файл', (error) => {
+        if (error instanceof Error) {
+          onError?.(error);
+        } else {
+          onError?.(new Error('Upload failed'));
+        }
       });
-      onSuccess?.(response.data?.data ?? response.data);
-      message.success('Файл загружен');
-    } catch (error) {
-      onError?.(error as Error);
-      message.error('Не удалось загрузить файл');
-    }
-  };
-
-  const handleOpenCategoryMonth = (row: ExpenseRow, month: string): void => {
-    if (row.kind !== 'other' || !row.category_id) {
-      return;
-    }
-    if (isMonthClosed(month)) {
-      message.warning('Месяц закрыт — изменения недоступны. Откройте месяц в разделе «Бонусы».');
-      return;
-    }
-    const category = categories.find((item) => item.id === row.category_id) ?? null;
-    setDrawerCategory(category);
-    setDrawerMonth(month);
-    setDrawerOpen(true);
+    },
+    openCategoryMonth: (row: ExpenseRow, month: string): void => {
+      if (row.kind !== 'other' || !row.category_id) {
+        return;
+      }
+      if (!ensureMonthIsOpen(month)) {
+        return;
+      }
+      const category = categories.find((item) => item.id === row.category_id) ?? null;
+      setDrawerCategory(category);
+      setDrawerMonth(month);
+      setDrawerOpen(true);
+    },
   };
 
   if (rows.length === 0) {
@@ -681,7 +712,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
           <Button size="small" type="link" onClick={(): void => openExpenseModal(operation.category_id, operation.month, operation)}>
             Редактировать
           </Button>
-          <Button size="small" type="link" danger onClick={(): void => { void handleDeleteOperation(operation.id); }}>
+          <Button size="small" type="link" danger onClick={(): void => { void expenseActions.deleteOperation(operation.id); }}>
             Удалить
           </Button>
         </Space>
@@ -695,7 +726,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
         size="small"
         pagination={false}
         dataSource={filteredRows}
-        columns={buildColumns(
+        columns={expenseGridUtils.buildColumns(
           months,
           focusMonth,
           onFocusMonthChange,
@@ -704,7 +735,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
           searchValue,
           setSearchValue,
           autoCompleteOptions,
-          handleOpenCategoryMonth,
+          expenseActions.openCategoryMonth,
           isMonthClosed,
         )}
         rowClassName={(): string => 'finops-row-project'}
@@ -806,7 +837,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
       <Modal
         open={expenseModalOpen}
         onCancel={(): void => setExpenseModalOpen(false)}
-        onOk={handleSaveExpense}
+        onOk={expenseActions.saveExpense}
         title={editingOperation ? 'Редактировать расход' : 'Добавить расход'}
         okText={editingOperation ? 'Сохранить' : 'Добавить'}
       >
@@ -840,7 +871,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
                       value={categoryInput}
                       onChange={(event): void => setCategoryInput(event.target.value)}
                     />
-                    <Button type="link" onClick={handleAddCategory}>
+                    <Button type="link" onClick={(): void => { void expenseActions.addCategory(); }}>
                       Добавить
                     </Button>
                   </Space>
@@ -917,7 +948,7 @@ const ExpensesGrid = forwardRef<ExpensesGridHandle, Props>(({
             }}
           </Form.Item>
           <Form.Item label="Вложения" name="attachments" valuePropName="fileList">
-            <Upload multiple customRequest={handleUpload}>
+            <Upload multiple customRequest={expenseActions.upload}>
               <Button icon={<PlusOutlined />}>Загрузить</Button>
             </Upload>
           </Form.Item>

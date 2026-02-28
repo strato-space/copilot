@@ -1,15 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,
 } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
-import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
-import { resolveCustomPromptsDir } from '../customPromptsDir.js';
-import { getCategorizationData, parseJsonArray } from './messageProcessors.js';
+import { getCategorizationData } from './messageProcessors.js';
+import { getCustomPromptText, normalizeCustomPromptRows } from './shared/customPromptShared.js';
+import { createOpenAiClient, getErrorMessage, normalizeString, runtimeQuery } from './shared/sharedRuntime.js';
 
 const logger = getLogger();
 
@@ -39,44 +36,6 @@ type MessageRecord = {
   session_id?: ObjectId | string;
   categorization?: unknown[];
   processors_data?: Record<string, unknown>;
-};
-
-const runtimeQuery = (query: Record<string, unknown>) =>
-  mergeWithRuntimeFilter(query, {
-    field: 'runtime_tag',
-    familyMatch: IS_PROD_RUNTIME,
-    includeLegacyInProd: IS_PROD_RUNTIME,
-  });
-
-const normalizeString = (value: unknown): string => {
-  if (typeof value === 'string') return value;
-  if (value == null) return '';
-  return String(value);
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return String(error);
-};
-
-const createOpenAiClient = (): OpenAI | null => {
-  const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
-  if (!apiKey) return null;
-  return new OpenAI({ apiKey });
-};
-
-const getCustomPromptText = (processorName: string): string | null => {
-  const promptsDir = resolveCustomPromptsDir();
-  const fileName = processorName.endsWith('.md') ? processorName : `${processorName}.md`;
-  const promptFilePath = path.join(promptsDir, fileName);
-  if (!existsSync(promptFilePath)) return null;
-
-  try {
-    return readFileSync(promptFilePath, 'utf8');
-  } catch {
-    return null;
-  }
 };
 
 export const handleCustomPromptJob = async (
@@ -183,16 +142,7 @@ export const handleCustomPromptJob = async (
     });
 
     const outputText = normalizeString((response as { output_text?: string }).output_text);
-    const parsedRows = parseJsonArray(outputText);
-    const normalizedRows = parsedRows
-      .filter((row) => row && typeof row === 'object')
-      .map((row) => {
-        const item = row as Record<string, unknown>;
-        return {
-          ...item,
-          result: normalizeString(item.result),
-        };
-      });
+    const normalizedRows = normalizeCustomPromptRows(outputText);
 
     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
       $set: {

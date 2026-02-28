@@ -7,8 +7,8 @@ import {
 } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
-import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
+import { getErrorMessage, runtimeQuery } from './shared/sharedRuntime.js';
 
 const logger = getLogger();
 
@@ -86,19 +86,6 @@ type NormalizedTask = {
   task_id_from_ai: string;
   dependencies_from_ai: string[];
   dialogue_reference: string;
-};
-
-const runtimeQuery = (query: Record<string, unknown>) =>
-  mergeWithRuntimeFilter(query, {
-    field: 'runtime_tag',
-    familyMatch: IS_PROD_RUNTIME,
-    includeLegacyInProd: IS_PROD_RUNTIME,
-  });
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return String(error);
 };
 
 const isModelNotFoundError = (error: unknown): boolean => {

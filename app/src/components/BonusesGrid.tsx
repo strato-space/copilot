@@ -83,9 +83,9 @@ const resolveEmployee = (
     name: normalizeName(employee.name),
   }));
   for (const alias of aliases) {
-    const found = normalized.find((entry) => entry.name.includes(alias));
-    if (found) {
-      return found.employee;
+    const matchedEmployeeEntry = normalized.find((entry) => entry.name.includes(alias));
+    if (matchedEmployeeEntry) {
+      return matchedEmployeeEntry.employee;
     }
   }
   return null;

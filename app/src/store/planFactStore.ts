@@ -7,7 +7,7 @@ import {
   type PlanFactProjectRow,
 } from '../services/types';
 
-interface PlanFactState {
+interface PlanFactDataSlice {
   data: PlanFactGridResponse | null;
   loading: boolean;
   error: string | null;
@@ -15,6 +15,9 @@ interface PlanFactState {
   focusMonth: string;
   forecastVersionId: string;
   dateRange: [string, string];
+}
+
+interface PlanFactActionsSlice {
   fetchPlanFact: () => Promise<void>;
   updateProjectMonth: (
     customerId: string,
@@ -27,6 +30,8 @@ interface PlanFactState {
   setFocusMonth: (month: string) => void;
   setForecastVersionId: (value: string) => void;
 }
+
+type PlanFactState = PlanFactDataSlice & PlanFactActionsSlice;
 
 const now = dayjs();
 const initialRangeStart = now.format('YYYY-MM');

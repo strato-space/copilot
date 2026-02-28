@@ -21,6 +21,23 @@ interface MeetingCardProps {
 }
 
 type PerformerRecord = Record<string, unknown>;
+type ControlAction = 'new' | 'rec' | 'cut' | 'pause' | 'done';
+
+interface MeetingCardUiState {
+    isEditingTitle: boolean;
+    isGeneratingTitle: boolean;
+    isSummarizing: boolean;
+    isRestartingProcessing: boolean;
+    busyControlAction: ControlAction | null;
+}
+
+const createInitialUiState = (): MeetingCardUiState => ({
+    isEditingTitle: false,
+    isGeneratingTitle: false,
+    isSummarizing: false,
+    isRestartingProcessing: false,
+    busyControlAction: null,
+});
 
 const getInitials = (fullName: string): string => {
     const trimmed = String(fullName || '').trim();
@@ -46,7 +63,7 @@ const resolvePerformer = (performers: PerformerRecord[] | null, id: string): Per
     return performers.find((performer) => String(performer._id || '').trim() === id);
 };
 
-export default function MeetingCard({ onCustomPromptResult, activeTab }: MeetingCardProps) {
+function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps) {
     const SESSION_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_ID';
     const SESSION_TAGS_STORAGE_KEY = 'voicebot_dialogue_tags';
     const {
@@ -72,22 +89,18 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
 
     const { openParticipantModal, openAccessUsersModal, generateSessionTitle } = useSessionsUIStore();
     const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
-    const [isEditing, setIsEditing] = useState(false);
-    const [localSessionName, setLocalSessionName] = useState(voiceBotSession?.session_name || '');
+    const [uiState, setUiState] = useState<MeetingCardUiState>(() => createInitialUiState());
+    const [sessionNameDraft, setSessionNameDraft] = useState('');
     const [customPromptModalVisible, setCustomPromptModalVisible] = useState(false);
     const [messageApi, contextHolder] = message.useMessage();
-    const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
-    const [isSummarizing, setIsSummarizing] = useState(false);
     const [summarizeDisabledUntil, setSummarizeDisabledUntil] = useState<number | null>(null);
     const [fabSessionState, setFabSessionState] = useState('idle');
     const [fabActiveSessionId, setFabActiveSessionId] = useState('');
-    const [isNewStarting, setIsNewStarting] = useState(false);
-    const [isRecStarting, setIsRecStarting] = useState(false);
-    const [isCutting, setIsCutting] = useState(false);
-    const [isPausing, setIsPausing] = useState(false);
-    const [isFinishing, setIsFinishing] = useState(false);
-    const [isRestartingProcessing, setIsRestartingProcessing] = useState(false);
     const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
+
+    const patchUiState = (patch: Partial<MeetingCardUiState>): void => {
+        setUiState((prev) => ({ ...prev, ...patch }));
+    };
 
     const circleIconWrapperStyle: CSSProperties = {
         display: 'flex',
@@ -151,10 +164,6 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     );
 
     useEffect(() => {
-        setLocalSessionName(voiceBotSession?.session_name || '');
-    }, [voiceBotSession?.session_name]);
-
-    useEffect(() => {
         if (!prepared_projects) {
             void fetchPreparedProjects();
         }
@@ -170,11 +179,6 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
             console.warn('Failed to read saved tags', error);
         }
     }, []);
-
-    useEffect(() => {
-        setSummarizeDisabledUntil(null);
-        setIsSummarizing(false);
-    }, [voiceBotSession?._id]);
 
     useEffect(() => {
         if (typeof summarizeDisabledUntil !== 'number') return;
@@ -216,10 +220,15 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         };
     }, []);
 
+    const openSessionNameEditor = (): void => {
+        setSessionNameDraft(voiceBotSession?.session_name || '');
+        patchUiState({ isEditingTitle: true });
+    };
+
     const handleSessionNameSave = async (): Promise<void> => {
-        setIsEditing(false);
-        if (voiceBotSession && localSessionName !== voiceBotSession.session_name) {
-            await updateSessionName(voiceBotSession._id, localSessionName);
+        patchUiState({ isEditingTitle: false });
+        if (voiceBotSession && sessionNameDraft !== voiceBotSession.session_name) {
+            await updateSessionName(voiceBotSession._id, sessionNameDraft);
         }
     };
 
@@ -278,7 +287,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
 
     const handleGenerateTitle = async (): Promise<void> => {
         if (!voiceBotSession?._id) return;
-        setIsGeneratingTitle(true);
+        patchUiState({ isGeneratingTitle: true });
         messageApi.open({
             key: 'generating-title',
             type: 'loading',
@@ -296,14 +305,14 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
         );
 
         messageApi.destroy('generating-title');
-        setIsGeneratingTitle(false);
+        patchUiState({ isGeneratingTitle: false });
     };
 
     const triggerSummarize = async (): Promise<void> => {
         if (!voiceBotSession?._id) return;
 
         setSummarizeDisabledUntil(Date.now() + 3 * 60 * 1000);
-        setIsSummarizing(true);
+        patchUiState({ isSummarizing: true });
         messageApi.open({
             key: 'summarize',
             type: 'loading',
@@ -329,14 +338,14 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                 duration: 4,
             });
         } finally {
-            setIsSummarizing(false);
+            patchUiState({ isSummarizing: false });
         }
     };
 
     const handleRestartProcessing = async (): Promise<void> => {
         const sessionId = String(voiceBotSession?._id || '').trim();
         if (!sessionId) return;
-        setIsRestartingProcessing(true);
+        patchUiState({ isRestartingProcessing: true });
         try {
             const result = await restartCorruptedSession(sessionId) as { success?: boolean; error?: string; restarted_messages?: number } | null;
             if (result?.success) {
@@ -354,7 +363,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
             console.error('Ошибка при реанимации обработки сессии:', error);
             messageApi.error('Ошибка при запуске реанимации');
         } finally {
-            setIsRestartingProcessing(false);
+            patchUiState({ isRestartingProcessing: false });
         }
     };
 
@@ -411,7 +420,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
     const canCutControl = !fabIsFinalUploading && (fabIsRecording || fabIsPaused);
     const canPauseControl = !fabIsFinalUploading && fabIsRecording;
     const canDoneControl = !fabIsFinalUploading && Boolean(currentSessionId);
-    const controlsBusy = isNewStarting || isRecStarting || isCutting || isPausing || isFinishing;
+    const controlsBusy = uiState.busyControlAction !== null;
 
     const sessionVisualState = (() => {
         if (!voiceBotSession?.is_active) return 'closed';
@@ -539,16 +548,16 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         </div>
 
                         <div className="voice-meeting-title-wrap">
-                            {isEditing ? (
+                            {uiState.isEditingTitle ? (
                                 <Input
-                                    value={localSessionName}
-                                    onChange={(event) => setLocalSessionName(event.target.value)}
+                                    value={sessionNameDraft}
+                                    onChange={(event) => setSessionNameDraft(event.target.value)}
                                     onBlur={handleSessionNameSave}
                                     onPressEnter={handleSessionNameSave}
                                     className="voice-meeting-title-input"
                                 />
                             ) : (
-                                <div className="voice-meeting-title" onClick={() => setIsEditing(true)} title="Редактировать название встречи">
+                                <div className="voice-meeting-title" onClick={openSessionNameEditor} title="Редактировать название встречи">
                                     {voiceBotSession?.session_name || 'Без названия'}
                                 </div>
                             )}
@@ -559,7 +568,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                                     shape="circle"
                                     style={circleIconButtonStyle}
                                     icon={<span style={circleIconWrapperStyle}><EditOutlined style={{ color: '#8ea0b8', fontSize: 16 }} /></span>}
-                                    onClick={() => setIsEditing(true)}
+                                    onClick={openSessionNameEditor}
                                 />
                             </Tooltip>
 
@@ -569,7 +578,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                                     shape="circle"
                                     style={circleIconButtonStyle}
                                     icon={<span style={circleIconWrapperStyle}><RobotOutlined style={{ color: '#1677ff', fontSize: 16 }} /></span>}
-                                    loading={isGeneratingTitle}
+                                    loading={uiState.isGeneratingTitle}
                                     onClick={handleGenerateTitle}
                                     disabled={!voiceBotSession?._id}
                                 />
@@ -581,9 +590,9 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                                     shape="circle"
                                     style={circleIconButtonStyle}
                                     icon={<span style={circleIconWrapperStyle}><span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span></span>}
-                                    loading={isSummarizing}
+                                    loading={uiState.isSummarizing}
                                     onClick={triggerSummarize}
-                                    disabled={!voiceBotSession?._id || isSummarizing || isSummarizeCooldownActive}
+                                    disabled={!voiceBotSession?._id || uiState.isSummarizing || isSummarizeCooldownActive}
                                 />
                             </Tooltip>
                         </div>
@@ -602,10 +611,10 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                                 onClick={() => {
                                     void handleRestartProcessing();
                                 }}
-                                disabled={!voiceBotSession?._id || isRestartingProcessing}
+                                disabled={!voiceBotSession?._id || uiState.isRestartingProcessing}
                                 aria-label="Реанимировать обработку"
                             >
-                                <RedoOutlined spin={isRestartingProcessing} />
+                                <RedoOutlined spin={uiState.isRestartingProcessing} />
                             </button>
                         </Tooltip>
 
@@ -647,19 +656,19 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         <Button
                             aria-label="New"
                             size="middle"
-                            loading={isNewStarting}
+                            loading={uiState.busyControlAction === 'new'}
                             disabled={!canNewControl || controlsBusy}
                             style={controlButtonStyle('new', !canNewControl || controlsBusy)}
                             onClick={async () => {
                                 if (!canNewControl || controlsBusy) return;
-                                setIsNewStarting(true);
+                                patchUiState({ busyControlAction: 'new' });
                                 try {
                                     const result = await runFabControlAction({ action: 'new' });
                                     if (!result.handled) messageApi.warning('FAB is unavailable right now.');
                                 } catch (error) {
                                     messageApi.error(`New failed: ${String(error)}`);
                                 } finally {
-                                    setIsNewStarting(false);
+                                    patchUiState({ busyControlAction: null });
                                 }
                             }}
                         >
@@ -669,19 +678,19 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         <Button
                             aria-label="Rec"
                             size="middle"
-                            loading={isRecStarting}
+                            loading={uiState.busyControlAction === 'rec'}
                             disabled={!canRecControl || controlsBusy}
                             style={controlButtonStyle('rec', !canRecControl || controlsBusy)}
                             onClick={async () => {
                                 if (!canRecControl || controlsBusy) return;
-                                setIsRecStarting(true);
+                                patchUiState({ busyControlAction: 'rec' });
                                 try {
                                     const result = await runFabControlAction({ action: 'rec', ensurePageSessionActive: true });
                                     if (!result.handled) messageApi.warning('FAB is unavailable right now.');
                                 } catch (error) {
                                     messageApi.error(`Rec failed: ${String(error)}`);
                                 } finally {
-                                    setIsRecStarting(false);
+                                    patchUiState({ busyControlAction: null });
                                 }
                             }}
                         >
@@ -691,19 +700,19 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         <Button
                             aria-label="Cut"
                             size="middle"
-                            loading={isCutting}
+                            loading={uiState.busyControlAction === 'cut'}
                             disabled={!canCutControl || controlsBusy}
                             style={controlButtonStyle('cut', !canCutControl || controlsBusy)}
                             onClick={async () => {
                                 if (!canCutControl || controlsBusy) return;
-                                setIsCutting(true);
+                                patchUiState({ busyControlAction: 'cut' });
                                 try {
                                     const result = await runFabControlAction({ action: 'cut' });
                                     if (!result.handled) messageApi.warning('FAB is unavailable right now.');
                                 } catch (error) {
                                     messageApi.error(`Cut failed: ${String(error)}`);
                                 } finally {
-                                    setIsCutting(false);
+                                    patchUiState({ busyControlAction: null });
                                 }
                             }}
                         >
@@ -713,19 +722,19 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         <Button
                             aria-label="Pause"
                             size="middle"
-                            loading={isPausing}
+                            loading={uiState.busyControlAction === 'pause'}
                             disabled={!canPauseControl || controlsBusy}
                             style={controlButtonStyle('pause', !canPauseControl || controlsBusy)}
                             onClick={async () => {
                                 if (!canPauseControl || controlsBusy) return;
-                                setIsPausing(true);
+                                patchUiState({ busyControlAction: 'pause' });
                                 try {
                                     const result = await runFabControlAction({ action: 'pause' });
                                     if (!result.handled) messageApi.warning('FAB is unavailable right now.');
                                 } catch (error) {
                                     messageApi.error(`Pause failed: ${String(error)}`);
                                 } finally {
-                                    setIsPausing(false);
+                                    patchUiState({ busyControlAction: null });
                                 }
                             }}
                         >
@@ -735,12 +744,12 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                         <Button
                             aria-label="Done"
                             size="middle"
-                            loading={isFinishing}
+                            loading={uiState.busyControlAction === 'done'}
                             disabled={!canDoneControl || controlsBusy}
                             style={controlButtonStyle('done', !canDoneControl || controlsBusy)}
                             onClick={async () => {
                                 if (!canDoneControl || controlsBusy || !voiceBotSession?._id) return;
-                                setIsFinishing(true);
+                                patchUiState({ busyControlAction: 'done' });
                                 try {
                                     const pageSessionId = String(voiceBotSession._id || '').trim();
                                     if (!pageSessionId) return;
@@ -760,7 +769,7 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
                                 } catch (error) {
                                     messageApi.error(`Done failed: ${String(error)}`);
                                 } finally {
-                                    setIsFinishing(false);
+                                    patchUiState({ busyControlAction: null });
                                 }
                             }}
                         >
@@ -846,4 +855,9 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
             />
         </>
     );
+}
+
+export default function MeetingCard(props: MeetingCardProps) {
+    const sessionScopeKey = useVoiceBotStore((state) => String(state.voiceBotSession?._id || 'no-session'));
+    return <MeetingCardInner key={sessionScopeKey} {...props} />;
 }

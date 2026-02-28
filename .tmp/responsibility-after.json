@@ -1,0 +1,55 @@
+{
+  "query": "responsibility_cohesion",
+  "status_filter": "open",
+  "total": 4,
+  "summary": {
+    "by_tier": {
+      "T3": 4
+    },
+    "by_detector": {
+      "responsibility_cohesion": 4
+    },
+    "files": 4
+  },
+  "by_file": {
+    "app/src/components/ExpensesGrid.tsx": [
+      {
+        "id": "responsibility_cohesion::app/src/components/ExpensesGrid.tsx::cohesion::app/src/components/ExpensesGrid.tsx",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (14 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: ensureMonthIsOpen, handleTogglePin, buildTotals, buildOtherRows"
+      }
+    ],
+    "app/src/store/voiceBotStore.ts": [
+      {
+        "id": "responsibility_cohesion::app/src/store/voiceBotStore.ts::cohesion::app/src/store/voiceBotStore.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (28 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: getPrimaryMessageRef, getProxyConfig, isTransientError, resolveAgentsMcpServerUrl"
+      }
+    ],
+    "backend/src/api/routes/voicebot/sessions.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/api/routes/voicebot/sessions.ts::cohesion::backend/src/api/routes/voicebot/sessions.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "14 disconnected function clusters (45 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: buildSocketToken, normalizeCodexTaskForApi, resolveTargetMessageRef, registerPostAlias"
+      }
+    ],
+    "backend/src/permissions/permission-manager.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/permissions/permission-manager.ts::cohesion::backend/src/permissions/permission-manager.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (14 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: checkContextualPermission, parseContextId, setUserProjectsAccess, removeProjectAccess"
+      }
+    ]
+  },
+  "total_matching": 4,
+  "noise_budget": 10,
+  "noise_global_budget": 0
+}

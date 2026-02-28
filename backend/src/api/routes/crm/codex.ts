@@ -37,6 +37,11 @@ type CommandResult = {
   timedOut: boolean;
 };
 
+type BdExecutionContext = {
+  command: string;
+  cwd: string;
+};
+
 const runCommand = async ({
   command,
   args,
@@ -174,92 +179,109 @@ const runBdCommandWithSyncRetry = async ({
   });
 };
 
-const resolveRepoRootCwd = (): string => {
-  const configured = process.env.CRM_CODEX_WORKDIR?.trim();
-  if (configured) {
-    return path.isAbsolute(configured)
-      ? configured
-      : path.resolve(process.cwd(), configured);
-  }
+const bdRuntime = {
+  isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  },
+  parseJson(raw: string): unknown | null {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return null;
+    }
+  },
+  resolveRepoRootCwd(): string {
+    const configured = process.env.CRM_CODEX_WORKDIR?.trim();
+    if (configured) {
+      return path.isAbsolute(configured)
+        ? configured
+        : path.resolve(process.cwd(), configured);
+    }
 
-  if (path.basename(process.cwd()) === 'backend') {
-    return path.resolve(process.cwd(), '..');
-  }
+    if (path.basename(process.cwd()) === 'backend') {
+      return path.resolve(process.cwd(), '..');
+    }
 
-  return process.cwd();
-};
+    return process.cwd();
+  },
+  resolveBdBin(): string {
+    const configured =
+      process.env.CRM_CODEX_BD_BIN?.trim()
+      || process.env.VOICEBOT_CODEX_REVIEW_BD_BIN?.trim();
+    return configured && configured.length > 0 ? configured : DEFAULT_BD_BIN;
+  },
+  resolveExecutionContext(): BdExecutionContext {
+    return {
+      command: this.resolveBdBin(),
+      cwd: this.resolveRepoRootCwd(),
+    };
+  },
+  resolveBdListArgs(view: CodexIssuesView, limit: number): string[] {
+    const resolvedLimit = Math.max(0, Math.min(limit, MAX_LIMIT));
 
-const resolveBdBin = (): string => {
-  const configured =
-    process.env.CRM_CODEX_BD_BIN?.trim()
-    || process.env.VOICEBOT_CODEX_REVIEW_BD_BIN?.trim();
-  return configured && configured.length > 0 ? configured : DEFAULT_BD_BIN;
-};
-
-const resolveBdListArgs = (view: CodexIssuesView, limit: number): string[] => {
-  const resolvedLimit = Math.max(0, Math.min(limit, MAX_LIMIT));
-
-  if (view === 'open') {
-    return ['--no-daemon', 'list', '--json', '--limit', String(resolvedLimit)];
-  }
-
-  if (view === 'closed') {
-    return ['--no-daemon', 'list', '--all', '--status', 'closed', '--json', '--limit', String(resolvedLimit)];
-  }
-
-  return ['--no-daemon', 'list', '--all', '--json', '--limit', String(resolvedLimit)];
-};
-
-const parseBdListPayload = (raw: string): Array<Record<string, unknown>> | null => {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
+    if (view === 'open') {
+      return ['--no-daemon', 'list', '--json', '--limit', String(resolvedLimit)];
+    }
+    if (view === 'closed') {
+      return ['--no-daemon', 'list', '--all', '--status', 'closed', '--json', '--limit', String(resolvedLimit)];
+    }
+    return ['--no-daemon', 'list', '--all', '--json', '--limit', String(resolvedLimit)];
+  },
+  resolveListExecutionContext(
+    view: CodexIssuesView,
+    limit: number,
+  ): BdExecutionContext & { args: string[] } {
+    const context = this.resolveExecutionContext();
+    return {
+      ...context,
+      args: this.resolveBdListArgs(view, limit),
+    };
+  },
+  resolveShowExecutionContext(issueId: string): BdExecutionContext & { args: string[] } {
+    const context = this.resolveExecutionContext();
+    return {
+      ...context,
+      args: ['--no-daemon', 'show', issueId, '--json'],
+    };
+  },
+  parseBdListPayload(raw: string): Array<Record<string, unknown>> | null {
+    const parsed = this.parseJson(raw);
+    if (parsed === null) {
+      return null;
+    }
     if (Array.isArray(parsed)) {
-      return parsed.filter((issue): issue is Record<string, unknown> => issue !== null && typeof issue === 'object' && !Array.isArray(issue));
+      return parsed.filter((issue): issue is Record<string, unknown> => this.isRecord(issue));
     }
-
-    if (parsed && typeof parsed === 'object') {
-      const candidate = parsed as { data?: unknown; issues?: unknown; items?: unknown; [key: string]: unknown };
-      const nested = candidate.data ?? candidate.issues ?? candidate.items;
-      if (Array.isArray(nested)) {
-        return nested.filter(
-          (issue): issue is Record<string, unknown> => issue !== null && typeof issue === 'object' && !Array.isArray(issue)
-        );
-      }
+    if (!this.isRecord(parsed)) {
+      return null;
     }
-
-    return null;
-  } catch {
-    return null;
-  }
-};
-
-const parseBdShowPayload = (raw: string): Record<string, unknown> | null => {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
+    const nested = parsed.data ?? parsed.issues ?? parsed.items;
+    if (!Array.isArray(nested)) {
+      return null;
+    }
+    return nested.filter((issue): issue is Record<string, unknown> => this.isRecord(issue));
+  },
+  parseBdShowPayload(raw: string): Record<string, unknown> | null {
+    const parsed = this.parseJson(raw);
+    if (parsed === null) {
+      return null;
+    }
     if (Array.isArray(parsed)) {
-      const candidate = parsed.find((item) => item && typeof item === 'object' && !Array.isArray(item));
-      return candidate ? candidate as Record<string, unknown> : null;
+      const candidate = parsed.find((item) => this.isRecord(item));
+      return candidate && this.isRecord(candidate) ? candidate : null;
     }
-    if (parsed && typeof parsed === 'object') {
-      const candidate = (parsed as { data?: unknown }).data;
-      if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-        return candidate as Record<string, unknown>;
-      }
-    }
-    if (parsed === null || typeof parsed !== 'object') return null;
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
-const isBdShowNotFound = ({ code, stdout, stderr }: Pick<CommandResult, 'code' | 'stdout' | 'stderr'>): boolean => {
-  const haystack = `${stdout}\n${stderr}`.toLowerCase();
-  if (code === 0) return false;
-  return haystack.includes('not found')
-    || haystack.includes('no issue')
-    || haystack.includes('unknown issue')
-    || haystack.includes('does not exist');
+    if (!this.isRecord(parsed)) return null;
+    if (this.isRecord(parsed.data)) return parsed.data;
+    return parsed;
+  },
+  isBdShowNotFound({ code, stdout, stderr }: Pick<CommandResult, 'code' | 'stdout' | 'stderr'>): boolean {
+    if (code === 0) return false;
+    const haystack = `${stdout}\n${stderr}`.toLowerCase();
+    return haystack.includes('not found')
+      || haystack.includes('no issue')
+      || haystack.includes('unknown issue')
+      || haystack.includes('does not exist');
+  },
 };
 
 /**
@@ -274,20 +296,18 @@ router.post('/issues', async (req: Request, res: Response) => {
 
   const view = parsedBody.data.view ?? 'open';
   const limit = parsedBody.data.limit ?? DEFAULT_LIMIT;
-  const bdBin = resolveBdBin();
-  const cwd = resolveRepoRootCwd();
-  const bdListArgs = resolveBdListArgs(view, limit);
+  const listExecutionContext = bdRuntime.resolveListExecutionContext(view, limit);
 
   const result = await runBdCommandWithSyncRetry({
-    command: bdBin,
-    args: bdListArgs,
+    command: listExecutionContext.command,
+    args: listExecutionContext.args,
     timeoutMs: BD_LIST_TIMEOUT_MS,
-    cwd,
+    cwd: listExecutionContext.cwd,
     logPrefix: '[crm.codex.issues]',
     metadata: {
       limit,
       view,
-      bd_args: bdListArgs.join(' '),
+      bd_args: listExecutionContext.args.join(' '),
     },
   });
 
@@ -298,21 +318,21 @@ router.post('/issues', async (req: Request, res: Response) => {
       timed_out: result.timedOut,
       stderr: result.stderr.trim() || null,
       stdout_sample: result.stdout.slice(0, 500) || null,
-      cwd,
+      cwd: listExecutionContext.cwd,
       limit,
       view,
-      bd_args: bdListArgs.join(' '),
+      bd_args: listExecutionContext.args.join(' '),
     });
     return res.status(502).json({ error: 'Failed to load Codex issues from bd list' });
   }
 
-  const issues = parseBdListPayload(result.stdout);
+  const issues = bdRuntime.parseBdListPayload(result.stdout);
   if (!issues) {
     logger.error('[crm.codex.issues] invalid bd list JSON payload', {
       stdout_sample: result.stdout.slice(0, 500),
       limit,
       view,
-      bd_args: bdListArgs.join(' '),
+      bd_args: listExecutionContext.args.join(' '),
     });
     return res.status(502).json({ error: 'Invalid Codex issues payload from bd list' });
   }
@@ -331,14 +351,13 @@ router.post('/issue', async (req: Request, res: Response) => {
   }
 
   const issueId = parsedBody.data.id ?? parsedBody.data.issue_id ?? '';
-  const bdBin = resolveBdBin();
-  const cwd = resolveRepoRootCwd();
+  const showExecutionContext = bdRuntime.resolveShowExecutionContext(issueId);
 
   const result = await runBdCommandWithSyncRetry({
-    command: bdBin,
-    args: ['--no-daemon', 'show', issueId, '--json'],
+    command: showExecutionContext.command,
+    args: showExecutionContext.args,
     timeoutMs: BD_SHOW_TIMEOUT_MS,
-    cwd,
+    cwd: showExecutionContext.cwd,
     logPrefix: '[crm.codex.issue]',
     metadata: {
       issue_id: issueId,
@@ -348,7 +367,7 @@ router.post('/issue', async (req: Request, res: Response) => {
   if (result.timedOut) {
     logger.error('[crm.codex.issue] bd show timed out', {
       issue_id: issueId,
-      cwd,
+      cwd: showExecutionContext.cwd,
       stderr: result.stderr.trim() || null,
       stdout_sample: result.stdout.slice(0, 500) || null,
     });
@@ -356,21 +375,21 @@ router.post('/issue', async (req: Request, res: Response) => {
   }
 
   if (result.code !== 0) {
-    if (isBdShowNotFound(result)) {
+    if (bdRuntime.isBdShowNotFound(result)) {
       return res.status(404).json({ error: 'Issue not found' });
     }
     logger.error('[crm.codex.issue] bd show failed', {
       issue_id: issueId,
       code: result.code,
       signal: result.signal,
-      cwd,
+      cwd: showExecutionContext.cwd,
       stderr: result.stderr.trim() || null,
       stdout_sample: result.stdout.slice(0, 500) || null,
     });
     return res.status(502).json({ error: 'Failed to load Codex issue from bd show' });
   }
 
-  const issue = parseBdShowPayload(result.stdout);
+  const issue = bdRuntime.parseBdShowPayload(result.stdout);
   if (!issue) {
     logger.error('[crm.codex.issue] invalid bd show JSON payload', {
       issue_id: issueId,

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import _ from 'lodash';
 import { Form, Input, DatePicker, Button, Select, Drawer, ConfigProvider } from 'antd';
@@ -54,9 +54,9 @@ const WorkHoursSidebar = () => {
         getProjectByName,
     } = useKanbanStore();
     const { editingWorkHours, setEditingWorkHours } = useCRMStore();
-    const [editingData, setEditingData] = useState<WorkFormValues>(emptyForm);
     const [form] = Form.useForm<WorkFormValues>();
-    const formRef = useRef(form);
+    const watchedWorkDataId = Form.useWatch('_id', form);
+    const isEditingEntry = Boolean(watchedWorkDataId);
 
     const customerName = editingWorkHours ? getCustomerByProject(editingWorkHours.project) : '';
     const projectGroupName = editingWorkHours ? getProjectGroupByProject(editingWorkHours.project) : '';
@@ -104,12 +104,9 @@ const WorkHoursSidebar = () => {
     );
 
     useEffect(() => {
-        setEditingData(emptyForm);
-    }, [editingWorkHours]);
-
-    useEffect(() => {
-        if (formRef.current) formRef.current.setFieldsValue(editingData);
-    }, [editingData]);
+        form.resetFields();
+        form.setFieldsValue(emptyForm);
+    }, [editingWorkHours?._id, form]);
 
     return (
         <ConfigProvider
@@ -144,13 +141,13 @@ const WorkHoursSidebar = () => {
                     )
                 }
                 footer={
-                    <div className={`flex ${editingData._id ? 'justify-between' : 'justify-end'} px-2`}>
-                        {editingData._id ? (
+                    <div className={`flex ${isEditingEntry ? 'justify-between' : 'justify-end'} px-2`}>
+                        {isEditingEntry ? (
                             <Button
                                 size="large"
                                 type="default"
                                 onClick={() => {
-                                    setEditingData(emptyForm);
+                                    form.setFieldsValue(emptyForm);
                                 }}
                             >
                                 Отмена
@@ -164,7 +161,7 @@ const WorkHoursSidebar = () => {
                                 form.submit();
                             }}
                         >
-                            {editingData._id ? 'Сохранить' : 'Добавить'} часы
+                            {isEditingEntry ? 'Сохранить' : 'Добавить'} часы
                         </Button>
                     </div>
                 }
@@ -183,7 +180,7 @@ const WorkHoursSidebar = () => {
                                             <EditOutlined
                                                 className="cursor-pointer hover:text-blue-500"
                                                 onClick={() => {
-                                                    setEditingData({
+                                                    form.setFieldsValue({
                                                         _id: work_data._id,
                                                         performer: work_data.created_by ?? null,
                                                         date: dayjs(work_data.date),
@@ -226,7 +223,7 @@ const WorkHoursSidebar = () => {
                             }
                             setEditingWorkHours(null);
                         }}
-                        initialValues={editingData}
+                        initialValues={emptyForm}
                         className="mt-4"
                     >
                         <Form.Item name="_id" hidden>

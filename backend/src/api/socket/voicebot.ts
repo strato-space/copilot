@@ -7,7 +7,7 @@ import {
 import { getDb } from '../../services/db.js';
 import { getLogger } from '../../utils/logger.js';
 import { PermissionManager, type Performer } from '../../permissions/permission-manager.js';
-import { computeSessionAccess } from '../../services/session-socket-auth.js';
+import { computeSessionAccess } from '../../services/voicebot/session-socket-auth.js';
 import { mergeWithRuntimeFilter, IS_PROD_RUNTIME } from '../../services/runtimeScope.js';
 import { completeSessionDoneFlow } from '../../services/voicebotSessionDoneFlow.js';
 

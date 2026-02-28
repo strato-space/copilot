@@ -1,0 +1,132 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 9,
+  "assessments": {
+    "convention_outlier": 78.0,
+    "error_consistency": 66.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "API/client naming drift is entrenched in app stores: `api_request` is the canonical request helper in [app/src/store/requestStore.ts], while sibling stores use different naming and call conventions.",
+        "Typos are promoted into public state/API contracts and reused across modules: `voiceMesagesData` in [app/src/store/voiceBotStore.ts], `fetchPeformersMarginData` and `fetchPerfrormerFinances` plus `satuses` fallback in [app/src/store/kanbanStore.ts] and [backend/src/api/routes/crm/tickets.ts].",
+        "Non-idiomatic identifier patterns persist in domain types and computed maps (`performers_by__id`, `daysBelowANormal`) in [app/src/store/kanbanStore.ts], creating a style island inside otherwise camelCase TS code."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "Backend exposes multiple incompatible error protocols simultaneously: standardized `{ data, error }` via [backend/src/api/middleware/response.ts] + [backend/src/api/middleware/error.ts], but many high-traffic routes return raw `{ error: ... }` directly in [backend/src/api/routes/voicebot/sessions.ts], [backend/src/api/routes/voicebot/uploads.ts], [backend/src/api/routes/crm/tickets.ts], and [backend/src/api/routes/crm/legacy/performerspayments.ts].",
+        "Server-side catch blocks repeatedly serialize internal exceptions with `String(error)` and return to clients (e.g., dozens of 500 handlers in [backend/src/api/routes/voicebot/sessions.ts], plus [backend/src/api/routes/voicebot/uploads.ts] and [backend/src/api/routes/crm/tickets.ts]).",
+        "Frontend stores consume failures with contradictory strategies: rethrow (`requestStore`), swallow and toast (`permissionsStore`), boolean fallback (`authStore`), mixed throw/return/message in `voiceBotStore` ([app/src/store/requestStore.ts], [app/src/store/permissionsStore.ts], [app/src/store/authStore.ts], [app/src/store/voiceBotStore.ts])."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "error_consistency",
+      "identifier": "backend_error_envelope_fragmentation",
+      "summary": "Backend route families use incompatible error/response envelopes in parallel",
+      "related_files": [
+        "backend/src/api/middleware/response.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts"
+      ],
+      "evidence": [
+        "`sendOk/sendError` define canonical `{ data, error }` envelope, and `expensesOperations` uses this path.",
+        "`voicebot/sessions`, `crm/tickets`, and `legacy/performerspayments` return ad-hoc `res.status(...).json({ error: ... })` and raw payloads instead of middleware envelope.",
+        "This creates endpoint-by-endpoint parsing contracts rather than one backend-wide error contract."
+      ],
+      "suggestion": "Adopt one response contract at route boundaries: migrate legacy routes to `sendOk/sendError` + `AppError`, and add a small adapter utility for legacy payloads during transition so clients can rely on a single shape.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "legacy_route_response_contract"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "internal_error_leakage_via_stringify",
+      "summary": "Routes leak internal exception text by returning `String(error)` to clients",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/crm/legacy/performerspayments.ts"
+      ],
+      "evidence": [
+        "Many 500 handlers directly return `res.status(500).json({ error: String(error) })`.",
+        "This bypasses controlled error codes/messages and can expose low-level runtime details in production responses."
+      ],
+      "suggestion": "Replace direct `String(error)` responses with structured `AppError`/`sendError` payloads (`code`, stable user-safe `message`, optional sanitized `details`) and keep full stack/context only in server logs.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_route_response_contract"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "frontend_store_failure_semantics_drift",
+      "summary": "Frontend stores implement conflicting failure semantics for similar HTTP operations",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/crmStore.ts"
+      ],
+      "evidence": [
+        "`requestStore` throws upstream on failures, while `permissionsStore` often swallows errors and only shows `message.error`.",
+        "`authStore` encodes failures as boolean returns in several actions, whereas `voiceBotStore` mixes thrown errors, `false` returns, and side-effect toasts for the same class of API failures.",
+        "Callers cannot depend on one predictable failure contract across sibling Zustand stores."
+      ],
+      "suggestion": "Define and enforce a shared store-layer error policy (e.g., always return `Result` object or always throw typed errors), then wrap all request helpers/stores behind that policy with one normalization utility.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "frontend_error_policy_fragmentation"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "public_api_naming_drift_and_typo_lockin",
+      "summary": "Typos and mixed naming conventions have become part of public app contracts",
+      "related_files": [
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/requestStore.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "Persistent typoed identifiers: `voiceMesagesData`, `fetchPeformersMarginData`, `fetchPerfrormerFinances` in store interfaces/state/actions.",
+        "Backend and client preserve misspelled API field compatibility (`satuses`) in ticket filtering path.",
+        "Snake_case helper/API names (`api_request`) coexist with camelCase store actions in the same TS subsystem."
+      ],
+      "suggestion": "Run a staged naming migration: add correctly named aliases first, migrate call sites, deprecate typoed names with lint guards, then remove legacy symbols and the `satuses` compatibility branch once clients are updated.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_naming_debt"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Incremental migration without a hard contract-enforcement gate left old and new response patterns coexisting.",
+      "Legacy compatibility choices (typo aliases, old API names) were retained without deprecation lifecycle controls.",
+      "No shared cross-store frontend error model, so each store evolved independently."
+    ],
+    "likely_symptoms": [
+      "backend_error_envelope_fragmentation",
+      "internal_error_leakage_via_stringify",
+      "frontend_store_failure_semantics_drift",
+      "public_api_naming_drift_and_typo_lockin"
+    ],
+    "possible_false_positives": []
+  }
+}

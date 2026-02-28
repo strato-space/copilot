@@ -474,6 +474,16 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Closed `copilot-sxq1.8` and synced contract coverage with extracted helper modules in voice/frontend (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus TaskPage sanitize rendering contracts.
+- Updated backend contract/runtime tests for current route shapes and ESM execution:
+  - imported `jest` from `@jest/globals` in `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts`,
+  - switched entrypoint path resolution to `import.meta.url` in `backend/__tests__/entrypoints/orphanedEntrypointsContract.test.ts`,
+  - refreshed route-contract expectations in `backend/__tests__/api/crmCodexRouteContract.test.ts` and `backend/__tests__/voicebot/rowMaterialTargetRouteContract.test.ts`.
+- Close-session validation summary:
+  - `make test` target is not defined in this repository,
+  - canonical suite passed: `./scripts/run-test-suite.sh full` (`10/10 PASS`),
+  - type-safety builds passed: `cd app && npm run build`, `cd backend && npm run build`.
+- Current `desloppify next` top unresolved item is Tier-2 exact duplicate `renderSanitizedHtml` between `app/src/pages/operops/TaskPage.tsx` and `miniapp/src/components/OneTicket.tsx`.
 - Closed `copilot-4o2c` (Voice/OperOps Codex details parity): Voice inline `Подробности Codex задачи` now reuses the same `CodexIssueDetailsCard` as OperOps, preserving Description/Notes paragraph breaks and widening the drawer to `min(1180px, calc(100vw - 48px))`; updated contracts in `app/__tests__/voice/codexTasksInlineDetailsContract.test.ts` and `app/__tests__/operops/codexTaskPageContract.test.ts`.
 - Closed `copilot-y9qy` (Wave 1 `desloppify` debug-logs + exact duplicates) with full swarm execution:
   - completed/closed all child tasks `copilot-y9qy.1`..`.19`,

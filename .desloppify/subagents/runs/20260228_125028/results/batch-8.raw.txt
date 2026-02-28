@@ -1,0 +1,142 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 8,
+  "assessments": {
+    "design_coherence": 72.4
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Voice pipeline modules are overloaded with unrelated responsibilities: `backend/src/workers/voicebot/handlers/transcribeHandler.ts` combines OpenAI transcription, Telegram file recovery/download, dedup reuse, Codex task creation, queue/event emission, and retry policy in one handler.",
+        "`backend/src/api/routes/voicebot/uploads.ts` mixes multer setup, auth/session checks, audio+image upload flows, websocket emits, attachment streaming, and legacy session lifecycle endpoints (`/create_session`, `/close_session`) in a single route module.",
+        "Frontend state layers blur boundaries: `app/src/store/sessionsUIStore.ts` contains UI state plus MCP orchestration (`generateSessionTitle`) and user notifications; `app/src/store/kanbanStore.ts` centralizes many unrelated domain fetch/mutation flows and view-coupled behavior.",
+        "Parallel UI flows are duplicated rather than abstracted: `app/src/components/voice/AccessUsersModal.tsx` and `app/src/components/voice/AddParticipantModal.tsx` reimplement similar selection/search/save/cancel list-management patterns with separate state slices.",
+        "Large composition surfaces (`app/src/pages/voice/SessionsListPage.tsx`, `app/src/components/crm/CRMKanban.tsx`, `backend/src/miniapp/routes/index.ts`) indicate orchestration, normalization, and presentation are co-located, increasing change blast radius."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_pipeline_overloaded_handlers",
+      "summary": "Voice handlers combine multiple domains (transport recovery, AI processing, CRM side-effects, and event delivery) in single files.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`transcribeHandler.ts` defines Codex trigger parsing (`CODEX_VOICE_TRIGGER_PATTERN`), project/performer lookup (`findCodexProject`, `findCodexPerformer`), Telegram download (`downloadTelegramFileToLocal`), dedup reuse, and transcription execution inside one module.",
+        "`uploads.ts` contains upload middleware config, runtime access checks, DB writes, dedup cleanup, socket `new_message`/`session_update` emission, and attachment/file serving endpoints.",
+        "`processingLoop.ts` coordinates stale-processor recovery, queue routing, codex deferred review enqueueing, and session scan bookkeeping in one job path."
+      ],
+      "suggestion": "Split voice pipeline into explicit layers: `transport` (upload/download), `message-lifecycle` (state transitions), `ai-processors` (transcribe/categorize/custom prompts), and `event-publisher`. Keep handlers thin and delegate to shared services with typed contracts.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voice_processor_abstraction_gap"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "processor_lifecycle_boilerplate_duplication",
+      "summary": "Processor handlers repeat the same lifecycle state machine manually, increasing drift risk.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/finalizationHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/categorizeHandler.ts"
+      ],
+      "evidence": [
+        "Each handler repeats the same sequence: validate IDs/session, resolve OpenAI client, execute model call, write `processors_data.*` success fields, clear errors, and mirror failure fields/logging.",
+        "`customPrompt.ts` and `questionsHandler.ts` both manually write similar `is_processing/is_processed/error/error_message/error_timestamp` transitions to message docs.",
+        "`finalizationHandler.ts` and `oneCustomPrompt.ts` repeat equivalent processor-key mutation patterns for session docs, but with slight key/field differences."
+      ],
+      "suggestion": "Introduce a shared processor lifecycle helper (or small framework) that standardizes start/success/failure transitions and logging; each handler should only provide input builder, model prompt, and output normalizer.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voice_processor_abstraction_gap"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "frontend_store_service_boundary_blur",
+      "summary": "Frontend stores mix UI state, network orchestration, persistence, and user messaging, reducing cohesion.",
+      "related_files": [
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/pages/voice/SessionsListPage.tsx"
+      ],
+      "evidence": [
+        "`sessionsUIStore.ts` includes localStorage persistence, ticket edit state machine, and MCP-driven `generateSessionTitle` network orchestration with `message.*` side-effects.",
+        "`kanbanStore.ts` is a 1300+ line store with broad API operations across tickets, finances, metrics, bot commands, and directories.",
+        "`permissionsStore.ts` embeds transport selection/proxy fallback plus UI notifications directly in state actions.",
+        "`SessionsListPage.tsx` adds additional localStorage/query-sync and action orchestration on top of already heavy store behavior."
+      ],
+      "suggestion": "Refactor stores to pure state + intent dispatch; move API workflows and notification policy into domain services/hooks (`useVoiceSessionActions`, `usePermissionsActions`, etc.) and keep persistence adapters centralized.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_state_orchestration_entanglement"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_modal_selection_pattern_duplication",
+      "summary": "Participant/access modals duplicate a near-identical selection workflow instead of sharing a reusable pattern.",
+      "related_files": [
+        "app/src/components/voice/AccessUsersModal.tsx",
+        "app/src/components/voice/AddParticipantModal.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "Both modals implement the same core flow: fetch options when visible, filtered search, selected chip-list rendering, remove item, save/cancel with loading flags.",
+        "`sessionsUIStore.ts` mirrors this duplication with separate but structurally similar modal slices and action sets (`participantModal*` vs `accessUsersModal*`).",
+        "Behavior diverges only in data source/labels, not in interaction model, indicating missing reusable abstraction."
+      ],
+      "suggestion": "Create a generic `EntitySelectionModal` + reusable Zustand slice factory for modal selection state; parameterize fetcher, label resolver, and save callback.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_state_orchestration_entanglement"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "monolithic_router_design_in_miniapp_and_permissions",
+      "summary": "Router modules aggregate many endpoint responsibilities with repeated request-validation/update/log patterns.",
+      "related_files": [
+        "backend/src/miniapp/routes/index.ts",
+        "backend/src/api/routes/voicebot/permissions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`miniapp/routes/index.ts` handles login verification, auth middleware, ticket listing, status updates, time tracking, and comments in one file.",
+        "`permissions.ts` contains numerous role/permission/project endpoints with repeated validation and log-writing scaffolding in a single module.",
+        "`uploads.ts` adds both current and legacy endpoint surfaces into the same router, further broadening responsibilities."
+      ],
+      "suggestion": "Split routers by capability (`auth`, `tickets`, `time`, `comments`; `roles`, `permissions`, `project-access`; `upload`, `attachment`, `legacy-compat`) and share request validators/mutation helpers.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "backend_route_aggregation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Missing shared abstractions for repeated processor and modal lifecycles",
+      "State/orchestration boundaries are not enforced, so modules accumulate transport + UI + domain logic",
+      "Compatibility and feature growth are absorbed into existing large files instead of capability-based decomposition"
+    ],
+    "likely_symptoms": [
+      "voice_pipeline_overloaded_handlers",
+      "processor_lifecycle_boilerplate_duplication",
+      "voice_modal_selection_pattern_duplication"
+    ],
+    "possible_false_positives": [
+      "Some co-location in `uploads.ts` and `transcribeHandler.ts` is intentional for runtime contract stability, but current size still creates design-coherence risk."
+    ]
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 8,
+  "assessments": {
+    "design_coherence": 72.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "`app/src/components/voice/MeetingCard.tsx` (~863 LOC) combines session metadata editing, FAB control orchestration, MCP summarize calls, access modals, localStorage tag persistence, and realtime sync (`voicebot:active-session-updated`).",
+        "`app/src/pages/voice/SessionPage.tsx` mixes route-level composition with clipboard image optimization/transcoding and global paste event wiring (`window.addEventListener('paste', ...)`).",
+        "FinOps computation logic is repeated in multiple places: `PlanFactPage.tsx` computes income/expense totals, while `BonusesGrid.tsx` and `ExpensesGrid.tsx` recompute overlapping salary/expense currency-conversion totals.",
+        "Processor lifecycle update shape is repeatedly hand-coded across handlers (`customPrompt.ts`, `oneCustomPrompt.ts`, `questionsHandler.ts`, `createTasksFromChunks.ts`) with similar `is_processing/is_processed/error*` mutations but inconsistent field conventions.",
+        "Task normalization rules are duplicated on backend and frontend (`createTasksFromChunks.ts:normalizeTask` and `PossibleTasks.tsx:parseTask`) using the same legacy-key fallback logic (`Task ID`, `Task Title`, `Priority Reason`, `Dependencies`, `Dialogue Reference`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_session_ui_god_components",
+      "summary": "Voice session UI responsibilities are split across two oversized orchestration-heavy components",
+      "related_files": [
+        "app/src/components/voice/MeetingCard.tsx",
+        "app/src/pages/voice/SessionPage.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "`MeetingCard.tsx` handles unrelated concerns in one component: session CRUD/UI, control-state transitions, MCP summarize flow, modal launchers, localStorage tag persistence, and global FAB sync listeners.",
+        "`SessionPage.tsx` is not only a page-composer; it also implements clipboard file decoding, canvas re-encoding (`toOptimizedClipboardImage`), paste ingestion side effects, and task-tab business gating.",
+        "Both files coordinate global browser events and side effects directly, increasing hidden coupling between page lifecycle and meeting control behavior."
+      ],
+      "suggestion": "Extract a `useVoiceSessionControls` hook for New/Rec/Cut/Pause/Done orchestration, a `useClipboardSessionIngress` hook for paste/image processing, and keep page/components focused on view composition. Move browser-global listeners into dedicated hooks with explicit cleanup contracts.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voice_ui_orchestration_leak"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_duplicate_aggregation_logic",
+      "summary": "FinOps totals and conversion logic are duplicated across page and grid components",
+      "related_files": [
+        "app/src/pages/PlanFactPage.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx",
+        "app/src/components/PlanFactGrid.tsx"
+      ],
+      "evidence": [
+        "`PlanFactPage.tsx` computes `incomeTotals`/`expenseTotals` using employee salary + category operation RUB conversion loops.",
+        "`BonusesGrid.tsx` independently re-implements expense-total construction (`buildExpenseTotals`) with nearly the same salary + operation conversion pattern.",
+        "`ExpensesGrid.tsx` again rebuilds monthly category and salary aggregations (`buildSalaryRows`, `buildOtherRows`, `buildTotals`) instead of consuming shared domain selectors."
+      ],
+      "suggestion": "Create a shared FinOps domain aggregator module (or store selectors) for canonical monthly totals/salary/converted-expense computation, and have page/grids consume those results rather than re-deriving with local loops.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "finops_domain_logic_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "pinned_month_state_pattern_duplicated",
+      "summary": "Pinned-month persistence behavior is duplicated in three grids with copy-paste state wiring",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx"
+      ],
+      "evidence": [
+        "All three components repeat the same localStorage bootstrapping flow (`PIN_STORAGE_KEY`, `getItem`, JSON parse fallback to `[focusMonth]`).",
+        "All three repeat the same follow-up effects (`normalizePinnedMonths` on month/focus changes and `setItem` persistence on state changes).",
+        "Only storage key differs (`finopsPinnedMonths`, `finopsPinnedBonusMonths`, `finopsPinnedExpenseMonths`), indicating a missing reusable hook."
+      ],
+      "suggestion": "Introduce a reusable `usePinnedMonths(storageKey, focusMonth, months)` hook that encapsulates parse/persist/normalize/toggle behavior, then remove duplicated initialization/effect code from each grid.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "finops_domain_logic_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_processor_state_machine_scattered",
+      "summary": "Voice worker processor lifecycle updates are manually scattered and inconsistent",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts"
+      ],
+      "evidence": [
+        "Each handler manually writes near-identical `processors_data.*` state transitions (`is_processing`, `is_processed`, `job_finished_timestamp`, error fields).",
+        "`questionsHandler.ts` mixes processor-scoped flags with legacy flat fields (`questioning_error*`), while other handlers use `processors_data.<processor>.error*`, creating divergent conventions in the same lifecycle.",
+        "Error and success branches repeat large update blocks per handler, increasing drift risk when lifecycle semantics evolve."
+      ],
+      "suggestion": "Extract a shared processor-state transition helper (e.g., `setProcessorQueued/Success/Error`) with a single canonical error schema and remove handler-local ad-hoc update payloads.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voice_worker_lifecycle_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "task_shape_normalization_split_front_back",
+      "summary": "Task payload normalization logic is duplicated across backend generation and frontend consumption",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "Backend `normalizeTask` and frontend `parseTask` both map the same mixed schema variants (`Task ID`, `Task Title`, `Priority Reason`, `Dependencies`, `Dialogue Reference`) with fallback defaults.",
+        "Both sides re-implement `toText`/dependency parsing and default value policies, creating two authoritative sources for task-shape compatibility.",
+        "This duplication raises long-term drift risk when CREATE_TASKS schema changes (one side can silently lag)."
+      ],
+      "suggestion": "Define a single shared task-normalization contract at API boundary (backend only), return already-normalized CREATE_TASKS data, and simplify frontend parsing to strict typed consumption with validation-only guards.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "task_contract_normalization_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Domain logic is embedded in UI components instead of centralized selectors/services.",
+      "Processor lifecycle/state transitions lack a shared state-machine abstraction.",
+      "Compatibility normalization for legacy payloads is implemented independently per layer."
+    ],
+    "likely_symptoms": [
+      "voice_session_ui_god_components",
+      "finops_duplicate_aggregation_logic",
+      "voice_processor_state_machine_scattered",
+      "task_shape_normalization_split_front_back"
+    ],
+    "possible_false_positives": [
+      "Large file size alone was not used as a finding; findings were only kept where duplicated or mixed responsibilities had concrete repeated patterns."
+    ]
+  }
+}

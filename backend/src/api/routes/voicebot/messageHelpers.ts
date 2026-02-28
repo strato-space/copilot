@@ -2,7 +2,7 @@ import { Db, ObjectId } from 'mongodb';
 import type { Request } from 'express';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { VOICEBOT_COLLECTIONS, VOICEBOT_PROCESSORS } from '../../../constants.js';
-import { buildSegmentsFromChunks, resolveMessageDurationSeconds } from '../../../services/transcriptionTimeline.js';
+import { buildSegmentsFromChunks, resolveMessageDurationSeconds } from '../../../services/voicebot/transcriptionTimeline.js';
 
 const SEGMENT_TIME_EPSILON = 1e-6;
 

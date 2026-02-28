@@ -1,0 +1,70 @@
+{
+  "batch": "AI Debt & Migrations",
+  "batch_index": 5,
+  "assessments": {
+    "ai_generated_debt": 91.0,
+    "incomplete_migration": 98.0,
+    "low_level_elegance": 93.0
+  },
+  "dimension_notes": {
+    "ai_generated_debt": {
+      "evidence": [
+        "Both barrel files start with comments that restate obvious intent without adding domain context: `/** Finances components exports */` and `/** Project components exports */`.",
+        "The pattern is duplicated across sibling index barrels and appears formulaic rather than informative."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Restating boilerplate comments create minor AI-style noise and reduce signal in tiny files."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "No `TODO`, `FIXME`, `legacy`, `deprecated`, or dual-path migration markers are present in the three scoped files.",
+        "`app/src/vite-env.d.ts` uses the canonical Vite reference line only, with no parallel old/new typing path."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "No direct migration defect is visible in scope, but evidence is limited to three minimal files."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "The two barrel files are concise and direct, but each includes a non-essential header block that adds one more artifact to maintain without clarifying behavior.",
+        "All exports are simple passthrough statements; the only avoidable local noise is repeated comment ceremony."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Minor verbosity from duplicated non-informative comments prevents fully minimal internals."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "redundant_barrel_header_comments",
+      "summary": "Barrel files use duplicated restating comments that add ceremony without information",
+      "related_files": [
+        "app/src/components/crm/finances/index.ts",
+        "app/src/components/crm/projects/index.ts"
+      ],
+      "evidence": [
+        "Each file contains a generic header comment (`Finances components exports` / `Project components exports`) followed immediately by self-explanatory export lines.",
+        "The comments do not document constraints, caveats, or ownership; they only paraphrase file names and statements."
+      ],
+      "suggestion": "Remove the generic header comments from both barrel files, or replace with one line that captures real module constraints (if any) rather than restating exports.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "formulaic_barrel_ceremony"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Template-style comment usage in tiny barrel files where code is already self-descriptive."
+    ],
+    "likely_symptoms": [
+      "redundant_barrel_header_comments"
+    ],
+    "possible_false_positives": []
+  }
+}

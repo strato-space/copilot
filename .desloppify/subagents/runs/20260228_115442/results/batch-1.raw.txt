@@ -1,0 +1,150 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 68.5,
+    "high_level_elegance": 71.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/constants.ts` is a 516-line cross-domain hub (queues, collections, statuses, voice runtime config) and is imported widely (noted in blind packet as 119 importers), creating high fan-out coupling.",
+        "`backend/src/services/runtimeScope.ts` resolves `RUNTIME_TAG`/`RUNTIME_FAMILY`/`IS_PROD_RUNTIME` at module import time from `process.env`, and `backend/src/constants.ts` immediately derives `VOICEBOT_QUEUES` and `VOICEBOT_FILE_STORAGE` from those values.",
+        "`backend/src/services/db.ts` hard-depends on imported runtime constants for query filters and write patching (`runtime_tag`), tying data isolation behavior to import order and process-global initialization."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`app/src/store/voiceBotStore.ts` is 1884 lines and mixes transport client, socket lifecycle, UI notifications (`antd` message), message normalization/grouping, task actions, and file download concerns in one store.",
+        "`app/src/store/kanbanStore.ts` is 1349 lines with broad CRUD/finance/design/import responsibilities, and directly reaches into `useRequestStore.getState()` for API helpers, reducing boundary clarity between domain logic and transport.",
+        "Contract tests (`app/__tests__/voice/*.test.ts`, `app/__tests__/operops/codexIssuesTableContract.test.ts`, `backend/__tests__/api/crmCodexRouteContract.test.ts`) assert raw source strings via `fs.readFileSync(...).toContain(...)`, coupling tests to exact implementation text instead of behavior."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "global_constants_hub_coupling",
+      "summary": "A single constants hub couples unrelated backend domains and amplifies blast radius.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts",
+        "backend/src/permissions/permissions-config.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` combines CRM, FinOps, VoiceBot runtime queues, Mongo collections, statuses, and file-storage env config in one module.",
+        "`backend/src/services/db.ts` imports startup index definitions from this hub (`MONGO_STARTUP_INDEXES`), so DB bootstrap is tied to a broad module with many unrelated exports.",
+        "Permission configuration is separately maintained in `backend/src/permissions/permissions-config.ts`, but authorization and other global contracts still rely on centralized string/constants patterns spread across hubs."
+      ],
+      "suggestion": "Split `backend/src/constants.ts` into bounded-context modules (for example: `constants/voicebot.ts`, `constants/crm.ts`, `constants/finops.ts`, `constants/db.ts`) and keep a minimal root facade only for truly shared primitives. Move startup-index definitions into a DB-focused module consumed directly by `db.ts`.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "overshared_global_contracts"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_runtime_binding",
+      "summary": "Runtime scope is bound at import-time, creating order-dependent behavior.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`runtimeScope.ts` exports `RUNTIME_TAG`, `RUNTIME_FAMILY`, and `IS_PROD_RUNTIME` as top-level constants resolved from `process.env` during import.",
+        "`constants.ts` builds `VOICEBOT_QUEUES` by suffixing with imported `RUNTIME_TAG` at module load.",
+        "`db.ts` uses imported `RUNTIME_TAG`/`IS_PROD_RUNTIME` in runtime filter builders and `withRuntimeTag`, so runtime isolation policy is frozen to the initially imported environment."
+      ],
+      "suggestion": "Replace import-time constants with explicit runtime context getters/factory injection (for example `getRuntimeScope()`), and pass that context into queue-name construction and DB scope helpers at initialization time. Keep a cached singleton only in the process bootstrap layer, not in utility modules.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "overshared_global_contracts"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_frontend_transport_boundary",
+      "summary": "Frontend transport/auth boundary is duplicated across stores with divergent contracts.",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/hooks/useMCPWebSocket.ts"
+      ],
+      "evidence": [
+        "Both `requestStore.ts` and `voiceBotStore.ts` define their own `getBackendUrl` and `getProxyConfig` logic.",
+        "`requestStore.ts` defaults to `/api/crm` and relies on cookie auth, while `voiceBotStore.ts` defaults to `/api` and injects `X-Authorization` from `useAuthStore.getState()`.",
+        "`authStore.ts` persists token in cookies and localStorage (`VOICEBOT_AUTH_TOKEN`), creating mixed auth paths that different stores consume differently."
+      ],
+      "suggestion": "Create a shared API transport layer with one URL/proxy resolution path and one auth header/cookie policy, then inject domain endpoints (`crm`, `voicebot`, `mcp`) as thin clients. Keep store logic domain-focused and remove per-store transport duplication.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "store_boundary_erosion"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "voice_store_multi_responsibility",
+      "summary": "Voice store acts as a god orchestrator spanning UI, transport, sockets, and transformation.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/components/voice/Categorization.tsx",
+        "app/src/hooks/useMCPWebSocket.ts"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` (1884 lines) owns HTTP request plumbing, socket subscription/event wiring, message normalization/grouping, modal/toast feedback, CRUD actions, and file download behavior.",
+        "`Categorization.tsx` directly consumes multiple store concerns (session data, rows, socket-connected behavior), reinforcing high coupling to the monolithic store surface.",
+        "`useMCPWebSocket.ts` separately handles socket lifecycle/error transitions for another store, showing split-but-overlapping realtime orchestration patterns rather than clear seam ownership."
+      ],
+      "suggestion": "Decompose voice state into focused slices/services: `voiceTransportClient`, `voiceRealtimeSync`, `voiceSessionActions`, and `voiceMessageProjection`. Keep UI notifications in UI layer hooks/components and expose domain events/state from store modules.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "store_boundary_erosion"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "string_locked_contract_tests",
+      "summary": "Contract tests are tightly coupled to source text, causing brittle architectural lock-in.",
+      "related_files": [
+        "app/__tests__/voice/voiceSocketRealtimeContract.test.ts",
+        "app/__tests__/operops/codexIssuesTableContract.test.ts",
+        "app/__tests__/voice/codexTasksInlineDetailsContract.test.ts",
+        "backend/__tests__/api/crmCodexRouteContract.test.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "Multiple tests read source files via `fs.readFileSync(...)` and assert exact substrings with `toContain(...)` instead of validating behavior.",
+        "`voiceSocketRealtimeContract.test.ts` expects `voicebotRequest('voicebot/session_done'...)`, while current store code uses `voicebotHttp.request(...)`, indicating tests can drift into false-failure/false-safety based on textual refactors.",
+        "These tests enforce implementation wording (exact literals and local variable names), which constrains decomposition and increases refactor friction across modules."
+      ],
+      "suggestion": "Replace string-based assertions with runtime-level contract tests: render/interaction tests for component behavior, mocked socket event integration tests for realtime flows, and API handler tests asserting response semantics. Keep a minimal AST/text snapshot only where syntax-level contract is intentional.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "textual_contract_overreach"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Overshared global modules used as convenience registries instead of bounded context APIs.",
+      "State stores are absorbing transport and UI orchestration concerns, eroding architectural seams.",
+      "Contract testing strategy over-relies on source-text matching rather than behavioral boundaries."
+    ],
+    "likely_symptoms": [
+      "global_constants_hub_coupling",
+      "import_time_runtime_binding",
+      "duplicated_frontend_transport_boundary",
+      "voice_store_multi_responsibility",
+      "string_locked_contract_tests"
+    ],
+    "possible_false_positives": []
+  }
+}

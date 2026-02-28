@@ -1,0 +1,126 @@
+{
+  "batch": "Authorization",
+  "batch_index": 4,
+  "assessments": {
+    "authorization_consistency": 56.0,
+    "mid_level_elegance": 64.0
+  },
+  "dimension_notes": {
+    "authorization_consistency": {
+      "evidence": [
+        "`sessions.ts` has multiple mutating endpoints without route-level permission middleware and without `resolveSessionAccess` checks (`/update_name`, `/update_access_level`, `/update_dialogue_tag`, `/update_participants`, `/update_allowed_users`; lines 2059-2244 and 2328-2414).",
+        "Those same endpoints update by raw `_id` filter instead of runtime-scoped filters (`runtimeSessionQuery`), unlike neighboring guarded endpoints (`/update_project` line 2121, uploads `/close_session` line 864).",
+        "`uploads.ts` consistently uses `PermissionManager.requirePermission(...)` on sibling routes (lines 764-889), highlighting protocol drift within the same voicebot surface."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Authorization handoff is split across incompatible seam patterns: middleware-first in `uploads.ts` versus ad-hoc inline checks in `sessions.ts`, and some handlers skip checks entirely.",
+        "App-level mount in `backend/src/index.ts` documents admin-only intent (lines 91-93) but actual enforcement is not explicit at that boundary, forcing correctness to depend on per-route discipline.",
+        "Miniapp boot path always injects hardcoded `TEST_DATA` into router construction (miniapp index lines 67-92), blending test and production auth contexts at integration seam."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "voicebot_sessions_mutation_auth_gap",
+      "summary": "Several session-mutating routes can be executed without explicit permission or ownership checks.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/index.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` `/update_name` updates session by `_id` directly with no `PermissionManager.requirePermission` and no `resolveSessionAccess` (2059-2074).",
+        "`/update_access_level` and `/update_dialogue_tag` repeat the same direct update pattern without access validation (2199-2244).",
+        "`/update_participants` and `/update_allowed_users` validate ID format but do not validate caller rights to that session before write (2328-2414).",
+        "Sibling upload routes enforce permission middleware consistently (`uploads.ts` 764-889), so this is not a global convention."
+      ],
+      "suggestion": "Standardize all mutating voicebot session routes on a shared guard pipeline: `PermissionManager.requirePermission(...)` + `resolveSessionAccess(...)` + runtime-scoped query wrapper. Apply it to every write endpoint in `sessions.ts` and reject writes before DB mutation.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fragmented_voicebot_auth_policy"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "runtime_scope_bypass_on_session_writes",
+      "summary": "Multiple write paths bypass runtime scoping, allowing cross-runtime record mutation by raw ObjectId.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "Unscoped writes in `sessions.ts` use `{ _id: new ObjectId(session_id) }` directly (`update_name` 2071-2073, `update_access_level` 2208-2210, `update_dialogue_tag` 2241-2243, `update_participants` 2368-2370, `update_allowed_users` 2411-2413).",
+        "Scoped pattern exists elsewhere and is actively used (`sessions.ts` `update_project` line 2121 uses `runtimeSessionQuery`; `uploads.ts` close/update uses `runtimeSessionQuery` line 864).",
+        "Given runtime isolation requirements, mixed scoped/unscoped writes create an authorization boundary hole tied to data tenancy."
+      ],
+      "suggestion": "Introduce a mandatory runtime-scoped repository helper for session writes (e.g., `updateSessionByIdScoped`) and replace all raw `_id` writes in voicebot routes; add a regression test that unscoped session IDs from another runtime return `409/404` and do not mutate.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fragmented_voicebot_auth_policy"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "authorization_seam_inconsistency",
+      "summary": "Auth enforcement is implemented as scattered per-handler logic instead of one consistent integration seam.",
+      "related_files": [
+        "backend/src/index.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`backend/src/index.ts` states all voicebot routes require admin role (91-93) but the mount itself does not show an explicit guard, so enforcement is implicit and distributed.",
+        "`uploads.ts` uses route middleware guards declaratively (`PermissionManager.requirePermission`) while `sessions.ts` mixes inline checks and unguarded writes.",
+        "This pattern drift already produced sibling handlers with materially different security behavior for similar write operations."
+      ],
+      "suggestion": "Refactor voicebot route assembly to a single auth seam (router-level middleware stack + per-route capability decorators). Remove inline permission branching from handlers where possible and keep handlers focused on business logic.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "fragmented_voicebot_auth_policy"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "miniapp_test_identity_in_production_path",
+      "summary": "Miniapp server always passes hardcoded test identity data into runtime router construction.",
+      "related_files": [
+        "backend/src/miniapp/index.ts",
+        "backend/src/index.ts"
+      ],
+      "evidence": [
+        "`miniapp/index.ts` defines static `TEST_DATA` with concrete user/auth fields (67-84).",
+        "The same static payload is always injected into `createMiniappRouter` at startup (line 91) without env gating.",
+        "This mixes test and production trust inputs at an app boundary and risks accidental fallback/privilege behavior if downstream validation paths consume `testData`."
+      ],
+      "suggestion": "Gate `testData` injection behind explicit non-production feature flags and default to `undefined` in production builds; add startup assertion that rejects test identity config when `NODE_ENV=production`.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "fragmented_voicebot_auth_policy"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Authorization is treated as handler-local logic instead of a uniform route composition contract.",
+      "Runtime-scope isolation is not encapsulated in mandatory data-access helpers, so write paths drift.",
+      "Test and production auth contexts are not strongly separated at server bootstrap boundaries."
+    ],
+    "likely_symptoms": [
+      "voicebot_sessions_mutation_auth_gap",
+      "runtime_scope_bypass_on_session_writes",
+      "authorization_seam_inconsistency"
+    ],
+    "possible_false_positives": [
+      "If `createMiniappRouter` ignores `testData` in production, finding `miniapp_test_identity_in_production_path` may be lower severity; current file still shows risky unconditional injection."
+    ]
+  }
+}

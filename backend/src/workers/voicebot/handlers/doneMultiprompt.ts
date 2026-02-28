@@ -11,7 +11,7 @@ import { getLogger } from '../../../utils/logger.js';
 import {
   buildDoneNotifyPreview,
   writeDoneNotifyRequestedLog,
-} from '../../../services/voicebotDoneNotify.js';
+} from '../../../services/voicebot/voicebotDoneNotify.js';
 import { insertSessionLogEvent } from '../../../services/voicebotSessionLog.js';
 import {
   clearActiveVoiceSessionBySessionId,

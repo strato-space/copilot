@@ -169,7 +169,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
             req.user = decoded as Record<string, unknown>;
             next();
         } catch (error) {
-            logger.error('Invalid token', { error: toSafeErrorMessage(error) });
+            logger.error('Miniapp auth verification failed', { reason: toSafeErrorMessage(error) });
             res.status(401).json({ error: 'Invalid token' });
         }
     };

@@ -1,0 +1,126 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 71.0,
+    "high_level_elegance": 69.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/constants.ts` is a high-fan-in hub (119 importers in packet context) and mixes socket events, CRM/FinOps enums, Mongo indexes, queue names, runtime-tagged queue construction, and file-storage env config in one module.",
+        "`backend/src/constants.ts` imports runtime state from `backend/src/services/runtimeScope.ts`, so many unrelated importers of constants transitively depend on runtime-scoping initialization.",
+        "`app/src/store/voiceBotStore.ts` (1884 LOC) and `app/src/store/kanbanStore.ts` (1349 LOC) are broad orchestrator hubs that combine transport calls, socket wiring, data normalization, and UI-side notifications in single stores.",
+        "`app/src/store/voiceBotStore.ts` duplicates backend/proxy URL resolution patterns that also exist in `app/src/store/requestStore.ts`, creating parallel boundary logic instead of a single HTTP boundary."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Top-level ownership is blurred in backend because `backend/src/constants.ts` acts as both a domain contract module and runtime configuration constructor (`VOICEBOT_QUEUES`, `VOICEBOT_FILE_STORAGE`, runtime exports).",
+        "Frontend state modules are role-mixed: `app/src/store/voiceBotStore.ts` handles API contract translation, retry policy, websocket lifecycle, attachment/transcript transformation, and user messages in one place.",
+        "`app/src/components/voice/Categorization.tsx` and `app/src/components/crm/CommentsSidebar.tsx` directly depend on large global stores for many concerns, making UI modules inherit orchestration complexity from store hubs."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "constants_runtime_domain_hub",
+      "summary": "Single backend constants hub couples unrelated domains and runtime initialization paths",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` co-locates CRM/FinOps/VoiceBot contracts with runtime-derived values (`VOICEBOT_QUEUES`, `VOICEBOT_FILE_STORAGE`, `IS_BETA`) and imports `runtimeScope` at module load.",
+        "`backend/src/services/db.ts` imports startup index config from this same hub, so DB bootstrap couples to broader constants surface instead of a narrow DB contract module.",
+        "Packet context marks `backend/src/constants.ts` as a god module with 119 importers, confirming broad blast radius."
+      ],
+      "suggestion": "Split `backend/src/constants.ts` into bounded modules (`constants/socket.ts`, `constants/crm.ts`, `constants/finops.ts`, `constants/voicebot.ts`, `db/indexes.ts`, `config/runtime.ts`). Keep runtime/env-derived values in config modules and expose stable read-only contracts from domain-specific files.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "oversized_shared_hubs"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_runtime_side_effects",
+      "summary": "Runtime identity/config is resolved at import time, creating order-dependent global state",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/constants.ts",
+        "backend/src/utils/logger.ts"
+      ],
+      "evidence": [
+        "`backend/src/services/runtimeScope.ts` computes `RUNTIME_FAMILY`, `RUNTIME_SERVER_NAME`, and `RUNTIME_TAG` once at import time from env/hostname.",
+        "`backend/src/constants.ts` builds queue names and file storage limits from env at module initialization (`VOICEBOT_QUEUES`, `VOICEBOT_FILE_STORAGE`).",
+        "`backend/src/utils/logger.ts` performs directory creation (`fs.mkdirSync`) in `getLogsDir()` during logger init, and `getLogger()` can auto-initialize singleton state without explicit bootstrap sequencing."
+      ],
+      "suggestion": "Move runtime/env resolution behind explicit bootstrap factories (e.g., `createRuntimeScope(env)`, `createVoicebotConfig(env)`), inject config into consumers, and keep singleton initialization out of incidental imports. Reserve filesystem effects for explicit startup paths only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "implicit_global_initialization"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "frontend_store_responsibility_mixing",
+      "summary": "Frontend stores combine transport, orchestration, data shaping, and UI notification concerns",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "app/src/components/voice/Categorization.tsx"
+      ],
+      "evidence": [
+        "`app/src/store/voiceBotStore.ts` includes HTTP client behavior (`voicebotHttp`), websocket event wiring, normalization/transform pipelines, and user message notifications (`antd` message API) in one store.",
+        "`app/src/store/kanbanStore.ts` is a 1349 LOC monolith with many slices/actions crossing CRUD, dictionary, widgets, design sync, finances, and import routines.",
+        "`app/src/components/voice/Categorization.tsx` depends on broad store state/actions, inheriting orchestration coupling from the store rather than consuming a narrow feature API."
+      ],
+      "suggestion": "Refactor into layered feature modules: transport clients (`services/*`), domain adapters/normalizers, and thin Zustand stores per bounded concern (session state, list state, task actions). Keep UI notifications in UI/controller layer instead of core store actions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "store_as_god_object"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_api_boundary_resolution",
+      "summary": "Backend/proxy resolution logic is duplicated across stores, fragmenting the API boundary",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/hooks/useMCPWebSocket.ts"
+      ],
+      "evidence": [
+        "`app/src/store/requestStore.ts` and `app/src/store/voiceBotStore.ts` both define near-identical `getBackendUrl` and `getProxyConfig` runtime resolution logic.",
+        "`app/src/store/voiceBotStore.ts` additionally maintains custom request/retry/error behavior (`voicebotHttp`) separate from shared request utilities, increasing divergence risk.",
+        "`app/src/hooks/useMCPWebSocket.ts` ties socket lifecycle directly to store internals, reinforcing multiple custom integration paths rather than one boundary abstraction."
+      ],
+      "suggestion": "Create one shared API boundary module (runtime URL/proxy/auth resolution + typed request helpers + retry policy) and make stores/hooks consume that module instead of reimplementing transport concerns.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "duplicated_integration_seams"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Oversized shared modules used as convenience hubs instead of bounded domain interfaces",
+      "Implicit global initialization (env/host/filesystem) performed during module evaluation",
+      "State stores used as orchestration containers for unrelated layers"
+    ],
+    "likely_symptoms": [
+      "constants_runtime_domain_hub",
+      "frontend_store_responsibility_mixing",
+      "duplicated_api_boundary_resolution"
+    ],
+    "possible_false_positives": []
+  }
+}

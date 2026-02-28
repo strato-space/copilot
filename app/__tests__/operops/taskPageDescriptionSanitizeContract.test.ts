@@ -12,7 +12,8 @@ describe('TaskPage description sanitization contract', () => {
         expect(source).toContain('allowProtocolRelative: false');
         expect(source).toContain("sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }, true)");
         expect(source).toContain('const safeTaskDescription = sanitizeTaskDescriptionHtml(task.description);');
-        expect(source).toContain('__html: safeTaskDescription');
+        expect(source).toContain('const safeTaskDescriptionNodes = renderSanitizedHtml(safeTaskDescription);');
+        expect(source).toContain('<div className="prose max-w-none">{safeTaskDescriptionNodes}</div>');
     });
 
     it('keeps sanitizer helper with explicit empty-input handling', () => {

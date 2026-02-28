@@ -19,7 +19,7 @@ const EditCustomer: React.FC<EditCustomerProps> = ({ customer, onSave }) => {
     const [loading, setLoading] = useState(false);
     const { createCustomer, updateCustomer } = useProjectsStore();
 
-    const handleSave = async () => {
+    const handleCustomerSave = async (): Promise<void> => {
         if (!name.trim()) {
             message.warning('Введите имя заказчика');
             return;
@@ -59,7 +59,7 @@ const EditCustomer: React.FC<EditCustomerProps> = ({ customer, onSave }) => {
                     unCheckedChildren="Скрыт"
                 />
             </Form.Item>
-            <Button type="primary" loading={loading} onClick={handleSave}>
+            <Button type="primary" loading={loading} onClick={handleCustomerSave}>
                 {customer ? 'Сохранить' : 'Создать'}
             </Button>
         </Form>

@@ -310,6 +310,16 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Closed `copilot-sxq1.8` and aligned contract tests with extracted voice/frontend helper modules (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus sanitized TaskPage render contract updates.
+- Updated backend contract/runtime tests for ESM-safe execution and current route contracts:
+  - `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts` (`jest` from `@jest/globals`),
+  - `backend/__tests__/entrypoints/orphanedEntrypointsContract.test.ts` (`import.meta.url` path resolution),
+  - `backend/__tests__/api/crmCodexRouteContract.test.ts` and `backend/__tests__/voicebot/rowMaterialTargetRouteContract.test.ts` (current route-shape expectations).
+- Close-session validation summary:
+  - `make test` target is absent in this repo (`No rule to make target 'test'`);
+  - canonical suite passed: `./scripts/run-test-suite.sh full` (`10/10 PASS`);
+  - type-safety builds passed: `cd app && npm run build`, `cd backend && npm run build`.
+- Current `desloppify next` top unresolved item: Tier-2 exact duplicate `renderSanitizedHtml` between `app/src/pages/operops/TaskPage.tsx` and `miniapp/src/components/OneTicket.tsx`.
 - Executed swarm waves for `top_open_in_progress_ids_by_priority`: closed `copilot-g0bd` (Codex routing fix) and `copilot-603` (placeholder cleanup), and recorded verification-only audit notes for remaining `copilot-ztlv*`/`copilot-ib30` backlog items.
 - Hardened backend Codex routing in `POST /api/voicebot/create_tickets` (`backend/src/api/routes/voicebot/sessions.ts`) so Codex aliases/labels are resolved before strict ObjectId checks and cannot leak into Mongo task inserts.
 - Added regression coverage for alias/name-based Codex routing and malformed non-Codex performer paths in `backend/__tests__/voicebot/sessionUtilityRuntimeBehavior.test.ts`.

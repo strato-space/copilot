@@ -1,0 +1,336 @@
+{
+  "batch": "Full Codebase Sweep",
+  "batch_index": 10,
+  "assessments": {
+    "cross_module_architecture": 82.0,
+    "convention_outlier": 88.0,
+    "error_consistency": 80.0,
+    "abstraction_fitness": 81.0,
+    "api_surface_coherence": 78.0,
+    "authorization_consistency": 83.0,
+    "ai_generated_debt": 87.0,
+    "incomplete_migration": 82.0,
+    "package_organization": 80.0,
+    "high_level_elegance": 86.0,
+    "mid_level_elegance": 84.0,
+    "low_level_elegance": 86.0,
+    "design_coherence": 86.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "app/src/App.tsx centralizes route graph, main shell layout, nav metadata, and legacy redirects in one hub.",
+        "Duplicate route declarations exist for the same paths (`/desops` and `/finops/desops`) in app/src/App.tsx, creating dead branches and boundary ambiguity."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Priority constants drift: `NOTION_TICKET_PRIORITIES` uses `'🔥 P1 '` (trailing space) while voice task priority options use `'🔥 P1'`.",
+        "Naming includes typo-style outlier `Screenshort.tsx`, which deviates from normal domain naming."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Small but real naming/value normalization drift across CRM and Voice priority and attachment UI naming."
+    },
+    "error_consistency": {
+      "evidence": [
+        "app/src/components/voice/AccessUsersModal.tsx and AddParticipantModal.tsx catch async failures and only `console.error`, without UI error state recovery.",
+        "app/src/components/voice/WebrtcFabLoader.tsx uses multiple silent catch blocks around DOM/script operations, masking operational failures."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Permission logic is duplicated in app/src/components/voice/PermissionGate.tsx (`hasAccess`) and again in exported `usePermissionChecker().check` with effectively the same branching.",
+        "Duplicated access-evaluation branches increase indirection cost without adding behavior or safety."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 78.0,
+        "indirection_cost": 80.0,
+        "interface_honesty": 85.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "app/src/App.tsx legacy redirect route `/guide/directory/:groupKey` navigates to literal `/guide/:groupKey`, not the actual param value.",
+        "HTTP access paths are inconsistent: apiClient usage (ProjectEditPage), axios direct binary fetch with manual auth header (Screenshort), and raw fetch HEAD (WebrtcFabLoader)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Sensitive mutate controls in CRM editors (delete/save in CRMCreateTicket and CRMCreateEpic) are always rendered with no client permission gate.",
+        "Other sensitive surfaces do use explicit guards (AdminPage via PermissionGate; PossibleTasks checks `PERMISSIONS.PROJECTS.UPDATE`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Some placeholder/no-op event handlers and broad explanatory comments exist, but most components still contain domain-specific behavior and typed models.",
+        "No widespread trivial restating comments or blanket pass-through wrappers were found in this batch."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "A few placeholder handlers and defensive noise patterns remain, especially in socket and loader glue."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Legacy route aliases remain extensive in app/src/App.tsx, including duplicated aliases and redirect scaffolding.",
+        "Voice transcript UI still supports multiple historical shapes (`transcription.segments`, `transcription_chunks`, `transcription_text`) across Transcription, TranscriptionTableRow, and SessionLog."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "package_organization": {
+      "evidence": [
+        "holistic_context.structure shows `app/src/components/voice/` with file_count 22 (>10 threshold) and avg_fan_in 1.1, indicating overloaded flat package with low cohesion.",
+        "coupling_matrix shows strong edge `app/src/components/voice/ → app/src/store/` = 23, suggesting tighter subdomain packaging around feature slices would reduce navigation friction."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Core domains are still discoverable (`pages/operops`, `components/voice`, `components/crm`, constants/hooks split).",
+        "Most route-level decomposition exists, but App.tsx legacy alias accumulation reduces top-level role clarity."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Main app composition and migration aliases are over-concentrated in one file."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "useCRMSocket subscribes to COMMENT_ADDED and WORK_HOURS_UPDATED but handlers are no-op, while sidebars render ticket-local comment/work snapshots.",
+        "This weak seam means collaboration updates are partially wired and lifecycle propagation is inconsistent."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Many components use clear guard clauses and typed local helpers (`toText`, `normalize*`, `useMemo` derived state).",
+        "Most control flow is readable, but a few files retain repeated branches and broad catch blocks."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Repeated branch logic and silent catches reduce precision in a few high-traffic files."
+    },
+    "design_coherence": {
+      "evidence": [
+        "Feature modules generally align with domain behavior (voice session controls, CRM forms, FinOps grids).",
+        "Some files still combine multiple concerns (routing + alias migration + layout) but overall design intent remains understandable."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "A few hub files carry mixed concerns that should be split by responsibility."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "legacy_directory_redirect_literal_param",
+      "summary": "Legacy directory redirect uses a literal `:groupKey` target instead of forwarding the actual route param.",
+      "related_files": [
+        "app/src/App.tsx",
+        "app/src/pages/DirectoriesPage.tsx"
+      ],
+      "evidence": [
+        "app/src/App.tsx defines `/guide/directory/:groupKey` with `<Navigate to=\"/guide/:groupKey\" replace />`.",
+        "Directories navigation uses concrete keys (`/guide/${record.key}`), so legacy deep links can resolve to a literal placeholder path value."
+      ],
+      "suggestion": "Replace this Navigate with a tiny redirect component that reads `groupKey` from `useParams()` and redirects to `/guide/${groupKey}`. Add a regression route test for `/guide/directory/<real-key>`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "routing_surface_drift"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "app_router_hub_drift",
+      "summary": "Routing, shell layout, and migration aliases are over-concentrated in `App.tsx`, with duplicate route declarations creating dead branches.",
+      "related_files": [
+        "app/src/App.tsx",
+        "app/src/pages/OperOpsLayout.tsx",
+        "app/src/pages/VoiceLayout.tsx"
+      ],
+      "evidence": [
+        "app/src/App.tsx handles navigation metadata, `MainLayout`, `RequireAuth`, full route graph, and large legacy alias matrix in one module.",
+        "Duplicate path declarations exist for `/desops` and `/finops/desops` in app/src/App.tsx, where the second declaration is unreachable."
+      ],
+      "suggestion": "Split routes into domain route modules (`routes/core`, `routes/operops`, `routes/voice`, `routes/legacy`) and keep App as composition only. Remove duplicate path entries and centralize legacy redirects in one map-driven wrapper.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "routing_surface_drift"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "voice_transcription_dual_schema_runtime",
+      "summary": "Voice transcription UI still runs multiple legacy schema fallbacks across several components with no retirement boundary.",
+      "related_files": [
+        "app/src/components/voice/Transcription.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "app/src/components/voice/SessionLog.tsx"
+      ],
+      "evidence": [
+        "Transcription checks `transcription.segments`, then `transcription_chunks`, then `transcription_text` and other fallbacks.",
+        "TranscriptionTableRow builds legacy segments (`buildLegacySegments`) and merges with canonical segments.",
+        "SessionLog repeats a separate fallback path for `transcription_chunks`."
+      ],
+      "suggestion": "Add one canonical normalizer in the store layer that emits a single segment model for UI consumers, then phase out direct legacy field reads behind a feature flag and removal date.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "modal_save_errors_not_user_visible",
+      "summary": "Voice access/participant modals swallow save failures into console logs without actionable user feedback.",
+      "related_files": [
+        "app/src/components/voice/AccessUsersModal.tsx",
+        "app/src/components/voice/AddParticipantModal.tsx"
+      ],
+      "evidence": [
+        "Both modals catch save/create errors and only call `console.error(...)` in catch blocks.",
+        "No `message.error`/form error state is surfaced to the user despite async mutation failure."
+      ],
+      "suggestion": "Normalize modal mutation errors to user-visible notifications and keep modal state with explicit retry guidance. Return typed error payloads from store actions to preserve context.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "permission_logic_duplicated_gate_and_hook",
+      "summary": "Permission/role access evaluation logic is duplicated in two paths within `PermissionGate`, increasing divergence risk.",
+      "related_files": [
+        "app/src/components/voice/PermissionGate.tsx",
+        "app/src/pages/AdminPage.tsx",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "`hasAccess()` and `usePermissionChecker().check()` implement effectively the same branching for role + permission + requireAll.",
+        "Multiple consumers depend on these paths for security-facing UI behavior."
+      ],
+      "suggestion": "Extract one pure `evaluateAccess({role, permission, requireAll}, evaluators)` helper and reuse it from both component and hook exports. Add table-driven tests for role/permission combinations.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "permission_logic_duplication"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "http_transport_error_contract_drift",
+      "summary": "Frontend API usage mixes `apiClient`, raw axios, and raw fetch with different auth and error semantics.",
+      "related_files": [
+        "app/src/pages/ProjectEditPage.tsx",
+        "app/src/pages/AnalyticsPage.tsx",
+        "app/src/components/voice/Screenshort.tsx",
+        "app/src/components/voice/WebrtcFabLoader.tsx"
+      ],
+      "evidence": [
+        "ProjectEditPage uses `apiClient` and axios-specific error narrowing.",
+        "Screenshort performs direct axios GET with manual `X-Authorization` header for attachment binary fetch.",
+        "WebrtcFabLoader uses raw fetch HEAD and silent catch behavior."
+      ],
+      "suggestion": "Create a unified transport layer for JSON, binary, and HEAD probes (all via shared auth/error adapter). Route Screenshort and loader probes through it, and standardize user-facing error mapping.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "crm_mutation_controls_missing_permission_gate",
+      "summary": "CRM mutate controls are exposed without explicit client permission checks while similar sensitive areas are permission-gated.",
+      "related_files": [
+        "app/src/components/crm/CRMCreateTicket.tsx",
+        "app/src/components/crm/CRMCreateEpic.tsx",
+        "app/src/pages/AdminPage.tsx",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "CRMCreateTicket and CRMCreateEpic render destructive/save controls directly, with no PermissionGate or `hasPermission` check.",
+        "AdminPage and PossibleTasks use explicit permission gating for sensitive operations."
+      ],
+      "suggestion": "Introduce CRM permission constants and gate create/edit/delete controls with shared permission checks. Keep backend enforcement unchanged but align frontend behavior and visibility with auth policy.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "permission_logic_duplication"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "crm_socket_partial_noop_handlers",
+      "summary": "CRM realtime seam is partially wired: key socket events are subscribed but handled as no-ops.",
+      "related_files": [
+        "app/src/hooks/useCRMSocket.ts",
+        "app/src/components/crm/CommentsSidebar.tsx",
+        "app/src/components/crm/WorkHoursSidebar.tsx"
+      ],
+      "evidence": [
+        "useCRMSocket registers COMMENT_ADDED and WORK_HOURS_UPDATED handlers with placeholder comments and no store update.",
+        "CommentsSidebar and WorkHoursSidebar render ticket-local `comments_list`/`work_data` snapshots, so collaboration updates can stay stale."
+      ],
+      "suggestion": "Implement targeted store patching for comment/work-hour events (or selective ticket refetch) in `useCRMSocket` and keep sidebar state synchronized from the same source of truth.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "voice_components_flat_overload",
+      "summary": "The voice component package is a flat overloaded directory with mixed concerns and weak navigability.",
+      "related_files": [
+        "app/src/components/voice/MeetingCard.tsx",
+        "app/src/components/voice/SessionLog.tsx",
+        "app/src/components/voice/AudioUploader.tsx",
+        "app/src/components/voice/Transcription.tsx"
+      ],
+      "evidence": [
+        "holistic_context.structure: `app/src/components/voice/` has file_count 22 and avg_fan_in 1.1 (flat, low-cohesion signal).",
+        "holistic_context.structure coupling_matrix: `app/src/components/voice/ → app/src/store/` = 23, indicating dense domain coupling without folder-level segmentation.",
+        "Current folder mixes session controls, access modals, transcript tables, uploader/network helpers, and status widgets."
+      ],
+      "suggestion": "Staged reorg plan: (1) create subfolders `voice/session`, `voice/transcription`, `voice/categorization`, `voice/access`, `voice/media`; (2) move read-only/table pieces first (`Transcription*`, `Categorization*`, `SessionLog`), then controls/modals (`MeetingCard`, `AccessUsersModal`, `AddParticipantModal`), then media helpers (`AudioUploader`, `Screenshort`); (3) add `voice/index.ts` facade exports; (4) run import updates and validation commands: `cd app && rg \"components/voice/\" src`, apply path updates, `npm run build`, `npm run test`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Legacy migration work is concentrated in runtime entrypoints instead of isolated compatibility layers.",
+      "Permission and transport behaviors are implemented ad hoc at component level instead of through shared policy/evaluation utilities.",
+      "Realtime seams are only partially closed, leaving UI read models stale under multi-user updates."
+    ],
+    "likely_symptoms": [
+      "legacy_directory_redirect_literal_param",
+      "app_router_hub_drift",
+      "voice_transcription_dual_schema_runtime",
+      "crm_socket_partial_noop_handlers"
+    ],
+    "possible_false_positives": [
+      "Some legacy transcript fallback paths may be intentionally retained for backward data compatibility until backend cleanup completes."
+    ]
+  }
+}

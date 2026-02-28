@@ -103,6 +103,14 @@ interface SubTabConfig {
     pagination?: boolean;
 }
 
+type ReportModalKind = 'jira' | 'performer' | null;
+
+interface CRMPageUiState {
+    voiceLoading: boolean;
+    reportLoading: boolean;
+    resultModalOpen: boolean;
+}
+
 const CRMPage = () => {
     const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew } = useCRMStore();
     const { tickets, projects, performers, fetchDictionary, fetchTickets, tickets_updated_at } = useKanbanStore();
@@ -114,15 +122,22 @@ const CRMPage = () => {
     useCRMSocket();
 
     const [voiceSessions, setVoiceSessions] = useState<VoiceSession[]>([]);
-    const [voiceLoading, setVoiceLoading] = useState(false);
+    const [uiState, setUiState] = useState<CRMPageUiState>({
+        voiceLoading: false,
+        reportLoading: false,
+        resultModalOpen: false,
+    });
     const [restartCreateTasksId, setRestartCreateTasksId] = useState<string | null>(null);
-    const [jiraModalOpen, setJiraModalOpen] = useState(false);
-    const [performerModalOpen, setPerformerModalOpen] = useState(false);
-    const [resultModalOpen, setResultModalOpen] = useState(false);
+    const [reportModalKind, setReportModalKind] = useState<ReportModalKind>(null);
     const [reportResult, setReportResult] = useState<ReportResult | null>(null);
-    const [reportLoading, setReportLoading] = useState(false);
     const [jiraForm] = Form.useForm();
     const [performerForm] = Form.useForm();
+    const voiceLoading = uiState.voiceLoading;
+    const reportLoading = uiState.reportLoading;
+    const resultModalOpen = uiState.resultModalOpen;
+    const patchUiState = (patch: Partial<CRMPageUiState>): void => {
+        setUiState((prev) => ({ ...prev, ...patch }));
+    };
 
     const { isAuth, loading: authLoading } = useAuthStore();
     const initialDataLoadedRef = useRef(false);
@@ -146,7 +161,7 @@ const CRMPage = () => {
 
     const fetchVoiceSessions = useCallback(async () => {
         if (!isAuth) return;
-        setVoiceLoading(true);
+        patchUiState({ voiceLoading: true });
         try {
             const data = await api_request<VoiceSession[]>('voicebot/sessions_in_crm', {}, { silent: true });
             setVoiceSessions(Array.isArray(data) ? data : []);
@@ -154,7 +169,7 @@ const CRMPage = () => {
             console.error('Ошибка при загрузке Voice сессий:', error);
             setVoiceSessions([]);
         } finally {
-            setVoiceLoading(false);
+            patchUiState({ voiceLoading: false });
         }
     }, [isAuth]);
 
@@ -260,7 +275,7 @@ const CRMPage = () => {
 
     const openResult = (result: ReportResult) => {
         setReportResult(result);
-        setResultModalOpen(true);
+        patchUiState({ resultModalOpen: true });
         window.open(result.url, '_blank', 'noopener');
     };
 
@@ -268,7 +283,7 @@ const CRMPage = () => {
         try {
             const values = await jiraForm.validateFields();
             const range = values.range as [Dayjs, Dayjs];
-            setReportLoading(true);
+            patchUiState({ reportLoading: true });
             const response = await api_request<ReportResponse>('reports/jira-style', {
                 customerId: values.customerId,
                 startDate: range[0].toISOString(),
@@ -276,7 +291,7 @@ const CRMPage = () => {
             });
             if (response?.data?.url) {
                 message.success('Отчет готов');
-                setJiraModalOpen(false);
+                setReportModalKind(null);
                 openResult(response.data);
             } else {
                 message.error(response?.error?.message ?? 'Не удалось сформировать отчет');
@@ -285,7 +300,7 @@ const CRMPage = () => {
             console.error('Ошибка при создании Jira-style отчета:', error);
             message.error('Не удалось сформировать отчет');
         } finally {
-            setReportLoading(false);
+            patchUiState({ reportLoading: false });
         }
     };
 
@@ -293,7 +308,7 @@ const CRMPage = () => {
         try {
             const values = await performerForm.validateFields();
             const range = values.range as [Dayjs, Dayjs];
-            setReportLoading(true);
+            patchUiState({ reportLoading: true });
             const response = await api_request<ReportResponse>('reports/performer-weeks', {
                 performerId: values.performerId,
                 startDate: range[0].toISOString(),
@@ -301,7 +316,7 @@ const CRMPage = () => {
             });
             if (response?.data?.url) {
                 message.success('Отчет готов');
-                setPerformerModalOpen(false);
+                setReportModalKind(null);
                 openResult(response.data);
             } else {
                 message.error(response?.error?.message ?? 'Не удалось сформировать отчет');
@@ -310,7 +325,7 @@ const CRMPage = () => {
             console.error('Ошибка при создании отчета по исполнителю:', error);
             message.error('Не удалось сформировать отчет');
         } finally {
-            setReportLoading(false);
+            patchUiState({ reportLoading: false });
         }
     };
 
@@ -592,8 +607,8 @@ const CRMPage = () => {
                     >
                         <Modal
                             title="Jira-style отчет"
-                            open={jiraModalOpen}
-                            onCancel={() => setJiraModalOpen(false)}
+                            open={reportModalKind === 'jira'}
+                            onCancel={() => setReportModalKind(null)}
                             onOk={handleJiraReportSubmit}
                             okText="Создать отчет"
                             cancelText="Отмена"
@@ -629,8 +644,8 @@ const CRMPage = () => {
 
                         <Modal
                             title="Отчет по исполнителю"
-                            open={performerModalOpen}
-                            onCancel={() => setPerformerModalOpen(false)}
+                            open={reportModalKind === 'performer'}
+                            onCancel={() => setReportModalKind(null)}
                             onOk={handlePerformerReportSubmit}
                             okText="Создать отчет"
                             cancelText="Отмена"
@@ -669,7 +684,7 @@ const CRMPage = () => {
                         <Modal
                             title="Отчет готов"
                             open={resultModalOpen}
-                            onCancel={() => setResultModalOpen(false)}
+                            onCancel={() => patchUiState({ resultModalOpen: false })}
                             onOk={() => reportResult?.url && window.open(reportResult.url, '_blank', 'noopener')}
                             okText="Открыть"
                             cancelText="Закрыть"
@@ -705,10 +720,10 @@ const CRMPage = () => {
                                     ))}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                    <Button icon={<FileExcelOutlined />} onClick={() => setJiraModalOpen(true)}>
+                                    <Button icon={<FileExcelOutlined />} onClick={() => setReportModalKind('jira')}>
                                         Jira-style отчет
                                     </Button>
-                                    <Button icon={<FileExcelOutlined />} onClick={() => setPerformerModalOpen(true)}>
+                                    <Button icon={<FileExcelOutlined />} onClick={() => setReportModalKind('performer')}>
                                         Отчет по исполнителю
                                     </Button>
                                     <Button type="primary" onClick={() => setEditingTicketToNew()}>

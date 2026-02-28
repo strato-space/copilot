@@ -3,26 +3,7 @@ import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import TranscriptionTableHeader from './TranscriptionTableHeader';
 import TranscriptionTableRow from './TranscriptionTableRow';
-
-const toTimestampMs = (value: unknown): number | null => {
-    if (value instanceof Date) {
-        const ms = value.getTime();
-        return Number.isNaN(ms) ? null : ms;
-    }
-
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        return value > 1e11 ? value : value * 1000;
-    }
-
-    if (typeof value === 'string' && value.trim()) {
-        const numeric = Number(value);
-        if (Number.isFinite(numeric)) return numeric > 1e11 ? numeric : numeric * 1000;
-        const parsed = Date.parse(value);
-        return Number.isNaN(parsed) ? null : parsed;
-    }
-
-    return null;
-};
+import { parseTimestampMs } from './timestampUtils';
 
 const hasVisibleTranscriptionContent = (message: Record<string, unknown>): boolean => {
     const isDeleted = message.is_deleted;
@@ -108,8 +89,8 @@ export default function Transcription() {
             return Number.isFinite(parsed) ? parsed : 0;
         };
         list.sort((a, b) => {
-            const aTs = toTimestampMs(a?.message_timestamp) ?? 0;
-            const bTs = toTimestampMs(b?.message_timestamp) ?? 0;
+            const aTs = parseTimestampMs(a?.message_timestamp) ?? 0;
+            const bTs = parseTimestampMs(b?.message_timestamp) ?? 0;
             let comparison = 0;
             if (aTs > bTs) comparison = -1;
             else if (aTs < bTs) comparison = 1;
@@ -126,7 +107,7 @@ export default function Transcription() {
 
     const sessionBaseTimestampMs = useMemo(() => {
         const stamps = sortedRows
-            .map((msg) => toTimestampMs(msg?.message_timestamp))
+            .map((msg) => parseTimestampMs(msg?.message_timestamp))
             .filter((value): value is number => value != null);
         if (stamps.length === 0) return null;
         return Math.min(...stamps);

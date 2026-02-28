@@ -2,10 +2,10 @@ import type { VoiceBotProject } from '../../types/voice';
 
 export const UNGROUPED_PROJECTS_LABEL = 'Без группы';
 
-const normalizeString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+const normalizeOptionalString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 export const projectDisplayName = (project: VoiceBotProject): string =>
-  normalizeString(project.name) || normalizeString(project.title) || String(project._id || '');
+  normalizeOptionalString(project.name) || normalizeOptionalString(project.title) || String(project._id || '');
 
 export type ProjectSelectOptionGroup = {
   label: string;
@@ -23,7 +23,7 @@ export const buildGroupedProjectOptions = (
   const grouped = new Map<string, VoiceBotProject[]>();
 
   for (const project of projects) {
-    const groupName = normalizeString(project.project_group?.name);
+    const groupName = normalizeOptionalString(project.project_group?.name);
     if (!grouped.has(groupName)) grouped.set(groupName, []);
     grouped.get(groupName)?.push(project);
   }

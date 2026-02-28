@@ -3,8 +3,8 @@
  * 
  * Migrated from voicebot/crm/routes/voicebot.js + controllers/voicebot.js
  * 
- * TODO: voicebot-tgbot integration - BullMQ queues for session events
- * TODO: Google Drive integration for spreadsheet renaming
+ * NOTE: voicebot-tgbot integration may adopt BullMQ queues for session events.
+ * NOTE: Google Drive integration may eventually support spreadsheet renaming.
  */
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import jwt from 'jsonwebtoken';
@@ -43,6 +43,19 @@ import { getLogger } from '../../../utils/logger.js';
 import { z } from 'zod';
 import { insertSessionLogEvent, mapEventForApi } from '../../../services/voicebotSessionLog.js';
 import { parseEmbeddedOid, parseTopLevelOidToObjectId, formatOid } from '../../../services/voicebotOid.js';
+import { voiceSessionUrlUtils } from './sessionUrlUtils.js';
+import {
+    codexPerformerUtils,
+    normalizeDateField,
+    normalizeLinkedMessageRef,
+    toIdString,
+    toObjectIdArray,
+    toObjectIdOrNull,
+    toTaskDependencies,
+    toTaskList,
+    toTaskReferenceList,
+    toTaskText,
+} from './sessionsSharedUtils.js';
 import {
   buildActorFromPerformer,
   buildCategorizationCleanupPayload,
@@ -60,7 +73,7 @@ import { completeSessionDoneFlow } from '../../../services/voicebotSessionDoneFl
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { createBdIssue } from '../../../services/bdClient.js';
 
-// TODO: Import MCPProxyClient when MCP integration is needed
+// NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
 
 const router = Router();
@@ -147,22 +160,7 @@ const projectFilesUpload = multer({
     },
 });
 
-const LEGACY_INTERFACE_HOST = '176.124.201.53';
-const DEFAULT_PUBLIC_INTERFACE_BASE = 'https://copilot.stratospace.fun/voice/session';
 const SESSION_MERGE_CONFIRM_PHRASE = 'СЛИТЬ СЕССИИ';
-
-const activeSessionUrl = (sessionId?: string | null): string => {
-    const rawBase = (process.env.VOICE_WEB_INTERFACE_URL || DEFAULT_PUBLIC_INTERFACE_BASE).replace(/\/+$/, '');
-    const base = rawBase.includes(LEGACY_INTERFACE_HOST) ? DEFAULT_PUBLIC_INTERFACE_BASE : rawBase;
-    if (!sessionId) return base;
-    return `${base}/${sessionId}`;
-};
-
-const canonicalVoiceSessionUrl = (sessionId?: string | null): string => {
-    const normalizedSessionId = String(sessionId || '').trim();
-    if (!normalizedSessionId) return DEFAULT_PUBLIC_INTERFACE_BASE;
-    return `${DEFAULT_PUBLIC_INTERFACE_BASE}/${normalizedSessionId}`;
-};
 
 const enqueueVoicebotNotify = async ({
     sessionId,
@@ -213,7 +211,7 @@ const buildSocketToken = (req: VoicebotRequest): string | null => {
     const performerId = req.performer?._id?.toString?.() || '';
     const userId = String(req.user?.userId || performerId).trim();
     if (!ObjectId.isValid(userId)) {
-        logger.warn('[voicebot.sessions.get] invalid user id for socket token', { userId });
+        logger.warn('[voicebot.sessions.get] invalid user identifier for socket auth payload');
         return null;
     }
 
@@ -228,8 +226,8 @@ const buildSocketToken = (req: VoicebotRequest): string | null => {
     try {
         return jwt.sign(jwtPayload, secret, { expiresIn: '90d' });
     } catch (error) {
-        logger.error('[voicebot.sessions.get] failed to sign socket token', {
-            error: error instanceof Error ? error.message : String(error),
+        logger.error('[voicebot.sessions.get] failed to sign socket auth payload', {
+            reason: error instanceof Error ? error.message : String(error),
         });
         return null;
     }
@@ -273,7 +271,7 @@ interface VoicebotRequest extends Request {
         role?: string;
         projects_access?: ObjectId[];
     };
-    // TODO: Add queues when BullMQ integration is implemented
+    // NOTE: Add queues when BullMQ integration is implemented.
     // queues?: Record<string, Queue>;
 }
 
@@ -284,40 +282,25 @@ type VoiceSessionRecord = Record<string, unknown> & {
     is_active?: boolean;
 };
 
-const toObjectIdOrNull = (value: unknown): ObjectId | null => {
-    if (value instanceof ObjectId) return value;
-    const raw = String(value ?? '').trim();
-    if (!raw || !ObjectId.isValid(raw)) return null;
-    return new ObjectId(raw);
+type VoiceSessionParticipant = {
+    _id: ObjectId;
+    name?: string;
+    contacts?: unknown;
 };
 
-const toObjectIdArray = (value: unknown): ObjectId[] => {
-    if (!Array.isArray(value)) return [];
-    const result: ObjectId[] = [];
-    for (const item of value) {
-        const parsed = toObjectIdOrNull(item);
-        if (parsed) result.push(parsed);
-    }
-    return result;
+type VoiceSessionAllowedUserDoc = {
+    _id: ObjectId;
+    name?: string;
+    real_name?: string;
+    corporate_email?: string;
+    role?: string;
 };
 
-const toTaskText = (value: unknown): string => {
-    if (typeof value === 'string') return value.trim();
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-    return '';
-};
-
-const normalizeDateField = (value: unknown): string | number | null => {
-    if (value instanceof Date) return value.toISOString();
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (!trimmed) return null;
-        const parsed = Date.parse(trimmed);
-        if (Number.isNaN(parsed)) return trimmed;
-        return new Date(parsed).toISOString();
-    }
-    return null;
+type VoiceSessionAllowedUserView = {
+    _id: ObjectId;
+    name: string | undefined;
+    email: string | undefined;
+    role: string;
 };
 
 const normalizeCodexTaskForApi = (value: unknown): Record<string, unknown> | null => {
@@ -381,62 +364,6 @@ const buildCodexIssueDescription = ({
     `Creator: ${creatorName || 'unknown'}`,
 ].join('\n');
 
-const CODEX_PERFORMER_ID = '69a2561d642f3a032ad88e7a';
-const CODEX_PERFORMER_ALIASES = new Set([
-    'codex',
-    'codex-system',
-]);
-const CODEX_PERFORMER_TEXT_KEYS = [
-    'name',
-    'real_name',
-    'full_name',
-    'username',
-    'email',
-    'corporate_email',
-];
-
-const normalizeCodexPerformerIdentifier = (value: unknown): string => {
-    const raw = String(toIdString(value) ?? toTaskText(value)).trim().toLowerCase();
-    if (!raw) return '';
-    const withoutLocalSuffix = raw.endsWith('.local') ? raw.slice(0, -'.local'.length) : raw;
-    return withoutLocalSuffix.replace(/_/g, '-');
-};
-
-const isCodexPerformerIdOrAlias = (value: unknown): boolean => {
-    const normalized = normalizeCodexPerformerIdentifier(value);
-    if (!normalized) return false;
-    return normalized === CODEX_PERFORMER_ID || CODEX_PERFORMER_ALIASES.has(normalized);
-};
-
-const isCodexPerformerTextValue = (value: unknown): boolean => {
-    const normalized = normalizeCodexPerformerIdentifier(value);
-    if (!normalized) return false;
-    if (CODEX_PERFORMER_ALIASES.has(normalized)) return true;
-
-    const emailLocalPart = normalized.includes('@') ? normalized.split('@')[0] : normalized;
-    return Boolean(emailLocalPart && CODEX_PERFORMER_ALIASES.has(emailLocalPart));
-};
-
-const isCodexPerformer = (value: unknown): boolean => {
-    if (!value || typeof value !== 'object') return false;
-    const performer = value as Record<string, unknown>;
-    if (isCodexPerformerIdOrAlias(performer._id) ||
-        isCodexPerformerIdOrAlias(performer.id) ||
-        isCodexPerformerIdOrAlias(performer.performer_id)) {
-        return true;
-    }
-
-    return CODEX_PERFORMER_TEXT_KEYS.some((key) => isCodexPerformerTextValue(performer[key]));
-};
-
-const isCodexTaskDocument = (value: unknown): boolean => {
-    if (!value || typeof value !== 'object') return false;
-    const task = value as Record<string, unknown>;
-    return task.codex_task === true ||
-        isCodexPerformerIdOrAlias(task.performer_id) ||
-        isCodexPerformer(task.performer);
-};
-
 type CreateTicketsRowRejectionReason =
     | 'missing_performer_id'
     | 'invalid_performer_id'
@@ -453,44 +380,6 @@ type CreateTicketsRejectedRow = {
     message: string;
     performer_id?: string;
     project_id?: string;
-};
-
-const toTaskDependencies = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value
-        .map((entry) => toTaskText(entry))
-        .filter(Boolean);
-};
-
-const toTaskList = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value
-        .map((entry) => toTaskText(entry))
-        .filter(Boolean);
-};
-
-const toTaskReferenceList = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    const references: string[] = [];
-    for (const entry of value) {
-        if (typeof entry === 'string' || typeof entry === 'number') {
-            const text = toTaskText(entry);
-            if (text) references.push(text);
-            continue;
-        }
-        if (!entry || typeof entry !== 'object') {
-            continue;
-        }
-        const record = entry as Record<string, unknown>;
-        const text =
-            toTaskText(record.id) ||
-            toTaskText(record.task_id) ||
-            toTaskText(record.title) ||
-            toTaskText(record.name) ||
-            toTaskText(record.reference);
-        if (text) references.push(text);
-    }
-    return Array.from(new Set(references));
 };
 
 const normalizeCreateTaskForStorage = (
@@ -516,124 +405,124 @@ const normalizeCreateTaskForStorage = (
     };
 };
 
-const getValueByPath = (input: unknown, path: string): unknown => {
-    if (!path) return undefined;
-    const keys = path.split('.');
-    let current: unknown = input;
-    for (const key of keys) {
-        if (!current || typeof current !== 'object') return undefined;
-        current = (current as Record<string, unknown>)[key];
-    }
-    return current;
-};
-
-const setValueByPath = (input: Record<string, unknown>, path: string, value: unknown): void => {
-    if (!path) return;
-    const keys = path.split('.');
-    let current: Record<string, unknown> = input;
-    for (let idx = 0; idx < keys.length; idx += 1) {
-        const key = keys[idx];
-        if (!key) return;
-        const isLast = idx === keys.length - 1;
-        if (isLast) {
-            current[key] = value;
-            return;
+const nestedRecordPath = {
+    get(input: unknown, path: string): unknown {
+        if (!path) return undefined;
+        const keys = path.split('.');
+        let current: unknown = input;
+        for (const key of keys) {
+            if (!current || typeof current !== 'object') return undefined;
+            current = (current as Record<string, unknown>)[key];
         }
-        const nextValue = current[key];
-        if (!nextValue || typeof nextValue !== 'object' || Array.isArray(nextValue)) {
-            current[key] = {};
+        return current;
+    },
+    set(input: Record<string, unknown>, path: string, value: unknown): void {
+        if (!path) return;
+        const keys = path.split('.');
+        let current: Record<string, unknown> = input;
+        for (let idx = 0; idx < keys.length; idx += 1) {
+            const key = keys[idx];
+            if (!key) return;
+            const isLast = idx === keys.length - 1;
+            if (isLast) {
+                current[key] = value;
+                return;
+            }
+            const nextValue = current[key];
+            if (!nextValue || typeof nextValue !== 'object' || Array.isArray(nextValue)) {
+                current[key] = {};
+            }
+            current = current[key] as Record<string, unknown>;
         }
-        current = current[key] as Record<string, unknown>;
-    }
+    },
 };
 
-const buildCategorizationCleanupStats = (
-    message: Record<string, unknown>,
-    cleanupPayload: Record<string, unknown>
-): { affected_paths: number; removed_rows: number } => {
-    let affectedPaths = 0;
-    let removedRows = 0;
-
-    for (const [path, nextValue] of Object.entries(cleanupPayload)) {
-        if (!Array.isArray(nextValue)) continue;
-        const prevValue = getValueByPath(message, path);
-        if (!Array.isArray(prevValue)) continue;
-        if (prevValue.length === nextValue.length) continue;
-        affectedPaths += 1;
-        removedRows += Math.max(0, prevValue.length - nextValue.length);
-    }
-
-    return {
-        affected_paths: affectedPaths,
-        removed_rows: removedRows,
-    };
-};
-
-const cleanupMessageCategorizationForDeletedSegments = (
-    message: Record<string, unknown>
-): {
-    message: Record<string, unknown>;
-    cleanupPayload: Record<string, unknown>;
-    cleanupStats: { affected_paths: number; removed_rows: number };
-} => {
-    const transcription = (message?.transcription && typeof message.transcription === 'object')
-        ? (message.transcription as Record<string, unknown>)
-        : null;
-    const segments = Array.isArray(transcription?.segments)
-        ? (transcription?.segments as Array<Record<string, unknown>>)
-        : [];
-    if (segments.length === 0) {
+const categorizationCleanup = {
+    buildStats(
+        message: Record<string, unknown>,
+        cleanupPayload: Record<string, unknown>
+    ): { affected_paths: number; removed_rows: number } {
+        let affectedPaths = 0;
+        let removedRows = 0;
+        for (const [path, nextValue] of Object.entries(cleanupPayload)) {
+            if (!Array.isArray(nextValue)) continue;
+            const prevValue = nestedRecordPath.get(message, path);
+            if (!Array.isArray(prevValue)) continue;
+            if (prevValue.length === nextValue.length) continue;
+            affectedPaths += 1;
+            removedRows += Math.max(0, prevValue.length - nextValue.length);
+        }
         return {
-            message,
-            cleanupPayload: {},
-            cleanupStats: { affected_paths: 0, removed_rows: 0 },
+            affected_paths: affectedPaths,
+            removed_rows: removedRows,
         };
-    }
-
-    const deletedSegments = segments.filter((segment) => segment?.is_deleted === true);
-    if (deletedSegments.length === 0) {
-        return {
-            message,
-            cleanupPayload: {},
-            cleanupStats: { affected_paths: 0, removed_rows: 0 },
-        };
-    }
-
-    const cloneValue = <T>(value: T): T => {
-        if (value == null) return value;
-        if (typeof value !== 'object') return value;
-        return structuredClone(value);
-    };
-    const messageForCleanup: Record<string, unknown> = {
-        _id: message._id,
-        categorization: cloneValue(message.categorization),
-        categorization_data: cloneValue(message.categorization_data),
-        processors_data: cloneValue(message.processors_data),
-    };
-    const aggregatePayload: Record<string, unknown> = {};
-
-    for (const deletedSegment of deletedSegments) {
-        const payload = buildCategorizationCleanupPayload({
-            message: messageForCleanup as Record<string, unknown> & { _id: ObjectId },
-            segment: deletedSegment,
-        });
-        if (Object.keys(payload).length === 0) continue;
-        for (const [path, value] of Object.entries(payload)) {
-            aggregatePayload[path] = value;
-            setValueByPath(messageForCleanup, path, value);
+    },
+    applyForDeletedSegments(
+        message: Record<string, unknown>
+    ): {
+        message: Record<string, unknown>;
+        cleanupPayload: Record<string, unknown>;
+        cleanupStats: { affected_paths: number; removed_rows: number };
+    } {
+        const transcription = (message?.transcription && typeof message.transcription === 'object')
+            ? (message.transcription as Record<string, unknown>)
+            : null;
+        const segments = Array.isArray(transcription?.segments)
+            ? (transcription?.segments as Array<Record<string, unknown>>)
+            : [];
+        if (segments.length === 0) {
+            return {
+                message,
+                cleanupPayload: {},
+                cleanupStats: { affected_paths: 0, removed_rows: 0 },
+            };
         }
-    }
 
-    const cleanupStats = buildCategorizationCleanupStats(message, aggregatePayload);
-    const updatedMessage = { ...message };
-    for (const [path, value] of Object.entries(aggregatePayload)) {
-        setValueByPath(updatedMessage, path, value);
-    }
-    return {
-        message: updatedMessage,
-        cleanupPayload: aggregatePayload,
-        cleanupStats,
-    };
+        const deletedSegments = segments.filter((segment) => segment?.is_deleted === true);
+        if (deletedSegments.length === 0) {
+            return {
+                message,
+                cleanupPayload: {},
+                cleanupStats: { affected_paths: 0, removed_rows: 0 },
+            };
+        }
+
+        const cloneValue = <T>(value: T): T => {
+            if (value == null) return value;
+            if (typeof value !== 'object') return value;
+            return structuredClone(value);
+        };
+        const messageForCleanup: Record<string, unknown> = {
+            _id: message._id,
+            categorization: cloneValue(message.categorization),
+            categorization_data: cloneValue(message.categorization_data),
+            processors_data: cloneValue(message.processors_data),
+        };
+        const aggregatePayload: Record<string, unknown> = {};
+
+        for (const deletedSegment of deletedSegments) {
+            const payload = buildCategorizationCleanupPayload({
+                message: messageForCleanup as Record<string, unknown> & { _id: ObjectId },
+                segment: deletedSegment,
+            });
+            if (Object.keys(payload).length === 0) continue;
+            for (const [path, value] of Object.entries(payload)) {
+                aggregatePayload[path] = value;
+                nestedRecordPath.set(messageForCleanup, path, value);
+            }
+        }
+
+        const cleanupStats = this.buildStats(message, aggregatePayload);
+        const updatedMessage = { ...message };
+        for (const [path, value] of Object.entries(aggregatePayload)) {
+            nestedRecordPath.set(updatedMessage, path, value);
+        }
+        return {
+            message: updatedMessage,
+            cleanupPayload: aggregatePayload,
+            cleanupStats,
+        };
+    },
 };
 
 type ProjectFileRecord = Record<string, unknown> & {
@@ -708,79 +597,134 @@ const runtimeProjectFilesQuery = (query: Record<string, unknown>): Record<string
         includeLegacyInProd: IS_PROD_RUNTIME,
     });
 
-const resolveTelegramUserId = (performer: VoicebotRequest['performer']): string | null => {
-    const fromPerformer = performer?.telegram_id ? String(performer.telegram_id).trim() : '';
-    if (fromPerformer) return fromPerformer;
-    return null;
+const activeSessionMappingUtils = {
+    resolveTelegramUserId(performer: VoicebotRequest['performer']): string | null {
+        const fromPerformer = performer?.telegram_id ? String(performer.telegram_id).trim() : '';
+        if (fromPerformer) return fromPerformer;
+        return null;
+    },
+    async get({
+        db,
+        performer,
+    }: {
+        db: Db;
+        performer: VoicebotRequest['performer'];
+    }): Promise<{ active_session_id?: ObjectId | null } | null> {
+        const telegramUserId = this.resolveTelegramUserId(performer);
+        if (!telegramUserId) return null;
+
+        return db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).findOne(
+            mergeWithRuntimeFilter(
+                { telegram_user_id: telegramUserId },
+                { field: 'runtime_tag' }
+            ),
+            {
+                projection: { active_session_id: 1 },
+            }
+        ) as Promise<{ active_session_id?: ObjectId | null } | null>;
+    },
+    async set({
+        db,
+        performer,
+        sessionId,
+    }: {
+        db: Db;
+        performer: VoicebotRequest['performer'];
+        sessionId: string;
+    }): Promise<void> {
+        const telegramUserId = this.resolveTelegramUserId(performer);
+        if (!telegramUserId || !ObjectId.isValid(sessionId)) return;
+
+        await db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).updateOne(
+            mergeWithRuntimeFilter(
+                { telegram_user_id: telegramUserId },
+                { field: 'runtime_tag' }
+            ),
+            {
+                $set: {
+                    telegram_user_id: telegramUserId,
+                    active_session_id: new ObjectId(sessionId),
+                    updated_at: new Date(),
+                },
+                $setOnInsert: {
+                    created_at: new Date(),
+                    chat_id: performer.telegram_id ? Number(performer.telegram_id) : null,
+                },
+            },
+            { upsert: true }
+        );
+    },
 };
 
-const resolveSessionAccess = async ({
-    db,
-    performer,
-    sessionId,
-}: {
-    db: Db;
-    performer: VoicebotRequest['performer'];
-    sessionId: string;
-}): Promise<{
-    session: Record<string, unknown> | null;
-    hasAccess: boolean;
-    runtimeMismatch: boolean;
-}> => {
-    if (!ObjectId.isValid(sessionId)) {
-        return { session: null, hasAccess: false, runtimeMismatch: false };
-    }
-    const rawDb = getRawDb();
-    const session = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
-        mergeWithProdAwareRuntimeFilter({
-            _id: new ObjectId(sessionId),
-            is_deleted: { $ne: true },
-        })
-    );
-    if (!session) {
-        const rawSession = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
-            _id: new ObjectId(sessionId),
-            is_deleted: { $ne: true },
-        });
-        if (
-            rawSession &&
-            !recordMatchesRuntime(rawSession as Record<string, unknown>, {
-                field: 'runtime_tag',
-                familyMatch: IS_PROD_RUNTIME,
-                includeLegacyInProd: IS_PROD_RUNTIME,
+const sessionAccessUtils = {
+    async resolve({
+        db,
+        performer,
+        sessionId,
+    }: {
+        db: Db;
+        performer: VoicebotRequest['performer'];
+        sessionId: string;
+    }): Promise<{
+        session: Record<string, unknown> | null;
+        hasAccess: boolean;
+        runtimeMismatch: boolean;
+    }> {
+        if (!ObjectId.isValid(sessionId)) {
+            return { session: null, hasAccess: false, runtimeMismatch: false };
+        }
+        const rawDb = getRawDb();
+        const session = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+            mergeWithProdAwareRuntimeFilter({
+                _id: new ObjectId(sessionId),
+                is_deleted: { $ne: true },
             })
-        ) {
-            return { session: null, hasAccess: false, runtimeMismatch: true };
+        );
+        if (!session) {
+            const rawSession = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+                _id: new ObjectId(sessionId),
+                is_deleted: { $ne: true },
+            });
+            if (
+                rawSession &&
+                !recordMatchesRuntime(rawSession as Record<string, unknown>, {
+                    field: 'runtime_tag',
+                    familyMatch: IS_PROD_RUNTIME,
+                    includeLegacyInProd: IS_PROD_RUNTIME,
+                })
+            ) {
+                return { session: null, hasAccess: false, runtimeMismatch: true };
+            }
+            return { session: null, hasAccess: false, runtimeMismatch: false };
         }
-        return { session: null, hasAccess: false, runtimeMismatch: false };
-    }
 
-    const userPermissions = await PermissionManager.getUserPermissions(performer, db);
-    let hasAccess = false;
-    if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL)) {
-        hasAccess = true;
-    } else if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN)) {
-        hasAccess = session.chat_id === Number(performer.telegram_id) ||
-            (session.user_id && performer._id.toString() === String(session.user_id));
+        const userPermissions = await PermissionManager.getUserPermissions(performer, db);
+        let hasAccess = false;
+        if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL)) {
+            hasAccess = true;
+        } else if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN)) {
+            hasAccess = session.chat_id === Number(performer.telegram_id) ||
+                (session.user_id && performer._id.toString() === String(session.user_id));
 
-        if (!hasAccess && session.project_id && session.access_level === VOICE_BOT_SESSION_ACCESS.PUBLIC) {
-            if (performer.projects_access && Array.isArray(performer.projects_access)) {
-                hasAccess = performer.projects_access.some(
-                    (projectId: ObjectId) => projectId.toString() === String(session.project_id)
-                );
+            if (!hasAccess && session.project_id && session.access_level === VOICE_BOT_SESSION_ACCESS.PUBLIC) {
+                if (performer.projects_access && Array.isArray(performer.projects_access)) {
+                    hasAccess = performer.projects_access.some(
+                        (projectId: ObjectId) => projectId.toString() === String(session.project_id)
+                    );
+                }
+            }
+
+            if (!hasAccess && session.access_level === VOICE_BOT_SESSION_ACCESS.RESTRICTED) {
+                if (session.allowed_users && Array.isArray(session.allowed_users)) {
+                    hasAccess = session.allowed_users.some(
+                        (userId: ObjectId) => userId.toString() === performer._id.toString()
+                    );
+                }
             }
         }
 
-        if (!hasAccess && session.access_level === VOICE_BOT_SESSION_ACCESS.RESTRICTED) {
-            if (session.allowed_users && Array.isArray(session.allowed_users)) {
-                hasAccess = session.allowed_users.some(
-                    (userId: ObjectId) => userId.toString() === performer._id.toString()
-                );
-            }
-        }
-    }
-
-    return { session: session as Record<string, unknown>, hasAccess, runtimeMismatch: false };
+        return { session: session as Record<string, unknown>, hasAccess, runtimeMismatch: false };
+    },
 };
 
 const dedupeObjectIds = (ids: ObjectId[]): ObjectId[] => {
@@ -809,20 +753,6 @@ const compactRecord = (value: unknown): unknown => {
         .map(([key, entry]) => [key, compactRecord(entry)] as const)
         .filter(([, entry]) => entry !== undefined);
     return Object.fromEntries(entries);
-};
-
-const toIdString = (value: unknown): string | null => {
-    if (value == null) return null;
-    if (typeof value === 'string') return value;
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'number' || typeof value === 'bigint') return String(value);
-    if (typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if ('_id' in record) return toIdString(record._id);
-        if ('id' in record) return toIdString(record.id);
-        if ('key' in record) return toIdString(record.key);
-    }
-    return null;
 };
 
 const resolveActorId = (req: Request): string | null => {
@@ -900,59 +830,6 @@ const writeSessionMergeAuditLog = async ({
     await db.collection(VOICEBOT_COLLECTIONS.SESSION_MERGE_LOG).insertOne(logDoc, options);
 };
 
-const getActiveSessionMapping = async ({
-    db,
-    performer,
-}: {
-    db: Db;
-    performer: VoicebotRequest['performer'];
-}): Promise<{ active_session_id?: ObjectId | null } | null> => {
-    const telegramUserId = resolveTelegramUserId(performer);
-    if (!telegramUserId) return null;
-
-    return db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).findOne(
-        mergeWithRuntimeFilter(
-            { telegram_user_id: telegramUserId },
-            { field: 'runtime_tag' }
-        ),
-        {
-            projection: { active_session_id: 1 },
-        }
-    ) as Promise<{ active_session_id?: ObjectId | null } | null>;
-};
-
-const setActiveSessionMapping = async ({
-    db,
-    performer,
-    sessionId,
-}: {
-    db: Db;
-    performer: VoicebotRequest['performer'];
-    sessionId: string;
-}): Promise<void> => {
-    const telegramUserId = resolveTelegramUserId(performer);
-    if (!telegramUserId || !ObjectId.isValid(sessionId)) return;
-
-    await db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).updateOne(
-        mergeWithRuntimeFilter(
-            { telegram_user_id: telegramUserId },
-            { field: 'runtime_tag' }
-        ),
-        {
-            $set: {
-                telegram_user_id: telegramUserId,
-                active_session_id: new ObjectId(sessionId),
-                updated_at: new Date(),
-            },
-            $setOnInsert: {
-                created_at: new Date(),
-                chat_id: performer.telegram_id ? Number(performer.telegram_id) : null,
-            },
-        },
-        { upsert: true }
-    );
-};
-
 type SessionAttachmentView = {
     _id: string;
     message_id: string | null;
@@ -995,45 +872,42 @@ const isImageAttachmentPayload = (attachment: unknown): boolean => {
     return mimeType.startsWith('image/');
 };
 
-const normalizeLinkedMessageRef = (value: unknown): string => {
-    if (typeof value !== 'string') return '';
-    return value.trim();
-};
+const linkedImageMessageResolver = {
+    async resolveTargetMessageRef({
+        db,
+        sessionObjectId,
+        linkedMessageRef,
+    }: {
+        db: Db;
+        sessionObjectId: ObjectId;
+        linkedMessageRef: string;
+    }): Promise<string | null> {
+        const normalizedRef = normalizeLinkedMessageRef(linkedMessageRef);
+        if (!normalizedRef) return null;
 
-const resolveLinkedImageTargetMessageRef = async ({
-    db,
-    sessionObjectId,
-    linkedMessageRef,
-}: {
-    db: Db;
-    sessionObjectId: ObjectId;
-    linkedMessageRef: string;
-}): Promise<string | null> => {
-    const normalizedRef = normalizeLinkedMessageRef(linkedMessageRef);
-    if (!normalizedRef) return null;
+        const targetQuery: Record<string, unknown> = {
+            session_id: sessionObjectId,
+            is_deleted: { $ne: true },
+            $or: [
+                { message_id: normalizedRef },
+            ],
+        };
+        if (ObjectId.isValid(normalizedRef)) {
+            (targetQuery.$or as Array<Record<string, unknown>>).push({ _id: new ObjectId(normalizedRef) });
+        }
 
-    const targetQuery: Record<string, unknown> = {
-        session_id: sessionObjectId,
-        is_deleted: { $ne: true },
-        $or: [
-            { message_id: normalizedRef },
-        ],
-    };
-    if (ObjectId.isValid(normalizedRef)) {
-        (targetQuery.$or as Array<Record<string, unknown>>).push({ _id: new ObjectId(normalizedRef) });
-    }
+        const targetMessage = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+            runtimeMessageQuery(targetQuery),
+            { projection: { _id: 1, message_id: 1 } }
+        ) as { _id?: ObjectId; message_id?: unknown } | null;
+        if (!targetMessage) return null;
 
-    const targetMessage = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
-        runtimeMessageQuery(targetQuery),
-        { projection: { _id: 1, message_id: 1 } }
-    ) as { _id?: ObjectId; message_id?: unknown } | null;
-    if (!targetMessage) return null;
-
-    if (targetMessage._id instanceof ObjectId) return targetMessage._id.toHexString();
-    if (typeof targetMessage.message_id === 'string' && targetMessage.message_id.trim()) {
-        return targetMessage.message_id.trim();
-    }
-    return null;
+        if (targetMessage._id instanceof ObjectId) return targetMessage._id.toHexString();
+        if (typeof targetMessage.message_id === 'string' && targetMessage.message_id.trim()) {
+            return targetMessage.message_id.trim();
+        }
+        return null;
+    },
 };
 
 const emitSessionRealtimeUpdate = ({
@@ -1324,7 +1198,7 @@ const getSession = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "session_id is required" });
         }
 
-        const { session, hasAccess, runtimeMismatch } = await resolveSessionAccess({
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: session_id,
@@ -1355,7 +1229,7 @@ const getSession = async (req: Request, res: Response) => {
         });
 
         const sessionMessagesCleaned = sessionMessagesFiltered.map((message) =>
-            cleanupMessageCategorizationForDeletedSegments(message as Record<string, unknown>)
+            categorizationCleanup.applyForDeletedSegments(message as Record<string, unknown>)
         );
         const cleanupUpdates = sessionMessagesCleaned.filter((entry) => entry.cleanupStats.removed_rows > 0);
         if (cleanupUpdates.length > 0) {
@@ -1381,7 +1255,7 @@ const getSession = async (req: Request, res: Response) => {
         const normalizedSessionMessages = sessionMessagesCleaned.map((entry) => entry.message);
 
         // Get participants info
-        let participants: any[] = [];
+        let participants: VoiceSessionParticipant[] = [];
         const sessionRecord = session as VoiceSessionRecord;
         const participantIds = toObjectIdArray(sessionRecord.participants);
         if (participantIds.length > 0) {
@@ -1391,14 +1265,14 @@ const getSession = async (req: Request, res: Response) => {
                 _id: 1,
                 name: 1,
                 contacts: 1
-            }).toArray();
+            }).toArray() as VoiceSessionParticipant[];
         }
 
         // Get allowed_users info for RESTRICTED sessions
-        let allowed_users: any[] = [];
+        let allowed_users: VoiceSessionAllowedUserView[] = [];
         const allowedUserIds = toObjectIdArray(sessionRecord.allowed_users);
         if (allowedUserIds.length > 0) {
-            allowed_users = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).find({
+            const allowedUserDocs = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).find({
                 _id: { $in: allowedUserIds }
             }).project({
                 _id: 1,
@@ -1406,13 +1280,13 @@ const getSession = async (req: Request, res: Response) => {
                 real_name: 1,
                 corporate_email: 1,
                 role: 1
-            }).toArray();
+            }).toArray() as VoiceSessionAllowedUserDoc[];
 
-            allowed_users = allowed_users.map(u => ({
-                _id: u._id,
-                name: u.name || u.real_name,
-                email: u.corporate_email,
-                role: u.role || "PERFORMER"
+            allowed_users = allowedUserDocs.map((userDoc) => ({
+                _id: userDoc._id,
+                name: userDoc.name || userDoc.real_name,
+                email: userDoc.corporate_email,
+                role: userDoc.role || "PERFORMER"
             }));
         }
 
@@ -1445,13 +1319,13 @@ router.post('/active_session', async (req: Request, res: Response) => {
     const db = getDb();
 
     try {
-        const mapping = await getActiveSessionMapping({ db, performer });
+        const mapping = await activeSessionMappingUtils.get({ db, performer });
         const activeSessionId = mapping?.active_session_id ? String(mapping.active_session_id) : '';
         if (!activeSessionId || !ObjectId.isValid(activeSessionId)) {
             return res.status(200).json({ active_session: null });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: activeSessionId,
@@ -1469,7 +1343,7 @@ router.post('/active_session', async (req: Request, res: Response) => {
                 session_id: activeSessionId,
                 session_name: sessionName,
                 is_active: Boolean(session.is_active),
-                url: activeSessionUrl(activeSessionId),
+                url: voiceSessionUrlUtils.active(activeSessionId),
             }
         });
     } catch (error) {
@@ -1490,7 +1364,7 @@ router.post('/activate_session', async (req: Request, res: Response) => {
         }
 
         const sessionId = parsedBody.data.session_id;
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId,
@@ -1498,13 +1372,13 @@ router.post('/activate_session', async (req: Request, res: Response) => {
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        await setActiveSessionMapping({ db, performer, sessionId });
+        await activeSessionMappingUtils.set({ db, performer, sessionId });
         return res.status(200).json({
             success: true,
             session_id: sessionId,
             session_name: typeof session.session_name === 'string' ? session.session_name : null,
             is_active: Boolean(session.is_active),
-            url: activeSessionUrl(sessionId),
+            url: voiceSessionUrlUtils.active(sessionId),
         });
     } catch (error) {
         logger.error('Error in activate_session:', error);
@@ -1536,7 +1410,7 @@ router.post(
                 return res.status(400).json({ error: 'invalid_session_id' });
             }
 
-            const { session, hasAccess } = await resolveSessionAccess({
+            const { session, hasAccess } = await sessionAccessUtils.resolve({
                 db,
                 performer,
                 sessionId,
@@ -1677,7 +1551,7 @@ router.post('/create_session', async (req: Request, res: Response) => {
 
         const op = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).insertOne(sessionDoc);
         const newSessionId = String(op.insertedId);
-        await setActiveSessionMapping({
+        await activeSessionMappingUtils.set({
             db,
             performer,
             sessionId: newSessionId,
@@ -1687,7 +1561,7 @@ router.post('/create_session', async (req: Request, res: Response) => {
             success: true,
             session_id: newSessionId,
             session_name: preparedName,
-            url: activeSessionUrl(newSessionId),
+            url: voiceSessionUrlUtils.active(newSessionId),
         });
     } catch (error) {
         logger.error('Error in create_session:', error);
@@ -1839,7 +1713,7 @@ router.post('/add_text', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'text or attachments are required' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId,
@@ -1849,7 +1723,7 @@ router.post('/add_text', async (req: Request, res: Response) => {
         const sessionObjectId = new ObjectId(sessionId);
         let resolvedLinkedMessageRef: string | null = null;
         if (hasImageAttachment && linkedMessageRef) {
-            resolvedLinkedMessageRef = await resolveLinkedImageTargetMessageRef({
+            resolvedLinkedMessageRef = await linkedImageMessageResolver.resolveTargetMessageRef({
                 db,
                 sessionObjectId,
                 linkedMessageRef,
@@ -1947,7 +1821,7 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'attachments must be a non-empty array' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId,
@@ -1957,7 +1831,7 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
         const sessionObjectId = new ObjectId(sessionId);
         let resolvedLinkedMessageRef: string | null = null;
         if (hasImageAttachment && linkedMessageRef) {
-            resolvedLinkedMessageRef = await resolveLinkedImageTargetMessageRef({
+            resolvedLinkedMessageRef = await linkedImageMessageResolver.resolveTargetMessageRef({
                 db,
                 sessionObjectId,
                 linkedMessageRef,
@@ -2044,7 +1918,7 @@ router.post('/update_name', async (req: Request, res: Response) => {
             return res.status(400).json({ error: "session_id and session_name are required" });
         }
 
-        // TODO: Google Drive integration - rename spreadsheet file
+        // NOTE: Google Drive integration can later rename linked spreadsheets.
         // if (session.current_spreadsheet_file_id) { ... }
 
         const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
@@ -2056,7 +1930,7 @@ router.post('/update_name', async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Session not found" });
         }
 
-        // TODO: Send notify via BullMQ when workers are integrated
+        // NOTE: notify dispatch should migrate to BullMQ when workers are integrated.
         // await send_notify(queues, session, VOICEBOT_JOBS.notifies.SESSION_PROJECT_ASSIGNED, {});
 
         res.status(200).json({ success: true });
@@ -2085,7 +1959,7 @@ router.post('/update_project', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid session_id/project_id' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId,
@@ -2520,7 +2394,7 @@ router.post('/merge', async (req: Request, res: Response) => {
         const accessEntries = await Promise.all(
             selectedSessionIds.map(async (sessionObjectId) => ({
                 sessionId: sessionObjectId.toHexString(),
-                ...(await resolveSessionAccess({
+                ...(await sessionAccessUtils.resolve({
                     db,
                     performer,
                     sessionId: sessionObjectId.toHexString(),
@@ -2918,7 +2792,7 @@ router.post('/send_to_crm', async (req: Request, res: Response) => {
 
         res.status(200).json({ success: true });
 
-        // TODO: Run create_tasks agent via MCP
+        // NOTE: create_tasks agent via MCP can be enabled in a dedicated rollout.
         // setImmediate(() => {
         //   runCreateTasksAgent({ session_id, db, logger, queues })
         //     .catch(error => logger.error('Error running create_tasks agent:', error));
@@ -2940,7 +2814,7 @@ router.post('/restart_corrupted_session', async (req: Request, res: Response) =>
             return res.status(400).json({ error: 'session_id is required' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: session_id,
@@ -3104,7 +2978,7 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
 
         res.status(200).json({ success: true });
 
-        // TODO: Run create_tasks agent via MCP
+        // NOTE: create_tasks agent via MCP can be enabled in a dedicated rollout.
         // setImmediate(() => {
         //   runCreateTasksAgent({ session_id, db, logger, queues })
         //     .catch(error => logger.error('Error running create_tasks agent:', error));
@@ -3132,12 +3006,12 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid session_id' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({ db, performer, sessionId });
+        const { session, hasAccess } = await sessionAccessUtils.resolve({ db, performer, sessionId });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const now = new Date();
-        const canonicalExternalRef = canonicalVoiceSessionUrl(sessionId);
+        const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
         const tasksToSave: Array<Record<string, unknown>> = [];
         const codexTasksToSync: Array<CodexIssueSyncInput> = [];
         const rejectedRows: CreateTicketsRejectedRow[] = [];
@@ -3155,7 +3029,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             const description = String(ticket.description || '').trim();
             const rawPerformerId = toTaskText(ticket.performer_id);
             const performerId = toObjectIdOrNull(rawPerformerId);
-            const isCodexPerformerByInput = isCodexPerformerIdOrAlias(rawPerformerId);
+            const isCodexPerformerByInput = codexPerformerUtils.isIdOrAlias(rawPerformerId);
             const projectId = toObjectIdOrNull(ticket.project_id);
             const projectName = String(ticket.project || '').trim();
 
@@ -3248,8 +3122,8 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             });
 
             const isCodexTask = isCodexPerformerByInput ||
-                isCodexPerformerIdOrAlias(performerId) ||
-                isCodexPerformer(taskPerformer);
+                codexPerformerUtils.isIdOrAlias(performerId) ||
+                codexPerformerUtils.isPerformer(taskPerformer);
             logger.info('[voicebot.create_tickets] routing decision', {
                 ticket_id: ticketId,
                 performer_id: performerCacheKey,
@@ -3358,7 +3232,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
 
         let insertedCount = 0;
         const filteredTasksToSave = tasksToSave.filter((task) => {
-            const isCodexTask = isCodexTaskDocument(task);
+            const isCodexTask = codexPerformerUtils.isTaskDocument(task);
             if (!isCodexTask) return true;
 
             const taskRecord = task as Record<string, unknown>;
@@ -3437,7 +3311,7 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid session_id' });
         }
 
-        const { session, hasAccess, runtimeMismatch } = await resolveSessionAccess({ db, performer, sessionId });
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({ db, performer, sessionId });
         if (!session) {
             if (runtimeMismatch) {
                 return res.status(409).json({ error: 'runtime_mismatch' });
@@ -3446,7 +3320,7 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
         }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const externalRef = canonicalVoiceSessionUrl(sessionId);
+        const externalRef = voiceSessionUrlUtils.canonical(sessionId);
         const codexTasks = await db
             .collection(COLLECTIONS.TASKS)
             .find(
@@ -3520,7 +3394,7 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
             return res.status(400).json({ error: 'Invalid session_id' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({ db, performer, sessionId });
+        const { session, hasAccess } = await sessionAccessUtils.resolve({ db, performer, sessionId });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
@@ -3758,7 +3632,7 @@ router.post('/save_custom_prompt_result', async (req: Request, res: Response) =>
             return res.status(400).json({ error: 'Invalid session_id' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({ db, performer, sessionId });
+        const { session, hasAccess } = await sessionAccessUtils.resolve({ db, performer, sessionId });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
@@ -4004,7 +3878,7 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
             return res.status(400).json({ error: 'Invalid session_id' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId,
@@ -4093,7 +3967,7 @@ router.post('/session_log', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'session_oid/session_id is required' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: session_id,
@@ -4139,7 +4013,7 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'segment_oid and text are required' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: session_id,
@@ -4228,7 +4102,7 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
             message: updatedMessageBase as Record<string, unknown> & { _id: ObjectId },
             segment: segmentForCleanup,
         });
-        const cleanupStats = buildCategorizationCleanupStats(
+        const cleanupStats = categorizationCleanup.buildStats(
             updatedMessageBase as Record<string, unknown>,
             categorizationCleanupPayload
         );
@@ -4322,7 +4196,7 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'session/message/segment ids are required' });
         }
 
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: session_id,
@@ -4409,7 +4283,7 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
             message: updatedMessageBase as Record<string, unknown> & { _id: ObjectId },
             segment: segmentForCleanup,
         });
-        const cleanupStats = buildCategorizationCleanupStats(
+        const cleanupStats = categorizationCleanup.buildStats(
             updatedMessageBase as Record<string, unknown>,
             categorizationCleanupPayload
         );
@@ -4505,7 +4379,7 @@ router.post('/rollback_event', async (req: Request, res: Response) => {
 
         const sessionObjectId = parseTopLevelOidToObjectId(sessionInput, { allowedPrefixes: ['se'] });
         const sessionIdHex = sessionObjectId.toHexString();
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: sessionIdHex,
@@ -4686,7 +4560,7 @@ router.post('/resend_notify_event', async (req: Request, res: Response) => {
 
         const sessionObjectId = parseTopLevelOidToObjectId(sessionInput, { allowedPrefixes: ['se'] });
         const sessionIdHex = sessionObjectId.toHexString();
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: sessionIdHex,
@@ -4761,7 +4635,7 @@ router.post('/retry_categorization_event', async (req: Request, res: Response) =
 
         const sessionObjectId = parseTopLevelOidToObjectId(sessionInput, { allowedPrefixes: ['se'] });
         const sessionIdHex = sessionObjectId.toHexString();
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: sessionIdHex,
@@ -4840,7 +4714,7 @@ router.post('/retry_categorization_chunk', async (req: Request, res: Response) =
 
         const sessionObjectId = parseTopLevelOidToObjectId(sessionInput, { allowedPrefixes: ['se'] });
         const sessionIdHex = sessionObjectId.toHexString();
-        const { session, hasAccess } = await resolveSessionAccess({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: sessionIdHex,

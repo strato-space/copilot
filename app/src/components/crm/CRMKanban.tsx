@@ -80,7 +80,6 @@ interface CRMKanbanProps {
 
 const CRMKanban = (props: CRMKanbanProps) => {
     const navigate = useNavigate();
-    const debugCRM = import.meta.env.VITE_DEBUG_CRM === 'true';
     const { isAuth, loading: authLoading } = useAuthStore();
     const {
         tickets,
@@ -246,12 +245,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
     useEffect(() => {
         if (isAuth) {
             if (tickets.length < 1) {
-                if (debugCRM) {
-                    console.debug('[CRMKanban] fetchTickets on mount', {
-                        statusFilter: props.filter.task_status ?? [],
-                        ticketsLength: tickets.length,
-                    });
-                }
                 fetchTickets(props.filter.task_status ?? []);
             }
         }
@@ -260,12 +253,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
     useEffect(() => {
         const nextStatusFilter = props.filter.task_status ?? [];
         if (_.isEqual(statusFilter, nextStatusFilter)) return;
-        if (debugCRM) {
-            console.debug('[CRMKanban] setStatusFilter', {
-                prev: statusFilter,
-                next: nextStatusFilter,
-            });
-        }
         setStatusFilter(nextStatusFilter);
     }, [props.filter.task_status, statusFilter, setStatusFilter]);
 
@@ -1249,12 +1236,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
     }, [tickets, filteredColumns, calculateStatusesStat]);
 
     useEffect(() => {
-        if (debugCRM) {
-            console.debug('[CRMKanban] recalulateStatusesStat', {
-                ticketsLength: tickets.length,
-                filteredColumns: filteredColumns.map((c) => c.key),
-            });
-        }
         recalulateStatusesStat();
     }, [tickets, recalulateStatusesStat]);
 
@@ -1327,13 +1308,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
                     pagination={props.pagination ? { pageSize: 100 } : false}
                     onChange={(pagination, filters, sorter, extra) => {
                         if (extra.action === 'filter') {
-                            if (debugCRM) {
-                                console.debug('[CRMKanban] table filter change', {
-                                    filters,
-                                    sorter,
-                                    pagination,
-                                });
-                            }
                             saveFilters(filters as Record<string, (string | boolean)[] | null>);
                             recalulateStatusesStat();
                         }

@@ -10,7 +10,7 @@ import { mergeWithRuntimeFilter } from './runtimeScope.js';
 import {
   buildDoneNotifyPreview,
   writeDoneNotifyRequestedLog,
-} from './voicebotDoneNotify.js';
+} from './voicebot/voicebotDoneNotify.js';
 import {
   clearActiveVoiceSessionBySessionId,
   clearActiveVoiceSessionForUser,

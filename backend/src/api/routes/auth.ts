@@ -148,7 +148,7 @@ interface OneTimeToken {
 router.post('/auth_token', async (req: Request, res: Response) => {
   const { token } = req.body as { token?: string };
 
-  logger.info('One-time token auth attempt received');
+  logger.info('One-time auth attempt received');
 
   if (!token) {
     logger.warn('One-time token auth: token missing in request');
@@ -159,7 +159,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
   const encryptionKey = getEncryptionKey();
 
   // Check token in database
-  logger.info('Looking for one-time token in database');
+  logger.info('Checking one-time auth record');
   const oneTimeToken = await db
     .collection<OneTimeToken>(VOICEBOT_COLLECTIONS.ONE_USE_TOKENS)
     .findOne(
@@ -177,7 +177,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
     throw new AppError('Invalid or expired token', 401, 'INVALID_TOKEN');
   }
 
-  logger.info('Found valid one-time token record');
+  logger.info('Valid one-time auth record found');
 
   // Check token expiration (24 hours)
   const tokenAge = Date.now() - oneTimeToken.created_at.getTime();
@@ -210,7 +210,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
     throw new AppError('User not found', 401, 'USER_NOT_FOUND');
   }
 
-  logger.info('Found performer for one-time token');
+  logger.info('Performer resolved for one-time auth');
 
   // Mark token as used
   await db
@@ -236,7 +236,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
     expiresIn: '90d',
   });
 
-  logger.info(`Successful one-time token login for performer_id: ${performer._id.toString()}`);
+  logger.info('One-time auth login completed');
 
   // Set auth cookie
   setAuthCookie(req, res, authToken);

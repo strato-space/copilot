@@ -1,0 +1,162 @@
+{
+  "batch": "Testing & API",
+  "batch_index": 3,
+  "assessments": {
+    "api_surface_coherence": 66.0,
+    "mid_level_elegance": 70.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "Frontend API access is split across incompatible surfaces: `apiClient` (`app/src/services/api.ts`), string-RPC style `api_request('customers/list', ...)` (`app/src/store/projectsStore.ts:72`, `app/src/store/crmStore.ts:170`), and custom `voicebotHttp.request` with manual proxy/auth headers (`app/src/store/voiceBotStore.ts:324-355`).",
+        "Store actions expose inconsistent failure contracts for similar operations: some swallow errors and resolve (`updateSessionName` at `app/src/store/voiceBotStore.ts:840-851`), others rethrow (`sendSessionToCrm` at `app/src/store/voiceBotStore.ts:868-880`, `getSessionData` at `1346-1353`).",
+        "Envelope handling is inconsistent with `{ data, error }` style: `guideStore` and `authStore` parse `data` but do not fail on populated envelope `error` fields (`app/src/store/guideStore.ts:61-70`, `app/src/store/authStore.ts:81-89`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Boundary semantics drift between modules: `silent` behavior in `voicebotHttp.request` does not suppress thrown transport errors because exceptions are rethrown before the `silent` status branch (`app/src/store/voiceBotStore.ts:356-363`), while other stores use `silent` to alter UX flow (`app/src/store/authStore.ts:174-190`).",
+        "Session title generation seam is brittle: it treats `updateSessionName` as authoritative but that method logs and resolves on error, enabling false success UX (`app/src/store/sessionsUIStore.ts:604-609` + `app/src/store/voiceBotStore.ts:840-851`).",
+        "Projects orchestration uses one shared `loading` flag for three independent fetches and sets it false per-request, creating racey handoff state under concurrent calls (`app/src/store/projectsStore.ts:70-121`)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "fragmented_http_boundary",
+      "summary": "Multiple incompatible frontend API surfaces create inconsistent URL, method, auth, and error contracts.",
+      "related_files": [
+        "app/src/services/api.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/projectsStore.ts",
+        "app/src/store/crmStore.ts",
+        "app/src/store/guideStore.ts"
+      ],
+      "evidence": [
+        "`api.ts` defines `apiClient`/`voicebotClient`, but `voiceBotStore` bypasses both with direct `axios.post` and a custom proxy/header path (`app/src/store/voiceBotStore.ts:324-355`, `1492-1533`).",
+        "`projectsStore`/`crmStore` call `api_request` with RPC-like string paths (`'customers/list'`, `'reports'`) instead of typed REST-style client usage (`app/src/store/projectsStore.ts:72-73`, `app/src/store/crmStore.ts:170-171`).",
+        "This forces each store to invent its own transport/error conventions, increasing integration ambiguity."
+      ],
+      "suggestion": "Define one typed HTTP boundary module (REST endpoint map + shared request/response/error parser) and migrate stores to it; keep proxy behavior as an adapter behind that boundary instead of per-store custom transport logic.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "transport-boundary-fragmentation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "envelope_error_not_enforced",
+      "summary": "Response envelope parsing ignores `error` payloads, allowing logical failures to be treated as successful responses.",
+      "related_files": [
+        "app/src/store/guideStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "`GuideApiEnvelope` includes `error`, but `fetchIndex`/`fetchDirectory` read `response.data?.data` and do not reject when `response.data?.error` is present (`app/src/store/guideStore.ts:61-70`, `85-101`).",
+        "`extractUserFromResponse` similarly extracts user/token but does not validate or prioritize envelope `error` semantics (`app/src/store/authStore.ts:81-89`)."
+      ],
+      "suggestion": "Introduce a shared envelope unwrapping utility in the API layer that throws typed errors when `error` exists, and require all stores to consume only normalized success payloads.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "transport-boundary-fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "silent_flag_contract_break",
+      "summary": "`silent` request option in `voicebotHttp.request` does not control failure behavior as its interface implies.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/authStore.ts"
+      ],
+      "evidence": [
+        "`voicebotHttp.request(..., silent)` catches axios errors and rethrows immediately (`app/src/store/voiceBotStore.ts:356-359`), so `silent` never affects transport failures.",
+        "The later `if (!silent && response.status >= 400)` branch is effectively dead for axios default behavior (`app/src/store/voiceBotStore.ts:361-363`).",
+        "Elsewhere `silent` is used as a meaningful caller contract (`app/src/store/authStore.ts:174-190`)."
+      ],
+      "suggestion": "Make `silent` semantics explicit and enforce them in one place: either return a typed `Result` for silent mode or keep throw-on-error and remove `silent` from transport API to avoid misleading seam contracts.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "transport-boundary-fragmentation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "voice_action_error_contract_mismatch",
+      "summary": "Voice session actions expose inconsistent error contracts, causing downstream false-positive success states.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "`updateSessionName` catches and logs but does not rethrow (`app/src/store/voiceBotStore.ts:849-851`), while sibling actions rethrow (`sendSessionToCrm` at `878-880`, `getSessionData` at `1350-1353`).",
+        "`generateSessionTitle` assumes rejection on failure and shows success immediately after `await updateSessionName(...)` (`app/src/store/sessionsUIStore.ts:604-605`), which can produce success UI despite backend failure."
+      ],
+      "suggestion": "Unify action contracts (all throw typed errors or all return `{ok,error}`) and update call sites accordingly; for `generateSessionTitle`, gate success message on explicit mutation success.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "inconsistent-store-action-contracts"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "projects_loading_race",
+      "summary": "Projects store uses a single global loading flag for independent fetches, producing racey handoff state under parallel requests.",
+      "related_files": [
+        "app/src/store/projectsStore.ts",
+        "app/src/store/guideStore.ts"
+      ],
+      "evidence": [
+        "`fetchCustomers`, `fetchProjectGroups`, and `fetchProjects` each set `loading: true` then independently set `loading: false` in catch/success (`app/src/store/projectsStore.ts:70-121`), so one completed call can clear loading while others are still pending.",
+        "In contrast, `guideStore` uses per-resource loading maps (`directoryLoading`, `indexLoading`) that avoid cross-request interference (`app/src/store/guideStore.ts:53-57`, `80-83`, `110-125`)."
+      ],
+      "suggestion": "Replace single `loading` with per-resource loading or a pending-request counter; expose explicit fetch status per dataset to make orchestration deterministic.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "state-handoff-ambiguity"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "permission_ownership_path_divergence",
+      "summary": "Permission ownership checks use narrower identity criteria than data filters, creating inconsistent behavior across list vs action seams.",
+      "related_files": [
+        "backend/src/permissions/permission-manager.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`checkSessionOwnership` authorizes only by `_id + chat_id:Number(performer.telegram_id)` (`backend/src/permissions/permission-manager.ts:306-309`).",
+        "`generateDataFilter` treats ownership/access more broadly (`user_id` ObjectId/string and restricted `allowed_users`) (`backend/src/permissions/permission-manager.ts:381-396`).",
+        "Voice session actions in `voiceBotStore` rely on endpoint-level permission decisions (`app/src/store/voiceBotStore.ts:840-848`, `1346-1349`), so this mismatch can yield list-visible but action-denied sessions."
+      ],
+      "suggestion": "Converge ownership predicates into one shared helper reused by both filter generation and contextual checks; include `user_id`/`allowed_users` parity in `checkSessionOwnership`.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "authorization-path-divergence"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No single canonical frontend transport boundary, leading each store to define its own request and error semantics.",
+      "Store action interfaces are not contract-tested for uniform failure behavior.",
+      "Permission checks and data-filter logic evolved separately without shared ownership primitive."
+    ],
+    "likely_symptoms": [
+      "silent_flag_contract_break",
+      "voice_action_error_contract_mismatch",
+      "projects_loading_race"
+    ],
+    "possible_false_positives": [
+      "permission_ownership_path_divergence (depends on intended policy for READ_OWN vs filtered visibility)"
+    ]
+  }
+}

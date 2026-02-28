@@ -1,0 +1,122 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 6,
+  "assessments": {
+    "package_organization": 69.0,
+    "high_level_elegance": 72.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`backend/src/services/` has 25 files with mixed concerns (FinOps, voicebot, runtime/db infra) in one flat folder (`directory_profiles.file_count=25`), crossing the >10 mixed-concern threshold.",
+        "Assigned files in the same folder represent unrelated ownership boundaries: `db.ts` (infra/runtime), `finopsEmployees.ts` (FinOps domain), `bdClient.ts` (voicebot Codex/bd integration).",
+        "`backend/__tests__/voicebot/` is a flat 62-file test directory (`file_count=62`) mixing route, worker, tgbot, and utility contracts, reducing navigability by concern.",
+        "Coupling shows heavy pressure through broad service placement (`backend/src/api/routes/voicebot/ → backend/src/services/ = 20`, `backend/src/workers/voicebot/handlers/ → backend/src/services/ = 37`), indicating current packaging centralizes too many domains."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/services/db.ts` combines generic DB lifecycle/proxy logic with product-specific bootstrapping (`seedCopilotProjectGitRepo`), blending infrastructure and domain initialization responsibilities.",
+        "Contract tests in `app/__tests__/voice/*` rely on direct file-path string scanning (`fs.readFileSync` of `src/store/voiceBotStore.ts`, `src/components/voice/*.tsx`, `public/webrtc/webrtc-voicebot-lib.js`), which makes architecture/layout changes expensive and brittle.",
+        "The same voice test directory contains many narrow source-contract tests (48 files) with very low fan-out (`avg_fan_out=0.1`), signaling fragmented top-level test ownership instead of cohesive behavior-level suites."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "services_flat_mixed_domains",
+      "summary": "A single flat `backend/src/services` package mixes infra, FinOps, and voicebot-specific services, obscuring ownership boundaries.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/services/finopsEmployees.ts",
+        "backend/src/services/bdClient.ts"
+      ],
+      "evidence": [
+        "`db.ts` implements core runtime-scoped DB proxy and connection lifecycle.",
+        "`finopsEmployees.ts` is a FinOps-specific domain data service.",
+        "`bdClient.ts` is a voicebot/Codex integration that shells out to `bd` CLI.",
+        "All three live in the same folder despite distinct lifecycle/ownership, while directory profile reports `backend/src/services/` at 25 files."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/services/core/`, `backend/src/services/finops/`, `backend/src/services/voicebot/` and move `db.ts` to `core/`, `finopsEmployees.ts` to `finops/`, `bdClient.ts` to `voicebot/`. 2) Add temporary re-export shims at old paths to avoid big-bang breakage. 3) Update imports incrementally with `rg \"services/(db|finopsEmployees|bdClient)\" backend/src backend/__tests__` and patch each caller. 4) Remove shims once callers are migrated. 5) Validate with `cd backend && npm run build` and targeted tests `npm run test -- activeSessionMapping.test.ts authListUsersRoute.test.ts`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "domain_boundary_blur_in_services"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "voicebot_test_folder_flat_overload",
+      "summary": "`backend/__tests__/voicebot` is overloaded as a flat catch-all test folder for multiple subsystems.",
+      "related_files": [
+        "backend/__tests__/voicebot/activeSessionMapping.test.ts",
+        "backend/__tests__/voicebot/audioUtils.test.ts",
+        "backend/__tests__/voicebot/authListUsersRoute.test.ts"
+      ],
+      "evidence": [
+        "Assigned tests target different layers (`activeSessionMapping` tgbot mapping, `audioUtils` util parsing, `authListUsersRoute` API route contract) but all live at one flat level.",
+        "Directory profile shows `backend/__tests__/voicebot/` has 62 files, indicating concern mixing and poor locality."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create subfolders `backend/__tests__/voicebot/routes/`, `.../services/`, `.../utils/`, `.../tgbot/`, `.../workers/`. 2) Move tests in batches (first low-dependency files like `audioUtils.test.ts`, then route tests, then worker suites). 3) Update any hardcoded test path assumptions (if present) with `rg \"__tests__/voicebot/\" backend`. 4) Run `cd backend && npm run test -- audioUtils.test.ts authListUsersRoute.test.ts activeSessionMapping.test.ts` then full `npm run test`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "test_package_flattening"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "db_layer_has_domain_bootstrap_side_effect",
+      "summary": "Core DB infrastructure module performs domain bootstrap work, weakening top-level layering clarity.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/services/finopsEmployees.ts"
+      ],
+      "evidence": [
+        "`connectDb()` in `db.ts` calls `seedCopilotProjectGitRepo(...)`, which is product/domain initialization rather than DB infrastructure.",
+        "Domain services like `finopsEmployees.ts` consume `getDb()` directly, so infra-layer side effects become implicit prerequisites across unrelated domains."
+      ],
+      "suggestion": "Staged reorg plan: 1) Keep `db.ts` strictly infra (connection, runtime-scope proxy, close). 2) Move `seedCopilotProjectGitRepo` invocation into a startup orchestrator module (for example `backend/src/bootstrap/startupSeeds.ts`) called from app entrypoint. 3) Maintain backward compatibility by introducing a short-lived wrapper call in startup, not in `db.ts`. 4) Validate with `cd backend && npm run build && npm run test -- authListUsersRoute.test.ts` and smoke-check startup logs for seed execution.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "domain_boundary_blur_in_services"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "voice_contract_tests_lock_physical_layout",
+      "summary": "Voice contract tests are tightly bound to exact file locations and source strings, reducing architectural freedom.",
+      "related_files": [
+        "app/__tests__/voice/accessUsersPerformerLifecycleContract.test.ts",
+        "app/__tests__/voice/activateSessionResilienceContract.test.ts",
+        "app/__tests__/voice/audioUploadProgress.test.ts"
+      ],
+      "evidence": [
+        "Each assigned test reads source files via `fs.readFileSync(path.resolve(process.cwd(), ...))` and asserts literal string fragments.",
+        "Tests depend on concrete paths like `src/store/voiceBotStore.ts`, `src/components/voice/AudioUploader.tsx`, and `public/webrtc/webrtc-voicebot-lib.js` rather than behavior-level interfaces."
+      ],
+      "suggestion": "Staged reorg plan: 1) Introduce shared helpers under `app/__tests__/voice/contracts/helpers/` that validate exported behavior/config instead of raw file text where possible. 2) Split tests into `contracts/source-shape/` (intentional string contracts) and `contracts/behavior/` to isolate layout-sensitive checks. 3) Replace path literals with helper-resolved module targets so future moves require one helper update. 4) Validate with `cd app && npm run build` and `npm run test -- accessUsersPerformerLifecycleContract.test.ts activateSessionResilienceContract.test.ts audioUploadProgress.test.ts`.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "test_package_flattening"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Services package evolved as a catch-all integration surface instead of domain-bounded subpackages.",
+      "Test suites optimized for quick contract coverage via source-string assertions, increasing coupling to physical layout."
+    ],
+    "likely_symptoms": [
+      "services_flat_mixed_domains",
+      "voicebot_test_folder_flat_overload",
+      "voice_contract_tests_lock_physical_layout"
+    ],
+    "possible_false_positives": []
+  }
+}

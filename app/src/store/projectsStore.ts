@@ -7,18 +7,22 @@ import { create } from 'zustand';
 import { useRequestStore } from './requestStore';
 import type { Customer, ProjectGroup, ProjectWithGroup, TreeNode } from '../types/crm';
 
-interface ProjectsState {
+interface ProjectsDataSlice {
     customers: Customer[];
     projectGroups: ProjectGroup[];
     projects: ProjectWithGroup[];
     loading: boolean;
     tree: TreeNode[];
+}
 
+interface ProjectsFetchActionsSlice {
     fetchCustomers: (showInactive?: boolean) => Promise<void>;
     fetchProjectGroups: (showInactive?: boolean) => Promise<void>;
     fetchProjects: (showInactive?: boolean) => Promise<void>;
     buildTree: () => TreeNode[];
+}
 
+interface ProjectsCrudActionsSlice {
     createCustomer: (name: string, isActive?: boolean) => Promise<unknown>;
     updateCustomer: (id: string, name: string, isActive?: boolean) => Promise<unknown>;
 
@@ -30,6 +34,10 @@ interface ProjectsState {
     createProject: (projectData: Partial<ProjectWithGroup> & { project_group?: string }) => Promise<unknown>;
     updateProject: (id: string, projectData: Partial<ProjectWithGroup>) => Promise<unknown>;
 }
+
+type ProjectsState = ProjectsDataSlice &
+    ProjectsFetchActionsSlice &
+    ProjectsCrudActionsSlice;
 
 export const useProjectsStore = create<ProjectsState>((set, get) => {
     const api_request = useRequestStore.getState().api_request;

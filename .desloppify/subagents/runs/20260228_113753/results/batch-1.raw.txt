@@ -1,0 +1,147 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 71.0,
+    "high_level_elegance": 69.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/constants.ts` is a high-fan-in hub that combines unrelated domains (socket events, queues, collections, statuses, indexes) and imports runtime scoping (`runtimeScope`) at module root.",
+        "`backend/src/services/db.ts` imports `constants` and creates a module-level logger (`const logger = getLogger()`), which pulls in singleton logger behavior and side effects early in the dependency graph.",
+        "`app/src/store/voiceBotStore.ts` and `app/src/store/requestStore.ts` each define their own backend/proxy resolution and request behavior, creating parallel integration paths across modules."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`app/src/store/kanbanStore.ts` and `app/src/store/voiceBotStore.ts` are multi-responsibility stores mixing transport, orchestration, UI concerns, normalization, and domain logic in single modules.",
+        "UI components (`CommentsSidebar`, `Categorization`) directly depend on broad stores that expose many unrelated capabilities, reducing ownership clarity.",
+        "Contract tests in `app/__tests__/...` and `backend/__tests__/api/crmCodexRouteContract.test.ts` assert source-code strings via `fs.readFileSync(...).toContain(...)`, coupling tests to file internals instead of stable behavior contracts."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "monolithic_constants_runtime_coupling",
+      "summary": "A single backend constants hub mixes many domains and transitively couples runtime-scoping concerns into unrelated consumers.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`constants.ts` imports `IS_PROD_RUNTIME`, `RUNTIME_TAG`, `RUNTIME_FAMILY` from `runtimeScope` at top level while also defining broad static contracts (socket, queue, mongo, statuses).",
+        "`db.ts` imports `MONGO_STARTUP_INDEXES` from `constants.ts`, so db initialization depends on the global constants hub rather than a focused db-index module.",
+        "The file is structurally a cross-domain hub rather than boundary-focused modules, increasing blast radius for any constants change."
+      ],
+      "suggestion": "Split `constants.ts` into domain modules (e.g., `constants/socket.ts`, `constants/db.ts`, `constants/crm.ts`, `constants/voice.ts`) and remove runtime-derived values from shared constants modules; keep runtime scope resolution in `runtimeScope` consumers only.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "global_hub_modules"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_singleton_side_effects",
+      "summary": "Import-time singleton initialization creates hidden side effects and order-sensitive behavior in backend core services.",
+      "related_files": [
+        "backend/src/utils/logger.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`logger.ts` keeps mutable singleton state (`let loggerInstance`) and `getLogger()` auto-initializes defaults if not initialized.",
+        "`db.ts` executes `const logger = getLogger();` at module scope, which can initialize logger transports before explicit service boot wiring.",
+        "Logger initialization path creates filesystem/log transport behavior implicitly rather than through explicit app composition."
+      ],
+      "suggestion": "Make logger creation explicit at process bootstrap and inject logger into services (`connectDb({ logger })` pattern); avoid module-scope `getLogger()` calls in core infra modules.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "global_hub_modules"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_transport_boundary_frontend",
+      "summary": "Frontend transport boundary is duplicated across stores, producing divergent request/auth/proxy behavior.",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/authStore.ts"
+      ],
+      "evidence": [
+        "`requestStore.ts` defines `getBackendUrl` + `getProxyConfig` and sends cookie-based CRM requests.",
+        "`voiceBotStore.ts` defines parallel `getBackendUrl` + `getProxyConfig` logic plus separate auth header strategy (`X-Authorization`).",
+        "`authStore.ts` maintains cookie/localStorage token lifecycle independently, while request stacks consume auth differently."
+      ],
+      "suggestion": "Introduce a shared API transport module (single backend/proxy resolution, auth header/cookie policy, error normalization) and have both stores compose it instead of embedding transport logic.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_frontend_integration_layer"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "god_store_mixed_responsibilities",
+      "summary": "Major Zustand stores act as god modules that combine unrelated responsibilities, obscuring ownership boundaries.",
+      "related_files": [
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/components/voice/Categorization.tsx",
+        "app/src/components/crm/CommentsSidebar.tsx"
+      ],
+      "evidence": [
+        "`kanbanStore.ts` composes a very large intersection state with many slices and directly coordinates API, domain mutation, widgets, finances, files, and imports in one module.",
+        "`voiceBotStore.ts` includes socket lifecycle, HTTP transport, normalization helpers, timeline parsing, session CRUD, task orchestration, and attachment processing together.",
+        "Components consume broad stores directly (`Categorization`, `CommentsSidebar`), tying UI behavior to large mutable modules rather than focused domain adapters."
+      ],
+      "suggestion": "Refactor into bounded stores/services by capability (e.g., `voiceSessionStore`, `voiceRealtimeStore`, `voiceTasksStore`; `kanbanTicketsStore`, `kanbanDictionaryStore`, `kanbanFinancesStore`) with explicit cross-store facades.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "god_store_pattern"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "contract_tests_bound_to_source_text",
+      "summary": "Contract tests are tightly coupled to source code text, which discourages architectural refactoring and locks implementation details.",
+      "related_files": [
+        "app/__tests__/operops/codexIssuesTableContract.test.ts",
+        "app/__tests__/voice/codexTasksInlineDetailsContract.test.ts",
+        "app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts",
+        "app/__tests__/voice/voiceSocketRealtimeContract.test.ts",
+        "backend/__tests__/api/crmCodexRouteContract.test.ts"
+      ],
+      "evidence": [
+        "Tests read source files with `fs.readFileSync(..., 'utf8')` and assert implementation strings via `toContain(...)`.",
+        "Assertions target specific code fragments and formatting-level details (exact declarations, exact calls, exact literal strings), not executable behavior.",
+        "This creates non-functional coupling between tests and internals, making decomposition and rename/refactor work unnecessarily risky."
+      ],
+      "suggestion": "Shift contract tests to behavioral seams (component rendering, API handler responses, socket event outcomes, function contracts) and keep text-level assertions only for intentionally frozen public literals.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "test_implementation_coupling"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Cross-domain hubs (constants and large stores) became default integration points instead of explicit bounded interfaces.",
+      "Infrastructure concerns (runtime scope, logging, transport/auth) are resolved implicitly in-module rather than via explicit composition roots.",
+      "Tests over-index on source-shape locking, which reinforces current coupling patterns."
+    ],
+    "likely_symptoms": [
+      "monolithic_constants_runtime_coupling",
+      "god_store_mixed_responsibilities",
+      "duplicated_transport_boundary_frontend"
+    ],
+    "possible_false_positives": []
+  }
+}

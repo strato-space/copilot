@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { createElement, useEffect, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import { Collapse, ConfigProvider } from 'antd';
 import { ArrowLeftOutlined, ClockCircleOutlined, StopOutlined } from '@ant-design/icons';
@@ -35,6 +35,74 @@ export const sanitizeTicketDescriptionHtml = (description?: string | null): stri
     return sanitizeHtml(description, ticketDescriptionSanitizerOptions);
 };
 
+const safeDescriptionAttributes = new Set([
+    'href',
+    'name',
+    'target',
+    'rel',
+    'src',
+    'srcset',
+    'alt',
+    'title',
+    'width',
+    'height',
+    'loading',
+    'class',
+]);
+
+const renderSanitizedHtmlNode = (node: ChildNode, key: string): ReactNode => {
+    if (node.nodeType === 3) {
+        return node.textContent ?? '';
+    }
+    if (node.nodeType !== 1) {
+        return null;
+    }
+
+    const element = node as HTMLElement;
+    const tagName = element.tagName.toLowerCase();
+    const props: Record<string, string> = { key };
+    for (const attribute of Array.from(element.attributes)) {
+        const attributeName = attribute.name.toLowerCase();
+        if (!safeDescriptionAttributes.has(attributeName)) {
+            continue;
+        }
+        if (attributeName === 'class') {
+            props.className = attribute.value;
+            continue;
+        }
+        props[attributeName] = attribute.value;
+    }
+
+    const children = Array.from(element.childNodes)
+        .map((child, index) => renderSanitizedHtmlNode(child, `${key}-${index}`))
+        .filter((child): child is Exclude<ReactNode, boolean | null | undefined> =>
+            child !== null && child !== undefined && child !== false
+        );
+
+    return createElement(tagName, props, ...children);
+};
+
+const renderSanitizedHtml = (sanitizedHtml: string): ReactNode[] => {
+    if (!sanitizedHtml) {
+        return [];
+    }
+    if (typeof DOMParser === 'undefined') {
+        return [sanitizedHtml];
+    }
+
+    const parsed = new DOMParser().parseFromString(`<div>${sanitizedHtml}</div>`, 'text/html');
+    const root = parsed.body.firstElementChild;
+    if (!root) {
+        return [sanitizedHtml];
+    }
+
+    return Array.from(root.childNodes)
+        .map((child, index) => renderSanitizedHtmlNode(child, `root-${index}`))
+        .filter((child): child is Exclude<ReactNode, boolean | null | undefined> =>
+            child !== null && child !== undefined && child !== false
+        );
+};
+
 const OneTicket = () => {
     const { selectedTicket, setSelectedTicket, setActiveActionSheet } = useKanban();
 
@@ -48,6 +116,7 @@ const OneTicket = () => {
 
     const ticket: Ticket = selectedTicket;
     const safeTicketDescription = sanitizeTicketDescriptionHtml(ticket.description);
+    const safeTicketDescriptionNodes = renderSanitizedHtml(safeTicketDescription);
 
     const taskType = ticket.task_type;
     const executionPlanItems = Array.isArray(taskType?.execution_plan) ? taskType.execution_plan : [];
@@ -147,11 +216,7 @@ const OneTicket = () => {
 
                 <div className="one-ticket-description break-all pb-20">
                     <div className="font-bold">Описание задачи:</div>
-                    <div
-                        dangerouslySetInnerHTML={{
-                            __html: safeTicketDescription,
-                        }}
-                    />
+                    <div>{safeTicketDescriptionNodes}</div>
                 </div>
             </div>
             <div className="fixed bottom-0 left-0 z-30 w-full">

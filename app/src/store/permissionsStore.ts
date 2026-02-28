@@ -4,16 +4,22 @@ import { message } from 'antd';
 import { useAuthStore } from './authStore';
 import { PERMISSIONS, ROLES } from '../constants/permissions';
 
-interface PermissionsState {
+interface PermissionsDataSlice {
     loading: boolean;
     users: Array<Record<string, unknown>>;
     roles: Record<string, unknown>;
     permissions: Record<string, unknown>;
     permissionsLog: Array<Record<string, unknown>>;
     error: string | null;
+}
+
+interface PermissionsFetchActionsSlice {
     loadRolesAndPermissions: () => Promise<void>;
     loadUsers: () => Promise<void>;
     loadPermissionsLog: (page?: number, limit?: number) => Promise<Record<string, unknown>>;
+}
+
+interface PermissionsUpdateActionsSlice {
     updateUserRole: (userId: string, role: string, additionalRoles?: string[]) => Promise<void>;
     updateUserPermissions: (userId: string, permissions: string[]) => Promise<void>;
     updateUserAdditionalRoles: (userId: string, additionalRoles: string[]) => Promise<void>;
@@ -21,6 +27,10 @@ interface PermissionsState {
     updateUserAccessLevel: (userId: string, accessLevel: string) => Promise<void>;
     updateUserProjectIds: (userId: string, projectIds: string[]) => Promise<void>;
 }
+
+type PermissionsState = PermissionsDataSlice &
+    PermissionsFetchActionsSlice &
+    PermissionsUpdateActionsSlice;
 
 const getBackendUrl = (): string => {
     if (typeof window !== 'undefined') {

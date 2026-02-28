@@ -7,16 +7,16 @@ describe('Voice image anchor grouping contract', () => {
 
   it('keeps image anchor rows linked with the next transcribed message block', () => {
     expect(source).toContain('const linkedImageAnchorRefs = new Set<string>()');
-    expect(source).toContain('const imageAnchorRef = normalizeMessageRef(record.image_anchor_message_id)');
+    expect(source).toContain('const imageAnchorRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_message_id);');
     expect(source).toContain('const linkedAnchorRows = imageAnchorRef ? (imageRowsByMessageRef.get(imageAnchorRef) ?? []) : []');
     expect(source).toContain('rows = [...linkedAnchorRows, ...rows];');
   });
 
   it('resolves anchor links by both message_id and _id references', () => {
-    expect(source).toContain('const getMessageLinkRefs = (msg: VoiceBotMessage): string[] => {');
-    expect(source).toContain('normalizeMessageRef(msg?.message_id)');
-    expect(source).toContain('normalizeMessageRef(msg?._id)');
-    expect(source).toContain('const ownImageRows = getRowsByMessageRefs(imageRowsByMessageRef, messageRefs);');
+    expect(source).toContain('getMessageLinkRefs(msg: VoiceBotMessage): string[] {');
+    expect(source).toContain('this.normalizeMessageRef(msg?.message_id)');
+    expect(source).toContain('this.normalizeMessageRef(msg?._id)');
+    expect(source).toContain('const ownImageRows = voiceMessageLinkUtils.getRowsByMessageRefs(imageRowsByMessageRef, messageRefs);');
   });
 
   it('hides standalone anchor-only block once the next message consumes it', () => {
@@ -26,7 +26,7 @@ describe('Voice image anchor grouping contract', () => {
 
   it('supports explicit row-targeted materials via linked message refs', () => {
     expect(source).toContain('const explicitLinkedImageRowsByTargetRef = new Map<string, Array<{ anchorMessageRef: string; rows: VoiceMessageRow[] }>>();');
-    expect(source).toContain('const imageAnchorLinkedTargetRef = normalizeMessageRef(record.image_anchor_linked_message_id);');
+    expect(source).toContain('const imageAnchorLinkedTargetRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_linked_message_id);');
     expect(source).toContain('const explicitLinkedEntries = messageRefs.flatMap((ref) => explicitLinkedImageRowsByTargetRef.get(ref) ?? []);');
     expect(source).toContain('const explicitLinkedRows = explicitLinkedEntries.flatMap((entry) => entry.rows);');
   });

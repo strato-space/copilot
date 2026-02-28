@@ -7,7 +7,9 @@ import type { Db } from 'mongodb';
 import { ObjectId } from 'mongodb';
 
 import { COLLECTIONS } from '../../constants.js';
+import { normalizeTicketDbId } from '../../utils/crmMiniappShared.js';
 import { createServiceAccountAuth, createSheetsClient, createSpreadsheet, loadSpreadsheet, buildSpreadsheetUrl } from './googleDrive.js';
+import { buildDayKeys, ensureDayBuckets, indexesToA1, setWeekStartMonday } from './jiraReportUtils.js';
 import type { JiraStyleReportParams, ReportResult } from './types.js';
 
 import 'dayjs/locale/en.js';
@@ -60,45 +62,12 @@ type ProjectRecord = {
 
 const JIRA_REPORTS_FOLDER_ID = process.env.REPORTS_JIRA_FOLDER_ID ?? '1Y8KaMhqi9HeiNUgiJtvYsdzOvMQvS8KD';
 
-const setWeekStart = (): void => {
-    dayjs.locale('en');
-    const localeData = (dayjs as unknown as { Ls?: Record<string, { weekStart?: number }> }).Ls;
-    if (localeData?.en) {
-        localeData.en.weekStart = 1;
-    }
-};
-
-const indexesToA1 = (row: number, column: number): string => {
-    const columns = [
-        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-        'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB',
-        'AC', 'AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL', 'AM', 'AN', 'AO', 'AP',
-        'AQ', 'AR', 'AS', 'AT', 'AU', 'AV', 'AW', 'AX', 'AY', 'AZ',
-    ];
-    return `${columns[column]}${row + 1}`;
-};
-
-const normalizeTicketDbId = (value: unknown): string | null => {
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'string') {
-        const normalized = value.trim();
-        return normalized.length > 0 ? normalized : null;
-    }
-    if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
-            return new ObjectId(record.$oid).toHexString();
-        }
-    }
-    return null;
-};
-
 export const generateJiraStyleReport = async (
     params: JiraStyleReportParams,
     db: Db,
     logger: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 ): Promise<ReportResult> => {
-    setWeekStart();
+    setWeekStartMonday(dayjs);
 
     if (!params.customerId || !params.startDate || !params.endDate) {
         throw new Error('Missing required parameters');
@@ -169,13 +138,7 @@ export const generateJiraStyleReport = async (
         return result;
     }, {} as Record<string, PerformerRecord>);
 
-    let currentDate = reportStart.clone();
-    const daysArray: string[] = [];
-
-    while (!currentDate.isAfter(reportEnd, 'day')) {
-        daysArray.push(currentDate.format('YYYY-MM-DD'));
-        currentDate = currentDate.add(1, 'day');
-    }
+    const daysArray = buildDayKeys(reportStart, reportEnd);
 
     for (const work of works) {
         try {
@@ -184,12 +147,7 @@ export const generateJiraStyleReport = async (
             const ticket = tickets[ticketDbId];
             if (!ticket) continue;
             const key = dayjs.unix(work.date_timestamp).format('YYYY-MM-DD');
-            if (!ticket.hours_data) {
-                ticket.hours_data = _.reduce(daysArray, (result, dayKey) => {
-                    result[dayKey] = [];
-                    return result;
-                }, {} as Record<string, Array<WorkHourRecord>>);
-            }
+            ticket.hours_data = ensureDayBuckets(ticket.hours_data, daysArray);
             if (!ticket.hours_data[key]) ticket.hours_data[key] = [];
             ticket.hours_data[key].push(work);
         } catch (error) {

@@ -1,0 +1,28 @@
+{
+  "query": "responsibility_cohesion",
+  "status_filter": "open",
+  "total": 1,
+  "summary": {
+    "by_tier": {
+      "T3": 1
+    },
+    "by_detector": {
+      "responsibility_cohesion": 1
+    },
+    "files": 1
+  },
+  "by_file": {
+    "backend/src/api/routes/voicebot/sessions.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/api/routes/voicebot/sessions.ts::cohesion::backend/src/api/routes/voicebot/sessions.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "15 disconnected function clusters (29 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: resolve, resolveActorId, resolveTargetMessageRef, enqueueVoicebotNotify"
+      }
+    ]
+  },
+  "total_matching": 1,
+  "noise_budget": 10,
+  "noise_global_budget": 0
+}

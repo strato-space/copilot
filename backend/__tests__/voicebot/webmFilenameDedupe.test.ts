@@ -4,7 +4,7 @@ import {
   buildSessionWebmDedupePlan,
   selectRelevantMessage,
   type VoicebotMessageDoc,
-} from '../../src/services/voicebotWebmDedup.js';
+} from '../../src/services/voicebot/voicebotWebmDedup.js';
 
 const buildMessage = (overrides: Partial<VoicebotMessageDoc> = {}): VoicebotMessageDoc => {
   const now = new Date('2026-02-19T10:00:00.000Z');

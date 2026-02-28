@@ -1,0 +1,133 @@
+{
+  "batch": "Governance & Contracts",
+  "batch_index": 7,
+  "assessments": {
+    "cross_module_architecture": 72.0,
+    "high_level_elegance": 70.0,
+    "package_organization": 68.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "README documents realtime contract events as `new_message`, `session_update`, `message_update`, but backend constants expose `session_updated` and `message_updated` names in `VOICEBOT_SOCKET_EVENTS`.",
+        "`backend/src/constants.ts` is a hub module (114 importers in holistic context) and is imported by `backend/src/services/db.ts`; this centralizes unrelated concerns (socket events, Mongo collections/indexes, queue names, voice runtime configuration) behind one dependency edge.",
+        "`backend/src/constants.ts` imports runtime state from `backend/src/services/runtimeScope.ts`, creating dependency inversion where a broad shared constants module depends on a runtime service layer."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Project governance docs in `README.md` present strict voice contracts, but core contract identifiers in `backend/src/constants.ts` are not aligned with those documented names for socket event updates.",
+        "Ownership boundaries are blurred: runtime derivation (`RUNTIME_TAG`, `IS_PROD_RUNTIME`) and environment-bound storage limits live in the same top-level constants surface as static enums and statuses.",
+        "The runtime-scoping policy appears in multiple places (`README.md`, `backend/src/services/runtimeScope.ts`, and collection constants in `backend/src/constants.ts`), increasing policy drift risk."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "package_organization": {
+      "evidence": [
+        "Holistic structure shows `backend/src/services/ -> backend/src/` coupling edge count of 18 and high inbound edges (`backend/src/workers/voicebot/handlers/ -> backend/src/services/`: 37), while `backend/src/constants.ts` acts as a cross-domain dependency hotspot.",
+        "`app/src/types/` has only 2 files with high average fan-in (18.0), and `app/src/types/crm.ts` aggregates unrelated domains (CRM tickets, Figma sync, finance records, bot commands) into one shared type bucket.",
+        "Runtime-scoped collection naming is split between `backend/src/services/runtimeScope.ts` (`RUNTIME_SCOPED_COLLECTION_NAMES`) and `backend/src/constants.ts` (`COLLECTIONS`/`VOICEBOT_COLLECTIONS`), indicating organizational duplication instead of a single authoritative package."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "voice_event_contract_drift",
+      "summary": "Documented realtime event contract and exported backend event constants are diverged.",
+      "related_files": [
+        "README.md",
+        "backend/src/constants.ts"
+      ],
+      "evidence": [
+        "`README.md` repeatedly defines runtime events as `session_update`/`message_update`.",
+        "`backend/src/constants.ts` defines `VOICEBOT_SOCKET_EVENTS.SESSION_UPDATED = 'session_updated'` and `MESSAGE_UPDATED = 'message_updated'` with different identifiers.",
+        "No canonical `session_update`/`message_update` identifiers are exported in the reviewed constants file, so contract consumers lack a single source of truth."
+      ],
+      "suggestion": "Create a single canonical voice event contract module and make docs reference that module name-for-name. Stage 1: add `backend/src/contracts/voiceEvents.ts` exporting exact wire event strings. Stage 2: replace usages from `backend/src/constants.ts` with imports from the contract module and keep temporary aliases only where required. Stage 3: update README contract section to mirror exported identifiers exactly and run `cd backend && npm run build` plus targeted event contract tests.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "contract_source_fragmentation"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "constants_hub_boundary_collapse",
+      "summary": "A single cross-domain constants hub collapses architectural boundaries and amplifies change blast radius.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts",
+        "backend/src/services/runtimeScope.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` contains socket events, queue/job names, Mongo collection/index names, notion mappings, voice queue runtime names, socket events, and storage env defaults in one file.",
+        "Holistic context marks `backend/src/constants.ts` as a god module with 114 importers.",
+        "`backend/src/services/db.ts` depends on `MONGO_STARTUP_INDEXES` from this hub, while the hub itself depends on `runtimeScope` exports (`RUNTIME_TAG`, `RUNTIME_FAMILY`, `IS_PROD_RUNTIME`)."
+      ],
+      "suggestion": "Split constants by bounded context and direction. Stage 1 target folders: `backend/src/contracts/events/`, `backend/src/contracts/voice/`, `backend/src/contracts/persistence/`, `backend/src/config/runtime/`. Stage 2 move order: extract pure static constants first (collections/indexes), then voice/socket contracts, then runtime-derived config. Stage 3 import updates: replace `../constants.js` broad imports with narrow module imports using `rg \"from '../constants\" backend/src -n` and update each caller. Stage 4 validate with `cd backend && npm run build && npm run test`.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "contract_source_fragmentation"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "runtime_scope_registry_duplication",
+      "summary": "Runtime-scoped collection ownership is duplicated across modules, making compatibility policy drift likely.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`runtimeScope.ts` maintains `RUNTIME_SCOPED_COLLECTION_NAMES` as hardcoded string literals.",
+        "`constants.ts` separately defines `COLLECTIONS` and `VOICEBOT_COLLECTIONS` with overlapping collection names.",
+        "`db.ts` relies on `isRuntimeScopedCollection` from `runtimeScope.ts` while also importing index metadata from `constants.ts`, forcing policy to be maintained in multiple places."
+      ],
+      "suggestion": "Establish one persistence schema registry and derive runtime-scope membership from it. Stage 1: create `backend/src/contracts/persistence/collections.ts` (canonical typed map with metadata, including `runtimeScoped: boolean`). Stage 2: replace hardcoded list in `runtimeScope.ts` with derived set from the canonical map. Stage 3: make `constants.ts` re-export only if needed for backward compatibility, then remove duplicate literals. Stage 4: update imports with `rg \"COLLECTIONS|RUNTIME_SCOPED_COLLECTION_NAMES|isRuntimeScopedCollection\" backend/src -n` and validate using `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "contract_source_fragmentation"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "crm_types_domain_mixing",
+      "summary": "Frontend CRM type package is overloaded with multiple domains, reducing navigability and ownership clarity.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "README.md"
+      ],
+      "evidence": [
+        "`app/src/types/crm.ts` contains CRM entities plus Figma sync types, finance records, week report types, and bot command types in a single file.",
+        "Holistic structure reports `app/src/types/` has high average fan-in (18.0) with consumers across voice, CRM components, stores, pages, utils, and tests, indicating this file became a shared catch-all contract.",
+        "README describes distinct product domains (OperOps/CRM, Voice, FinOps), but type organization does not reflect these boundaries."
+      ],
+      "suggestion": "Reorganize frontend types by domain with staged moves. Stage 1 target folders: `app/src/types/crm/`, `app/src/types/voice/`, `app/src/types/finops/`, `app/src/types/integrations/figma.ts`. Stage 2 move order: extract non-CRM groups first (Figma, finance, bot command), then split CRM ticket/project/comment/work-log contracts. Stage 3 add a temporary barrel `app/src/types/crm.ts` re-exporting new modules to avoid big-bang breakage, then gradually update import sites via `rg \"src/types/crm\" app/src app/__tests__ -n`. Stage 4 validate with `cd app && npm run build && npm run test`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "type_boundary_erosion"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Contract source-of-truth is split between documentation and multiple runtime modules without generated or enforced linkage.",
+      "Cross-domain constants/type aggregation has grown into convenience hubs, replacing bounded ownership with global dependency points."
+    ],
+    "likely_symptoms": [
+      "voice_event_contract_drift",
+      "runtime_scope_registry_duplication",
+      "crm_types_domain_mixing"
+    ],
+    "possible_false_positives": []
+  }
+}

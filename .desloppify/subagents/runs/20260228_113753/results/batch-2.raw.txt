@@ -1,0 +1,174 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 2,
+  "assessments": {
+    "abstraction_fitness": 74.0,
+    "mid_level_elegance": 76.0,
+    "low_level_elegance": 82.0
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "Codex task creation logic is reimplemented in multiple paths: telegram ingress (`ingressHandlers.ts`), transcribe worker (`transcribeHandler.ts`), and voice sessions route (`sessions.ts`) with duplicated performer/project resolution and payload/task-shape assembly.",
+        "Large store files emulate slice decomposition via many `*Slice` interfaces but keep all behavior in one closure (`voiceBotStore.ts` and `kanbanStore.ts`), so abstraction layering adds type ceremony without reducing change surface."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 68.0,
+        "indirection_cost": 79.0,
+        "interface_honesty": 75.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Frontend voice-related stores define separate HTTP transport wrappers (`voiceBotStore.ts` `voicebotHttp.request` vs `permissionsStore.ts` `voicebotRequest`) and they drifted: `getUserPermissions` calls `permissions/users/permissions` while the backend endpoint is mounted under voicebot route (`voicebot/permissions.ts` uses `/users/permissions`).",
+        "Authorization seam is split between `requireRole` and `PermissionManager.requirePermission` with duplicated performer loading and divergent eligibility filters (`roleGuard.ts` includes `is_banned: { $ne: true }`, `permission-manager.ts` does not), making boundary behavior route-dependent.",
+        "Telegram non-command handlers repeat near-identical attachment ingress plumbing for photo/document/audio in `runtimeNonCommandHandlers.ts` instead of one media-normalization seam reused by handler registration."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Miniapp action sheet components duplicate substantial JSX footer/back-button structures and inline SVG path blocks (`ASChangeStatus.tsx` and `ASRejectTicket.tsx`), increasing local edit friction and copy-paste drift risk.",
+        "Repeated per-handler object construction in `runtimeNonCommandHandlers.ts` (`photo`/`document`/`audio`) obscures intent with boilerplate-heavy internals instead of concise media mapping."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "codex_task_pipeline_fragmented",
+      "summary": "Codex task creation is duplicated across route, ingress, and worker flows with divergent rules",
+      "related_files": [
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`ingressHandlers.ts` builds and inserts codex tasks via `createCodexTaskFromPayload` with `@task` trigger and project fallback logic (`findCodexProject`).",
+        "`transcribeHandler.ts` independently implements codex voice-trigger task creation (`maybeCreateCodexTaskFromVoiceCommand`) with another `findCodexProject`/`findCodexPerformer` path and task-doc shaping.",
+        "`sessions.ts` includes a separate codex performer matcher (`codexPerformerUtils`) and codex-specific ticket routing inside `/create_tickets`, creating a third codex decision surface."
+      ],
+      "suggestion": "Extract a shared `codexTaskOrchestrator` service that owns performer/project resolution, dedupe keys, payload normalization, and task persistence; invoke it from ingress, transcribe, and route handlers with trigger-specific adapters only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "codex_task_pipeline_fragmentation"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "store_slice_ceremony_without_boundary",
+      "summary": "Slice-interface layering in stores is mostly ceremonial because behavior remains monolithic",
+      "related_files": [
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`kanbanStore.ts` defines many `Kanban*Slice` interfaces and intersects them into `KanbanState`, but all actions/state live in one `create(...)` factory block.",
+        "`voiceBotStore.ts` follows the same pattern (`VoiceBot*Slice` intersections) while keeping a large single implementation closure with broad responsibilities."
+      ],
+      "suggestion": "Convert type-only slice decomposition into runtime module boundaries: split each store by domain concern into composable creator functions (e.g., `createSessionsSlice`, `createUploadSlice`) or separate stores with explicit cross-store APIs.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "store_boundary_collapse"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "frontend_voicebot_client_drift",
+      "summary": "Duplicated frontend voicebot transport wrappers have already drifted into endpoint mismatch",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`permissionsStore.ts` defines its own `voicebotRequest` and calls `permissions/users/permissions` in `getUserPermissions`.",
+        "Other methods in the same file use `voicebot/permissions/...`, and backend route is mounted at `voicebot/permissions` (`permissions.ts` defines `router.post('/users/permissions', ...)`).",
+        "`voiceBotStore.ts` separately defines `voicebotHttp.request` with similar proxy/auth logic, indicating duplicated seam logic instead of one canonical API client."
+      ],
+      "suggestion": "Introduce a shared typed voicebot API client module and migrate both stores to it; enforce route-prefix constants so endpoint paths cannot diverge per store.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_transport_duplication"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "auth_gate_split_brain",
+      "summary": "Role and permission middlewares duplicate performer hydration with inconsistent access criteria",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts"
+      ],
+      "evidence": [
+        "`roleGuard.requireRole` fetches performer with `_id`, `is_deleted`, and `is_banned` filters before authorizing.",
+        "`PermissionManager.requirePermission` performs its own performer lookup but omits `is_banned`, then computes permissions from that record.",
+        "Routes combine auth/role middleware chains (`expensesOperations.ts` uses `authMiddleware, requireAdmin`) while other areas use permission manager, so access semantics depend on which middleware stack a route chose."
+      ],
+      "suggestion": "Unify performer hydration and eligibility checks in one authorization entry point (shared performer resolver + policy evaluators), and make `requireRole` a thin adapter over that unified path.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "authz_pipeline_duplication"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "telegram_media_ingress_repetition",
+      "summary": "Telegram media handlers repeat attachment-mapping seams instead of a single normalized adapter",
+      "related_files": [
+        "backend/src/voicebot_tgbot/runtimeNonCommandHandlers.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts"
+      ],
+      "evidence": [
+        "`runtimeNonCommandHandlers.ts` has three near-parallel `bot.on('photo'|'document'|'audio')` blocks that each build `handleAttachmentIngress` payloads with mostly identical envelope plumbing.",
+        "`ingressHandlers.ts` already provides shared ingress schema/normalization concepts, but media mapping remains copied per runtime handler."
+      ],
+      "suggestion": "Create one `buildTelegramAttachmentIngressInput(kind, message)` mapper and use a small dispatch table for media events; keep handler registration focused on event wiring only.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "telegram_ingress_mapper_duplication"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "miniapp_actionsheet_footer_duplication",
+      "summary": "Miniapp action sheets duplicate large footer/back-button JSX and inline SVG internals",
+      "related_files": [
+        "miniapp/src/components/ASChangeStatus.tsx",
+        "miniapp/src/components/ASRejectTicket.tsx"
+      ],
+      "evidence": [
+        "Both components include almost the same bottom action area markup (back circular button + primary CTA) with identical Tailwind class chains and long inline SVG path data.",
+        "The repeated block appears as copy-paste UI internals rather than a reusable primitive, increasing maintenance cost for visual/interaction updates."
+      ],
+      "suggestion": "Extract a shared `ActionSheetFooter` component with props for `primaryLabel`, `onPrimary`, and `onBack`; keep SVG/icon and layout in one place.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "miniapp_ui_copy_paste"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Domain logic (especially Codex task flows) is implemented per entrypoint instead of behind a single orchestrator.",
+      "Type-level decomposition is used without corresponding runtime/module decomposition, so abstractions do not reduce coupling.",
+      "Transport and authorization seams are duplicated across adjacent modules without shared canonical clients/policies."
+    ],
+    "likely_symptoms": [
+      "codex_task_pipeline_fragmented",
+      "frontend_voicebot_client_drift",
+      "auth_gate_split_brain",
+      "telegram_media_ingress_repetition"
+    ],
+    "possible_false_positives": []
+  }
+}

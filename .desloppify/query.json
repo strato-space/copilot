@@ -2,263 +2,69 @@
   "command": "next",
   "items": [
     {
-      "id": "logs::app/src/components/crm/CRMKanban.tsx::CRMKanban",
-      "kind": "finding",
-      "tier": 1,
-      "effective_tier": 1,
-      "confidence": "high",
-      "detector": "logs",
-      "file": "app/src/components/crm/CRMKanban.tsx",
-      "summary": "4 tagged logs [CRMKanban]",
-      "detail": {
-        "count": 4,
-        "lines": [
-          250,
-          264,
-          1253,
-          1331
-        ]
-      },
-      "status": "open",
-      "primary_command": "desloppify fix debug-logs --dry-run"
-    },
-    {
-      "id": "dupes::backend/src/services/reports/jiraStyleReport.ts::normalizeTicketDbId::backend/src/services/reports/performerWeeksReport.ts::normalizeTicketDbId",
+      "id": "dupes::app/src/pages/operops/TaskPage.tsx::renderSanitizedHtml::miniapp/src/components/OneTicket.tsx::renderSanitizedHtml",
       "kind": "finding",
       "tier": 2,
       "effective_tier": 2,
       "confidence": "high",
       "detector": "dupes",
-      "file": "backend/src/services/reports/jiraStyleReport.ts",
-      "summary": "Exact dupe: normalizeTicketDbId (backend/src/services/reports/jiraStyleReport.ts:81) <-> normalizeTicketDbId (backend/src/services/reports/performerWeeksReport.ts:65) [100%]",
+      "file": "app/src/pages/operops/TaskPage.tsx",
+      "summary": "Exact dupe: renderSanitizedHtml (app/src/pages/operops/TaskPage.tsx:119) <-> renderSanitizedHtml (miniapp/src/components/OneTicket.tsx:85) [100%]",
       "detail": {
         "fn_a": {
-          "file": "backend/src/services/reports/jiraStyleReport.ts",
-          "name": "normalizeTicketDbId",
-          "line": 81,
-          "loc": 14
+          "file": "app/src/pages/operops/TaskPage.tsx",
+          "name": "renderSanitizedHtml",
+          "line": 119,
+          "loc": 20
         },
         "fn_b": {
-          "file": "backend/src/services/reports/performerWeeksReport.ts",
-          "name": "normalizeTicketDbId",
-          "line": 65,
-          "loc": 14
+          "file": "miniapp/src/components/OneTicket.tsx",
+          "name": "renderSanitizedHtml",
+          "line": 85,
+          "loc": 20
         },
         "similarity": 1.0,
         "kind": "exact",
         "cluster_size": 2,
         "cluster": [
           {
-            "file": "backend/src/services/reports/jiraStyleReport.ts",
-            "name": "normalizeTicketDbId",
-            "line": 81,
-            "loc": 14
+            "file": "app/src/pages/operops/TaskPage.tsx",
+            "name": "renderSanitizedHtml",
+            "line": 119,
+            "loc": 20
           },
           {
-            "file": "backend/src/services/reports/performerWeeksReport.ts",
-            "name": "normalizeTicketDbId",
-            "line": 65,
-            "loc": 14
+            "file": "miniapp/src/components/OneTicket.tsx",
+            "name": "renderSanitizedHtml",
+            "line": 85,
+            "loc": 20
           }
         ]
       },
       "status": "open",
-      "primary_command": "desloppify resolve fixed \"dupes::backend/src/services/reports/jiraStyleReport.ts::normalizeTicketDbId::backend/src/services/reports/performerWeeksReport.ts::normalizeTicketDbId\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "facade::app/src/components/voice/index.ts",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "facade",
-      "file": "app/src/components/voice/index.ts",
-      "summary": "Re-export facade (19 LOC): imports from ./PermissionGate, ./AudioUploader, ./WebrtcFabLoader, +16 (0 importers)",
-      "detail": {
-        "loc": 19,
-        "importers": 0,
-        "imports_from": [
-          "./PermissionGate",
-          "./AudioUploader",
-          "./WebrtcFabLoader",
-          "./Transcription",
-          "./TranscriptionTableHeader",
-          "./TranscriptionTableRow",
-          "./Categorization",
-          "./CategorizationTableHeader",
-          "./CategorizationTableRow",
-          "./CategorizationTableSummary",
-          "./CategorizationStatusColumn",
-          "./MeetingCard",
-          "./SessionStatusWidget",
-          "./CustomPromptModal",
-          "./CustomPromptResult",
-          "./AddParticipantModal",
-          "./AccessUsersModal",
-          "./Screenshort",
-          "./SessionLog"
-        ],
-        "kind": "file"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"facade::app/src/components/voice/index.ts\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "facade::backend/src/models/collections.ts",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "facade",
-      "file": "backend/src/models/collections.ts",
-      "summary": "Re-export facade (1 LOC): imports from ../constants.js (0 importers)",
-      "detail": {
-        "loc": 1,
-        "importers": 0,
-        "imports_from": [
-          "../constants.js"
-        ],
-        "kind": "file"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"facade::backend/src/models/collections.ts\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "security::app/src/components/voice/TranscriptionTableRow.tsx::security::hardcoded_secret_name::app/src/components/voice/TranscriptionTableRow.tsx::151",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "security",
-      "file": "app/src/components/voice/TranscriptionTableRow.tsx",
-      "summary": "Hardcoded secret in variable 'openai_api_key_missing'",
-      "detail": {
-        "kind": "hardcoded_secret_name",
-        "severity": "high",
-        "line": 151,
-        "content": "        openai_api_key_missing: '\u041d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d OPENAI_API_KEY',",
-        "remediation": "Move secret to environment variable or secrets manager"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"security::app/src/components/voice/TranscriptionTableRow.tsx::security::hardcoded_secret_name::app/src/components/voice/TranscriptionTableRow.tsx::151\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "security::app/src/constants/permissions.ts::security::hardcoded_secret_name::app/src/constants/permissions.ts::25",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "security",
-      "file": "app/src/constants/permissions.ts",
-      "summary": "Hardcoded secret in variable 'RESET_PASSWORD'",
-      "detail": {
-        "kind": "hardcoded_secret_name",
-        "severity": "high",
-        "line": 25,
-        "content": "        RESET_PASSWORD: 'users:reset_password',",
-        "remediation": "Move secret to environment variable or secrets manager"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"security::app/src/constants/permissions.ts::security::hardcoded_secret_name::app/src/constants/permissions.ts::25\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "security::backend/src/constants.ts::security::hardcoded_secret_name::backend/src/constants.ts::486",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "security",
-      "file": "backend/src/constants.ts",
-      "summary": "Hardcoded secret in variable 'ONE_USE_TOKENS'",
-      "detail": {
-        "kind": "hardcoded_secret_name",
-        "severity": "high",
-        "line": 486,
-        "content": "  ONE_USE_TOKENS: 'automation_one_use_tokens',",
-        "remediation": "Move secret to environment variable or secrets manager"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"security::backend/src/constants.ts::security::hardcoded_secret_name::backend/src/constants.ts::486\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "security::backend/src/permissions/permissions-config.ts::security::hardcoded_secret_name::backend/src/permissions/permissions-config.ts::39",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "security",
-      "file": "backend/src/permissions/permissions-config.ts",
-      "summary": "Hardcoded secret in variable 'RESET_PASSWORD'",
-      "detail": {
-        "kind": "hardcoded_secret_name",
-        "severity": "high",
-        "line": 39,
-        "content": "        RESET_PASSWORD: 'users:reset_password',           // Reset passwords",
-        "remediation": "Move secret to environment variable or secrets manager"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"security::backend/src/permissions/permissions-config.ts::security::hardcoded_secret_name::backend/src/permissions/permissions-config.ts::39\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "security::backend/src/voicebot_tgbot/runtime.ts::security::eval_injection::backend/src/voicebot_tgbot/runtime.ts::194",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "security",
-      "file": "backend/src/voicebot_tgbot/runtime.ts",
-      "summary": "eval() or new Function() \u2014 potential code injection",
-      "detail": {
-        "kind": "eval_injection",
-        "severity": "critical",
-        "line": 194,
-        "content": "    const result = await redis.eval(",
-        "remediation": "Avoid eval/new Function \u2014 use safer alternatives (JSON.parse, Map, etc.)"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"security::backend/src/voicebot_tgbot/runtime.ts::security::eval_injection::backend/src/voicebot_tgbot/runtime.ts::194\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
-    },
-    {
-      "id": "security::backend/src/voicebot_tgbot/runtime.ts::security::eval_injection::backend/src/voicebot_tgbot/runtime.ts::213",
-      "kind": "finding",
-      "tier": 2,
-      "effective_tier": 2,
-      "confidence": "high",
-      "detector": "security",
-      "file": "backend/src/voicebot_tgbot/runtime.ts",
-      "summary": "eval() or new Function() \u2014 potential code injection",
-      "detail": {
-        "kind": "eval_injection",
-        "severity": "critical",
-        "line": 213,
-        "content": "    await redis.eval(REDIS_RELEASE_LOCK_SCRIPT, 1, TG_POLLER_LOCK_KEY, TG_POLLER_LOCK_OWNER);",
-        "remediation": "Avoid eval/new Function \u2014 use safer alternatives (JSON.parse, Map, etc.)"
-      },
-      "status": "open",
-      "primary_command": "desloppify resolve fixed \"security::backend/src/voicebot_tgbot/runtime.ts::security::eval_injection::backend/src/voicebot_tgbot/runtime.ts::213\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+      "primary_command": "desloppify resolve fixed \"dupes::app/src/pages/operops/TaskPage.tsx::renderSanitizedHtml::miniapp/src/components/OneTicket.tsx::renderSanitizedHtml\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
     }
   ],
   "queue": {
     "tier_counts": {
-      "1": 1,
-      "2": 59,
-      "3": 603,
-      "4": 258
+      "1": 0,
+      "2": 37,
+      "3": 505,
+      "4": 254
     },
     "requested_tier": null,
     "selected_tier": null,
     "fallback_reason": null,
     "available_tiers": [
-      1,
       2,
       3,
       4
     ],
-    "total": 921
+    "total": 796
   },
   "narrative": {
-    "phase": "early_momentum",
-    "headline": "\u26a0 17 security findings \u2014 review before other cleanup. Score 32.5/100 with 921 findings open. Keep the momentum going.",
+    "phase": "stagnation",
+    "headline": "\u26a0 6 security findings \u2014 review before other cleanup. All T1 items cleared!",
     "dimensions": {
       "lowest_dimensions": [
         {
@@ -287,251 +93,250 @@
         }
       ],
       "biggest_gap_dimensions": [],
-      "stagnant_dimensions": []
+      "stagnant_dimensions": [
+        {
+          "name": "File health",
+          "strict": 91.8,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Code quality",
+          "strict": 95.5,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Duplication",
+          "strict": 92.7,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Test health",
+          "strict": 27.1,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Security",
+          "strict": 99.1,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Error consistency",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Abstraction fit",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "AI generated debt",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "High elegance",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Mid elegance",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Low elegance",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Cross-module arch",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Convention drift",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "API coherence",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Auth consistency",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Stale migration",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Structure nav",
+          "strict": 0.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Design coherence",
+          "strict": 0.0,
+          "stuck_scans": 5
+        }
+      ]
     },
     "actions": [
       {
-        "type": "auto_fix",
-        "detector": "logs",
+        "type": "reorganize",
+        "detector": "orphaned",
         "count": 1,
-        "description": "1 logs findings \u2014 run `desloppify fix debug-logs --dry-run` to preview, then apply",
-        "command": "desloppify fix debug-logs --dry-run",
+        "description": "1 orphaned findings \u2014 delete dead files or relocate with `desloppify move`",
+        "command": "desloppify show orphaned --status open",
         "impact": 0.0,
         "dimension": "Code quality",
         "priority": 1,
-        "lane": "cleanup"
+        "lane": "restructure"
       },
       {
         "type": "reorganize",
-        "detector": "orphaned",
-        "count": 19,
-        "description": "19 orphaned findings \u2014 delete dead files or relocate with `desloppify move`",
-        "command": "desloppify show orphaned --status open",
+        "detector": "flat_dirs",
+        "count": 3,
+        "description": "3 flat_dirs findings \u2014 create subdirectories and use `desloppify move`",
+        "command": "desloppify show flat_dirs --status open",
         "impact": 0.0,
         "dimension": "Code quality",
         "priority": 2,
         "lane": "restructure"
       },
       {
-        "type": "reorganize",
-        "detector": "flat_dirs",
-        "count": 6,
-        "description": "6 flat_dirs findings \u2014 create subdirectories and use `desloppify move`",
-        "command": "desloppify show flat_dirs --status open",
-        "impact": 0.0,
-        "dimension": "Code quality",
-        "priority": 3,
-        "lane": "restructure"
-      },
-      {
-        "type": "reorganize",
-        "detector": "naming",
-        "count": 2,
-        "description": "2 naming findings \u2014 rename files with `desloppify move` to fix conventions",
-        "command": "desloppify show naming --status open",
-        "impact": 0.0,
-        "dimension": "Code quality",
-        "priority": 4,
-        "lane": "restructure"
-      },
-      {
-        "type": "reorganize",
-        "detector": "single_use",
-        "count": 1,
-        "description": "1 single_use findings \u2014 inline or relocate with `desloppify move`",
-        "command": "desloppify show single_use --status open",
-        "impact": 0.0,
-        "dimension": "Code quality",
-        "priority": 5,
-        "lane": "restructure"
-      },
-      {
-        "type": "reorganize",
-        "detector": "facade",
-        "count": 4,
-        "description": "4 facade findings \u2014 flatten re-export facades or consolidate barrel files",
-        "command": "desloppify show facade --status open",
-        "impact": 0.0,
-        "dimension": "Code quality",
-        "priority": 6,
-        "lane": "restructure"
-      },
-      {
         "type": "refactor",
         "detector": "structural",
-        "count": 42,
-        "description": "42 structural findings \u2014 decompose large files \u2014 extract logic into focused modules",
+        "count": 34,
+        "description": "34 structural findings \u2014 decompose large files \u2014 extract logic into focused modules",
         "command": "desloppify show structural --status open",
         "impact": 0.0,
         "dimension": "File health",
-        "priority": 7,
+        "priority": 3,
         "lane": "refactor"
       },
       {
         "type": "refactor",
-        "detector": "props",
-        "count": 9,
-        "description": "9 props findings \u2014 split bloated components, extract sub-components",
-        "command": "desloppify show props --status open",
+        "detector": "dupes",
+        "count": 2,
+        "description": "2 dupes findings \u2014 extract shared utility or consolidate duplicates",
+        "command": "desloppify show dupes --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 4,
+        "lane": "refactor"
+      },
+      {
+        "type": "refactor",
+        "detector": "test_coverage",
+        "count": 212,
+        "description": "212 test_coverage findings \u2014 add tests for untested production modules \u2014 prioritize by import count",
+        "command": "desloppify show test_coverage --status open",
+        "impact": 0.0,
+        "dimension": "Test health",
+        "priority": 5,
+        "lane": "test_coverage"
+      },
+      {
+        "type": "refactor",
+        "detector": "signature",
+        "count": 4,
+        "description": "4 signature findings \u2014 consolidate inconsistent function signatures",
+        "command": "desloppify show signature --status open",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 6,
+        "lane": "refactor"
+      },
+      {
+        "type": "refactor",
+        "detector": "boilerplate_duplication",
+        "count": 109,
+        "description": "109 boilerplate_duplication findings \u2014 extract shared boilerplate into reusable helpers or base classes",
+        "command": "desloppify show boilerplate_duplication --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 7,
+        "lane": "refactor"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "smells",
+        "count": 175,
+        "description": "175 smells findings \u2014 inspect with `desloppify next` and fix manually",
+        "command": "desloppify show smells --status open",
         "impact": 0.0,
         "dimension": "Code quality",
         "priority": 8,
         "lane": "refactor"
       },
       {
-        "type": "refactor",
-        "detector": "react",
-        "count": 11,
-        "description": "11 react findings \u2014 refactor React antipatterns (state sync, provider nesting, hook bloat)",
-        "command": "desloppify show react --status open",
-        "impact": 0.0,
-        "dimension": "Code quality",
-        "priority": 9,
-        "lane": "refactor"
-      },
-      {
-        "type": "refactor",
-        "detector": "dupes",
-        "count": 3,
-        "description": "3 dupes findings \u2014 extract shared utility or consolidate duplicates",
-        "command": "desloppify show dupes --status open",
-        "impact": 0.0,
-        "dimension": "Duplication",
-        "priority": 10,
-        "lane": "refactor"
-      },
-      {
-        "type": "refactor",
-        "detector": "test_coverage",
-        "count": 228,
-        "description": "228 test_coverage findings \u2014 add tests for untested production modules \u2014 prioritize by import count",
-        "command": "desloppify show test_coverage --status open",
-        "impact": 0.0,
-        "dimension": "Test health",
-        "priority": 11,
-        "lane": "test_coverage"
-      },
-      {
-        "type": "refactor",
-        "detector": "signature",
-        "count": 7,
-        "description": "7 signature findings \u2014 consolidate inconsistent function signatures",
-        "command": "desloppify show signature --status open",
-        "impact": 0.0,
-        "dimension": "Unknown",
-        "priority": 12,
-        "lane": "refactor"
-      },
-      {
-        "type": "refactor",
-        "detector": "responsibility_cohesion",
-        "count": 8,
-        "description": "8 responsibility_cohesion findings \u2014 split modules with too many responsibilities \u2014 extract focused sub-modules",
-        "command": "desloppify show responsibility_cohesion --status open",
-        "impact": 0.0,
-        "dimension": "Code quality",
-        "priority": 13,
-        "lane": "refactor"
-      },
-      {
-        "type": "refactor",
-        "detector": "boilerplate_duplication",
-        "count": 123,
-        "description": "123 boilerplate_duplication findings \u2014 extract shared boilerplate into reusable helpers or base classes",
-        "command": "desloppify show boilerplate_duplication --status open",
-        "impact": 0.0,
-        "dimension": "Duplication",
-        "priority": 14,
-        "lane": "refactor"
-      },
-      {
-        "type": "manual_fix",
-        "detector": "smells",
-        "count": 192,
-        "description": "192 smells findings \u2014 inspect with `desloppify next` and fix manually",
-        "command": "desloppify show smells --status open",
-        "impact": 0.0,
-        "dimension": "Code quality",
-        "priority": 15,
-        "lane": "refactor"
-      },
-      {
         "type": "manual_fix",
         "detector": "security",
-        "count": 17,
-        "description": "17 security findings \u2014 review and fix security findings \u2014 prioritize by severity",
+        "count": 6,
+        "description": "6 security findings \u2014 review and fix security findings \u2014 prioritize by severity",
         "command": "desloppify show security --status open",
         "impact": 0.0,
         "dimension": "Security",
-        "priority": 16,
+        "priority": 9,
         "lane": "refactor"
       },
       {
         "type": "manual_fix",
         "detector": "subjective_review",
-        "count": 248,
-        "description": "248 files need design review \u2014 run design review with dimension templates",
+        "count": 250,
+        "description": "250 files need design review \u2014 run design review with dimension templates",
         "command": "desloppify fix review",
         "impact": 0.0,
         "dimension": "Test health",
-        "priority": 17,
+        "priority": 10,
         "lane": "refactor"
       }
     ],
     "strategy": {
       "fixer_leverage": {
-        "auto_fixable_count": 1,
-        "total_count": 921,
-        "coverage": 0.001,
+        "auto_fixable_count": 0,
+        "total_count": 796,
+        "coverage": 0.0,
         "impact_ratio": 0.0,
         "recommendation": "none"
       },
       "lanes": {
-        "cleanup": {
-          "actions": [
-            1
-          ],
-          "file_count": 1,
-          "total_impact": 0.0,
-          "automation": "full",
-          "run_first": true
-        },
         "restructure": {
           "actions": [
-            2,
-            3,
-            4,
-            5,
-            6
+            1,
+            2
           ],
-          "file_count": 30,
+          "file_count": 4,
           "total_impact": 0.0,
           "automation": "manual",
           "run_first": false
         },
         "refactor": {
           "actions": [
+            3,
+            4,
+            6,
             7,
             8,
             9,
-            10,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17
+            10
           ],
-          "file_count": 294,
+          "file_count": 293,
           "total_impact": 0.0,
           "automation": "manual",
           "run_first": false
         },
         "test_coverage": {
           "actions": [
-            11
+            5
           ],
-          "file_count": 228,
+          "file_count": 212,
           "total_impact": 0.0,
           "automation": "manual",
           "run_first": false
@@ -543,28 +348,22 @@
     "tools": {
       "fixers": [
         {
-          "name": "debug-logs",
-          "detector": "logs",
-          "open_count": 1,
-          "command": "desloppify fix debug-logs --dry-run"
-        },
-        {
           "name": "dead-useeffect",
           "detector": "smells",
-          "open_count": 192,
+          "open_count": 175,
           "command": "desloppify fix dead-useeffect --dry-run"
         },
         {
           "name": "empty-if-chain",
           "detector": "smells",
-          "open_count": 192,
+          "open_count": 175,
           "command": "desloppify fix empty-if-chain --dry-run"
         }
       ],
       "move": {
         "available": true,
         "relevant": true,
-        "reason": "19 orphaned files + 1 single-use files + 6 flat directories + 2 naming issues",
+        "reason": "1 orphaned files + 3 flat directories",
         "usage": "desloppify move <source> <dest> [--dry-run]"
       },
       "plan": {
@@ -580,106 +379,91 @@
     },
     "debt": {
       "overall_gap": 0.0,
-      "wontfix_count": 0,
+      "wontfix_count": 1,
       "worst_dimension": null,
       "worst_gap": 0.0,
       "trend": "stable"
     },
-    "milestone": null,
+    "milestone": "All T1 items cleared!",
     "primary_action": {
-      "command": "desloppify fix debug-logs --dry-run",
-      "description": "1 logs findings \u2014 run `desloppify fix debug-logs --dry-run` to preview, then apply"
+      "command": "desloppify show orphaned --status open",
+      "description": "1 orphaned findings \u2014 delete dead files or relocate with `desloppify move`"
     },
     "why_now": "3 independent workstreams, safe to parallelize. Rescan after each phase to verify.",
     "verification_step": {
       "command": "desloppify scan",
       "reason": "revalidate after changes"
     },
-    "risk_flags": [],
+    "risk_flags": [
+      {
+        "type": "wontfix_gap",
+        "severity": "medium",
+        "message": "Strict/lenient gap is 0.0 pts with 1 wontfix findings"
+      }
+    ],
     "strict_target": {
       "target": 95.0,
-      "current": 32.5,
-      "gap": 62.5,
+      "current": 33.2,
+      "gap": 61.8,
       "state": "below",
       "warning": null
     },
-    "reminders": [
-      {
-        "type": "auto_fixers_available",
-        "message": "1 findings are auto-fixable. Run `desloppify fix debug-logs --dry-run`.",
-        "command": "desloppify fix debug-logs --dry-run",
-        "priority": 2,
-        "severity": "medium"
-      },
-      {
-        "type": "zone_classification",
-        "message": "163 of 450 files classified as non-production (2 config, 3 generated, 7 script, 151 test). Override with `desloppify zone set <file> production` if any are misclassified.",
-        "command": "desloppify zone show",
-        "priority": 2,
-        "severity": "medium"
-      },
-      {
-        "type": "dry_run_first",
-        "message": "Always --dry-run first, review changes, then apply.",
-        "command": null,
-        "priority": 3,
-        "severity": "low"
-      }
-    ],
+    "reminders": [],
     "reminder_history": {
-      "auto_fixers_available": 3,
+      "auto_fixers_available": 2,
       "zone_classification": 3,
-      "dry_run_first": 3,
-      "report_scores": 2,
-      "feedback_nudge": 1
+      "dry_run_first": 2,
+      "report_scores": 26,
+      "feedback_nudge": 3,
+      "stagnant_nudge": 14
     }
   },
-  "overall_score": 32.5,
-  "objective_score": 81.4,
-  "strict_score": 32.5,
+  "overall_score": 33.2,
+  "objective_score": 83.0,
+  "strict_score": 33.2,
   "scorecard_dimensions": [
     {
       "name": "File health",
-      "score": 91.2,
-      "strict": 91.2,
-      "checks": 294,
-      "issues": 35,
+      "score": 91.8,
+      "strict": 91.8,
+      "checks": 292,
+      "issues": 33,
       "tier": 3,
       "subjective": false
     },
     {
       "name": "Code quality",
-      "score": 93.0,
-      "strict": 93.0,
-      "checks": 1726,
-      "issues": 208,
+      "score": 95.5,
+      "strict": 95.5,
+      "checks": 1723,
+      "issues": 141,
       "tier": 3,
       "subjective": false
     },
     {
       "name": "Duplication",
-      "score": 92.6,
-      "strict": 92.6,
-      "checks": 1182,
-      "issues": 126,
+      "score": 92.7,
+      "strict": 92.7,
+      "checks": 1075,
+      "issues": 111,
       "tier": 3,
       "subjective": false
     },
     {
       "name": "Security",
-      "score": 98.2,
-      "strict": 98.2,
-      "checks": 586,
-      "issues": 17,
+      "score": 99.1,
+      "strict": 99.1,
+      "checks": 581,
+      "issues": 6,
       "tier": 4,
       "subjective": false
     },
     {
       "name": "Test health",
-      "score": 22.0,
-      "strict": 22.0,
-      "checks": 3902,
-      "issues": 476,
+      "score": 27.1,
+      "strict": 27.1,
+      "checks": 3884,
+      "issues": 462,
       "tier": 4,
       "subjective": false
     }

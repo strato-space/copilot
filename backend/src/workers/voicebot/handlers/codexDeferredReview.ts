@@ -8,8 +8,8 @@ import {
   IS_PROD_RUNTIME,
 } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
-import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
+import { getErrorMessage, normalizeTrimmedString, runtimeQuery } from './shared/sharedRuntime.js';
 
 const logger = getLogger();
 
@@ -143,6 +143,13 @@ type CommandRunInput = {
   cwd?: string;
 };
 
+type DeferredReviewFailureUpdateInput = {
+  code: string;
+  message: string;
+  failedAt: Date;
+  retryDelayMs: number;
+};
+
 class CodexDeferredReviewError extends Error {
   readonly code: string;
 
@@ -153,24 +160,7 @@ class CodexDeferredReviewError extends Error {
   }
 }
 
-const runtimeQuery = (query: Record<string, unknown>) =>
-  mergeWithRuntimeFilter(query, {
-    field: 'runtime_tag',
-    familyMatch: IS_PROD_RUNTIME,
-    includeLegacyInProd: IS_PROD_RUNTIME,
-  });
-
-const normalizeString = (value: unknown): string => {
-  if (typeof value === 'string') return value.trim();
-  if (value == null) return '';
-  return String(value).trim();
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return String(error);
-};
+const normalizeString = normalizeTrimmedString;
 
 const getNumericEnv = (name: string, fallback: number): number => {
   const raw = Number.parseInt(String(process.env[name] || ''), 10);
@@ -190,6 +180,27 @@ const resolveFailureDetails = (error: unknown): { code: string; message: string 
   return {
     code: 'codex_deferred_review_failed',
     message,
+  };
+};
+
+const buildDeferredReviewFailureSet = ({
+  code,
+  message,
+  failedAt,
+  retryDelayMs,
+}: DeferredReviewFailureUpdateInput): { set: Record<string, unknown>; nextAttemptAt: Date } => {
+  const nextAttemptAt = new Date(failedAt.getTime() + retryDelayMs);
+  return {
+    nextAttemptAt,
+    set: {
+      codex_review_summary_processing: false,
+      codex_review_summary_last_error_code: code,
+      codex_review_summary_last_error_message: message,
+      codex_review_summary_last_runner_error: message,
+      codex_review_summary_last_error_at: failedAt,
+      codex_review_summary_next_attempt_at: nextAttemptAt,
+      updated_at: failedAt,
+    },
   };
 };
 
@@ -685,7 +696,7 @@ const ISSUE_ID_PATTERN = /^copilot-[a-z0-9]+$/i;
 
 const resolveIssueId = (task: TaskRecord): string | null => {
   const candidates = [task.codex_issue_id, task.issue_id, task.id]
-    .map(normalizeString)
+    .map((value) => normalizeString(value))
     .filter(Boolean);
 
   for (const candidate of candidates) {
@@ -810,17 +821,14 @@ export const handleCodexDeferredReviewJob = async (
 
   if (!task) {
     const failedAt = new Date();
-    const nextAttemptAt = new Date(failedAt.getTime() + retryDelayMs);
+    const failureState = buildDeferredReviewFailureSet({
+      code: 'task_not_found_after_claim',
+      message: 'task_not_found_after_claim',
+      failedAt,
+      retryDelayMs,
+    });
     await tasksCollection.updateOne(runtimeQuery({ _id: taskObjectId }), {
-      $set: {
-        codex_review_summary_processing: false,
-        codex_review_summary_last_error_code: 'task_not_found_after_claim',
-        codex_review_summary_last_error_message: 'task_not_found_after_claim',
-        codex_review_summary_last_runner_error: 'task_not_found_after_claim',
-        codex_review_summary_last_error_at: failedAt,
-        codex_review_summary_next_attempt_at: nextAttemptAt,
-        updated_at: failedAt,
-      },
+      $set: failureState.set,
     });
     return {
       ok: false,
@@ -955,25 +963,22 @@ export const handleCodexDeferredReviewJob = async (
   } catch (error) {
     const failure = resolveFailureDetails(error);
     const failedAt = new Date();
-    const nextAttemptAt = new Date(failedAt.getTime() + retryDelayMs);
+    const failureState = buildDeferredReviewFailureSet({
+      code: failure.code,
+      message: failure.message,
+      failedAt,
+      retryDelayMs,
+    });
 
     await tasksCollection.updateOne(runtimeQuery({ _id: taskObjectId }), {
-      $set: {
-        codex_review_summary_processing: false,
-        codex_review_summary_last_error_code: failure.code,
-        codex_review_summary_last_error_message: failure.message,
-        codex_review_summary_last_runner_error: failure.message,
-        codex_review_summary_last_error_at: failedAt,
-        codex_review_summary_next_attempt_at: nextAttemptAt,
-        updated_at: failedAt,
-      },
+      $set: failureState.set,
     });
 
     logger.error('[voicebot-worker] codex deferred review failed', {
       task_id,
       error_code: failure.code,
       error: failure.message,
-      retry_at: nextAttemptAt.toISOString(),
+      retry_at: failureState.nextAttemptAt.toISOString(),
     });
 
     return {

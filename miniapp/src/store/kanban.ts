@@ -7,11 +7,9 @@ import constants from '../constants';
 import { useRequest } from './request';
 import type { Ticket, TrackTimePayload } from '../types/kanban';
 
-interface KanbanState {
+interface MiniappKanbanDataSlice {
     messageApi: MessageInstance | null;
-    setupMessageApi: (messageApi: MessageInstance) => void;
     statusesFilter: string[];
-    setStatusesFilter: (statuses: string[]) => void;
     tickets: Ticket[];
     boards: string[];
     clients: string[];
@@ -21,19 +19,31 @@ interface KanbanState {
     tree: unknown[];
     performers: Array<Record<string, unknown>>;
     selectedTicket: Ticket | null;
-    setSelectedTicket: (ticket: Ticket | null) => void;
     activeActionSheet: string | null;
+    tickets_updated_at: number | null;
+    tickets_loaded: boolean;
+}
+
+interface MiniappKanbanUiActionsSlice {
+    setupMessageApi: (messageApi: MessageInstance) => void;
+    setStatusesFilter: (statuses: string[]) => void;
+    setSelectedTicket: (ticket: Ticket | null) => void;
     setActiveActionSheet: (activeSheet: string | null) => void;
     getFilteredTickets: () => Ticket[];
     fetchTickets: () => Promise<void>;
-    tickets_updated_at: number | null;
-    tickets_loaded: boolean;
+}
+
+interface MiniappKanbanTicketActionsSlice {
     changeTicketStatus: (ticket: Ticket, newStatus: string) => Promise<void>;
     trackTicketTime: (formData: TrackTimePayload) => Promise<void>;
     rejectTicket: (values: { ticket_id: string; comment: string }) => Promise<void>;
 }
 
-export const useKanban = create<KanbanState>((set, get) => {
+type MiniappKanbanStoreShape = MiniappKanbanDataSlice &
+    MiniappKanbanUiActionsSlice &
+    MiniappKanbanTicketActionsSlice;
+
+export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
     const api_request = useRequest.getState().api_request;
 
     const fetchTickets = async () => {

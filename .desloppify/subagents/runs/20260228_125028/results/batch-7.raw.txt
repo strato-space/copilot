@@ -1,0 +1,130 @@
+{
+  "batch": "Governance & Contracts",
+  "batch_index": 7,
+  "assessments": {
+    "cross_module_architecture": 74.0,
+    "high_level_elegance": 78.0,
+    "package_organization": 79.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/constants.ts` centralizes unrelated domains (socket events, queues, Mongo collections, statuses, Notion mapping) in one module (for example lines 10-260+), and holistic context marks it as a god module with 119 importers.",
+        "Runtime-scoping collection names are duplicated as raw strings in `backend/src/constants.ts` (lines 60-127) and `backend/src/services/runtimeScope.ts` (lines 72-114), creating parallel architecture registries with no single owner."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/services/db.ts` mixes infrastructure responsibilities (connection/proxy/index setup) with product bootstrap seeding by calling `seedCopilotProjectGitRepo` inside `connectDb` (lines 22 and 416-420), which couples DB lifecycle to one domain concern.",
+        "`README.md` is being used as a mutable operations changelog plus architecture contract (for example lines 74-201 and 222-235), which dilutes stable governance boundaries and increases docs-vs-runtime drift risk."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "package_organization": {
+      "evidence": [
+        "Objective structure signal: `backend/src/constants.ts` has broad cross-domain fan-in (119 importers in holistic context) while containing mixed concerns, indicating a flat placement hotspot instead of domain packages.",
+        "Collection identifiers and runtime-scope policy are split across `backend/src/constants.ts` and `backend/src/services/runtimeScope.ts`, which reflects package-boundary mismatch (domain constants living outside the runtime-scoping package)."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "constants_hub_boundary_break",
+      "summary": "A single constants hub owns multiple domains and creates a high-blast-radius dependency center.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts",
+        "backend/src/services/runtimeScope.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` includes socket, queue, DB, notifications, and status contracts in one file (lines 10-260+).",
+        "`backend/src/services/db.ts` imports DB startup index config from this same hub (line 14), reinforcing central coupling.",
+        "Holistic context reports this module as a god module with 119 importers, confirming architecture-level concentration."
+      ],
+      "suggestion": "Split into domain-scoped modules under `backend/src/constants/` (for example `socket.ts`, `queues.ts`, `collections.ts`, `statuses.ts`, `mongoIndexes.ts`) and keep a temporary compatibility barrel `backend/src/constants/index.ts`; migrate imports in waves (DB/runtime first, then API routes/workers), then remove the legacy barrel after compile pass (`cd backend && npm run build`).",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_domain_constant_boundaries"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "runtime_scope_registry_duplication",
+      "summary": "Runtime-scope eligibility is defined in duplicate registries, creating silent policy drift risk.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`COLLECTIONS` is defined in `backend/src/constants.ts` (lines 60-127), while runtime-scoped collection names are separately hardcoded in `runtimeScope.ts` (lines 72-114).",
+        "`db.ts` relies on `isRuntimeScopedCollection` for query scoping (lines 19 and 116-120), so missing/extra entries in either list directly change data-isolation behavior."
+      ],
+      "suggestion": "Create one canonical registry module (for example `backend/src/constants/collections.ts`) exporting typed collection IDs plus runtime-scoping metadata, then have `runtimeScope.ts` derive `RUNTIME_SCOPED_COLLECTIONS` from that source; validate parity via a unit test and backend build (`cd backend && npm run test -- runtimeScope && npm run build`).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_domain_constant_boundaries"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "db_service_owns_domain_seed_flow",
+      "summary": "Database infrastructure initialization is entangled with product-domain seed behavior.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/services/runtimeScope.ts",
+        "README.md"
+      ],
+      "evidence": [
+        "`connectDb` performs infra setup then invokes `seedCopilotProjectGitRepo` (db.ts lines 416-420), tying DB readiness to a specific feature seed path.",
+        "Runtime scoping is already a substantial concern in the same service (`runtimeFilterForCollection`, proxy logic lines 94-414), so adding domain bootstrap increases role mixing."
+      ],
+      "suggestion": "Move seeding orchestration to an explicit bootstrap module (for example `backend/src/bootstrap/startup.ts`) that calls `connectDb` then optional seed tasks; keep `db.ts` limited to connection/scoping/index concerns. Rollout order: 1) introduce bootstrap module, 2) move seed call out of `connectDb`, 3) update runtime entrypoints to call bootstrap, 4) run `cd backend && npm run build` and startup smoke tests.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "bootstrap_responsibility_blur"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "constants_flat_package_overload",
+      "summary": "Package placement keeps high-affinity constant domains in a flat root file instead of purpose folders.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` aggregates many concern groups (socket, queue, collection, status, mapping) in one root file (lines 10-260+).",
+        "Holistic structure marks this file as a fan-in hotspot (119 importers), indicating navigability and ownership pressure.",
+        "Runtime policy and collection ownership are split between `constants.ts` and `runtimeScope.ts`, showing organizational mismatch."
+      ],
+      "suggestion": "Staged reorg plan: 1) create `backend/src/constants/{events,queues,mongo,crm,voice}.ts`; 2) move exports in low-risk order (`mongo` first for `db.ts`, then events/queues, then statuses/mappings); 3) add temporary re-export file `backend/src/constants.ts` for compatibility; 4) bulk-update imports with `rg -l \"from '../constants\" backend/src | xargs sed -i`-style scripted replacements; 5) validate with `cd backend && npm run build && npm run test` before removing legacy re-export surface.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_domain_constant_boundaries"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Constants and policy registries are treated as convenience globals rather than owned domain modules.",
+      "Startup orchestration responsibilities are not cleanly separated from infrastructure primitives."
+    ],
+    "likely_symptoms": [
+      "constants_hub_boundary_break",
+      "runtime_scope_registry_duplication",
+      "constants_flat_package_overload"
+    ],
+    "possible_false_positives": []
+  }
+}

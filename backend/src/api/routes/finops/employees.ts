@@ -9,7 +9,7 @@ const router = Router();
 
 const isMonthString = (value: string): boolean => /^\d{4}-\d{2}$/.test(value);
 
-const parseMonth = (value: unknown, field = 'month'): string => {
+const parseRequiredMonth = (value: unknown, field = 'month'): string => {
     if (typeof value !== 'string' || value.trim() === '') {
         throw new AppError(`${field} is required`, 400, 'VALIDATION_ERROR');
     }
@@ -47,8 +47,8 @@ const buildMonthRange = (from: string, to: string): string[] => {
 };
 
 router.get('/employees', authMiddleware, async (req: Request, res: Response) => {
-    const from = req.query.from ? parseMonth(req.query.from, 'from') : undefined;
-    const to = req.query.to ? parseMonth(req.query.to, 'to') : undefined;
+    const from = req.query.from ? parseRequiredMonth(req.query.from, 'from') : undefined;
+    const to = req.query.to ? parseRequiredMonth(req.query.to, 'to') : undefined;
     const months = from && to ? buildMonthRange(from, to) : [];
 
     const fxRates = await listFxRates(from, to);

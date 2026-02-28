@@ -1,0 +1,82 @@
+{
+  "query": "responsibility_cohesion",
+  "status_filter": "open",
+  "total": 7,
+  "summary": {
+    "by_tier": {
+      "T3": 7
+    },
+    "by_detector": {
+      "responsibility_cohesion": 7
+    },
+    "files": 7
+  },
+  "by_file": {
+    "app/e2e/voice-fab-lifecycle.spec.ts": [
+      {
+        "id": "responsibility_cohesion::app/e2e/voice-fab-lifecycle.spec.ts::cohesion::app/e2e/voice-fab-lifecycle.spec.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "9 disconnected function clusters (11 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: attachFabControlRecorder, actionButton, gotoWithBootRetry, getFabCalls"
+      }
+    ],
+    "app/src/components/ExpensesGrid.tsx": [
+      {
+        "id": "responsibility_cohesion::app/src/components/ExpensesGrid.tsx::cohesion::app/src/components/ExpensesGrid.tsx",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (14 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: handleAddCategory, handleSaveExpense, buildOtherRows, handleTogglePin"
+      }
+    ],
+    "app/src/store/voiceBotStore.ts": [
+      {
+        "id": "responsibility_cohesion::app/src/store/voiceBotStore.ts::cohesion::app/src/store/voiceBotStore.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (28 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: sort, getBackendUrl, normalizeIncludeIds, isTransientError"
+      }
+    ],
+    "backend/src/api/routes/crm/codex.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/api/routes/crm/codex.ts::cohesion::backend/src/api/routes/crm/codex.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "7 disconnected function clusters (10 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: runCommand, resolveBdBin, resolveRepoRootCwd, resolveBdListArgs"
+      }
+    ],
+    "backend/src/api/routes/voicebot/sessions.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/api/routes/voicebot/sessions.ts::cohesion::backend/src/api/routes/voicebot/sessions.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "14 disconnected function clusters (45 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: isIdOrAlias, resolveSessionAccess, normalizeRef, enqueueVoicebotNotify"
+      }
+    ],
+    "backend/src/permissions/permission-manager.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/permissions/permission-manager.ts::cohesion::backend/src/permissions/permission-manager.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (14 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: checkProjectAssignment, parseContextId, removeProjectAccess, setUserProjectsAccess"
+      }
+    ],
+    "backend/src/services/finopsExpenses.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/services/finopsExpenses.ts::cohesion::backend/src/services/finopsExpenses.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (11 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: updateExpenseOperation, buildMonthFilter, listExpenseCategories, updateExpenseCategory"
+      }
+    ]
+  },
+  "total_matching": 7,
+  "noise_budget": 10,
+  "noise_global_budget": 0
+}

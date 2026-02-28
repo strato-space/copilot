@@ -4,7 +4,7 @@ import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
 import { toCrmIdString } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS } from '../../../constants.js';
-import { writeProjectTreeAuditLog } from './project-tree-audit.js';
+import { writeProjectTreeAuditLog } from './legacy/projecttreeaudit.js';
 
 const router = Router();
 const logger = getLogger();

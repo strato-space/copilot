@@ -73,6 +73,11 @@ type SessionRow = Omit<VoiceBotSession, 'dialogue_tag'> & {
 
 type SessionProjectTab = 'all' | 'without_project' | 'active' | 'mine';
 type SessionVisualState = 'recording' | 'cutting' | 'paused' | 'final_uploading' | 'closed' | 'ready' | 'error';
+interface BulkActionsState {
+    isBulkDeleting: boolean;
+    isMergeModalOpen: boolean;
+    isBulkMerging: boolean;
+}
 
 const SESSION_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_ID';
 const SESSIONS_LIST_FILTERS_STORAGE_KEY = 'voicebot_sessions_list_filters_v1';
@@ -105,7 +110,7 @@ const PERSISTED_QUERY_KEYS = [
     SESSIONS_QUERY_KEYS.SHOW_DELETED,
 ] as const;
 
-const parsePositiveInt = (value: string | null, fallback: number): number => {
+const parsePositiveIntegerParam = (value: string | null, fallback: number): number => {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
     return Math.floor(parsed);
@@ -295,13 +300,16 @@ export default function SessionsListPage() {
     const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
     const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
     const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
-    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-    const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
-    const [isBulkMerging, setIsBulkMerging] = useState(false);
+    const [bulkActionsState, setBulkActionsState] = useState<BulkActionsState>({
+        isBulkDeleting: false,
+        isMergeModalOpen: false,
+        isBulkMerging: false,
+    });
     const [mergeTargetSessionId, setMergeTargetSessionId] = useState<string>('');
     const [mergeConfirmationPhrase, setMergeConfirmationPhrase] = useState('');
     const [fabSessionState, setFabSessionState] = useState('idle');
     const [fabActiveSessionId, setFabActiveSessionId] = useState('');
+    const { isBulkDeleting, isMergeModalOpen, isBulkMerging } = bulkActionsState;
 
     const dialogueTagOptions = useMemo(() => {
         const tags = (voiceBotSessionsList || [])
@@ -326,8 +334,8 @@ export default function SessionsListPage() {
         rawProjectTab === 'without_project' || rawProjectTab === 'active' || rawProjectTab === 'mine'
             ? rawProjectTab
             : 'all';
-    const currentPage = parsePositiveInt(searchParams.get(SESSIONS_QUERY_KEYS.PAGE), DEFAULT_SESSIONS_PAGE);
-    const pageSize = parsePositiveInt(searchParams.get(SESSIONS_QUERY_KEYS.PAGE_SIZE), DEFAULT_SESSIONS_PAGE_SIZE);
+    const currentPage = parsePositiveIntegerParam(searchParams.get(SESSIONS_QUERY_KEYS.PAGE), DEFAULT_SESSIONS_PAGE);
+    const pageSize = parsePositiveIntegerParam(searchParams.get(SESSIONS_QUERY_KEYS.PAGE_SIZE), DEFAULT_SESSIONS_PAGE_SIZE);
     const projectFilterValue = parseSingleFilter(searchParams.get(SESSIONS_QUERY_KEYS.PROJECT));
     const dialogueTagFilterValue = parseSingleFilter(searchParams.get(SESSIONS_QUERY_KEYS.DIALOGUE_TAG));
     const sessionNameFilterValue = parseSingleFilter(searchParams.get(SESSIONS_QUERY_KEYS.SESSION_NAME));
@@ -647,9 +655,10 @@ export default function SessionsListPage() {
         [filteredSessionsList]
     );
 
-    useEffect(() => {
-        setSelectedSessionIds((prev) => prev.filter((sessionId) => selectableSessionIds.has(sessionId)));
-    }, [selectableSessionIds]);
+    const effectiveSelectedSessionIds = useMemo(
+        () => selectedSessionIds.filter((sessionId) => selectableSessionIds.has(sessionId)),
+        [selectedSessionIds, selectableSessionIds]
+    );
 
     useEffect(() => {
         const totalPages = Math.max(1, Math.ceil(filteredSessionsList.length / pageSize));
@@ -731,9 +740,9 @@ export default function SessionsListPage() {
     const selectedNonDeletedSessions = useMemo(
         () =>
             filteredSessionsList.filter(
-                (session) => selectedSessionIds.includes(session._id) && !session.is_deleted
+                (session) => effectiveSelectedSessionIds.includes(session._id) && !session.is_deleted
             ),
-        [filteredSessionsList, selectedSessionIds]
+        [effectiveSelectedSessionIds, filteredSessionsList]
     );
 
     const mergeTargetOptions = useMemo(
@@ -756,12 +765,12 @@ export default function SessionsListPage() {
         const defaultTarget = selectedNonDeletedSessions[0]?._id ?? '';
         setMergeTargetSessionId(defaultTarget);
         setMergeConfirmationPhrase('');
-        setIsMergeModalOpen(true);
+        setBulkActionsState((prev) => ({ ...prev, isMergeModalOpen: true }));
     };
 
     const closeMergeModal = (): void => {
         if (isBulkMerging) return;
-        setIsMergeModalOpen(false);
+        setBulkActionsState((prev) => ({ ...prev, isMergeModalOpen: false }));
         setMergeConfirmationPhrase('');
     };
 
@@ -785,7 +794,7 @@ export default function SessionsListPage() {
             return;
         }
 
-        setIsBulkMerging(true);
+        setBulkActionsState((prev) => ({ ...prev, isBulkMerging: true }));
         try {
             const operationId = `${Date.now()}-${mergeTargetSessionId}`;
             await mergeSessions({
@@ -796,13 +805,13 @@ export default function SessionsListPage() {
             });
             message.success('Сессии успешно слиты');
             setSelectedSessionIds([]);
-            setIsMergeModalOpen(false);
+            setBulkActionsState((prev) => ({ ...prev, isMergeModalOpen: false }));
             setMergeConfirmationPhrase('');
         } catch (error) {
             console.error('Ошибка при слиянии сессий:', error);
             message.error('Не удалось выполнить слияние сессий');
         } finally {
-            setIsBulkMerging(false);
+            setBulkActionsState((prev) => ({ ...prev, isBulkMerging: false }));
         }
     };
 
@@ -815,7 +824,7 @@ export default function SessionsListPage() {
             return;
         }
 
-        setIsBulkDeleting(true);
+        setBulkActionsState((prev) => ({ ...prev, isBulkDeleting: true }));
         let deletedCount = 0;
         let failedCount = 0;
 
@@ -830,7 +839,7 @@ export default function SessionsListPage() {
         }
 
         setSelectedSessionIds([]);
-        setIsBulkDeleting(false);
+        setBulkActionsState((prev) => ({ ...prev, isBulkDeleting: false }));
 
         if (deletedCount > 0 && failedCount === 0) {
             message.success(`Удалено сессий: ${deletedCount}`);
@@ -1491,10 +1500,10 @@ export default function SessionsListPage() {
                         { key: 'mine', label: 'Мои' },
                     ]}
                 />
-                {selectedSessionIds.length > 0 ? (
+                {effectiveSelectedSessionIds.length > 0 ? (
                     <div className="mb-2 flex items-center justify-between rounded border border-red-200 bg-red-50 px-3 py-2">
                         <div className="text-[12px] text-red-800">
-                            Выбрано сессий: {selectedSessionIds.length}
+                            Выбрано сессий: {effectiveSelectedSessionIds.length}
                         </div>
                         <div className="flex items-center gap-2">
                             <Button
@@ -1508,7 +1517,7 @@ export default function SessionsListPage() {
                             </Button>
                             <Popconfirm
                                 title="Удалить выбранные сессии"
-                                description={`Будет удалено: ${selectedSessionIds.length}`}
+                                description={`Будет удалено: ${effectiveSelectedSessionIds.length}`}
                                 okText="Удалить"
                                 cancelText="Отмена"
                                 okType="danger"
@@ -1539,9 +1548,13 @@ export default function SessionsListPage() {
                     rowKey="_id"
                     rowClassName={(record) => (record.is_deleted ? 'sessions-row-deleted' : '')}
                     rowSelection={{
-                        selectedRowKeys: selectedSessionIds,
+                        selectedRowKeys: effectiveSelectedSessionIds,
                         onChange: (nextSelectedKeys) =>
-                            setSelectedSessionIds(nextSelectedKeys.map((key) => String(key))),
+                            setSelectedSessionIds(
+                                nextSelectedKeys
+                                    .map((key) => String(key))
+                                    .filter((sessionId) => selectableSessionIds.has(sessionId))
+                            ),
                         getCheckboxProps: (record) => ({
                             disabled: Boolean(record.is_deleted),
                         }),

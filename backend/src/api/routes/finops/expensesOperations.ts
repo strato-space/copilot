@@ -16,7 +16,9 @@ const router = Router();
 
 const isMonthString = (value: string): boolean => /^\d{4}-\d{2}$/.test(value);
 
-const parseMonth = (value: unknown, field = 'month'): string => {
+type ExpenseCurrency = 'RUB' | 'USD';
+
+const parseMonthField = (value: unknown, field = 'month'): string => {
     if (typeof value !== 'string' || value.trim() === '') {
         throw new AppError(`${field} is required`, 400, 'VALIDATION_ERROR');
     }
@@ -40,6 +42,14 @@ const parseString = (value: unknown, field: string): string => {
     return value.trim();
 };
 
+const parseCurrency = (value: unknown): ExpenseCurrency => {
+    const currency = parseString(value, 'currency');
+    if (currency !== 'RUB' && currency !== 'USD') {
+        throw new AppError('currency must be RUB or USD', 400, 'VALIDATION_ERROR');
+    }
+    return currency;
+};
+
 const getActorId = (req: AuthenticatedRequest): string | null => req.user?.userId ?? null;
 
 const isSuperAdmin = (req: AuthenticatedRequest): boolean => {
@@ -53,10 +63,20 @@ const isSuperAdmin = (req: AuthenticatedRequest): boolean => {
     return false;
 };
 
+const ensureMonthIsWritable = async (month: string, req: AuthenticatedRequest): Promise<void> => {
+    if (!(await isMonthClosed(month))) {
+        return;
+    }
+    if (isSuperAdmin(req)) {
+        return;
+    }
+    throw new AppError('month is closed', 403, 'MONTH_CLOSED');
+};
+
 router.get('/expenses/operations', authMiddleware, async (req: Request, res: Response) => {
-    const from = req.query.from ? parseMonth(req.query.from, 'from') : undefined;
-    const to = req.query.to ? parseMonth(req.query.to, 'to') : undefined;
-    const month = req.query.month ? parseMonth(req.query.month, 'month') : undefined;
+    const from = req.query.from ? parseMonthField(req.query.from, 'from') : undefined;
+    const to = req.query.to ? parseMonthField(req.query.to, 'to') : undefined;
+    const month = req.query.month ? parseMonthField(req.query.month, 'month') : undefined;
     const categoryId = typeof req.query.category_id === 'string' ? req.query.category_id : undefined;
 
     const params: { from?: string; to?: string; month?: string; category_id?: string } = {};
@@ -80,9 +100,9 @@ router.get('/expenses/operations', authMiddleware, async (req: Request, res: Res
 router.post('/expenses/operations', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
     const categoryId = parseString(req.body?.category_id, 'category_id');
-    const month = parseMonth(req.body?.month, 'month');
+    const month = parseMonthField(req.body?.month, 'month');
     const amount = parseNumber(req.body?.amount, 'amount');
-    const currency = parseString(req.body?.currency, 'currency');
+    const currency = parseCurrency(req.body?.currency);
     const fxUsed = req.body?.fx_used;
     const vendor = typeof req.body?.vendor === 'string' ? req.body.vendor : undefined;
     const comment = typeof req.body?.comment === 'string' ? req.body.comment : undefined;
@@ -94,15 +114,7 @@ router.post('/expenses/operations', authMiddleware, requireAdmin, async (req: Re
         throw new AppError('attachments limit exceeded', 400, 'VALIDATION_ERROR');
     }
 
-    if (await isMonthClosed(month)) {
-        if (!isSuperAdmin(authReq)) {
-            throw new AppError('month is closed', 403, 'MONTH_CLOSED');
-        }
-    }
-
-    if (currency !== 'RUB' && currency !== 'USD') {
-        throw new AppError('currency must be RUB or USD', 400, 'VALIDATION_ERROR');
-    }
+    await ensureMonthIsWritable(month, authReq);
 
     if (fxUsed !== undefined && typeof fxUsed !== 'number') {
         throw new AppError('fx_used must be a number', 400, 'VALIDATION_ERROR');
@@ -135,13 +147,9 @@ router.patch('/expenses/operations/:id', authMiddleware, requireAdmin, async (re
         throw new AppError('operation not found', 404, 'NOT_FOUND');
     }
 
-    const month = req.body?.month ? parseMonth(req.body?.month, 'month') : undefined;
+    const month = req.body?.month ? parseMonthField(req.body?.month, 'month') : undefined;
     const targetMonth = month ?? current.month;
-    if (await isMonthClosed(targetMonth)) {
-        if (!isSuperAdmin(authReq)) {
-            throw new AppError('month is closed', 403, 'MONTH_CLOSED');
-        }
-    }
+    await ensureMonthIsWritable(targetMonth, authReq);
 
     const attachments = Array.isArray(req.body?.attachments)
         ? req.body.attachments.filter((item: unknown): item is string => typeof item === 'string')
@@ -151,11 +159,7 @@ router.patch('/expenses/operations/:id', authMiddleware, requireAdmin, async (re
         throw new AppError('attachments limit exceeded', 400, 'VALIDATION_ERROR');
     }
 
-    const currencyValue = req.body?.currency ? parseString(req.body?.currency, 'currency') : undefined;
-    if (currencyValue && currencyValue !== 'RUB' && currencyValue !== 'USD') {
-        throw new AppError('currency must be RUB or USD', 400, 'VALIDATION_ERROR');
-    }
-    const currency = currencyValue as 'RUB' | 'USD' | undefined;
+    const currency = req.body?.currency ? parseCurrency(req.body?.currency) : undefined;
 
     const fxUsed = req.body?.fx_used;
     if (fxUsed !== undefined && typeof fxUsed !== 'number') {
@@ -167,7 +171,7 @@ router.patch('/expenses/operations/:id', authMiddleware, requireAdmin, async (re
         category_id?: string;
         month?: string;
         amount?: number;
-        currency?: 'RUB' | 'USD';
+        currency?: ExpenseCurrency;
         fx_used?: number | null;
         vendor?: string | null;
         comment?: string | null;
@@ -224,11 +228,7 @@ router.delete('/expenses/operations/:id', authMiddleware, requireAdmin, async (r
         throw new AppError('operation not found', 404, 'NOT_FOUND');
     }
 
-    if (await isMonthClosed(current.month)) {
-        if (!isSuperAdmin(authReq)) {
-            throw new AppError('month is closed', 403, 'MONTH_CLOSED');
-        }
-    }
+    await ensureMonthIsWritable(current.month, authReq);
 
     const deleted = await deleteExpenseOperation(operationId, getActorId(authReq));
     if (!deleted) {

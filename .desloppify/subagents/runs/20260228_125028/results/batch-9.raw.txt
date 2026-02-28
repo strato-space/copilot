@@ -1,0 +1,124 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 9,
+  "assessments": {
+    "convention_outlier": 76.0,
+    "error_consistency": 72.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "Frontend store APIs mix naming styles in the same layer: `api_request` in `app/src/store/requestStore.ts` and its use in `app/src/store/kanbanStore.ts`, while sibling stores use camelCase (`voicebotRequest`, `fetchTickets`, `loadUsers`).",
+        "A convention drift typo appears in live request payload keys: `kanbanStore.fetchTickets` sends `{ satuses: statuses }`.",
+        "Authorization middleware conventions diverge between `backend/src/api/middleware/roleGuard.ts` and `backend/src/permissions/permission-manager.ts` (different request typing and denial payload fields like `allowed_roles` vs `required_permissions`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "Frontend async actions expose mixed failure contracts for similar operations: throw (`requestStore.api_request`), boolean (`authStore.tryLogin` / `tryTokenAuth` / `refreshUserData`), null (`kanbanStore.fetchTicketById`), and silent fallback values (`permissionsStore.loadUsers` / `voiceBotStore.fetchTaskTypes`).",
+        "Backend 500 responses are inconsistent and sometimes leak raw exception text (`res.status(500).json({ error: String(error) })` in `backend/src/api/routes/voicebot/sessions.ts` and `backend/src/api/routes/voicebot/uploads.ts`) while middleware paths return generic `Internal server error` (`roleGuard.ts`, `permission-manager.ts`).",
+        "Voice upload endpoints already have structured error payloads with codes/request id in some paths, but sibling failure paths in the same module fall back to raw `String(error)`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "convention_outlier",
+      "identifier": "store_api_naming_drift",
+      "summary": "Frontend store API naming drifts between snake_case and camelCase, including a misspelled payload key",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/permissionsStore.ts"
+      ],
+      "evidence": [
+        "`requestStore` defines `api_request`, while sibling stores define camelCase request helpers (`voicebotRequest` in `permissionsStore`).",
+        "`kanbanStore.fetchTickets` uses `api_request('tickets', { satuses: statuses })`, carrying a misspelled key (`satuses`) in runtime traffic."
+      ],
+      "suggestion": "Standardize internal store action/helper names to camelCase (`apiRequest`), and isolate snake_case only at backend DTO mapping boundaries. Fix `satuses` to `statuses` and, if backward compatibility is needed, map both keys in one adapter location.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_naming_without_boundary_adapter"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "dual_auth_guard_conventions",
+      "summary": "Two parallel role/permission guard stacks use different conventions and response schemas",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`roleGuard.requireRole` and `PermissionManager.requirePermission` both enforce authz but expose different denial payload conventions (`allowed_roles` vs `required_permissions`) and different request augmentation contracts.",
+        "Voicebot routes use `PermissionManager.requirePermission`, while other code paths still keep `requireRole` available, increasing protocol divergence risk."
+      ],
+      "suggestion": "Consolidate on a single guard contract (or a single adapter wrapper) for request typing and error payload shape, then migrate remaining call sites to that unified interface.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "parallel_authz_stacks"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "frontend_async_error_contract_mismatch",
+      "summary": "Similar frontend async actions report failures through incompatible patterns",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`requestStore.api_request` throws on failure after setting store error.",
+        "`authStore` login/refresh methods return `false` on failure rather than throwing.",
+        "`kanbanStore.fetchTicketById` catches and returns `null`; `permissionsStore.loadUsers` catches and only emits UI message; `permissionsStore.loadPermissionsLog` catches then rethrows."
+      ],
+      "suggestion": "Define one store-level async error contract (for example, always throw typed `AppError` and let callers decide UI fallback, or always return `{ ok, data, error }`) and apply it consistently across Zustand stores.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "store_error_contract_fragmentation"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "voicebot_route_500_shape_drift",
+      "summary": "Voicebot backend mixes structured errors with raw exception-string 500 responses",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "Multiple handlers in `sessions.ts` and `uploads.ts` return `res.status(500).json({ error: String(error) })`, leaking raw exception text and producing unstable client-visible messages.",
+        "Other paths in the same modules return structured errors (`file_too_large`, `upload_error`, `request_id`) and middleware returns generic `Internal server error`, producing incompatible failure envelopes."
+      ],
+      "suggestion": "Introduce a shared HTTP error responder for voice routes (stable `code`, human `message`, optional `request_id`) and route all catches through it while logging raw exception details server-side only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "backend_error_envelope_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Legacy migration kept old naming/error patterns in place without a strict boundary adapter.",
+      "No single enforced error-envelope contract across route handlers and frontend stores.",
+      "Parallel authorization abstractions evolved independently."
+    ],
+    "likely_symptoms": [
+      "store_api_naming_drift",
+      "frontend_async_error_contract_mismatch",
+      "voicebot_route_500_shape_drift"
+    ],
+    "possible_false_positives": []
+  }
+}

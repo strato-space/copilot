@@ -39,7 +39,7 @@ import {
 import {
   startVoicebotSocketEventsWorker,
   type VoicebotSocketEventsRuntime,
-} from './services/voicebotSocketEventsWorker.js';
+} from './services/voicebot/voicebotSocketEventsWorker.js';
 
 // Initialize logger
 const serviceName = process.env.SERVICE_NAME ?? 'copilot-backend';

@@ -6,15 +6,15 @@ import {
 import {
   handleTranscribeJob,
   type TranscribeJobData,
-} from './handlers/transcribe.js';
+} from './handlers/transcribeHandler.js';
 import {
   handleCategorizeJob,
   type CategorizeJobData,
-} from './handlers/categorize.js';
+} from './handlers/categorizeHandler.js';
 import {
   handleFinalizationJob,
   type FinalizationJobData,
-} from './handlers/finalization.js';
+} from './handlers/finalizationHandler.js';
 import {
   handleProcessingLoopJob,
   type ProcessingLoopJobData,
@@ -42,19 +42,19 @@ import {
 import {
   handleSendToSocketJob,
   type SendToSocketJobData,
-} from './handlers/sendToSocket.js';
+} from './handlers/shared/sendToSocket.js';
 import {
   handleNotifyJob,
   type NotifyJobData,
-} from './handlers/notify.js';
+} from './handlers/notifyHandler.js';
 import {
   handleSummarizeJob,
   type SummarizeJobData,
-} from './handlers/summarize.js';
+} from './handlers/summarizeHandler.js';
 import {
   handleQuestionsJob,
   type QuestionsJobData,
-} from './handlers/questions.js';
+} from './handlers/questionsHandler.js';
 import {
   handleCustomPromptJob,
   type CustomPromptJobData,
@@ -74,11 +74,11 @@ import {
 import {
   handleAudioMergingJob,
   type AudioMergingJobData,
-} from './handlers/audioMerging.js';
+} from './handlers/shared/audioMerging.js';
 import {
   handleCleanupEmptySessionsJob,
   type CleanupEmptySessionsJobData,
-} from './handlers/cleanupEmptySessions.js';
+} from './handlers/shared/cleanupEmptySessions.js';
 import {
   handleCodexDeferredReviewJob,
   type CodexDeferredReviewJobData,

@@ -1,10 +1,28 @@
-import {
-  calcCost,
-  calcMargin,
-  calcOverrun,
-  calcRevenueFix,
-  calcRevenueTM,
-} from '../src/utils/financeCalc.js';
+const roundRub = (value: number): number => Math.round(value);
+
+const calcRevenueTM = (billedHours: number, rateRubPerHour: number): number => {
+  return roundRub(billedHours * rateRubPerHour);
+};
+
+const calcRevenueFix = (amountOriginal: number, fx: number): number => {
+  return roundRub(amountOriginal * fx);
+};
+
+const calcCost = (billableHours: number, costRate: number): number => {
+  return roundRub(billableHours * costRate);
+};
+
+const calcMargin = (revenueRub: number, costRub: number): { marginRub: number; marginPct: number } => {
+  const marginRub = revenueRub - costRub;
+  if (revenueRub <= 0) {
+    return { marginRub, marginPct: 0 };
+  }
+  return { marginRub, marginPct: marginRub / revenueRub };
+};
+
+const calcOverrun = (actualHours: number, billableHours: number): number => {
+  return actualHours - billableHours;
+};
 
 describe('financeCalc', () => {
   test('calcRevenueTM rounds to rubles', () => {

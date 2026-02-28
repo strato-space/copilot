@@ -1,0 +1,105 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 6,
+  "assessments": {
+    "package_organization": 74.5,
+    "high_level_elegance": 81.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`backend/src/services/` has 19 files with mixed concerns (db/runtime infrastructure, finops domain, voicebot domain, external CLI integration) in one flat directory profile (`file_count: 19`), and includes all three assigned files: `db.ts`, `bdClient.ts`, `finopsEmployees.ts`.",
+        "`backend/src/services/` is a high-traffic hub (`avg_fan_in: 7.4`, imported by routes/workers/scripts/tests), so flat mixed placement increases navigation and ownership ambiguity for change planning.",
+        "`app/__tests__/voice/` is overloaded (`file_count: 48`) and mixes string-contract tests against stores/runtime files with component contract tests; assigned tests (`accessUsersPerformerLifecycleContract`, `activateSessionResilienceContract`, `audioUploadProgress`) are colocated by broad feature label instead of boundary/type."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`AccessUsersModal.tsx` and `AddParticipantModal.tsx` both combine UI rendering with data shaping, fetch/save orchestration, and selection lifecycle logic from global stores, making the component boundary do both presentation and domain coordination.",
+        "`AudioUploader.tsx` contains transport-level concerns (byte aggregation, axios progress handling, upload error classification for HTTP/network/timeout) inside UI component code, which blurs ownership between feature UI and upload service behavior.",
+        "These three voice components repeat similar orchestration patterns (modal state, filtering, save side effects, error handling) without a shared feature-layer abstraction, so decomposition is organized by widget file rather than stable domain boundary."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "services_root_mixed_domains_flat",
+      "summary": "Flat `backend/src/services` mixes infrastructure, integration, and domain services in one boundary.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/services/bdClient.ts",
+        "backend/src/services/finopsEmployees.ts"
+      ],
+      "evidence": [
+        "`db.ts` owns Mongo connectivity, runtime-scope proxying, index bootstrap, and startup seeding concerns.",
+        "`bdClient.ts` is an external process/CLI integration (`spawn`) but is placed beside core DB and finops domain services.",
+        "`finopsEmployees.ts` is finops-specific domain mapping logic but is also in the same flat services root."
+      ],
+      "suggestion": "Staged reorg plan: 1) create target folders `backend/src/services/platform/`, `backend/src/services/integrations/bd/`, and `backend/src/services/finops/`; 2) move `db.ts` -> `platform/db.ts`, `bdClient.ts` -> `integrations/bd/client.ts`, `finopsEmployees.ts` -> `finops/employees.ts`; 3) update imports incrementally (first internal service imports, then routes/workers/tests) using `rg -n \"services/(db|bdClient|finopsEmployees)\" backend/src backend/__tests__ backend/scripts`; 4) run `cd backend && npm run build` and targeted tests to validate import graph after each move.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "service_root_flattening"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "voice_tests_overloaded_by_feature_bucket",
+      "summary": "`app/__tests__/voice` is overloaded and groups heterogeneous contract levels under one folder.",
+      "related_files": [
+        "app/__tests__/voice/accessUsersPerformerLifecycleContract.test.ts",
+        "app/__tests__/voice/activateSessionResilienceContract.test.ts",
+        "app/__tests__/voice/audioUploadProgress.test.ts"
+      ],
+      "evidence": [
+        "All three assigned tests are source-string contracts (`fs.readFileSync` + `toContain`) against different ownership layers (component, store, public WebRTC runtime).",
+        "Directory profile shows `app/__tests__/voice/` contains 48 files, indicating broad concern aggregation in a single feature bucket.",
+        "Current placement hides whether a test is UI contract, store contract, or runtime contract, slowing fault localization."
+      ],
+      "suggestion": "Staged reorg plan: 1) create `app/__tests__/voice/contracts/ui/`, `app/__tests__/voice/contracts/store/`, and `app/__tests__/voice/contracts/runtime/`; 2) move `accessUsersPerformerLifecycleContract.test.ts` and `audioUploadProgress.test.ts` to `contracts/store/` (component-store contract), and `activateSessionResilienceContract.test.ts` to `contracts/runtime/`; 3) update any path-based test scripts and `describe` labels to match new boundary names; 4) validate with `cd app && npm run test -- app/__tests__/voice/contracts --runInBand`.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "test_bucket_overload"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "voice_components_mix_ui_and_domain_orchestration",
+      "summary": "Voice UI components own domain orchestration and transport policy, blurring top-level ownership.",
+      "related_files": [
+        "app/src/components/voice/AccessUsersModal.tsx",
+        "app/src/components/voice/AddParticipantModal.tsx",
+        "app/src/components/voice/AudioUploader.tsx"
+      ],
+      "evidence": [
+        "`AccessUsersModal.tsx` performs fetch lifecycle (`fetchPerformersList`), selection filtering rules, and save-side mutation (`updateSessionAllowedUsers`) directly in component.",
+        "`AddParticipantModal.tsx` performs create flow, participant mapping, and session participant update orchestration in component scope.",
+        "`AudioUploader.tsx` contains upload pipeline policy and error taxonomy (`413`/`ECONNABORTED`/network) in presentational component."
+      ],
+      "suggestion": "Refactor in stages: 1) introduce feature-layer modules under `app/src/features/voice/session-access/` and `app/src/features/voice/upload/` for orchestration hooks/services (`useSessionAccessController`, `useAudioUploadController`); 2) keep components in `app/src/components/voice/` as render-focused shells receiving prepared view-model/state callbacks; 3) centralize upload error mapping and progress aggregation in feature service, then remove duplicated UI-owned orchestration; 4) validate with `cd app && npm run build` and run voice contract tests.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voice_ui_orchestration_leak"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Flat service-root strategy in backend accumulated unrelated ownership domains into one navigational boundary.",
+      "Feature-bucket test placement favored broad `voice` grouping over explicit test-layer taxonomy.",
+      "Voice UI evolved with orchestration logic inside components instead of a stable feature-controller layer."
+    ],
+    "likely_symptoms": [
+      "services_root_mixed_domains_flat",
+      "voice_tests_overloaded_by_feature_bucket",
+      "voice_components_mix_ui_and_domain_orchestration"
+    ],
+    "possible_false_positives": []
+  }
+}

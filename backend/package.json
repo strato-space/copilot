@@ -19,6 +19,8 @@
     "test:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
     "runtime:backfill:dry": "tsx scripts/runtime-tag-backfill.ts",
     "runtime:backfill:apply": "tsx scripts/runtime-tag-backfill.ts --apply",
+    "workhours:backfill:ticket-db-id:dry": "tsx scripts/backfill-work-hours-ticket-db-id.ts",
+    "workhours:backfill:ticket-db-id:apply": "tsx scripts/backfill-work-hours-ticket-db-id.ts --apply",
     "voice:dedupe:webm:dry": "tsx scripts/voicebot-dedupe-webm-filenames.ts",
     "voice:dedupe:webm:apply": "tsx scripts/voicebot-dedupe-webm-filenames.ts --apply",
     "voice:close-idle:dry": "tsx scripts/voicebot-close-inactive-sessions.ts",

@@ -34,6 +34,9 @@ import {
     extractVoiceTaskCreateRowErrors,
     VoiceTaskCreateValidationError,
 } from '../utils/voiceTaskCreation';
+import { voicebotRuntimeConfig } from './voicebotRuntimeConfig';
+import { voicebotHttp } from './voicebotHttp';
+import { codexTaskTimeline } from './codexTaskTimeline';
 
 export {
     buildVoiceSessionTaskSourceRefs,
@@ -41,17 +44,23 @@ export {
     ticketMatchesVoiceSessionSourceRefs,
 };
 
-interface VoiceBotState {
+interface VoiceBotSessionDataSlice {
     currentSessionId: string | null;
     voiceBotSession: VoiceBotSession | null;
     voiceBotMessages: VoiceBotMessage[];
     voiceMesagesData: VoiceMessageGroup[];
     sessionAttachments: VoiceSessionAttachment[];
     sessionLogEvents: VoiceSessionLogEvent[];
+    highlightedMessageId: string | null;
+}
+
+interface VoiceBotSocketDataSlice {
     socketToken: string | null;
     socketPort: number | null;
     socket: Socket | null;
-    highlightedMessageId: string | null;
+}
+
+interface VoiceBotCatalogDataSlice {
     task_types: TaskTypeNode[] | null;
     voiceBotSessionsList: VoiceBotSession[];
     prepared_projects: VoiceBotProject[] | null;
@@ -61,14 +70,25 @@ interface VoiceBotState {
     isSessionsListLoading: boolean;
     sessionsListLoadedAt: number | null;
     sessionsListIncludeDeleted: boolean | null;
+}
 
+interface VoiceBotSessionCrudActionsSlice {
     updateSessionName: (sessionId: string, newName: string) => Promise<void>;
     updateSessionDialogueTag: (sessionId: string, dialogueTag: string) => Promise<void>;
-    sendSessionToCrm: (sessionId: string) => Promise<boolean>;
-    sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
     fetchVoiceBotSession: (sessionId: string) => Promise<void>;
     fetchActiveSession: () => Promise<Record<string, unknown> | null>;
     activateSession: (sessionId: string) => Promise<boolean>;
+    updateSessionProject: (sessionId: string, projectId: string | null) => Promise<void>;
+    finishSession: (sessionId: string) => void;
+    updateSessionAccessLevel: (sessionId: string, accessLevel: string) => Promise<void>;
+    restartCorruptedSession: (sessionId: string) => Promise<unknown>;
+    setHighlightedMessageId: (messageId: string | null) => void;
+    getSessionData: (sessionId: string) => Promise<VoiceBotSessionResponse>;
+}
+
+interface VoiceBotSessionProcessingActionsSlice {
+    sendSessionToCrm: (sessionId: string) => Promise<boolean>;
+    sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
     triggerSessionReadyToSummarize: (sessionId: string) => Promise<Record<string, unknown>>;
     fetchSessionLog: (sessionId: string, options?: { silent?: boolean }) => Promise<void>;
     fetchSessionCodexTasks: (sessionId: string) => Promise<CodexTask[]>;
@@ -93,12 +113,9 @@ interface VoiceBotState {
         options?: { silent?: boolean }
     ) => Promise<void>;
     getMessageDataById: (messageId: string) => VoiceBotMessage | null;
-    updateSessionProject: (sessionId: string, projectId: string | null) => Promise<void>;
-    finishSession: (sessionId: string) => void;
-    updateSessionAccessLevel: (sessionId: string, accessLevel: string) => Promise<void>;
-    restartCorruptedSession: (sessionId: string) => Promise<unknown>;
-    setHighlightedMessageId: (messageId: string | null) => void;
-    getSessionData: (sessionId: string) => Promise<VoiceBotSessionResponse>;
+}
+
+interface VoiceBotSessionsListActionsSlice {
     fetchVoiceBotSessionsList: (options?: { force?: boolean; includeDeleted?: boolean }) => Promise<void>;
     postProcessSession: (sessionId: string) => Promise<void>;
     createTasksFromChunks: (sessionId: string, chunks: CreateTaskChunk[]) => void;
@@ -108,6 +125,9 @@ interface VoiceBotState {
     fetchPersonsList: () => Promise<VoicebotPerson[]>;
     createPerson: (personData: Record<string, unknown>) => Promise<VoicebotPerson>;
     updateSessionParticipants: (sessionId: string, participantIds: string[]) => Promise<boolean>;
+}
+
+interface VoiceBotUploadActionsSlice {
     uploadAudioFile: (
         file: File,
         sessionId: string,
@@ -132,6 +152,9 @@ interface VoiceBotState {
     updateSessionAllowedUsers: (sessionId: string, allowedUserIds: string[]) => Promise<boolean>;
     fetchPerformersList: (includeIds?: string[]) => Promise<Array<Record<string, unknown>>>;
     fetchPerformersForTasksList: (includeIds?: string[]) => Promise<Array<Record<string, unknown>>>;
+}
+
+interface VoiceBotTicketsActionsSlice {
     confirmSelectedTickets: (selectedTicketIds: string[], updatedTickets?: Array<Record<string, unknown>> | null) => Promise<boolean>;
     rejectAllTickets: () => void;
     deleteTaskFromSession: (taskId: string) => Promise<boolean>;
@@ -143,6 +166,9 @@ interface VoiceBotState {
         operationId?: string;
     }) => Promise<Record<string, unknown>>;
     downloadTranscription: (sessionId: string) => Promise<void>;
+}
+
+interface VoiceBotToolsActionsSlice {
     fetchProjectTopics: (projectId: string, sessionId?: string | null) => Promise<unknown>;
     runCustomPrompt: (
         prompt: string,
@@ -153,49 +179,15 @@ interface VoiceBotState {
     ) => Promise<unknown>;
 }
 
-const getBackendUrl = (): string => {
-    if (typeof window !== 'undefined') {
-        const win = window as { backend_url?: string };
-        if (win.backend_url) return win.backend_url;
-    }
-    return import.meta.env.VITE_VOICEBOT_BASE_URL ?? '/api';
-};
-
-const getProxyConfig = (): { url: string; auth: string } | null => {
-    if (typeof window !== 'undefined') {
-        const win = window as { proxy_url?: string; proxy_auth?: string };
-        if (win.proxy_url && win.proxy_auth) {
-            return { url: win.proxy_url, auth: win.proxy_auth };
-        }
-    }
-    return null;
-};
-
-const resolveAgentsMcpServerUrl = (): string | null => {
-    if (typeof window !== 'undefined') {
-        const win = window as { agents_api_url?: string };
-        if (typeof win.agents_api_url === 'string' && win.agents_api_url.trim()) {
-            return win.agents_api_url.trim();
-        }
-    }
-    const envUrl = import.meta.env.VITE_AGENTS_API_URL as string | undefined;
-    if (typeof envUrl === 'string' && envUrl.trim()) return envUrl.trim();
-
-    // Fallback for prod builds where VITE_AGENTS_API_URL was not injected.
-    // This URL is consumed by backend MCP proxy (not direct browser fetch).
-    return 'http://127.0.0.1:8722';
-};
-
-const normalizeIncludeIds = (includeIds: string[] | undefined): string[] => {
-    if (!Array.isArray(includeIds)) return [];
-    return Array.from(
-        new Set(
-            includeIds
-                .map((value) => String(value ?? '').trim())
-                .filter(Boolean)
-        )
-    );
-};
+type VoiceBotStoreShape = VoiceBotSessionDataSlice &
+    VoiceBotSocketDataSlice &
+    VoiceBotCatalogDataSlice &
+    VoiceBotSessionCrudActionsSlice &
+    VoiceBotSessionProcessingActionsSlice &
+    VoiceBotSessionsListActionsSlice &
+    VoiceBotUploadActionsSlice &
+    VoiceBotTicketsActionsSlice &
+    VoiceBotToolsActionsSlice;
 
 const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
     const lines = messages
@@ -214,218 +206,96 @@ const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
     return lines.join('\n');
 };
 
-const toEpochMillis = (value: unknown): number | null => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        if (value > 1e12) return value;
-        if (value > 1e10) return value;
-        return value * 1000;
-    }
 
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-
-    const parsedDate = Date.parse(trimmed);
-    if (!Number.isNaN(parsedDate)) return parsedDate;
-
-    const numeric = Number(trimmed);
-    if (!Number.isFinite(numeric)) return null;
-    if (numeric > 1e12) return numeric;
-    if (numeric > 1e10) return numeric;
-    return numeric * 1000;
-};
-
-const resolveCodexTaskTimestamp = (task: CodexTask): number => {
-    const createdAt = toEpochMillis(task.created_at);
-    if (createdAt !== null) return createdAt;
-    const updatedAt = toEpochMillis(task.updated_at);
-    if (updatedAt !== null) return updatedAt;
-    return Number.NEGATIVE_INFINITY;
-};
-
-const sortCodexTasksNewestFirst = (tasks: CodexTask[]): CodexTask[] => {
-    return [...tasks].sort((left, right) => {
-        const timestampDiff = resolveCodexTaskTimestamp(right) - resolveCodexTaskTimestamp(left);
-        if (timestampDiff !== 0) return timestampDiff;
-
-        const rightKey = String(right._id || right.id || '');
-        const leftKey = String(left._id || left.id || '');
-        return rightKey.localeCompare(leftKey);
-    });
-};
-
-
-const logVoicebotRequestError = (endpoint: string, targetUrl: string, error: unknown): void => {
-    if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
-        const runtimeMismatch =
-            status === 409 ||
-            (typeof error.response?.data === 'object' &&
-                (error.response?.data as { error?: unknown }).error === 'runtime_mismatch');
-        console.error('[voicebot] request failed', {
-            endpoint,
-            targetUrl,
-            status: status ?? null,
-            code: error.code ?? null,
-            runtimeMismatch,
-            response: error.response?.data ?? null,
-            message: error.message,
-        });
-        return;
-    }
-
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('[voicebot] request failed', {
-        endpoint,
-        targetUrl,
-        runtimeMismatch: false,
-        message,
-    });
-};
-
-const isTransientVoicebotRequestError = (error: unknown): boolean => {
-    if (!axios.isAxiosError(error)) return false;
-    if (!error.response) return true;
-    const status = Number(error.response.status);
-    return Number.isFinite(status) && status >= 500 && status <= 599;
-};
-
-const voicebotRequest = async <T = unknown>(url: string, data: unknown = {}, silent = false): Promise<T> => {
-    const backendUrl = getBackendUrl();
-    const proxyConfig = getProxyConfig();
-    const { authToken } = useAuthStore.getState();
-    const targetUrl = `${backendUrl}/${url}`;
-
-    if (proxyConfig) {
-        try {
-            const response = await axios.post<T>(proxyConfig.url, data, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Proxy-Auth': proxyConfig.auth,
-                    'X-Proxy-Target-URL': targetUrl,
-                    'X-Authorization': authToken ?? '',
-                },
-                withCredentials: true,
-            });
-            return response.data;
-        } catch (error) {
-            logVoicebotRequestError(url, targetUrl, error);
-            throw error;
+const voiceMessageLinkUtils = {
+    getMessageRecord(msg: VoiceBotMessage): Record<string, unknown> {
+        return msg && typeof msg === 'object' ? (msg as unknown as Record<string, unknown>) : {};
+    },
+    isMessageDeleted(msg: VoiceBotMessage | null | undefined): boolean {
+        if (!msg || typeof msg !== 'object') return false;
+        const value = this.getMessageRecord(msg).is_deleted;
+        if (value === true) return true;
+        if (typeof value === 'number') return value === 1;
+        if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+        return false;
+    },
+    normalizeMessageRef(value: unknown): string {
+        if (typeof value === 'string') return value.trim();
+        if (value && typeof value === 'object') {
+            const record = value as { $oid?: unknown };
+            if (typeof record.$oid === 'string') return record.$oid.trim();
         }
-    }
+        return '';
+    },
+    getMessageLinkRefs(msg: VoiceBotMessage): string[] {
+        const refs = [
+            this.normalizeMessageRef(msg?.message_id),
+            this.normalizeMessageRef(msg?._id),
+        ].filter((value): value is string => value.length > 0);
+        return Array.from(new Set(refs));
+    },
+    getPrimaryMessageRef(msg: VoiceBotMessage): string {
+        const refs = this.getMessageLinkRefs(msg);
+        return refs[0] ?? '';
+    },
+    getRowsByMessageRefs(source: Map<string, VoiceMessageRow[]>, refs: string[]): VoiceMessageRow[] {
+        for (const ref of refs) {
+            const rows = source.get(ref);
+            if (Array.isArray(rows) && rows.length > 0) return rows;
+        }
+        return [];
+    },
+    getImageRowsFromMessage(msg: VoiceBotMessage): VoiceMessageRow[] {
+        const record = this.getMessageRecord(msg);
+        const attachments = Array.isArray(record.attachments) ? record.attachments : [];
+        const messageRef = this.getPrimaryMessageRef(msg);
 
-    let response;
-    try {
-        response = await axios.post<T>(targetUrl, data, {
-            headers: {
-                'X-Authorization': authToken ?? '',
-            },
-            withCredentials: true,
-        });
-    } catch (error) {
-        logVoicebotRequestError(url, targetUrl, error);
-        throw error;
-    }
+        return attachments
+            .map((attachment) => {
+                const item = attachment && typeof attachment === 'object' ? (attachment as Record<string, unknown>) : null;
+                if (!item) return null;
 
-    if (!silent && response.status >= 400) {
-        throw new Error('Failed to fetch! Try again.');
-    }
+                const mime =
+                    typeof item.mime_type === 'string'
+                        ? item.mime_type
+                        : typeof item.mimeType === 'string'
+                            ? item.mimeType
+                            : '';
+                const kind = typeof item.kind === 'string' ? item.kind : '';
+                const url =
+                    normalizeAttachmentUri(item.direct_uri) ||
+                    normalizeAttachmentUri(item.uri) ||
+                    normalizeAttachmentUri(item.url);
 
-    return response.data;
-};
+                if (!url) return null;
+                if (!(mime.startsWith('image/') || kind === 'image')) return null;
 
-const getMessageRecord = (msg: VoiceBotMessage): Record<string, unknown> =>
-    (msg && typeof msg === 'object' ? (msg as unknown as Record<string, unknown>) : {});
+                const imageName =
+                    typeof item.name === 'string'
+                        ? item.name
+                        : typeof item.file_unique_id === 'string'
+                            ? item.file_unique_id
+                            : 'image';
+                const fallbackText =
+                    typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
+                        ? msg.transcription_text.trim()
+                        : typeof msg.text === 'string' && msg.text.trim()
+                            ? msg.text.trim()
+                            : '[Image]';
 
-const isMessageDeleted = (msg: VoiceBotMessage | null | undefined): boolean => {
-    if (!msg || typeof msg !== 'object') return false;
-    const value = getMessageRecord(msg).is_deleted;
-    if (value === true) return true;
-    if (typeof value === 'number') return value === 1;
-    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
-    return false;
-};
-
-const normalizeMessageRef = (value: unknown): string => {
-    if (typeof value === 'string') return value.trim();
-    if (value && typeof value === 'object') {
-        const record = value as { $oid?: unknown };
-        if (typeof record.$oid === 'string') return record.$oid.trim();
-    }
-    return '';
-};
-
-const getMessageLinkRefs = (msg: VoiceBotMessage): string[] => {
-    const refs = [
-        normalizeMessageRef(msg?.message_id),
-        normalizeMessageRef(msg?._id),
-    ].filter((value): value is string => value.length > 0);
-    return Array.from(new Set(refs));
-};
-
-const getPrimaryMessageRef = (msg: VoiceBotMessage): string => {
-    const refs = getMessageLinkRefs(msg);
-    return refs[0] ?? '';
-};
-
-const getRowsByMessageRefs = (source: Map<string, VoiceMessageRow[]>, refs: string[]): VoiceMessageRow[] => {
-    for (const ref of refs) {
-        const rows = source.get(ref);
-        if (Array.isArray(rows) && rows.length > 0) return rows;
-    }
-    return [];
-};
-
-const getImageRowsFromMessage = (msg: VoiceBotMessage): VoiceMessageRow[] => {
-    const record = getMessageRecord(msg);
-    const attachments = Array.isArray(record.attachments) ? record.attachments : [];
-    const messageRef = getPrimaryMessageRef(msg);
-
-    return attachments
-        .map((attachment) => {
-            const item = attachment && typeof attachment === 'object' ? (attachment as Record<string, unknown>) : null;
-            if (!item) return null;
-
-            const mime =
-                typeof item.mime_type === 'string'
-                    ? item.mime_type
-                    : typeof item.mimeType === 'string'
-                        ? item.mimeType
-                        : '';
-            const kind = typeof item.kind === 'string' ? item.kind : '';
-            const url =
-                normalizeAttachmentUri(item.direct_uri) ||
-                normalizeAttachmentUri(item.uri) ||
-                normalizeAttachmentUri(item.url);
-
-            if (!url) return null;
-            if (!(mime.startsWith('image/') || kind === 'image')) return null;
-
-            const imageName =
-                typeof item.name === 'string'
-                    ? item.name
-                    : typeof item.file_unique_id === 'string'
-                        ? item.file_unique_id
-                        : 'image';
-            const fallbackText =
-                typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
-                    ? msg.transcription_text.trim()
-                    : typeof msg.text === 'string' && msg.text.trim()
-                        ? msg.text.trim()
-                        : '[Image]';
-
-            return {
-                avatar: 'I',
-                name: 'Image',
-                text: fallbackText,
-                kind: 'image' as const,
-                imageUrl: url,
-                imageName,
-                message_id: messageRef || undefined,
-                material_source_message_id: messageRef || undefined,
-            } satisfies VoiceMessageRow;
-        })
-        .filter((row): row is Exclude<typeof row, null> => row !== null);
+                return {
+                    avatar: 'I',
+                    name: 'Image',
+                    text: fallbackText,
+                    kind: 'image' as const,
+                    imageUrl: url,
+                    imageName,
+                    message_id: messageRef || undefined,
+                    material_source_message_id: messageRef || undefined,
+                } satisfies VoiceMessageRow;
+            })
+            .filter((row): row is Exclude<typeof row, null> => row !== null);
+    },
 };
 
 const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]): VoiceMessageGroup[] => {
@@ -436,21 +306,21 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     const linkedImageAnchorRefs = new Set<string>();
     const allMessageRefs = new Set<string>();
     for (const msg of voiceBotMessages) {
-        if (isMessageDeleted(msg)) continue;
-        const messageRefs = getMessageLinkRefs(msg);
+        if (voiceMessageLinkUtils.isMessageDeleted(msg)) continue;
+        const messageRefs = voiceMessageLinkUtils.getMessageLinkRefs(msg);
         for (const ref of messageRefs) allMessageRefs.add(ref);
-        const imageRows = getImageRowsFromMessage(msg);
+        const imageRows = voiceMessageLinkUtils.getImageRowsFromMessage(msg);
         if (messageRefs.length > 0 && imageRows.length > 0) {
             for (const ref of messageRefs) {
                 imageRowsByMessageRef.set(ref, imageRows);
             }
         }
 
-        const record = getMessageRecord(msg);
-        const imageAnchorRef = normalizeMessageRef(record.image_anchor_message_id);
+        const record = voiceMessageLinkUtils.getMessageRecord(msg);
+        const imageAnchorRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_message_id);
         if (imageAnchorRef) linkedImageAnchorRefs.add(imageAnchorRef);
 
-        const imageAnchorLinkedTargetRef = normalizeMessageRef(record.image_anchor_linked_message_id);
+        const imageAnchorLinkedTargetRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_linked_message_id);
         const anchorMessageRef = messageRefs[0] ?? '';
         if (imageRows.length > 0 && imageAnchorLinkedTargetRef && anchorMessageRef) {
             const current = explicitLinkedImageRowsByTargetRef.get(imageAnchorLinkedTargetRef) ?? [];
@@ -473,12 +343,12 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     }
 
     return voiceBotMessages.flatMap((msg) => {
-        if (isMessageDeleted(msg)) return [];
-        const messageRefs = getMessageLinkRefs(msg);
+        if (voiceMessageLinkUtils.isMessageDeleted(msg)) return [];
+        const messageRefs = voiceMessageLinkUtils.getMessageLinkRefs(msg);
         const primaryMessageRef = messageRefs[0] ?? '';
-        const ownImageRows = getRowsByMessageRefs(imageRowsByMessageRef, messageRefs);
-        const record = getMessageRecord(msg);
-        const imageAnchorRef = normalizeMessageRef(record.image_anchor_message_id);
+        const ownImageRows = voiceMessageLinkUtils.getRowsByMessageRefs(imageRowsByMessageRef, messageRefs);
+        const record = voiceMessageLinkUtils.getMessageRecord(msg);
+        const imageAnchorRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_message_id);
         const linkedAnchorRows = imageAnchorRef ? (imageRowsByMessageRef.get(imageAnchorRef) ?? []) : [];
         const explicitLinkedEntries = messageRefs.flatMap((ref) => explicitLinkedImageRowsByTargetRef.get(ref) ?? []);
         const explicitLinkedRows = explicitLinkedEntries.flatMap((entry) => entry.rows);
@@ -597,67 +467,63 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     });
 };
 
-const getMessageIdentity = (message: VoiceBotMessage): string => {
-    const messageId = typeof message.message_id === 'string' ? message.message_id.trim() : '';
-    if (messageId) return `mid:${messageId}`;
-    const oid = typeof message._id === 'string' ? message._id.trim() : '';
-    if (oid) return `oid:${oid}`;
-    return '';
-};
+const messageListUtils = {
+    getIdentity(message: VoiceBotMessage): string {
+        const messageId = typeof message.message_id === 'string' ? message.message_id.trim() : '';
+        if (messageId) return `mid:${messageId}`;
+        const oid = typeof message._id === 'string' ? message._id.trim() : '';
+        if (oid) return `oid:${oid}`;
+        return '';
+    },
+    getTimestamp(message: VoiceBotMessage): number {
+        const raw = message.message_timestamp;
+        const numeric = Number(raw);
+        if (Number.isFinite(numeric)) return numeric;
+        return 0;
+    },
+    sort(messages: VoiceBotMessage[]): VoiceBotMessage[] {
+        return [...messages].sort((left, right) => {
+            const leftTs = this.getTimestamp(left);
+            const rightTs = this.getTimestamp(right);
+            if (leftTs !== rightTs) return leftTs - rightTs;
+            const leftId = `${left.message_id || left._id || ''}`;
+            const rightId = `${right.message_id || right._id || ''}`;
+            return leftId.localeCompare(rightId);
+        });
+    },
+    upsert(current: VoiceBotMessage[], incoming: VoiceBotMessage): VoiceBotMessage[] {
+        const incomingIdentity = this.getIdentity(incoming);
+        const matchIncoming = (existing: VoiceBotMessage): boolean => {
+            const existingIdentity = this.getIdentity(existing);
+            const identityMatch = Boolean(incomingIdentity && existingIdentity && incomingIdentity === existingIdentity);
+            const fallbackMatch = Boolean(
+                (incoming.message_id && existing.message_id && incoming.message_id === existing.message_id) ||
+                (incoming._id && existing._id && incoming._id === existing._id)
+            );
+            return identityMatch || fallbackMatch;
+        };
 
-const getMessageTimestamp = (message: VoiceBotMessage): number => {
-    const raw = message.message_timestamp;
-    const numeric = Number(raw);
-    if (Number.isFinite(numeric)) return numeric;
-    return 0;
-};
-
-const sortVoiceBotMessages = (messages: VoiceBotMessage[]): VoiceBotMessage[] => {
-    return [...messages].sort((left, right) => {
-        const leftTs = getMessageTimestamp(left);
-        const rightTs = getMessageTimestamp(right);
-        if (leftTs !== rightTs) return leftTs - rightTs;
-        const leftId = `${left.message_id || left._id || ''}`;
-        const rightId = `${right.message_id || right._id || ''}`;
-        return leftId.localeCompare(rightId);
-    });
-};
-
-const upsertVoiceBotMessage = (
-    current: VoiceBotMessage[],
-    incoming: VoiceBotMessage
-): VoiceBotMessage[] => {
-    const incomingIdentity = getMessageIdentity(incoming);
-    const matchIncoming = (existing: VoiceBotMessage): boolean => {
-        const existingIdentity = getMessageIdentity(existing);
-        const identityMatch = Boolean(incomingIdentity && existingIdentity && incomingIdentity === existingIdentity);
-        const fallbackMatch = Boolean(
-            (incoming.message_id && existing.message_id && incoming.message_id === existing.message_id) ||
-            (incoming._id && existing._id && incoming._id === existing._id)
-        );
-        return identityMatch || fallbackMatch;
-    };
-
-    if (isMessageDeleted(incoming)) {
-        const withoutIncoming = current.filter((existing) => !matchIncoming(existing) && !isMessageDeleted(existing));
-        return sortVoiceBotMessages(withoutIncoming);
-    }
-
-    const next = [...current];
-    let replaced = false;
-
-    for (let index = 0; index < next.length; index++) {
-        const existing = next[index];
-        if (!existing) continue;
-        if (matchIncoming(existing)) {
-            next[index] = { ...existing, ...incoming };
-            replaced = true;
-            break;
+        if (voiceMessageLinkUtils.isMessageDeleted(incoming)) {
+            const withoutIncoming = current.filter((existing) => !matchIncoming(existing) && !voiceMessageLinkUtils.isMessageDeleted(existing));
+            return this.sort(withoutIncoming);
         }
-    }
 
-    if (!replaced) next.push(incoming);
-    return sortVoiceBotMessages(next.filter((message) => !isMessageDeleted(message)));
+        const next = [...current];
+        let replaced = false;
+
+        for (let index = 0; index < next.length; index++) {
+            const existing = next[index];
+            if (!existing) continue;
+            if (matchIncoming(existing)) {
+                next[index] = { ...existing, ...incoming };
+                replaced = true;
+                break;
+            }
+        }
+
+        if (!replaced) next.push(incoming);
+        return this.sort(next.filter((message) => !voiceMessageLinkUtils.isMessageDeleted(message)));
+    },
 };
 
 const normalizeAttachmentUri = (value: unknown): string | null => {
@@ -706,7 +572,7 @@ const normalizeSessionAttachment = (value: unknown): VoiceSessionAttachment | nu
 const buildSessionAttachmentsFromMessages = (messages: VoiceBotMessage[]): VoiceSessionAttachment[] => {
     const attachments: VoiceSessionAttachment[] = [];
     for (const message of messages) {
-        if (isMessageDeleted(message)) continue;
+        if (voiceMessageLinkUtils.isMessageDeleted(message)) continue;
         const messageRecord = message as unknown as Record<string, unknown>;
         const messageAttachments = Array.isArray(messageRecord.attachments) ? messageRecord.attachments : [];
         if (messageAttachments.length === 0) continue;
@@ -772,7 +638,7 @@ const normalizeSessionResponse = (response: unknown): VoiceBotSessionResponse =>
     const payload = response as Record<string, unknown>;
     const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
     const rawMessages = (data.session_messages as VoiceBotMessage[]) || [];
-    const messages = rawMessages.filter((msg) => !isMessageDeleted(msg));
+    const messages = rawMessages.filter((msg) => !voiceMessageLinkUtils.isMessageDeleted(msg));
     const explicitAttachments = Array.isArray(data.session_attachments)
         ? data.session_attachments.map(normalizeSessionAttachment).filter((item): item is VoiceSessionAttachment => item !== null)
         : [];
@@ -788,7 +654,7 @@ const normalizeSessionResponse = (response: unknown): VoiceBotSessionResponse =>
     };
 };
 
-export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
+export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
     currentSessionId: null,
     voiceBotSession: null,
     voiceBotMessages: [],
@@ -811,7 +677,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     updateSessionName: async (sessionId, newName) => {
         try {
-            await voicebotRequest('voicebot/sessions/update_name', { session_id: sessionId, session_name: newName });
+            await voicebotHttp.request('voicebot/sessions/update_name', { session_id: sessionId, session_name: newName });
             set((state) => ({
                 voiceBotSession: state.voiceBotSession?._id === sessionId ? { ...state.voiceBotSession, session_name: newName } : state.voiceBotSession,
                 voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
@@ -825,7 +691,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     updateSessionDialogueTag: async (sessionId, dialogueTag) => {
         try {
-            await voicebotRequest('voicebot/sessions/update_dialogue_tag', { session_id: sessionId, dialogue_tag: dialogueTag });
+            await voicebotHttp.request('voicebot/sessions/update_dialogue_tag', { session_id: sessionId, dialogue_tag: dialogueTag });
             set((state) => ({
                 voiceBotSession: state.voiceBotSession?._id === sessionId ? { ...state.voiceBotSession, dialogue_tag: dialogueTag } : state.voiceBotSession,
                 voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
@@ -839,7 +705,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     sendSessionToCrm: async (sessionId) => {
         try {
-            await voicebotRequest('voicebot/sessions/send_to_crm', { session_id: sessionId });
+            await voicebotHttp.request('voicebot/sessions/send_to_crm', { session_id: sessionId });
             set((state) => ({
                 voiceBotSession: state.voiceBotSession?._id === sessionId ? { ...state.voiceBotSession, show_in_crm: true } : state.voiceBotSession,
                 voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
@@ -863,7 +729,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 duration: 0,
             });
 
-            const agentsMcpServerUrl = resolveAgentsMcpServerUrl();
+            const agentsMcpServerUrl = voicebotRuntimeConfig.resolveAgentsMcpServerUrl();
             if (!agentsMcpServerUrl) {
                 message.open({
                     key: processingKey,
@@ -921,7 +787,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 throw new Error('Пустой результат агента');
             }
 
-            await voicebotRequest('voicebot/sessions/save_create_tasks', {
+            await voicebotHttp.request('voicebot/sessions/save_create_tasks', {
                 session_id: sessionId,
                 tasks,
             });
@@ -946,9 +812,9 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchVoiceBotSession: async (sessionId) => {
         const prevSessionId = get().currentSessionId;
-        const response = await voicebotRequest<unknown>('voicebot/sessions/get', { session_id: sessionId });
+        const response = await voicebotHttp.request<unknown>('voicebot/sessions/get', { session_id: sessionId });
         const normalized = normalizeSessionResponse(response);
-        const sortedMessages = sortVoiceBotMessages(normalized.session_messages);
+        const sortedMessages = messageListUtils.sort(normalized.session_messages);
         const processed = transformVoiceBotMessagesToGroups(sortedMessages);
 
         set({
@@ -984,7 +850,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             socket.on('message_update', (data: { message_id?: string; message?: VoiceBotMessage; _id?: string }) => {
                 if (!data?.message) return;
                 set((state) => {
-                    const updatedMessages = upsertVoiceBotMessage(state.voiceBotMessages, data.message as VoiceBotMessage);
+                    const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, data.message as VoiceBotMessage);
                     const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups(updatedMessages);
                     const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
                     return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };
@@ -998,7 +864,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 if (existingMessage) return;
 
                 set((state) => {
-                    const updatedMessages = upsertVoiceBotMessage(state.voiceBotMessages, data);
+                    const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, data);
                     const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups(updatedMessages);
                     const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
                     return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };
@@ -1068,7 +934,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchActiveSession: async () => {
         try {
-            const response = await voicebotRequest<Record<string, unknown>>('voicebot/active_session', {});
+            const response = await voicebotHttp.request<Record<string, unknown>>('voicebot/active_session', {});
             const active = response?.active_session;
             if (active && typeof active === 'object') {
                 return active as Record<string, unknown>;
@@ -1087,10 +953,10 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
             try {
-                await voicebotRequest('voicebot/activate_session', { session_id: normalizedSessionId });
+                await voicebotHttp.request('voicebot/activate_session', { session_id: normalizedSessionId });
                 return true;
             } catch (error) {
-                const shouldRetry = attempt < maxAttempts && isTransientVoicebotRequestError(error);
+                const shouldRetry = attempt < maxAttempts && voicebotHttp.isTransientError(error);
                 if (!shouldRetry) {
                     console.error('Ошибка при активации сессии:', error);
                     break;
@@ -1119,7 +985,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     triggerSessionReadyToSummarize: async (sessionId) => {
         try {
-            return await voicebotRequest<Record<string, unknown>>('voicebot/trigger_session_ready_to_summarize', {
+            return await voicebotHttp.request<Record<string, unknown>>('voicebot/trigger_session_ready_to_summarize', {
                 session_id: sessionId,
             });
         } catch (error) {
@@ -1130,7 +996,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchSessionLog: async (sessionId, options) => {
         try {
-            const response = await voicebotRequest<{ events?: VoiceSessionLogEvent[] }>('voicebot/session_log', { session_id: sessionId });
+            const response = await voicebotHttp.request<{ events?: VoiceSessionLogEvent[] }>('voicebot/session_log', { session_id: sessionId });
             const events = Array.isArray(response?.events) ? response.events : [];
             set({ sessionLogEvents: events });
         } catch (error) {
@@ -1150,14 +1016,14 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         if (!normalizedSessionId) return [];
         const sessionSourceRefs = buildVoiceSessionTaskSourceRefs(normalizedSessionId, get().voiceBotSession);
         try {
-            const response = await voicebotRequest<CodexTask[]>('voicebot/codex_tasks', {
+            const response = await voicebotHttp.request<CodexTask[]>('voicebot/codex_tasks', {
                 session_id: normalizedSessionId,
             });
             if (!Array.isArray(response)) return [];
             const filteredTasks = response.filter(
                 (task) => ticketMatchesVoiceSessionSourceRefs(task, sessionSourceRefs)
             );
-            return sortCodexTasksNewestFirst(filteredTasks);
+            return codexTaskTimeline.sortNewestFirst(filteredTasks);
         } catch (error) {
             console.error('Ошибка при загрузке Codex-задач сессии:', error);
             throw error;
@@ -1173,7 +1039,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             reason: payload.reason,
         };
         try {
-            await voicebotRequest('voicebot/edit_transcript_chunk', body, Boolean(options?.silent));
+            await voicebotHttp.request('voicebot/edit_transcript_chunk', body, Boolean(options?.silent));
         } catch (error) {
             if (!options?.silent) {
                 console.error('Ошибка при изменении сегмента транскрипции:', error);
@@ -1185,7 +1051,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     deleteTranscriptChunk: async (payload, options) => {
         try {
-            await voicebotRequest('voicebot/delete_transcript_chunk', payload, Boolean(options?.silent));
+            await voicebotHttp.request('voicebot/delete_transcript_chunk', payload, Boolean(options?.silent));
         } catch (error) {
             if (!options?.silent) {
                 console.error('Ошибка при удалении сегмента транскрипции:', error);
@@ -1197,7 +1063,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     rollbackSessionEvent: async (payload, options) => {
         try {
-            await voicebotRequest('voicebot/rollback_event', payload, Boolean(options?.silent));
+            await voicebotHttp.request('voicebot/rollback_event', payload, Boolean(options?.silent));
         } catch (error) {
             if (!options?.silent) {
                 console.error('Ошибка rollback_event:', error);
@@ -1209,7 +1075,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     resendNotifyEvent: async (payload, options) => {
         try {
-            await voicebotRequest('voicebot/resend_notify_event', payload, Boolean(options?.silent));
+            await voicebotHttp.request('voicebot/resend_notify_event', payload, Boolean(options?.silent));
         } catch (error) {
             if (!options?.silent) {
                 console.error('Ошибка resend_notify_event:', error);
@@ -1221,7 +1087,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     retryCategorizationEvent: async (payload, options) => {
         try {
-            await voicebotRequest('voicebot/retry_categorization_event', payload, Boolean(options?.silent));
+            await voicebotHttp.request('voicebot/retry_categorization_event', payload, Boolean(options?.silent));
         } catch (error) {
             if (!options?.silent) {
                 console.error('Ошибка retry_categorization_event:', error);
@@ -1239,7 +1105,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     updateSessionProject: async (sessionId, projectId) => {
         try {
-            await voicebotRequest('voicebot/sessions/update_project', { session_id: sessionId, project_id: projectId });
+            await voicebotHttp.request('voicebot/sessions/update_project', { session_id: sessionId, project_id: projectId });
             set((state) => ({
                 voiceBotSession: state.voiceBotSession ? { ...state.voiceBotSession, project_id: projectId } : state.voiceBotSession,
             }));
@@ -1254,7 +1120,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
         void (async () => {
             try {
-                await voicebotRequest('voicebot/session_done', { session_id: normalizedSessionId });
+                await voicebotHttp.request('voicebot/session_done', { session_id: normalizedSessionId });
                 const doneAtIso = new Date().toISOString();
                 set((state) => ({
                     voiceBotSession:
@@ -1293,7 +1159,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     updateSessionAccessLevel: async (sessionId, accessLevel) => {
         try {
-            await voicebotRequest('voicebot/sessions/update_access_level', { session_id: sessionId, access_level: accessLevel });
+            await voicebotHttp.request('voicebot/sessions/update_access_level', { session_id: sessionId, access_level: accessLevel });
             set((state) => ({
                 voiceBotSession: state.voiceBotSession ? { ...state.voiceBotSession, access_level: accessLevel } : state.voiceBotSession,
             }));
@@ -1304,7 +1170,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     restartCorruptedSession: async (sessionId) => {
         try {
-            return await voicebotRequest('voicebot/restart_corrupted_session', { session_id: sessionId });
+            return await voicebotHttp.request('voicebot/restart_corrupted_session', { session_id: sessionId });
         } catch (e) {
             console.error('Ошибка при перезапуске поломанной сессии', e);
             throw e;
@@ -1317,7 +1183,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     getSessionData: async (sessionId) => {
         try {
-            const response = await voicebotRequest('voicebot/sessions/get', { session_id: sessionId });
+            const response = await voicebotHttp.request('voicebot/sessions/get', { session_id: sessionId });
             return normalizeSessionResponse(response);
         } catch (error) {
             console.error('Ошибка при получении данных сессии:', error);
@@ -1333,7 +1199,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
         set({ isSessionsListLoading: true });
         try {
-            const response = await voicebotRequest<VoiceBotSession[]>('voicebot/sessions/list', {
+            const response = await voicebotHttp.request<VoiceBotSession[]>('voicebot/sessions/list', {
                 include_deleted: includeDeleted,
             });
             if (response && Array.isArray(response)) {
@@ -1392,7 +1258,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchTaskTypes: async () => {
         try {
-            const data = await voicebotRequest<TaskTypeNode[]>('voicebot/task_types');
+            const data = await voicebotHttp.request<TaskTypeNode[]>('voicebot/task_types');
             if (data && Array.isArray(data)) {
                 set({ task_types: data });
                 return data;
@@ -1407,7 +1273,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchPreparedProjects: async () => {
         try {
-            const data = await voicebotRequest<VoiceBotProject[]>('voicebot/projects');
+            const data = await voicebotHttp.request<VoiceBotProject[]>('voicebot/projects');
             if (data && Array.isArray(data)) {
                 set({ prepared_projects: data });
             } else {
@@ -1422,7 +1288,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchPersonsList: async () => {
         try {
-            const data = await voicebotRequest<VoicebotPerson[]>('voicebot/persons/list');
+            const data = await voicebotHttp.request<VoicebotPerson[]>('voicebot/persons/list');
             if (data && Array.isArray(data)) {
                 set({ persons_list: data });
                 return data;
@@ -1439,7 +1305,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     createPerson: async (personData) => {
         try {
-            const response = await voicebotRequest<VoicebotPerson>('voicebot/persons/create', personData);
+            const response = await voicebotHttp.request<VoicebotPerson>('voicebot/persons/create', personData);
             await get().fetchPersonsList();
             return response;
         } catch (e) {
@@ -1450,7 +1316,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     updateSessionParticipants: async (sessionId, participantIds) => {
         try {
-            await voicebotRequest('voicebot/sessions/update_participants', { session_id: sessionId, participant_ids: participantIds });
+            await voicebotHttp.request('voicebot/sessions/update_participants', { session_id: sessionId, participant_ids: participantIds });
             set((state) => ({
                 voiceBotSession: state.voiceBotSession ? { ...state.voiceBotSession, participants: participantIds } : state.voiceBotSession,
             }));
@@ -1463,7 +1329,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     uploadAudioFile: async (file, sessionId, opt) => {
         try {
-            const backendUrl = getBackendUrl();
+            const backendUrl = voicebotRuntimeConfig.getBackendUrl();
             const { authToken } = useAuthStore.getState();
             const formData = new FormData();
             formData.append('audio', file);
@@ -1491,7 +1357,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     uploadSessionImageAttachment: async (file, sessionId) => {
         try {
-            const backendUrl = getBackendUrl();
+            const backendUrl = voicebotRuntimeConfig.getBackendUrl();
             const { authToken } = useAuthStore.getState();
             const formData = new FormData();
             formData.append('attachment', file);
@@ -1521,7 +1387,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         if (!normalizedSessionId || !normalizedText) return;
 
         try {
-            await voicebotRequest('voicebot/add_text', {
+            await voicebotHttp.request('voicebot/add_text', {
                 session_id: normalizedSessionId,
                 text: normalizedText,
             });
@@ -1557,7 +1423,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             const uploadFile = new File([blob], name, { type: uploadMimeType });
             const uploadedAttachment = await get().uploadSessionImageAttachment(uploadFile, normalizedSessionId);
 
-            await voicebotRequest('voicebot/add_text', {
+            await voicebotHttp.request('voicebot/add_text', {
                 session_id: normalizedSessionId,
                 text: fallbackText,
                 kind: 'image',
@@ -1583,7 +1449,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     updateSessionAllowedUsers: async (sessionId, allowedUserIds) => {
         try {
-            await voicebotRequest('voicebot/sessions/update_allowed_users', {
+            await voicebotHttp.request('voicebot/sessions/update_allowed_users', {
                 session_id: sessionId,
                 allowed_user_ids: allowedUserIds,
             });
@@ -1599,11 +1465,11 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchPerformersList: async (includeIds = []) => {
         try {
-            const normalizedIncludeIds = normalizeIncludeIds(includeIds);
+            const normalizedIncludeIds = voicebotRuntimeConfig.normalizeIncludeIds(includeIds);
             const payload = normalizedIncludeIds.length > 0
                 ? { include_ids: normalizedIncludeIds }
                 : {};
-            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/auth/list-users', payload);
+            const data = await voicebotHttp.request<Array<Record<string, unknown>>>('voicebot/auth/list-users', payload);
             if (data && Array.isArray(data)) {
                 set({ performers_list: data });
                 return data;
@@ -1618,11 +1484,11 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     fetchPerformersForTasksList: async (includeIds = []) => {
         try {
-            const normalizedIncludeIds = normalizeIncludeIds(includeIds);
+            const normalizedIncludeIds = voicebotRuntimeConfig.normalizeIncludeIds(includeIds);
             const payload = normalizedIncludeIds.length > 0
                 ? { include_ids: normalizedIncludeIds }
                 : {};
-            const data = await voicebotRequest<Array<Record<string, unknown>>>('voicebot/persons/list_performers', payload);
+            const data = await voicebotHttp.request<Array<Record<string, unknown>>>('voicebot/persons/list_performers', payload);
             if (data && Array.isArray(data)) {
                 const performersWithCodex = ensureCodexPerformerRecords(data);
                 set({ performers_for_tasks_list: performersWithCodex });
@@ -1651,7 +1517,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 })(),
             }));
 
-            await voicebotRequest('voicebot/create_tickets', { tickets: preparedTickets, session_id: get().currentSessionId });
+            await voicebotHttp.request('voicebot/create_tickets', { tickets: preparedTickets, session_id: get().currentSessionId });
             message.success(`Создано ${selectedTicketIds.length} задач`);
             useSessionsUIStore.getState().closeTicketsModal();
             return true;
@@ -1683,7 +1549,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 return false;
             }
 
-            await voicebotRequest('voicebot/delete_task_from_session', { session_id: sessionId, task_id: taskId });
+            await voicebotHttp.request('voicebot/delete_task_from_session', { session_id: sessionId, task_id: taskId });
 
             set((state) => {
                 if (!state.voiceBotSession) {
@@ -1727,7 +1593,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     deleteSession: async (sessionId) => {
         try {
-            await voicebotRequest('voicebot/sessions/delete', { session_id: sessionId }, true);
+            await voicebotHttp.request('voicebot/sessions/delete', { session_id: sessionId }, true);
             const includeDeleted = get().sessionsListIncludeDeleted === true;
             await get().fetchVoiceBotSessionsList({ force: true, includeDeleted });
             return true;
@@ -1739,7 +1605,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     mergeSessions: async ({ sessionIds, targetSessionId, confirmationPhrase, operationId }) => {
         try {
-            const response = await voicebotRequest<Record<string, unknown>>('voicebot/sessions/merge', {
+            const response = await voicebotHttp.request<Record<string, unknown>>('voicebot/sessions/merge', {
                 session_ids: sessionIds,
                 target_session_id: targetSessionId,
                 confirmation_phrase: confirmationPhrase,
@@ -1756,7 +1622,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     downloadTranscription: async (sessionId) => {
         try {
-            const backendUrl = getBackendUrl();
+            const backendUrl = voicebotRuntimeConfig.getBackendUrl();
             const { authToken } = useAuthStore.getState();
             const response = await fetch(`${backendUrl}/voicebot/transcription/download/${sessionId}`, {
                 method: 'GET',
@@ -1809,7 +1675,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         try {
             const requestData: Record<string, unknown> = { project_id: projectId };
             if (sessionId) requestData.session_id = sessionId;
-            return await voicebotRequest('voicebot/topics', requestData);
+            return await voicebotHttp.request('voicebot/topics', requestData);
         } catch (error) {
             console.error('Ошибка при получении топиков:', error);
             throw error;
@@ -1818,7 +1684,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
     runCustomPrompt: async (prompt, input, model = 'gpt-5', sessionId = null, inputType = 'categorization') => {
         try {
-            const response = await voicebotRequest<Record<string, unknown>>('voicebot/LLMGate/run_prompt', {
+            const response = await voicebotHttp.request<Record<string, unknown>>('voicebot/LLMGate/run_prompt', {
                 prompt,
                 input,
                 model,
@@ -1836,7 +1702,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
 
             if (sessionId && (response as { success?: boolean }).success) {
                 try {
-                    await voicebotRequest('voicebot/save_custom_prompt_result', {
+                    await voicebotHttp.request('voicebot/save_custom_prompt_result', {
                         session_id: sessionId,
                         prompt,
                         input_type: inputType,

@@ -23,9 +23,9 @@ const parseCredentials = (raw: string, source: string): GoogleCredentials => {
             private_key: parsed.private_key,
         };
     } catch (error) {
-        logger.error('[google.sheets] failed to parse service account credentials', {
+        logger.error('[google.sheets] failed to parse auth payload', {
             source,
-            error: error instanceof Error ? error.message : String(error),
+            reason: error instanceof Error ? error.message : String(error),
         });
         throw new Error(`Invalid Google service account credentials in ${source}`);
     }

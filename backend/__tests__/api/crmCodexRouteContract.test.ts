@@ -19,7 +19,8 @@ describe('CRM Codex route contract', () => {
     expect(routeSource).toContain("if (view === 'closed') {");
     expect(routeSource).toContain("return ['--no-daemon', 'list', '--all', '--status', 'closed', '--json', '--limit', String(resolvedLimit)];");
     expect(routeSource).toContain("return ['--no-daemon', 'list', '--all', '--json', '--limit', String(resolvedLimit)];");
-    expect(routeSource).toContain('const bdListArgs = resolveBdListArgs(view, limit);');
+    expect(routeSource).toContain('const listExecutionContext = bdRuntime.resolveListExecutionContext(view, limit);');
+    expect(routeSource).toContain('args: listExecutionContext.args,');
     expect(routeSource).toContain("args: ['sync', '--import-only'],");
   });
 

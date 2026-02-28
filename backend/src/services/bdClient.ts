@@ -24,14 +24,16 @@ type BdCreateIssueInput = {
   issueType?: 'bug' | 'feature' | 'task' | 'epic' | 'chore';
 };
 
-const normalizeString = (value: unknown): string => {
+const normalizeTextValue = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (value == null) return '';
   return String(value).trim();
 };
 
 const resolveBdBin = (): string => {
-  const configured = normalizeString(process.env.VOICEBOT_CODEX_BD_BIN) || normalizeString(process.env.VOICEBOT_CODEX_REVIEW_BD_BIN);
+  const configured =
+    normalizeTextValue(process.env.VOICEBOT_CODEX_BD_BIN) ||
+    normalizeTextValue(process.env.VOICEBOT_CODEX_REVIEW_BD_BIN);
   return configured.length > 0 ? configured : DEFAULT_BD_BIN;
 };
 
@@ -86,7 +88,7 @@ const parseBdCreateResponse = (raw: string): string | null => {
   try {
     const parsed = JSON.parse(trimmed) as { id?: unknown };
     if (parsed && typeof parsed === 'object') {
-      const id = normalizeString(parsed.id);
+      const id = normalizeTextValue(parsed.id);
       if (id) return id;
     }
     return null;
@@ -97,7 +99,7 @@ const parseBdCreateResponse = (raw: string): string | null => {
         try {
           const parsed = JSON.parse(line) as { id?: unknown };
           if (parsed && typeof parsed === 'object') {
-            const id = normalizeString(parsed.id);
+            const id = normalizeTextValue(parsed.id);
             if (id) return id;
           }
         } catch {
@@ -149,13 +151,16 @@ export const createBdIssue = async ({
   }
 
   if (result.code !== 0) {
-    const message = normalizeString(result.stderr) || normalizeString(result.stdout) || `bd_create_exit_code_${String(result.code)}`;
+    const message =
+      normalizeTextValue(result.stderr) ||
+      normalizeTextValue(result.stdout) ||
+      `bd_create_exit_code_${String(result.code)}`;
     throw new Error(message);
   }
 
   const issueId = parseBdCreateResponse(result.stdout);
   if (!issueId) {
-    const output = normalizeString(result.stdout);
+    const output = normalizeTextValue(result.stdout);
     throw new Error(`bd_create_no_issue_id:${output ? output.slice(0, 180) : 'empty_output'}`);
   }
 

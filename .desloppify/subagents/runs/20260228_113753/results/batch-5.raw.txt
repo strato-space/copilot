@@ -1,0 +1,73 @@
+{
+  "batch": "AI Debt & Migrations",
+  "batch_index": 5,
+  "assessments": {
+    "ai_generated_debt": 90.0,
+    "incomplete_migration": 96.0,
+    "low_level_elegance": 94.0
+  },
+  "dimension_notes": {
+    "ai_generated_debt": {
+      "evidence": [
+        "app/src/components/crm/finances/index.ts contains a header comment that only restates the file purpose ('Finances components exports') without adding constraints or rationale.",
+        "app/src/components/crm/projects/index.ts repeats the same restating-comment pattern as finances/index.ts.",
+        "Both barrel files are 3-export pass-through modules; the comments create maintenance noise without improving understanding."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Restating header comments in tiny pass-through files are formulaic and add noise characteristic of AI-generated cleanup."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "No TODO/FIXME/deprecated migration markers appear in app/src/components/crm/finances/index.ts.",
+        "No TODO/FIXME/deprecated migration markers appear in app/src/components/crm/projects/index.ts.",
+        "app/src/vite-env.d.ts uses the canonical Vite client reference and shows no legacy dual-path declarations."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "These files are clean locally, but they are thin barrels and do not prove migration completeness of the underlying CRM modules they re-export."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "All three files are short and readable with direct intent.",
+        "The two CRM index files are pure export barrels with no branching or state mutation.",
+        "The only low-level rough edge is repeated non-informative header comments in minimal files."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Boilerplate comments reduce signal-to-noise in otherwise minimal files."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "restating_barrel_header_comments",
+      "summary": "Two CRM barrel files use non-informative restating comments that add maintenance noise.",
+      "related_files": [
+        "app/src/components/crm/finances/index.ts",
+        "app/src/components/crm/projects/index.ts"
+      ],
+      "evidence": [
+        "Both files include top-of-file comments that only repeat obvious context ('components exports').",
+        "Each file is a trivial 3-line re-export barrel where the comment adds no business rule, ownership note, or migration context."
+      ],
+      "suggestion": "Delete these header comments, or replace them with concise rationale-bearing notes only if there is a non-obvious contract for these barrels (for example, why these exports are grouped and stability expectations).",
+      "confidence": "high",
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "template_style_commenting_without_information_gain"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Template-style file headers were applied to tiny pass-through modules without adding actionable context."
+    ],
+    "likely_symptoms": [
+      "restating_barrel_header_comments"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -104,6 +104,12 @@ interface OpsApprovePackage {
   approved_by?: string | null;
 }
 
+interface OperopsLoadingState {
+  metrics: boolean;
+  approve: boolean;
+  apply: boolean;
+}
+
 const buildRangeMonths = (startMonth: string, endMonth: string): string[] => {
   if (!startMonth || !endMonth) {
     return [];
@@ -153,16 +159,24 @@ export default function AnalyticsPage(): ReactElement {
   const { RangePicker } = DatePicker;
   const [moduleTab, setModuleTab] = useState<'operops' | 'finance' | 'desops'>('finance');
   const [operopsMetrics, setOperopsMetrics] = useState<OpsMetricsResponse | null>(null);
-  const [operopsLoading, setOperopsLoading] = useState<boolean>(false);
+  const [operopsLoadingState, setOperopsLoadingState] = useState<OperopsLoadingState>({
+    metrics: false,
+    approve: false,
+    apply: false,
+  });
   const [operopsError, setOperopsError] = useState<string | null>(null);
   const [operopsSelectedOpIds, setOperopsSelectedOpIds] = useState<Set<string>>(new Set());
   const [operopsApprovedBy, setOperopsApprovedBy] = useState<string>('admin');
-  const [operopsApproveLoading, setOperopsApproveLoading] = useState<boolean>(false);
-  const [operopsApplyLoading, setOperopsApplyLoading] = useState<boolean>(false);
   const [operopsApproveError, setOperopsApproveError] = useState<string | null>(null);
   const [operopsApprovePackage, setOperopsApprovePackage] = useState<OpsApprovePackage | null>(null);
   const [pieMetric, setPieMetric] = useState<'rub' | 'hours'>('rub');
   const [pieValueMode, setPieValueMode] = useState<'forecast' | 'fact'>('forecast');
+  const operopsLoading = operopsLoadingState.metrics;
+  const operopsApproveLoading = operopsLoadingState.approve;
+  const operopsApplyLoading = operopsLoadingState.apply;
+  const patchOperopsLoadingState = (patch: Partial<OperopsLoadingState>): void => {
+    setOperopsLoadingState((prev) => ({ ...prev, ...patch }));
+  };
   const triggerCheck = useNotificationStore((state) => state.triggerCheck);
   const employees = useEmployeeStore((state) => state.employees);
   const {
@@ -205,7 +219,7 @@ export default function AnalyticsPage(): ReactElement {
   }, [dateRange, focusMonth]);
 
   const loadOperopsMetrics = useCallback(async (): Promise<void> => {
-    setOperopsLoading(true);
+    patchOperopsLoadingState({ metrics: true });
     setOperopsError(null);
     try {
       const response = await apiClient.get<OpsMetricsResponse>('/ops/metrics');
@@ -214,7 +228,7 @@ export default function AnalyticsPage(): ReactElement {
     } catch (err) {
       setOperopsError(toOpsErrorMessage(err));
     } finally {
-      setOperopsLoading(false);
+      patchOperopsLoadingState({ metrics: false });
     }
   }, []);
 
@@ -732,7 +746,7 @@ export default function AnalyticsPage(): ReactElement {
                         loading={operopsApproveLoading}
                         disabled={operopsSuggestions.length === 0 || operopsSelectedOpIds.size === 0}
                         onClick={async (): Promise<void> => {
-                          setOperopsApproveLoading(true);
+                          patchOperopsLoadingState({ approve: true });
                           setOperopsApproveError(null);
                           try {
                             const selectedOps = operopsSuggestions.filter((op) => operopsSelectedOpIds.has(op.op_id));
@@ -745,7 +759,7 @@ export default function AnalyticsPage(): ReactElement {
                           } catch (err) {
                             setOperopsApproveError(toOpsErrorMessage(err));
                           } finally {
-                            setOperopsApproveLoading(false);
+                            patchOperopsLoadingState({ approve: false });
                           }
                         }}
                       >
@@ -758,7 +772,7 @@ export default function AnalyticsPage(): ReactElement {
                           if (!operopsApprovePackage?.approve_id) {
                             return;
                           }
-                          setOperopsApplyLoading(true);
+                          patchOperopsLoadingState({ apply: true });
                           setOperopsApproveError(null);
                           try {
                             const response = await apiClient.post<OpsApprovePackage>('/ops/apply', {
@@ -768,7 +782,7 @@ export default function AnalyticsPage(): ReactElement {
                           } catch (err) {
                             setOperopsApproveError(toOpsErrorMessage(err));
                           } finally {
-                            setOperopsApplyLoading(false);
+                            patchOperopsLoadingState({ apply: false });
                           }
                         }}
                       >

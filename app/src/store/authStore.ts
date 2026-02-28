@@ -26,7 +26,7 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
-const getErrorMessage = (err: unknown): string => {
+const getAuthErrorMessage = (err: unknown): string => {
   if (axios.isAxiosError(err)) {
     const apiMessage = err.response?.data?.error?.message;
     if (typeof apiMessage === 'string' && apiMessage.length > 0) {
@@ -115,7 +115,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
         set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, ready: true, error: null });
         return;
       }
-      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, ready: true, error: getErrorMessage(err) });
+      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, ready: true, error: getAuthErrorMessage(err) });
     }
   },
   tryLogin: async (login: string, password: string): Promise<boolean> => {
@@ -141,7 +141,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
       set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, error: 'Invalid credentials' });
       return false;
     } catch (err) {
-      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, error: getErrorMessage(err) });
+      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, error: getAuthErrorMessage(err) });
       return false;
     }
   },
@@ -166,7 +166,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
       set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, error: 'Invalid token' });
       return false;
     } catch (err) {
-      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, error: getErrorMessage(err) });
+      set({ isAuth: false, user: null, permissions: [], authToken: null, loading: false, error: getAuthErrorMessage(err) });
       return false;
     }
   },
@@ -212,7 +212,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
           permissions: [],
           authToken: null,
           loading: silent ? state.loading : false,
-          error: getErrorMessage(err),
+          error: getAuthErrorMessage(err),
           ready: true,
         }));
         return false;
@@ -224,7 +224,7 @@ export const useAuthStore = create<AuthState>((set): AuthState => ({
         permissions: state.permissions,
         authToken: state.authToken,
         loading: silent ? state.loading : false,
-        error: getErrorMessage(err),
+        error: getAuthErrorMessage(err),
         ready: true,
       }));
       return false;

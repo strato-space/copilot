@@ -27,7 +27,7 @@ export interface NotificationSettings {
   popupTags: Record<string, boolean>;
 }
 
-interface NotificationState {
+interface NotificationDataSlice {
   items: NotificationItem[];
   readIds: Set<string>;
   mutedIds: Set<string>;
@@ -37,6 +37,9 @@ interface NotificationState {
   pendingPopupIds: string[];
   settings: NotificationSettings;
   isDrawerOpen: boolean;
+}
+
+interface NotificationUiActionsSlice {
   openDrawer: () => void;
   closeDrawer: () => void;
   toggleFilterTag: (tag: string) => void;
@@ -44,6 +47,9 @@ interface NotificationState {
   markRead: (id: string) => void;
   mute: (id: string) => void;
   snooze: (id: string, hours?: number) => void;
+}
+
+interface NotificationAgentActionsSlice {
   addAgentNotification: (title: string, description: string) => void;
   runAgentCommand: (commandId: string) => boolean;
   setContextLabel: (label: string) => void;
@@ -51,6 +57,10 @@ interface NotificationState {
   triggerCheck: (source: 'analytics' | 'refresh' | 'agent') => void;
   clearPendingPopups: () => void;
 }
+
+type NotificationState = NotificationDataSlice &
+  NotificationUiActionsSlice &
+  NotificationAgentActionsSlice;
 
 const STORAGE_READ = 'finopsNotificationsRead';
 const STORAGE_MUTED = 'finopsNotificationsMuted';

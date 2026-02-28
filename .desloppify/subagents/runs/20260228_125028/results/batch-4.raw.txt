@@ -1,0 +1,122 @@
+{
+  "batch": "Authorization",
+  "batch_index": 4,
+  "assessments": {
+    "authorization_consistency": 69.0,
+    "mid_level_elegance": 74.0
+  },
+  "dimension_notes": {
+    "authorization_consistency": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/index.ts` states all voicebot routes require auth/admin, but mounts unauthenticated `GET /public_attachment/:session_id/:file_unique_id` before `authMiddleware` + `requireAdmin`.",
+        "`backend/src/api/routes/voicebot/sessions.ts` has multiple mutation handlers (`/update_name`, `/update_access_level`, `/update_dialogue_tag`, `/update_participants`, `/update_allowed_users`) that update session state directly by `_id` without `resolveSessionAccess` checks and without per-action permission checks used elsewhere.",
+        "Several session mutations in `sessions.ts` write by raw `_id` and skip runtime-scoped filters used in other handlers (`runtimeSessionQuery`/`mergeWithProdAwareRuntimeFilter`), creating inconsistent runtime isolation enforcement."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Session authorization logic is duplicated in `sessions.ts` (`resolveSessionAccess`) and `uploads.ts` (`checkSessionAccess`) with near-identical READ_ALL/READ_OWN/public/restricted branching, creating seam drift risk for future policy changes.",
+        "Voicebot route-level contract is split across files: global auth/admin in `voicebot/index.ts`, per-route permission middleware in `uploads.ts`, and ad-hoc inline permission checks in `sessions.ts`, so boundary behavior is not centralized or predictable.",
+        "`backend/src/miniapp/index.ts` always injects static `TEST_DATA` into router dependencies; auth hardening depends on runtime flags in downstream router logic rather than startup-time environment guardrails."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "public_attachment_auth_bypass_path",
+      "summary": "Public attachment endpoint bypasses voicebot auth/admin policy at router boundary.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/index.ts"
+      ],
+      "evidence": [
+        "`voicebot/index.ts` mounts `router.get('/public_attachment/:session_id/:file_unique_id', publicAttachmentHandler)` before `router.use(authMiddleware)` and `router.use(requireAdmin)`.",
+        "`uploads.ts` `publicAttachmentHandler` serves files by `session_id` + `file_unique_id` with no caller identity or permission check.",
+        "`backend/src/index.ts` mounts whole voicebot router at `/api/voicebot`, so this unauthenticated branch is reachable in production API surface."
+      ],
+      "suggestion": "Require signed, short-lived attachment tokens (or authenticated access with `resolveSessionAccess`) for public attachment retrieval, and update route docs/comments to reflect the real contract. If legacy public access is required, isolate it into an explicitly named public router with strict token validation and audit logging.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "split_authorization_model"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "session_mutations_skip_consistent_acl_runtime_scope",
+      "summary": "Several session mutation routes bypass shared access checks and runtime isolation filters.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` handlers `/update_name`, `/update_access_level`, `/update_dialogue_tag`, `/update_participants`, `/update_allowed_users` perform direct `updateOne({ _id: new ObjectId(session_id) }, ...)` without `resolveSessionAccess`.",
+        "These handlers also skip runtime-aware filters (`runtimeSessionQuery`/`mergeWithProdAwareRuntimeFilter`) that are used in other session paths.",
+        "In the same module, other sensitive endpoints (`/session_done`, `/delete`, `/add_text`) do perform explicit permission/session-access checks, showing inconsistent authorization enforcement model."
+      ],
+      "suggestion": "Introduce a shared mutation guard helper (session fetch + runtime scope + permission + session-level ACL) and route all session writes through it; then replace raw `_id` update filters in mutation endpoints with runtime-scoped filters.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "split_authorization_model"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "duplicated_session_acl_logic_across_routes",
+      "summary": "Access-control logic is duplicated across route modules, increasing policy drift risk.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` `resolveSessionAccess` and `uploads.ts` `checkSessionAccess` both reimplement the same permission matrix (READ_ALL/READ_OWN + private/public/restricted session visibility).",
+        "Both functions also duplicate runtime mismatch probing (main query + raw DB fallback), but remain independent code paths.",
+        "When ACL rules evolve, both modules must be updated manually, making inconsistent authorization behavior likely."
+      ],
+      "suggestion": "Extract a single `voicebotSessionAccessService` (pure function + DB adapter) used by both sessions and uploads routes; include standardized result shape (`not_found|runtime_mismatch|forbidden|ok`) and shared telemetry fields.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "split_authorization_model"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "miniapp_debug_identity_path_not_startup_guarded",
+      "summary": "Miniapp boot path wires static test identity data without an environment safety gate.",
+      "related_files": [
+        "backend/src/miniapp/index.ts",
+        "backend/src/index.ts"
+      ],
+      "evidence": [
+        "`miniapp/index.ts` defines static `TEST_DATA` and always passes it into `createMiniappRouter`.",
+        "The same process boot code has no startup-time guard that refuses launch when debug auth mode is enabled in non-dev environments.",
+        "This creates auth posture dependence on downstream runtime flag handling instead of an explicit server-start safety invariant."
+      ],
+      "suggestion": "Add a startup guard in `miniapp/index.ts` that throws when `IS_MINIAPP_DEBUG_MODE=true` outside explicit local/dev environments, and only provide test identity fixtures under that guarded branch.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "split_authorization_model"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Authorization rules are enforced in multiple layers (router-level, route-level middleware, ad-hoc handler checks) without a single canonical policy path.",
+      "Runtime isolation and ACL checks are treated as optional per-handler concerns instead of mandatory boundary primitives."
+    ],
+    "likely_symptoms": [
+      "public_attachment_auth_bypass_path",
+      "session_mutations_skip_consistent_acl_runtime_scope",
+      "duplicated_session_acl_logic_across_routes"
+    ],
+    "possible_false_positives": []
+  }
+}

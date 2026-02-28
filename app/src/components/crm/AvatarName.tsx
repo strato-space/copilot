@@ -6,7 +6,7 @@ interface AvatarNameProps {
     className?: string;
 }
 
-const getInitials = (value: string): string => {
+const buildAvatarInitials = (value: string): string => {
     if (!value || typeof value !== 'string') return '?';
     const parts = value
         .trim()
@@ -42,7 +42,7 @@ const AvatarName = ({ name, size = 28, className = '' }: AvatarNameProps) => {
                 style={{ fontSize: Math.max(size - 2, 10) }}
                 className={`bg-slate-200 text-slate-700 border border-slate-200 ${className}`}
             >
-                {getInitials(safeName)}
+                {buildAvatarInitials(safeName)}
             </Avatar>
         </Tooltip>
     );

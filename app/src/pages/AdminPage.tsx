@@ -2,8 +2,8 @@ import { Card, Tabs } from 'antd';
 import { SettingOutlined, UserOutlined } from '@ant-design/icons';
 
 import PermissionGate from '../components/voice/PermissionGate';
+import PermissionsManager from '../components/admin/PermissionsManager';
 import { PERMISSIONS } from '../constants/permissions';
-import { PermissionsManager } from '../components/admin';
 
 const { TabPane } = Tabs;
 

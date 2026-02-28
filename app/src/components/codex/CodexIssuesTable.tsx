@@ -237,10 +237,6 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
         }
     }, [filteredIssues, selectedKey]);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [view]);
-
     const columns = useMemo<TableColumnsType<CodexIssue>>(
         () => [
             {
@@ -388,6 +384,7 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
                 items={CODEX_VIEW_TABS}
                 onChange={(key) => {
                     setView(key as CodexIssuesView);
+                    setCurrentPage(1);
                 }}
                 className="mb-3"
             />

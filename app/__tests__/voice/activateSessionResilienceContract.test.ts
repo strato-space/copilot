@@ -8,8 +8,8 @@ describe('Voice activate_session resilience contract', () => {
   const webrtcSource = fs.readFileSync(webrtcPath, 'utf8');
 
   it('retries transient activate_session failures in voiceBotStore and keeps page session fallback', () => {
-    expect(storeSource).toContain('const isTransientVoicebotRequestError = (error: unknown): boolean => {');
     expect(storeSource).toContain('const maxAttempts = 3;');
+    expect(storeSource).toContain('const shouldRetry = attempt < maxAttempts && voicebotHttp.isTransientError(error);');
     expect(storeSource).toContain('Повтор активации сессии после сетевой ошибки');
     expect(storeSource).toContain('Локальный fallback активации: используем текущую открытую сессию');
   });

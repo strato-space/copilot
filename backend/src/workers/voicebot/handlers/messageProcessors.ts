@@ -28,6 +28,14 @@ export const parseJsonArray = (raw: string): unknown[] => {
   return [];
 };
 
+export const mapJsonArrayRows = <T>(
+  raw: string,
+  mapper: (item: Record<string, unknown>) => T
+): T[] =>
+  parseJsonArray(raw)
+    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+    .map((row) => mapper(row));
+
 export const getCategorizationData = (message: MessageWithCategorization): unknown[] => {
   if (Array.isArray(message.categorization)) {
     return message.categorization;

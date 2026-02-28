@@ -44,7 +44,7 @@ export type CategorizationRow = VoiceMessageRow & {
     timeEnd?: number | string | undefined;
 };
 
-interface SessionsUIState {
+interface SessionsUIDataSlice {
     participantModal: ParticipantModalState;
     accessUsersModal: AccessUsersModalState;
     selectedCategorizationRows: CategorizationRow[];
@@ -52,7 +52,9 @@ interface SessionsUIState {
     categorizationSort: CategorizationSortState;
     transcriptionSort: TranscriptionSortState;
     ticketsModal: TicketsModalState;
+}
 
+interface ParticipantModalActionsSlice {
     setParticipantModalVisible: (visible: boolean) => void;
     setParticipantModalLoading: (loading: boolean) => void;
     setParticipantModalMode: (mode: 'select' | 'create') => void;
@@ -63,7 +65,9 @@ interface SessionsUIState {
     resetParticipantModal: () => void;
     addSelectedPerson: (personId: string) => void;
     removeSelectedPerson: (personId: string) => void;
+}
 
+interface AccessUsersModalActionsSlice {
     setAccessUsersModalVisible: (visible: boolean) => void;
     setAccessUsersModalLoading: (loading: boolean) => void;
     setAccessUsersModalSelectedUserIds: (selectedUserIds: string[]) => void;
@@ -73,7 +77,9 @@ interface SessionsUIState {
     resetAccessUsersModal: () => void;
     addSelectedUser: (userId: string) => void;
     removeSelectedUser: (userId: string) => void;
+}
 
+interface CategorizationSelectionActionsSlice {
     setSelectedCategorizationRows: (rows: CategorizationRow[]) => void;
     addSelectedCategorizationRow: (row: CategorizationRow) => void;
     removeSelectedCategorizationRow: (row: CategorizationRow) => void;
@@ -82,13 +88,18 @@ interface SessionsUIState {
     clearSelectedCategorizationRows: () => void;
     setMaterialTargetMessageId: (messageId: string | null) => void;
     clearMaterialTargetMessageId: () => void;
+}
+
+interface SortPreferenceActionsSlice {
     toggleCategorizationSort: () => void;
     setCategorizationSortAscending: (ascending: boolean) => void;
     initCategorizationSort: (sessionIsActive?: boolean) => void;
     toggleTranscriptionSort: () => void;
     setTranscriptionSortAscending: (ascending: boolean) => void;
     initTranscriptionSort: (sessionIsActive?: boolean) => void;
+}
 
+interface TicketsModalBaseActionsSlice {
     openTicketsModal: (data: TicketsModalData) => void;
     closeTicketsModal: () => void;
     setTicketsModalLoading: (loading: boolean) => void;
@@ -98,6 +109,9 @@ interface SessionsUIState {
     toggleTicketSelection: (ticketId: string) => void;
     setEditingTicket: (ticketId: string, updates: Record<string, unknown>) => void;
     setTicketEditing: (ticketId: string, field: string, value: unknown) => void;
+}
+
+interface TicketsModalEditActionsSlice {
     saveTicketEdit: (ticketId: string) => void;
     cancelTicketEdit: (ticketId: string) => void;
     isTicketEditing: (ticketId: string, field: string) => boolean;
@@ -116,6 +130,14 @@ interface SessionsUIState {
         connectionState: 'connecting' | 'connected' | 'disconnected'
     ) => Promise<void>;
 }
+
+type SessionsUIState = SessionsUIDataSlice &
+    ParticipantModalActionsSlice &
+    AccessUsersModalActionsSlice &
+    CategorizationSelectionActionsSlice &
+    SortPreferenceActionsSlice &
+    TicketsModalBaseActionsSlice &
+    TicketsModalEditActionsSlice;
 
 const initialParticipantModal: ParticipantModalState = {
     visible: false,

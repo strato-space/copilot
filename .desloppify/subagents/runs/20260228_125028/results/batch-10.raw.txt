@@ -1,0 +1,332 @@
+{
+  "batch": "Full Codebase Sweep",
+  "batch_index": 10,
+  "assessments": {
+    "cross_module_architecture": 86.0,
+    "convention_outlier": 83.0,
+    "error_consistency": 78.0,
+    "abstraction_fitness": 80.0,
+    "api_surface_coherence": 79.0,
+    "authorization_consistency": 90.0,
+    "ai_generated_debt": 87.0,
+    "incomplete_migration": 82.0,
+    "package_organization": 83.0,
+    "high_level_elegance": 84.0,
+    "mid_level_elegance": 82.0,
+    "low_level_elegance": 83.0,
+    "design_coherence": 81.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "app/src/App.tsx is a central dependency hub for route registration and imports most top-level pages directly.",
+        "holistic_context.structure shows strong one-way edges app/src/ → app/src/pages/ (14) and app/src/pages/ → app/src/components/ (16), indicating concentration at the root router layer."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Route/context concerns are still centralized in App.tsx, increasing blast radius for navigation changes."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "app/src/constants/crm.ts defines NOTION_TICKET_PRIORITIES with \"🔥 P1 \" (trailing space), while app/src/components/voice/PossibleTasks.tsx uses \"🔥 P1\".",
+        "app/src/components/voice/Screenshort.tsx uses a persistent misspelling in file/component naming, diverging from normal naming conventions."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "app/src/components/voice/WebrtcFabLoader.tsx contains multiple catch blocks that fully swallow failures without any telemetry.",
+        "app/src/pages/PlanFactPage.tsx catches bulk API load errors and emits only a generic UI message, losing endpoint-level context.",
+        "app/src/components/voice/SessionLog.tsx and app/src/components/voice/TranscriptionTableRow.tsx log raw console errors while other paths fully suppress errors."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "app/src/components/voice/PermissionGate.tsx duplicates access-check logic in both PermissionGate and usePermissionChecker.",
+        "The same permission predicates are also reimplemented in UserActions, creating parallel abstractions for one policy."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 74.0,
+        "indirection_cost": 79.0,
+        "interface_honesty": 82.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "app/src/components/voice/Screenshort.tsx uses direct axios.get with custom X-Authorization handling.",
+        "app/src/components/voice/WebrtcFabLoader.tsx uses raw fetch directly for network checks.",
+        "app/src/pages/ProjectEditPage.tsx and app/src/pages/PlanFactPage.tsx use apiClient, resulting in mixed HTTP APIs and divergent error/auth behavior."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Admin surface is gated via PermissionGate in app/src/pages/AdminPage.tsx.",
+        "Task-creation actions are gated with PERMISSIONS.PROJECTS.UPDATE in app/src/components/voice/Categorization.tsx and app/src/components/voice/PossibleTasks.tsx."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Permission checks are consistent where present, but remain component-local rather than route-level for sensitive sections."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "app/src/components/voice/WebrtcFabLoader.tsx shows repetitive defensive try/catch wrappers with empty handlers.",
+        "app/src/components/voice/MeetingCard.tsx and related voice components contain repeated boilerplate-style error logging patterns."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Repeated defensive scaffolding and inconsistent logging patterns add noise and reduce operational signal."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "app/src/components/voice/Transcription.tsx, app/src/components/voice/TranscriptionTableRow.tsx, and app/src/components/voice/SessionLog.tsx all maintain parallel legacy-transcription paths.",
+        "Legacy handling logic is duplicated rather than centralized, increasing risk of behavior drift during migration completion."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "package_organization": {
+      "evidence": [
+        "holistic_context.structure.directory_profiles[\"app/src/pages/\"] shows 14 files with mixed concerns (auth, placeholders, layouts, analytics, finops editing) in one flat folder.",
+        "holistic_context.structure.directory_profiles[\"app/src/components/\"] shows 10 broad components (3163 LOC) while feature-specific folders already exist (voice/crm), indicating partial split and placement drift.",
+        "app/src/App.tsx imports both domain pages and generic placeholders directly, reinforcing mixed ownership at folder boundaries."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Top-level routing, nav metadata, and context-label resolution are all co-located in app/src/App.tsx.",
+        "Placeholder domain pages (Agents/ChatOps/DesOps/HHOps/SaleOps) are implemented as separate files but share identical structural intent."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Network and error handoff patterns differ across adjacent modules (Screenshort/WebrtcFabLoader/ProjectEditPage/PlanFactPage).",
+        "Transcription-related seams (legacy vs new segment models) are translated independently in multiple components."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "app/src/App.tsx contains duplicated conditional branch for '/desops' in contextLabel resolution chain.",
+        "app/src/components/voice/WebrtcFabLoader.tsx repeats many near-identical cleanup try/catch blocks."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high"
+    },
+    "design_coherence": {
+      "evidence": [
+        "App-level navigation state and label derivation are maintained by manual duplicated condition chains instead of shared route metadata.",
+        "Permission and legacy-transcription policies are implemented via repeated local helpers rather than single policy/normalization points."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "duplicate_context_branch_in_router_shell",
+      "summary": "Main layout context-label logic has duplicated branch and manual drift-prone chain",
+      "related_files": [
+        "app/src/App.tsx",
+        "app/src/components/NotificationsDrawer.tsx"
+      ],
+      "evidence": [
+        "app/src/App.tsx computes contextLabel with a long nested ternary and repeats normalizedPath.startsWith('/desops') twice.",
+        "NotificationsDrawer consumes contextLabel for user-facing context; branch mistakes directly affect agent context display."
+      ],
+      "suggestion": "Replace nested ternary with a single ordered route-to-context map (array/object) shared by nav and notification context derivation; remove duplicate '/desops' branch and unit-test label resolution for each top-level route.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "manual_route_policy_scatter"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_http_client_contracts",
+      "summary": "Frontend uses three network surfaces with incompatible auth/error conventions",
+      "related_files": [
+        "app/src/components/voice/Screenshort.tsx",
+        "app/src/components/voice/WebrtcFabLoader.tsx",
+        "app/src/pages/ProjectEditPage.tsx",
+        "app/src/pages/PlanFactPage.tsx"
+      ],
+      "evidence": [
+        "Screenshort performs direct axios.get with custom X-Authorization + withCredentials behavior.",
+        "WebrtcFabLoader uses raw fetch HEAD calls and suppresses network failures.",
+        "ProjectEditPage and PlanFactPage use apiClient, creating parallel error/auth handling paths."
+      ],
+      "suggestion": "Standardize on apiClient for app network calls (including binary attachment fetch and script preflight), add a typed helper for attachment proxy headers, and unify error normalization so UI paths receive consistent error objects.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "manual_route_policy_scatter"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_or_raw_error_handling_mix",
+      "summary": "Error handling alternates between silent catch, raw console logs, and generic UI errors",
+      "related_files": [
+        "app/src/components/voice/WebrtcFabLoader.tsx",
+        "app/src/pages/PlanFactPage.tsx",
+        "app/src/components/voice/SessionLog.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "app/src/components/voice/Screenshort.tsx"
+      ],
+      "evidence": [
+        "WebrtcFabLoader has multiple catch blocks with no logging or structured fallback reason.",
+        "PlanFactPage catches multi-endpoint load failures and emits a single generic message without contextual diagnostics.",
+        "SessionLog/TranscriptionTableRow/Screenshort use raw console.error in user flows, yielding inconsistent observability contracts."
+      ],
+      "suggestion": "Introduce a shared frontend error utility (`reportUiError(context, error)`) with category/context metadata; replace empty catches with structured reporting and convert raw console.error calls to the same utility plus consistent user-facing messages.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "inconsistent_frontend_error_policy"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_permission_evaluation_logic",
+      "summary": "Permission evaluation is reimplemented in multiple helpers inside one module",
+      "related_files": [
+        "app/src/components/voice/PermissionGate.tsx",
+        "app/src/pages/AdminPage.tsx",
+        "app/src/components/voice/Categorization.tsx"
+      ],
+      "evidence": [
+        "PermissionGate.tsx defines equivalent role/permission checks in `hasAccess` and again in `usePermissionChecker.check`.",
+        "UserActions adds another local permission/role filter path instead of reusing one predicate.",
+        "Consumers (AdminPage, Categorization) rely on this module as policy boundary, so duplicate logic increases divergence risk."
+      ],
+      "suggestion": "Extract one pure permission predicate (`canAccess({permission, role, requireAll}, checker)`) and reuse it in PermissionGate, usePermissionChecker, and UserActions to keep role/permission semantics synchronized.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "policy_logic_duplication"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_transcription_path_fragmentation",
+      "summary": "Legacy transcription compatibility logic is duplicated across UI surfaces",
+      "related_files": [
+        "app/src/components/voice/Transcription.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "app/src/components/voice/SessionLog.tsx"
+      ],
+      "evidence": [
+        "Transcription.tsx maintains visibility rules for both `transcription.segments` and `transcription_chunks`.",
+        "TranscriptionTableRow.tsx contains a separate, complex legacy conversion pipeline (`buildLegacySegments`, merging by id).",
+        "SessionLog.tsx independently implements segment extraction for both new and legacy schemas."
+      ],
+      "suggestion": "Create a shared voice normalization module (e.g., `normalizeTranscriptionMessage`) that returns a canonical segment list and visibility flags; migrate all three components to that contract, then phase out direct `transcription_chunks` handling behind one compatibility adapter.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_schema_dualpath"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "priority_literal_mismatch_trailing_space",
+      "summary": "Priority literals diverge by trailing whitespace, risking filter/mapping mismatches",
+      "related_files": [
+        "app/src/constants/crm.ts",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "crm constants define `NOTION_TICKET_PRIORITIES` with first value `\"🔥 P1 \"` (trailing space).",
+        "PossibleTasks uses `PRIORITY_OPTIONS` with `\"🔥 P1\"` (no trailing space), creating subtly different enum values."
+      ],
+      "suggestion": "Normalize priority constants to a single shared source (trimmed canonical values), replace local literals in PossibleTasks with that shared constant, and add a unit test asserting no leading/trailing whitespace in priority enums.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "literal_enum_drift"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "flat_page_layer_mixes_domains",
+      "summary": "Top-level page folder is overloaded with mixed-domain concerns and placeholders",
+      "related_files": [
+        "app/src/App.tsx",
+        "app/src/pages/AnalyticsPage.tsx",
+        "app/src/pages/PlanFactPage.tsx",
+        "app/src/pages/AgentsOpsPage.tsx",
+        "app/src/pages/ChatopsPage.tsx",
+        "app/src/pages/DesopsPage.tsx",
+        "app/src/pages/HhopsPage.tsx",
+        "app/src/pages/SaleopsPage.tsx",
+        "app/src/pages/OperOpsLayout.tsx",
+        "app/src/pages/VoiceLayout.tsx"
+      ],
+      "evidence": [
+        "directory_profiles shows app/src/pages/ contains 14 files with mixed concerns (layouts, auth, finops analytics, placeholders).",
+        "App.tsx imports these heterogeneous pages directly, making ownership boundaries unclear and increasing route-maintenance churn."
+      ],
+      "suggestion": "Staged reorg plan: 1) create target folders `app/src/pages/{shell,finops,ops-placeholder,auth,admin}`; 2) move placeholder pages (AgentsOps/Chatops/Desops/Hhops/Saleops) into `ops-placeholder`; 3) move PlanFact/Analytics/ProjectEdit into `finops`; 4) move Login/TGAuth into `auth`; 5) keep routing shell in `shell`; 6) update imports in App.tsx and any barrels using `rg -n \"from './pages\" app/src`; 7) validate with `cd app && npm run build` and `cd app && npm run test`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "package_boundary_drift"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "repeated_policy_and_schema_logic_no_single_source",
+      "summary": "Permission policy and transcription compatibility are both maintained as repeated local logic",
+      "related_files": [
+        "app/src/components/voice/PermissionGate.tsx",
+        "app/src/components/voice/Transcription.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "app/src/components/voice/SessionLog.tsx"
+      ],
+      "evidence": [
+        "Permission policy is duplicated within PermissionGate module instead of one policy primitive.",
+        "Legacy/new transcription schema reconciliation is duplicated across three voice views.",
+        "Both patterns show repeated rule ownership in UI leaf components rather than centralized domain adapters."
+      ],
+      "suggestion": "Introduce two shared seams: a `voiceAccessPolicy` helper and a `voiceTranscriptionNormalizer` adapter; migrate consumers to these seams first, then remove duplicated branch logic in components.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "policy_logic_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Policy logic (permissions/errors/schema compatibility) is duplicated across UI components instead of centralized adapters.",
+      "Page and routing layers are organized around historical accretion rather than explicit ownership boundaries."
+    ],
+    "likely_symptoms": [
+      "duplicate_context_branch_in_router_shell",
+      "mixed_http_client_contracts",
+      "legacy_transcription_path_fragmentation",
+      "priority_literal_mismatch_trailing_space"
+    ],
+    "possible_false_positives": [
+      "Some legacy transcription paths may be intentionally retained for active backend compatibility; centralization is still advisable to reduce drift."
+    ]
+  }
+}

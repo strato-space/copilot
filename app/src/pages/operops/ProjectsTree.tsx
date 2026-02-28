@@ -93,6 +93,14 @@ interface MergeDialogState {
     loading: boolean;
 }
 
+interface ProjectsTreeUiState {
+    createCustomerOpen: boolean;
+    createGroupOpen: boolean;
+    createProjectOpen: boolean;
+    editModalOpen: boolean;
+    showInactive: boolean;
+}
+
 const numberValue = (value: unknown): number => {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     return 0;
@@ -147,11 +155,13 @@ const ProjectsTree: React.FC = () => {
     const api_request = useRequestStore((state) => state.api_request);
 
     const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
-    const [showCreateCustomer, setShowCreateCustomer] = useState(false);
-    const [showCreateGroup, setShowCreateGroup] = useState(false);
-    const [showCreateProject, setShowCreateProject] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [showInactive, setShowInactive] = useState(false);
+    const [uiState, setUiState] = useState<ProjectsTreeUiState>({
+        createCustomerOpen: false,
+        createGroupOpen: false,
+        createProjectOpen: false,
+        editModalOpen: false,
+        showInactive: false,
+    });
     const [tableRows, setTableRows] = useState<TableRow[]>([]);
     const [tableLoading, setTableLoading] = useState(false);
     const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
@@ -267,14 +277,14 @@ const ProjectsTree: React.FC = () => {
         setTableLoading(true);
         try {
             await Promise.all([
-                fetchCustomers(showInactive),
-                fetchProjectGroups(showInactive),
-                fetchProjects(showInactive),
+                fetchCustomers(uiState.showInactive),
+                fetchProjectGroups(uiState.showInactive),
+                fetchProjects(uiState.showInactive),
             ]);
 
             const treeResponse = await api_request<ProjectTreeResponse>(
                 'project_tree/list',
-                { show_inactive: showInactive, include_stats: true },
+                { show_inactive: uiState.showInactive, include_stats: true },
                 { silent: true }
             );
             setTableRows(buildTableRows(treeResponse));
@@ -284,7 +294,7 @@ const ProjectsTree: React.FC = () => {
         } finally {
             setTableLoading(false);
         }
-    }, [api_request, buildTableRows, fetchCustomers, fetchProjectGroups, fetchProjects, showInactive]);
+    }, [api_request, buildTableRows, fetchCustomers, fetchProjectGroups, fetchProjects, uiState.showInactive]);
 
     useEffect(() => {
         loadData();
@@ -298,12 +308,12 @@ const ProjectsTree: React.FC = () => {
         const node = toTreeNodeFromRow(row);
         if (node) {
             setSelectedNode(node);
-            setShowEditModal(true);
+            setUiState((prev) => ({ ...prev, editModalOpen: true }));
         }
     };
 
     const closeEditModal = (): void => {
-        setShowEditModal(false);
+        setUiState((prev) => ({ ...prev, editModalOpen: false }));
         setSelectedNode(null);
     };
 
@@ -680,7 +690,7 @@ const ProjectsTree: React.FC = () => {
                         <Button
                             type="default"
                             icon={<PlusOutlined />}
-                            onClick={() => setShowCreateCustomer(true)}
+                            onClick={() => setUiState((prev) => ({ ...prev, createCustomerOpen: true }))}
                             size="large"
                         >
                             Новый заказчик
@@ -688,7 +698,7 @@ const ProjectsTree: React.FC = () => {
                         <Button
                             type="default"
                             icon={<PlusOutlined />}
-                            onClick={() => setShowCreateGroup(true)}
+                            onClick={() => setUiState((prev) => ({ ...prev, createGroupOpen: true }))}
                             size="large"
                         >
                             Новая группа
@@ -696,13 +706,18 @@ const ProjectsTree: React.FC = () => {
                         <Button
                             type="default"
                             icon={<PlusOutlined />}
-                            onClick={() => setShowCreateProject(true)}
+                            onClick={() => setUiState((prev) => ({ ...prev, createProjectOpen: true }))}
                             size="large"
                         >
                             Новый проект
                         </Button>
                         <div className="flex items-center gap-2">
-                            <Switch checked={showInactive} onChange={setShowInactive} />
+                            <Switch
+                                checked={uiState.showInactive}
+                                onChange={(checked) =>
+                                    setUiState((prev) => ({ ...prev, showInactive: checked }))
+                                }
+                            />
                             <Text type="secondary">Показывать скрытые</Text>
                         </div>
                     </Space>
@@ -739,7 +754,7 @@ const ProjectsTree: React.FC = () => {
                 </Card>
 
                 <Modal
-                    open={showCreateCustomer}
+                    open={uiState.createCustomerOpen}
                     title={
                         <div className="flex items-center gap-2">
                             <UserOutlined className="text-blue-500" />
@@ -747,20 +762,22 @@ const ProjectsTree: React.FC = () => {
                         </div>
                     }
                     footer={null}
-                    onCancel={() => setShowCreateCustomer(false)}
+                    onCancel={() =>
+                        setUiState((prev) => ({ ...prev, createCustomerOpen: false }))
+                    }
                     width={560}
                 >
                     <Divider />
                     <EditCustomer
                         onSave={() => {
                             handleSaveAndRefresh();
-                            setShowCreateCustomer(false);
+                            setUiState((prev) => ({ ...prev, createCustomerOpen: false }));
                         }}
                     />
                 </Modal>
 
                 <Modal
-                    open={showCreateGroup}
+                    open={uiState.createGroupOpen}
                     title={
                         <div className="flex items-center gap-2">
                             <FolderOutlined className="text-orange-500" />
@@ -768,7 +785,9 @@ const ProjectsTree: React.FC = () => {
                         </div>
                     }
                     footer={null}
-                    onCancel={() => setShowCreateGroup(false)}
+                    onCancel={() =>
+                        setUiState((prev) => ({ ...prev, createGroupOpen: false }))
+                    }
                     width={640}
                 >
                     <Divider />
@@ -776,13 +795,13 @@ const ProjectsTree: React.FC = () => {
                         customers={customers}
                         onSave={() => {
                             handleSaveAndRefresh();
-                            setShowCreateGroup(false);
+                            setUiState((prev) => ({ ...prev, createGroupOpen: false }));
                         }}
                     />
                 </Modal>
 
                 <Modal
-                    open={showCreateProject}
+                    open={uiState.createProjectOpen}
                     title={
                         <div className="flex items-center gap-2">
                             <ProjectOutlined className="text-green-500" />
@@ -790,7 +809,9 @@ const ProjectsTree: React.FC = () => {
                         </div>
                     }
                     footer={null}
-                    onCancel={() => setShowCreateProject(false)}
+                    onCancel={() =>
+                        setUiState((prev) => ({ ...prev, createProjectOpen: false }))
+                    }
                     width={760}
                 >
                     <Divider />
@@ -799,13 +820,13 @@ const ProjectsTree: React.FC = () => {
                         projectGroups={projectGroups}
                         onSave={() => {
                             handleSaveAndRefresh();
-                            setShowCreateProject(false);
+                            setUiState((prev) => ({ ...prev, createProjectOpen: false }));
                         }}
                     />
                 </Modal>
 
                 <Modal
-                    open={showEditModal}
+                    open={uiState.editModalOpen}
                     title={selectedNode ? `Редактирование: ${selectedNode.title}` : 'Редактирование'}
                     footer={null}
                     onCancel={closeEditModal}

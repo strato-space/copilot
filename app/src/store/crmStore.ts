@@ -33,122 +33,128 @@ interface SelectedSectionPairs {
     [key: string]: unknown;
 }
 
-interface CRMState {
-    // Week reports
+interface CRMReportsSlice {
     week_reports: WeekReports;
     fetchReports: () => Promise<void>;
+}
 
-    // Editing states
+interface CRMEditingSlice {
     editingColumn: EditingColumn;
     setEditingColumn: (ticket: Ticket | null, column: string | null) => void;
-
     editingTicket: Ticket | null;
     setEditingTicket: (ticket: Ticket | null) => void;
     setEditingTicketToNew: () => void;
-
     editingEpic: Epic | null;
     setEditingEpic: (epic: Epic | null) => void;
     setEditingEpicToNew: () => void;
+}
 
-    // Tree navigation
+interface CRMTreeSlice {
     selectedNode: TreeNode | null;
     setSelectedNode: (data: TreeNode | null) => void;
-
     editingNode: TreeNode | null;
     setEditingNode: (node: TreeNode | null) => void;
+}
 
-    // Forms
+interface CRMFormsSlice {
     newEntityForm: string | null;
     setNewEntityForm: (formName: string | null) => void;
-
     editForm: string | null;
     setEditForm: (formName: string | null) => void;
+}
 
-    // Filters
+interface CRMFiltersSlice {
     isInActiveVisible: boolean;
     setIsInActiveVisible: (is_visible: boolean) => void;
-
     statusFilter: string[];
     setStatusFilter: (filter: string[]) => void;
-
     savedFilters: CRMFilters;
     saveFilters: (filters: CRMFilters) => void;
-
     savedTab: string;
     saveTab: (tab: string | number) => void;
-
     all_statuses_stat: Record<string, number>;
     calculateStatusesStat: (tickets?: Ticket[]) => void;
+}
 
-    // Comments and work hours
+interface CRMCommentsAndHoursSlice {
     commentedTicket: Ticket | null;
     setCommentedTicket: (ticket: Ticket | null) => void;
-
     editingWorkHours: Ticket | null;
     setEditingWorkHours: (ticket: Ticket | null) => void;
+}
 
-    // Figma sync
+interface CRMFigmaSyncSlice {
     pairToSync: FigmaSyncPair | null;
     setPairToSync: (pair: FigmaSyncPair) => Promise<void>;
     clearPairToSync: () => void;
-
     secitionsToSync: Record<string, SectionToSync>;
     addSectionToSync: (pair: FigmaSyncPair, page: { name: string; node_id: string }, section: { name: string; node_id: string }) => void;
     removeSectionFromSync: (pair: FigmaSyncPair, page: { name: string; node_id: string }, section: { name: string; node_id: string }) => void;
     clearSectionsToSync: () => void;
+}
 
-    // Section selection for sync
+interface CRMSectionSelectionSlice {
     currentMark: number;
     selectedSectionPairs: SelectedSectionPairs;
     selectedSections: SelectedSections;
     selectedSectionMode: 'none' | 'select_dev' | 'select_des';
     toggleSectionToSync: (pair: FigmaSyncPair, page: { name: string; node_id: string }, section: { name: string; node_id: string }, isDev: boolean) => void;
     getSectionsToSync: () => Array<{ from: unknown; to: unknown }>;
+}
 
-    // Project editing
+interface CRMProjectEditingSlice {
     editTiketProject: string | null;
     setEditTiketProject: (p: string | null) => void;
+}
 
-    // Metrics
+interface CRMMetricsSlice {
     metricsMonth: number;
     setMetricMonth: (m: number) => void;
-
     metricsYear: number;
     setMetricYear: (y: number) => void;
+}
 
-    // Income editing
+interface CRMIncomeAndApproveSlice {
     editedIncomeRow: unknown | null;
     setEditedIncomeRow: (d: unknown | null) => void;
-
-    // Work hours
     isMonthWorkHoursChanged: boolean;
     setIsMonthWorkHoursChanged: (d: boolean) => void;
-
-    // Approve modal
     approveModalOpen: unknown | null;
     setApproveModalOpen: (d: unknown | null) => void;
+}
 
-    // Bot commands
+interface CRMBotCommandSlice {
     emptyBotCommand: BotCommand;
     selectedBotCommand: BotCommand;
     setSelectedBotCommand: (d: BotCommand) => void;
-
     testText: string;
     setTestText: (d: string) => void;
-
     commandSearchText: string;
     setCommandSearchText: (d: string) => void;
+}
 
-    // Additional filters
+interface CRMAdditionalFiltersSlice {
     clientFilter: string | null;
     setClientFilter: (d: string | null) => void;
-
     projectFilter: string[];
     setProjectFilter: (d: string[]) => void;
-
     selectedProject: string | null;
     setSelectedProject: (d: string | null) => void;
 }
+
+type CRMState = CRMReportsSlice &
+    CRMEditingSlice &
+    CRMTreeSlice &
+    CRMFormsSlice &
+    CRMFiltersSlice &
+    CRMCommentsAndHoursSlice &
+    CRMFigmaSyncSlice &
+    CRMSectionSelectionSlice &
+    CRMProjectEditingSlice &
+    CRMMetricsSlice &
+    CRMIncomeAndApproveSlice &
+    CRMBotCommandSlice &
+    CRMAdditionalFiltersSlice;
 
 export const useCRMStore = create<CRMState>((set, get) => {
     // Load saved values from cookies

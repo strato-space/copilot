@@ -183,7 +183,7 @@ const buildTaskTypeOptions = (taskTypes: TaskTypeNode[] | null): TaskTypeOptionG
   return groups;
 };
 
-export default function PossibleTasks() {
+function PossibleTasksSessionScope() {
   const screens = Grid.useBreakpoint();
   const { hasPermission } = useCurrentUserPermissions();
   const {
@@ -209,15 +209,6 @@ export default function PossibleTasks() {
   const performerPickerListHeight = screens.md
     ? PERFORMER_PICKER_POPUP_HEIGHT.desktop
     : PERFORMER_PICKER_POPUP_HEIGHT.mobile;
-
-  useEffect(() => {
-    setSelectedRowKeys([]);
-    setDrafts({});
-    setRowCreationErrors({});
-    setSearchQuery('');
-    setPriorityFilter('all');
-    setOnlySelected(false);
-  }, [voiceBotSession?._id]);
 
   const defaultProjectId = toText(voiceBotSession?.project_id);
   const hasSessionProject = Boolean(defaultProjectId);
@@ -783,4 +774,9 @@ export default function PossibleTasks() {
       />
     </div>
   );
+}
+
+export default function PossibleTasks() {
+  const sessionScopeKey = useVoiceBotStore((state) => String(state.voiceBotSession?._id || 'no-session'));
+  return <PossibleTasksSessionScope key={sessionScopeKey} />;
 }

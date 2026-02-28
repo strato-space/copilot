@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import dotenv from 'dotenv';
+import type {} from './e2e/auth.setup';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

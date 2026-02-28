@@ -7,6 +7,7 @@ import type { Db } from 'mongodb';
 import { ObjectId } from 'mongodb';
 
 import { COLLECTIONS } from '../../constants.js';
+import { normalizeTicketDbId } from '../../utils/crmMiniappShared.js';
 import { createServiceAccountAuth, createSpreadsheet, loadSpreadsheet, buildSpreadsheetUrl } from './googleDrive.js';
 import type { PerformerWeeksReportParams, ReportResult } from './types.js';
 
@@ -60,21 +61,6 @@ const indexesToA1 = (row: number, column: number): string => {
         'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
     ];
     return `${columns[column]}${row + 1}`;
-};
-
-const normalizeTicketDbId = (value: unknown): string | null => {
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'string') {
-        const normalized = value.trim();
-        return normalized.length > 0 ? normalized : null;
-    }
-    if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
-            return new ObjectId(record.$oid).toHexString();
-        }
-    }
-    return null;
 };
 
 export const generatePerformerWeeksReport = async (

@@ -89,19 +89,26 @@ interface PaymentData {
     tax?: number;
 }
 
-interface KanbanState {
-    // Filters
+interface KanbanFilterSlice {
     statusesFilter: string[];
     setStatusesFilter: (statuses: string[]) => void;
+}
 
-    // Helpers
+interface KanbanLookupSlice {
     getCustomerByProject: (project: string) => string;
     getProjectGroupByProject: (project: string) => string;
+}
 
-    // Data
+interface KanbanPrimaryDataSlice {
     tickets: Ticket[];
     tickets_updated_at: number | null;
     boards: string[];
+    performers: Performer[];
+    projects: string[];
+    projectsData: Project[];
+}
+
+interface KanbanDictionaryDataSlice {
     customers: Customer[];
     projectGroups: ProjectGroup[];
     income_types: IncomeType[];
@@ -110,59 +117,59 @@ interface KanbanState {
     task_types_tree: TreeNode[];
     tree: TreeNode[];
     saveTree: (tree: TreeNode[]) => void;
-    performers: Performer[];
     setPayment: (performer: Performer, payments: string) => void;
-    projects: string[];
-    projectsData: Project[];
     epics: Record<string, Epic> | null;
+}
 
-    // Fetch operations
+interface KanbanFetchSlice {
     fetchTickets: (statuses?: string[]) => Promise<void>;
     fetchTicketById: (ticket_id: string) => Promise<Ticket | null>;
     fetchDictionary: () => Promise<void>;
+}
 
-    // CRUD operations
+interface KanbanCrudSlice {
     moveNode: (node: TreeNode, destination: TreeNode) => void;
     saveProject: (project: Project, projectGroup: string) => Promise<void>;
     saveCustomer: (customer: Customer) => Promise<void>;
     saveProjectGroup: (projectGroup: ProjectGroup, customer?: string) => Promise<void>;
-
     updateTicket: (ticket: Ticket, updateProps: Partial<Ticket>, opt?: { silent?: boolean }) => Promise<void>;
     editTicketData: (ticket: Ticket) => Promise<void>;
     deleteTicket: (ticket_id: string) => Promise<void>;
     createTicket: (values: Partial<Ticket>) => Promise<void>;
+}
 
-    // Comments
+interface KanbanCommentUploadSlice {
     saveComment: (ticket: Ticket, comment_text: string) => Promise<void>;
-
-    // File upload
     uploadFile: (file: File) => Promise<string>;
-
-    // Bulk operations
     massiveChangeStatus: (tickets: string[], new_status: string) => Promise<void>;
+}
 
-    // Work hours
+interface KanbanWorkHoursSlice {
     addWorkHours: (data: { ticket_id: string; date: Dayjs; time: number; description?: string }) => Promise<void>;
     editWorkHour: (data: { _id: string; ticket_id: string; date: Dayjs; time: number; description?: string }) => Promise<void>;
+}
 
-    // Figma / Design
+interface KanbanDesignSlice {
     getDesignSections: (figma_file_url: string) => Promise<void>;
     fileDesignSections: unknown[];
     projectFilesList: unknown[];
     getProjectFiles: (selectedNode: TreeNode) => Promise<void>;
     clearProjectFiles: () => void;
     startSync: (pair: unknown, sectionsToSync: unknown) => Promise<void>;
+}
 
-    // Project helpers
+interface KanbanProjectHelpersSlice {
     getProjectByName: (project_name: string) => Project | undefined;
     getProjectEpics: (project_name: string) => Epic[];
+}
 
-    // Epics
+interface KanbanEpicsSlice {
     createEpic: (values: Partial<Epic>) => Promise<void>;
     editEpic: (epic: Epic) => Promise<void>;
     deleteEpic: (epic: Epic) => Promise<void>;
+}
 
-    // Finances
+interface KanbanFinancesSlice {
     fetchExpensesData: () => Promise<void>;
     savePayments: () => Promise<void>;
     incomeData: IncomeRecord[] | null;
@@ -173,14 +180,16 @@ interface KanbanState {
     fetchPeformersMarginData: () => Promise<void>;
     projectsMarginData: unknown[];
     fetchProjectsMarginData: () => Promise<void>;
+}
 
-    // Month work hours
+interface KanbanMonthWorkHoursSlice {
     monthWorkHours: number | null;
     setMonthWorkHours: (value: number | null) => void;
     saveMonthWorkHours: () => Promise<void>;
     fetchMonthWorkHours: () => Promise<void>;
+}
 
-    // Widgets
+interface KanbanWidgetsSlice {
     widgetsActualProjects: Array<{ name: string; full_name: string }>;
     widgetsData: WidgetsData | null;
     fetchMetricsWidgets: () => Promise<void>;
@@ -190,49 +199,82 @@ interface KanbanState {
     setWidgetsPerformersFilter: (d: string[]) => void;
     calculadetWidgetsData: CalculatedWidgetsData | null;
     calculateWidgets: () => void;
+}
 
-    // Bot commands
+interface KanbanBotCommandsSlice {
     botCommands: BotCommand[] | null;
     fetchBotCommands: () => Promise<void>;
     saveBotCommand: (command: BotCommand) => Promise<void>;
     deleteBotCommand: (command_id: string) => Promise<void>;
     testResult: unknown[];
     testBotCommand: (command: BotCommand, text: string) => Promise<void>;
+}
 
-    // Roadmaps
+interface KanbanRoadmapSlice {
     roadmap: Epic[] | null;
     fetchRoadmap: (project_id: string) => Promise<void>;
+}
 
-    // Task types
+interface KanbanTaskTypesSlice {
     taskTypesTree: TaskType[] | null;
     fetchTaskTypes: () => Promise<void>;
     saveTaskType: (task_type: TaskType) => Promise<void>;
     saveFunctionality: (functionality: TaskType) => Promise<TaskType>;
+}
 
-    // Performer finances
+interface KanbanPerformerFinancesSlice {
     performerFinancesData: unknown | null;
     fetchPerfrormerFinances: (performer_id: string) => Promise<void>;
+}
 
-    // Payments tree
+interface KanbanPaymentsTreeSlice {
     performersPaymentsTree: PaymentTreeNode[] | null;
     fetchPerformersPaymentsTree: () => Promise<void>;
+}
 
-    // Bonus calculation
+interface KanbanBonusSlice {
     calculateBonus: (stats: PerformerStats, paymentData: PaymentData) => BonusResult;
     createPayment: (performer_id: string, works: unknown, stats: PerformerStats, paymentData: PaymentData) => Promise<unknown>;
+}
 
-    // Performers data
+interface KanbanPerformersDataSlice {
     performersData: unknown[];
     fetchPerformersData: () => Promise<void>;
     savePaymentsSettings: (settings: unknown, performer_id: string) => Promise<void>;
+}
 
-    // Warehouse
+interface KanbanWarehouseSlice {
     warehouseTree: unknown | null;
     fetchWarehouseTree: () => Promise<void>;
+}
 
-    // Import
+interface KanbanImportSlice {
     importFromGoogleSheets: (spreadsheet_url: string) => Promise<unknown>;
 }
+
+type KanbanState = KanbanFilterSlice &
+    KanbanLookupSlice &
+    KanbanPrimaryDataSlice &
+    KanbanDictionaryDataSlice &
+    KanbanFetchSlice &
+    KanbanCrudSlice &
+    KanbanCommentUploadSlice &
+    KanbanWorkHoursSlice &
+    KanbanDesignSlice &
+    KanbanProjectHelpersSlice &
+    KanbanEpicsSlice &
+    KanbanFinancesSlice &
+    KanbanMonthWorkHoursSlice &
+    KanbanWidgetsSlice &
+    KanbanBotCommandsSlice &
+    KanbanRoadmapSlice &
+    KanbanTaskTypesSlice &
+    KanbanPerformerFinancesSlice &
+    KanbanPaymentsTreeSlice &
+    KanbanBonusSlice &
+    KanbanPerformersDataSlice &
+    KanbanWarehouseSlice &
+    KanbanImportSlice;
 
 export const useKanbanStore = create<KanbanState>((set, get) => {
     const api_request = useRequestStore.getState().api_request;

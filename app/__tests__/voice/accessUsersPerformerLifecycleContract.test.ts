@@ -11,7 +11,7 @@ describe('AccessUsers performer lifecycle contract', () => {
     expect(modalSource).toContain('void fetchPerformersList(accessUsersModal.selectedUserIds);');
     expect(storeSource).toContain('fetchPerformersList: async (includeIds = []) => {');
     expect(storeSource).toContain('const payload = normalizedIncludeIds.length > 0');
-    expect(storeSource).toContain("voicebotRequest<Array<Record<string, unknown>>>('voicebot/auth/list-users', payload)");
+    expect(storeSource).toContain("voicebotHttp.request<Array<Record<string, unknown>>>('voicebot/auth/list-users', payload)");
   });
 
   it('hides inactive/deleted users from add-user dropdown', () => {

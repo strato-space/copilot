@@ -1,0 +1,37 @@
+{
+  "query": "responsibility_cohesion",
+  "status_filter": "open",
+  "total": 2,
+  "summary": {
+    "by_tier": {
+      "T3": 2
+    },
+    "by_detector": {
+      "responsibility_cohesion": 2
+    },
+    "files": 2
+  },
+  "by_file": {
+    "app/src/store/voiceBotStore.ts": [
+      {
+        "id": "responsibility_cohesion::app/src/store/voiceBotStore.ts::cohesion::app/src/store/voiceBotStore.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "6 disconnected function clusters (29 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: sortNewestFirst, getBackendUrl, isTransientError, normalizeIncludeIds"
+      }
+    ],
+    "backend/src/api/routes/voicebot/sessions.ts": [
+      {
+        "id": "responsibility_cohesion::backend/src/api/routes/voicebot/sessions.ts::cohesion::backend/src/api/routes/voicebot/sessions.ts",
+        "tier": 3,
+        "confidence": "medium",
+        "summary": "13 disconnected function clusters (45 functions) \u2014 likely mixed responsibilities",
+        "detail": "Clusters: toObjectIdOrNull, normalizeIdentifier, normalizeRef, active"
+      }
+    ]
+  },
+  "total_matching": 2,
+  "noise_budget": 10,
+  "noise_global_budget": 0
+}

@@ -1,0 +1,142 @@
+{
+  "batch": "Testing & API",
+  "batch_index": 3,
+  "assessments": {
+    "api_surface_coherence": 71.0,
+    "mid_level_elegance": 74.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "`backend/src/api/middleware/response.ts` defines a strict `{ data, error }` envelope, but frontend callers in `app/src/store/voiceBotStore.ts` often expect raw arrays/objects (for example `fetchVoiceBotSessionsList` checks `Array.isArray(response)` directly).",
+        "`app/src/store/authStore.ts` uses `extractUserFromResponse` to support both enveloped and flat payloads, while `voiceBotStore` mixes direct `response.data` assumptions with ad-hoc normalizers (`normalizeSessionResponse`), indicating no single API contract.",
+        "Store actions across `authStore`, `crmStore`, and `voiceBotStore` expose inconsistent failure behavior (throw vs return false vs return empty arrays vs swallow-and-log), making consumer-side API usage unpredictable."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "`voiceBotStore` defines a seam helper (`voicebotHttp.request`) with proxy/auth/error wiring, but critical calls (`uploadAudioFile`, `uploadSessionImageAttachment`, `downloadTranscription`) bypass it and use raw `axios/fetch`, fragmenting integration behavior.",
+        "MCP agent URL resolution logic is duplicated in both `app/src/store/voiceBotStore.ts` (`resolveAgentsMcpServerUrl`) and `app/src/store/sessionsUIStore.ts` (inline IIFE in `generateSessionTitle`), creating drift-prone boundary configuration.",
+        "`authStore` 401 handling diverges across flows: `checkAuth` clears cookies/localStorage, but `refreshUserData` marks user unauthenticated without clearing persisted auth artifacts, causing seam-level state desynchronization with callers that read persisted token state."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_response_contracts",
+      "summary": "Frontend stores consume incompatible API payload shapes for similar endpoints",
+      "related_files": [
+        "backend/src/api/middleware/response.ts",
+        "app/src/store/authStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`sendOk`/`sendError` in `response.ts` enforce `{ data, error }` envelope.",
+        "`authStore.extractUserFromResponse` explicitly supports both `payload.data.user` and `payload.user` forms.",
+        "`voiceBotStore.fetchVoiceBotSessionsList` expects the request result itself to be an array (`Array.isArray(response)`), while `normalizeSessionResponse` separately tries both `payload.data` and root payload."
+      ],
+      "suggestion": "Standardize frontend API consumption on one envelope parser (e.g., `unwrapApiData<T>`) and require all store requests to use it. Remove dual-shape fallbacks once routes are normalized, and enforce this via store-level contract tests.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "mixed_response_contracts"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "voicebot_proxy_bypass_paths",
+      "summary": "Voice upload/download paths bypass shared HTTP seam and lose proxy/runtime behavior",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`voicebotHttp.request` contains proxy routing (`X-Proxy-*` headers) and common request logging.",
+        "`uploadAudioFile` and `uploadSessionImageAttachment` call `axios.post(`${backendUrl}/...`)` directly, and `downloadTranscription` uses raw `fetch`, so these paths do not inherit proxy routing and unified error translation.",
+        "This creates endpoint-specific behavior divergence for network/auth failures despite a declared shared request seam."
+      ],
+      "suggestion": "Introduce seam variants for multipart and binary download in `voicebotHttp` (or a shared API client module) and migrate upload/download methods to that seam so proxy/auth/error behavior is consistent across all voice actions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fragmented_transport_seams"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "store_action_error_contract_drift",
+      "summary": "Store action methods expose inconsistent failure contracts to callers",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/store/crmStore.ts"
+      ],
+      "evidence": [
+        "In `voiceBotStore`, similar mutating actions vary between silent swallow (`updateSessionName`), boolean returns (`deleteTaskFromSession`), and throw (`sendSessionToCrm`, `deleteSession`).",
+        "`authStore` methods also mix `Promise<void>`, `Promise<boolean>`, and silent state-only handling.",
+        "`crmStore.fetchReports` catches and logs, but exposes no error state or return signal to consumers."
+      ],
+      "suggestion": "Define explicit action result contracts (e.g., `Promise<Result<T, UiError>>` or consistent `throw` semantics) per store and align all actions to one pattern, then update consuming components accordingly.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "mixed_response_contracts"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "duplicated_mcp_endpoint_resolution",
+      "summary": "MCP endpoint resolution logic is duplicated across stores",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "`voiceBotStore` has `resolveAgentsMcpServerUrl()` with window/env/fallback logic.",
+        "`sessionsUIStore.generateSessionTitle` reimplements the same window/env/fallback resolution inline.",
+        "Both copies hardcode fallback and window key behavior, increasing drift risk for future endpoint policy changes."
+      ],
+      "suggestion": "Extract MCP endpoint resolution to a shared utility (or configuration store) and reuse it in both stores so boundary configuration changes happen in one place.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fragmented_transport_seams"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "auth_401_state_desync",
+      "summary": "401 handling in auth refresh can leave persisted auth artifacts behind",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`authStore.checkAuth` clears cookies/localStorage on 401 via `clearAuthCookies()`.",
+        "`authStore.refreshUserData` on 401 sets in-memory auth state to false but does not clear cookie/localStorage token artifacts.",
+        "`voiceBotStore` and request helpers read auth state for headers, so persisted stale tokens can continue influencing follow-up flows."
+      ],
+      "suggestion": "Apply a single unauthorized handler used by both `checkAuth` and `refreshUserData` that clears persisted auth artifacts and normalizes store state before returning.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "fragmented_transport_seams"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No single enforced frontend API contract adapter for `{ data, error }` envelopes across stores.",
+      "Boundary concerns (transport, proxying, endpoint resolution, auth failure handling) are duplicated instead of centralized."
+    ],
+    "likely_symptoms": [
+      "mixed_response_contracts",
+      "store_action_error_contract_drift",
+      "voicebot_proxy_bypass_paths",
+      "duplicated_mcp_endpoint_resolution"
+    ],
+    "possible_false_positives": []
+  }
+}

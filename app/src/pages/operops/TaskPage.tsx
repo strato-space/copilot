@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createElement, type ReactNode, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Spin,
@@ -67,6 +67,74 @@ export const sanitizeTaskDescriptionHtml = (description?: string | null): string
     }
 
     return sanitizeHtml(description, taskDescriptionSanitizerOptions);
+};
+
+const safeDescriptionAttributes = new Set([
+    'href',
+    'name',
+    'target',
+    'rel',
+    'src',
+    'srcset',
+    'alt',
+    'title',
+    'width',
+    'height',
+    'loading',
+    'class',
+]);
+
+const renderSanitizedHtmlNode = (node: ChildNode, key: string): ReactNode => {
+    if (node.nodeType === 3) {
+        return node.textContent ?? '';
+    }
+    if (node.nodeType !== 1) {
+        return null;
+    }
+
+    const element = node as HTMLElement;
+    const tagName = element.tagName.toLowerCase();
+    const props: Record<string, string> = { key };
+    for (const attribute of Array.from(element.attributes)) {
+        const attributeName = attribute.name.toLowerCase();
+        if (!safeDescriptionAttributes.has(attributeName)) {
+            continue;
+        }
+        if (attributeName === 'class') {
+            props.className = attribute.value;
+            continue;
+        }
+        props[attributeName] = attribute.value;
+    }
+
+    const children = Array.from(element.childNodes)
+        .map((child, index) => renderSanitizedHtmlNode(child, `${key}-${index}`))
+        .filter((child): child is Exclude<ReactNode, boolean | null | undefined> =>
+            child !== null && child !== undefined && child !== false
+        );
+
+    return createElement(tagName, props, ...children);
+};
+
+const renderSanitizedHtml = (sanitizedHtml: string): ReactNode[] => {
+    if (!sanitizedHtml) {
+        return [];
+    }
+    if (typeof DOMParser === 'undefined') {
+        return [sanitizedHtml];
+    }
+
+    const parsed = new DOMParser().parseFromString(`<div>${sanitizedHtml}</div>`, 'text/html');
+    const root = parsed.body.firstElementChild;
+    if (!root) {
+        return [sanitizedHtml];
+    }
+
+    return Array.from(root.childNodes)
+        .map((child, index) => renderSanitizedHtmlNode(child, `root-${index}`))
+        .filter((child): child is Exclude<ReactNode, boolean | null | undefined> =>
+            child !== null && child !== undefined && child !== false
+        );
 };
 
 interface TaskTypeInfo {
@@ -181,6 +249,7 @@ const TaskPage = () => {
     const creatorName = resolveTaskCreator(task, performers);
     const sourceInfo = resolveTaskSourceInfo(task);
     const safeTaskDescription = sanitizeTaskDescriptionHtml(task.description);
+    const safeTaskDescriptionNodes = renderSanitizedHtml(safeTaskDescription);
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -331,12 +400,7 @@ const TaskPage = () => {
                     {/* Description */}
                     <Card title="Description" bordered={false}>
                         {task.description ? (
-                            <div
-                                className="prose max-w-none"
-                                dangerouslySetInnerHTML={{
-                                    __html: safeTaskDescription,
-                                }}
-                            />
+                            <div className="prose max-w-none">{safeTaskDescriptionNodes}</div>
                         ) : (
                             <Text type="secondary">No description provided</Text>
                         )}

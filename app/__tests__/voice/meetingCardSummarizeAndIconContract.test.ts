@@ -9,7 +9,7 @@ describe('MeetingCard summarize + circle icon alignment contract', () => {
     expect(source).toContain('setSummarizeDisabledUntil(Date.now() + 3 * 60 * 1000);');
     expect(source).toContain('const isSummarizeCooldownActive = typeof summarizeDisabledUntil === \'number\' && Date.now() < summarizeDisabledUntil;');
     expect(source).toContain('const result = await triggerSessionReadyToSummarize(voiceBotSession._id);');
-    expect(source).toContain('disabled={!voiceBotSession?._id || isSummarizing || isSummarizeCooldownActive}');
+    expect(source).toContain('disabled={!voiceBotSession?._id || uiState.isSummarizing || isSummarizeCooldownActive}');
     expect(source).toContain('content: projectAssigned ? \'Summarize запущен (проект PMO назначен).\' : \'Summarize запущен.\'');
   });
 

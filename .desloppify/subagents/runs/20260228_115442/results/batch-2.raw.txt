@@ -1,0 +1,175 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 2,
+  "assessments": {
+    "abstraction_fitness": 68.0,
+    "mid_level_elegance": 72.0,
+    "low_level_elegance": 74.0
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "Runtime-scope query wrappers are redefined per module with different option sets (`backend/src/api/routes/voicebot/uploads.ts`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/workers/voicebot/handlers/transcribeHandler.ts`, `backend/src/voicebot_tgbot/ingressHandlers.ts`).",
+        "Frontend store transport helpers (`getBackendUrl`, `getProxyConfig`, request wrapper) are duplicated instead of centralized, and one path diverges (`permissions/users/permissions` vs `voicebot/permissions/*`) in `app/src/store/permissionsStore.ts` while similar logic exists in `app/src/store/voiceBotStore.ts`.",
+        "Large report/service flows implement near-identical data prep and dayjs/plugin setup without shared abstractions (`backend/src/services/reports/jiraStyleReport.ts`, `backend/src/services/reports/performerWeeksReport.ts`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 62.0,
+        "indirection_cost": 70.0,
+        "interface_honesty": 66.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Auth/permission boundary checks are split across two middleware stacks with duplicated performer lookup and slightly different rules (`backend/src/api/middleware/roleGuard.ts` vs `backend/src/permissions/permission-manager.ts`).",
+        "Telegram ingress/runtime seams repeatedly rebuild similar dependency/context objects (`buildIngressDeps`, `buildCommonIngressContext`) across runtime modules (`backend/src/voicebot_tgbot/runtimeNonCommandHandlers.ts`, `backend/src/voicebot_tgbot/ingressHandlers.ts`, `backend/src/voicebot_tgbot/commandHandlers.ts`).",
+        "Route-to-service handoff shape is inconsistent in permissions store APIs (same module mixes `voicebot/permissions/*` and `permissions/users/permissions`), weakening predictable seam contracts (`app/src/store/permissionsStore.ts`, `app/src/store/voiceBotStore.ts`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Legacy performers payments route contains long procedural flows with repeated folder/create/list blocks and `sleep()` synchronization, making local reasoning and edits fragile (`backend/src/api/routes/crm/legacy/performerspayments.ts`).",
+        "Miniapp action sheets duplicate substantial button/footer SVG markup instead of a local reusable primitive (`miniapp/src/components/ASChangeStatus.tsx`, `miniapp/src/components/ASRejectTicket.tsx`).",
+        "Large route/store files accumulate mixed concerns and long internal control flows (`backend/src/api/routes/voicebot/sessions.ts`, `app/src/store/voiceBotStore.ts`, `app/src/pages/voice/SessionsListPage.tsx`)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "permissions_route_prefix_drift",
+      "summary": "Permissions store uses inconsistent API prefixes, creating seam drift and likely wrong endpoint call",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`permissionsStore.voicebotRequest` is used mostly with `voicebot/permissions/*`, but `getUserPermissions` calls `permissions/users/permissions` (missing `voicebot/` prefix).",
+        "Both stores reimplement backend/proxy resolution logic separately, so endpoint contract drift is not caught centrally."
+      ],
+      "suggestion": "Extract a shared authenticated voicebot API client (backend URL + proxy behavior + auth header) and migrate both stores to it; normalize permissions endpoints to one prefix family (likely `voicebot/permissions/*`) and add a store-level test for route shape consistency.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_transport_abstraction_gap"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "duplicated_auth_guard_paths",
+      "summary": "Role and permission middleware duplicate identity loading and can drift in enforcement behavior",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts"
+      ],
+      "evidence": [
+        "`requireRole` and `PermissionManager.requirePermission` both fetch performer documents and attach auth state, but via separate code paths.",
+        "`roleGuard` checks `is_banned` while `PermissionManager.requirePermission` lookup omits ban-state filtering, so route behavior depends on which guard is applied."
+      ],
+      "suggestion": "Create a single auth-context loader middleware (performer resolution + ban/deleted checks + normalized request fields), then implement role/permission checks as pure predicates over that context to prevent divergent route outcomes.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "auth_boundary_duplication"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "runtime_scope_wrapper_fragmentation",
+      "summary": "Runtime-filter abstraction is copied across modules with different semantics",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts"
+      ],
+      "evidence": [
+        "Each module defines local `runtimeQuery`/`runtimeSessionQuery` wrappers instead of using one shared helper.",
+        "Wrapper options differ by module (for example explicit `familyMatch/includeLegacyInProd` in some files, minimal `{ field: 'runtime_tag' }` in others), which increases risk of cross-runtime mismatch as rules evolve."
+      ],
+      "suggestion": "Introduce one canonical runtime query helper per collection family (sessions/messages/etc.) in a shared service, and replace per-file local wrappers; enforce usage with tests or lint checks around runtime-scoped collections.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_scope_policy_duplication"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "legacy_payments_procedural_monolith",
+      "summary": "Legacy performers-payments route mixes analytics, Drive orchestration, and settings in one procedural module",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/services/reports/performerWeeksReport.ts",
+        "backend/src/services/reports/jiraStyleReport.ts"
+      ],
+      "evidence": [
+        "`performerspayments.ts` has repeated folder discovery/creation/list blocks, repeated `await sleep(...)`, and multiple endpoint responsibilities in one file.",
+        "Similar work-hours/tickets aggregation logic exists in report services, but route keeps a bespoke copy, increasing local branching and maintenance burden."
+      ],
+      "suggestion": "Split `performerspayments.ts` into focused services (finance metrics calculator, Drive folder/document manager, payment settings repository) and keep route handlers as thin orchestration; reuse existing report-style aggregation helpers for work-hour joins.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "legacy_crm_payments_migration_debt"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "miniapp_actionsheet_footer_duplication",
+      "summary": "Miniapp action sheets duplicate complex footer/back-button markup",
+      "related_files": [
+        "miniapp/src/components/ASChangeStatus.tsx",
+        "miniapp/src/components/ASRejectTicket.tsx"
+      ],
+      "evidence": [
+        "Both components contain near-identical footer container markup, identical back button SVG, and similar primary action button structure.",
+        "This repetition makes tiny UI behavior/style changes likely to diverge across action sheets."
+      ],
+      "suggestion": "Extract a shared `ActionSheetFooter` (props: onBack, onConfirm, confirmLabel, disabled/loading) and reuse it in both components to remove duplicated SVG/layout/control flow.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "miniapp_ui_primitive_gap"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "report_pipeline_duplication",
+      "summary": "Two report generators duplicate pipeline setup instead of sharing a reporting core",
+      "related_files": [
+        "backend/src/services/reports/jiraStyleReport.ts",
+        "backend/src/services/reports/performerWeeksReport.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "Both report services repeat dayjs plugin initialization, work-hours normalization by `ticket_db_id`, and ticket map construction patterns.",
+        "Ticket/work-hour joining logic also appears independently in CRM routes (`tickets.ts`), signaling missing shared report/query abstraction."
+      ],
+      "suggestion": "Create a shared report data module for ticket/work-hour joins (normalized by `ticket_db_id`) and date-bucket helpers, then make both report services consume it with only output-format-specific logic.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "crm_reporting_data_access_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Boundary helpers (auth context, runtime scope, frontend transport) are implemented per-feature instead of as single canonical seam modules.",
+      "Legacy migration preserved endpoint/flow compatibility by layering aliases and copies rather than converging abstractions."
+    ],
+    "likely_symptoms": [
+      "permissions_route_prefix_drift",
+      "runtime_scope_wrapper_fragmentation",
+      "legacy_payments_procedural_monolith"
+    ],
+    "possible_false_positives": [
+      "Some endpoint aliases in voice sessions are intentional compatibility contracts; concern is maintainability cost, not immediate functional break."
+    ]
+  }
+}

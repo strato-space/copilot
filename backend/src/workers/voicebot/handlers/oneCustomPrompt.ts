@@ -1,6 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,
@@ -9,10 +6,10 @@ import {
 } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
-import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
-import { listCustomPromptProcessorNames, resolveCustomPromptsDir } from '../customPromptsDir.js';
-import { parseJsonArray } from './messageProcessors.js';
+import { listCustomPromptProcessorNames } from '../customPromptsDir.js';
+import { getCustomPromptText, normalizeCustomPromptRows } from './shared/customPromptShared.js';
+import { createOpenAiClient, getErrorMessage, normalizeString, runtimeQuery } from './shared/sharedRuntime.js';
 
 const logger = getLogger();
 
@@ -46,44 +43,6 @@ type OneCustomPromptResult = {
   skipped?: boolean;
   reason?: string;
   error?: string;
-};
-
-const runtimeQuery = (query: Record<string, unknown>) =>
-  mergeWithRuntimeFilter(query, {
-    field: 'runtime_tag',
-    familyMatch: IS_PROD_RUNTIME,
-    includeLegacyInProd: IS_PROD_RUNTIME,
-  });
-
-const getCustomPromptText = (processorName: string): string | null => {
-  const promptsDir = resolveCustomPromptsDir();
-  const fileName = processorName.endsWith('.md') ? processorName : `${processorName}.md`;
-  const promptPath = path.join(promptsDir, fileName);
-  if (!existsSync(promptPath)) return null;
-
-  try {
-    return readFileSync(promptPath, 'utf8');
-  } catch {
-    return null;
-  }
-};
-
-const createOpenAiClient = (): OpenAI | null => {
-  const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
-  if (!apiKey) return null;
-  return new OpenAI({ apiKey });
-};
-
-const normalizeString = (value: unknown): string => {
-  if (typeof value === 'string') return value;
-  if (value == null) return '';
-  return String(value);
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return String(error);
 };
 
 const toBoolean = (value: unknown): boolean => value === true;
@@ -172,16 +131,7 @@ export const handleOneCustomPromptJob = async (
       });
 
       const outputText = normalizeString((response as { output_text?: string }).output_text);
-      const parsedRows = parseJsonArray(outputText);
-      normalizedRows = parsedRows
-        .filter((row) => row && typeof row === 'object')
-        .map((row) => {
-          const item = row as Record<string, unknown>;
-          return {
-            ...item,
-            result: normalizeString(item.result),
-          };
-        });
+      normalizedRows = normalizeCustomPromptRows(outputText);
     }
 
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {

@@ -13,6 +13,138 @@ import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger();
 
+const mongoIdUtils = {
+  toObjectId(value: string): ObjectId {
+    return new ObjectId(value);
+  },
+};
+
+const requestContextUtils = {
+  parseId(value: unknown): string | null {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+    return null;
+  },
+  getSessionId(req?: AuthenticatedRequest): string | null {
+    return (
+      this.parseId(req?.body?.session_id)
+      ?? this.parseId(req?.params?.session_id)
+      ?? this.parseId(req?.query?.session_id)
+    );
+  },
+  getProjectId(req?: AuthenticatedRequest): string | null {
+    return (
+      this.parseId(req?.body?.project_id)
+      ?? this.parseId(req?.params?.project_id)
+      ?? this.parseId(req?.query?.project_id)
+    );
+  },
+};
+
+const rolePermissionUtils = {
+  resolve(performer: Performer): Permission[] {
+    const roleConfig = performer.role ? ROLES[performer.role] : undefined;
+    const rolePermissions = [...(roleConfig?.permissions ?? [])];
+    const additionalPermissions = Array.isArray(performer.additional_roles)
+      ? performer.additional_roles.flatMap((roleKey) => ROLES[roleKey]?.permissions ?? [])
+      : [];
+    const customPermissions = Array.isArray(performer.custom_permissions)
+      ? performer.custom_permissions
+      : [];
+    return Array.from(new Set([...rolePermissions, ...additionalPermissions, ...customPermissions]));
+  },
+};
+
+const projectAccessUtils = {
+  normalizeProjectAccessIds(performer: Performer): ObjectId[] {
+    return Array.isArray(performer.projects_access) ? performer.projects_access : [];
+  },
+  hasProjectAccess(performer: Performer, projectId: string | ObjectId | null | undefined): boolean {
+    if (!projectId) return false;
+    const projectIdText = projectId.toString();
+    return this.normalizeProjectAccessIds(performer)
+      .some((accessProjectId) => accessProjectId.toString() === projectIdText);
+  },
+  buildMutation(update: Record<string, unknown>): Record<string, unknown> {
+    return {
+      ...update,
+      $set: {
+        ...(typeof update.$set === 'object' && update.$set !== null ? update.$set as Record<string, unknown> : {}),
+        permissions_updated_at: new Date(),
+      },
+    };
+  },
+  resolveAccessibleProjectIds(performer: Performer): ObjectId[] {
+    return this.normalizeProjectAccessIds(performer)
+      .map((id) => mongoIdUtils.toObjectId(id.toString()));
+  },
+  buildAccessibleProjectsPipeline(accessibleProjectIds: ObjectId[]): Record<string, unknown>[] {
+    return [
+  {
+    $match: {
+      _id: { $in: accessibleProjectIds },
+      is_deleted: { $ne: true },
+      is_active: true,
+    },
+  },
+  {
+    $lookup: {
+      from: COLLECTIONS.PROJECT_GROUPS,
+      localField: 'project_group',
+      foreignField: '_id',
+      as: 'project_group_info',
+    },
+  },
+  {
+    $lookup: {
+      from: COLLECTIONS.CUSTOMERS,
+      localField: 'project_group_info.customer',
+      foreignField: '_id',
+      as: 'customer_info',
+    },
+  },
+  {
+    $addFields: {
+      project_group: { $arrayElemAt: ['$project_group_info', 0] },
+      customer: { $arrayElemAt: ['$customer_info', 0] },
+    },
+  },
+  {
+    $project: {
+      name: 1,
+      title: 1,
+      description: 1,
+      created_at: 1,
+      board_id: 1,
+      drive_folder_id: 1,
+      git_repo: 1,
+      design_files: 1,
+      status: 1,
+      is_active: 1,
+      project_group: {
+        _id: '$project_group._id',
+        name: '$project_group.name',
+        is_active: '$project_group.is_active',
+      },
+      customer: {
+        _id: '$customer._id',
+        name: '$customer.name',
+        is_active: '$customer.is_active',
+      },
+    },
+  },
+  {
+    $sort: { name: 1, title: 1 },
+  },
+    ];
+  },
+};
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -144,30 +276,7 @@ export class PermissionManager {
    * Get all user permissions
    */
   static async getUserPermissions(performer: Performer, _db?: Db): Promise<Permission[]> {
-    let permissions: Permission[] = [];
-
-    // Permissions from main role
-    const roleConfig = performer.role ? ROLES[performer.role] : undefined;
-    if (roleConfig) {
-      permissions = [...(roleConfig.permissions ?? [])];
-    }
-
-    // Additional roles
-    if (performer.additional_roles && Array.isArray(performer.additional_roles)) {
-      for (const roleKey of performer.additional_roles) {
-        if (ROLES[roleKey]) {
-          permissions = [...permissions, ...(ROLES[roleKey].permissions ?? [])];
-        }
-      }
-    }
-
-    // Individual permissions
-    if (performer.custom_permissions && Array.isArray(performer.custom_permissions)) {
-      permissions = [...permissions, ...performer.custom_permissions];
-    }
-
-    // Remove duplicates
-    return [...new Set(permissions)];
+    return rolePermissionUtils.resolve(performer);
   }
 
   /**
@@ -202,13 +311,13 @@ export class PermissionManager {
   ): Promise<boolean> {
     if (!req || !db) return false;
 
-    const sessionId = req.body?.session_id || req.params?.session_id || req.query?.session_id;
-    if (!sessionId) {
+    const sessionId = requestContextUtils.getSessionId(req);
+    if (!sessionId || !ObjectId.isValid(sessionId)) {
       return false;
     }
 
     const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
-      _id: new ObjectId(sessionId as string),
+      _id: mongoIdUtils.toObjectId(sessionId),
       chat_id: Number(performer.telegram_id),
     });
 
@@ -225,8 +334,8 @@ export class PermissionManager {
   ): Promise<boolean> {
     if (!req || !db) return true; // For general requests
 
-    let projectId = req.body?.project_id || req.params?.project_id || req.query?.project_id;
-    const sessionId = req.body?.session_id || req.params?.session_id || req.query?.session_id;
+    let projectId = requestContextUtils.getProjectId(req);
+    const sessionId = requestContextUtils.getSessionId(req);
 
     if (!projectId && !sessionId) {
       return true; // For general requests
@@ -235,26 +344,16 @@ export class PermissionManager {
     if (sessionId) {
       // If session_id exists, check its project
       const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
-        _id: new ObjectId(sessionId as string),
+        _id: mongoIdUtils.toObjectId(sessionId),
       });
       if (session && session.project_id) {
-        projectId = session.project_id;
+        projectId = String(session.project_id);
       } else {
         return false;
       }
     }
 
-    // Check access through projects_access array
-    if (performer.projects_access && Array.isArray(performer.projects_access)) {
-      const hasAccess = performer.projects_access.some(
-        accessProjectId => accessProjectId.toString() === projectId?.toString()
-      );
-      if (hasAccess) {
-        return true;
-      }
-    }
-
-    return false;
+    return projectAccessUtils.hasProjectAccess(performer, projectId);
   }
 
   /**
@@ -311,7 +410,7 @@ export class PermissionManager {
 
     // If user has READ_ASSIGNED permission, add project sessions
     if (userPermissions.includes(PERMISSIONS.PROJECTS.READ_ASSIGNED)) {
-      const accessibleProjectIds = performer.projects_access || [];
+      const accessibleProjectIds = projectAccessUtils.normalizeProjectAccessIds(performer);
 
       if (accessibleProjectIds.length > 0) {
         return {
@@ -348,11 +447,10 @@ export class PermissionManager {
   static async addProjectAccess(performerId: string, projectId: string, db: Db): Promise<boolean> {
     try {
       const result = await db.collection(COLLECTIONS.PERFORMERS).updateOne(
-        { _id: new ObjectId(performerId) },
-        {
-          $addToSet: { projects_access: new ObjectId(projectId) },
-          $set: { permissions_updated_at: new Date() },
-        }
+        { _id: mongoIdUtils.toObjectId(performerId) },
+        projectAccessUtils.buildMutation({
+          $addToSet: { projects_access: mongoIdUtils.toObjectId(projectId) },
+        })
       );
       return result.modifiedCount > 0;
     } catch (error) {
@@ -366,11 +464,10 @@ export class PermissionManager {
   static async removeProjectAccess(performerId: string, projectId: string, db: Db): Promise<boolean> {
     try {
       const result = await db.collection(COLLECTIONS.PERFORMERS).updateOne(
-        { _id: new ObjectId(performerId) },
-        {
-          $pull: { projects_access: new ObjectId(projectId) },
-          $set: { permissions_updated_at: new Date() },
-        } as any
+        { _id: mongoIdUtils.toObjectId(performerId) },
+        projectAccessUtils.buildMutation({
+          $pull: { projects_access: mongoIdUtils.toObjectId(projectId) },
+        }) as Record<string, unknown>
       );
       return result.modifiedCount > 0;
     } catch (error) {
@@ -383,15 +480,14 @@ export class PermissionManager {
    */
   static async setUserProjectsAccess(performerId: string, projectIds: string[], db: Db): Promise<boolean> {
     try {
-      const objectIds = projectIds.map(id => new ObjectId(id));
+      const objectIds = projectIds.map((id) => mongoIdUtils.toObjectId(id));
       const result = await db.collection(COLLECTIONS.PERFORMERS).updateOne(
-        { _id: new ObjectId(performerId) },
-        {
+        { _id: mongoIdUtils.toObjectId(performerId) },
+        projectAccessUtils.buildMutation({
           $set: {
             projects_access: objectIds,
-            permissions_updated_at: new Date(),
           },
-        }
+        })
       );
       return result.modifiedCount > 0;
     } catch (error) {
@@ -403,70 +499,15 @@ export class PermissionManager {
    * Get accessible projects for user
    */
   static async getUserAccessibleProjects(performer: Performer, db: Db): Promise<unknown[]> {
-    const accessibleProjectIds = performer.projects_access || [];
+    const accessibleProjectIds = projectAccessUtils.resolveAccessibleProjectIds(performer);
 
     if (accessibleProjectIds.length === 0) {
       return [];
     }
 
-    const projects = await db.collection(COLLECTIONS.PROJECTS).aggregate([
-      {
-        $match: {
-          _id: { $in: accessibleProjectIds.map(id => new ObjectId(id.toString())) },
-          is_deleted: { $ne: true },
-          is_active: true,
-        },
-      },
-      {
-        $lookup: {
-          from: COLLECTIONS.PROJECT_GROUPS,
-          localField: 'project_group',
-          foreignField: '_id',
-          as: 'project_group_info',
-        },
-      },
-      {
-        $lookup: {
-          from: COLLECTIONS.CUSTOMERS,
-          localField: 'project_group_info.customer',
-          foreignField: '_id',
-          as: 'customer_info',
-        },
-      },
-      {
-        $addFields: {
-          project_group: { $arrayElemAt: ['$project_group_info', 0] },
-          customer: { $arrayElemAt: ['$customer_info', 0] },
-        },
-      },
-      {
-        $project: {
-          name: 1,
-          title: 1,
-          description: 1,
-          created_at: 1,
-          board_id: 1,
-          drive_folder_id: 1,
-          git_repo: 1,
-          design_files: 1,
-          status: 1,
-          is_active: 1,
-          project_group: {
-            _id: '$project_group._id',
-            name: '$project_group.name',
-            is_active: '$project_group.is_active',
-          },
-          customer: {
-            _id: '$customer._id',
-            name: '$customer.name',
-            is_active: '$customer.is_active',
-          },
-        },
-      },
-      {
-        $sort: { name: 1, title: 1 },
-      },
-    ]).toArray();
+    const projects = await db.collection(COLLECTIONS.PROJECTS)
+      .aggregate(projectAccessUtils.buildAccessibleProjectsPipeline(accessibleProjectIds))
+      .toArray();
 
     return projects;
   }

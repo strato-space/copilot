@@ -2,6 +2,7 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **17:18** Session closeout quality gate was blocked because `make test` is not defined in this repo and refactoring of Voice/CRM helpers left string-contract tests out of sync, causing initial `full` suite failures in app/backend checks.
 - **14:12** Voice session inline Codex details (`Подробности Codex задачи`) used a narrower side panel and plain-text rendering, so Description/Notes paragraph breaks were collapsed and the layout diverged from OperOps Codex task view (`copilot-4o2c`).
 - **13:52** Wave-1 technical debt from `desloppify` (`copilot-y9qy`) still left noisy runtime logs and duplicated helper logic across app/backend/voice-worker paths, which increased incident-triage time and made behavior changes harder to verify.
 - **13:52** Security wave backlog (`copilot-6obm`) had 20 untriaged scanner findings mixed between exploitable issues and rule-level false positives, which blocked deterministic risk reporting and patch planning.
@@ -30,6 +31,7 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **17:18** Completed closeout validation for current wave (`copilot-sxq1.8`): updated frontend/backend contract tests to match extracted helper boundaries (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) and ESM-safe backend test runtime (`@jest/globals` `jest` import, `import.meta.url` path resolution).
 - **14:12** Implemented shared Codex details presentation between OperOps and Voice:
   - introduced reusable `CodexIssueDetailsCard` and switched both OperOps Codex task page and Voice inline drawer to the same component;
   - expanded Voice secondary drawer width so the card is displayed at near full-size with side paddings.
@@ -73,6 +75,20 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **17:18** Test contract/runtime sync updates:
+  - frontend contracts updated for refactored Voice store and sanitized task description rendering:
+    - `app/__tests__/voice/{voiceImageAnchorGroupingContract,voiceSocketRealtimeContract,meetingCardSummarizeAndIconContract,accessUsersPerformerLifecycleContract,activateSessionResilienceContract,sessionPageRequestDiagnostics}.test.ts`
+    - `app/__tests__/operops/taskPageDescriptionSanitizeContract.test.ts`
+  - backend contracts/runtime tests updated for current Codex/voice route implementations and ESM execution:
+    - `backend/__tests__/api/crmCodexRouteContract.test.ts`
+    - `backend/__tests__/voicebot/rowMaterialTargetRouteContract.test.ts`
+    - `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts`
+    - `backend/__tests__/entrypoints/orphanedEntrypointsContract.test.ts`.
+- **17:18** Validation run:
+  - `make test` -> `No rule to make target 'test'`;
+  - `./scripts/run-test-suite.sh full` -> `10/10 PASS`;
+  - type-safety gates passed: `cd app && npm run build`, `cd backend && npm run build`.
+- **17:18** `desloppify next` current top open item (Tier 2): exact duplicate `renderSanitizedHtml` between `app/src/pages/operops/TaskPage.tsx` and `miniapp/src/components/OneTicket.tsx` (`dupes::app/src/pages/operops/TaskPage.tsx::renderSanitizedHtml::miniapp/src/components/OneTicket.tsx::renderSanitizedHtml`).
 - **14:12** UI parity + contract test sync for `copilot-4o2c`:
   - added `app/src/components/codex/CodexIssueDetailsCard.tsx`;
   - updated `app/src/components/codex/CodexIssuesTable.tsx` to render shared card in drawer and set width `min(1180px, calc(100vw - 48px))`;
