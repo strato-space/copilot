@@ -44,6 +44,9 @@ attribute is_transcribed, value boolean;
 attribute is_finalized, value boolean;
 attribute to_finalize, value boolean;
 attribute is_replay, value boolean;
+attribute codex_task, value boolean;
+attribute codex_review_summary_processing, value boolean;
+attribute codex_review_summary_note_appended, value boolean;
 attribute status_update_checked, value boolean;
 attribute is_folder, value boolean;
 attribute created_at, value datetime;
@@ -52,6 +55,7 @@ attribute started_at, value datetime;
 attribute ended_at, value datetime;
 attribute decided_at, value datetime;
 attribute due_at, value datetime;
+attribute codex_review_due_at, value datetime;
 attribute merged_at, value datetime;
 attribute done_at, value datetime;
 attribute finished_at, value datetime;
@@ -63,6 +67,13 @@ attribute pending_image_anchor_created_at, value datetime;
 attribute error_timestamp, value datetime;
 attribute categorization_error_timestamp, value datetime;
 attribute categorization_next_attempt_at, value datetime;
+attribute codex_review_summary_started_at, value datetime;
+attribute codex_review_summary_generated_at, value datetime;
+attribute codex_review_summary_next_attempt_at, value datetime;
+attribute codex_review_summary_last_error_at, value datetime;
+attribute codex_review_summary_finished_at, value datetime;
+attribute codex_review_summary_note_synced_at, value datetime;
+attribute codex_review_approval_card_sent_at, value datetime;
 attribute shipment_date, value datetime;
 attribute date_indexed, value datetime;
 attribute created_time, value datetime;
@@ -76,8 +87,21 @@ attribute date, value string;
 attribute raw_date, value string;
 attribute source, value string;
 attribute source_type, value string;
+attribute source_kind, value string;
+attribute source_ref, value string;
+attribute external_ref, value string;
+attribute source_data, value string;
 attribute stream_source, value string;
 attribute runtime_source, value string;
+attribute dialogue_reference, value string;
+attribute dialogue_tag, value string;
+attribute dependencies, value string;
+attribute dependencies_from_ai, value string;
+attribute labels, value string;
+attribute notes, value string;
+attribute issue_type, value string;
+attribute assignee, value string;
+attribute owner, value string;
 attribute operation_type, value string;
 attribute entity_id, value string;
 attribute related_entity_ids, value string;
@@ -88,8 +112,12 @@ attribute stats_after, value string;
 attribute performed_by, value string;
 attribute request_id, value string;
 attribute created_by, value string;
+attribute created_by_name, value string;
+attribute created_by_performer_id, value string;
 attribute updated_by, value string;
 attribute changed_by, value string;
+attribute task_id_from_ai, value string;
+attribute priority_reason, value string;
 attribute result, value string;
 attribute error_message, value string;
 attribute error_source, value string;
@@ -184,6 +212,7 @@ attribute session_name, value string;
 attribute session_type, value string;
 attribute done_count, value integer;
 attribute categorization_attempts, value integer;
+attribute codex_review_summary_attempts, value integer;
 attribute chat_id, value string;
 attribute user_id, value string;
 attribute telegram_user_id, value string;
@@ -196,7 +225,22 @@ attribute processors_data, value string;
 attribute current_spreadsheet_file_id, value string;
 attribute last_message_id, value string;
 attribute deletion_reason, value string;
+attribute codex_review_state, value string;
+attribute codex_review_summary, value string;
+attribute codex_review_summary_source, value string;
+attribute codex_review_summary_issue_id, value string;
+attribute codex_review_summary_job_id, value string;
+attribute codex_review_summary_last_error_code, value string;
+attribute codex_review_summary_last_error_message, value string;
+attribute codex_review_summary_last_runner_error, value string;
+attribute codex_review_summary_note_marker, value string;
+attribute codex_review_approval_card_chat_id, value string;
+attribute codex_review_approval_card_thread_id, value string;
+attribute codex_review_approval_card_message_id, value string;
+attribute codex_review_approval_card_start_callback, value string;
+attribute codex_review_approval_card_cancel_callback, value string;
 attribute active_session_id, value string;
+attribute git_repo, value string;
 attribute title_generated_by, value string;
 attribute message_id, value string;
 attribute session_id, value string;
@@ -363,6 +407,7 @@ entity project,
   owns project_group_ref,
   owns board_id,
   owns description,
+  owns git_repo,
   owns drive_folder_id,
   owns figma_project_link,
   owns design_files,
@@ -545,10 +590,56 @@ entity oper_task,
   owns dashboard_comment,
   owns order_index,
   owns source,
+  owns source_kind,
+  owns source_ref,
+  owns external_ref,
+  owns source_data,
+  owns dialogue_reference,
+  owns dialogue_tag,
+  owns dependencies,
+  owns dependencies_from_ai,
+  owns labels,
+  owns notes,
+  owns issue_type,
+  owns assignee,
+  owns owner,
+  owns created_by,
+  owns created_by_name,
+  owns created_by_performer_id,
+  owns task_id_from_ai,
+  owns priority_reason,
+  owns codex_task,
+  owns codex_review_state,
+  owns codex_review_due_at,
+  owns codex_review_summary,
+  owns codex_review_summary_source,
+  owns codex_review_summary_issue_id,
+  owns codex_review_summary_processing,
+  owns codex_review_summary_attempts,
+  owns codex_review_summary_job_id,
+  owns codex_review_summary_started_at,
+  owns codex_review_summary_generated_at,
+  owns codex_review_summary_next_attempt_at,
+  owns codex_review_summary_last_error_code,
+  owns codex_review_summary_last_error_message,
+  owns codex_review_summary_last_runner_error,
+  owns codex_review_summary_last_error_at,
+  owns codex_review_summary_finished_at,
+  owns codex_review_summary_note_marker,
+  owns codex_review_summary_note_synced_at,
+  owns codex_review_summary_note_appended,
+  owns codex_review_approval_card_sent_at,
+  owns codex_review_approval_card_chat_id,
+  owns codex_review_approval_card_thread_id,
+  owns codex_review_approval_card_message_id,
+  owns codex_review_approval_card_start_callback,
+  owns codex_review_approval_card_cancel_callback,
+  owns runtime_tag,
   owns stop_comment_parsing,
   owns created_at,
   owns updated_at,
   plays project_has_oper_task:oper_task,
+  plays voice_session_sources_oper_task:sourced_oper_task,
   plays oper_task_classified_as_task_type:oper_task,
   plays task_type_tree_classifies_oper_task:oper_task,
   plays oper_task_has_work_log:oper_task,
@@ -896,6 +987,7 @@ entity voice_session,
   owns created_at,
   owns updated_at,
   plays project_has_voice_session:voice_session,
+  plays voice_session_sources_oper_task:source_voice_session,
   plays mode_tag_selected_for_voice_session:voice_session,
   plays voice_session_has_message:voice_session,
   plays voice_session_has_topic:voice_session,
@@ -1194,6 +1286,10 @@ relation agreement_creates_oper_task,
 relation project_has_oper_task,
   relates owner_project,
   relates oper_task;
+
+relation voice_session_sources_oper_task,
+  relates source_voice_session,
+  relates sourced_oper_task;
 
 relation oper_task_classified_as_task_type,
   relates oper_task,

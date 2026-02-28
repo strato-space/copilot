@@ -3,16 +3,38 @@ import { resolve } from 'node:path';
 import { JWT } from 'google-auth-library';
 import { google } from 'googleapis';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
+import { getLogger } from '../../utils/logger.js';
 
 interface ServiceAccountCredentials {
     client_email: string;
     private_key: string;
 }
 
+const logger = getLogger();
+
+const parseCredentials = (raw: string, source: string): ServiceAccountCredentials => {
+    try {
+        const parsed = JSON.parse(raw) as Partial<ServiceAccountCredentials>;
+        if (typeof parsed.client_email !== 'string' || typeof parsed.private_key !== 'string') {
+            throw new Error('missing_required_fields');
+        }
+        return {
+            client_email: parsed.client_email,
+            private_key: parsed.private_key,
+        };
+    } catch (error) {
+        logger.error('[google.drive] failed to parse service account credentials', {
+            source,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        throw new Error(`Invalid Google service account credentials in ${source}`);
+    }
+};
+
 const getCredentials = (): ServiceAccountCredentials => {
     const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     if (json) {
-        return JSON.parse(json) as ServiceAccountCredentials;
+        return parseCredentials(json, 'GOOGLE_SERVICE_ACCOUNT_JSON');
     }
 
     const filePath = process.env.GOOGLE_SERVICE_ACCOUNT_PATH;
@@ -22,7 +44,7 @@ const getCredentials = (): ServiceAccountCredentials => {
 
     const resolvedPath = resolve(filePath);
     const raw = readFileSync(resolvedPath, 'utf-8');
-    return JSON.parse(raw) as ServiceAccountCredentials;
+    return parseCredentials(raw, resolvedPath);
 };
 
 const normalizePrivateKey = (value: string): string => value

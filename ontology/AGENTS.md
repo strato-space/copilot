@@ -41,6 +41,17 @@ Run ontology tooling via backend npm aliases (stable operator contract):
 
 ## Recent Updates
 
+- 2026-02-28: `copilot-gym6.1`..`copilot-gym6.5` completed ontology runtime-parity wave:
+  - gap matrix baseline added: `ontology/typedb/docs/runtime_contract_gap_matrix_v1.md`,
+  - schema + mapping extended for Codex/task lineage, deferred review lifecycle, `project.git_repo`, and task runtime tagging,
+  - `voice_session_sources_oper_task` relation added and mapped from `automation_tasks.source_ref`.
+- 2026-02-28: Validation pack/tooling refreshed for TypeDB 3 compatibility:
+  - `ontology/typedb/queries/validation_v1.tql` now covers task/codex quality gates,
+  - `ontology/typedb/scripts/typedb-ontology-validate.py` anchor checks were rewritten to avoid incompatible attribute-type joins (`pending_image_anchor_message_id` vs `voice_message_id`).
+- 2026-02-28: Ingestion tooling alignment:
+  - `ontology/typedb/scripts/typedb-ontology-ingest.py` runs `automation_tasks` via mapping-driven ingestion path to reduce YAML/script drift.
+- 2026-02-28: Operational runbook note for dev env:
+  - when `.env.development` lacks `MONGODB_CONNECTION_STRING`, construct it from `MONGO_USER/MONGO_PASSWORD/MONGODB_HOST/MONGODB_PORT/DB_NAME` and include `directConnection=true` to avoid replica-set internal-hostname DNS failures.
 - 2026-02-28: `copilot-aonw` completed deep runtime-contract ontology refresh for Voice domain (schema/mapping/validation/docs), including merge-log representation and anchor/dedup/error diagnostics fields.
 - 2026-02-28: Expanded `typedb/schema/str_opsportal_v1.tql` and `typedb/mappings/mongodb_to_typedb_v1.yaml` to cover additional MongoDB collections and attributes.
 - 2026-02-28: Upgraded `typedb/scripts/typedb-ontology-ingest.py` with mapping-driven generic ingestion, relation idempotency checks, and datetime normalization for TypeDB compatibility.

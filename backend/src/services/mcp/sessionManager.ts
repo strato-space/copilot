@@ -5,6 +5,7 @@
  * Migrated from voicebot/services/mcpSessionManager.js
  */
 import { getLogger } from '../../utils/logger.js';
+import { randomBytes } from 'node:crypto';
 
 const logger = getLogger();
 
@@ -22,7 +23,8 @@ export class MCPSessionManager {
     private sessions: Map<string, MCPSessionRecord> = new Map();
 
     createSession(socketId: string, agentName: string): string {
-        const sessionId = `mcp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const entropy = randomBytes(16).toString('hex');
+        const sessionId = `mcp_${Date.now()}_${entropy}`;
         this.sessions.set(socketId, {
             sessionId,
             socketId,

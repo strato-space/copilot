@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { ObjectId, type Db, type ClientSession } from 'mongodb';
 import { COLLECTIONS } from '../../../constants.js';
+import { toCrmIdString } from '../../../utils/crmMiniappShared.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const logger = getLogger();
@@ -32,23 +33,6 @@ interface ProjectTreeLogInput {
     requestId?: string;
 }
 
-const toIdString = (value: unknown): string | null => {
-    if (value == null) return null;
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number' || typeof value === 'bigint') return String(value);
-
-    if (value instanceof ObjectId) return value.toHexString();
-
-    if (typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if ('_id' in record) return toIdString(record._id);
-        if ('id' in record) return toIdString(record.id);
-        if ('key' in record) return toIdString(record.key);
-    }
-
-    return null;
-};
-
 const compactRecord = (value: unknown): unknown => {
     if (!value || typeof value !== 'object') return value;
     if (Array.isArray(value)) {
@@ -74,7 +58,7 @@ const resolveActorId = (req: Request): string | null => {
     const fromUser = record.user?.userId?.trim();
     if (fromUser) return fromUser;
 
-    const fromPerformer = toIdString(record.performer?._id);
+    const fromPerformer = toCrmIdString(record.performer?._id);
     if (fromPerformer) return fromPerformer;
 
     return null;
@@ -87,7 +71,7 @@ export const writeProjectTreeAuditLog = async (
     session?: ClientSession
 ): Promise<void> => {
     const now = Date.now();
-    const entityId = toIdString(input.entityId);
+    const entityId = toCrmIdString(input.entityId);
     const requestId = input.requestId ?? req.header('x-request-id') ?? undefined;
 
     const logDoc = {
@@ -125,4 +109,3 @@ export const writeProjectTreeAuditLog = async (
         throw error;
     }
 };
-

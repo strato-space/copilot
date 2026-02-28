@@ -20,6 +20,7 @@ import {
   type ExpenseOperation,
 } from '../services/expenseDirectory';
 import { useExpensesStore } from '../store/expensesStore';
+import { normalizePinnedMonths, togglePinnedMonth } from '../utils/pinnedMonths';
 
 interface BonusMonthCell {
   amount: number;
@@ -269,16 +270,7 @@ const BonusesGrid = ({
   }, [rows, searchValue]);
 
   useEffect((): void => {
-    setPinnedMonths((prev) => {
-      let next = prev.filter((month) => months.includes(month));
-      if (next.length === 0) {
-        next = [focusMonth];
-      }
-      while (next.length > 3) {
-        next.shift();
-      }
-      return next;
-    });
+    setPinnedMonths((prev) => normalizePinnedMonths(prev, months, focusMonth));
   }, [focusMonth, months]);
 
   useEffect((): void => {
@@ -289,20 +281,7 @@ const BonusesGrid = ({
   }, [pinnedMonths]);
 
   const handleTogglePin = (month: string): void => {
-    setPinnedMonths((prev) => {
-      const isPinned = prev.includes(month);
-      if (isPinned) {
-        return prev.filter((item) => item !== month);
-      }
-      const next = [...prev, month];
-      if (!next.includes(focusMonth)) {
-        next.push(focusMonth);
-      }
-      while (next.length > 3) {
-        next.shift();
-      }
-      return next;
-    });
+    setPinnedMonths((prev) => togglePinnedMonth(prev, month, focusMonth));
   };
 
   const autoCompleteOptions = useMemo(

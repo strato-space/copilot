@@ -11,6 +11,7 @@ import AddParticipantModal from './AddParticipantModal';
 import AccessUsersModal from './AccessUsersModal';
 import CustomPromptModal from './CustomPromptModal';
 import { buildGroupedProjectOptions } from './projectSelectOptions';
+import { readActiveSessionIdFromEvent, readVoiceFabGlobals } from '../../utils/voiceFabSync';
 import type { SessionAccessLevel } from '../../constants/permissions';
 import type { VoicebotPerson } from '../../types/voice';
 
@@ -188,27 +189,17 @@ export default function MeetingCard({ onCustomPromptResult, activeTab }: Meeting
 
     useEffect(() => {
         const syncFromGlobals = (): void => {
-            try {
-                const stateGetter = (window as { __voicebotState?: { get?: () => { state?: string } } }).__voicebotState?.get;
-                if (typeof stateGetter === 'function') {
-                    const state = stateGetter();
-                    const nextState = typeof state?.state === 'string' ? state.state : 'idle';
-                    setFabSessionState(nextState);
-                }
-            } catch {
-                // ignore
+            const { sessionState, activeSessionId } = readVoiceFabGlobals(SESSION_ID_STORAGE_KEY);
+            if (typeof sessionState === 'string') {
+                setFabSessionState(sessionState);
             }
-            try {
-                const sid = String(window.localStorage.getItem(SESSION_ID_STORAGE_KEY) || '').trim();
-                setFabActiveSessionId(sid);
-            } catch {
-                // ignore
+            if (typeof activeSessionId === 'string') {
+                setFabActiveSessionId(activeSessionId);
             }
         };
 
         const onActiveSessionUpdated = (event: Event): void => {
-            const detail = (event as CustomEvent<{ session_id?: string }>).detail;
-            const sid = String(detail?.session_id || '').trim();
+            const sid = readActiveSessionIdFromEvent(event);
             if (sid) {
                 setFabActiveSessionId(sid);
                 return;

@@ -9,6 +9,32 @@ import constants from '../constants';
 import { useKanban } from '../store/kanban';
 import type { Ticket } from '../types/kanban';
 
+const ticketDescriptionSanitizerOptions: sanitizeHtml.IOptions = {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
+    allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        a: ['href', 'name', 'target', 'rel'],
+        img: ['src', 'srcset', 'alt', 'title', 'width', 'height', 'loading'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+    allowedSchemesByTag: {
+        ...sanitizeHtml.defaults.allowedSchemesByTag,
+        img: ['http', 'https'],
+    },
+    allowProtocolRelative: false,
+    transformTags: {
+        a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }, true),
+    },
+};
+
+export const sanitizeTicketDescriptionHtml = (description?: string | null): string => {
+    if (!description) {
+        return '';
+    }
+
+    return sanitizeHtml(description, ticketDescriptionSanitizerOptions);
+};
+
 const OneTicket = () => {
     const { selectedTicket, setSelectedTicket, setActiveActionSheet } = useKanban();
 
@@ -21,6 +47,7 @@ const OneTicket = () => {
     }
 
     const ticket: Ticket = selectedTicket;
+    const safeTicketDescription = sanitizeTicketDescriptionHtml(ticket.description);
 
     const taskType = ticket.task_type;
     const executionPlanItems = Array.isArray(taskType?.execution_plan) ? taskType.execution_plan : [];
@@ -122,9 +149,7 @@ const OneTicket = () => {
                     <div className="font-bold">Описание задачи:</div>
                     <div
                         dangerouslySetInnerHTML={{
-                            __html: sanitizeHtml(ticket.description ?? '', {
-                                allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
-                            }),
+                            __html: safeTicketDescription,
                         }}
                     />
                 </div>

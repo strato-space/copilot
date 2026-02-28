@@ -148,7 +148,7 @@ interface OneTimeToken {
 router.post('/auth_token', async (req: Request, res: Response) => {
   const { token } = req.body as { token?: string };
 
-  logger.info(`One-time token auth attempt with token: ${token ? token.substring(0, 8) + '...' : 'null'}`);
+  logger.info('One-time token auth attempt received');
 
   if (!token) {
     logger.warn('One-time token auth: token missing in request');
@@ -159,7 +159,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
   const encryptionKey = getEncryptionKey();
 
   // Check token in database
-  logger.info(`Looking for token in database: ${token.substring(0, 8)}...`);
+  logger.info('Looking for one-time token in database');
   const oneTimeToken = await db
     .collection<OneTimeToken>(VOICEBOT_COLLECTIONS.ONE_USE_TOKENS)
     .findOne(
@@ -173,18 +173,18 @@ router.post('/auth_token', async (req: Request, res: Response) => {
     );
 
   if (!oneTimeToken) {
-    logger.warn(`Invalid or used one-time token: ${token.substring(0, 8)}...`);
+    logger.warn('Invalid or used one-time token');
     throw new AppError('Invalid or expired token', 401, 'INVALID_TOKEN');
   }
 
-  logger.info(`Found valid token for chat_id: ${oneTimeToken.chat_id}`);
+  logger.info('Found valid one-time token record');
 
   // Check token expiration (24 hours)
   const tokenAge = Date.now() - oneTimeToken.created_at.getTime();
   const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   if (tokenAge > maxAge) {
-    logger.warn(`Expired one-time token: ${token.substring(0, 8)}..., age: ${Math.round(tokenAge / 1000 / 60)} minutes`);
+    logger.warn(`Expired one-time token, age: ${Math.round(tokenAge / 1000 / 60)} minutes`);
     // Mark expired token as used
     await db
       .collection<OneTimeToken>(VOICEBOT_COLLECTIONS.ONE_USE_TOKENS)
@@ -196,7 +196,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
   }
 
   // Find user by chat_id (telegram_id)
-  logger.info(`Looking for performer with telegram_id: ${oneTimeToken.chat_id}`);
+  logger.info('Looking for performer by telegram_id');
   const performer = await db
     .collection<Performer>(COLLECTIONS.PERFORMERS)
     .findOne({
@@ -206,11 +206,11 @@ router.post('/auth_token', async (req: Request, res: Response) => {
     });
 
   if (!performer) {
-    logger.warn(`No performer found for chat_id: ${oneTimeToken.chat_id}`);
+    logger.warn('No performer found for one-time token');
     throw new AppError('User not found', 401, 'USER_NOT_FOUND');
   }
 
-  logger.info(`Found performer: ${performer.name || performer.real_name} (${performer.corporate_email})`);
+  logger.info('Found performer for one-time token');
 
   // Mark token as used
   await db
@@ -236,7 +236,7 @@ router.post('/auth_token', async (req: Request, res: Response) => {
     expiresIn: '90d',
   });
 
-  logger.info(`Successful one-time token login for user: ${performer.corporate_email || performer.name}, chat_id: ${oneTimeToken.chat_id}`);
+  logger.info(`Successful one-time token login for performer_id: ${performer._id.toString()}`);
 
   // Set auth cookie
   setAuthCookie(req, res, authToken);

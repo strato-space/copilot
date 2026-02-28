@@ -12,6 +12,8 @@ describe('CRM performer lifecycle selector contract', () => {
   const crmPageSource = fs.readFileSync(crmPagePath, 'utf8');
 
   it('hides inactive performers by default and keeps historical fallback in create-ticket selectors', () => {
+    expect(createTicketSource).toContain("import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';");
+    expect(createTicketSource).not.toContain('const getPerformerLabel =');
     expect(createTicketSource).toContain('const historicalPerformerIds = useMemo(() => {');
     expect(createTicketSource).toContain('if (!isPerformerSelectable(performer) && !historicalPerformerIdSet.has(value)) continue;');
     expect(createTicketSource).toContain('for (const performerId of historicalPerformerIds) {');
@@ -19,6 +21,8 @@ describe('CRM performer lifecycle selector contract', () => {
   });
 
   it('keeps kanban performer editing compatible with historical inactive assignees', () => {
+    expect(kanbanSource).toContain("import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';");
+    expect(kanbanSource).not.toContain('const getPerformerLabel =');
     expect(kanbanSource).toContain('const historicalPerformerLabels = useMemo(() => {');
     expect(kanbanSource).toContain('if (!isPerformerSelectable(performer) && !historicalPerformerIdSet.has(value)) continue;');
     expect(kanbanSource).toContain('filters: performerOptions.map((performer) => ({ text: performer.label, value: performer.value }))');

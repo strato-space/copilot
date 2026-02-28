@@ -2,13 +2,34 @@ import { JWT } from 'google-auth-library';
 import { GoogleSpreadsheet, type GoogleSpreadsheetWorksheet } from 'google-spreadsheet';
 import path from 'path';
 import fs from 'fs';
+import { getLogger } from '../../utils/logger.js';
 
 interface GoogleCredentials {
     client_email: string;
     private_key: string;
 }
 
+const logger = getLogger();
 let serviceAccountAuth: JWT | null = null;
+
+const parseCredentials = (raw: string, source: string): GoogleCredentials => {
+    try {
+        const parsed = JSON.parse(raw) as Partial<GoogleCredentials>;
+        if (typeof parsed.client_email !== 'string' || typeof parsed.private_key !== 'string') {
+            throw new Error('missing_required_fields');
+        }
+        return {
+            client_email: parsed.client_email,
+            private_key: parsed.private_key,
+        };
+    } catch (error) {
+        logger.error('[google.sheets] failed to parse service account credentials', {
+            source,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        throw new Error(`Invalid Google service account credentials in ${source}`);
+    }
+};
 
 /**
  * Load Google service account credentials from file
@@ -22,7 +43,7 @@ const loadCredentials = (): GoogleCredentials => {
     }
 
     const content = fs.readFileSync(credPath, 'utf-8');
-    return JSON.parse(content) as GoogleCredentials;
+    return parseCredentials(content, credPath);
 };
 
 /**

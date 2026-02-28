@@ -48,7 +48,6 @@ export const useCRMSocket = () => {
         // Ticket created
         cleanups.push(
             onSocketEvent<TicketEventPayload>(SOCKET_EVENTS.TICKET_CREATED, (data) => {
-                console.log('[CRM Socket] Ticket created:', data.ticket?.name);
                 // Refetch tickets to include new one
                 fetchTickets();
             })
@@ -57,7 +56,6 @@ export const useCRMSocket = () => {
         // Ticket updated
         cleanups.push(
             onSocketEvent<TicketEventPayload>(SOCKET_EVENTS.TICKET_UPDATED, (data) => {
-                console.log('[CRM Socket] Ticket updated:', data.ticket?.name);
                 // Update the specific ticket in store
                 const { tickets } = useKanbanStore.getState();
                 const updatedTickets = tickets.map((t) =>
@@ -70,7 +68,6 @@ export const useCRMSocket = () => {
         // Ticket deleted
         cleanups.push(
             onSocketEvent<{ ticket_id: string }>(SOCKET_EVENTS.TICKET_DELETED, (data) => {
-                console.log('[CRM Socket] Ticket deleted:', data.ticket_id);
                 const { tickets } = useKanbanStore.getState();
                 const filteredTickets = tickets.filter((t) => t._id !== data.ticket_id);
                 useKanbanStore.setState({ tickets: filteredTickets, tickets_updated_at: Date.now() });
@@ -80,7 +77,6 @@ export const useCRMSocket = () => {
         // Epic updated
         cleanups.push(
             onSocketEvent<EpicEventPayload>(SOCKET_EVENTS.EPIC_UPDATED, (data) => {
-                console.log('[CRM Socket] Epic updated:', data.epic?.name);
                 const { epics } = useKanbanStore.getState();
                 if (epics) {
                     useKanbanStore.setState({
@@ -93,7 +89,6 @@ export const useCRMSocket = () => {
         // Comment added
         cleanups.push(
             onSocketEvent<CommentEventPayload>(SOCKET_EVENTS.COMMENT_ADDED, (data) => {
-                console.log('[CRM Socket] Comment added to ticket:', data.ticket_id);
                 // Could update comments in UI if needed
             })
         );
@@ -101,7 +96,6 @@ export const useCRMSocket = () => {
         // Work hours updated
         cleanups.push(
             onSocketEvent<WorkHoursEventPayload>(SOCKET_EVENTS.WORK_HOURS_UPDATED, (data) => {
-                console.log('[CRM Socket] Work hours updated for ticket:', data.ticket_id);
                 // Could trigger widgets refresh
             })
         );

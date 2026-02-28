@@ -1627,7 +1627,8 @@ def init_typedb(options: CliOptions) -> Any:
 INGESTERS: dict[str, Callable[[IngestContext], CollectionStats]] = {
     "automation_customers": ingest_customers,
     "automation_projects": ingest_projects,
-    "automation_tasks": ingest_tasks,
+    # Keep automation_tasks strictly mapping-driven to avoid schema/mapping drift.
+    "automation_tasks": lambda ctx: ingest_collection_from_mapping(ctx, "automation_tasks"),
     "automation_voice_bot_sessions": ingest_voice_sessions,
     "automation_voice_bot_messages": ingest_voice_messages,
     "forecasts_project_month": ingest_forecasts,

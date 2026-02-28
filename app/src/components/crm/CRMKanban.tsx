@@ -47,7 +47,7 @@ import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
 import { TASK_STATUSES } from '../../constants/crm';
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
-import { isPerformerSelectable } from '../../utils/performerLifecycle';
+import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
 import { normalizeVoiceSessionSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
 import type { Ticket, Performer, Epic, TaskType } from '../../types/crm';
 
@@ -62,17 +62,6 @@ const roundTo = (value: number, precision = 0): number => {
     if (!Number.isFinite(value)) return 0;
     const factor = 10 ** precision;
     return Math.round(value * factor) / factor;
-};
-
-const getPerformerLabel = (performer: Record<string, unknown> | Performer | null | undefined, fallback: string): string => {
-    if (!performer || typeof performer !== 'object') return fallback;
-    const realName = typeof performer.real_name === 'string' ? performer.real_name.trim() : '';
-    if (realName) return realName;
-    const name = typeof performer.name === 'string' ? performer.name.trim() : '';
-    if (name) return name;
-    const email = typeof performer.email === 'string' ? performer.email.trim() : '';
-    if (email) return email;
-    return fallback;
 };
 
 interface CRMKanbanProps {

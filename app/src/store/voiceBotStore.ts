@@ -283,6 +283,13 @@ const logVoicebotRequestError = (endpoint: string, targetUrl: string, error: unk
     });
 };
 
+const isTransientVoicebotRequestError = (error: unknown): boolean => {
+    if (!axios.isAxiosError(error)) return false;
+    if (!error.response) return true;
+    const status = Number(error.response.status);
+    return Number.isFinite(status) && status >= 500 && status <= 599;
+};
+
 const voicebotRequest = async <T = unknown>(url: string, data: unknown = {}, silent = false): Promise<T> => {
     const backendUrl = getBackendUrl();
     const proxyConfig = getProxyConfig();
@@ -1074,13 +1081,40 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     },
 
     activateSession: async (sessionId) => {
-        try {
-            await voicebotRequest('voicebot/activate_session', { session_id: sessionId });
-            return true;
-        } catch (error) {
-            console.error('Ошибка при активации сессии:', error);
-            return false;
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) return false;
+        const maxAttempts = 3;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            try {
+                await voicebotRequest('voicebot/activate_session', { session_id: normalizedSessionId });
+                return true;
+            } catch (error) {
+                const shouldRetry = attempt < maxAttempts && isTransientVoicebotRequestError(error);
+                if (!shouldRetry) {
+                    console.error('Ошибка при активации сессии:', error);
+                    break;
+                }
+                const retryDelayMs = 250 * attempt;
+                console.warn('Повтор активации сессии после сетевой ошибки', {
+                    sessionId: normalizedSessionId,
+                    attempt,
+                    maxAttempts,
+                    retryDelayMs,
+                });
+                await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+            }
         }
+
+        const currentSessionId = String(get().voiceBotSession?._id || '').trim();
+        if (currentSessionId && currentSessionId === normalizedSessionId) {
+            console.warn('Локальный fallback активации: используем текущую открытую сессию', {
+                sessionId: normalizedSessionId,
+            });
+            return true;
+        }
+
+        return false;
     },
 
     triggerSessionReadyToSummarize: async (sessionId) => {

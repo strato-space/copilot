@@ -9,6 +9,7 @@ import _ from 'lodash';
 import numberToWordsRu from 'number-to-words-ru';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
+import { normalizeTicketDbId } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS } from '../../../constants.js';
 import { getGoogleAuth } from '../../../services/google/sheets.js';
 
@@ -21,21 +22,6 @@ const router = Router();
 const logger = getLogger();
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-const normalizeTicketDbId = (value: unknown): string | null => {
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'string') {
-        const normalized = value.trim();
-        return normalized.length > 0 ? normalized : null;
-    }
-    if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
-            return new ObjectId(record.$oid).toHexString();
-        }
-    }
-    return null;
-};
 
 const getRootFolderId = (): string => {
     const rootFolderId = process.env.PERFORMERS_PAYMENTS_ROOT_FOLDER_ID;

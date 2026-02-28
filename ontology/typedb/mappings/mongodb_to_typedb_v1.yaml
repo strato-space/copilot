@@ -45,6 +45,7 @@ collections:
       project_group_ref: project_group
       board_id: board_id
       description: description
+      git_repo: git_repo
       drive_folder_id: drive_folder_id
       figma_project_link: figma_project_link
       design_files: design_files
@@ -207,6 +208,51 @@ collections:
       dashboard_comment: dashboard_comment
       order_index: order
       source: source
+      source_kind: source_kind
+      source_ref: source_ref
+      external_ref: external_ref
+      source_data: source_data
+      dialogue_reference: dialogue_reference
+      dialogue_tag: dialogue_tag
+      dependencies: dependencies
+      dependencies_from_ai: dependencies_from_ai
+      labels: labels
+      notes: notes
+      issue_type: issue_type
+      assignee: assignee
+      owner: owner
+      created_by: created_by
+      created_by_name: created_by_name
+      created_by_performer_id: created_by_performer_id
+      task_id_from_ai: task_id_from_ai
+      priority_reason: priority_reason
+      codex_task: codex_task
+      codex_review_state: codex_review_state
+      codex_review_due_at: codex_review_due_at
+      codex_review_summary: codex_review_summary
+      codex_review_summary_source: codex_review_summary_source
+      codex_review_summary_issue_id: codex_review_summary_issue_id
+      codex_review_summary_processing: codex_review_summary_processing
+      codex_review_summary_attempts: codex_review_summary_attempts
+      codex_review_summary_job_id: codex_review_summary_job_id
+      codex_review_summary_started_at: codex_review_summary_started_at
+      codex_review_summary_generated_at: codex_review_summary_generated_at
+      codex_review_summary_next_attempt_at: codex_review_summary_next_attempt_at
+      codex_review_summary_last_error_code: codex_review_summary_last_error_code
+      codex_review_summary_last_error_message: codex_review_summary_last_error_message
+      codex_review_summary_last_runner_error: codex_review_summary_last_runner_error
+      codex_review_summary_last_error_at: codex_review_summary_last_error_at
+      codex_review_summary_finished_at: codex_review_summary_finished_at
+      codex_review_summary_note_marker: codex_review_summary_note_marker
+      codex_review_summary_note_synced_at: codex_review_summary_note_synced_at
+      codex_review_summary_note_appended: codex_review_summary_note_appended
+      codex_review_approval_card_sent_at: codex_review_approval_card_sent_at
+      codex_review_approval_card_chat_id: codex_review_approval_card_chat_id
+      codex_review_approval_card_thread_id: codex_review_approval_card_thread_id
+      codex_review_approval_card_message_id: codex_review_approval_card_message_id
+      codex_review_approval_card_start_callback: codex_review_approval_card_start_callback
+      codex_review_approval_card_cancel_callback: codex_review_approval_card_cancel_callback
+      runtime_tag: runtime_tag
       notion_url: notion_url
       notion_board_id: notion_board_id
       sprint: sprint
@@ -229,6 +275,12 @@ collections:
           entity: project
           by: project_id
           from: project_id
+      - relation: voice_session_sources_oper_task
+        owner_role: source_voice_session
+        owner_lookup:
+          entity: voice_session
+          by: voice_session_id
+          from: source_ref
       - relation: oper_task_classified_as_task_type
         owner_role: oper_task
         owner_lookup:

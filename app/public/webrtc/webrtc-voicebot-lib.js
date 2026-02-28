@@ -1613,17 +1613,52 @@
             }
         }
 
-        async function activateSessionAPI(sessionId) {
+        function isTransientActivationError(error) {
+            const message = String((error && error.message) ? error.message : (error || '')).toLowerCase();
+            return (
+                message.includes('failed to fetch') ||
+                message.includes('networkerror') ||
+                message.includes('network request failed') ||
+                message.includes('fetch failed') ||
+                message.includes('load failed') ||
+                message.includes('err_empty_response')
+            );
+        }
+
+        async function activateSessionAPI(sessionId, opts = {}) {
             const payload = { session_id: String(sessionId || '').trim() };
             if (!payload.session_id) throw new Error('session_id is required');
-            const resp = await fetch(endpoints.activateSession(), {
-                method: 'POST',
-                headers: { 'X-Authorization': AUTH_TOKEN, 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const text = await resp.text();
-            if (!resp.ok) throw new Error(text || `status ${resp.status}`);
-            try { return text ? JSON.parse(text) : {}; } catch { return {}; }
+            const maxAttemptsRaw = Number(opts?.maxAttempts);
+            const maxAttempts = Number.isFinite(maxAttemptsRaw) ? Math.max(1, Math.floor(maxAttemptsRaw)) : 3;
+            let lastError = null;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                try {
+                    const resp = await fetch(endpoints.activateSession(), {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'X-Authorization': AUTH_TOKEN, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const text = await resp.text();
+                    if (!resp.ok) throw new Error(text || `status ${resp.status}`);
+                    try { return text ? JSON.parse(text) : {}; } catch { return {}; }
+                } catch (error) {
+                    lastError = error;
+                    const shouldRetry = attempt < maxAttempts && isTransientActivationError(error);
+                    if (!shouldRetry) throw error;
+                    const retryDelayMs = 250 * attempt;
+                    console.warn('[activate_session] transient failure; retrying', {
+                        attempt,
+                        maxAttempts,
+                        retryDelayMs,
+                        message: String((error && error.message) ? error.message : (error || ''))
+                    });
+                    await sleepMs(retryDelayMs);
+                }
+            }
+
+            throw lastError || new Error('activate_session_failed');
         }
 
         async function activateSessionForRecording(sessionId, opts = {}) {
@@ -1635,7 +1670,19 @@
             if (current && current === sid) return sid;
 
             const source = String(opts?.source || 'rec').trim();
-            const activation = await activateSessionAPI(sid);
+            let activation = null;
+            try {
+                activation = await activateSessionAPI(sid);
+            } catch (error) {
+                if (!isTransientActivationError(error)) throw error;
+                const fallbackMessage = String((error && error.message) ? error.message : (error || ''));
+                console.warn('[activate_session] transient failure; using local fallback', {
+                    session_id: sid,
+                    message: fallbackMessage,
+                });
+                logApi('activate_session.degraded', { session_id: sid, message: fallbackMessage });
+                activation = { session_id: sid, session_name: '' };
+            }
             const activeId = String(activation?.session_id || sid).trim();
             const activeNameFromResponse = String(activation?.session_name || '').trim();
 

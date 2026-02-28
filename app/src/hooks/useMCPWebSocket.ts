@@ -19,12 +19,10 @@ export const useMCPWebSocket = (): void => {
 
         const handleConnect = () => {
             setConnectionState('connected');
-            console.info('[MCP] Socket connected');
         };
 
         const handleDisconnect = () => {
             setConnectionState('disconnected');
-            console.warn('[MCP] Socket disconnected');
             const { requests } = useMCPRequestStore.getState();
             requests.forEach((request, requestId) => {
                 if (request.status === 'pending' || request.status === 'streaming') {

@@ -20,13 +20,18 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("router.post('/upload_progress/:message_id'");
   });
 
-  it('persists runtime-aware task creation metadata for create_tickets', () => {
+  it('routes codex tasks via bd sync and keeps runtime-aware metadata for non-codex tasks', () => {
     expect(source).toContain('runtime_tag: RUNTIME_TAG');
     expect(source).toContain("source: 'VOICE_BOT'");
     expect(source).toContain('source_data: {');
     expect(source).toContain('session_id: new ObjectId(sessionId)');
-    expect(source).toContain("codex_review_state: 'deferred'");
-    expect(source).toContain('codex_review_due_at: new Date(now.getTime() + CODEX_REVIEW_DEFERRED_WINDOW_MS)');
+    expect(source).toContain('const codexTasksToSync: Array<CodexIssueSyncInput> = [];');
+    expect(source).toContain('const filteredTasksToSave = tasksToSave.filter((task) => {');
+    expect(source).toContain('[voicebot.create_tickets] dropped codex task before insertMany');
+    expect(source).toContain('await db.collection(COLLECTIONS.TASKS).deleteMany(');
+    expect(source).toContain('external_ref: canonicalExternalRef');
+    expect(source).toContain('codex_task: true');
+    expect(source).toContain('const issueId = await createBdIssue({');
   });
 
   it('normalizes save_create_tasks payload into canonical task fields', () => {

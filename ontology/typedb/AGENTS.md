@@ -32,9 +32,20 @@ From `/home/strato-space/copilot/backend`:
 2. `npm run ontology:typedb:ingest:dry`
 3. `npm run ontology:typedb:validate`
 
+If `.env.development` does not provide `MONGODB_CONNECTION_STRING`, construct and export it before ingestion:
+
+`export MONGODB_CONNECTION_STRING="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${DB_NAME}?authSource=admin&directConnection=true"`
+
 If you changed only docs, state explicitly that runtime validation was skipped.
 
 ## Recent Updates
 
+- 2026-02-28: `copilot-gym6.*` runtime-parity wave completed for schema/mapping/validation/tooling:
+  - added gap baseline `docs/runtime_contract_gap_matrix_v1.md`,
+  - expanded OperOps/Codex task contract coverage in schema/mapping,
+  - added `voice_session_sources_oper_task` relation and mapping path,
+  - refreshed validation queries with OperTask/Codex checks.
+- 2026-02-28: `typedb-ontology-validate.py` anchor checks were made TypeDB 3 inference-safe (no direct variable reuse across different attribute labels).
+- 2026-02-28: `typedb-ontology-ingest.py` now ingests `automation_tasks` through generic mapping-driven path to reduce YAML/script drift.
 - 2026-02-28: Deep runtime-contract alignment for Voice ontology (`copilot-aonw`): extended `voice_session` / `voice_message` / `history_step` field coverage, added `voice_session_merge_log` entity+relation, and mapped `automation_voice_bot_session_merge_log`.
 - 2026-02-28: Validation pack expanded with contract checks for session-log/merge-log orphans, image-anchor integrity, runtime-tag completeness, and close-flow consistency (`is_active=false` + `to_finalize=true` should have `done_at`).

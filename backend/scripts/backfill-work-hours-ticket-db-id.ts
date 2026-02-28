@@ -121,32 +121,32 @@ async function main(): Promise<void> {
       : 0;
 
     console.log(
-      `[work-hours-ticket-db-id-backfill] mode=${apply ? 'apply' : 'dry-run'} env=${envPath}`
+      `work-hours-ticket-db-id-backfill mode=${apply ? 'apply' : 'dry-run'} env=${envPath}`
     );
     console.log(
-      `[work-hours-ticket-db-id-backfill] missing_ticket_db_id=${totalMissing} missing_with_string_ticket_id=${missingWithStringTicketId}`
+      `work-hours-ticket-db-id-backfill missing_ticket_db_id=${totalMissing} missing_with_string_ticket_id=${missingWithStringTicketId}`
     );
     console.log(
-      `[work-hours-ticket-db-id-backfill] missing_with_found_task=${missingWithFoundTaskCount} missing_with_unique_found_task=${missingWithUniqueFoundTaskCount}`
+      `work-hours-ticket-db-id-backfill missing_with_found_task=${missingWithFoundTaskCount} missing_with_unique_found_task=${missingWithUniqueFoundTaskCount}`
     );
     console.log(
-      `[work-hours-ticket-db-id-backfill] distinct_ticket_ids=${distinctTicketIds.length} found_ticket_ids=${anyFoundPublicIds.length} ambiguous_ticket_ids=${ambiguousPublicIds.length}`
+      `work-hours-ticket-db-id-backfill distinct_ticket_ids=${distinctTicketIds.length} found_ticket_ids=${anyFoundPublicIds.length} ambiguous_ticket_ids=${ambiguousPublicIds.length}`
     );
 
     if (!apply) {
       if (ambiguousPublicIds.length > 0) {
         const preview = ambiguousPublicIds.slice(0, 20).join(', ');
         console.log(
-          `[work-hours-ticket-db-id-backfill] ambiguous ticket_id examples (first 20): ${preview}`
+          `work-hours-ticket-db-id-backfill ambiguous ticket_id examples (first 20): ${preview}`
         );
       }
-      console.log('[work-hours-ticket-db-id-backfill] dry-run finished');
+      console.log('work-hours-ticket-db-id-backfill dry-run finished');
       return;
     }
 
     if (uniqueTaskDbIdByPublicId.size === 0) {
       console.log(
-        '[work-hours-ticket-db-id-backfill] nothing to update: no unique ticket_id -> task._id matches'
+        'work-hours-ticket-db-id-backfill nothing to update: no unique ticket_id -> task._id matches'
       );
       return;
     }
@@ -177,7 +177,7 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      `[work-hours-ticket-db-id-backfill] apply finished matched=${totalMatched} modified=${totalModified}`
+      `work-hours-ticket-db-id-backfill apply finished matched=${totalMatched} modified=${totalModified}`
     );
   } finally {
     await client.close();
@@ -185,7 +185,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error('[work-hours-ticket-db-id-backfill] failed:', error);
+  console.error('work-hours-ticket-db-id-backfill failed:', error);
   process.exitCode = 1;
 });
-

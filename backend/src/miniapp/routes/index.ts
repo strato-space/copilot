@@ -9,6 +9,10 @@ import type { Queue } from 'bullmq';
 import type { Logger } from 'winston';
 
 import { COLLECTIONS, NOTIFICATIONS, TASK_CLASSES, TASK_STATUSES } from '../../constants.js';
+import {
+    buildWorkHoursLookupByTicketDbId,
+    normalizeTicketDbId,
+} from '../../utils/crmMiniappShared.js';
 
 dayjs.extend(customParseFormat);
 
@@ -23,6 +27,37 @@ interface TelegramUserData {
     photo_url?: string;
 }
 
+const toSafeErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
+const summarizeQueryParams = (params: URLSearchParams): { keys: string[]; has_hash: boolean; has_user: boolean } => ({
+    keys: Array.from(new Set(Array.from(params.keys()))).sort(),
+    has_hash: params.has('hash'),
+    has_user: params.has('user'),
+});
+
+const parseJsonWithDiagnostics = <T>(raw: unknown, logger: Logger, context: string): T | null => {
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+        logger.warn('JSON parse skipped: invalid input', { context, has_value: raw !== undefined && raw !== null });
+        return null;
+    }
+
+    try {
+        return JSON.parse(raw) as T;
+    } catch (error) {
+        logger.warn('JSON parse failed', { context, error: toSafeErrorMessage(error) });
+        return null;
+    }
+};
+
+const isTelegramUserData = (value: unknown): value is TelegramUserData =>
+    Boolean(
+        value
+        && typeof value === 'object'
+        && typeof (value as { id?: unknown }).id === 'number'
+        && Number.isFinite((value as { id: number }).id)
+    );
+
 export interface MiniappDeps {
     db: Db;
     notificationQueue: Queue;
@@ -32,48 +67,6 @@ export interface MiniappDeps {
 
 type MiniappRequest = Request & { user?: Record<string, unknown> };
 
-const normalizeTicketDbId = (value: unknown): string | null => {
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'string') {
-        const normalized = value.trim();
-        return normalized.length > 0 ? normalized : null;
-    }
-    if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
-            return new ObjectId(record.$oid).toHexString();
-        }
-    }
-    return null;
-};
-
-const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
-    $lookup: {
-        from: COLLECTIONS.WORK_HOURS,
-        let: { taskDbId: { $toString: '$_id' } },
-        pipeline: [
-            {
-                $match: {
-                    $expr: {
-                        $eq: [
-                            {
-                                $convert: {
-                                    input: '$ticket_db_id',
-                                    to: 'string',
-                                    onError: '',
-                                    onNull: '',
-                                },
-                            },
-                            '$$taskDbId',
-                        ],
-                    },
-                },
-            },
-        ],
-        as: 'work_data',
-    },
-});
-
 export const createMiniappRouter = ({ db, notificationQueue, logger, testData }: MiniappDeps): Router => {
     const router = express.Router();
 
@@ -82,7 +75,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
             let data = req.query as Record<string, string> | Record<string, unknown>;
             const urlParams = new URLSearchParams(data as Record<string, string>);
 
-            logger.info('Try login', { ip: req.ip, query: Object.fromEntries(urlParams) });
+            logger.info('Try login', { ip: req.ip, query: summarizeQueryParams(urlParams) });
 
             const isDebug = process.env.IS_MINIAPP_DEBUG_MODE === 'true';
 
@@ -112,13 +105,22 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                     data = testData as Record<string, string>;
                 }
 
-                const user = JSON.parse((data as { user: string }).user) as TelegramUserData;
+                const user = parseJsonWithDiagnostics<TelegramUserData>(
+                    (data as { user?: unknown }).user,
+                    logger,
+                    'miniapp.login.user'
+                );
+                if (!isTelegramUserData(user)) {
+                    logger.warn('Bad init tg data: user payload is invalid');
+                    res.status(401).json({ error: 'Access denied!' });
+                    return;
+                }
                 const dbUser = await db
                     .collection(COLLECTIONS.PERFORMERS)
                     .findOne({ telegram_id: user.id.toString() });
 
                 if (!dbUser) {
-                    logger.error('User not found', { user });
+                    logger.warn('User not found for telegram login');
                     res.status(401).json({ error: 'Access denied!' });
                     return;
                 }
@@ -127,7 +129,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                 const tgData = _.pick(user, ['language_code', 'photo_url']);
 
                 const userData = { ...dbData, ...tgData };
-                logger.info('User logged in', { user: userData });
+                logger.info('User logged in via miniapp');
 
                 const jwtSecret = process.env.APP_ENCRYPTION_KEY ?? '';
                 const jwtToken = jwt.sign(userData, jwtSecret, { expiresIn: '30d' });
@@ -137,11 +139,11 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                     .status(200)
                     .json(userData);
             } else {
-                logger.error('Bad init tg data', { data });
+                logger.warn('Bad init tg data');
                 res.status(401).json({ error: 'Access denied!' });
             }
         } catch (error) {
-            logger.error('Login error', { error });
+            logger.error('Login error', { error: toSafeErrorMessage(error) });
             res.status(500).json({ error: `${error}` });
         }
     });
@@ -167,7 +169,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
             req.user = decoded as Record<string, unknown>;
             next();
         } catch (error) {
-            logger.error('Invalid token', { error });
+            logger.error('Invalid token', { error: toSafeErrorMessage(error) });
             res.status(401).json({ error: 'Invalid token' });
         }
     };
@@ -318,7 +320,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
 
             res.status(200).json({ tickets: data });
         } catch (error) {
-            logger.error('Tickets error', { error });
+            logger.error('Tickets error', { error: toSafeErrorMessage(error) });
             res.status(500).json({ error: `${error}` });
         }
     });
@@ -387,7 +389,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
 
             res.status(200).json({ result: 'ok' });
         } catch (error) {
-            logger.error('Set status error', { error });
+            logger.error('Set status error', { error: toSafeErrorMessage(error) });
             res.status(500).json({ error: `${error}` });
         }
     });
@@ -487,7 +489,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
 
             res.status(200).json({ result: 'ok' });
         } catch (error) {
-            logger.error('Track time error', { error });
+            logger.error('Track time error', { error: toSafeErrorMessage(error) });
             res.status(500).json({ error: `${error}` });
         }
     });
@@ -515,7 +517,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
 
             res.status(200).json({ result: 'ok', op_res: opRes });
         } catch (error) {
-            logger.error('Comment error', { error });
+            logger.error('Comment error', { error: toSafeErrorMessage(error) });
             res.status(500).json({ error: `${error}` });
         }
     });

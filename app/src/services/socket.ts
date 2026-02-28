@@ -57,14 +57,6 @@ export const getSocket = (): Socket => {
             autoConnect: true,
         });
 
-        socket.on('connect', () => {
-            console.log('[Socket] Connected:', socket?.id);
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.log('[Socket] Disconnected:', reason);
-        });
-
         socket.on('connect_error', (error) => {
             console.error('[Socket] Connection error:', error.message);
         });
@@ -96,14 +88,6 @@ export const getVoicebotSocket = (authToken?: string | null): Socket => {
 
         voicebotSocket = io(voicebotNamespaceUrl, options);
 
-        voicebotSocket.on('connect', () => {
-            console.log('[VoiceBot Socket] Connected:', voicebotSocket?.id);
-        });
-
-        voicebotSocket.on('disconnect', (reason) => {
-            console.log('[VoiceBot Socket] Disconnected:', reason);
-        });
-
         voicebotSocket.on('connect_error', (error) => {
             console.error('[VoiceBot Socket] Connection error:', error.message);
         });
@@ -118,7 +102,6 @@ export const getVoicebotSocket = (authToken?: string | null): Socket => {
 export const subscribeToChannel = (channel: Channel): void => {
     const s = getSocket();
     s.emit(SOCKET_EVENTS.SUBSCRIBE, channel);
-    console.log('[Socket] Subscribed to:', channel);
 };
 
 /**
@@ -127,7 +110,6 @@ export const subscribeToChannel = (channel: Channel): void => {
 export const unsubscribeFromChannel = (channel: Channel): void => {
     const s = getSocket();
     s.emit(SOCKET_EVENTS.UNSUBSCRIBE, channel);
-    console.log('[Socket] Unsubscribed from:', channel);
 };
 
 /**
@@ -152,7 +134,6 @@ export const disconnectSocket = (): void => {
     if (socket) {
         socket.disconnect();
         socket = null;
-        console.log('[Socket] Disconnected and cleaned up');
     }
 };
 

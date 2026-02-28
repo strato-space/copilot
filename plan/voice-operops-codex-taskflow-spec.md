@@ -201,7 +201,7 @@ This section is a decomposition source for bd tasks. Each task references this s
 
 ### Voice tabs and task views
 7. Add `Задачи` tab in Voice session (same visual model as OperOps Backlog, filtered by session source).
-8. Add `Codex` tab in Voice session (filtered by `external_ref`, chronological, status-agnostic).
+8. Add `Codex` tab in Voice session (filtered by `external_ref`, chronological, shared status tabs `Open/Closed/All` like OperOps).
 9. Add in-place task detail preview in Voice `Codex` tab equivalent to `bd show <id>`.
 
 ### Codex performer / project constraints / external refs

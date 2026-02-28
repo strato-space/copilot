@@ -33,6 +33,22 @@ This folder contains a first executable scaffold of the STR OpsPortal ontology i
   - runtime-tag completeness counters for runtime-scoped voice collections,
   - close-contract check (`is_active=false` + `to_finalize=true` implies `done_at` exists).
 
+## Runtime Contract Alignment (2026-02-28, copilot-gym6)
+
+- Added cross-artifact gap baseline: `docs/runtime_contract_gap_matrix_v1.md` (runtime contract -> ontology coverage -> required change).
+- Extended `schema/str_opsportal_v1.tql` for OperOps/Codex task lifecycle:
+  - `project` now owns `git_repo`,
+  - `oper_task` includes source lineage (`source_ref`, `external_ref`, `source_kind`, `source_data`), Codex review lifecycle fields, and `runtime_tag`,
+  - new relation `voice_session_sources_oper_task` links session-origin tasks.
+- Updated `mappings/mongodb_to_typedb_v1.yaml`:
+  - mapped `automation_projects.git_repo`,
+  - expanded `automation_tasks` mapping with Codex/runtime fields and session-link relation.
+- Updated validation artifacts:
+  - `queries/validation_v1.tql` now includes OperTask/Codex gates (lineage, deferred review due-at, project git_repo, task runtime-tag counters),
+  - `scripts/typedb-ontology-validate.py` includes equivalent aggregate checks and TypeDB-3-safe image-anchor diagnostics.
+- Ingest script alignment:
+  - `scripts/typedb-ontology-ingest.py` now routes `automation_tasks` through the mapping-driven path to minimize schema/mapping/script drift.
+
 ## Contents
 
 - `scripts/typedb-ontology-ingest.py` - MongoDB -> TypeDB ingestion tool
@@ -84,6 +100,22 @@ From `copilot/backend`:
 - `npm run ontology:typedb:ingest:dry`
 - `npm run ontology:typedb:ingest:apply -- --init-schema`
 - `npm run ontology:typedb:validate`
+
+### Operator Runbook (Dev, Verified 2026-02-28)
+
+1. Prepare Python env:
+   - `cd /home/strato-space/copilot/backend && npm run ontology:typedb:py:setup`
+2. Load backend env and construct Mongo URI if needed:
+   - `set -a && source .env.development && set +a`
+   - `export MONGODB_CONNECTION_STRING="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${DB_NAME}?authSource=admin&directConnection=true"`
+3. Run dry ingestion:
+   - `npm run ontology:typedb:ingest:dry`
+4. Sync schema/apply sample (optional but useful when local TypeDB schema drifts):
+   - `npm run ontology:typedb:ingest:apply -- --init-schema --limit 5 --collections automation_projects,automation_tasks,automation_voice_bot_sessions,automation_voice_bot_messages,automation_voice_bot_session_log,automation_voice_bot_session_merge_log`
+5. Run validation:
+   - `npm run ontology:typedb:validate`
+
+Note: `directConnection=true` avoids replica-set internal-hostname resolution issues observed in dev when only external host/IP is reachable.
 
 ## Operational Contract
 

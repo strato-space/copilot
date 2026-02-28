@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "description": "Canonical test platform matrix for Copilot monorepo",
+  "platforms": [
+    {
+      "id": "app",
+      "root": "app",
+      "test_catalogs": ["__tests__", "e2e"],
+      "default_commands": {
+        "unit": "npm run test",
+        "e2e": "npm run test:e2e"
+      }
+    },
+    {
+      "id": "backend",
+      "root": "backend",
+      "test_catalogs": ["__tests__"],
+      "default_commands": {
+        "unit": "npm run test"
+      }
+    },
+    {
+      "id": "miniapp",
+      "root": "miniapp",
+      "test_catalogs": ["__tests__"],
+      "default_commands": {
+        "unit": "npm run test",
+        "e2e": "npm run test:e2e"
+      }
+    }
+  ],
+  "suites": {
+    "baseline": [
+      {
+        "id": "app-e2e-install",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run e2e:install"
+      },
+      {
+        "id": "app-unit",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run test"
+      },
+      {
+        "id": "backend-unit",
+        "platform": "backend",
+        "workdir": "backend",
+        "command": "npm run test"
+      },
+      {
+        "id": "miniapp-unit",
+        "platform": "miniapp",
+        "workdir": "miniapp",
+        "command": "npm run test"
+      },
+      {
+        "id": "app-e2e",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run test:e2e"
+      },
+      {
+        "id": "miniapp-e2e",
+        "platform": "miniapp",
+        "workdir": "miniapp",
+        "command": "npm run test:e2e"
+      }
+    ],
+    "voice": [
+      {
+        "id": "app-voice-unit",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run test -- __tests__/voice"
+      },
+      {
+        "id": "backend-voicebot-unit",
+        "platform": "backend",
+        "workdir": "backend",
+        "command": "npm run test -- __tests__/voicebot"
+      },
+      {
+        "id": "backend-voicebot-smoke",
+        "platform": "backend",
+        "workdir": "backend",
+        "command": "npm run test -- __tests__/smoke/voicebotApiSmoke.test.ts __tests__/smoke/voicebotAttachmentSmoke.test.ts"
+      },
+      {
+        "id": "app-voice-e2e",
+        "platform": "app",
+        "workdir": "app",
+        "env": {
+          "PLAYWRIGHT_BASE_URL": "https://copilot.stratospace.fun"
+        },
+        "command": "npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth"
+      }
+    ],
+    "full": [
+      {
+        "id": "app-e2e-install",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run e2e:install"
+      },
+      {
+        "id": "app-unit",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run test"
+      },
+      {
+        "id": "backend-unit",
+        "platform": "backend",
+        "workdir": "backend",
+        "command": "npm run test"
+      },
+      {
+        "id": "miniapp-unit",
+        "platform": "miniapp",
+        "workdir": "miniapp",
+        "command": "npm run test"
+      },
+      {
+        "id": "app-e2e",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run test:e2e"
+      },
+      {
+        "id": "miniapp-e2e",
+        "platform": "miniapp",
+        "workdir": "miniapp",
+        "command": "npm run test:e2e"
+      },
+      {
+        "id": "app-voice-unit",
+        "platform": "app",
+        "workdir": "app",
+        "command": "npm run test -- __tests__/voice"
+      },
+      {
+        "id": "backend-voicebot-unit",
+        "platform": "backend",
+        "workdir": "backend",
+        "command": "npm run test -- __tests__/voicebot"
+      },
+      {
+        "id": "backend-voicebot-smoke",
+        "platform": "backend",
+        "workdir": "backend",
+        "command": "npm run test -- __tests__/smoke/voicebotApiSmoke.test.ts __tests__/smoke/voicebotAttachmentSmoke.test.ts"
+      },
+      {
+        "id": "app-voice-e2e",
+        "platform": "app",
+        "workdir": "app",
+        "env": {
+          "PLAYWRIGHT_BASE_URL": "https://copilot.stratospace.fun"
+        },
+        "command": "npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth"
+      }
+    ]
+  }
+}

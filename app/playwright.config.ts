@@ -19,7 +19,8 @@ dotenv.config({ path: path.resolve(__dirname, 'e2e/.env'), override: true });
 const isCI = Boolean(process.env.CI);
 const authFile = path.join(__dirname, '.playwright/.auth/user.json');
 
-// WebServer disabled - run `npm run dev` manually before tests
+// WebServer disabled - point tests to a running target via PLAYWRIGHT_BASE_URL
+// (default is http://127.0.0.1:3002).
 // const webServerConfig = isCI
 //     ? {}
 //     : {

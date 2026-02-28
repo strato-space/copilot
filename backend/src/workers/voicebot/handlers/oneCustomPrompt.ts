@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
@@ -11,7 +11,8 @@ import { getDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
-import { resolveCustomPromptsDir } from '../customPromptsDir.js';
+import { listCustomPromptProcessorNames, resolveCustomPromptsDir } from '../customPromptsDir.js';
+import { parseJsonArray } from './messageProcessors.js';
 
 const logger = getLogger();
 
@@ -54,21 +55,6 @@ const runtimeQuery = (query: Record<string, unknown>) =>
     includeLegacyInProd: IS_PROD_RUNTIME,
   });
 
-const getCustomProcessors = (): string[] => {
-  const promptsDir = resolveCustomPromptsDir();
-  if (!existsSync(promptsDir)) return [];
-
-  try {
-    return readdirSync(promptsDir)
-      .filter((file) => file.endsWith('.md'))
-      .map((file) => file.replace(/\.md$/i, ''))
-      .map((name) => name.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
-
 const getCustomPromptText = (processorName: string): string | null => {
   const promptsDir = resolveCustomPromptsDir();
   const fileName = processorName.endsWith('.md') ? processorName : `${processorName}.md`;
@@ -98,29 +84,6 @@ const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   return String(error);
-};
-
-const parseJsonArray = (raw: string): unknown[] => {
-  const direct = raw.trim();
-  if (!direct) return [];
-
-  const candidates = [
-    direct,
-    direct.replace(/^```json\s*/i, '').replace(/```$/i, '').trim(),
-    direct.replace(/^```\s*/i, '').replace(/```$/i, '').trim(),
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    try {
-      const parsed = JSON.parse(candidate) as unknown;
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // ignore parse error and continue
-    }
-  }
-
-  return [];
 };
 
 const toBoolean = (value: unknown): boolean => value === true;
@@ -249,7 +212,7 @@ export const handleOneCustomPromptJob = async (
     );
 
     if (!isFinalProcessed) {
-      const customProcessors = getCustomProcessors();
+      const customProcessors = listCustomPromptProcessorNames();
       const allProcessed = customProcessors.every((processor) =>
         toBoolean(
           refreshedSession?.processors_data?.[processor] &&

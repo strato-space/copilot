@@ -34,17 +34,17 @@ async function main(): Promise<void> {
             ],
         };
 
-        console.log(`[runtime-tag-backfill] mode=${apply ? 'apply' : 'dry-run'}`);
+        console.log(`runtime-tag-backfill mode=${apply ? 'apply' : 'dry-run'}`);
         for (const collectionName of RUNTIME_SCOPED_COLLECTIONS) {
             const collection = db.collection(collectionName);
             const pending = await collection.countDocuments(filter);
             if (pending === 0) {
-                console.log(`[runtime-tag-backfill] ${collectionName}: pending=0`);
+                console.log(`runtime-tag-backfill ${collectionName}: pending=0`);
                 continue;
             }
 
             if (!apply) {
-                console.log(`[runtime-tag-backfill] ${collectionName}: pending=${pending} (dry-run)`);
+                console.log(`runtime-tag-backfill ${collectionName}: pending=${pending} (dry-run)`);
                 continue;
             }
 
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
                 { $set: { runtime_tag: 'prod' } }
             );
             console.log(
-                `[runtime-tag-backfill] ${collectionName}: pending=${pending}, modified=${result.modifiedCount}`
+                `runtime-tag-backfill ${collectionName}: pending=${pending}, modified=${result.modifiedCount}`
             );
         }
     } finally {
@@ -62,6 +62,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-    console.error('[runtime-tag-backfill] failed:', error);
+    console.error('runtime-tag-backfill failed:', error);
     process.exitCode = 1;
 });

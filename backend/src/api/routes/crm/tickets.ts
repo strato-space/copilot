@@ -8,6 +8,7 @@ import isSameOrAfter from 'dayjs/plugin/isSameOrAfter.js';
 import weekOfYear from 'dayjs/plugin/weekOfYear.js';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
+import { normalizeTicketDbId } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 
@@ -65,21 +66,6 @@ const toObjectId = (value: unknown): ObjectId | undefined => {
         }
     }
     return undefined;
-};
-
-const normalizeTicketDbId = (value: unknown): string | null => {
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'string') {
-        const normalized = value.trim();
-        return normalized.length > 0 ? normalized : null;
-    }
-    if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
-            return new ObjectId(record.$oid).toHexString();
-        }
-    }
-    return null;
 };
 
 const resolveRequestActor = (req: Request): { id?: string; name?: string } => {

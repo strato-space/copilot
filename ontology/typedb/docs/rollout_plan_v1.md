@@ -5,6 +5,9 @@ Create a production-ready ontology layer for OperOps + FinOps + Voice, with Mong
 
 Migration baseline: TypeDB `3.x` only (hard cutover), no TypeDB `2.x` compatibility track.
 
+Contract baseline for current sync wave (`copilot-gym6.*`):
+- `docs/runtime_contract_gap_matrix_v1.md`
+
 ## Phase 0 - Environment
 
 1. Provision TypeDB (isolated env) and create database `str_opsportal_v1`.

@@ -4,12 +4,12 @@ import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,
-  VOICEBOT_PROCESSORS,
 } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 import { resolveCustomPromptsDir } from '../customPromptsDir.js';
+import { getCategorizationData, parseJsonArray } from './messageProcessors.js';
 
 const logger = getLogger();
 
@@ -64,49 +64,6 @@ const createOpenAiClient = (): OpenAI | null => {
   const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
   if (!apiKey) return null;
   return new OpenAI({ apiKey });
-};
-
-const parseJsonArray = (raw: string): unknown[] => {
-  const direct = raw.trim();
-  if (!direct) return [];
-
-  const candidates = [
-    direct,
-    direct.replace(/^```json\s*/i, '').replace(/```$/i, '').trim(),
-    direct.replace(/^```\s*/i, '').replace(/```$/i, '').trim(),
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    try {
-      const parsed = JSON.parse(candidate) as unknown;
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // ignore parse error and continue
-    }
-  }
-
-  return [];
-};
-
-const getCategorizationData = (message: MessageRecord): unknown[] => {
-  if (Array.isArray(message.categorization)) {
-    return message.categorization;
-  }
-
-  const processorsData =
-    message.processors_data && typeof message.processors_data === 'object'
-      ? (message.processors_data as Record<string, unknown>)
-      : {};
-  const categorizationBucket = processorsData[VOICEBOT_PROCESSORS.CATEGORIZATION] as
-    | { data?: unknown[] }
-    | undefined;
-
-  if (categorizationBucket && Array.isArray(categorizationBucket.data)) {
-    return categorizationBucket.data;
-  }
-
-  return [];
 };
 
 const getCustomPromptText = (processorName: string): string | null => {

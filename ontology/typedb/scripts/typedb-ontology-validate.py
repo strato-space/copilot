@@ -103,13 +103,48 @@ CHECKS = [
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
+        "tasks_missing_runtime_tag",
+        "match $t isa oper_task; not { $t has runtime_tag $rt; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "codex_tasks_without_project",
+        "match $t isa oper_task, has codex_task true; not { (owner_project: $p, oper_task: $t) isa project_has_oper_task; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "tasks_with_source_ref_without_voice_session_link",
+        "match $t isa oper_task, has source_ref $ref; not { (source_voice_session: $s, sourced_oper_task: $t) isa voice_session_sources_oper_task; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "codex_tasks_without_session_reference",
+        "match $t isa oper_task, has codex_task true; not { $t has source_ref $source_ref; }; not { $t has external_ref $external_ref; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "codex_deferred_without_due_at",
+        "match $t isa oper_task, has codex_review_state \"deferred\"; not { $t has codex_review_due_at $due; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "codex_summary_generated_without_text",
+        "match $t isa oper_task, has codex_review_summary_generated_at $generated_at; not { $t has codex_review_summary $summary; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "codex_tasks_without_project_git_repo",
+        "match $t isa oper_task, has codex_task true; (owner_project: $p, oper_task: $t) isa project_has_oper_task; not { $p has git_repo $repo; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
         "sessions_pending_anchor_without_message",
-        "match $s isa voice_session, has pending_image_anchor_message_id $anchor_id; not { $m isa voice_message, has voice_message_id $anchor_id; (voice_session: $s, voice_message: $m) isa voice_session_has_message; }; reduce $count = count;",
+        "match $s isa voice_session, has pending_image_anchor_message_id $anchor_id; not { (voice_session: $s, voice_message: $m) isa voice_session_has_message; $m isa voice_message, has is_image_anchor true; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "messages_with_missing_image_anchor_parent",
-        "match $m isa voice_message, has image_anchor_message_id $anchor_id; not { $a isa voice_message, has voice_message_id $anchor_id; }; reduce $count = count;",
+        "match $m isa voice_message, has image_anchor_message_id $anchor_id; not { (voice_session: $s, voice_message: $m) isa voice_session_has_message; (voice_session: $s, voice_message: $a) isa voice_session_has_message; $a isa voice_message, has is_image_anchor true; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(

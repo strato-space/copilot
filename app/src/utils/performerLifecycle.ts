@@ -2,6 +2,7 @@ type PerformerLifecycleRecord = {
   is_deleted?: unknown;
   is_active?: unknown;
   active?: unknown;
+  real_name?: unknown;
   corporate_email?: unknown;
   email?: unknown;
   name?: unknown;
@@ -22,6 +23,20 @@ const HIDDEN_PERFORMER_ALIASES = new Set([
 
 const toNormalizedText = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+export const getPerformerLabel = (
+  performer: PerformerLifecycleRecord | Record<string, unknown> | null | undefined,
+  fallback: string
+): string => {
+  if (!performer || typeof performer !== 'object') return fallback;
+  const realName = typeof performer.real_name === 'string' ? performer.real_name.trim() : '';
+  if (realName) return realName;
+  const name = typeof performer.name === 'string' ? performer.name.trim() : '';
+  if (name) return name;
+  const email = typeof performer.email === 'string' ? performer.email.trim() : '';
+  if (email) return email;
+  return fallback;
+};
 
 export const isHiddenPerformerFromActiveSelectors = (
   performer: PerformerLifecycleRecord | null | undefined

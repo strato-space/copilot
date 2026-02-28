@@ -49,8 +49,6 @@ export const useMCPRequestStore = create<MCPStoreState>((set, get) => ({
             throw new Error('Socket not connected');
         }
 
-        console.info('[MCP] sendMCPCall', { requestId, mcpServer, tool });
-
         const request: MCPRequest = {
             requestId,
             mcpServer,

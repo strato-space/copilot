@@ -43,6 +43,32 @@ dayjs.extend(relativeTime);
 
 const { Title, Text, Paragraph } = Typography;
 
+const taskDescriptionSanitizerOptions: sanitizeHtml.IOptions = {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
+    allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        a: ['href', 'name', 'target', 'rel'],
+        img: ['src', 'srcset', 'alt', 'title', 'width', 'height', 'loading'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+    allowedSchemesByTag: {
+        ...sanitizeHtml.defaults.allowedSchemesByTag,
+        img: ['http', 'https'],
+    },
+    allowProtocolRelative: false,
+    transformTags: {
+        a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }, true),
+    },
+};
+
+export const sanitizeTaskDescriptionHtml = (description?: string | null): string => {
+    if (!description) {
+        return '';
+    }
+
+    return sanitizeHtml(description, taskDescriptionSanitizerOptions);
+};
+
 interface TaskTypeInfo {
     title?: string;
     description?: string;
@@ -154,6 +180,7 @@ const TaskPage = () => {
     const projectName = resolveTaskProjectName(task, projectsData);
     const creatorName = resolveTaskCreator(task, performers);
     const sourceInfo = resolveTaskSourceInfo(task);
+    const safeTaskDescription = sanitizeTaskDescriptionHtml(task.description);
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -307,9 +334,7 @@ const TaskPage = () => {
                             <div
                                 className="prose max-w-none"
                                 dangerouslySetInnerHTML={{
-                                    __html: sanitizeHtml(task.description, {
-                                        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
-                                    }),
+                                    __html: safeTaskDescription,
                                 }}
                             />
                         ) : (

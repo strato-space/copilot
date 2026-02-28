@@ -272,13 +272,27 @@ test.describe('Voice UI', () => {
         await expect(page.getByRole('button', { name: 'Edit segment' })).toBeVisible();
     });
 
-    test('@unauth shows runtime mismatch screen on 404 session fetch', async ({ page }) => {
+    test('@unauth shows not-found screen on 404 session fetch', async ({ page }) => {
         await mockAuth(page);
         await page.route('**/api/voicebot/sessions/get', async (route) => {
             await route.fulfill({
                 status: 404,
                 contentType: 'application/json',
                 body: JSON.stringify({ error: 'Session not found' }),
+            });
+        });
+
+        await page.goto('/voice/session/69948bce20288880ed5dea89');
+        await expect(page.getByText('Сессия не найдена')).toBeVisible();
+    });
+
+    test('@unauth shows runtime mismatch screen on 409 session fetch', async ({ page }) => {
+        await mockAuth(page);
+        await page.route('**/api/voicebot/sessions/get', async (route) => {
+            await route.fulfill({
+                status: 409,
+                contentType: 'application/json',
+                body: JSON.stringify({ error: 'runtime_mismatch' }),
             });
         });
 

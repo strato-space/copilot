@@ -12,6 +12,7 @@ import {
 import { handleDoneMultipromptJob } from '../src/workers/voicebot/handlers/doneMultiprompt.js';
 import { completeSessionDoneFlow } from '../src/services/voicebotSessionDoneFlow.js';
 import { getLogger } from '../src/utils/logger.js';
+import { hasFlag } from './cliFlags.js';
 
 type SessionDoc = {
   _id: ObjectId;
@@ -65,8 +66,6 @@ type CloseResult = {
 
 const logger = getLogger();
 const args = process.argv.slice(2);
-
-const hasFlag = (flag: string): boolean => args.includes(flag);
 
 const resolveOption = (name: string): string | null => {
   const inlinePrefix = `--${name}=`;
@@ -216,10 +215,10 @@ const pickSessionProjectName = (
 };
 
 async function main(): Promise<void> {
-  const apply = hasFlag('--apply');
-  const jsonOutput = hasFlag('--json');
-  const jsonlOutput = hasFlag('--jsonl');
-  const verbose = hasFlag('--verbose');
+  const apply = hasFlag(args, '--apply');
+  const jsonOutput = hasFlag(args, '--json');
+  const jsonlOutput = hasFlag(args, '--jsonl');
+  const verbose = hasFlag(args, '--verbose');
   const inactivityHours = resolveNumberOption('inactive-hours', 4);
   const limit = resolveNumberOption('limit', Number.MAX_SAFE_INTEGER);
   const explicitSessionIds = parseSessionFilter();
@@ -409,7 +408,7 @@ async function main(): Promise<void> {
         });
 
         if (!result.ok) {
-          logger.error('[voicebot-close-idle] failed to close session', {
+          logger.error('voicebot-close-idle failed to close session', {
             session_id: candidate.sessionId,
             error: result.error,
           });
@@ -492,17 +491,17 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      `[voicebot-close-idle] mode=${apply ? 'apply' : 'dry-run'} threshold_hours=${inactivityHours} open_sessions=${sessions.length} candidates=${targetCandidates.length}`
+      `voicebot-close-idle mode=${apply ? 'apply' : 'dry-run'} threshold_hours=${inactivityHours} open_sessions=${sessions.length} candidates=${targetCandidates.length}`
     );
 
     if (targetCandidates.length === 0) {
-      console.log('[voicebot-close-idle] no inactive active sessions found');
+      console.log('voicebot-close-idle no inactive active sessions found');
       return;
     }
 
     for (const candidate of targetCandidates) {
       console.log(
-        `[voicebot-close-idle] candidate session=${candidate.sessionId} messages=${candidate.messageCount} idle_hours=${candidate.idleHours} last_activity=${candidate.lastActivityAt.toISOString()} source=${candidate.lastActivitySource} session_name=${JSON.stringify(candidate.sessionName)} project_name=${JSON.stringify(candidate.projectName)}`
+        `voicebot-close-idle candidate session=${candidate.sessionId} messages=${candidate.messageCount} idle_hours=${candidate.idleHours} last_activity=${candidate.lastActivityAt.toISOString()} source=${candidate.lastActivitySource} session_name=${JSON.stringify(candidate.sessionName)} project_name=${JSON.stringify(candidate.projectName)}`
       );
 
       if (!apply) continue;
@@ -511,7 +510,7 @@ async function main(): Promise<void> {
       if (!result?.ok) continue;
 
       console.log(
-        `[voicebot-close-idle] closed session=${candidate.sessionId} messages=${candidate.messageCount} session_name=${JSON.stringify(candidate.sessionName)} project_name=${JSON.stringify(candidate.projectName)}`
+        `voicebot-close-idle closed session=${candidate.sessionId} messages=${candidate.messageCount} session_name=${JSON.stringify(candidate.sessionName)} project_name=${JSON.stringify(candidate.projectName)}`
       );
     }
 
@@ -519,7 +518,7 @@ async function main(): Promise<void> {
       const closed = closeResults.filter((entry) => entry.ok).length;
       const failed = closeResults.filter((entry) => !entry.ok).length;
       console.log(
-        `[voicebot-close-idle] summary mode=${apply ? 'apply' : 'dry-run'} candidates=${targetCandidates.length} closed=${closed} failed=${failed}`
+        `voicebot-close-idle summary mode=${apply ? 'apply' : 'dry-run'} candidates=${targetCandidates.length} closed=${closed} failed=${failed}`
       );
     }
   } finally {
@@ -530,6 +529,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error('[voicebot-close-idle] failed:', error);
+  console.error('voicebot-close-idle failed:', error);
   process.exitCode = 1;
 });

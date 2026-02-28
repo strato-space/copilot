@@ -2,37 +2,11 @@ import { Router, type Request, type Response } from 'express';
 import { ObjectId } from 'mongodb';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
+import { buildWorkHoursLookupByTicketDbId } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS } from '../../../constants.js';
 
 const router = Router();
 const logger = getLogger();
-
-const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
-    $lookup: {
-        from: COLLECTIONS.WORK_HOURS,
-        let: { taskDbId: { $toString: '$_id' } },
-        pipeline: [
-            {
-                $match: {
-                    $expr: {
-                        $eq: [
-                            {
-                                $convert: {
-                                    input: '$ticket_db_id',
-                                    to: 'string',
-                                    onError: '',
-                                    onNull: '',
-                                },
-                            },
-                            '$$taskDbId',
-                        ],
-                    },
-                },
-            },
-        ],
-        as: 'work_data',
-    },
-});
 
 /**
  * Get expenses

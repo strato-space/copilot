@@ -111,9 +111,18 @@ const loadHooksConfig = async (): Promise<{ resolvedPath: string; hooksByEvent: 
   }
 
   const raw = await fs.promises.readFile(resolvedPath, 'utf8');
-  const parsed = path.extname(resolvedPath).toLowerCase() === '.json'
-    ? JSON.parse(raw)
-    : YAML.parse(raw);
+  let parsed: unknown;
+  try {
+    parsed = path.extname(resolvedPath).toLowerCase() === '.json'
+      ? JSON.parse(raw)
+      : YAML.parse(raw);
+  } catch (error) {
+    logger.error('[voicebot-worker] notify hooks config parse failed', {
+      path: resolvedPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new Error(`Invalid notify hooks config at ${resolvedPath}`);
+  }
   const hooksByEvent = notifyHooksConfigSchema.parse(parsed);
 
   hooksCache = {

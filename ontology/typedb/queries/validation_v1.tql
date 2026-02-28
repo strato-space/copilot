@@ -154,3 +154,71 @@ match
   not { $l has runtime_tag $runtime_tag; };
 get $l;
 count;
+
+# 10) OperTask/Codex runtime-contract checks
+# 10.1 VoiceSession -> OperTask links (spot-check)
+match
+  $rel (source_voice_session: $s, sourced_oper_task: $t) isa voice_session_sources_oper_task;
+  $s has voice_session_id $session_id;
+  $t has task_id $task_id;
+get $session_id, $task_id;
+limit 50;
+
+# 10.2 Codex tasks must stay linked to a project
+match
+  $t isa oper_task, has codex_task true;
+  not {
+    (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+  };
+get $t;
+count;
+
+# 10.3 Tasks with source_ref should have VoiceSession relation materialized
+match
+  $t isa oper_task, has source_ref $source_ref;
+  not {
+    (source_voice_session: $s, sourced_oper_task: $t) isa voice_session_sources_oper_task;
+  };
+get $t, $source_ref;
+limit 50;
+
+# 10.4 Codex task lineage requires at least one session reference (source_ref or external_ref)
+match
+  $t isa oper_task, has codex_task true;
+  not { $t has source_ref $source_ref; };
+  not { $t has external_ref $external_ref; };
+get $t;
+count;
+
+# 10.5 Deferred review contract: state=deferred should include due_at
+match
+  $t isa oper_task, has codex_review_state "deferred";
+  not { $t has codex_review_due_at $due_at; };
+get $t;
+count;
+
+# 10.6 Deferred review summary contract: generated summary must include summary text
+match
+  $t isa oper_task, has codex_review_summary_generated_at $generated_at;
+  not { $t has codex_review_summary $summary; };
+get $t, $generated_at;
+count;
+
+# 10.7 Codex project readiness: linked project should have git_repo
+match
+  $t isa oper_task, has codex_task true;
+  (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+  not { $p has git_repo $git_repo; };
+get $t, $p;
+count;
+
+# 10.8 Runtime-tag completeness counters for runtime-scoped task collection
+match
+  $t isa oper_task;
+  not { $t has runtime_tag $runtime_tag; };
+get $t;
+count;
+
+# 11) Source boundary note
+# Validation here covers MongoDB-ingested ontology entities.
+# BD-only Codex issues exposed via /api/crm/codex/* are intentionally out of scope for this query pack.

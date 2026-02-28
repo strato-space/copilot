@@ -67,6 +67,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
 - OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
 - Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing), so Source->Voice navigation keeps task visibility consistent.
+- Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, including status segmentation tabs (`Open` / `Closed` / `All`) with the same row-open behavior and source filtering.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 
 ## Voice notes
@@ -84,7 +85,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - `POST /api/voicebot/sessions/get` now differentiates missing vs runtime-scoped sessions: `404 Session not found` for true absence and `409 runtime_mismatch` when session exists outside current runtime scope.
-- Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + sortable categorization content.
+- Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + text + `Materials` with sortable order.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` (legacy alias `POST /api/voicebot/close_session`), while websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
@@ -104,6 +105,12 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - dry run (streaming JSONL): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-hours=4 --jsonl`
   - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:apply -- --inactive-hours=4`
   - activity window uses latest session update/message/session-log timestamps; sessions with no movement above the threshold are closed through `DONE_MULTIPROMPT` flow.
+- Summarize MCP dependency watchdog is available for `session_ready_to_summarize` prerequisites:
+  - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:summarize-mcp-watchdog:dry`
+  - dry run JSON: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:summarize-mcp-watchdog:dry -- --json`
+  - apply (auto-heal): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:summarize-mcp-watchdog:apply`
+  - checks required endpoint/service mappings: `fs`, `tg-ro`, `call`, `seq`, `tm`, `tgbot`.
+  - remediation is targeted: inactive `mcp@*` units are started, active units with endpoint `502`/unreachable probes are restarted.
 - Empty stale sessions can be cleaned in worker runtime by scheduled `CLEANUP_EMPTY_SESSIONS` jobs (no-message sessions older than configured threshold are marked `is_deleted=true`):
   - env knobs: `VOICEBOT_EMPTY_SESSION_CLEANUP_INTERVAL_MS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_AGE_HOURS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_BATCH_LIMIT`.
 - Voice sessions list supports deleted-session mode (`include_deleted` / `Показывать удаленные`); creator/participant filters suppress numeric identity placeholders and keep only human-readable labels.
@@ -259,11 +266,22 @@ See `AGENTS.md` for the full workflow (including `bd doctor` guidance).
 The Finance Ops SPA is served by Nginx, and `/api` is proxied to the backend. For the public domain, see `deploy/nginx-host.conf` and `deploy/README.md`.
 
 ## Testing
-- Unit tests: `npm run test` (Jest) in `app/` and `backend/`.
-- E2E tests: `npm run test:e2e` (Playwright) in `app/` — runs against local dev server.
-- E2E tests require a running dev server or use `PLAYWRIGHT_BASE_URL` env var.
-- Run E2E with UI: `npm run test:e2e:ui`
-- Run E2E headed: `npm run test:e2e:headed`
+- Canonical test matrix and suite composition are declared in `platforms.json`.
+- Unified repo-level runner:
+  - `./scripts/run-test-suite.sh baseline`
+  - `./scripts/run-test-suite.sh voice`
+  - `./scripts/run-test-suite.sh full`
+- Detailed structured procedure: `docs/TESTING_PROCEDURE.md`.
+- Module-level commands:
+  - `app`: `npm run test`, `npm run e2e:install`, `npm run test:e2e`
+  - `backend`: `npm run test`
+  - `miniapp`: `npm run test`, `npm run test:e2e`
+- `app` E2E requires explicit target URL via `PLAYWRIGHT_BASE_URL` (default config uses `http://127.0.0.1:3002`).
+- Useful `app` E2E scopes:
+  - `npm run test:e2e:ui`
+  - `npm run test:e2e:headed`
+  - `npm run test:e2e:unauth`
+  - `npm run test:e2e:auth`
 
 ### E2E Auth Setup
 To run authenticated tests:
@@ -274,6 +292,21 @@ To run authenticated tests:
 Projects:
 - `chromium-unauth`: Tests without authentication (login page, redirects)
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
+
+## Desloppify
+Current scanner triage baseline:
+- `Accepted risk / false-positive: 6`
+
+Accepted items for `desloppify` security scan:
+1. `security::app/src/components/voice/TranscriptionTableRow.tsx::hardcoded_secret_name` (`openai_api_key_missing`) — UI error-code label, not a secret.
+2. `security::app/src/constants/permissions.ts::hardcoded_secret_name` (`RESET_PASSWORD`) — permission key constant, not a credential.
+3. `security::backend/src/constants.ts::hardcoded_secret_name` (`ONE_USE_TOKENS`) — collection-name constant, not a credential.
+4. `security::backend/src/permissions/permissions-config.ts::hardcoded_secret_name` (`RESET_PASSWORD`) — permission key constant, not a credential.
+5. `security::backend/src/voicebot_tgbot/runtime.ts::eval_injection` (line ~194) — Redis Lua `EVAL` command with static script, not JS `eval/new Function`.
+6. `security::backend/src/voicebot_tgbot/runtime.ts::eval_injection` (line ~213) — Redis Lua `EVAL` command with static script, not JS `eval/new Function`.
+
+Rule for updates:
+- Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
 - Executed swarm waves for `top_open_in_progress_ids_by_priority`: closed `copilot-g0bd` (Codex routing fix) and `copilot-603` (placeholder cleanup), and recorded verification-only audit notes for remaining `copilot-ztlv*`/`copilot-ib30` backlog items.

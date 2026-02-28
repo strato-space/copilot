@@ -56,6 +56,7 @@
 
 ```bash
 cd /home/strato-space/copilot/app
+npm run e2e:install
 PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth
 PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun PLAYWRIGHT_INCLUDE_FIREFOX=1 npm run test:e2e -- e2e/voice-fab-lifecycle.spec.ts --project=firefox-unauth
 ```

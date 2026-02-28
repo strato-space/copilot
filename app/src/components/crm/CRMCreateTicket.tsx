@@ -10,8 +10,8 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { TASK_STATUSES, NOTION_TICKET_PRIORITIES } from '../../constants/crm';
-import { isPerformerSelectable } from '../../utils/performerLifecycle';
-import type { Performer, Project, TaskType } from '../../types/crm';
+import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
+import type { Project, TaskType } from '../../types/crm';
 
 interface TicketFormValues {
     _id?: string | null;
@@ -42,17 +42,6 @@ const toIdString = (value: unknown): string | undefined => {
         }
     }
     return undefined;
-};
-
-const getPerformerLabel = (performer: Record<string, unknown> | Performer | null | undefined, fallback: string): string => {
-    if (!performer || typeof performer !== 'object') return fallback;
-    const realName = typeof performer.real_name === 'string' ? performer.real_name.trim() : '';
-    if (realName) return realName;
-    const name = typeof performer.name === 'string' ? performer.name.trim() : '';
-    if (name) return name;
-    const email = typeof performer.email === 'string' ? performer.email.trim() : '';
-    if (email) return email;
-    return fallback;
 };
 
 const CRMCreateTicket = () => {

@@ -228,7 +228,9 @@ const buildSocketToken = (req: VoicebotRequest): string | null => {
     try {
         return jwt.sign(jwtPayload, secret, { expiresIn: '90d' });
     } catch (error) {
-        logger.error('[voicebot.sessions.get] failed to sign socket token', error);
+        logger.error('[voicebot.sessions.get] failed to sign socket token', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return null;
     }
 };

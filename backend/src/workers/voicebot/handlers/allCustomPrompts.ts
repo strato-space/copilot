@@ -1,4 +1,3 @@
-import { existsSync, readdirSync } from 'node:fs';
 import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,
@@ -9,7 +8,7 @@ import { getDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
-import { resolveCustomPromptsDir } from '../customPromptsDir.js';
+import { listCustomPromptProcessorNames } from '../customPromptsDir.js';
 
 const logger = getLogger();
 
@@ -40,21 +39,6 @@ const runtimeQuery = (query: Record<string, unknown>) =>
     familyMatch: IS_PROD_RUNTIME,
     includeLegacyInProd: IS_PROD_RUNTIME,
   });
-
-const getCustomProcessors = (): string[] => {
-  const promptsDir = resolveCustomPromptsDir();
-  if (!existsSync(promptsDir)) return [];
-
-  try {
-    return readdirSync(promptsDir)
-      .filter((file) => file.endsWith('.md'))
-      .map((file) => file.replace(/\.md$/i, ''))
-      .map((name) => name.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
 
 const toBoolean = (value: unknown): boolean => value === true;
 
@@ -88,7 +72,7 @@ export const handleAllCustomPromptsJob = async (
     return { ok: false, error: 'session_not_found', session_id };
   }
 
-  const customProcessors = getCustomProcessors();
+  const customProcessors = listCustomPromptProcessorNames();
   const sessionProcessors = new Set(
     (Array.isArray(session.session_processors) ? session.session_processors : [])
       .map((item) => String(item || '').trim())

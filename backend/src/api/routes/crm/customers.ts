@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { ObjectId } from 'mongodb';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
+import { toCrmIdString } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS } from '../../../constants.js';
 import { writeProjectTreeAuditLog } from './project-tree-audit.js';
 
@@ -15,24 +16,8 @@ const toRecord = (value: unknown): Record<string, unknown> => {
     return {};
 };
 
-const toIdString = (value: unknown): string | null => {
-    if (value == null) return null;
-    if (typeof value === 'string') return value;
-    if (value instanceof ObjectId) return value.toHexString();
-    if (typeof value === 'number' || typeof value === 'bigint') return String(value);
-
-    if (typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        if ('_id' in record) return toIdString(record._id);
-        if ('id' in record) return toIdString(record.id);
-        if ('key' in record) return toIdString(record.key);
-    }
-
-    return null;
-};
-
 const toObjectId = (value: unknown): ObjectId | null => {
-    const id = toIdString(value);
+    const id = toCrmIdString(value);
     if (!id || !ObjectId.isValid(id)) return null;
     return new ObjectId(id);
 };

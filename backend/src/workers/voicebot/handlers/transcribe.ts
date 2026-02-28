@@ -28,6 +28,7 @@ import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { getAudioDurationFromFile, splitAudioFileByDuration } from '../../../utils/audioUtils.js';
 import { getLogger } from '../../../utils/logger.js';
 import { buildCanonicalSessionLink } from '../../../voicebot_tgbot/sessionTelegramMessage.js';
+import { isQuotaError, normalizeErrorCode } from './openAiErrors.js';
 
 const logger = getLogger();
 
@@ -479,53 +480,6 @@ const getErrorMessage = (error: unknown): string => {
     }
   }
   return String(error);
-};
-
-const normalizeErrorCode = (error: unknown): string | null => {
-  if (!error || typeof error !== 'object') return null;
-  const typed = error as Record<string, unknown>;
-  const typedError = typed.error as Record<string, unknown> | undefined;
-  const response = typed.response as Record<string, unknown> | undefined;
-  const responseData = response?.data as Record<string, unknown> | undefined;
-  const responseError = responseData?.error as Record<string, unknown> | undefined;
-
-  const candidates = [
-    typed.code,
-    typedError?.code,
-    responseError?.code,
-    responseError?.type,
-    typedError?.type,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim().toLowerCase();
-    }
-  }
-
-  return null;
-};
-
-const isQuotaError = (error: unknown): boolean => {
-  if (!error || typeof error !== 'object') return false;
-  const typed = error as Record<string, unknown>;
-  const statusRaw =
-    typed.status ??
-    (typed.response as Record<string, unknown> | undefined)?.status ??
-    (((typed.response as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined)
-      ?.status as unknown);
-  const status = Number(statusRaw);
-  const code = normalizeErrorCode(error) || '';
-  const message = getErrorMessage(error).toLowerCase();
-
-  if (status === 429) {
-    if (/insufficient|quota|balance|billing|payment/.test(code)) return true;
-    if (/insufficient[_\s-]*quota|exceeded your quota|quota.*exceeded|billing|payment required/.test(message)) {
-      return true;
-    }
-  }
-
-  return false;
 };
 
 const isPayloadTooLargeError = (error: unknown): boolean => {
@@ -1571,9 +1525,10 @@ export const handleTranscribeJob = async (
       session_id,
     };
   } catch (error) {
-    const quotaRetryable = isQuotaError(error);
+    const errorMessage = getErrorMessage(error);
+    const quotaRetryable = isQuotaError(error, errorMessage);
     const payloadTooLarge = isPayloadTooLargeError(error);
-    const splitFailedBySize = /oversized_segment_after_split/i.test(getErrorMessage(error));
+    const splitFailedBySize = /oversized_segment_after_split/i.test(errorMessage);
     const normalizedCode = quotaRetryable
       ? normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
       : payloadTooLarge || splitFailedBySize
@@ -1585,7 +1540,7 @@ export const handleTranscribeJob = async (
       $set: {
         is_transcribed: false,
         transcription_error: normalizedCode,
-        error_message: getErrorMessage(error),
+        error_message: errorMessage,
         error_timestamp: new Date(),
         transcribe_timestamp: Date.now(),
         transcribe_attempts: attempts,

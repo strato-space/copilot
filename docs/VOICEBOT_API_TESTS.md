@@ -45,6 +45,7 @@ npm test -- --runInBand __tests__/services/dbRuntimeScopedCollectionProxy.test.t
 
 ```bash
 cd /home/strato-space/copilot/app
+npm run e2e:install
 PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth
 ```
 
@@ -55,6 +56,7 @@ Additional FAB lifecycle coverage:
 
 ```bash
 cd /home/strato-space/copilot/app
+npm run e2e:install
 PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts --project=chromium-unauth
 ```
 

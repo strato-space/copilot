@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const CUSTOM_PROMPTS_RELATIVE_PATH = path.join('resources', 'voicebot', 'custom_prompts');
@@ -20,3 +20,17 @@ export const resolveCustomPromptsDir = (): string => {
   return resolveDefaultCustomPromptsDir();
 };
 
+export const listCustomPromptProcessorNames = (): string[] => {
+  const promptsDir = resolveCustomPromptsDir();
+  if (!existsSync(promptsDir)) return [];
+
+  try {
+    return readdirSync(promptsDir)
+      .filter((file) => file.endsWith('.md'))
+      .map((file) => file.replace(/\.md$/i, ''))
+      .map((name) => name.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+};

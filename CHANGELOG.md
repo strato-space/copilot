@@ -2,6 +2,11 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **13:52** Wave-1 technical debt from `desloppify` (`copilot-y9qy`) still left noisy runtime logs and duplicated helper logic across app/backend/voice-worker paths, which increased incident-triage time and made behavior changes harder to verify.
+- **13:52** Security wave backlog (`copilot-6obm`) had 20 untriaged scanner findings mixed between exploitable issues and rule-level false positives, which blocked deterministic risk reporting and patch planning.
+- **13:40** TypeDB ontology assets had contract drift after latest Voice/OperOps/Codex changes: task lineage/deferred-review fields were missing in schema/mapping, task runtime-tag diagnostics were absent, and validation tooling had non-compilable anchor checks in TypeDB 3 (`copilot-gym6.*` wave).
+- **13:40** `ontology:typedb:ingest:dry` in dev could fail even with reachable Mongo host because replica-set responses contained internal hostnames not resolvable from this runtime; operator runbook lacked an explicit `directConnection=true` workaround.
+- **10:52** `session_ready_to_summarize` automation still depended on manual host triage when summarize MCP prerequisites (`fs/tg-ro/call/seq/tm/tgbot`) drifted into inactive `mcp@` units or endpoint `502` states; there was no repo-owned watchdog with safe dry-run diagnostics (`copilot-lo1c`).
 - **09:42** `POST /voicebot/create_tickets` still had edge paths where Codex-intended rows (`codex-system`, Codex-labeled performer payloads) could be rejected as malformed performer IDs before Codex routing, which risked inconsistent bd-only behavior (`copilot-g0bd`).
 - **09:42** End-to-end validation for `copilot-ib30` revealed a runtime blocker: Voice UI could not activate page session (`POST /api/voicebot/activate_session` -> `ERR_EMPTY_RESPONSE`), preventing screenshot paste flow verification from the browser.
 - **09:10** Production `POST /api/crm/codex/issue` and `POST /api/crm/codex/issues` could fail with `502` when `bd --no-daemon` returned `Database out of sync with JSONL`, so valid Codex issues were unavailable until manual CLI sync (`copilot-f7w7` follow-up).
@@ -24,6 +29,24 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **13:52** Completed and closed `copilot-y9qy` end-to-end:
+  - removed Tier-1 tagged debug logs in frontend/backend scripts (`y9qy.1-.8`);
+  - unified exact-duplicate helper clusters in frontend, CRM/miniapp backend, and voice workers (`y9qy.9-.18`);
+  - executed full final test gate (`y9qy.19`) with all suites green.
+- **13:52** Completed and closed `copilot-6obm` security wave (`copilot-6obm.1`):
+  - fixed high/medium findings for XSS rendering, sensitive logging, insecure randomness, and unguarded JSON parsing;
+  - recorded explicit accepted-risk set (`6` scanner false positives / non-exploitable signals) and synced operator-facing scanner notes in `README.md`.
+- **13:40** Completed ontology sync wave `copilot-gym6.1`..`copilot-gym6.5`:
+  - added runtime gap baseline document (`ontology/typedb/docs/runtime_contract_gap_matrix_v1.md`),
+  - expanded TypeDB schema/mapping for Codex/task runtime contracts (`git_repo`, task source lineage, deferred review fields, task runtime tags),
+  - added `voice_session_sources_oper_task` relation and mapping linkage via `automation_tasks.source_ref`,
+  - refreshed query-pack and Python validator with OperTask/Codex quality gates and TypeDB-3-safe anchor diagnostics.
+- **13:40** Executed verification cycle for ontology tooling:
+  - `npm run ontology:typedb:py:setup` passed,
+  - `npm run ontology:typedb:ingest:dry` passed with explicit `MONGODB_CONNECTION_STRING` including `directConnection=true`,
+  - `npm run ontology:typedb:ingest:apply -- --init-schema ...` used to resync local schema,
+  - `npm run ontology:typedb:validate` passed (expected WARN counters preserved).
+- **10:52** Added summarize MCP dependency watchdog for `session_ready_to_summarize`: typed service + CLI script now checks endpoint/service pairs, emits structured diagnostics, supports dry-run by default, and auto-heals only failed `mcp@` units in apply mode (`copilot-lo1c`).
 - **09:42** Hardened Codex routing guard in `create_tickets`: Codex classification now runs before strict performer ObjectId validation, includes text-identity heuristics (`name/real_name/full_name/username/email/corporate_email`), and treats `codex_task=true` as Codex-safe bd-only path (`copilot-g0bd`).
 - **09:42** Executed multi-agent wave processing for top-priority open/in-progress `bd` IDs and persisted verification findings into issue notes without unapproved code changes; closed placeholder/no-op `copilot-603`.
 - **09:10** Added backend auto-recovery for Codex `bd` calls: when out-of-sync JSONL state is detected, route now runs `bd sync --import-only` and retries `bd list/show` once before returning failure.
@@ -46,6 +69,42 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **13:52** `copilot-y9qy` implementation set:
+  - frontend dedupe helpers: `app/src/utils/{performerLifecycle.ts,voiceFabSync.ts,pinnedMonths.ts}`;
+  - backend shared helpers: `backend/src/utils/crmMiniappShared.ts`;
+  - voice worker shared helpers: `backend/src/workers/voicebot/handlers/{messageProcessors.ts,openAiErrors.ts}` and `customPromptsDir.ts` processor-name listing helper;
+  - removed tagged log noise from target files in app hooks/services/stores and backend scripts;
+  - added/updated regression tests in `app/__tests__` and `backend/__tests__` for new shared contracts.
+- **13:52** `copilot-6obm` security hardening:
+  - stricter sanitized HTML rendering paths in `app/src/pages/operops/TaskPage.tsx` and `miniapp/src/components/OneTicket.tsx` with new sanitizer contract tests;
+  - auth/log redaction and safe diagnostics in `backend/src/api/routes/auth.ts`, `backend/src/api/routes/voicebot/sessions.ts`, and `backend/src/miniapp/routes/index.ts`;
+  - crypto-safe MCP session id generation in `backend/src/services/mcp/sessionManager.ts`;
+  - guarded JSON credential/config parsing in `backend/src/services/{google/sheets.ts,reports/googleDrive.ts}` and `backend/src/workers/voicebot/handlers/notify.ts`.
+- **13:52** Validation and closeout evidence:
+  - type gates passed: `app`, `miniapp`, `backend` builds;
+  - full Jest pass: `app` `61/61` suites (`156/156` tests), `backend` `78/78` suites (`387/387` tests), total `139/139` suites and `543/543` tests;
+  - updated `README.md` with dedicated `Desloppify` section documenting `Accepted risk / false-positive: 6`.
+- **13:40** Ontology runtime-parity implementation (`copilot-gym6.*`):
+  - Added docs baseline and rollout linkage:
+    - `ontology/typedb/docs/runtime_contract_gap_matrix_v1.md`
+    - `ontology/typedb/docs/rollout_plan_v1.md`
+  - Updated schema contract:
+    - `ontology/typedb/schema/str_opsportal_v1.tql` (`project.git_repo`, expanded `oper_task` Codex/runtime attributes, relation `voice_session_sources_oper_task`).
+  - Updated mapping contract:
+    - `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml` (project `git_repo`, expanded `automation_tasks` fields, session-task relation mapping).
+  - Updated validation artifacts:
+    - `ontology/typedb/queries/validation_v1.tql` (task/codex gates),
+    - `ontology/typedb/scripts/typedb-ontology-validate.py` (added aggregate checks, fixed anchor checks).
+  - Updated ingestion behavior:
+    - `ontology/typedb/scripts/typedb-ontology-ingest.py` now ingests `automation_tasks` via mapping-driven path.
+  - Updated operator docs/runbook:
+    - `ontology/README.md`, `ontology/AGENTS.md`, `ontology/typedb/README.md`, `ontology/typedb/AGENTS.md`.
+- **10:52** Summarize MCP watchdog rollout (`copilot-lo1c`):
+  - Added typed backend service `backend/src/services/summarizeMcpWatchdog.ts` with canonical dependency map (`fs`, `tg-ro`, `call`, `seq`, `tm`, `tgbot`), per-dependency health snapshots, remediation planner (`start` inactive / `restart` endpoint-failed), and structured result summary.
+  - Added operational CLI wrapper `backend/scripts/summarize-mcp-watchdog.ts` with dry-run default, `--apply`, `--json`, `--jsonl`, timeout flags, and non-zero exit on unresolved unhealthy dependencies.
+  - Added npm commands in `backend/package.json`: `voice:summarize-mcp-watchdog:dry` and `voice:summarize-mcp-watchdog:apply`.
+  - Added regression tests `backend/__tests__/services/summarizeMcpWatchdog.test.ts` for targeted restart/start behavior and safe handling of service-check diagnostics.
+  - Updated operational docs/contracts in `README.md` and `AGENTS.md` for watchdog usage and remediation semantics.
 - **09:42** Codex performer routing hardening (`copilot-g0bd`):
   - Updated `backend/src/api/routes/voicebot/sessions.ts`:
     - added Codex text-key detection (`name`, `real_name`, `full_name`, `username`, `email`, `corporate_email`),
