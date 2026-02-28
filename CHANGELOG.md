@@ -1230,3 +1230,116 @@
 - **14:52** Removed deprecated env key `CRM_SNAPSHOT_DIR` from `backend/.env.example`.
 - **14:52** Added `docs/FINOPS_REALIZTION.md` and test fixture image files under `backend/uploads/voicebot/attachments/6996d9169bce3264e9851c1c/` used by attachment-flow verification.
 - **14:52** Validation run: `cd app && npm test -- --runInBand` (`28 suites`, `57 tests`), `cd backend && npm test -- --runInBand` (`62 suites`, `307 tests`), and `cd app && npm run build` (success).
+
+## 2026-02-21
+### PROBLEM SOLVED
+- **22:00** Product and architecture research context was fragmented across ad-hoc notes, making follow-up design decisions and closeout reporting inconsistent.
+
+### FEATURE IMPLEMENTED
+- **10:49** Added an initial deep-research brief for OSS platform selection for OperOps/FinOps expansion.
+- **22:00** Added a synchronized session-closeout update for the same research track to keep handoff continuity.
+
+### CHANGES
+- **10:49** Added `plan/deep-research-oss-platforms-operops-finops.report.draft.md`.
+- **22:00** Updated session closeout artifacts and synced research references to repository docs.
+
+## 2026-02-22
+### PROBLEM SOLVED
+- **22:01** STR OpsPortal ERD extraction workflow lacked a single documented protocol and baseline draft for cross-domain alignment.
+
+### FEATURE IMPLEMENTED
+- **22:01** Added an ERD extraction protocol and initial consolidated STR OpsPortal ERD draft.
+
+### CHANGES
+- **22:01** Added `ontology/fpf-erd-extraction-protocol-str-opsportal.md` and `ontology/str-opsportal-erd-draft-v0.md`.
+
+## 2026-02-24
+### PROBLEM SOLVED
+- **22:04** Session finalization and idle-session handling were not unified, which caused delayed closure and operational drift for stale active sessions.
+- **19:37** TypeDB ingestion scaffolding and voice transcription download flow lacked a canonical path and operator-ready scripts.
+
+### FEATURE IMPLEMENTED
+- **12:37** Refactored OperOps projects tree editing and added merge/audit-oriented workflows.
+- **19:37** Added voice transcription download route support and TypeDB tooling scaffold.
+- **22:04** Centralized done-flow handling and added idle session close tooling.
+
+### CHANGES
+- **12:37** Updated CRM/Projects tree modules for modal-first editing and merge/audit readiness.
+- **19:37** Added `backend/src/api/routes/voicebot/transcription.ts` download contract coverage and initial `ontology/typedb` tooling hooks.
+- **19:49** Added tracked TypeDB model package assets to `ontology/typedb/*`.
+- **22:04** Added shared finalize flow integration and `backend/scripts/voicebot-close-inactive-sessions.ts` with dry/apply operational commands.
+
+## 2026-02-25
+### PROBLEM SOLVED
+- **17:11** Upload outage handling and transcribe transport diagnostics were incomplete for Telegram/media edge cases.
+- **22:05** Done-flow UX and performer normalization still had mixed identifier behavior in voice/CRM boundaries.
+
+### FEATURE IMPLEMENTED
+- **17:11** Added tighter upload outage handling, tgbot poller lock safety, and improved transcribe transport diagnostics.
+- **22:05** Hardened done-flow UX semantics and performer normalization across affected voice/CRM flows.
+
+### CHANGES
+- **17:11** Updated voice worker/runtime diagnostics and locking paths for Telegram ingestion/transcription stability.
+- **22:05** Updated done-flow and performer mapping logic with focused regression coverage.
+
+## 2026-02-26
+### PROBLEM SOLVED
+- **12:28** Realtime session updates and cleanup scheduling had race conditions, producing stale session state in UI and workers.
+- **13:22** WebRTC FAB `Done` flow was brittle across runtime/socket edge states.
+- **14:25** Session close/read behavior and list ordering needed REST-first consistency and runtime-safe semantics.
+- **16:34** CRM work-hour linkage and voice close diagnostics needed canonical identifiers for reliable joins and incident triage.
+- **22:05** Notify hook parity and diagnostics still required production-grade observability.
+
+### FEATURE IMPLEMENTED
+- **00:30** Added notify hooks parity and done-flow notify coverage for TS runtime.
+- **12:52** Allowed FAB `Done` from paused flow with deterministic transitions.
+- **13:03** Added forced include-deleted synchronization under in-flight load.
+- **14:25** Enforced REST-first close flow and hardened voice sessions ordering/runtime mismatch handling.
+
+### CHANGES
+- **00:30** Added notify parity coverage and local hook execution support in worker notify pipeline.
+- **12:28** Updated worker loop/realtime emission logic and cleanup scheduling safeguards.
+- **12:41** Finalized sessions-list operational contracts and unblocked prod build path.
+- **13:22** Hardened WebRTC close retries and failure UX handling.
+- **14:25** Switched close initiation semantics to REST-first across frontend/backend contracts and tests.
+- **16:34** Unified CRM work-hour joins on `ticket_db_id` and expanded voice close diagnostics/logging.
+- **22:05** Persisted hook-level notify diagnostics and standardized session-log events.
+
+## 2026-02-27
+### PROBLEM SOLVED
+- **22:01** TypeDB ontology tooling paths were split across duplicate locations, increasing drift risk and operator confusion.
+
+### FEATURE IMPLEMENTED
+- **20:39** Added a consolidated voice session/runtime checkpoint and migration planning baseline for the next waves.
+- **22:01** Refactored ontology tooling to canonical `ontology/typedb/scripts/*` paths.
+
+### CHANGES
+- **20:39** Updated checkpoint docs/plans for voice session UX/runtime contracts.
+- **22:01** Moved/refactored TypeDB scripts and references to canonical ontology paths and removed backend-local duplication.
+
+## 2026-02-28
+### PROBLEM SOLVED
+- **02:52** Voice-OperOps-Codex rollout still had unresolved gaps across task creation triggers, deferred review flow, tabs, and categorization material model.
+- **03:28** Deferred Codex review lacked an executable worker pipeline with deterministic queue orchestration and summary generation.
+- **03:39** Deferred review output was not persisted into issue notes and had no approval card routing for operator decisions.
+- **04:07** Start/Cancel callback actions for deferred tasks were missing, so users could not complete deferred lifecycle from Telegram cards.
+- **04:14** Categorization rows lacked final metadata/material UX contract (`Materials`, hidden `Unknown`, pale signature, row-group links, explicit row-targeted attachments).
+
+### FEATURE IMPLEMENTED
+- **02:52** Completed Wave 2 (`copilot-yqst`, `copilot-m2uw`, `copilot-8yuq`, `copilot-dkj6`, `copilot-aonw`, `copilot-su2v`, `copilot-grg4`, `copilot-upqs`): Copilot `git_repo` seeding, Codex `@task` session bootstrap, performer lifecycle filtering, ontology/runtime contract alignment, attachment link normalization, deferred task creation, and transcription trigger tasking.
+- **03:28** Completed Wave 3 (`copilot-0t2c`, `copilot-03gp`): canonical `external_ref` and deferred review worker pipeline (`CODEX_DEFERRED_REVIEW` job + prompt card + manifest/loop integration).
+- **03:41** Completed Wave 4 (`copilot-l3j6`, `copilot-c1xj`, `copilot-zwjl`): Voice `Задачи` and `Codex` tabs, backend `codex_tasks` route, deferred review note persistence, Telegram approval card dispatch.
+- **04:09** Completed Wave 5 (`copilot-2psh`, `copilot-ex9q`, `copilot-gb72`): deferred Start/Cancel callbacks, OperOps Codex tab (latest 500 `bd` items), inline Codex task details in Voice tab.
+- **04:36** Completed categorization-material chain (`copilot-hfvd`, `copilot-c4bd`, `copilot-a3k0`, `copilot-p31k`, `copilot-250m`): `Materials` column, unknown-speaker suppression, pale metadata signature, image/text group links, explicit row-targeted material attachment flow.
+- **04:37** Closed coordinating epic `copilot-bq81` after all dependent IDs were completed and verified.
+
+### CHANGES
+- **02:52** Added/updated backend contracts in `backend/src/api/routes/voicebot/sessions.ts` and worker/runtime handlers for Codex task/deferred review orchestration.
+- **03:12** Added Codex voice trigger processing in `backend/src/workers/voicebot/handlers/transcribe.ts` with `processors_data.CODEX_TASKS` persistence.
+- **03:28** Added `backend/src/workers/voicebot/handlers/codexDeferredReview.ts`, updated `processingLoop.ts`, and registered `VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW`.
+- **03:39** Added approval-card persistence and Telegram dispatch integration in deferred review worker, plus new env knobs in `backend/.env.example`.
+- **03:41** Added app voice tab components and contracts: `CodexTasks`, session tab wiring, and source/session filters in `SessionPage` + `CRMKanban`.
+- **04:07** Added Telegram callback runtime path for `cdr:start:*` and `cdr:cancel:*` in `backend/src/voicebot_tgbot/codexReviewCallbacks.ts` and `runtimeNonCommandHandlers.ts`.
+- **04:08** Added OperOps Codex backend route `POST /api/crm/codex/issues` and OperOps `Codex` UI tab in `CRMPage`.
+- **04:35** Added explicit row-target material targeting across frontend state/UI and backend add routes (`image_anchor_linked_message_id` validation/persistence + realtime payload updates).
+- **04:36** Validation run: targeted app/backend Jest suites for every wave (`voice tabs`, `codex routes`, `deferred callbacks`, `categorization/materials grouping`) passed; `app/backend` full builds remain blocked by pre-existing unrelated TypeScript errors in CRM and voicebot-persons files.

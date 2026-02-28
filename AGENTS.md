@@ -495,3 +495,25 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added inactivity-driven close automation script `backend/scripts/voicebot-close-inactive-sessions.ts` plus npm aliases `voice:close-idle:dry|apply` for dry-run/apply operational workflows.
 - Added diagnostics helper `backend/scripts/tmp-explain-69981f2e.ts` for one-session transcription/chunk state inspection during incident triage.
 - Updated TS notify hooks runner to persist per-run stdout/stderr logs under `VOICE_BOT_NOTIFY_HOOKS_LOG_DIR` and include `log_path` in session-log metadata; hook spawn errors are now persisted as `notify_hook_failed` events.
+- Completed Wave 2 (`copilot-yqst`, `copilot-m2uw`, `copilot-8yuq`, `copilot-dkj6`, `copilot-aonw`, `copilot-su2v`, `copilot-grg4`, `copilot-upqs`) and merged all commits to `main`.
+- Added startup seed `projectGitRepoSeed` for project `Copilot` (`git_repo=strato-space/copilot`) and integrated it in DB boot flow with dedicated tests.
+- Extended Telegram/voice Codex trigger flows: `@task` auto-creates Codex session when needed, attachment refs normalize to canonical `public_attachment` URLs, and transcribe first-word trigger (`Codex`/`Кодекс`) creates deferred Codex tasks.
+- Added deferred-review lifecycle end-to-end:
+  - `VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW` worker + prompt card (`agents/agent-cards/codex_deferred_review.md`),
+  - issue-note persistence + Telegram approval card send,
+  - callback actions `cdr:start:*` / `cdr:cancel:*` for Start/Cancel decisions.
+- Added canonical Codex task reference contract (`external_ref=https://copilot.stratospace.fun/voice/session/<id>`) for voice-created Codex tasks.
+- Completed Wave 4 (`copilot-l3j6`, `copilot-c1xj`, `copilot-zwjl`) and merged all commits to `main`.
+- Added Voice session tabs contract:
+  - `Задачи` tab (CRMKanban, `source_ref` scoped to current session, Work/Review subtabs),
+  - `Codex` tab with backend `POST /api/voicebot/codex_tasks` route and newest-first canonical filtering by `external_ref`.
+- Added OperOps `Codex` tab (`copilot-ex9q`) backed by `POST /api/crm/codex/issues` (`bd --no-daemon list --json --limit 500`) and inline refresh workflow.
+- Added inline Voice Codex issue detail drawer (`copilot-gb72`) with bd-show-like payload fields (`labels`, `dependencies`, `notes`, ownership metadata).
+- Completed categorization-material chain (`copilot-hfvd`, `copilot-c4bd`, `copilot-a3k0`, `copilot-p31k`, `copilot-250m`) and merged all commits to `main`.
+- Categorization UI/data contract now includes:
+  - `Materials` column (screenshots rendered outside main text),
+  - hidden `Unknown` speaker label,
+  - pale metadata signature line (timeline + speaker),
+  - explicit image/text row-group cross-links (`material_*` fields),
+  - explicit row-level material targeting with `image_anchor_linked_message_id` validation/persistence and realtime propagation.
+- Closed remaining dependency chain issues (`copilot-eejo`, `copilot-a3k0`, `copilot-c4bd`, `copilot-hfvd`, `copilot-p31k`, `copilot-250m`) and closed coordinating epic `copilot-bq81`; `bd ready` is now empty.

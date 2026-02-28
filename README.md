@@ -319,3 +319,29 @@ Projects:
 - Extracted shared Voice `completeSessionDoneFlow` service and switched socket `session_done` path to it for unified close/notify behavior.
 - Added idle-active-session close automation script (`backend/scripts/voicebot-close-inactive-sessions.ts`) and npm commands `voice:close-idle:dry|apply` with JSON/JSONL outputs for operations.
 - Added session-specific diagnostics helper script `backend/scripts/tmp-explain-69981f2e.ts` for transcription/chunk payload inspection.
+- Completed Waves 2-5 and merged all implementation commits to `main`:
+  - Wave 2 (`copilot-yqst`, `copilot-m2uw`, `copilot-8yuq`, `copilot-dkj6`, `copilot-aonw`, `copilot-su2v`, `copilot-grg4`, `copilot-upqs`)
+  - Wave 3 (`copilot-0t2c`, `copilot-03gp`)
+  - Wave 4 (`copilot-l3j6`, `copilot-c1xj`, `copilot-zwjl`)
+  - Wave 5 (`copilot-2psh`, `copilot-ex9q`, `copilot-gb72`)
+- Added deferred Codex review end-to-end lifecycle:
+  - worker job `VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW`,
+  - issue-note persistence and Telegram approval cards,
+  - Telegram callback actions `cdr:start:*` / `cdr:cancel:*`.
+- Added Voice taskflow tabs and APIs:
+  - Voice `Задачи` tab scoped by current `source_ref`,
+  - Voice `Codex` tab backed by `POST /api/voicebot/codex_tasks`,
+  - OperOps `Codex` tab backed by `POST /api/crm/codex/issues` (latest 500 `bd` issues).
+- Added inline Codex task detail drawer in Voice session tab and expanded codex task payload mapping (`labels`, `dependencies`, `notes`, ownership metadata).
+- Added canonical Codex external reference contract (`https://copilot.stratospace.fun/voice/session/<id>`) across voice-created tasks.
+- Added transcribe trigger flow (`Codex`/`Кодекс`) and improved `@task` ingestion:
+  - auto-create Codex session when no active session exists,
+  - normalize and append canonical attachment links in created task descriptions.
+- Completed categorization/material chain:
+  - `copilot-hfvd`: hide `Unknown` speaker labels,
+  - `copilot-c4bd`: `Materials` column replacing quick-summary behavior,
+  - `copilot-a3k0`: pale metadata signature line,
+  - `copilot-p31k`: image/text row-group cross-link model,
+  - `copilot-250m`: explicit row-level material targeting with `image_anchor_linked_message_id`.
+- Closed dependency branch `copilot-eejo -> (copilot-a3k0,copilot-c4bd,copilot-hfvd) -> copilot-p31k -> copilot-250m`.
+- Closed coordinating epic `copilot-bq81`; `bd ready` queue is empty.
