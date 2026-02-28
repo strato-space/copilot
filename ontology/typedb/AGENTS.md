@@ -33,3 +33,8 @@ From `/home/strato-space/copilot/backend`:
 3. `npm run ontology:typedb:validate`
 
 If you changed only docs, state explicitly that runtime validation was skipped.
+
+## Recent Updates
+
+- 2026-02-28: Deep runtime-contract alignment for Voice ontology (`copilot-aonw`): extended `voice_session` / `voice_message` / `history_step` field coverage, added `voice_session_merge_log` entity+relation, and mapped `automation_voice_bot_session_merge_log`.
+- 2026-02-28: Validation pack expanded with contract checks for session-log/merge-log orphans, image-anchor integrity, runtime-tag completeness, and close-flow consistency (`is_active=false` + `to_finalize=true` should have `done_at`).

@@ -20,6 +20,19 @@ This folder contains a first executable scaffold of the STR OpsPortal ontology i
 - For ingestion defaults, keep schema/deadletter locations script-relative to avoid cwd-dependent behavior.
 - Future ontology updates must not restore old backend-local script copies (`backend/scripts/typedb-*`, `backend/requirements-typedb.txt`).
 
+## Runtime Contract Alignment (2026-02-28, copilot-aonw)
+
+- Voice ontology now models current runtime diagnostics and lifecycle fields explicitly:
+  - `voice_session`: pending image-anchor pointer fields, merge markers, close-flow counters, and transcription/error diagnostics.
+  - `voice_message`: hash/dedup metadata, anchor linkage metadata, transcription/categorization error fields, and file metadata envelope fields.
+  - `history_step`: event payload fields (`event_name`, `event_group`, `actor`, `target`, `diff`, `metadata`, correlation IDs, replay flag, runtime tag).
+- Added `voice_session_merge_log` entity plus `voice_session_has_merge_log` relation to ingest and query merge audit records from `automation_voice_bot_session_merge_log`.
+- Validation checks now include:
+  - orphan session-log and merge-log checks,
+  - image-anchor consistency checks,
+  - runtime-tag completeness counters for runtime-scoped voice collections,
+  - close-contract check (`is_active=false` + `to_finalize=true` implies `done_at` exists).
+
 ## Contents
 
 - `scripts/typedb-ontology-ingest.py` - MongoDB -> TypeDB ingestion tool

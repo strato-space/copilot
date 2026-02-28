@@ -33,6 +33,7 @@ SUPPORTED_COLLECTIONS = [
     "automation_voice_bot_messages",
     "automation_voice_bot_topics",
     "automation_voice_bot_session_log",
+    "automation_voice_bot_session_merge_log",
     "automation_tg_voice_sessions",
     "automation_google_drive_projects_files",
     "automation_google_drive_events_channels",
@@ -447,6 +448,15 @@ def to_stringish(value: Any) -> Optional[str]:
     return None
 
 
+def to_capped_stringish(value: Any, max_bytes: int = TYPEDB_SAFE_STRING_BYTES) -> Optional[str]:
+    text = to_stringish(value)
+    if text is None:
+        return None
+    if utf8_byte_length(text) <= max_bytes:
+        return text
+    return truncate_utf8_to_bytes(text, max_bytes)
+
+
 def mapping_key_component(value: Any) -> Optional[str]:
     return normalize_id(value) or to_stringish(value)
 
@@ -761,8 +771,70 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
         fields = ["insert $s isa voice_session", f"has voice_session_id {lit_string(doc_id)}"]
         append_string_attr(fields, "status", status)
         append_string_attr(fields, "source_type", as_string(doc.get("session_source")))
+        append_string_attr(fields, "session_name", as_string(doc.get("session_name")))
+        append_string_attr(fields, "session_type", as_string(doc.get("session_type")))
         append_string_attr(fields, "project_id", normalize_id(doc.get("project_id")))
+        append_string_attr(fields, "chat_id", to_stringish(doc.get("chat_id")))
+        append_string_attr(fields, "user_id", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id")))
+        append_string_attr(fields, "access_level", as_string(doc.get("access_level")))
+        append_number_attr(fields, "done_count", as_number(doc.get("done_count")))
+        append_bool_attr(fields, "is_active", as_bool(doc.get("is_active")))
+        append_bool_attr(fields, "is_active_legacy", as_bool(doc.get("is_active:")))
+        append_bool_attr(fields, "is_deleted", as_bool(doc.get("is_deleted")))
+        append_bool_attr(fields, "is_messages_processed", as_bool(doc.get("is_messages_processed")))
+        append_bool_attr(fields, "is_waiting", as_bool(doc.get("is_waiting")))
+        append_bool_attr(fields, "is_corrupted", as_bool(doc.get("is_corrupted")))
+        append_bool_attr(fields, "is_postprocessing", as_bool(doc.get("is_postprocessing")))
+        append_bool_attr(fields, "is_finished", as_bool(doc.get("is_finished")))
+        append_bool_attr(fields, "is_finalized", as_bool(doc.get("is_finalized")))
+        append_bool_attr(fields, "to_finalize", as_bool(doc.get("to_finalize")))
+        append_string_attr(fields, "participants", to_capped_stringish(doc.get("participants")))
+        append_string_attr(fields, "allowed_users", to_capped_stringish(doc.get("allowed_users")))
+        append_string_attr(fields, "processors", to_capped_stringish(doc.get("processors")))
+        append_string_attr(fields, "session_processors", to_capped_stringish(doc.get("session_processors")))
+        append_string_attr(fields, "processors_data", to_capped_stringish(doc.get("processors_data")))
+        append_string_attr(fields, "last_message_id", to_stringish(doc.get("last_message_id")))
+        append_number_attr(fields, "last_message_timestamp", as_number(doc.get("last_message_timestamp")))
+        append_number_attr(fields, "last_voice_timestamp", as_number(doc.get("last_voice_timestamp")))
+        append_number_attr(
+            fields,
+            "postprocessing_job_queued_timestamp",
+            as_number(doc.get("postprocessing_job_queued_timestamp")),
+        )
+        append_datetime_attr(fields, "title_generated_at", as_datetime(doc.get("title_generated_at")))
+        append_string_attr(fields, "title_generated_by", as_string(doc.get("title_generated_by")))
+        append_datetime_attr(fields, "finished_at", as_datetime(doc.get("finished_at")))
+        append_datetime_attr(fields, "done_at", as_datetime(doc.get("done_at")))
+        append_datetime_attr(fields, "deleted_at", as_datetime(doc.get("deleted_at")))
+        append_string_attr(fields, "deletion_reason", as_string(doc.get("deletion_reason")))
+        append_string_attr(
+            fields,
+            "pending_image_anchor_message_id",
+            normalize_id(doc.get("pending_image_anchor_message_id"))
+            or normalize_id(doc.get("pending_image_anchor_oid"))
+            or to_stringish(doc.get("pending_image_anchor_message_id"))
+            or to_stringish(doc.get("pending_image_anchor_oid")),
+        )
+        append_string_attr(fields, "pending_image_anchor_oid", to_stringish(doc.get("pending_image_anchor_oid")))
+        append_datetime_attr(
+            fields,
+            "pending_image_anchor_created_at",
+            as_datetime(doc.get("pending_image_anchor_created_at")),
+        )
+        append_string_attr(
+            fields,
+            "merged_into_session_id",
+            normalize_id(doc.get("merged_into_session_id")) or to_stringish(doc.get("merged_into_session_id")),
+        )
+        append_string_attr(fields, "error_source", as_string(doc.get("error_source")))
+        append_string_attr(fields, "transcription_error", as_string(doc.get("transcription_error")))
+        append_string_attr(fields, "error_message", to_capped_stringish(doc.get("error_message")))
+        append_string_attr(fields, "error_message_id", normalize_id(doc.get("error_message_id")))
+        append_datetime_attr(fields, "error_timestamp", as_datetime(doc.get("error_timestamp")))
+        append_string_attr(fields, "current_spreadsheet_file_id", as_string(doc.get("current_spreadsheet_file_id")))
         append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
+        append_datetime_attr(fields, "updated_at", as_datetime(doc.get("updated_at")))
+        append_datetime_attr(fields, "created_at", as_datetime(doc.get("created_at")))
         query = f"{', '.join(fields)};"
         insert_query(
             ctx,
@@ -828,11 +900,97 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
             if capped_transcript is not None
             else None
         )
+        status = as_string(doc.get("status")) or normalize_status_from_bool(doc.get("is_finalized"))
+        resolved_session_id = normalize_id(doc.get("session_id"))
 
         fields = ["insert $m isa voice_message", f"has voice_message_id {lit_string(doc_id)}"]
         append_string_attr(fields, "source_type", as_string(doc.get("source_type")))
+        append_string_attr(fields, "session_id", resolved_session_id)
+        append_string_attr(fields, "session_type", as_string(doc.get("session_type")))
+        append_string_attr(
+            fields,
+            "message_type",
+            as_string(doc.get("message_type")) or as_string(doc.get("type")),
+        )
+        append_string_attr(fields, "message_id", to_stringish(doc.get("message_id")))
+        append_string_attr(fields, "chat_id", to_stringish(doc.get("chat_id")))
+        append_string_attr(fields, "speaker", as_string(doc.get("speaker")))
+        append_string_attr(fields, "file_id", as_string(doc.get("file_id")))
+        append_string_attr(fields, "file_hash", as_string(doc.get("file_hash")))
+        append_string_attr(fields, "hash_sha256", as_string(doc.get("hash_sha256")))
+        append_string_attr(fields, "file_unique_id", as_string(doc.get("file_unique_id")))
+        append_string_attr(fields, "file_path", as_string(doc.get("file_path")))
+        append_string_attr(fields, "file_name", as_string(doc.get("file_name")))
+        append_number_attr(fields, "file_size", as_number(doc.get("file_size")))
+        append_string_attr(fields, "mime_type", as_string(doc.get("mime_type")))
+        append_string_attr(fields, "file_metadata", to_capped_stringish(doc.get("file_metadata")))
+        append_string_attr(fields, "attachments", to_capped_stringish(doc.get("attachments")))
+        append_number_attr(fields, "duration", as_number(doc.get("duration")))
+        append_string_attr(fields, "text", to_capped_stringish(doc.get("text")))
+        append_number_attr(fields, "message_timestamp", as_number(doc.get("message_timestamp")))
+        append_number_attr(fields, "timestamp", as_number(doc.get("timestamp")))
+        append_number_attr(fields, "transcribe_timestamp", as_number(doc.get("transcribe_timestamp")))
+        append_bool_attr(fields, "is_transcribed", as_bool(doc.get("is_transcribed")))
+        append_string_attr(fields, "transcription_method", as_string(doc.get("transcription_method")))
+        append_string_attr(fields, "transcription", to_capped_stringish(doc.get("transcription")))
+        append_string_attr(fields, "transcription_text", summary_text)
+        append_string_attr(fields, "categorization", to_capped_stringish(doc.get("categorization")))
+        append_string_attr(fields, "categorization_error", as_string(doc.get("categorization_error")))
+        append_string_attr(
+            fields,
+            "categorization_error_message",
+            to_capped_stringish(doc.get("categorization_error_message")),
+        )
+        append_datetime_attr(
+            fields,
+            "categorization_error_timestamp",
+            as_datetime(doc.get("categorization_error_timestamp")),
+        )
+        append_string_attr(fields, "categorization_retry_reason", as_string(doc.get("categorization_retry_reason")))
+        append_datetime_attr(
+            fields,
+            "categorization_next_attempt_at",
+            as_datetime(doc.get("categorization_next_attempt_at")),
+        )
+        append_number_attr(fields, "categorization_attempts", as_number(doc.get("categorization_attempts")))
+        append_string_attr(fields, "transcription_error", as_string(doc.get("transcription_error")))
+        append_string_attr(
+            fields,
+            "transcription_error_context",
+            to_capped_stringish(doc.get("transcription_error_context")),
+        )
+        append_string_attr(fields, "error_message", to_capped_stringish(doc.get("error_message")))
+        append_string_attr(
+            fields,
+            "error_message_id",
+            normalize_id(doc.get("error_message_id")) or to_stringish(doc.get("error_message_id")),
+        )
+        append_datetime_attr(fields, "error_timestamp", as_datetime(doc.get("error_timestamp")))
+        append_string_attr(
+            fields,
+            "dedup_replaced_by",
+            normalize_id(doc.get("dedup_replaced_by")) or to_stringish(doc.get("dedup_replaced_by")),
+        )
+        append_string_attr(fields, "dedup_reason", as_string(doc.get("dedup_reason")))
+        append_string_attr(fields, "processors_data", to_capped_stringish(doc.get("processors_data")))
         append_string_attr(fields, "summary", summary_text)
-        append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_finalized")))
+        append_string_attr(fields, "status", status)
+        append_bool_attr(fields, "is_finalized", as_bool(doc.get("is_finalized")))
+        append_bool_attr(fields, "is_deleted", as_bool(doc.get("is_deleted")))
+        append_bool_attr(fields, "is_image_anchor", as_bool(doc.get("is_image_anchor")))
+        append_string_attr(
+            fields,
+            "image_anchor_message_id",
+            normalize_id(doc.get("image_anchor_message_id")) or to_stringish(doc.get("image_anchor_message_id")),
+        )
+        append_datetime_attr(fields, "image_anchor_linked_at", as_datetime(doc.get("image_anchor_linked_at")))
+        append_bool_attr(fields, "to_transcribe", as_bool(doc.get("to_transcribe")))
+        append_string_attr(fields, "uploaded_by", normalize_id(doc.get("uploaded_by")))
+        append_string_attr(fields, "user_id", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id")))
+        append_string_attr(fields, "username", as_string(doc.get("username")))
+        append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
+        append_datetime_attr(fields, "created_at", as_datetime(doc.get("created_at")))
+        append_datetime_attr(fields, "updated_at", as_datetime(doc.get("updated_at")))
         query = f"{', '.join(fields)};"
         insert_query(
             ctx,
@@ -907,7 +1065,7 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                     ),
                 )
 
-        session_id = normalize_id(doc.get("session_id"))
+        session_id = resolved_session_id
         if not session_id:
             return
 

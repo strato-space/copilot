@@ -59,6 +59,8 @@ CHECKS = [
     AggregateCheck("tasks_total", "match $t isa oper_task; reduce $count = count;"),
     AggregateCheck("voice_sessions_total", "match $s isa voice_session; reduce $count = count;"),
     AggregateCheck("voice_messages_total", "match $m isa voice_message; reduce $count = count;"),
+    AggregateCheck("voice_history_steps_total", "match $h isa history_step; reduce $count = count;"),
+    AggregateCheck("voice_session_merge_logs_total", "match $l isa voice_session_merge_log; reduce $count = count;"),
     AggregateCheck("forecast_rows_total", "match $f isa forecast_project_month; reduce $count = count;"),
     AggregateCheck(
         "orphan_tasks_without_project",
@@ -73,6 +75,46 @@ CHECKS = [
     AggregateCheck(
         "orphan_forecasts_without_project",
         "match $f isa forecast_project_month; not { (owner_project: $p, forecast_project_month: $f) isa project_has_forecast_month; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "orphan_history_steps_without_session",
+        "match $h isa history_step; not { (voice_session: $s, history_step: $h) isa voice_session_has_history_step; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "orphan_session_merge_logs_without_target_session",
+        "match $l isa voice_session_merge_log; not { (target_session: $s, merge_log: $l) isa voice_session_has_merge_log; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "sessions_missing_runtime_tag",
+        "match $s isa voice_session; not { $s has runtime_tag $rt; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "messages_missing_runtime_tag",
+        "match $m isa voice_message; not { $m has runtime_tag $rt; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "merge_logs_missing_runtime_tag",
+        "match $l isa voice_session_merge_log; not { $l has runtime_tag $rt; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "sessions_pending_anchor_without_message",
+        "match $s isa voice_session, has pending_image_anchor_message_id $anchor_id; not { $m isa voice_message, has voice_message_id $anchor_id; (voice_session: $s, voice_message: $m) isa voice_session_has_message; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "messages_with_missing_image_anchor_parent",
+        "match $m isa voice_message, has image_anchor_message_id $anchor_id; not { $a isa voice_message, has voice_message_id $anchor_id; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "session_done_contract_missing_done_at",
+        "match $s isa voice_session, has is_active false, has to_finalize true; not { $s has done_at $done; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
 ]

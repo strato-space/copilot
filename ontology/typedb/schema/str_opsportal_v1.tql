@@ -58,6 +58,11 @@ attribute finished_at, value datetime;
 attribute deleted_at, value datetime;
 attribute changed_at, value datetime;
 attribute title_generated_at, value datetime;
+attribute image_anchor_linked_at, value datetime;
+attribute pending_image_anchor_created_at, value datetime;
+attribute error_timestamp, value datetime;
+attribute categorization_error_timestamp, value datetime;
+attribute categorization_next_attempt_at, value datetime;
 attribute shipment_date, value datetime;
 attribute date_indexed, value datetime;
 attribute created_time, value datetime;
@@ -73,9 +78,39 @@ attribute source, value string;
 attribute source_type, value string;
 attribute stream_source, value string;
 attribute runtime_source, value string;
+attribute operation_type, value string;
+attribute entity_id, value string;
+attribute related_entity_ids, value string;
+attribute payload_before, value string;
+attribute payload_after, value string;
+attribute stats_before, value string;
+attribute stats_after, value string;
+attribute performed_by, value string;
+attribute request_id, value string;
 attribute created_by, value string;
 attribute updated_by, value string;
 attribute changed_by, value string;
+attribute result, value string;
+attribute error_message, value string;
+attribute error_source, value string;
+attribute error_message_id, value string;
+attribute transcription_error, value string;
+attribute transcription_error_context, value string;
+attribute categorization_error, value string;
+attribute categorization_error_message, value string;
+attribute categorization_retry_reason, value string;
+attribute dedup_replaced_by, value string;
+attribute dedup_reason, value string;
+attribute file_hash, value string;
+attribute hash_sha256, value string;
+attribute file_metadata, value string;
+attribute image_anchor_message_id, value string;
+attribute message_type, value string;
+attribute speaker, value string;
+attribute pending_image_anchor_message_id, value string;
+attribute pending_image_anchor_oid, value string;
+attribute transcription_method, value string;
+attribute merged_into_session_id, value string;
 attribute date_timestamp, value double;
 attribute duration, value double;
 attribute duration_ms, value double;
@@ -91,6 +126,7 @@ attribute transcribe_timestamp, value double;
 attribute last_message_timestamp, value double;
 attribute last_voice_timestamp, value double;
 attribute postprocessing_job_queued_timestamp, value double;
+attribute performed_at, value double;
 attribute ticket_id, value string;
 attribute ticket_db_id, value string;
 attribute edited_at, value string;
@@ -146,6 +182,8 @@ attribute old_id, value string;
 attribute merged_into_project_id, value string;
 attribute session_name, value string;
 attribute session_type, value string;
+attribute done_count, value integer;
+attribute categorization_attempts, value integer;
 attribute chat_id, value string;
 attribute user_id, value string;
 attribute telegram_user_id, value string;
@@ -286,6 +324,7 @@ attribute patch_operation_id, value string;
 attribute apply_attempt_id, value string;
 attribute history_step_id, value string;
 attribute mode_tag_id, value string;
+attribute voice_session_merge_log_id, value string;
 
 # ==============================
 # Entities
@@ -814,6 +853,7 @@ entity voice_session,
   owns session_name,
   owns session_type,
   owns chat_id,
+  owns user_id,
   owns access_level,
   owns participants,
   owns allowed_users,
@@ -824,6 +864,7 @@ entity voice_session,
   owns last_message_timestamp,
   owns last_voice_timestamp,
   owns done_at,
+  owns done_count,
   owns is_messages_processed,
   owns is_waiting,
   owns is_corrupted,
@@ -838,6 +879,15 @@ entity voice_session,
   owns current_spreadsheet_file_id,
   owns deleted_at,
   owns deletion_reason,
+  owns pending_image_anchor_message_id,
+  owns pending_image_anchor_oid,
+  owns pending_image_anchor_created_at,
+  owns merged_into_session_id,
+  owns error_source,
+  owns transcription_error,
+  owns error_message,
+  owns error_message_id,
+  owns error_timestamp,
   owns status,
   owns is_active,
   owns is_active_legacy,
@@ -852,26 +902,52 @@ entity voice_session,
   plays tg_voice_session_bound_to_voice_session:bound_voice_session,
   plays voice_session_processed_by_run:voice_session,
   plays voice_session_has_history_step:voice_session,
-  plays voice_session_emits_metric_event:voice_session;
+  plays voice_session_emits_metric_event:voice_session,
+  plays voice_session_has_merge_log:target_session;
 
 entity voice_message,
   owns voice_message_id @key,
   owns session_id,
+  owns message_type,
   owns message_id,
   owns chat_id,
+  owns speaker,
   owns session_type,
+  owns file_hash,
+  owns hash_sha256,
   owns file_id,
   owns file_unique_id,
   owns file_path,
+  owns file_name,
+  owns file_size,
+  owns mime_type,
+  owns file_metadata,
+  owns attachments,
   owns duration,
   owns message_timestamp,
   owns timestamp,
   owns transcribe_timestamp,
   owns source_type,
   owns text,
+  owns image_anchor_message_id,
+  owns image_anchor_linked_at,
   owns transcription,
+  owns transcription_method,
   owns transcription_text,
   owns categorization,
+  owns categorization_error,
+  owns categorization_error_message,
+  owns categorization_error_timestamp,
+  owns categorization_retry_reason,
+  owns categorization_next_attempt_at,
+  owns categorization_attempts,
+  owns transcription_error,
+  owns transcription_error_context,
+  owns error_message,
+  owns error_message_id,
+  owns error_timestamp,
+  owns dedup_replaced_by,
+  owns dedup_reason,
   owns processors_data,
   owns is_transcribed,
   owns is_finalized,
@@ -1011,9 +1087,47 @@ entity apply_attempt,
 
 entity history_step,
   owns history_step_id @key,
+  owns session_id,
+  owns project_id,
+  owns message_id,
+  owns event_name,
+  owns event_version,
+  owns event_group,
+  owns action,
+  owns actor,
+  owns source,
+  owns diff,
+  owns target,
+  owns reason,
+  owns metadata,
+  owns correlation_id,
+  owns source_event_id,
+  owns is_replay,
+  owns event_time,
+  owns runtime_tag,
   owns status,
   owns created_at,
   plays voice_session_has_history_step:history_step;
+
+entity voice_session_merge_log,
+  owns voice_session_merge_log_id @key,
+  owns operation_type,
+  owns entity_type,
+  owns entity_id,
+  owns related_entity_ids,
+  owns payload_before,
+  owns payload_after,
+  owns stats_before,
+  owns stats_after,
+  owns request_id,
+  owns performed_by,
+  owns performed_at,
+  owns result,
+  owns error_message,
+  owns runtime_tag,
+  owns created_at,
+  owns updated_at,
+  plays voice_session_has_merge_log:merge_log;
 
 entity ops_metric_event,
   owns external_id @key,
@@ -1308,6 +1422,10 @@ relation voice_session_has_history_step,
 relation voice_session_emits_metric_event,
   relates voice_session,
   relates ops_metric_event;
+
+relation voice_session_has_merge_log,
+  relates target_session,
+  relates merge_log;
 
 relation ops_metric_event_aggregated_to_snapshot,
   relates ops_metric_event,

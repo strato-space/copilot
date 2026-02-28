@@ -15,12 +15,19 @@ Migration baseline: TypeDB `3.x` only (hard cutover), no TypeDB `2.x` compatibil
 
 1. Ingest `automation_projects`, `automation_customers`, `automation_tasks`.
 2. Ingest `automation_voice_bot_sessions`, `automation_voice_bot_messages`, `automation_voice_bot_session_log`.
-3. Materialize critical relations:
+3. Ingest `automation_voice_bot_session_merge_log` for merge audit traceability.
+4. Materialize critical relations:
    - `project_has_oper_task`
    - `project_has_voice_session`
    - `voice_session_has_message`
    - `voice_message_chunked_as_transcript_chunk`
-4. Run `queries/validation_v1.tql` and fix orphan records.
+   - `voice_session_has_history_step`
+   - `voice_session_has_merge_log`
+5. Run `queries/validation_v1.tql` and fix orphan records.
+6. Enforce voice runtime contract checks:
+   - pending/image-anchor consistency,
+   - runtime-tag coverage in runtime-scoped voice collections,
+   - close-flow consistency (`is_active=false` + `to_finalize=true` => `done_at`).
 
 ## Phase 2 - FinOps Current Live
 

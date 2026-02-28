@@ -289,6 +289,7 @@ collections:
       chat_id: chat_id
       user_id: user_id
       access_level: access_level
+      done_count: done_count
       is_active: is_active
       is_active_legacy: "is_active:"
       is_deleted: is_deleted
@@ -314,6 +315,15 @@ collections:
       done_at: done_at
       deleted_at: deleted_at
       deletion_reason: deletion_reason
+      pending_image_anchor_message_id: pending_image_anchor_message_id
+      pending_image_anchor_oid: pending_image_anchor_oid
+      pending_image_anchor_created_at: pending_image_anchor_created_at
+      merged_into_session_id: merged_into_session_id
+      error_source: error_source
+      transcription_error: transcription_error
+      error_message: error_message
+      error_message_id: error_message_id
+      error_timestamp: error_timestamp
       current_spreadsheet_file_id: current_spreadsheet_file_id
       runtime_tag: runtime_tag
       updated_at: updated_at
@@ -335,26 +345,51 @@ collections:
       source_type: source_type
       session_id: session_id
       session_type: session_type
+      message_type: message_type
       message_id: message_id
       chat_id: chat_id
+      speaker: speaker
       file_id: file_id
+      file_hash: file_hash
+      hash_sha256: hash_sha256
       file_unique_id: file_unique_id
       file_path: file_path
+      file_name: file_name
+      file_size: file_size
+      mime_type: mime_type
+      file_metadata: file_metadata
+      attachments: attachments
       duration: duration
       text: text
       message_timestamp: message_timestamp
       timestamp: timestamp
       transcribe_timestamp: transcribe_timestamp
       is_transcribed: is_transcribed
+      transcription_method: transcription_method
       transcription: transcription
       transcription_text: transcription_text
       summary: transcription_text
       categorization: categorization
+      categorization_error: categorization_error
+      categorization_error_message: categorization_error_message
+      categorization_error_timestamp: categorization_error_timestamp
+      categorization_retry_reason: categorization_retry_reason
+      categorization_next_attempt_at: categorization_next_attempt_at
+      categorization_attempts: categorization_attempts
+      transcription_error: transcription_error
+      transcription_error_context: transcription_error_context
+      error_message: error_message
+      error_message_id: error_message_id
+      error_timestamp: error_timestamp
+      dedup_replaced_by: dedup_replaced_by
+      dedup_reason: dedup_reason
       processors_data: processors_data
       status: status
       is_finalized: is_finalized
       is_deleted: is_deleted
       is_image_anchor: is_image_anchor
+      image_anchor_message_id: image_anchor_message_id
+      image_anchor_linked_at: image_anchor_linked_at
       to_transcribe: to_transcribe
       uploaded_by: uploaded_by
       user_id: user_id
@@ -404,6 +439,8 @@ collections:
       from: _id
     attributes:
       status: status
+      session_id: session_id
+      event_time: event_time
       event_name: event_name
       event_version: event_version
       action: action
@@ -419,6 +456,7 @@ collections:
       correlation_id: correlation_id
       source_event_id: source_event_id
       is_replay: is_replay
+      runtime_tag: runtime_tag
       created_at: event_time
     relations:
       - relation: voice_session_has_history_step
@@ -427,6 +465,36 @@ collections:
           entity: voice_session
           by: voice_session_id
           from: session_id
+
+  - collection: automation_voice_bot_session_merge_log
+    target_entity: voice_session_merge_log
+    key:
+      attribute: voice_session_merge_log_id
+      from: _id
+    attributes:
+      operation_type: operation_type
+      entity_type: entity_type
+      entity_id: entity_id
+      related_entity_ids: related_entity_ids
+      payload_before: payload_before
+      payload_after: payload_after
+      stats_before: stats_before
+      stats_after: stats_after
+      request_id: request_id
+      performed_by: performed_by
+      performed_at: performed_at
+      result: result
+      error_message: error_message
+      runtime_tag: runtime_tag
+      created_at: created_at
+      updated_at: updated_at
+    relations:
+      - relation: voice_session_has_merge_log
+        owner_role: target_session
+        owner_lookup:
+          entity: voice_session
+          by: voice_session_id
+          from: entity_id
 
   - collection: automation_tg_voice_sessions
     target_entity: tg_voice_session
@@ -711,6 +779,16 @@ quality_gates:
     check: each oper_task must link to exactly one project
   - name: no_orphan_voice_messages
     check: each voice_message must link to one voice_session
+  - name: no_orphan_voice_history_steps
+    check: each history_step must link to one voice_session
+  - name: no_orphan_voice_merge_logs
+    check: each voice_session_merge_log must link to one target voice_session
+  - name: image_anchor_link_integrity
+    check: image anchor pointers must resolve to existing session messages
+  - name: session_done_has_done_at
+    check: voice_session rows with is_active=false and to_finalize=true must have done_at
+  - name: runtime_tag_coverage_voice
+    check: runtime-scoped voice collections should carry runtime_tag (legacy gaps are explicitly counted)
   - name: no_forecast_without_project
     check: each forecast_project_month must link to one project
   - name: type_normalized_ids

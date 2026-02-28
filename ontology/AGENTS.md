@@ -41,6 +41,7 @@ Run ontology tooling via backend npm aliases (stable operator contract):
 
 ## Recent Updates
 
+- 2026-02-28: `copilot-aonw` completed deep runtime-contract ontology refresh for Voice domain (schema/mapping/validation/docs), including merge-log representation and anchor/dedup/error diagnostics fields.
 - 2026-02-28: Expanded `typedb/schema/str_opsportal_v1.tql` and `typedb/mappings/mongodb_to_typedb_v1.yaml` to cover additional MongoDB collections and attributes.
 - 2026-02-28: Upgraded `typedb/scripts/typedb-ontology-ingest.py` with mapping-driven generic ingestion, relation idempotency checks, and datetime normalization for TypeDB compatibility.
 - 2026-02-28: Completed full apply+validate cycle against production MongoDB source and local TypeDB target (`str_opsportal_v1`) with successful validation.

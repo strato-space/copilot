@@ -32,6 +32,8 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 
 ## Session Outcome (2026-02-28)
 
+- Deep runtime-contract alignment (`copilot-aonw`) added Voice merge-log ontology coverage plus expanded session/message/session-log fields for anchors, dedup hashes, runtime diagnostics, and merge traceability.
+- Validation suite was expanded with runtime-quality gates (orphan session/merge logs, image-anchor integrity, runtime-tag completeness, and close-flow `done_at` consistency checks).
 - TypeDB ontology assets were reconciled with production MongoDB structure:
   - schema: `typedb/schema/str_opsportal_v1.tql`
   - mappings: `typedb/mappings/mongodb_to_typedb_v1.yaml`

@@ -94,3 +94,63 @@ match
   $p isa project, has project_id $pid;
 get $pid;
 limit 20;
+
+# 9) Voice runtime-contract spot checks
+# 9.1 Session logs linked to sessions
+match
+  $rel (voice_session: $s, history_step: $h) isa voice_session_has_history_step;
+  $s has voice_session_id $session_id;
+  $h has event_name $event_name;
+get $session_id, $event_name;
+limit 50;
+
+# 9.2 Merge logs linked to target sessions
+match
+  $rel (target_session: $s, merge_log: $l) isa voice_session_has_merge_log;
+  $s has voice_session_id $target_session_id;
+  $l has operation_type $operation_type;
+get $target_session_id, $operation_type;
+limit 50;
+
+# 9.3 Session close contract: inactive + to_finalize sessions should have done_at
+match
+  $s isa voice_session, has is_active false, has to_finalize true;
+  not { $s has done_at $done; };
+get $s;
+count;
+
+# 9.4 Pending anchor contract: pending image anchors should point to an existing session message
+match
+  $s isa voice_session, has pending_image_anchor_message_id $anchor_id;
+  not {
+    $m isa voice_message, has voice_message_id $anchor_id;
+    (voice_session: $s, voice_message: $m) isa voice_session_has_message;
+  };
+get $s, $anchor_id;
+limit 50;
+
+# 9.5 Linked anchor contract: message.image_anchor_message_id should point to existing message
+match
+  $m isa voice_message, has image_anchor_message_id $anchor_id;
+  not { $anchor isa voice_message, has voice_message_id $anchor_id; };
+get $m, $anchor_id;
+limit 50;
+
+# 9.6 Runtime-tag completeness counters for runtime-scoped voice collections
+match
+  $s isa voice_session;
+  not { $s has runtime_tag $runtime_tag; };
+get $s;
+count;
+
+match
+  $m isa voice_message;
+  not { $m has runtime_tag $runtime_tag; };
+get $m;
+count;
+
+match
+  $l isa voice_session_merge_log;
+  not { $l has runtime_tag $runtime_tag; };
+get $l;
+count;
