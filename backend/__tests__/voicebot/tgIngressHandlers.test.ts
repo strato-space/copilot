@@ -454,4 +454,74 @@ describe('voicebot tgbot ingress handlers', () => {
     expect(sourceData.session_id).toEqual(createdSessionId);
     expect(insertedTask.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${createdSessionId.toHexString()}`);
   });
+
+  it('appends normalized public_attachment links to @task task descriptions for attachment ingress', async () => {
+    const performerId = new ObjectId();
+    const codexPerformerId = new ObjectId();
+    const projectId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '2020' },
+      codexPerformer: { _id: codexPerformerId, id: 'codex', name: 'Codex', real_name: 'Codex' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        project_id: projectId,
+        is_active: true,
+      },
+      codexProject: {
+        _id: projectId,
+        name: 'Copilot',
+        git_repo: 'git@github.com:strato-space/copilot.git',
+      },
+    });
+
+    const result = await handleAttachmentIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 2020,
+        chat_id: -1003001,
+        username: 'codex-task-user',
+        message_id: 121,
+        message_timestamp: 1770500510,
+        text: '@task Review attached files before triage',
+        message_type: 'document',
+        attachments: [
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'doc-file-1',
+            file_unique_id: 'uniq-doc-1',
+            name: 'invoice.pdf',
+            mimeType: 'application/pdf',
+          },
+          {
+            kind: 'image',
+            source: 'telegram',
+            file_id: 'image-file-2',
+            uri: '/voicebot/public_attachment/legacy-session/legacy-uniq',
+            mimeType: 'image/png',
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(spies.tasksInsertOne).toHaveBeenCalledTimes(1);
+
+    const insertedTask = spies.tasksInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    const description = String(insertedTask.description || '');
+    expect(description).toContain('Review attached files before triage');
+    expect(description).toContain(
+      `\n\nAttachments:\n- https://copilot.stratospace.fun/api/voicebot/public_attachment/${sessionId.toHexString()}/uniq-doc-1`
+    );
+    expect(description).toContain(
+      '- https://copilot.stratospace.fun/api/voicebot/public_attachment/legacy-session/legacy-uniq'
+    );
+  });
 });

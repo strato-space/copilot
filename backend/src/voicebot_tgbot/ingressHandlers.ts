@@ -18,7 +18,7 @@ import {
   setActiveVoiceSession,
 } from './activeSessionMapping.js';
 import { extractSessionIdFromText } from './sessionRef.js';
-import { buildSessionLink } from './sessionTelegramMessage.js';
+import { buildSessionLink, getPublicInterfaceOrigin } from './sessionTelegramMessage.js';
 
 export type QueueLike = {
   add: (name: string, data: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
@@ -179,6 +179,12 @@ const TASK_SIGNATURE_PATTERN = /(^|\s)@task\b/i;
 const TASK_SIGNATURE_REPLACE_PATTERN = /(^|\s)@task\b/gi;
 const DEFAULT_CODEX_TASK_TITLE = 'Telegram @task';
 const DEFAULT_CODEX_TASK_DESCRIPTION = 'Created from @task payload.';
+const CANONICAL_PUBLIC_ATTACHMENT_PREFIX = '/api/voicebot/public_attachment/';
+const LEGACY_PUBLIC_ATTACHMENT_PREFIXES = [
+  CANONICAL_PUBLIC_ATTACHMENT_PREFIX,
+  '/voicebot/public_attachment/',
+  '/voicebot/uploads/public_attachment/',
+] as const;
 
 const hasTaskSignature = (value: string): boolean => TASK_SIGNATURE_PATTERN.test(value);
 
@@ -230,7 +236,90 @@ const normalizeTaskAttachments = (attachments: Array<Record<string, unknown>>): 
     ...(Number.isFinite(Number(attachment.height)) ? { height: Number(attachment.height) } : {}),
   }));
 
-const resolveAttachmentReference = (attachment: Record<string, unknown>): string | null => {
+const buildCanonicalPublicAttachmentUrl = ({
+  sessionId,
+  fileUniqueId,
+}: {
+  sessionId: string;
+  fileUniqueId: string;
+}): string | null => {
+  const normalizedSessionId = normalizeString(sessionId);
+  const normalizedFileUniqueId = normalizeString(fileUniqueId);
+  if (!normalizedSessionId || !normalizedFileUniqueId) return null;
+  return `${getPublicInterfaceOrigin()}${CANONICAL_PUBLIC_ATTACHMENT_PREFIX}${encodeURIComponent(
+    normalizedSessionId
+  )}/${encodeURIComponent(normalizedFileUniqueId)}`;
+};
+
+const extractPublicAttachmentPathParts = (value: string): { sessionId: string; fileUniqueId: string } | null => {
+  const normalizedValue = normalizeString(value);
+  if (!normalizedValue) return null;
+
+  let path = normalizedValue;
+  if (normalizedValue.startsWith('http://') || normalizedValue.startsWith('https://')) {
+    try {
+      path = new URL(normalizedValue).pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  for (const prefix of LEGACY_PUBLIC_ATTACHMENT_PREFIXES) {
+    if (!path.startsWith(prefix)) continue;
+    const match = path.slice(prefix.length).match(/^([^/?#]+)\/([^/?#]+)/);
+    if (!match) return null;
+    const [, sessionId, fileUniqueId] = match;
+    if (!sessionId || !fileUniqueId) return null;
+    return {
+      sessionId,
+      fileUniqueId,
+    };
+  }
+
+  return null;
+};
+
+const resolveNormalizedPublicAttachmentLink = ({
+  attachment,
+  payloadSessionId,
+}: {
+  attachment: Record<string, unknown>;
+  payloadSessionId: string;
+}): string | null => {
+  const fromFileUniqueId = buildCanonicalPublicAttachmentUrl({
+    sessionId: payloadSessionId,
+    fileUniqueId: normalizeString(attachment.file_unique_id),
+  });
+  if (fromFileUniqueId) return fromFileUniqueId;
+
+  const url = normalizeString(attachment.url);
+  const parsedFromUrl = extractPublicAttachmentPathParts(url);
+  if (parsedFromUrl) {
+    return buildCanonicalPublicAttachmentUrl(parsedFromUrl);
+  }
+
+  const uri = normalizeString(attachment.uri);
+  const parsedFromUri = extractPublicAttachmentPathParts(uri);
+  if (parsedFromUri) {
+    return buildCanonicalPublicAttachmentUrl(parsedFromUri);
+  }
+
+  return null;
+};
+
+const resolveAttachmentReference = ({
+  attachment,
+  payloadSessionId,
+}: {
+  attachment: Record<string, unknown>;
+  payloadSessionId: string;
+}): string | null => {
+  const normalizedAttachmentLink = resolveNormalizedPublicAttachmentLink({
+    attachment,
+    payloadSessionId,
+  });
+  if (normalizedAttachmentLink) return normalizedAttachmentLink;
+
   const url = normalizeString(attachment.url);
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
 
@@ -251,7 +340,13 @@ const buildTaskDescription = ({
   payload: CodexTaskPayload;
 }): string => {
   const baseText = normalizedText || DEFAULT_CODEX_TASK_DESCRIPTION;
-  const attachmentRefs = payload.attachments.map(resolveAttachmentReference).filter((value): value is string => Boolean(value));
+  const attachmentRefs = Array.from(
+    new Set(
+      payload.attachments
+        .map((attachment) => resolveAttachmentReference({ attachment, payloadSessionId: payload.session_id }))
+        .filter((value): value is string => Boolean(value))
+    )
+  );
   if (attachmentRefs.length === 0) return baseText;
   return `${baseText}\n\nAttachments:\n${attachmentRefs.map((ref) => `- ${ref}`).join('\n')}`;
 };
