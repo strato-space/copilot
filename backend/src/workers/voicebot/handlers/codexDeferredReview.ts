@@ -19,6 +19,9 @@ const DEFAULT_BD_BIN = 'bd';
 const DEFAULT_CODEX_TIMEOUT_MS = 180_000;
 const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
 const MAX_SUMMARY_LENGTH = 240;
+const TELEGRAM_BOT_API_BASE_URL = 'https://api.telegram.org';
+const DEFAULT_CODEX_APPROVAL_CHAT_ID = '-1002820582847';
+const DEFAULT_CODEX_APPROVAL_THREAD_ID = 11091;
 
 const FALLBACK_PROMPT_CARD = `
 Ты — ассистент модерации задач для клиента.
@@ -45,6 +48,10 @@ type CodexDeferredReviewResult = {
   summary?: string;
   source?: string;
   issue_id?: string | null;
+  issue_note_appended?: boolean;
+  issue_note_marker?: string | null;
+  approval_card_sent?: boolean;
+  approval_card_message_id?: number | null;
 };
 
 type TaskRecord = {
@@ -69,9 +76,11 @@ type PromptCard = {
   path: string | null;
 };
 
+type IssueRecord = Record<string, unknown>;
+
 type ReviewRunnerInput = {
   task: TaskRecord;
-  issue: Record<string, unknown> | null;
+  issue: IssueRecord | null;
   prompt: string;
   promptCardPath: string | null;
 };
@@ -84,8 +93,38 @@ type ReviewRunnerOutput = {
 type CodexDeferredReviewOptions = {
   now?: () => Date;
   loadPromptCard?: () => Promise<PromptCard>;
-  loadIssue?: (issueId: string) => Promise<Record<string, unknown> | null>;
+  loadIssue?: (issueId: string) => Promise<IssueRecord | null>;
   runReview?: (input: ReviewRunnerInput) => Promise<ReviewRunnerOutput>;
+  appendIssueSummaryNote?: (input: AppendIssueSummaryNoteInput) => Promise<AppendIssueSummaryNoteResult>;
+  sendTelegramApprovalCard?: (input: SendTelegramApprovalCardInput) => Promise<SendTelegramApprovalCardResult>;
+};
+
+type AppendIssueSummaryNoteInput = {
+  issueId: string;
+  summary: string;
+  task: TaskRecord;
+  issue: IssueRecord | null;
+};
+
+type AppendIssueSummaryNoteResult = {
+  appended: boolean;
+  marker: string;
+  note: string;
+};
+
+type SendTelegramApprovalCardInput = {
+  issueId: string;
+  summary: string;
+  task: TaskRecord;
+  issue: IssueRecord | null;
+};
+
+type SendTelegramApprovalCardResult = {
+  chat_id: string;
+  thread_id: number | null;
+  message_id: number;
+  callback_start: string;
+  callback_cancel: string;
 };
 
 type CommandRunResult = {
@@ -305,13 +344,219 @@ const getRepoRootCwd = (): string => {
   return process.cwd();
 };
 
+const resolveTelegramBotToken = (): string | null => {
+  const prodToken =
+    typeof process.env.TG_VOICE_BOT_TOKEN === 'string' ? process.env.TG_VOICE_BOT_TOKEN.trim() : '';
+  const betaToken =
+    typeof process.env.TG_VOICE_BOT_BETA_TOKEN === 'string' ? process.env.TG_VOICE_BOT_BETA_TOKEN.trim() : '';
+  if (IS_PROD_RUNTIME) return prodToken || betaToken || null;
+  return betaToken || prodToken || null;
+};
+
+const buildIssueSummaryNoteMarker = (task: TaskRecord): string =>
+  `[codex-deferred-review:${task._id.toHexString()}]`;
+
+const buildIssueSummaryNote = ({
+  marker,
+  summary,
+}: {
+  marker: string;
+  summary: string;
+}): string => `${marker}\nDeferred review summary:\n${summary}`;
+
+const issueAlreadyContainsNoteMarker = (issue: IssueRecord | null, marker: string): boolean => {
+  if (!issue) return false;
+  const notes = typeof issue.notes === 'string' ? issue.notes : '';
+  return notes.includes(marker);
+};
+
+const appendIssueSummaryNoteDefault = async ({
+  issueId,
+  summary,
+  task,
+  issue,
+}: AppendIssueSummaryNoteInput): Promise<AppendIssueSummaryNoteResult> => {
+  const marker = buildIssueSummaryNoteMarker(task);
+  const note = buildIssueSummaryNote({ marker, summary });
+
+  if (issueAlreadyContainsNoteMarker(issue, marker)) {
+    logger.info('[voicebot-worker] codex deferred review note already present', {
+      issue_id: issueId,
+      task_id: task._id.toHexString(),
+      marker,
+    });
+    return {
+      appended: false,
+      marker,
+      note,
+    };
+  }
+
+  const bdBin = normalizeString(process.env.VOICEBOT_CODEX_REVIEW_BD_BIN) || DEFAULT_BD_BIN;
+  const result = await runCommand({
+    command: bdBin,
+    args: ['--no-daemon', 'update', issueId, '--append-notes', note, '--json'],
+    timeoutMs: 20_000,
+    cwd: getRepoRootCwd(),
+  });
+
+  if (result.timedOut) {
+    throw new Error('codex_review_append_note_timeout');
+  }
+  if (result.code !== 0) {
+    const stderrText = normalizeString(result.stderr);
+    throw new Error(stderrText || `codex_review_append_note_exit_code_${String(result.code)}`);
+  }
+
+  logger.info('[voicebot-worker] codex deferred review note appended', {
+    issue_id: issueId,
+    task_id: task._id.toHexString(),
+    marker,
+  });
+
+  return {
+    appended: true,
+    marker,
+    note,
+  };
+};
+
+const resolveCodexApprovalTarget = (): { chat_id: string; thread_id: number | null } => {
+  const configuredChatId = normalizeString(process.env.VOICEBOT_CODEX_REVIEW_TELEGRAM_CHAT_ID);
+  const chat_id = configuredChatId || DEFAULT_CODEX_APPROVAL_CHAT_ID;
+  if (!chat_id) {
+    throw new Error('codex_review_telegram_chat_id_missing');
+  }
+
+  const configuredThreadRaw = normalizeString(process.env.VOICEBOT_CODEX_REVIEW_TELEGRAM_THREAD_ID);
+  const threadRaw = configuredThreadRaw || String(DEFAULT_CODEX_APPROVAL_THREAD_ID);
+  const parsedThread = Number.parseInt(threadRaw, 10);
+  const thread_id = Number.isFinite(parsedThread) && parsedThread > 0 ? parsedThread : null;
+
+  return { chat_id, thread_id };
+};
+
+const buildApprovalCardMessage = ({
+  issueId,
+  summary,
+  task,
+  issue,
+}: SendTelegramApprovalCardInput): string => {
+  const title = normalizeString(issue?.title) || normalizeString(task.name);
+  const description = normalizeString(task.description);
+  const externalRef = normalizeString(task.external_ref);
+
+  const lines = [
+    'Codex deferred review',
+    `Issue: ${issueId}`,
+    title ? `Title: ${title}` : null,
+    description ? `Description: ${toUltraShortSummary(description)}` : null,
+    `Summary: ${summary}`,
+    externalRef ? `Voice session: ${externalRef}` : null,
+    'Choose action: Start or Cancel',
+  ].filter((line): line is string => Boolean(line));
+
+  return lines.join('\n');
+};
+
+const buildApprovalStartCallback = (task: TaskRecord): string =>
+  `cdr:start:${task._id.toHexString()}`;
+
+const buildApprovalCancelCallback = (task: TaskRecord): string =>
+  `cdr:cancel:${task._id.toHexString()}`;
+
+const sendTelegramApprovalCardDefault = async ({
+  issueId,
+  summary,
+  task,
+  issue,
+}: SendTelegramApprovalCardInput): Promise<SendTelegramApprovalCardResult> => {
+  const token = resolveTelegramBotToken();
+  if (!token) {
+    throw new Error('codex_review_telegram_token_missing');
+  }
+
+  const target = resolveCodexApprovalTarget();
+  const callback_start = buildApprovalStartCallback(task);
+  const callback_cancel = buildApprovalCancelCallback(task);
+  const text = buildApprovalCardMessage({ issueId, summary, task, issue });
+
+  type TelegramSendMessageResponse = {
+    ok?: boolean;
+    description?: string;
+    result?: {
+      message_id?: number;
+      message_thread_id?: number;
+      chat?: {
+        id?: number | string;
+      };
+    };
+  };
+
+  const response = await fetch(`${TELEGRAM_BOT_API_BASE_URL}/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      chat_id: target.chat_id,
+      ...(target.thread_id ? { message_thread_id: target.thread_id } : {}),
+      text,
+      disable_web_page_preview: true,
+      reply_markup: {
+        inline_keyboard: [[
+          {
+            text: 'Start',
+            callback_data: callback_start,
+          },
+          {
+            text: 'Cancel',
+            callback_data: callback_cancel,
+          },
+        ]],
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`codex_review_telegram_send_http_${String(response.status)}`);
+  }
+
+  const body = (await response.json().catch(() => null)) as TelegramSendMessageResponse | null;
+  const message_id = Number(body?.result?.message_id);
+  if (!body?.ok || !Number.isFinite(message_id) || message_id <= 0) {
+    const description = normalizeString(body?.description);
+    throw new Error(description || 'codex_review_telegram_send_failed');
+  }
+
+  const resolvedThreadId = Number(body.result?.message_thread_id);
+  const thread_id =
+    Number.isFinite(resolvedThreadId) && resolvedThreadId > 0 ? resolvedThreadId : target.thread_id;
+
+  logger.info('[voicebot-worker] codex deferred review approval card sent', {
+    issue_id: issueId,
+    task_id: task._id.toHexString(),
+    chat_id: target.chat_id,
+    thread_id,
+    message_id,
+  });
+
+  return {
+    chat_id: target.chat_id,
+    thread_id: thread_id || null,
+    message_id,
+    callback_start,
+    callback_cancel,
+  };
+};
+
 const createReviewPrompt = ({
   task,
   issue,
   promptCard,
 }: {
   task: TaskRecord;
-  issue: Record<string, unknown> | null;
+  issue: IssueRecord | null;
   promptCard: PromptCard;
 }): string => {
   const taskContext = {
@@ -427,7 +672,7 @@ const resolveIssueId = (task: TaskRecord): string | null => {
   return null;
 };
 
-const loadIssueDefault = async (issueId: string): Promise<Record<string, unknown> | null> => {
+const loadIssueDefault = async (issueId: string): Promise<IssueRecord | null> => {
   const bdBin = normalizeString(process.env.VOICEBOT_CODEX_REVIEW_BD_BIN) || DEFAULT_BD_BIN;
 
   try {
@@ -451,11 +696,11 @@ const loadIssueDefault = async (issueId: string): Promise<Record<string, unknown
     const payload = JSON.parse(result.stdout) as unknown;
     if (Array.isArray(payload)) {
       const first = payload[0];
-      return first && typeof first === 'object' ? (first as Record<string, unknown>) : null;
+      return first && typeof first === 'object' ? (first as IssueRecord) : null;
     }
 
     if (payload && typeof payload === 'object') {
-      return payload as Record<string, unknown>;
+      return payload as IssueRecord;
     }
 
     return null;
@@ -570,6 +815,8 @@ export const handleCodexDeferredReviewJob = async (
   const loadPromptCard = options.loadPromptCard || loadPromptCardDefault;
   const loadIssue = options.loadIssue || loadIssueDefault;
   const runReview = options.runReview || runCodexReviewDefault;
+  const appendIssueSummaryNote = options.appendIssueSummaryNote || appendIssueSummaryNoteDefault;
+  const sendTelegramApprovalCard = options.sendTelegramApprovalCard || sendTelegramApprovalCardDefault;
 
   try {
     const issueId = resolveIssueId(task);
@@ -603,17 +850,57 @@ export const handleCodexDeferredReviewJob = async (
       throw new Error('codex_review_summary_empty');
     }
 
+    let issueNoteResult: AppendIssueSummaryNoteResult | null = null;
+    let approvalCardResult: SendTelegramApprovalCardResult | null = null;
+
+    if (issueId) {
+      issueNoteResult = await appendIssueSummaryNote({
+        issueId,
+        summary,
+        task,
+        issue,
+      });
+
+      approvalCardResult = await sendTelegramApprovalCard({
+        issueId,
+        summary,
+        task,
+        issue,
+      });
+    } else {
+      logger.warn('[voicebot-worker] codex deferred review missing issue id for note/card actions', {
+        task_id,
+      });
+    }
+
     const completedAt = new Date();
+    const completionSet: Record<string, unknown> = {
+      codex_review_summary: summary,
+      codex_review_summary_source: source,
+      codex_review_summary_issue_id: issueId || null,
+      codex_review_summary_generated_at: completedAt,
+      codex_review_summary_processing: false,
+      codex_review_summary_finished_at: completedAt,
+      updated_at: completedAt,
+    };
+
+    if (issueNoteResult) {
+      completionSet.codex_review_summary_note_marker = issueNoteResult.marker;
+      completionSet.codex_review_summary_note_synced_at = completedAt;
+      completionSet.codex_review_summary_note_appended = issueNoteResult.appended;
+    }
+
+    if (approvalCardResult) {
+      completionSet.codex_review_approval_card_sent_at = completedAt;
+      completionSet.codex_review_approval_card_chat_id = approvalCardResult.chat_id;
+      completionSet.codex_review_approval_card_thread_id = approvalCardResult.thread_id;
+      completionSet.codex_review_approval_card_message_id = approvalCardResult.message_id;
+      completionSet.codex_review_approval_card_start_callback = approvalCardResult.callback_start;
+      completionSet.codex_review_approval_card_cancel_callback = approvalCardResult.callback_cancel;
+    }
+
     await tasksCollection.updateOne(runtimeQuery({ _id: taskObjectId }), {
-      $set: {
-        codex_review_summary: summary,
-        codex_review_summary_source: source,
-        codex_review_summary_issue_id: issueId || null,
-        codex_review_summary_generated_at: completedAt,
-        codex_review_summary_processing: false,
-        codex_review_summary_finished_at: completedAt,
-        updated_at: completedAt,
-      },
+      $set: completionSet,
       $unset: {
         codex_review_summary_last_runner_error: 1,
         codex_review_summary_last_error_at: 1,
@@ -628,13 +915,24 @@ export const handleCodexDeferredReviewJob = async (
       summary_chars: summary.length,
     });
 
-    return {
+    const resultPayload: CodexDeferredReviewResult = {
       ok: true,
       task_id,
       issue_id: issueId,
       summary,
       source,
     };
+
+    if (issueNoteResult) {
+      resultPayload.issue_note_appended = issueNoteResult.appended;
+      resultPayload.issue_note_marker = issueNoteResult.marker;
+    }
+    if (approvalCardResult) {
+      resultPayload.approval_card_sent = true;
+      resultPayload.approval_card_message_id = approvalCardResult.message_id;
+    }
+
+    return resultPayload;
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     const failedAt = new Date();

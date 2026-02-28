@@ -49,6 +49,18 @@ describe('handleCodexDeferredReviewJob', () => {
       source: 'codex_cli',
     }));
     const loadIssue = jest.fn(async () => ({ id: 'copilot-ab12', title: 'Issue' }));
+    const appendIssueSummaryNote = jest.fn(async () => ({
+      appended: true,
+      marker: `[codex-deferred-review:${taskId.toHexString()}]`,
+      note: 'review note',
+    }));
+    const sendTelegramApprovalCard = jest.fn(async () => ({
+      chat_id: '-1002820582847',
+      thread_id: 11091,
+      message_id: 557,
+      callback_start: `cdr:start:${taskId.toHexString()}`,
+      callback_cancel: `cdr:cancel:${taskId.toHexString()}`,
+    }));
 
     const result = await handleCodexDeferredReviewJob(
       {
@@ -62,6 +74,8 @@ describe('handleCodexDeferredReviewJob', () => {
           text: 'review prompt card',
           path: '/tmp/card.md',
         }),
+        appendIssueSummaryNote,
+        sendTelegramApprovalCard,
       }
     );
 
@@ -76,6 +90,18 @@ describe('handleCodexDeferredReviewJob', () => {
 
     expect(loadIssue).toHaveBeenCalledWith('copilot-ab12');
     expect(runReview).toHaveBeenCalledTimes(1);
+    expect(appendIssueSummaryNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueId: 'copilot-ab12',
+        summary: 'Короткое резюме для клиента по задаче релиза.',
+      })
+    );
+    expect(sendTelegramApprovalCard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueId: 'copilot-ab12',
+        summary: 'Короткое резюме для клиента по задаче релиза.',
+      })
+    );
 
     const completionCall = updateOne.mock.calls[1];
     expect(completionCall).toBeDefined();
@@ -84,6 +110,9 @@ describe('handleCodexDeferredReviewJob', () => {
     expect(setPayload.codex_review_summary).toBe('Короткое резюме для клиента по задаче релиза.');
     expect(setPayload.codex_review_summary_source).toBe('codex_cli');
     expect(setPayload.codex_review_summary_processing).toBe(false);
+    expect(setPayload.codex_review_summary_note_marker).toBe(`[codex-deferred-review:${taskId.toHexString()}]`);
+    expect(setPayload.codex_review_approval_card_chat_id).toBe('-1002820582847');
+    expect(setPayload.codex_review_approval_card_message_id).toBe(557);
   });
 
   it('falls back to task fields when codex runner fails', async () => {
