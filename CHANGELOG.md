@@ -2,6 +2,8 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **09:04** OperOps Codex issue page could fail with `Не удалось загрузить задачу из BD/Codex` for valid IDs like `copilot-ib30` because frontend parsing expected a narrow response envelope while backend/route variants returned object/array wrappers (`copilot-f7w7`).
+- **09:04** Voice session Codex task rows rendered an unintended one-character-width text artifact (`Открыть задачу в OperOps`) between Issue and Title, which degraded table readability (`copilot-oh19`).
 - **07:10** Voice session tabs used different source-matching logic across OperOps and Voice views, so tasks linked from TaskPage `Source` could disappear in Voice `Задачи`/`Codex` tabs for the same session (`copilot-ztlv.7`, `copilot-ztlv.27`).
 - **07:10** Telegram `@task` flow preserved attachment URLs inconsistently in created Codex tasks (public and reverse links were not normalized into a single payload contract), which reduced traceability from backlog task back to original message attachment (`copilot-ztlv.13`).
 - **07:10** OperOps metadata resolvers still had edge-case gaps (duplicate short links, non-string project fallback, creator/source fallbacks), which complicated incident triage for cards opened from Kanban (`copilot-ztlv.3`, `copilot-ztlv.4`, `copilot-ztlv.5`, `copilot-ztlv.6`).
@@ -19,6 +21,8 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **09:04** Added resilient Codex issue page payload normalization: frontend now accepts direct issue objects plus wrapped payload variants (`issue`, `data`, array) and sends both `id` and `issue_id` for backward-compatible route contracts (`copilot-f7w7`).
+- **09:04** Reworked Voice Codex row action rendering to icon+tooltip behavior so navigation remains available without inline stray text in the content flow (`copilot-oh19`).
 - **07:10** Unified session-source matching via shared canonical matcher (`source_ref`, `external_ref`, `source_data.session_id`, `source_data.session_db_id`, canonical `/voice/session/:id` URL parsing) and reused it across Voice tabs and CRM Kanban filtering (`copilot-ztlv.7`, `copilot-ztlv.27`).
 - **07:10** Enriched `@task` attachment contract with normalized `public_url` + reverse attachment links and persisted mirrored attachment payload in created Codex task `source_data` (`copilot-ztlv.13`).
 - **07:10** Hardened OperOps card/short-link contracts: deterministic route-id selection, explicit duplicate-public-id handling, stronger creator/source/project fallback chains, and updated contract docs/tests (`copilot-ztlv.3`, `copilot-ztlv.4`, `copilot-ztlv.5`, `copilot-ztlv.6`).
@@ -36,6 +40,12 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **09:04** Codex page loading/parsing hardening (`copilot-f7w7`):
+  - Updated `app/src/pages/operops/CodexTaskPage.tsx` with broad payload parser support and dual request key contract (`id` + `issue_id`).
+  - Added regression contract `app/__tests__/operops/codexTaskPageContract.test.ts`.
+- **09:04** Voice Codex row artifact removal (`copilot-oh19`):
+  - Updated `app/src/components/codex/CodexIssuesTable.tsx` and `app/src/components/voice/CodexTasks.tsx` to remove visible inline CTA artifact while preserving OperOps navigation action.
+  - Updated regression contract `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
 - **07:10** Voice Tasks/Codex source-filter parity (`copilot-ztlv.7`, `copilot-ztlv.27`):
   - Added shared matcher utility `app/src/utils/voiceSessionTaskSource.ts`.
   - Reused matcher in `app/src/components/crm/CRMKanban.tsx`, `app/src/pages/voice/SessionPage.tsx`, and `app/src/store/voiceBotStore.ts` for OperOps/Voice tabs.

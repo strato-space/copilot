@@ -7,6 +7,8 @@ Canonical contract for OperOps task public IDs (`automation_tasks.id`) and task 
 - `task _id`: MongoDB `ObjectId` (primary key).
 - `task id`: public short ID (example: `start-figma-02-28`).
 - Short link route: `/operops/task/:taskId` where `:taskId` can be `_id` or public `id`.
+- `id` is the user-facing short identifier; `_id` is the immutable DB primary key. 
+  Use `_id` to guarantee exact row targeting, use `id` for human-readable links when unique.
 
 ## Source Of Truth
 
@@ -17,6 +19,13 @@ Canonical contract for OperOps task public IDs (`automation_tasks.id`) and task 
 ## Generation Algorithm
 
 Public ID format is Telegram-like: `<slug>-<MM-DD>`.
+
+### Environment variables
+
+- `TASK_PUBLIC_ID_DEFAULT_PREFIX` — fallback slug when both preferred/generic values are absent (default: `task`)
+- `TASK_PUBLIC_ID_SLUG_MAX_LENGTH` — max length before `-MM-DD` suffix is appended (default: `120`)
+- `TASK_PUBLIC_ID_NUMERIC_COLLISION_LIMIT` — collision attempts before UUID fallback (default: `9999`)
+- `TASK_PUBLIC_ID_RANDOM_SUFFIX_LENGTH` — fallback UUID tail length for hard collision cases (default: `8`, max `16`)
 
 Algorithm in `ensureUniqueTaskPublicId`:
 

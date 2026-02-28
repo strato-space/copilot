@@ -11,7 +11,7 @@ import MeetingCard from '../../components/voice/MeetingCard';
 import Transcription from '../../components/voice/Transcription';
 import Categorization from '../../components/voice/Categorization';
 import PossibleTasks from '../../components/voice/PossibleTasks';
-import CodexTasks from '../../components/voice/CodexTasks';
+import CodexIssuesTable from '../../components/codex/CodexIssuesTable';
 import CustomPromptResult from '../../components/voice/CustomPromptResult';
 import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
@@ -221,39 +221,6 @@ export default function SessionPage() {
         };
     }, [sessionId, addSessionTextChunk, addSessionImageChunk, materialTargetMessageId]);
 
-    if (isLoading) {
-        return (
-            <div className="voice-session-shell">
-                <div className="voice-session-shell-bg" />
-                <div className="voice-session-page">
-                    <div className="min-h-[300px] flex items-center justify-center">Загрузка...</div>
-                </div>
-            </div>
-        );
-    }
-
-    if (loadError) {
-        return (
-            <div className="voice-session-shell">
-                <div className="voice-session-shell-bg" />
-                <div className="voice-session-page">
-                    <div className="min-h-[300px] flex items-center justify-center text-center px-6">{loadError}</div>
-                </div>
-            </div>
-        );
-    }
-
-    if (!voiceBotSession) {
-        return (
-            <div className="voice-session-shell">
-                <div className="voice-session-shell-bg" />
-                <div className="voice-session-page">
-                    <div className="min-h-[300px] flex items-center justify-center">Сессия не найдена</div>
-                </div>
-            </div>
-        );
-    }
-
     const possibleTasks = (
         (voiceBotSession?.processors_data as Record<string, unknown> | undefined)?.CREATE_TASKS as
             | { data?: unknown[] }
@@ -316,7 +283,7 @@ export default function SessionPage() {
         {
             key: 'codex',
             label: 'Codex',
-            children: <CodexTasks />,
+            children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} />,
         },
         {
             key: 'screenshort',
@@ -338,6 +305,39 @@ export default function SessionPage() {
             children: <SessionLog />,
         },
     ];
+
+    if (isLoading) {
+        return (
+            <div className="voice-session-shell">
+                <div className="voice-session-shell-bg" />
+                <div className="voice-session-page">
+                    <div className="min-h-[300px] flex items-center justify-center">Загрузка...</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="voice-session-shell">
+                <div className="voice-session-shell-bg" />
+                <div className="voice-session-page">
+                    <div className="min-h-[300px] flex items-center justify-center text-center px-6">{loadError}</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!voiceBotSession) {
+        return (
+            <div className="voice-session-shell">
+                <div className="voice-session-shell-bg" />
+                <div className="voice-session-page">
+                    <div className="min-h-[300px] flex items-center justify-center">Сессия не найдена</div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="voice-session-shell">

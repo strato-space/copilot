@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ReloadOutlined } from '@ant-design/icons';
+import { LinkOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Alert, Button, Descriptions, Drawer, Space, Table, Tag, Typography } from 'antd';
 import type { TableColumnsType } from 'antd';
 
@@ -50,9 +50,9 @@ const resolveTaskKey = (task: CodexTask): string => {
 };
 
 const resolveTaskLink = (task: CodexTask): string | null => {
-    const taskDbId = toText(task._id);
-    if (!taskDbId) return null;
-    return `/operops/task/${taskDbId}`;
+    const issueId = toText(task.id) || toText(task._id);
+    if (!issueId) return null;
+    return `/operops/codex/task/${issueId}`;
 };
 
 const statusColor = (status: string): string | undefined => {
@@ -71,6 +71,8 @@ const reviewStateColor = (state: string): string => {
     if (state === 'canceled') return 'red';
     return 'default';
 };
+
+const OPER_OPS_TASK_LINK_LABEL = 'Открыть задачу в OperOps';
 
 const buildBdShowEquivalent = (task: CodexTask): Record<string, unknown> => {
     const createdByName = toText(task.created_by_name) || toText(task.created_by) || null;
@@ -193,8 +195,25 @@ export default function CodexTasks() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(event) => event.stopPropagation()}
+                                    className="relative inline-flex items-center text-gray-500"
+                                    aria-label={OPER_OPS_TASK_LINK_LABEL}
                                 >
-                                    <Text type="secondary">карточка</Text>
+                                    <LinkOutlined />
+                                    <span
+                                        style={{
+                                            position: 'absolute',
+                                            width: 1,
+                                            height: 1,
+                                            padding: 0,
+                                            margin: -1,
+                                            overflow: 'hidden',
+                                            clip: 'rect(0 0 0 0)',
+                                            whiteSpace: 'nowrap',
+                                            border: 0,
+                                        }}
+                                    >
+                                        {OPER_OPS_TASK_LINK_LABEL}
+                                    </span>
                                 </a>
                             ) : null}
                         </Space>

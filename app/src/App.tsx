@@ -33,6 +33,7 @@ import {
   CRMPage,
   PerformersPage,
   TaskPage,
+  CodexTaskPage,
   ProjectsTree,
   FinancesPerformersPage,
 } from './pages/operops';
@@ -226,6 +227,7 @@ export default function App(): ReactElement {
             <Route path="finances-performers" element={<FinancesPerformersPage />} />
             <Route path="projects-tree" element={<ProjectsTree />} />
             <Route path="task/:taskId" element={<TaskPage />} />
+            <Route path="codex/task/:issueId" element={<CodexTaskPage />} />
           </Route>
           <Route path="/chatops" element={<ChatopsPage />} />
           <Route path="/agents" element={<AgentsOpsPage />} />

@@ -3,6 +3,36 @@ import type { Db } from 'mongodb';
 
 import { COLLECTIONS } from '../constants.js';
 
+const DEFAULT_TASK_PUBLIC_ID_PREFIX = 'task';
+const DEFAULT_TASK_PUBLIC_ID_SLUG_MAX_LENGTH = 120;
+const DEFAULT_TASK_PUBLIC_ID_NUMERIC_COLLISION_LIMIT = 9999;
+const DEFAULT_TASK_PUBLIC_ID_RANDOM_SUFFIX_LENGTH = 8;
+
+const parsePositiveInt = (value: string | undefined, fallback: number, min: number): number => {
+    const raw = Number.parseInt(value ?? '', 10);
+    if (!Number.isFinite(raw) || raw < min) {
+        return fallback;
+    }
+    return raw;
+};
+
+const parseSuffixLength = (value: string | undefined): number => {
+    const raw = parsePositiveInt(value, DEFAULT_TASK_PUBLIC_ID_RANDOM_SUFFIX_LENGTH, 1);
+    return Math.min(raw, 16);
+};
+
+const getTaskPublicIdPrefix = (): string =>
+    process.env.TASK_PUBLIC_ID_DEFAULT_PREFIX?.trim() || DEFAULT_TASK_PUBLIC_ID_PREFIX || 'task';
+
+const getTaskPublicIdSlugMaxLength = (): number =>
+    parsePositiveInt(process.env.TASK_PUBLIC_ID_SLUG_MAX_LENGTH, DEFAULT_TASK_PUBLIC_ID_SLUG_MAX_LENGTH, 1);
+
+const getTaskPublicIdNumericCollisionLimit = (): number =>
+    parsePositiveInt(process.env.TASK_PUBLIC_ID_NUMERIC_COLLISION_LIMIT, DEFAULT_TASK_PUBLIC_ID_NUMERIC_COLLISION_LIMIT, 2);
+
+const getTaskPublicIdRandomSuffixLength = (): number =>
+    parseSuffixLength(process.env.TASK_PUBLIC_ID_RANDOM_SUFFIX_LENGTH);
+
 const CYRILLIC_TO_LATIN: Record<string, string> = {
     а: 'a',
     б: 'b',
@@ -79,7 +109,7 @@ const slugifyTaskPublicId = (value: string): string => {
         .replace(/-+/g, '-')
         .replace(/^-+/, '')
         .replace(/-+$/, '')
-        .slice(0, 120)
+        .slice(0, getTaskPublicIdSlugMaxLength())
         .replace(/-+$/, '');
 };
 
@@ -116,7 +146,7 @@ const resolveTaskPublicIdBase = ({
     const fallbackSlug = fallback ? slugifyTaskPublicId(fallback) : '';
     const useFallback = !preferredSlug || isGenericTaskId(preferredSlug);
 
-    const baseSlug = (useFallback ? fallbackSlug || preferredSlug : preferredSlug) || 'task';
+    const baseSlug = (useFallback ? fallbackSlug || preferredSlug : preferredSlug) || getTaskPublicIdPrefix();
     return ensureDateSuffix(baseSlug, now);
 };
 
@@ -166,7 +196,7 @@ export const ensureUniqueTaskPublicId = async ({
         return baseId;
     }
 
-    for (let suffix = 2; suffix <= 9999; suffix += 1) {
+    for (let suffix = 2; suffix <= getTaskPublicIdNumericCollisionLimit(); suffix += 1) {
         const candidate = `${baseId}-${suffix}`;
         if (!(await isTaskPublicIdTaken({ db, candidate, reservedIds: reserved }))) {
             reserved.add(candidate);
@@ -174,7 +204,8 @@ export const ensureUniqueTaskPublicId = async ({
         }
     }
 
-    const fallback = `${baseId}-${randomUUID().slice(0, 8).toLowerCase()}`;
+    const fallbackSuffixLength = getTaskPublicIdRandomSuffixLength();
+    const fallback = `${baseId}-${randomUUID().slice(0, fallbackSuffixLength).toLowerCase()}`;
     reserved.add(fallback);
     return fallback;
 };

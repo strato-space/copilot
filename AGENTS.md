@@ -462,6 +462,8 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Fixed OperOps Codex task page load compatibility (`copilot-f7w7`): `app/src/pages/operops/CodexTaskPage.tsx` now handles mixed `/api/crm/codex/issue` response envelopes (`issue`, `data`, array, plain object) and sends both `id`/`issue_id` for API contract parity; added `app/__tests__/operops/codexTaskPageContract.test.ts`.
+- Fixed Voice Codex row UI artifact (`copilot-oh19`): removed inline visible `Открыть задачу в OperOps` text spill from session row content and preserved navigation via compact action/tooltip rendering; updated `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
 - Completed Wave 1 voice-operops-codex implementation batch and closed `copilot-b1k5`, `copilot-s33e`, `copilot-u976`, `copilot-xuec`; coordinating epic `copilot-bq81` remains `in_progress` for follow-up waves.
 - Canonicalized performer lifecycle selection around `is_deleted` with legacy compatibility (`is_active`/`active`) and `include_ids` passthrough so historical assignees remain selectable/renderable in edit flows.
 - Added project `git_repo` contract surface (API projection, CRUD normalization, frontend types/forms) and enforced Codex assignment guard in `POST /voicebot/create_tickets` (`400` when Codex performer is selected for a project without `git_repo`).

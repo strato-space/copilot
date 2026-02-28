@@ -4,12 +4,14 @@ import path from 'node:path';
 describe('SessionPage codex tab contract', () => {
   const pagePath = path.resolve(process.cwd(), 'src/pages/voice/SessionPage.tsx');
   const source = fs.readFileSync(pagePath, 'utf8');
+  const codexTablePath = path.resolve(process.cwd(), 'src/components/codex/CodexIssuesTable.tsx');
+  const codexTableSource = fs.readFileSync(codexTablePath, 'utf8');
 
   it('renders Codex tab in voice session tabs', () => {
-    expect(source).toContain("import CodexTasks from '../../components/voice/CodexTasks';");
+    expect(source).toContain("import CodexIssuesTable from '../../components/codex/CodexIssuesTable';");
     expect(source).toContain("key: 'codex'");
     expect(source).toContain("label: 'Codex'");
-    expect(source).toContain('children: <CodexTasks />');
+    expect(source).toContain('children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} />');
   });
 
   it('keeps Codex tab before Screenshort and Log tabs', () => {
@@ -20,5 +22,9 @@ describe('SessionPage codex tab contract', () => {
     expect(idxCodex).toBeGreaterThanOrEqual(0);
     expect(idxScreenshort).toBeGreaterThan(idxCodex);
     expect(idxLog).toBeGreaterThan(idxScreenshort);
+  });
+
+  it('uses codex issue links with the codex operops route contract', () => {
+    expect(codexTableSource).toContain('return `/operops/codex/task/${taskId}`;');
   });
 });

@@ -276,6 +276,8 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Fixed OperOps Codex issue page loading for valid BD IDs (`copilot-f7w7`): `app/src/pages/operops/CodexTaskPage.tsx` now supports mixed `/api/crm/codex/issue` payload envelopes and posts both `id` + `issue_id`; added coverage in `app/__tests__/operops/codexTaskPageContract.test.ts`.
+- Fixed Voice session Codex row visual artifact (`copilot-oh19`): removed unintended inline `Открыть задачу в OperOps` text fragment from row content while preserving OperOps navigation action; updated `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
 - Completed Wave 1 voice-operops-codex rollout items and closed `copilot-b1k5`, `copilot-s33e`, `copilot-u976`, `copilot-xuec`; epic `copilot-bq81` stays in progress for later waves.
 - Canonicalized performer lifecycle filtering (`is_deleted` primary, legacy `is_active/active` compatibility) across Voice/CRM selectors with historical-id passthrough for edit safety.
 - Added `git_repo` project contract support end-to-end (backend create/update/list + frontend types/edit form) and enforced Codex assignment guard in `POST /api/voicebot/create_tickets`.
