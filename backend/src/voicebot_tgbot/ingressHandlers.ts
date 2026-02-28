@@ -18,7 +18,8 @@ import {
   setActiveVoiceSession,
 } from './activeSessionMapping.js';
 import { extractSessionIdFromText } from './sessionRef.js';
-import { buildSessionLink, getPublicInterfaceOrigin } from './sessionTelegramMessage.js';
+import { buildCanonicalSessionLink, getPublicInterfaceOrigin } from './sessionTelegramMessage.js';
+import { ensureUniqueTaskPublicId } from '../services/taskPublicId.js';
 
 export type QueueLike = {
   add: (name: string, data: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
@@ -108,10 +109,28 @@ type CodexTaskPayload = {
   telegram_message_id: string;
   source_type: string;
   message_type: string;
-  attachments: Array<Record<string, unknown>>;
+  attachments: CodexTaskAttachment[];
   external_ref: string;
   source_ref: string | null;
   created_at: string;
+};
+
+type CodexTaskAttachment = {
+  kind?: string;
+  source?: string;
+  file_id?: string;
+  file_unique_id?: string;
+  name?: string;
+  mimeType?: string;
+  url?: string;
+  uri?: string;
+  size?: number;
+  width?: number;
+  height?: number;
+  attachment_index?: number;
+  public_url?: string;
+  reverse_url?: string;
+  reverse_uri?: string;
 };
 
 type NormalizedIngressContext = {
@@ -219,22 +238,20 @@ const buildTelegramMessageLink = (chatId: number, messageId: string): string | n
   return `https://t.me/${directId}/${normalizedMessageId}`;
 };
 
-const normalizeTaskAttachments = (attachments: Array<Record<string, unknown>>): Array<Record<string, unknown>> =>
-  attachments.map((attachment) => ({
-    ...(normalizeString(attachment.kind) ? { kind: normalizeString(attachment.kind) } : {}),
-    ...(normalizeString(attachment.source) ? { source: normalizeString(attachment.source) } : {}),
-    ...(normalizeString(attachment.file_id) ? { file_id: normalizeString(attachment.file_id) } : {}),
-    ...(normalizeString(attachment.file_unique_id)
-      ? { file_unique_id: normalizeString(attachment.file_unique_id) }
-      : {}),
-    ...(normalizeString(attachment.name) ? { name: normalizeString(attachment.name) } : {}),
-    ...(normalizeString(attachment.mimeType) ? { mimeType: normalizeString(attachment.mimeType) } : {}),
-    ...(normalizeString(attachment.url) ? { url: normalizeString(attachment.url) } : {}),
-    ...(normalizeString(attachment.uri) ? { uri: normalizeString(attachment.uri) } : {}),
-    ...(Number.isFinite(Number(attachment.size)) ? { size: Number(attachment.size) } : {}),
-    ...(Number.isFinite(Number(attachment.width)) ? { width: Number(attachment.width) } : {}),
-    ...(Number.isFinite(Number(attachment.height)) ? { height: Number(attachment.height) } : {}),
-  }));
+const buildMessageAttachmentPath = (messageDbId: string, attachmentIndex: number): string => {
+  const normalizedMessageDbId = normalizeString(messageDbId);
+  if (!normalizedMessageDbId) return '';
+  const normalizedIndex = Number.isFinite(Number(attachmentIndex)) ? Number(attachmentIndex) : 0;
+  return `${CANONICAL_PUBLIC_ATTACHMENT_PREFIX.replace('/public_attachment/', '/message_attachment/')}${encodeURIComponent(
+    normalizedMessageDbId
+  )}/${Math.max(0, normalizedIndex)}`;
+};
+
+const toAbsoluteVoicebotUrl = (path: string): string | null => {
+  const normalizedPath = normalizeString(path);
+  if (!normalizedPath.startsWith('/')) return null;
+  return `${getPublicInterfaceOrigin()}${normalizedPath}`;
+};
 
 const buildCanonicalPublicAttachmentUrl = ({
   sessionId,
@@ -311,11 +328,16 @@ const resolveAttachmentReference = ({
   attachment,
   payloadSessionId,
 }: {
-  attachment: Record<string, unknown>;
+  attachment: CodexTaskAttachment;
   payloadSessionId: string;
 }): string | null => {
+  const directPublicUrl = normalizeString(attachment.public_url);
+  if (directPublicUrl.startsWith('http://') || directPublicUrl.startsWith('https://')) {
+    return directPublicUrl;
+  }
+
   const normalizedAttachmentLink = resolveNormalizedPublicAttachmentLink({
-    attachment,
+    attachment: attachment as Record<string, unknown>,
     payloadSessionId,
   });
   if (normalizedAttachmentLink) return normalizedAttachmentLink;
@@ -332,6 +354,84 @@ const resolveAttachmentReference = ({
   return null;
 };
 
+const resolveAttachmentReverseReference = ({
+  attachment,
+}: {
+  attachment: CodexTaskAttachment;
+}): string | null => {
+  const reverseUrl = normalizeString(attachment.reverse_url);
+  if (reverseUrl.startsWith('http://') || reverseUrl.startsWith('https://')) return reverseUrl;
+  if (reverseUrl.startsWith('/')) {
+    const absolute = toAbsoluteVoicebotUrl(reverseUrl);
+    if (absolute) return absolute;
+  }
+
+  const reverseUri = normalizeString(attachment.reverse_uri);
+  if (reverseUri.startsWith('http://') || reverseUri.startsWith('https://')) return reverseUri;
+  if (reverseUri.startsWith('/')) {
+    const absolute = toAbsoluteVoicebotUrl(reverseUri);
+    if (absolute) return absolute;
+  }
+
+  const url = normalizeString(attachment.url);
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) {
+    const absolute = toAbsoluteVoicebotUrl(url);
+    if (absolute) return absolute;
+  }
+
+  const uri = normalizeString(attachment.uri);
+  if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
+  if (uri.startsWith('/')) {
+    const absolute = toAbsoluteVoicebotUrl(uri);
+    if (absolute) return absolute;
+  }
+
+  return null;
+};
+
+const normalizeTaskAttachments = ({
+  attachments,
+  payloadSessionId,
+  messageDbId,
+}: {
+  attachments: Array<Record<string, unknown>>;
+  payloadSessionId: string;
+  messageDbId: string;
+}): CodexTaskAttachment[] =>
+  attachments.map((attachment, attachmentIndex) => {
+    const normalizedAttachment: CodexTaskAttachment = {
+      ...(normalizeString(attachment.kind) ? { kind: normalizeString(attachment.kind) } : {}),
+      ...(normalizeString(attachment.source) ? { source: normalizeString(attachment.source) } : {}),
+      ...(normalizeString(attachment.file_id) ? { file_id: normalizeString(attachment.file_id) } : {}),
+      ...(normalizeString(attachment.file_unique_id)
+        ? { file_unique_id: normalizeString(attachment.file_unique_id) }
+        : {}),
+      ...(normalizeString(attachment.name) ? { name: normalizeString(attachment.name) } : {}),
+      ...(normalizeString(attachment.mimeType) ? { mimeType: normalizeString(attachment.mimeType) } : {}),
+      ...(normalizeString(attachment.url) ? { url: normalizeString(attachment.url) } : {}),
+      ...(normalizeString(attachment.uri) ? { uri: normalizeString(attachment.uri) } : {}),
+      ...(Number.isFinite(Number(attachment.size)) ? { size: Number(attachment.size) } : {}),
+      ...(Number.isFinite(Number(attachment.width)) ? { width: Number(attachment.width) } : {}),
+      ...(Number.isFinite(Number(attachment.height)) ? { height: Number(attachment.height) } : {}),
+      attachment_index: attachmentIndex,
+    };
+
+    const messageAttachmentPath = buildMessageAttachmentPath(messageDbId, attachmentIndex);
+    const messageAttachmentUrl = toAbsoluteVoicebotUrl(messageAttachmentPath);
+    const publicAttachmentUrl = resolveNormalizedPublicAttachmentLink({
+      attachment: normalizedAttachment as Record<string, unknown>,
+      payloadSessionId,
+    });
+
+    return {
+      ...normalizedAttachment,
+      ...(publicAttachmentUrl ? { public_url: publicAttachmentUrl } : {}),
+      ...(messageAttachmentPath ? { reverse_uri: messageAttachmentPath } : {}),
+      ...(messageAttachmentUrl ? { reverse_url: messageAttachmentUrl } : {}),
+    };
+  });
+
 const buildTaskDescription = ({
   normalizedText,
   payload,
@@ -347,8 +447,20 @@ const buildTaskDescription = ({
         .filter((value): value is string => Boolean(value))
     )
   );
-  if (attachmentRefs.length === 0) return baseText;
-  return `${baseText}\n\nAttachments:\n${attachmentRefs.map((ref) => `- ${ref}`).join('\n')}`;
+  const reverseRefs = Array.from(
+    new Set(payload.attachments.map((attachment) => resolveAttachmentReverseReference({ attachment })).filter(Boolean))
+  ) as string[];
+  if (attachmentRefs.length === 0 && reverseRefs.length === 0) return baseText;
+
+  let description = baseText;
+  if (attachmentRefs.length > 0) {
+    description += `\n\nAttachments:\n${attachmentRefs.map((ref) => `- ${ref}`).join('\n')}`;
+  }
+  if (reverseRefs.length > 0) {
+    description += `\n\nAttachment reverse links:\n${reverseRefs.map((ref) => `- ${ref}`).join('\n')}`;
+  }
+
+  return description;
 };
 
 const buildCodexTaskPayload = ({
@@ -378,8 +490,12 @@ const buildCodexTaskPayload = ({
     telegram_message_id: context.message_id,
     source_type: context.source_type,
     message_type: messageType,
-    attachments: normalizeTaskAttachments(attachments),
-    external_ref: buildSessionLink(sessionId.toHexString()),
+    attachments: normalizeTaskAttachments({
+      attachments,
+      payloadSessionId: sessionId.toHexString(),
+      messageDbId: messageDbId.toHexString(),
+    }),
+    external_ref: buildCanonicalSessionLink(sessionId.toHexString()),
     source_ref: buildTelegramMessageLink(context.chat_id, context.message_id),
     created_at: new Date().toISOString(),
   };
@@ -520,12 +636,18 @@ const createCodexTaskFromPayload = async ({
 
   const codexPerformer = await findCodexPerformer(deps);
   const normalizedText = payload.normalized_text;
+  const taskTitle = toTaskTitle(normalizedText);
+  const publicTaskId = await ensureUniqueTaskPublicId({
+    db: deps.db,
+    preferredId: taskTitle,
+    fallbackText: normalizedText,
+  });
   const now = new Date();
   const deferredUntil = new Date(now.getTime() + 15 * 60 * 1000);
 
   const taskDoc: Record<string, unknown> = {
-    id: `codex-${new ObjectId().toHexString()}`,
-    name: toTaskTitle(normalizedText),
+    id: publicTaskId,
+    name: taskTitle,
     description: buildTaskDescription({ normalizedText, payload }),
     priority: 'P2',
     priority_reason: '@task',
@@ -545,13 +667,14 @@ const createCodexTaskFromPayload = async ({
     created_by_performer_id: actor._id,
     source_kind: 'telegram',
     source_ref: payload.source_ref || payload.session_id,
-    external_ref: payload.external_ref,
+    external_ref: buildCanonicalSessionLink(payload.session_id),
     source: 'VOICE_BOT',
     source_data: {
       session_id: new ObjectId(payload.session_id),
       message_id: payload.telegram_message_id,
       message_db_id: new ObjectId(payload.message_db_id),
       trigger: payload.trigger,
+      attachments: payload.attachments,
       payload,
     },
     codex_task: true,

@@ -2,6 +2,11 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **07:10** Voice session tabs used different source-matching logic across OperOps and Voice views, so tasks linked from TaskPage `Source` could disappear in Voice `Задачи`/`Codex` tabs for the same session (`copilot-ztlv.7`, `copilot-ztlv.27`).
+- **07:10** Telegram `@task` flow preserved attachment URLs inconsistently in created Codex tasks (public and reverse links were not normalized into a single payload contract), which reduced traceability from backlog task back to original message attachment (`copilot-ztlv.13`).
+- **07:10** OperOps metadata resolvers still had edge-case gaps (duplicate short links, non-string project fallback, creator/source fallbacks), which complicated incident triage for cards opened from Kanban (`copilot-ztlv.3`, `copilot-ztlv.4`, `copilot-ztlv.5`, `copilot-ztlv.6`).
+- **06:21** Short-link IDs were not telegra-like and not uniformly generated across all task create-paths: some flows still emitted ad-hoc IDs, while readability/consistency requirements expected slug-based links like `ping-02-28`.
+- **06:12** Voice possible-task creation could fail with `No valid tasks to create tickets` when `performer_id` was empty, legacy synthetic (`codex-system`), or otherwise non-ObjectId; frontend only showed a generic error and did not identify which row must be fixed.
 - **02:37** Performer lifecycle filtering was inconsistent across Voice/CRM selectors (`is_deleted`, `is_active`, legacy `active`), so inactive historical performers could disappear from edit flows while still being referenced in saved tasks.
 - **02:37** Codex assignment had no hard project readiness guard, which allowed creating Codex tickets for projects without `git_repo` and broke downstream repo-linked automation assumptions.
 - **02:37** Telegram `@task` ingest path attached payloads to sessions but did not guarantee Codex task creation from the same normalized payload, creating mismatch between voice evidence and OperOps backlog entries.
@@ -14,6 +19,11 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **07:10** Unified session-source matching via shared canonical matcher (`source_ref`, `external_ref`, `source_data.session_id`, `source_data.session_db_id`, canonical `/voice/session/:id` URL parsing) and reused it across Voice tabs and CRM Kanban filtering (`copilot-ztlv.7`, `copilot-ztlv.27`).
+- **07:10** Enriched `@task` attachment contract with normalized `public_url` + reverse attachment links and persisted mirrored attachment payload in created Codex task `source_data` (`copilot-ztlv.13`).
+- **07:10** Hardened OperOps card/short-link contracts: deterministic route-id selection, explicit duplicate-public-id handling, stronger creator/source/project fallback chains, and updated contract docs/tests (`copilot-ztlv.3`, `copilot-ztlv.4`, `copilot-ztlv.5`, `copilot-ztlv.6`).
+- **06:21** Unified task public-id generation to telegra-like slug format with date suffix (`<slug>-MM-DD`) and enabled the same generator across CRM create, Voice `create_tickets`, Telegram `@task` ingress, and voice `Codex/Кодекс` trigger paths.
+- **06:12** Canonicalized Codex performer identity in selectors to real Mongo `_id=69a2561d642f3a032ad88e7a`, and added backend/frontend row-level validation plumbing so invalid `performer_id` errors are returned and rendered per task row.
 - **02:37** Canonicalized performer lifecycle contract around `is_deleted` with compatibility for legacy `is_active/active` flags and explicit historical-performer passthrough (`include_ids`) for selector edit safety.
 - **02:37** Added project `git_repo` surface area (project CRUD/types/listing) and enforced Codex ticket guard: Codex performer assignment now requires non-empty project `git_repo`.
 - **02:37** Extended Telegram `@task` ingress to create Codex tasks from the same normalized payload persisted to `processors_data.CODEX_TASKS.data`, with non-blocking ingest behavior and regression coverage.
@@ -26,6 +36,48 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **07:10** Voice Tasks/Codex source-filter parity (`copilot-ztlv.7`, `copilot-ztlv.27`):
+  - Added shared matcher utility `app/src/utils/voiceSessionTaskSource.ts`.
+  - Reused matcher in `app/src/components/crm/CRMKanban.tsx`, `app/src/pages/voice/SessionPage.tsx`, and `app/src/store/voiceBotStore.ts` for OperOps/Voice tabs.
+  - Added regression coverage:
+    - `app/__tests__/voice/sessionTaskSourceFilterBehavior.test.ts`,
+    - `app/__tests__/voice/sessionTaskSourceFilterIssueCopilotZtlv27.test.ts`,
+    - `app/__tests__/voice/sessionPageOperOpsTasksTabContract.test.ts`,
+    - `app/__tests__/voice/operopsTasksSourceFilterContract.test.ts`,
+    - `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
+- **07:10** Telegram `@task` attachment traceability (`copilot-ztlv.13`):
+  - `backend/src/voicebot_tgbot/ingressHandlers.ts`: attachment payload now includes normalized `public_url`, `reverse_uri`, `reverse_url`, `attachment_index`; task description appends both public + reverse links; `source_data.attachments` persisted alongside payload.
+  - Added backend regression coverage in `backend/__tests__/voicebot/tgIngressHandlers.test.ts` for `@task + image` payload path.
+- **07:10** OperOps metadata/short-link hardening (`copilot-ztlv.3`, `copilot-ztlv.4`, `copilot-ztlv.5`, `copilot-ztlv.6`):
+  - `app/src/components/crm/CRMKanban.tsx`: deterministic `_id`-first route resolution and duplicate short-link guard for eye-link navigation.
+  - `app/src/pages/operops/taskPageUtils.ts` + `TaskPage.tsx`: stronger `Created by` / `Source` / `Project` fallbacks and consistent new-tab source links.
+  - `docs/OPEROPS_TASK_SHORT_LINKS.md` updated with explicit collision/runbook contract.
+  - Added/updated tests:
+    - `app/__tests__/operops/taskPageCanonicalTaskIdContract.test.ts`,
+    - `app/__tests__/operops/taskPageProjectNameContract.test.ts`,
+    - `app/__tests__/operops/taskPageCreatorContract.test.ts`,
+    - `app/__tests__/operops/taskPageSourceContract.test.ts`,
+    - `app/__tests__/operops/taskShortLinkRouteContract.test.ts`,
+    - `backend/__tests__/services/taskPublicId.test.ts`.
+- **06:21** Telegra-style short-link rollout (`copilot-br5s`):
+  - `backend/src/services/taskPublicId.ts`: replaced simple slash-normalization with canonical slug builder (lowercase, transliteration, separator normalization) and date suffix (`MM-DD`) strategy; kept deterministic collision policy (`-2`, `-3`, ... + UUID fallback).
+  - `backend/src/api/routes/crm/tickets.ts`, `backend/src/api/routes/voicebot/sessions.ts`: creation paths now pass task title as fallback seed to produce readable links when incoming IDs are generic.
+  - `backend/src/voicebot_tgbot/ingressHandlers.ts`, `backend/src/workers/voicebot/handlers/transcribe.ts`: replaced ad-hoc `codex-<oid>` task IDs with canonical `ensureUniqueTaskPublicId(...)`.
+  - Updated contract tests:
+    - `backend/__tests__/services/taskPublicId.test.ts`,
+    - `backend/__tests__/voicebot/tgIngressHandlers.test.ts`,
+    - `backend/__tests__/voicebot/workerTranscribeHandler.test.ts`.
+  - Updated short-link spec doc: `docs/OPEROPS_TASK_SHORT_LINKS.md`.
+- **06:12** Voice task creation performer-id hardening (`copilot-ztlv.8`):
+  - `app/src/utils/codexPerformer.ts`: switched Codex constant to canonical ObjectId and normalize legacy `codex-system` records to canonical id for selector payloads.
+  - `backend/src/api/routes/voicebot/sessions.ts` (`POST /voicebot/create_tickets`): collect row-level `performer_id` rejections (`missing_performer_id`, `invalid_performer_id`, `performer_not_found`) and return them via `invalid_rows`/`rejected_rows` while preserving existing error text contract.
+  - `app/src/utils/voiceTaskCreation.ts`, `app/src/store/voiceBotStore.ts`, `app/src/components/voice/PossibleTasks.tsx`: parse backend row errors and render actionable per-row performer validation messages in UI.
+  - Added/updated regression tests:
+    - `backend/__tests__/voicebot/sessionUtilityRuntimeBehavior.test.ts`,
+    - `app/__tests__/voice/voiceTaskCreationErrorParser.test.ts`,
+    - `app/__tests__/voice/possibleTasksBackendValidationContract.test.ts`,
+    - `app/__tests__/voice/possibleTasksDesignContract.test.ts`,
+    - `app/__tests__/operops/codexPerformerSelectorsContract.test.ts`.
 - **02:37** Performer lifecycle canonicalization (`copilot-b1k5`):
   - Added backend lifecycle filter helper `backend/src/services/performerLifecycle.ts` and frontend selector helper `app/src/utils/performerLifecycle.ts`.
   - Updated selector-producing routes and consumers:

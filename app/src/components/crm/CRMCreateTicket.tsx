@@ -156,7 +156,7 @@ const CRMCreateTicket = () => {
     const historicalPerformerLabels = useMemo(() => {
         const map = new Map<string, string>();
         if (editingTicket?.performer && typeof editingTicket.performer === 'object') {
-            const performerRecord = editingTicket.performer as Record<string, unknown>;
+            const performerRecord = editingTicket.performer;
             const value = toIdString(performerRecord);
             if (value) {
                 map.set(value, getPerformerLabel(performerRecord, value));

@@ -13,7 +13,7 @@ const createTicket = (overrides: Partial<Ticket> = {}): Ticket => ({
 });
 
 describe('TaskPage source contract', () => {
-    it('resolves source kind and external link for voice/telegram/manual tasks', () => {
+    it('resolves source kind and link fallback for voice/telegram/manual tasks', () => {
         const voiceSource = resolveTaskSourceInfo(
             createTicket({
                 source: 'VOICE_BOT',
@@ -24,6 +24,7 @@ describe('TaskPage source contract', () => {
             createTicket({
                 source_kind: 'telegram',
                 source_ref: 't.me/c/123/456',
+                external_ref: 'https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7',
             })
         );
         const manualSource = resolveTaskSourceInfo(
@@ -40,11 +41,41 @@ describe('TaskPage source contract', () => {
         expect(voiceSource.link).toBe('https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7');
 
         expect(telegramSource.label).toBe('Telegram');
+        expect(telegramSource.reference).toBe('t.me/c/123/456');
         expect(telegramSource.link).toBe('https://t.me/c/123/456');
 
         expect(manualSource.label).toBe('Manual');
         expect(manualSource.reference).toBe('N/A');
         expect(manualSource.link).toBeUndefined();
+    });
+
+    it('infers source kind from source_ref/external_ref fallback values', () => {
+        const telegramSource = resolveTaskSourceInfo(
+            createTicket({
+                source: undefined,
+                source_kind: undefined,
+                source_ref: 'https://t.me/c/987/654',
+                external_ref: undefined,
+                source_data: undefined,
+            })
+        );
+        const voiceSource = resolveTaskSourceInfo(
+            createTicket({
+                source: undefined,
+                source_kind: undefined,
+                source_ref: undefined,
+                external_ref: 'https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7',
+                source_data: undefined,
+            })
+        );
+
+        expect(telegramSource.kind).toBe('telegram');
+        expect(telegramSource.label).toBe('Telegram');
+        expect(telegramSource.link).toBe('https://t.me/c/987/654');
+
+        expect(voiceSource.kind).toBe('voice_session');
+        expect(voiceSource.label).toBe('Voice session');
+        expect(voiceSource.link).toBe('https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7');
     });
 
     it('TaskPage renders source block with new-tab external link', () => {
@@ -53,7 +84,9 @@ describe('TaskPage source contract', () => {
 
         expect(source).toContain('const sourceInfo = resolveTaskSourceInfo(task);');
         expect(source).toContain('Source');
+        expect(source).toContain('href={sourceInfo.link}');
         expect(source).toContain('target="_blank"');
+        expect(source).toContain('rel="noopener noreferrer"');
         expect(source).toContain('{sourceInfo.reference}');
     });
 });

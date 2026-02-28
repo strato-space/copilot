@@ -115,7 +115,7 @@ describe('handleCodexDeferredReviewJob', () => {
     expect(setPayload.codex_review_approval_card_message_id).toBe(557);
   });
 
-  it('falls back to task fields when codex runner fails', async () => {
+  it('fails fast when codex runner fails and persists structured failure fields', async () => {
     const taskId = new ObjectId();
     const updateOne = jest
       .fn()
@@ -123,7 +123,7 @@ describe('handleCodexDeferredReviewJob', () => {
       .mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 1 });
     const findOne = jest.fn(async () => ({
       _id: taskId,
-      id: 'codex-1234',
+      id: 'copilot-1234',
       name: 'Prepare onboarding flow',
       description: 'Align docs and UI steps for the new onboarding rollout.',
       codex_review_state: 'deferred',
@@ -141,6 +141,19 @@ describe('handleCodexDeferredReviewJob', () => {
       },
     });
 
+    const appendIssueSummaryNote = jest.fn(async () => ({
+      appended: true,
+      marker: 'never',
+      note: 'never',
+    }));
+    const sendTelegramApprovalCard = jest.fn(async () => ({
+      chat_id: '-1002820582847',
+      thread_id: 11091,
+      message_id: 101,
+      callback_start: 'cdr:start:never',
+      callback_cancel: 'cdr:cancel:never',
+    }));
+
     const result = await handleCodexDeferredReviewJob(
       {
         task_id: taskId.toHexString(),
@@ -149,6 +162,9 @@ describe('handleCodexDeferredReviewJob', () => {
         runReview: async () => {
           throw new Error('codex runner unavailable');
         },
+        loadIssue: async () => null,
+        appendIssueSummaryNote,
+        sendTelegramApprovalCard,
         loadPromptCard: async () => ({
           text: 'review prompt card',
           path: '/tmp/card.md',
@@ -158,19 +174,108 @@ describe('handleCodexDeferredReviewJob', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        ok: true,
+        ok: false,
         task_id: taskId.toHexString(),
-        source: 'fallback_task_fields',
+        error: 'codex_review_runner_failed',
       })
     );
-    expect(typeof result.summary).toBe('string');
-    expect((result.summary || '').length).toBeGreaterThan(10);
 
     const completionCall = updateOne.mock.calls[1];
     const completionUpdate = completionCall?.[1] as Record<string, unknown>;
     const setPayload = completionUpdate.$set as Record<string, unknown>;
-    expect(setPayload.codex_review_summary_source).toBe('fallback_task_fields');
     expect(setPayload.codex_review_summary_processing).toBe(false);
+    expect(setPayload.codex_review_summary_last_error_code).toBe('codex_review_runner_failed');
+    expect(setPayload.codex_review_summary_last_error_message).toBe(
+      'Codex deferred review runner failed: codex runner unavailable'
+    );
+    expect(setPayload.codex_review_summary_next_attempt_at).toBeInstanceOf(Date);
+    expect(setPayload.codex_review_summary).toBeUndefined();
+    expect(setPayload.codex_review_summary_source).toBeUndefined();
+    expect(appendIssueSummaryNote).not.toHaveBeenCalled();
+    expect(sendTelegramApprovalCard).not.toHaveBeenCalled();
+  });
+
+  it('fails fast when issue id cannot be resolved before note/card and summary persistence', async () => {
+    const taskId = new ObjectId();
+    const updateOne = jest
+      .fn()
+      .mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 1 })
+      .mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 1 });
+    const findOne = jest.fn(async () => ({
+      _id: taskId,
+      id: 'task-without-bd-id',
+      name: 'Prepare onboarding flow',
+      description: 'Align docs and UI steps for the new onboarding rollout.',
+      codex_review_state: 'deferred',
+    }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            updateOne,
+            findOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    const runReview = jest.fn(async () => ({
+      summary: 'should not be produced',
+      source: 'codex_cli',
+    }));
+    const appendIssueSummaryNote = jest.fn(async () => ({
+      appended: true,
+      marker: 'never',
+      note: 'never',
+    }));
+    const sendTelegramApprovalCard = jest.fn(async () => ({
+      chat_id: '-1002820582847',
+      thread_id: 11091,
+      message_id: 557,
+      callback_start: `cdr:start:${taskId.toHexString()}`,
+      callback_cancel: `cdr:cancel:${taskId.toHexString()}`,
+    }));
+
+    const result = await handleCodexDeferredReviewJob(
+      {
+        task_id: taskId.toHexString(),
+      },
+      {
+        runReview,
+        appendIssueSummaryNote,
+        sendTelegramApprovalCard,
+        loadPromptCard: async () => ({
+          text: 'review prompt card',
+          path: '/tmp/card.md',
+        }),
+      }
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        task_id: taskId.toHexString(),
+        error: 'codex_review_issue_id_unresolved',
+      })
+    );
+
+    expect(runReview).not.toHaveBeenCalled();
+    expect(appendIssueSummaryNote).not.toHaveBeenCalled();
+    expect(sendTelegramApprovalCard).not.toHaveBeenCalled();
+
+    const completionCall = updateOne.mock.calls[1];
+    const completionUpdate = completionCall?.[1] as Record<string, unknown>;
+    const setPayload = completionUpdate.$set as Record<string, unknown>;
+    expect(setPayload.codex_review_summary_processing).toBe(false);
+    expect(setPayload.codex_review_summary_last_error_code).toBe('codex_review_issue_id_unresolved');
+    expect(setPayload.codex_review_summary_last_error_message).toBe(
+      'Unable to resolve issue_id for deferred Codex review task.'
+    );
+    expect(setPayload.codex_review_summary_next_attempt_at).toBeInstanceOf(Date);
+    expect(setPayload.codex_review_summary).toBeUndefined();
+    expect(setPayload.codex_review_summary_source).toBeUndefined();
   });
 
   it('returns error for invalid task id', async () => {

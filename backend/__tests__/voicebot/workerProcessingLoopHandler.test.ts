@@ -752,4 +752,62 @@ describe('handleProcessingLoopJob', () => {
       })
     );
   });
+
+  it('keeps deferred-review retry gating on next_attempt_at without depending on error metadata fields', async () => {
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() => makeFindCursor([]))
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() => makeFindCursor([]))
+      .mockImplementation(() => makeFindCursor([]));
+
+    const tasksCountDocuments = jest.fn().mockResolvedValue(0);
+    const tasksFind = jest.fn(() => makeFindCursor([]));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: jest.fn(),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: jest.fn(),
+            countDocuments: jest.fn().mockResolvedValue(0),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            countDocuments: tasksCountDocuments,
+            find: tasksFind,
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob({});
+
+    expect(result.ok).toBe(true);
+    expect(tasksCountDocuments).toHaveBeenCalledTimes(1);
+    expect(tasksFind).toHaveBeenCalledTimes(1);
+
+    const countFilter = tasksCountDocuments.mock.calls[0]?.[0] as Record<string, unknown>;
+    const scopedClauses = Array.isArray(countFilter?.$and) ? (countFilter.$and as Record<string, unknown>[]) : [];
+    const dueFilter = scopedClauses.find((clause) => clause.codex_review_state === 'deferred');
+
+    expect(dueFilter).toBeTruthy();
+    const dueFilterJson = JSON.stringify(dueFilter);
+    expect(dueFilterJson).toContain('codex_review_summary_next_attempt_at');
+    expect(dueFilterJson).not.toContain('codex_review_summary_last_runner_error');
+    expect(dueFilterJson).not.toContain('codex_review_summary_error_code');
+    expect(dueFilterJson).not.toContain('codex_review_summary_error_message');
+    expect(tasksFind.mock.calls[0]?.[0]).toEqual(countFilter);
+  });
 });

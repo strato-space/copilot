@@ -64,6 +64,27 @@ const coerceString = (value: unknown): string | undefined => {
     return undefined;
 };
 
+const resolveRequestErrorMessage = (error: unknown, fallback: string): string => {
+    if (error && typeof error === 'object') {
+        const typedError = error as {
+            message?: unknown;
+            response?: { data?: unknown };
+        };
+
+        const responseData = typedError.response?.data;
+        if (responseData && typeof responseData === 'object') {
+            const payload = responseData as { error?: unknown; message?: unknown };
+            const backendError = coerceString(payload.error) ?? coerceString(payload.message);
+            if (backendError) return backendError;
+        }
+
+        const defaultMessage = coerceString(typedError.message);
+        if (defaultMessage) return defaultMessage;
+    }
+
+    return fallback;
+};
+
 const normalizeVoiceTask = (raw: VoiceTask): VoiceTask => {
     // Backend may store agent output as objects with human keys like "Task Title", "Task ID", etc.
     // Normalize it into the fields used by the table columns below.
@@ -129,6 +150,7 @@ const CRMPage = () => {
     const [voiceLoading, setVoiceLoading] = useState(false);
     const [codexIssues, setCodexIssues] = useState<CodexIssue[]>([]);
     const [codexLoading, setCodexLoading] = useState(false);
+    const [codexLoadError, setCodexLoadError] = useState<string | null>(null);
     const [restartCreateTasksId, setRestartCreateTasksId] = useState<string | null>(null);
     const [jiraModalOpen, setJiraModalOpen] = useState(false);
     const [performerModalOpen, setPerformerModalOpen] = useState(false);
@@ -175,12 +197,16 @@ const CRMPage = () => {
     const fetchCodexIssues = useCallback(async () => {
         if (!isAuth) return;
         setCodexLoading(true);
+        setCodexLoadError(null);
         try {
             const data = await api_request<CodexIssue[]>('codex/issues', { limit: 500 }, { silent: true });
             setCodexIssues(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Ошибка при загрузке Codex-задач из bd:', error);
+            const userMessage = resolveRequestErrorMessage(error, 'Не удалось загрузить Codex issues');
+            setCodexLoadError(userMessage);
             setCodexIssues([]);
+            message.error(userMessage);
         } finally {
             setCodexLoading(false);
         }
@@ -579,7 +605,12 @@ const CRMPage = () => {
                 <div className="flex flex-col">
                     <span>{coerceString(value) ?? '—'}</span>
                     {record?.description ? (
-                        <Tooltip title={record.description}>
+                        <Tooltip
+                            title={<div className="whitespace-pre-wrap break-words text-[12px] leading-5">{record.description}</div>}
+                            placement="leftTop"
+                            overlayStyle={{ maxWidth: 'min(760px, calc(100vw - 32px))' }}
+                            overlayInnerStyle={{ maxHeight: '60vh', overflowY: 'auto', overflowX: 'hidden' }}
+                        >
                             <span className="text-[11px] text-[#667085] truncate max-w-[560px]">{record.description}</span>
                         </Tooltip>
                     ) : null}
@@ -888,7 +919,7 @@ const CRMPage = () => {
                                     rowKey={(record, index) => record.id ?? `${record.title ?? 'codex-issue'}-${String(index)}`}
                                     loading={codexLoading}
                                     pagination={{ pageSize: 50, showSizeChanger: false }}
-                                    locale={{ emptyText: 'Нет Codex issues' }}
+                                    locale={{ emptyText: codexLoadError ? `Ошибка: ${codexLoadError}` : 'Нет Codex issues' }}
                                 />
                             </div>
                         ) : activeConfig ? (

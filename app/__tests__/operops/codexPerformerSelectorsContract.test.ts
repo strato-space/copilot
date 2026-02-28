@@ -10,6 +10,10 @@ import {
 } from '../../src/utils/codexPerformer';
 
 describe('Codex performer selector contract', () => {
+    it('uses canonical Mongo ObjectId for Codex performer identity', () => {
+        expect(CODEX_PERFORMER_ID).toBe('69a2561d642f3a032ad88e7a');
+    });
+
     it('injects Codex performer once for CRM/kanban selectors', () => {
         const basePerformers: Performer[] = [
             {
@@ -38,6 +42,16 @@ describe('Codex performer selector contract', () => {
 
         expect(withCodex.some((item) => item._id === CODEX_PERFORMER_ID)).toBe(true);
         expect(withCodexAgain.filter((item) => item._id === CODEX_PERFORMER_ID)).toHaveLength(1);
+    });
+
+    it('normalizes legacy Codex synthetic ids to canonical ObjectId', () => {
+        const withCanonical = ensureCodexPerformerRecords([
+            { _id: 'codex-system', id: 'codex-system', name: 'Codex' },
+        ]);
+
+        expect(withCanonical).toHaveLength(1);
+        expect(withCanonical[0]?._id).toBe(CODEX_PERFORMER_ID);
+        expect(withCanonical[0]?.id).toBe(CODEX_PERFORMER_ID);
     });
 
     it('wires Codex helper into kanban and voice performer loaders', () => {

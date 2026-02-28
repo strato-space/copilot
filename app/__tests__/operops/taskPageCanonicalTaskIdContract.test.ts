@@ -14,9 +14,10 @@ const createTicket = (overrides: Partial<Ticket> = {}): Ticket => ({
 
 describe('OperOps task card canonical task-id contract', () => {
     it('resolves canonical id from public id first, then route id, then _id', () => {
-        expect(resolveCanonicalTaskId(createTicket())).toBe('OPS-77');
+        expect(resolveCanonicalTaskId(createTicket(), 'route-id')).toBe('OPS-77');
+        expect(resolveCanonicalTaskId(createTicket({ id: '  OPS-77  ' }), 'route-id')).toBe('OPS-77');
         expect(resolveCanonicalTaskId(createTicket({ id: '  ' }), 'route-id')).toBe('route-id');
-        expect(resolveCanonicalTaskId(createTicket({ id: '' }), '')).toBe('67c4473f4a0ec9753d95d42a');
+        expect(resolveCanonicalTaskId(createTicket({ id: '' }), '   ')).toBe('67c4473f4a0ec9753d95d42a');
     });
 
     it('renders dedicated Task ID header block with copy action in TaskPage', () => {

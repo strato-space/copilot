@@ -333,6 +333,14 @@ MCP_SESSION_TIMEOUT=1800000
 - E2E tests: `npm run test:e2e` (Playwright) in `app/` — runs against local dev server.
 - E2E tests require running dev server or use `PLAYWRIGHT_BASE_URL` env var.
 
+### Type Safety Gate (Mandatory For Parent And Child Agents)
+- Type-safety verification is REQUIRED for every code-changing task, including work done in child agents/subagents and temporary worktrees.
+- Child agents MUST run the same TypeScript gate in their own workspace before reporting completion or handing off:
+  - frontend changes (`app/*`): `cd app && npm run build` (or `npm run build-dev` / `npm run build-local` if the task is explicitly env-scoped),
+  - backend changes (`backend/*`): `cd backend && npm run build`.
+- If a task touches both frontend and backend, both build checks are mandatory.
+- Do not close `bd` issue status as done and do not merge child-agent output until the required type-safety build checks pass.
+
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
 
@@ -507,8 +515,12 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added Voice session tabs contract:
   - `Задачи` tab (CRMKanban, `source_ref` scoped to current session, Work/Review subtabs),
   - `Codex` tab with backend `POST /api/voicebot/codex_tasks` route and newest-first canonical filtering by `external_ref`.
-- Added OperOps `Codex` tab (`copilot-ex9q`) backed by `POST /api/crm/codex/issues` (`bd --no-daemon list --json --limit 500`) and inline refresh workflow.
+- Added OperOps `Codex` tab (`copilot-ex9q`) backed by `POST /api/crm/codex/issues` (`bd --no-daemon list --all --json --limit 500`) and inline refresh workflow.
 - Added inline Voice Codex issue detail drawer (`copilot-gb72`) with bd-show-like payload fields (`labels`, `dependencies`, `notes`, ownership metadata).
+- Added shared canonical source matcher (`app/src/utils/voiceSessionTaskSource.ts`) for Voice `Задачи`/`Codex` tabs and OperOps `CRMKanban` filtering, covering `source_ref`, `external_ref`, `source_data.session_id`, and `source_data.session_db_id`.
+- Fixed Voice `Задачи` tab missing-task regression (`copilot-ztlv.27`): Source-link jump from OperOps task card now resolves the same task in Voice session view through canonical source/session matching.
+- Hardened Telegram `@task` attachment contract (`copilot-ztlv.13`): created Codex tasks now persist normalized public attachment links and reverse message-attachment links in both description and `source_data.attachments`.
+- Finalized OperOps task-card parity wave (`copilot-ztlv.3/.4/.5/.6`): deterministic `_id`-first eye-link routing with duplicate-id guard, stronger `Created by`/`Source`/`Project` fallback chain, and updated short-link runbook/tests.
 - Completed categorization-material chain (`copilot-hfvd`, `copilot-c4bd`, `copilot-a3k0`, `copilot-p31k`, `copilot-250m`) and merged all commits to `main`.
 - Categorization UI/data contract now includes:
   - `Materials` column (screenshots rendered outside main text),

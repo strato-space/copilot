@@ -373,6 +373,24 @@ const isCodexPerformer = (value: unknown): boolean => {
 
 const CODEX_REVIEW_DEFERRED_WINDOW_MS = 15 * 60 * 1000;
 
+type CreateTicketsRowRejectionReason =
+    | 'missing_performer_id'
+    | 'invalid_performer_id'
+    | 'performer_not_found'
+    | 'codex_project_git_repo_required';
+
+type CreateTicketsRejectedField = 'performer_id' | 'project_id';
+
+type CreateTicketsRejectedRow = {
+    index: number;
+    ticket_id: string;
+    field: CreateTicketsRejectedField;
+    reason: CreateTicketsRowRejectionReason;
+    message: string;
+    performer_id?: string;
+    project_id?: string;
+};
+
 const toTaskDependencies = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
     return value
@@ -3056,19 +3074,64 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
 
         const now = new Date();
         const tasksToSave: Array<Record<string, unknown>> = [];
+        const rejectedRows: CreateTicketsRejectedRow[] = [];
         const performerCache = new Map<string, Record<string, unknown> | null>();
         const projectCache = new Map<string, Record<string, unknown> | null>();
         const reservedPublicTaskIds = new Set<string>();
         const creatorId = performer?._id?.toHexString?.() ?? '';
         const creatorName = String(performer?.real_name || performer?.name || '').trim();
-        for (const rawTicket of tickets) {
+        for (const [ticketIndex, rawTicket] of tickets.entries()) {
             if (!rawTicket || typeof rawTicket !== 'object') continue;
             const ticket = rawTicket as Record<string, unknown>;
+            const ticketId = toTaskText(ticket.id) || toTaskText(ticket.task_id_from_ai) || `task-${ticketIndex + 1}`;
             const name = String(ticket.name || '').trim();
             const description = String(ticket.description || '').trim();
-            const performerId = toObjectIdOrNull(ticket.performer_id);
+            const rawPerformerId = toTaskText(ticket.performer_id);
+            const performerId = toObjectIdOrNull(rawPerformerId);
             const projectId = toObjectIdOrNull(ticket.project_id);
             const projectName = String(ticket.project || '').trim();
+
+            const pushRejectedRow = (
+                field: CreateTicketsRejectedField,
+                reason: CreateTicketsRowRejectionReason,
+                message: string,
+                details?: {
+                    performer_id?: string;
+                    project_id?: string;
+                }
+            ): void => {
+                rejectedRows.push({
+                    index: ticketIndex,
+                    ticket_id: ticketId,
+                    field,
+                    reason,
+                    message,
+                    ...(details ?? {}),
+                });
+            };
+
+            if (!rawPerformerId) {
+                pushRejectedRow(
+                    'performer_id',
+                    'missing_performer_id',
+                    'Исполнитель не выбран',
+                    {
+                        performer_id: rawPerformerId,
+                    }
+                );
+                continue;
+            }
+            if (!performerId) {
+                pushRejectedRow(
+                    'performer_id',
+                    'invalid_performer_id',
+                    'Некорректный performer_id: ожидается Mongo ObjectId',
+                    {
+                        performer_id: rawPerformerId,
+                    }
+                );
+                continue;
+            }
             if (!name || !description || !performerId || !projectId || !projectName) continue;
 
             const canAccess = await canAccessProject({ db, performer, projectId });
@@ -3080,7 +3143,17 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                 taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId }) as Record<string, unknown> | null;
                 performerCache.set(performerCacheKey, taskPerformer);
             }
-            if (!taskPerformer) continue;
+            if (!taskPerformer) {
+                pushRejectedRow(
+                    'performer_id',
+                    'performer_not_found',
+                    'Исполнитель не найден в automation_performers',
+                    {
+                        performer_id: rawPerformerId,
+                    }
+                );
+                continue;
+            }
 
             const isCodexTask = isCodexPerformer(taskPerformer);
             if (isCodexTask) {
@@ -3096,16 +3169,23 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                     projectCache.set(projectCacheKey, projectDoc);
                 }
                 if (!projectDoc || !normalizeGitRepo(projectDoc.git_repo)) {
-                    return res.status(400).json({
-                        error: 'Codex assignment requires project git_repo',
-                        project_id: projectCacheKey,
-                    });
+                    pushRejectedRow(
+                        'project_id',
+                        'codex_project_git_repo_required',
+                        'Для задач Codex у проекта должен быть git_repo',
+                        {
+                            performer_id: rawPerformerId,
+                            project_id: projectCacheKey,
+                        }
+                    );
+                    continue;
                 }
             }
 
             const publicTaskId = await ensureUniqueTaskPublicId({
                 db,
                 preferredId: ticket.id,
+                fallbackText: name,
                 reservedIds: reservedPublicTaskIds,
             });
 
@@ -3150,11 +3230,21 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         }
 
         if (tasksToSave.length === 0) {
+            if (rejectedRows.length > 0) {
+                return res.status(400).json({
+                    error: 'No valid tasks to create tickets',
+                    invalid_rows: rejectedRows,
+                });
+            }
             return res.status(400).json({ error: 'No valid tasks to create tickets' });
         }
 
         const insertResult = await db.collection(COLLECTIONS.TASKS).insertMany(tasksToSave);
-        return res.status(200).json({ success: true, insertedCount: insertResult.insertedCount });
+        return res.status(200).json({
+            success: true,
+            insertedCount: insertResult.insertedCount,
+            ...(rejectedRows.length > 0 ? { rejected_rows: rejectedRows } : {}),
+        });
     } catch (error) {
         logger.error('Error in create_tickets:', error);
         return res.status(500).json({ error: String(error) });

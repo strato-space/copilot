@@ -135,7 +135,7 @@ router.post('/issues', async (req: Request, res: Response) => {
 
   const result = await runCommand({
     command: bdBin,
-    args: ['--no-daemon', 'list', '--json', '--limit', String(limit)],
+    args: ['--no-daemon', 'list', '--all', '--allow-stale', '--json', '--limit', String(limit)],
     timeoutMs: BD_LIST_TIMEOUT_MS,
     cwd,
   });
@@ -146,6 +146,7 @@ router.post('/issues', async (req: Request, res: Response) => {
       signal: result.signal,
       timed_out: result.timedOut,
       stderr: result.stderr.trim() || null,
+      stdout_sample: result.stdout.slice(0, 500) || null,
       cwd,
       limit,
     });

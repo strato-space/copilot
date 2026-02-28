@@ -66,7 +66,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Short-link generation/collision/route-resolution contract is documented in `docs/OPEROPS_TASK_SHORT_LINKS.md`.
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
 - OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
-- Performer selectors now include synthetic system performer `Codex` (deduped) in CRM and Voice task-assignment flows.
+- Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing), so Source->Voice navigation keeps task visibility consistent.
+- Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).

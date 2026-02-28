@@ -20,6 +20,7 @@ import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
 import type { TaskTypeNode } from '../../types/voice';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
+import { isVoiceTaskCreateValidationError } from '../../utils/voiceTaskCreation';
 
 type RawTaskRecord = Record<string, unknown>;
 
@@ -41,6 +42,12 @@ type TaskRow = {
 type TaskRowView = TaskRow & {
   __missing: Array<keyof TaskRow>;
   __isReady: boolean;
+};
+
+type TaskRowCreationErrors = {
+  performer_id?: string;
+  project_id?: string;
+  general?: string;
 };
 
 const PRIORITY_OPTIONS = ['🔥 P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
@@ -193,6 +200,7 @@ export default function PossibleTasks() {
   const [drafts, setDrafts] = useState<Record<string, Partial<TaskRow>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [rowCreationErrors, setRowCreationErrors] = useState<Record<string, TaskRowCreationErrors>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [onlySelected, setOnlySelected] = useState(false);
@@ -205,6 +213,7 @@ export default function PossibleTasks() {
   useEffect(() => {
     setSelectedRowKeys([]);
     setDrafts({});
+    setRowCreationErrors({});
     setSearchQuery('');
     setPriorityFilter('all');
     setOnlySelected(false);
@@ -362,6 +371,12 @@ export default function PossibleTasks() {
         [field]: value,
       },
     }));
+    setRowCreationErrors((prev) => {
+      if (!prev[taskId]) return prev;
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -371,6 +386,12 @@ export default function PossibleTasks() {
       if (!success) return;
       setSelectedRowKeys((prev) => prev.filter((id) => id !== taskId));
       setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      setRowCreationErrors((prev) => {
+        if (!prev[taskId]) return prev;
         const next = { ...prev };
         delete next[taskId];
         return next;
@@ -427,11 +448,52 @@ export default function PossibleTasks() {
     }));
 
     setIsSubmitting(true);
+    setRowCreationErrors({});
     try {
       await confirmSelectedTickets(selectedRowKeys, payload);
       setSelectedRowKeys([]);
       message.success(`Создано задач: ${payload.length}`);
     } catch (error) {
+      if (isVoiceTaskCreateValidationError(error)) {
+        const rowErrorsByTaskId: Record<string, TaskRowCreationErrors> = {};
+        for (const rowError of error.rowErrors) {
+          if (!rowError.ticketId) continue;
+          const current = rowErrorsByTaskId[rowError.ticketId] || {};
+          if (rowError.field === 'performer_id') {
+            if (!current.performer_id) current.performer_id = rowError.message;
+          } else if (rowError.field === 'project_id') {
+            if (!current.project_id) current.project_id = rowError.message;
+          } else if (!current.general) {
+            current.general = rowError.message;
+          }
+          rowErrorsByTaskId[rowError.ticketId] = current;
+        }
+
+        if (Object.keys(rowErrorsByTaskId).length > 0) {
+          setRowCreationErrors(rowErrorsByTaskId);
+        }
+
+        const firstRowError = error.rowErrors[0];
+        if (firstRowError) {
+          const taskName = rowsById.get(firstRowError.ticketId)?.name || firstRowError.ticketId;
+          const followUpHint =
+            firstRowError.field === 'performer_id'
+              ? 'Выберите исполнителя из списка.'
+              : firstRowError.field === 'project_id'
+                ? 'Выберите проект с заполненным git_repo.'
+                : '';
+          message.error(
+            followUpHint
+              ? `Задача "${taskName}": ${firstRowError.message}. ${followUpHint}`
+              : `Задача "${taskName}": ${firstRowError.message}`
+          );
+          return;
+        }
+
+        const genericError = error.backendError || 'Не удалось создать задачи';
+        message.error(genericError);
+        return;
+      }
       console.error('Ошибка при создании задач:', error);
       message.error('Не удалось создать задачи');
     } finally {
@@ -578,6 +640,12 @@ export default function PossibleTasks() {
             width: 320,
             render: (_value, record) => (
               <div className="flex flex-col gap-1">
+                {rowCreationErrors[record.id]?.project_id ? (
+                  <Typography.Text type="danger">{rowCreationErrors[record.id]?.project_id}</Typography.Text>
+                ) : null}
+                {rowCreationErrors[record.id]?.general ? (
+                  <Typography.Text type="danger">{rowCreationErrors[record.id]?.general}</Typography.Text>
+                ) : null}
                 <Input
                   status={record.__missing.includes('name') ? 'error' : ''}
                   value={record.name}
@@ -624,20 +692,31 @@ export default function PossibleTasks() {
             title: 'Исполнитель',
             dataIndex: 'performer_id',
             width: 220,
-            render: (_value, record) => (
-              <Select
-                status={record.__missing.includes('performer_id') ? 'error' : ''}
-                allowClear
-                value={record.performer_id || undefined}
-                onChange={(value) => setDraftValue(record.id, 'performer_id', toText(value))}
-                options={performerOptions}
-                showSearch
-                optionFilterProp="label"
-                listHeight={performerPickerListHeight}
-                style={{ width: '100%' }}
-                placeholder="Исполнитель"
-              />
-            ),
+            render: (_value, record) => {
+              const performerErrorText = rowCreationErrors[record.id]?.performer_id || '';
+              return (
+                <div className="flex flex-col gap-1">
+                  <Select
+                    status={record.__missing.includes('performer_id') || Boolean(performerErrorText) ? 'error' : ''}
+                    allowClear
+                    value={record.performer_id || undefined}
+                    onChange={(value) => setDraftValue(record.id, 'performer_id', toText(value))}
+                    options={performerOptions}
+                    showSearch
+                    optionFilterProp="label"
+                    listHeight={performerPickerListHeight}
+                    style={{ width: '100%' }}
+                    placeholder="Исполнитель"
+                  />
+                  {record.__missing.includes('performer_id') ? (
+                    <Typography.Text type="danger">обязательное поле</Typography.Text>
+                  ) : null}
+                  {!record.__missing.includes('performer_id') && performerErrorText ? (
+                    <Typography.Text type="danger">{performerErrorText}</Typography.Text>
+                  ) : null}
+                </div>
+              );
+            },
           },
           {
             title: 'Тип задачи',

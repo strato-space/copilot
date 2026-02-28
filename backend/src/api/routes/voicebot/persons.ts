@@ -4,7 +4,7 @@
  * Migrated from voicebot/crm/routes/persons.js + controllers/persons.js
  */
 import { Router, type Request, type Response } from 'express';
-import { ObjectId } from 'mongodb';
+import { ObjectId, type Document } from 'mongodb';
 import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
@@ -14,6 +14,14 @@ import { getLogger } from '../../../utils/logger.js';
 
 const router = Router();
 const logger = getLogger();
+
+type PerformerListRow = Document & {
+    _id: ObjectId;
+    name?: string | null;
+    real_name?: string | null;
+    corporate_email?: string | null;
+    projects_access?: unknown[];
+};
 
 /**
  * POST /persons/list
@@ -281,13 +289,13 @@ router.post('/list_performers',
         const db = getDb();
 
         try {
-            const includeIds = Array.isArray(req.body?.include_ids)
+            const includeIds: ObjectId[] = Array.isArray(req.body?.include_ids)
                 ? req.body.include_ids
                     .map((value: unknown) => {
                         const raw = String(value ?? '').trim();
                         return raw && ObjectId.isValid(raw) ? new ObjectId(raw) : null;
                     })
-                    .filter((value): value is ObjectId => value !== null)
+                    .filter((value: ObjectId | null): value is ObjectId => value !== null)
                 : [];
 
             const performers = await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS).find(
@@ -302,10 +310,10 @@ router.post('/list_performers',
                 name: 1,
                 real_name: 1,
                 corporate_email: 1,
-            }).toArray();
+            }).toArray() as PerformerListRow[];
 
             // Format names
-            const result = performers.map(p => ({
+            const result = performers.map((p) => ({
                 _id: p._id,
                 name: p.name || p.real_name,
                 email: p.corporate_email,

@@ -24,9 +24,10 @@ import {
   buildSegmentsFromChunks,
   resolveMessageDurationSeconds,
 } from '../../../services/transcriptionTimeline.js';
+import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { getAudioDurationFromFile, splitAudioFileByDuration } from '../../../utils/audioUtils.js';
 import { getLogger } from '../../../utils/logger.js';
-import { buildSessionLink } from '../../../voicebot_tgbot/sessionTelegramMessage.js';
+import { buildCanonicalSessionLink } from '../../../voicebot_tgbot/sessionTelegramMessage.js';
 
 const logger = getLogger();
 
@@ -296,7 +297,7 @@ const maybeCreateCodexTaskFromVoiceCommand = async ({
     message_db_id: message_id,
     source_type: normalizeString(message.source_type) || 'voice',
     message_type: normalizeString(message.message_type) || 'voice',
-    external_ref: buildSessionLink(session_id),
+    external_ref: buildCanonicalSessionLink(session_id),
     source_ref: session_id,
     created_at: new Date(timestampMs).toISOString(),
   };
@@ -349,12 +350,18 @@ const maybeCreateCodexTaskFromVoiceCommand = async ({
 
   const codexPerformer = await findCodexPerformer(db);
   const actorId = toObjectIdOrNull(message.user_id) || toObjectIdOrNull(session.user_id);
+  const taskTitle = toCodexTaskTitle(normalizedText);
+  const publicTaskId = await ensureUniqueTaskPublicId({
+    db,
+    preferredId: taskTitle,
+    fallbackText: normalizedText,
+  });
   const now = new Date();
   const deferredUntil = new Date(now.getTime() + 15 * 60 * 1000);
 
   const taskDoc: Record<string, unknown> = {
-    id: `codex-${new ObjectId().toHexString()}`,
-    name: toCodexTaskTitle(normalizedText),
+    id: publicTaskId,
+    name: taskTitle,
     description: normalizedText || DEFAULT_CODEX_VOICE_TASK_DESCRIPTION,
     priority: 'P2',
     priority_reason: CODEX_VOICE_TASK_TRIGGER,

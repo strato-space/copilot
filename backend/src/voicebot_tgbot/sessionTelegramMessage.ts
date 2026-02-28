@@ -26,6 +26,12 @@ export const buildSessionLink = (sessionId?: string | null): string => {
   return `${getPublicInterfaceBase()}/${sid}`;
 };
 
+export const buildCanonicalSessionLink = (sessionId?: string | null): string => {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return DEFAULT_PUBLIC_INTERFACE_BASE;
+  return `${DEFAULT_PUBLIC_INTERFACE_BASE}/${sid}`;
+};
+
 const normalizeSessionId = (session: Record<string, unknown>): string => {
   const raw = session._id || session.session_id || session.id || '';
   return String(raw || '').trim();

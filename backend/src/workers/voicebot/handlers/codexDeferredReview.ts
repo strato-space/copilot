@@ -143,6 +143,16 @@ type CommandRunInput = {
   cwd?: string;
 };
 
+class CodexDeferredReviewError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message?: string) {
+    super(message || code);
+    this.name = 'CodexDeferredReviewError';
+    this.code = code;
+  }
+}
+
 const runtimeQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, {
     field: 'runtime_tag',
@@ -166,6 +176,21 @@ const getNumericEnv = (name: string, fallback: number): number => {
   const raw = Number.parseInt(String(process.env[name] || ''), 10);
   if (!Number.isFinite(raw) || raw <= 0) return fallback;
   return raw;
+};
+
+const resolveFailureDetails = (error: unknown): { code: string; message: string } => {
+  if (error instanceof CodexDeferredReviewError) {
+    return {
+      code: error.code,
+      message: normalizeString(error.message) || error.code,
+    };
+  }
+
+  const message = normalizeString(getErrorMessage(error)) || 'codex_deferred_review_failed';
+  return {
+    code: 'codex_deferred_review_failed',
+    message,
+  };
 };
 
 const toUltraShortSummary = (raw: string): string => {
@@ -713,19 +738,6 @@ const loadIssueDefault = async (issueId: string): Promise<IssueRecord | null> =>
   }
 };
 
-const buildFallbackSummary = (task: TaskRecord): string => {
-  const title = normalizeString(task.name);
-  const description = normalizeString(task.description);
-
-  if (title && description) {
-    return toUltraShortSummary(`${title}: ${description}`);
-  }
-
-  if (description) return toUltraShortSummary(description);
-  if (title) return toUltraShortSummary(title);
-  return 'Task received and queued for Codex review.';
-};
-
 export const handleCodexDeferredReviewJob = async (
   payload: CodexDeferredReviewJobData,
   options: CodexDeferredReviewOptions = {}
@@ -797,12 +809,17 @@ export const handleCodexDeferredReviewJob = async (
   )) as TaskRecord | null;
 
   if (!task) {
+    const failedAt = new Date();
+    const nextAttemptAt = new Date(failedAt.getTime() + retryDelayMs);
     await tasksCollection.updateOne(runtimeQuery({ _id: taskObjectId }), {
       $set: {
         codex_review_summary_processing: false,
+        codex_review_summary_last_error_code: 'task_not_found_after_claim',
+        codex_review_summary_last_error_message: 'task_not_found_after_claim',
         codex_review_summary_last_runner_error: 'task_not_found_after_claim',
-        codex_review_summary_last_error_at: new Date(),
-        updated_at: new Date(),
+        codex_review_summary_last_error_at: failedAt,
+        codex_review_summary_next_attempt_at: nextAttemptAt,
+        updated_at: failedAt,
       },
     });
     return {
@@ -820,58 +837,58 @@ export const handleCodexDeferredReviewJob = async (
 
   try {
     const issueId = resolveIssueId(task);
-    const issue = issueId ? await loadIssue(issueId) : null;
+    if (!issueId) {
+      throw new CodexDeferredReviewError(
+        'codex_review_issue_id_unresolved',
+        'Unable to resolve issue_id for deferred Codex review task.'
+      );
+    }
+
+    const issue = await loadIssue(issueId);
     const promptCard = await loadPromptCard();
     const prompt = createReviewPrompt({ task, issue, promptCard });
 
-    let summary = '';
-    let source = 'codex_cli';
-
+    let reviewResult: ReviewRunnerOutput;
     try {
-      const reviewResult = await runReview({
+      reviewResult = await runReview({
         task,
         issue,
         prompt,
         promptCardPath: promptCard.path,
       });
-      summary = toUltraShortSummary(normalizeString(reviewResult.summary));
-      source = normalizeString(reviewResult.source) || source;
     } catch (error) {
-      logger.warn('[voicebot-worker] codex deferred review runner failed, fallback summary used', {
-        task_id,
-        issue_id: issueId,
-        error: getErrorMessage(error),
-      });
-      summary = buildFallbackSummary(task);
-      source = 'fallback_task_fields';
+      throw new CodexDeferredReviewError(
+        'codex_review_runner_failed',
+        `Codex deferred review runner failed: ${getErrorMessage(error)}`
+      );
     }
 
+    const summary = toUltraShortSummary(normalizeString(reviewResult.summary));
+    const source = normalizeString(reviewResult.source) || 'codex_cli';
+
     if (!summary) {
-      throw new Error('codex_review_summary_empty');
+      throw new CodexDeferredReviewError(
+        'codex_review_summary_empty',
+        'Codex deferred review produced an empty summary.'
+      );
     }
 
     let issueNoteResult: AppendIssueSummaryNoteResult | null = null;
     let approvalCardResult: SendTelegramApprovalCardResult | null = null;
 
-    if (issueId) {
-      issueNoteResult = await appendIssueSummaryNote({
-        issueId,
-        summary,
-        task,
-        issue,
-      });
+    issueNoteResult = await appendIssueSummaryNote({
+      issueId,
+      summary,
+      task,
+      issue,
+    });
 
-      approvalCardResult = await sendTelegramApprovalCard({
-        issueId,
-        summary,
-        task,
-        issue,
-      });
-    } else {
-      logger.warn('[voicebot-worker] codex deferred review missing issue id for note/card actions', {
-        task_id,
-      });
-    }
+    approvalCardResult = await sendTelegramApprovalCard({
+      issueId,
+      summary,
+      task,
+      issue,
+    });
 
     const completedAt = new Date();
     const completionSet: Record<string, unknown> = {
@@ -902,6 +919,8 @@ export const handleCodexDeferredReviewJob = async (
     await tasksCollection.updateOne(runtimeQuery({ _id: taskObjectId }), {
       $set: completionSet,
       $unset: {
+        codex_review_summary_last_error_code: 1,
+        codex_review_summary_last_error_message: 1,
         codex_review_summary_last_runner_error: 1,
         codex_review_summary_last_error_at: 1,
         codex_review_summary_next_attempt_at: 1,
@@ -934,14 +953,16 @@ export const handleCodexDeferredReviewJob = async (
 
     return resultPayload;
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
+    const failure = resolveFailureDetails(error);
     const failedAt = new Date();
     const nextAttemptAt = new Date(failedAt.getTime() + retryDelayMs);
 
     await tasksCollection.updateOne(runtimeQuery({ _id: taskObjectId }), {
       $set: {
         codex_review_summary_processing: false,
-        codex_review_summary_last_runner_error: errorMessage,
+        codex_review_summary_last_error_code: failure.code,
+        codex_review_summary_last_error_message: failure.message,
+        codex_review_summary_last_runner_error: failure.message,
         codex_review_summary_last_error_at: failedAt,
         codex_review_summary_next_attempt_at: nextAttemptAt,
         updated_at: failedAt,
@@ -950,14 +971,15 @@ export const handleCodexDeferredReviewJob = async (
 
     logger.error('[voicebot-worker] codex deferred review failed', {
       task_id,
-      error: errorMessage,
+      error_code: failure.code,
+      error: failure.message,
       retry_at: nextAttemptAt.toISOString(),
     });
 
     return {
       ok: false,
       task_id,
-      error: 'codex_deferred_review_failed',
+      error: failure.code,
     };
   }
 };

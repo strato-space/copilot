@@ -99,7 +99,7 @@ router.post('/create', async (req: Request, res: Response) => {
         }
 
         const now = Date.now();
-        const newProject = {
+        const newProject: Record<string, unknown> = {
             ...project,
             project_group: projectGroupId,
             is_active: project.is_active ?? true,

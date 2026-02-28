@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Tabs, message } from 'antd';
 import { useParams } from 'react-router-dom';
 
 import { CRMKanban } from '../../components/crm';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
+import { buildVoiceSessionTaskSourceRefs } from '../../utils/voiceSessionTaskSource';
 import SessionStatusWidget from '../../components/voice/SessionStatusWidget';
 import MeetingCard from '../../components/voice/MeetingCard';
 import Transcription from '../../components/voice/Transcription';
@@ -261,6 +262,10 @@ export default function SessionPage() {
     const hasPossibleTasks = Array.isArray(possibleTasks) && possibleTasks.length > 0;
     const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
     const activeTasksConfig = VOICE_SESSION_TASK_SUBTAB_CONFIGS[sessionTasksSubTab];
+    const sessionTaskSourceRefs = useMemo(
+        () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
+        [sessionId, voiceBotSession]
+    );
 
     const tabs = [
         {
@@ -301,7 +306,7 @@ export default function SessionPage() {
                         key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab}`}
                         filter={{
                             task_status: [...activeTasksConfig.statuses],
-                            source_ref: sessionId ? [sessionId] : [],
+                            source_ref: sessionTaskSourceRefs,
                         }}
                         columns={[...activeTasksConfig.columns]}
                     />

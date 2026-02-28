@@ -519,6 +519,7 @@ router.post('/create', async (req: Request, res: Response) => {
         newTicket.id = await ensureUniqueTaskPublicId({
             db,
             preferredId: newTicket.id,
+            fallbackText: newTicket.name,
         });
 
         logger.info('[crm.tickets.create] normalized new ticket payload', {

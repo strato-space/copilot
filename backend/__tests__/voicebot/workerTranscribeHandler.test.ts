@@ -57,6 +57,7 @@ describe('handleTranscribeJob', () => {
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcd';
     delete process.env.TG_VOICE_BOT_TOKEN;
     delete process.env.TG_VOICE_BOT_BETA_TOKEN;
+    delete process.env.VOICE_WEB_INTERFACE_URL;
     getFileSha256FromPathMock.mockResolvedValue('sha256-transcribe-test');
     getVoicebotQueuesMock.mockReturnValue(null);
   });
@@ -153,7 +154,7 @@ describe('handleTranscribeJob', () => {
     );
   });
 
-  it('creates deferred codex task when transcription starts with Кодекс trigger word', async () => {
+  it('creates deferred codex task with canonical external_ref when transcription starts with Кодекс trigger word', async () => {
     const messageId = new ObjectId();
     const sessionId = new ObjectId();
     const actorId = new ObjectId();
@@ -233,6 +234,7 @@ describe('handleTranscribeJob', () => {
 
     createTranscriptionMock.mockResolvedValue({ text: 'Кодекс подготовь план релиза' });
     getAudioDurationFromFileMock.mockResolvedValue(12);
+    process.env.VOICE_WEB_INTERFACE_URL = 'https://copilot-dev.stratospace.fun/voice/session';
 
     const result = await handleTranscribeJob({ message_id: messageId.toString() });
     expect(result).toMatchObject({
@@ -241,9 +243,10 @@ describe('handleTranscribeJob', () => {
       session_id: sessionId.toString(),
     });
 
-    expect(tasksFindOne).toHaveBeenCalledTimes(1);
+    expect(tasksFindOne.mock.calls.length).toBeGreaterThanOrEqual(1);
     expect(tasksInsertOne).toHaveBeenCalledTimes(1);
     const insertedTask = tasksInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(String(insertedTask.id || '')).toMatch(/^[a-z0-9-]+-\d{2}-\d{2}(?:-\d+)?$/);
     expect(insertedTask.source_kind).toBe('voice_session');
     expect(insertedTask.created_by_performer_id).toEqual(actorId);
     expect(insertedTask.priority_reason).toBe('voice_command');
@@ -257,6 +260,7 @@ describe('handleTranscribeJob', () => {
     expect(payload.session_id).toBe(sessionId.toHexString());
     expect(payload.message_db_id).toBe(messageId.toHexString());
     expect(payload.normalized_text).toBe('подготовь план релиза');
+    expect(payload.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
 
     const codexPayloadUpdate = sessionsUpdateOne.mock.calls.find((call) => {
       const update = call[1] as Record<string, unknown> | undefined;

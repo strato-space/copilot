@@ -69,6 +69,40 @@ const findPerformerByIdentity = (performers: Performer[], identity: unknown): Pe
     });
 };
 
+const findPerformerByIdentities = (performers: Performer[], identities: unknown[]): Performer | undefined => {
+    for (const identity of identities) {
+        const match = findPerformerByIdentity(performers, identity);
+        if (match) return match;
+    }
+
+    return undefined;
+};
+
+const getCreatorLabelFromRecord = (creatorRecord: Record<string, unknown>): string => {
+    return (
+        toNonEmptyString(creatorRecord.real_name) ||
+        toNonEmptyString(creatorRecord.name) ||
+        toNonEmptyString(creatorRecord.display_name) ||
+        toNonEmptyString(creatorRecord.full_name) ||
+        toNonEmptyString(creatorRecord.username) ||
+        toNonEmptyString(creatorRecord.email) ||
+        toNonEmptyString(creatorRecord.corporate_email)
+    );
+};
+
+const getCreatorIdentityCandidates = (creatorRecord: Record<string, unknown>): unknown[] => {
+    return [
+        creatorRecord._id,
+        creatorRecord.id,
+        creatorRecord.user_id,
+        creatorRecord.userId,
+        creatorRecord.performer_id,
+        creatorRecord.performerId,
+        creatorRecord.created_by,
+        creatorRecord.createdBy,
+    ];
+};
+
 const SOURCE_KIND_LABELS = {
     voice_session: 'Voice session',
     telegram: 'Telegram',
@@ -121,6 +155,10 @@ const normalizeExternalLink = (value: unknown): string => {
     if (/^t\.me\//i.test(raw)) return `https://${raw}`;
     return '';
 };
+
+const isTelegramLink = (value: string): boolean => /^https?:\/\/t\.me\//i.test(value);
+
+const isVoiceSessionLink = (value: string): boolean => /\/voice\/session\/[^/?#]+/i.test(value);
 
 const buildVoiceSessionLink = (sessionIdValue: unknown): string => {
     const sessionId = toLookupValue(sessionIdValue);
@@ -196,10 +234,11 @@ export const resolveTaskProjectName = (task: Ticket, projectsData: Project[] = [
         return projectFromLookup.name;
     }
 
-    const directProject = typeof task.project === 'string' ? task.project.trim() : '';
-    if (directProject) {
-        return directProject;
-    }
+    const directProject = toNonEmptyString(task.project);
+    if (directProject) return directProject;
+
+    const legacyProject = toLookupValue(task.project).trim();
+    if (legacyProject) return legacyProject;
 
     return 'N/A';
 };
@@ -207,7 +246,9 @@ export const resolveTaskProjectName = (task: Ticket, projectsData: Project[] = [
 export const resolveTaskCreator = (task: Ticket, performers: Performer[] = []): string => {
     const explicitCreatorName =
         toNonEmptyString((task as Ticket & { created_by_name?: unknown }).created_by_name) ||
-        toNonEmptyString((task as Ticket & { creator_name?: unknown }).creator_name);
+        toNonEmptyString((task as Ticket & { creator_name?: unknown }).creator_name) ||
+        toNonEmptyString((task as Ticket & { created_by_real_name?: unknown }).created_by_real_name) ||
+        toNonEmptyString((task as Ticket & { creator_real_name?: unknown }).creator_real_name);
     if (explicitCreatorName) {
         return explicitCreatorName;
     }
@@ -219,26 +260,23 @@ export const resolveTaskCreator = (task: Ticket, performers: Performer[] = []): 
 
     if (rawCreator && typeof rawCreator === 'object') {
         const creatorRecord = rawCreator as Record<string, unknown>;
-        const creatorLabel =
-            toNonEmptyString(creatorRecord.real_name) ||
-            toNonEmptyString(creatorRecord.name) ||
-            toNonEmptyString(creatorRecord.email) ||
-            toNonEmptyString(creatorRecord.corporate_email);
+        const creatorLabel = getCreatorLabelFromRecord(creatorRecord);
         if (creatorLabel) {
             return creatorLabel;
         }
 
-        const creatorIdentity =
-            creatorRecord._id ?? creatorRecord.id ?? creatorRecord.user_id ?? creatorRecord.userId;
-        const performerMatch = findPerformerByIdentity(performers, creatorIdentity);
+        const creatorIdentities = getCreatorIdentityCandidates(creatorRecord);
+        const performerMatch = findPerformerByIdentities(performers, creatorIdentities);
         const performerName = getPerformerDisplayName(performerMatch);
         if (performerName) {
             return performerName;
         }
 
-        const identityLabel = toLookupValue(creatorIdentity);
-        if (identityLabel) {
-            return identityLabel;
+        for (const creatorIdentity of creatorIdentities) {
+            const identityLabel = toLookupValue(creatorIdentity);
+            if (identityLabel) {
+                return identityLabel;
+            }
         }
     }
 
@@ -260,6 +298,11 @@ export const resolveTaskSourceInfo = (task: Ticket): TaskSourceInfo => {
     const embeddedSource = asRecord(task.source);
     const sourceData = asRecord(task.source_data);
     const telegramSource = asRecord(embeddedSource?.telegram) ?? asRecord(sourceData?.telegram);
+    const voiceSessionId = toLookupValue(sourceData?.session_id) || toLookupValue(embeddedSource?.voice_session_id);
+    const sourceRef = toNonEmptyString(task.source_ref) || toLookupValue(embeddedSource?.voice_session_id);
+    const externalRef = normalizeExternalLink(task.external_ref);
+    const sourceRefLink = normalizeExternalLink(sourceRef);
+    const telegramFallbackLink = buildTelegramLink(telegramSource);
 
     const explicitKind =
         normalizeSourceKind(task.source_kind) !== 'unknown'
@@ -271,26 +314,29 @@ export const resolveTaskSourceInfo = (task: Ticket): TaskSourceInfo => {
     if (kind === 'unknown' && legacyKind !== 'unknown') {
         kind = legacyKind;
     }
-    if (kind === 'unknown' && toLookupValue(sourceData?.session_id)) {
+    if (
+        kind === 'unknown' &&
+        (isTelegramLink(sourceRefLink) || isTelegramLink(externalRef) || Boolean(telegramFallbackLink))
+    ) {
+        kind = 'telegram';
+    }
+    if (kind === 'unknown' && (voiceSessionId || isVoiceSessionLink(sourceRefLink) || isVoiceSessionLink(externalRef))) {
         kind = 'voice_session';
     }
     if (kind === 'unknown') {
         kind = 'manual';
     }
 
-    const sourceRef = toNonEmptyString(task.source_ref) || toLookupValue(embeddedSource?.voice_session_id);
-    const externalRef = normalizeExternalLink(task.external_ref);
-    const sourceRefLink = normalizeExternalLink(sourceRef);
-
-    let link = externalRef || sourceRefLink;
-    if (!link && kind === 'voice_session') {
-        link = buildVoiceSessionLink(sourceRef || sourceData?.session_id);
-    }
-    if (!link && kind === 'telegram') {
-        link = buildTelegramLink(telegramSource);
+    let link = '';
+    if (kind === 'telegram') {
+        link = sourceRefLink || telegramFallbackLink || externalRef;
+    } else if (kind === 'voice_session') {
+        link = externalRef || sourceRefLink || buildVoiceSessionLink(sourceRef || voiceSessionId);
+    } else {
+        link = externalRef || sourceRefLink;
     }
 
-    const reference = sourceRef || toLookupValue(sourceData?.session_id) || link || 'N/A';
+    const reference = sourceRef || voiceSessionId || link || 'N/A';
 
     return {
         kind,

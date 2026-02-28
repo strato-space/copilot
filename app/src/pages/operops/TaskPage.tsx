@@ -247,7 +247,7 @@ const TaskPage = () => {
                                         <div className="flex flex-col">
                                             <Text>{sourceInfo.label}</Text>
                                             {sourceInfo.link ? (
-                                                <a href={sourceInfo.link} target="_blank" rel="noreferrer">
+                                                <a href={sourceInfo.link} target="_blank" rel="noopener noreferrer">
                                                     {sourceInfo.reference}
                                                 </a>
                                             ) : (

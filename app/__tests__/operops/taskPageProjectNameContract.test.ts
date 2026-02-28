@@ -36,6 +36,14 @@ describe('TaskPage project name contract', () => {
             }),
             projectsData
         );
+        const nonStringLegacyFallback = resolveTaskProjectName(
+            createTicket({
+                project: 1742 as unknown as Ticket['project'],
+                project_id: undefined,
+                project_data: undefined,
+            }),
+            []
+        );
 
         const emptyFallback = resolveTaskProjectName(
             createTicket({
@@ -49,6 +57,7 @@ describe('TaskPage project name contract', () => {
         expect(byArrayProjectData).toBe('Project from lookup payload');
         expect(byProjectId).toBe('Project from dictionary');
         expect(fallbackValue).toBe('Legacy project field');
+        expect(nonStringLegacyFallback).toBe('1742');
         expect(emptyFallback).toBe('N/A');
     });
 

@@ -48,6 +48,7 @@ import { useAuthStore } from '../../store/authStore';
 import { TASK_STATUSES } from '../../constants/crm';
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
+import { normalizeVoiceSessionSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
 import type { Ticket, Performer, Epic, TaskType } from '../../types/crm';
 
 import AvatarName from './AvatarName';
@@ -155,6 +156,56 @@ const CRMKanban = (props: CRMKanbanProps) => {
         return '';
     }, []);
 
+    const resolveTicketDbId = useCallback((record: Ticket): string => {
+        return toLookupValue(record._id).trim();
+    }, [toLookupValue]);
+
+    const resolveTicketPublicId = useCallback((record: Ticket): string => {
+        return toLookupValue(record.id).trim();
+    }, [toLookupValue]);
+
+    const duplicatedPublicTicketIds = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const ticket of tickets) {
+            const publicId = resolveTicketPublicId(ticket);
+            if (!publicId) continue;
+            counts.set(publicId, (counts.get(publicId) ?? 0) + 1);
+        }
+
+        const duplicates = new Set<string>();
+        for (const [publicId, count] of counts.entries()) {
+            if (count > 1) duplicates.add(publicId);
+        }
+        return duplicates;
+    }, [resolveTicketPublicId, tickets]);
+
+    const resolveTicketRouteId = useCallback((record: Ticket): string => {
+        const dbId = resolveTicketDbId(record);
+        if (dbId) return dbId;
+
+        const publicId = resolveTicketPublicId(record);
+        if (!publicId || duplicatedPublicTicketIds.has(publicId)) return '';
+        return publicId;
+    }, [duplicatedPublicTicketIds, resolveTicketDbId, resolveTicketPublicId]);
+
+    const resolveTicketRowKey = useCallback((record: Ticket): string => {
+        const dbId = resolveTicketDbId(record);
+        if (dbId) return dbId;
+
+        const publicId = resolveTicketPublicId(record);
+        const createdAt = toLookupValue(record.created_at).trim();
+        const updatedAt = toLookupValue(record.updated_at).trim();
+        const name = typeof record.name === 'string' ? record.name.trim() : '';
+
+        return [
+            'ticket',
+            publicId || 'missing-public-id',
+            createdAt || 'missing-created-at',
+            updatedAt || 'missing-updated-at',
+            name || 'missing-name',
+        ].join(':');
+    }, [resolveTicketDbId, resolveTicketPublicId, toLookupValue]);
+
     const getProjectByValue = useCallback((projectValue?: unknown) => {
         const targetValue = toLookupValue(projectValue);
         if (!targetValue) return null;
@@ -256,11 +307,13 @@ const CRMKanban = (props: CRMKanbanProps) => {
     const isInlineEditing = useCallback(
         (record: Ticket, column: string): boolean => {
             if (!editingColumn.ticket || !editingColumn.column) return false;
-            const editingTicketId = editingColumn.ticket._id || editingColumn.ticket.id;
-            const recordId = record._id || record.id;
+            const editingTicketId =
+                resolveTicketDbId(editingColumn.ticket) ||
+                resolveTicketPublicId(editingColumn.ticket);
+            const recordId = resolveTicketDbId(record) || resolveTicketPublicId(record);
             return editingColumn.column === column && editingTicketId === recordId;
         },
-        [editingColumn]
+        [editingColumn, resolveTicketDbId, resolveTicketPublicId]
     );
 
     const closeInlineEditor = useCallback(() => {
@@ -327,7 +380,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
             if (!rawPerformer) continue;
 
             if (typeof rawPerformer === 'object') {
-                const performerRecord = rawPerformer as Record<string, unknown>;
+                const performerRecord = rawPerformer as Performer;
                 const performerId = toLookupValue(performerRecord._id) || toLookupValue(performerRecord.id);
                 if (!performerId) continue;
                 labels.set(performerId, getPerformerLabel(performerRecord, performerId));
@@ -510,6 +563,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
         onChange: (keys) => {
             setSelectedRows(keys as string[]);
         },
+        getCheckboxProps: (record) => ({
+            disabled: !resolveTicketDbId(record),
+        }),
     };
 
     const columns = useMemo<TableColumnType<Ticket>[]>(() => [
@@ -1098,14 +1154,38 @@ const CRMKanban = (props: CRMKanbanProps) => {
         {
             title: '',
             key: 'edit_action',
-            render: (_, record) => (
+            render: (_, record) => {
+                const routeTaskId = resolveTicketRouteId(record);
+                const dbId = resolveTicketDbId(record);
+                const publicId = resolveTicketPublicId(record);
+                const hasDuplicatedPublicId = !dbId && Boolean(publicId) && duplicatedPublicTicketIds.has(publicId);
+
+                return (
                     <div className="flex gap-4">
                         <EditOutlined className="hover:text-cyan-500" onClick={() => setEditingTicket(record)} />
-                        <a href={`/operops/task/${record._id || record.id}`} target="_blank" rel="noopener noreferrer">
-                            <EyeOutlined className="hover:text-cyan-500" />
-                        </a>
+                        {routeTaskId ? (
+                            <a
+                                href={`/operops/task/${encodeURIComponent(routeTaskId)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <EyeOutlined className="hover:text-cyan-500" />
+                            </a>
+                        ) : (
+                            <Tooltip
+                                title={
+                                    hasDuplicatedPublicId
+                                        ? 'Невозможно открыть: обнаружен дублирующий short-link, нужен _id'
+                                        : 'Невозможно открыть: отсутствует идентификатор задачи'
+                                }
+                            >
+                                <EyeOutlined className="text-slate-300 cursor-not-allowed" />
+                            </Tooltip>
+                        )}
                     </div>
-            ),
+                );
+            },
         },
     ], [
         compareStrings,
@@ -1140,6 +1220,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
         setEditingTicket,
         setEditingWorkHours,
         setCommentedTicket,
+        resolveTicketDbId,
+        resolveTicketPublicId,
+        resolveTicketRouteId,
+        duplicatedPublicTicketIds,
     ]);
 
     const normalizeColumnKeys = (keys: string[]) => {
@@ -1195,23 +1279,11 @@ const CRMKanban = (props: CRMKanbanProps) => {
             projectFilter.includes(getProjectDisplayName(record))
         );
     }
-    const sourceRefFilterValues = (props.filter.source_ref ?? [])
-        .map((value) => toLookupValue(value).trim())
-        .filter((value) => value.length > 0);
+    const sourceRefFilterValues = normalizeVoiceSessionSourceRefs(props.filter.source_ref ?? []);
     if (sourceRefFilterValues.length > 0) {
-        filteredTickets = filteredTickets.filter((record) => {
-            const directSourceRef = toLookupValue(record.source_ref).trim();
-            if (directSourceRef && sourceRefFilterValues.includes(directSourceRef)) return true;
-
-            const sourceRecord =
-                record.source && typeof record.source === 'object' && !Array.isArray(record.source)
-                    ? (record.source as Record<string, unknown>)
-                    : null;
-            const embeddedVoiceSessionRef = toLookupValue(sourceRecord?.voice_session_id).trim();
-            if (embeddedVoiceSessionRef && sourceRefFilterValues.includes(embeddedVoiceSessionRef)) return true;
-
-            return false;
-        });
+        filteredTickets = filteredTickets.filter((record) =>
+            ticketMatchesVoiceSessionSourceRefs(record, sourceRefFilterValues)
+        );
     }
 
     return (
@@ -1256,7 +1328,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                     dataSource={filteredTickets}
                     size="small"
                     scroll={{ x: 'max-content' }}
-                    rowKey="_id"
+                    rowKey={(record) => resolveTicketRowKey(record)}
                     rowClassName={(record) => (record.status_update_checked === false ? 'row-unchecked-status' : '')}
                     onRow={(record) => ({
                         onClick: () => {

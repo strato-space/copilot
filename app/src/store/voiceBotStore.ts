@@ -24,6 +24,22 @@ import type {
 import { getVoicebotSocket, SOCKET_EVENTS } from '../services/socket';
 import { normalizeTimelineRangeSeconds } from '../utils/voiceTimeline';
 import { ensureCodexPerformerRecords } from '../utils/codexPerformer';
+import {
+    buildVoiceSessionTaskSourceRefs,
+    normalizeVoiceSessionSourceRefs,
+    ticketMatchesVoiceSessionSourceRefs,
+} from '../utils/voiceSessionTaskSource';
+import {
+    extractVoiceTaskCreateErrorText,
+    extractVoiceTaskCreateRowErrors,
+    VoiceTaskCreateValidationError,
+} from '../utils/voiceTaskCreation';
+
+export {
+    buildVoiceSessionTaskSourceRefs,
+    normalizeVoiceSessionSourceRefs,
+    ticketMatchesVoiceSessionSourceRefs,
+};
 
 interface VoiceBotState {
     currentSessionId: string | null;
@@ -196,6 +212,46 @@ const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
         })
         .filter(Boolean);
     return lines.join('\n');
+};
+
+const toEpochMillis = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        if (value > 1e12) return value;
+        if (value > 1e10) return value;
+        return value * 1000;
+    }
+
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const parsedDate = Date.parse(trimmed);
+    if (!Number.isNaN(parsedDate)) return parsedDate;
+
+    const numeric = Number(trimmed);
+    if (!Number.isFinite(numeric)) return null;
+    if (numeric > 1e12) return numeric;
+    if (numeric > 1e10) return numeric;
+    return numeric * 1000;
+};
+
+const resolveCodexTaskTimestamp = (task: CodexTask): number => {
+    const createdAt = toEpochMillis(task.created_at);
+    if (createdAt !== null) return createdAt;
+    const updatedAt = toEpochMillis(task.updated_at);
+    if (updatedAt !== null) return updatedAt;
+    return Number.NEGATIVE_INFINITY;
+};
+
+const sortCodexTasksNewestFirst = (tasks: CodexTask[]): CodexTask[] => {
+    return [...tasks].sort((left, right) => {
+        const timestampDiff = resolveCodexTaskTimestamp(right) - resolveCodexTaskTimestamp(left);
+        if (timestampDiff !== 0) return timestampDiff;
+
+        const rightKey = String(right._id || right.id || '');
+        const leftKey = String(left._id || left.id || '');
+        return rightKey.localeCompare(leftKey);
+    });
 };
 
 
@@ -1058,12 +1114,16 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
     fetchSessionCodexTasks: async (sessionId) => {
         const normalizedSessionId = String(sessionId || '').trim();
         if (!normalizedSessionId) return [];
+        const sessionSourceRefs = buildVoiceSessionTaskSourceRefs(normalizedSessionId, get().voiceBotSession);
         try {
             const response = await voicebotRequest<CodexTask[]>('voicebot/codex_tasks', {
                 session_id: normalizedSessionId,
             });
             if (!Array.isArray(response)) return [];
-            return response;
+            const filteredTasks = response.filter(
+                (task) => ticketMatchesVoiceSessionSourceRefs(task, sessionSourceRefs)
+            );
+            return sortCodexTasksNewestFirst(filteredTasks);
         } catch (error) {
             console.error('Ошибка при загрузке Codex-задач сессии:', error);
             throw error;
@@ -1562,6 +1622,14 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
             useSessionsUIStore.getState().closeTicketsModal();
             return true;
         } catch (e) {
+            const backendPayload = axios.isAxiosError(e)
+                ? (e.response?.data as unknown)
+                : null;
+            const rowErrors = extractVoiceTaskCreateRowErrors(backendPayload);
+            if (rowErrors.length > 0) {
+                const backendError = extractVoiceTaskCreateErrorText(backendPayload) || 'Не удалось создать задачи';
+                throw new VoiceTaskCreateValidationError(backendError, rowErrors);
+            }
             console.error('Ошибка при создании задач:', e);
             message.error('Ошибка при создании задач');
             throw e;
