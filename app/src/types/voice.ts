@@ -39,6 +39,10 @@ export interface VoiceBotMessage {
     message_timestamp?: string | number;
     session_id?: string;
     image_anchor_message_id?: string | null;
+    image_anchor_linked_message_id?: string | null;
+    material_row_group_id?: string | null;
+    material_anchor_message_id?: string | null;
+    material_target_message_id?: string | null;
     is_image_anchor?: boolean;
     message_type?: string;
     text?: string;
@@ -100,11 +104,18 @@ export interface VoiceMessageRow {
     flag?: string | undefined;
     keywords?: string | undefined;
     message_id?: string | undefined;
+    material_group_id?: string | undefined;
+    material_anchor_message_id?: string | undefined;
+    material_target_message_id?: string | undefined;
+    material_source_message_id?: string | undefined;
 }
 
 export interface VoiceMessageGroup {
     message_id: string | undefined;
     message_timestamp: string | number | undefined;
+    material_group_id?: string | undefined;
+    material_anchor_message_id?: string | undefined;
+    material_target_message_id?: string | undefined;
     original_message: VoiceBotMessage;
     rows: VoiceMessageRow[];
     summary: {

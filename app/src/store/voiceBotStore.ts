@@ -282,14 +282,40 @@ const isMessageDeleted = (msg: VoiceBotMessage | null | undefined): boolean => {
     return false;
 };
 
-const getNormalizedMessageId = (msg: VoiceBotMessage): string => {
-    const raw = msg?.message_id;
-    return typeof raw === 'string' ? raw.trim() : '';
+const normalizeMessageRef = (value: unknown): string => {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value === 'object') {
+        const record = value as { $oid?: unknown };
+        if (typeof record.$oid === 'string') return record.$oid.trim();
+    }
+    return '';
+};
+
+const getMessageLinkRefs = (msg: VoiceBotMessage): string[] => {
+    const refs = [
+        normalizeMessageRef(msg?.message_id),
+        normalizeMessageRef(msg?._id),
+    ].filter((value): value is string => value.length > 0);
+    return Array.from(new Set(refs));
+};
+
+const getPrimaryMessageRef = (msg: VoiceBotMessage): string => {
+    const refs = getMessageLinkRefs(msg);
+    return refs[0] ?? '';
+};
+
+const getRowsByMessageRefs = (source: Map<string, VoiceMessageRow[]>, refs: string[]): VoiceMessageRow[] => {
+    for (const ref of refs) {
+        const rows = source.get(ref);
+        if (Array.isArray(rows) && rows.length > 0) return rows;
+    }
+    return [];
 };
 
 const getImageRowsFromMessage = (msg: VoiceBotMessage): VoiceMessageRow[] => {
     const record = getMessageRecord(msg);
     const attachments = Array.isArray(record.attachments) ? record.attachments : [];
+    const messageRef = getPrimaryMessageRef(msg);
 
     return attachments
         .map((attachment) => {
@@ -331,7 +357,8 @@ const getImageRowsFromMessage = (msg: VoiceBotMessage): VoiceMessageRow[] => {
                 kind: 'image' as const,
                 imageUrl: url,
                 imageName,
-                message_id: msg.message_id,
+                message_id: messageRef || undefined,
+                material_source_message_id: messageRef || undefined,
             } satisfies VoiceMessageRow;
         })
         .filter((row): row is Exclude<typeof row, null> => row !== null);
@@ -340,34 +367,33 @@ const getImageRowsFromMessage = (msg: VoiceBotMessage): VoiceMessageRow[] => {
 const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]): VoiceMessageGroup[] => {
     if (!Array.isArray(voiceBotMessages)) return [];
 
-    const imageRowsByMessageId = new Map<string, VoiceMessageRow[]>();
-    const linkedImageAnchorIds = new Set<string>();
+    const imageRowsByMessageRef = new Map<string, VoiceMessageRow[]>();
+    const linkedImageAnchorRefs = new Set<string>();
     for (const msg of voiceBotMessages) {
         if (isMessageDeleted(msg)) continue;
-        const messageId = getNormalizedMessageId(msg);
-        if (messageId) {
-            const imageRows = getImageRowsFromMessage(msg);
-            if (imageRows.length > 0) {
-                imageRowsByMessageId.set(messageId, imageRows);
+        const messageRefs = getMessageLinkRefs(msg);
+        const imageRows = getImageRowsFromMessage(msg);
+        if (messageRefs.length > 0 && imageRows.length > 0) {
+            for (const ref of messageRefs) {
+                imageRowsByMessageRef.set(ref, imageRows);
             }
         }
 
         const record = getMessageRecord(msg);
-        const imageAnchorIdRaw = record.image_anchor_message_id;
-        const imageAnchorId = typeof imageAnchorIdRaw === 'string' ? imageAnchorIdRaw.trim() : '';
-        if (imageAnchorId) linkedImageAnchorIds.add(imageAnchorId);
+        const imageAnchorRef = normalizeMessageRef(record.image_anchor_message_id);
+        if (imageAnchorRef) linkedImageAnchorRefs.add(imageAnchorRef);
     }
 
     return voiceBotMessages.flatMap((msg) => {
         if (isMessageDeleted(msg)) return [];
-        const messageId = getNormalizedMessageId(msg);
-        const ownImageRows = messageId ? (imageRowsByMessageId.get(messageId) ?? []) : [];
+        const messageRefs = getMessageLinkRefs(msg);
+        const primaryMessageRef = messageRefs[0] ?? '';
+        const ownImageRows = getRowsByMessageRefs(imageRowsByMessageRef, messageRefs);
         const record = getMessageRecord(msg);
-        const imageAnchorIdRaw = record.image_anchor_message_id;
-        const imageAnchorId = typeof imageAnchorIdRaw === 'string' ? imageAnchorIdRaw.trim() : '';
-        const linkedAnchorRows = imageAnchorId ? (imageRowsByMessageId.get(imageAnchorId) ?? []) : [];
+        const imageAnchorRef = normalizeMessageRef(record.image_anchor_message_id);
+        const linkedAnchorRows = imageAnchorRef ? (imageRowsByMessageRef.get(imageAnchorRef) ?? []) : [];
 
-        if (messageId && linkedImageAnchorIds.has(messageId) && ownImageRows.length > 0) {
+        if (ownImageRows.length > 0 && messageRefs.some((ref) => linkedImageAnchorRefs.has(ref))) {
             return [];
         }
 
@@ -389,7 +415,7 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                 patt: cat.new_pattern_detected || '',
                 flag: cat.quality_flag || '',
                 keywords: cat.topic_keywords || '',
-                message_id: msg.message_id,
+                message_id: primaryMessageRef || undefined,
             };
         }).filter((row) => typeof row.text === 'string' && row.text.trim().length > 0);
 
@@ -411,7 +437,7 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                             name: 'Text',
                             text: fallbackText,
                             kind: 'text' as const,
-                            message_id: msg.message_id,
+                            message_id: primaryMessageRef || undefined,
                         },
                     ];
                 }
@@ -424,10 +450,28 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
             rows = [...linkedAnchorRows, ...rows];
         }
 
+        const materialAnchorMessageId = imageAnchorRef || (ownImageRows.length > 0 ? primaryMessageRef : '');
+        const materialTargetMessageId = primaryMessageRef;
+        const materialGroupId = materialAnchorMessageId && materialTargetMessageId
+            ? `${materialAnchorMessageId}::${materialTargetMessageId}`
+            : '';
+        if (materialGroupId) {
+            rows = rows.map((row) => ({
+                ...row,
+                material_group_id: materialGroupId,
+                material_anchor_message_id: materialAnchorMessageId,
+                material_target_message_id: materialTargetMessageId,
+                material_source_message_id: row.material_source_message_id ?? row.message_id,
+            }));
+        }
+
         return [
             {
-                message_id: msg.message_id,
+                message_id: primaryMessageRef || undefined,
                 message_timestamp: msg.message_timestamp,
+                material_group_id: materialGroupId || undefined,
+                material_anchor_message_id: materialAnchorMessageId || undefined,
+                material_target_message_id: materialTargetMessageId || undefined,
                 original_message: msg,
                 rows,
                 summary: {
