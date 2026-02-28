@@ -462,6 +462,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Added production resilience for Codex `bd` API calls: `backend/src/api/routes/crm/codex.ts` now detects `Database out of sync with JSONL`, runs `bd sync --import-only`, and retries `bd show/list` once to prevent transient `502` on valid issue IDs.
 - Fixed OperOps Codex task page load compatibility (`copilot-f7w7`): `app/src/pages/operops/CodexTaskPage.tsx` now handles mixed `/api/crm/codex/issue` response envelopes (`issue`, `data`, array, plain object) and sends both `id`/`issue_id` for API contract parity; added `app/__tests__/operops/codexTaskPageContract.test.ts`.
 - Fixed Voice Codex row UI artifact (`copilot-oh19`): removed inline visible `Открыть задачу в OperOps` text spill from session row content and preserved navigation via compact action/tooltip rendering; updated `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
 - Completed Wave 1 voice-operops-codex implementation batch and closed `copilot-b1k5`, `copilot-s33e`, `copilot-u976`, `copilot-xuec`; coordinating epic `copilot-bq81` remains `in_progress` for follow-up waves.

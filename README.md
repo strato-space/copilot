@@ -276,6 +276,7 @@ Projects:
 - `chromium`: Authenticated tests (require valid credentials in `.env.test`)
 
 ## Session closeout update
+- Added Codex API runtime recovery for out-of-sync `bd` state: `/api/crm/codex/issue` and `/api/crm/codex/issues` now auto-run `bd sync --import-only` and retry once before returning an error.
 - Fixed OperOps Codex issue page loading for valid BD IDs (`copilot-f7w7`): `app/src/pages/operops/CodexTaskPage.tsx` now supports mixed `/api/crm/codex/issue` payload envelopes and posts both `id` + `issue_id`; added coverage in `app/__tests__/operops/codexTaskPageContract.test.ts`.
 - Fixed Voice session Codex row visual artifact (`copilot-oh19`): removed unintended inline `Открыть задачу в OperOps` text fragment from row content while preserving OperOps navigation action; updated `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
 - Completed Wave 1 voice-operops-codex rollout items and closed `copilot-b1k5`, `copilot-s33e`, `copilot-u976`, `copilot-xuec`; epic `copilot-bq81` stays in progress for later waves.

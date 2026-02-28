@@ -20,6 +20,7 @@ describe('CRM Codex route contract', () => {
     expect(routeSource).toContain("return ['--no-daemon', 'list', '--all', '--status', 'closed', '--json', '--limit', String(resolvedLimit)];");
     expect(routeSource).toContain("return ['--no-daemon', 'list', '--all', '--json', '--limit', String(resolvedLimit)];");
     expect(routeSource).toContain('const bdListArgs = resolveBdListArgs(view, limit);');
+    expect(routeSource).toContain("args: ['sync', '--import-only'],");
   });
 
   it('exposes single-issue endpoint backed by bd show --json and id payload validation', () => {
@@ -28,6 +29,7 @@ describe('CRM Codex route contract', () => {
     expect(routeSource).toContain('issue_id: z.string().trim().min(1).optional(),');
     expect(routeSource).toContain("router.post('/issue', async (req: Request, res: Response) => {");
     expect(routeSource).toContain("args: ['--no-daemon', 'show', issueId, '--json'],");
+    expect(routeSource).toContain('const runBdCommandWithSyncRetry = async ({');
   });
 
   it('mounts codex router under /api/crm/codex', () => {

@@ -2,6 +2,7 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **09:10** Production `POST /api/crm/codex/issue` and `POST /api/crm/codex/issues` could fail with `502` when `bd --no-daemon` returned `Database out of sync with JSONL`, so valid Codex issues were unavailable until manual CLI sync (`copilot-f7w7` follow-up).
 - **09:04** OperOps Codex issue page could fail with `Не удалось загрузить задачу из BD/Codex` for valid IDs like `copilot-ib30` because frontend parsing expected a narrow response envelope while backend/route variants returned object/array wrappers (`copilot-f7w7`).
 - **09:04** Voice session Codex task rows rendered an unintended one-character-width text artifact (`Открыть задачу в OperOps`) between Issue and Title, which degraded table readability (`copilot-oh19`).
 - **07:10** Voice session tabs used different source-matching logic across OperOps and Voice views, so tasks linked from TaskPage `Source` could disappear in Voice `Задачи`/`Codex` tabs for the same session (`copilot-ztlv.7`, `copilot-ztlv.27`).
@@ -21,6 +22,7 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **09:10** Added backend auto-recovery for Codex `bd` calls: when out-of-sync JSONL state is detected, route now runs `bd sync --import-only` and retries `bd list/show` once before returning failure.
 - **09:04** Added resilient Codex issue page payload normalization: frontend now accepts direct issue objects plus wrapped payload variants (`issue`, `data`, array) and sends both `id` and `issue_id` for backward-compatible route contracts (`copilot-f7w7`).
 - **09:04** Reworked Voice Codex row action rendering to icon+tooltip behavior so navigation remains available without inline stray text in the content flow (`copilot-oh19`).
 - **07:10** Unified session-source matching via shared canonical matcher (`source_ref`, `external_ref`, `source_data.session_id`, `source_data.session_db_id`, canonical `/voice/session/:id` URL parsing) and reused it across Voice tabs and CRM Kanban filtering (`copilot-ztlv.7`, `copilot-ztlv.27`).
@@ -40,6 +42,9 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **09:10** Codex backend resilience hotfix:
+  - Updated `backend/src/api/routes/crm/codex.ts` with out-of-sync detector, `bd sync --import-only` recovery path, and one-shot retry wrapper for `bd list/show`.
+  - Updated contract guard in `backend/__tests__/api/crmCodexRouteContract.test.ts`.
 - **09:04** Codex page loading/parsing hardening (`copilot-f7w7`):
   - Updated `app/src/pages/operops/CodexTaskPage.tsx` with broad payload parser support and dual request key contract (`id` + `issue_id`).
   - Added regression contract `app/__tests__/operops/codexTaskPageContract.test.ts`.

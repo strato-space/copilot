@@ -12,6 +12,7 @@ const DEFAULT_LIMIT = 0;
 const MAX_LIMIT = 1000;
 const BD_LIST_TIMEOUT_MS = 20_000;
 const BD_SHOW_TIMEOUT_MS = 20_000;
+const BD_SYNC_IMPORT_TIMEOUT_MS = 20_000;
 
 const codexIssuesViewSchema = z.enum(['open', 'closed', 'all']);
 type CodexIssuesView = z.infer<typeof codexIssuesViewSchema>;
@@ -96,6 +97,80 @@ const runCommand = async ({
         timedOut,
       });
     });
+  });
+};
+
+const isBdOutOfSyncError = ({ stdout, stderr }: Pick<CommandResult, 'stdout' | 'stderr'>): boolean => {
+  const haystack = `${stdout}\n${stderr}`.toLowerCase();
+  return haystack.includes('database out of sync with jsonl')
+    || haystack.includes('run \'bd sync --import-only\' to fix');
+};
+
+const runBdCommandWithSyncRetry = async ({
+  command,
+  args,
+  timeoutMs,
+  cwd,
+  logPrefix,
+  metadata,
+}: {
+  command: string;
+  args: string[];
+  timeoutMs: number;
+  cwd: string;
+  logPrefix: string;
+  metadata?: Record<string, unknown>;
+}): Promise<CommandResult> => {
+  const first = await runCommand({
+    command,
+    args,
+    timeoutMs,
+    cwd,
+  });
+
+  if (first.timedOut || first.code === 0 || !isBdOutOfSyncError(first)) {
+    return first;
+  }
+
+  logger.warn(`${logPrefix} bd out-of-sync detected, running import-only sync`, {
+    cwd,
+    code: first.code,
+    signal: first.signal,
+    stderr: first.stderr.trim() || null,
+    stdout_sample: first.stdout.slice(0, 500) || null,
+    ...(metadata ?? {}),
+  });
+
+  const syncResult = await runCommand({
+    command,
+    args: ['sync', '--import-only'],
+    timeoutMs: BD_SYNC_IMPORT_TIMEOUT_MS,
+    cwd,
+  });
+
+  if (syncResult.timedOut || syncResult.code !== 0) {
+    logger.error(`${logPrefix} bd sync --import-only failed`, {
+      cwd,
+      code: syncResult.code,
+      signal: syncResult.signal,
+      timed_out: syncResult.timedOut,
+      stderr: syncResult.stderr.trim() || null,
+      stdout_sample: syncResult.stdout.slice(0, 500) || null,
+      ...(metadata ?? {}),
+    });
+    return first;
+  }
+
+  logger.info(`${logPrefix} bd sync --import-only succeeded, retrying command`, {
+    cwd,
+    ...(metadata ?? {}),
+  });
+
+  return await runCommand({
+    command,
+    args,
+    timeoutMs,
+    cwd,
   });
 };
 
@@ -203,11 +278,17 @@ router.post('/issues', async (req: Request, res: Response) => {
   const cwd = resolveRepoRootCwd();
   const bdListArgs = resolveBdListArgs(view, limit);
 
-  const result = await runCommand({
+  const result = await runBdCommandWithSyncRetry({
     command: bdBin,
     args: bdListArgs,
     timeoutMs: BD_LIST_TIMEOUT_MS,
     cwd,
+    logPrefix: '[crm.codex.issues]',
+    metadata: {
+      limit,
+      view,
+      bd_args: bdListArgs.join(' '),
+    },
   });
 
   if (result.timedOut || result.code !== 0) {
@@ -253,11 +334,15 @@ router.post('/issue', async (req: Request, res: Response) => {
   const bdBin = resolveBdBin();
   const cwd = resolveRepoRootCwd();
 
-  const result = await runCommand({
+  const result = await runBdCommandWithSyncRetry({
     command: bdBin,
     args: ['--no-daemon', 'show', issueId, '--json'],
     timeoutMs: BD_SHOW_TIMEOUT_MS,
     cwd,
+    logPrefix: '[crm.codex.issue]',
+    metadata: {
+      issue_id: issueId,
+    },
   });
 
   if (result.timedOut) {
