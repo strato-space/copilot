@@ -32,6 +32,8 @@ import {
 import {
     extractVoiceTaskCreateErrorText,
     extractVoiceTaskCreateRowErrors,
+    isVoiceTaskCreateValidationError,
+    type VoiceTaskCreateRowError,
     VoiceTaskCreateValidationError,
 } from '../utils/voiceTaskCreation';
 import { voicebotRuntimeConfig } from './voicebotRuntimeConfig';
@@ -155,7 +157,10 @@ interface VoiceBotUploadActionsSlice {
 }
 
 interface VoiceBotTicketsActionsSlice {
-    confirmSelectedTickets: (selectedTicketIds: string[], updatedTickets?: Array<Record<string, unknown>> | null) => Promise<boolean>;
+    confirmSelectedTickets: (
+        selectedTicketIds: string[],
+        updatedTickets?: Array<Record<string, unknown>> | null
+    ) => Promise<{ createdTaskIds: string[]; rowErrors: VoiceTaskCreateRowError[] }>;
     rejectAllTickets: () => void;
     deleteTaskFromSession: (taskId: string) => Promise<boolean>;
     deleteSession: (sessionId: string) => Promise<boolean>;
@@ -1517,11 +1522,64 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 })(),
             }));
 
-            await voicebotHttp.request('voicebot/create_tickets', { tickets: preparedTickets, session_id: get().currentSessionId });
-            message.success(`Создано ${selectedTicketIds.length} задач`);
+            const response = await voicebotHttp.request<Record<string, unknown>>(
+                'voicebot/create_tickets',
+                { tickets: preparedTickets, session_id: get().currentSessionId }
+            );
+            const createdTaskIds = Array.isArray(response?.created_task_ids)
+                ? response.created_task_ids
+                    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+                    .filter(Boolean)
+                : [];
+            const createdTaskIdSet = new Set(createdTaskIds);
+
+            if (createdTaskIdSet.size > 0) {
+                set((state) => {
+                    if (!state.voiceBotSession) return state;
+                    const processorsData = state.voiceBotSession.processors_data as Record<string, unknown> | undefined;
+                    const createTasks = processorsData?.CREATE_TASKS as
+                        | { data?: Array<Record<string, unknown>> }
+                        | undefined;
+                    if (!createTasks?.data) return state;
+
+                    return {
+                        ...state,
+                        voiceBotSession: {
+                            ...state.voiceBotSession,
+                            processors_data: {
+                                ...processorsData,
+                                CREATE_TASKS: {
+                                    ...createTasks,
+                                    data: createTasks.data.filter((task) => {
+                                        const byId = typeof task.id === 'string' ? task.id : '';
+                                        const byAiId = typeof task.task_id_from_ai === 'string' ? task.task_id_from_ai : '';
+                                        const byLegacyAiId = typeof task['Task ID'] === 'string' ? task['Task ID'] : '';
+                                        return (
+                                            !createdTaskIdSet.has(byId) &&
+                                            !createdTaskIdSet.has(byAiId) &&
+                                            !createdTaskIdSet.has(byLegacyAiId)
+                                        );
+                                    }),
+                                },
+                            },
+                        },
+                    };
+                });
+                message.success(`Создано ${createdTaskIdSet.size} задач`);
+            }
+
+            const rowErrors = extractVoiceTaskCreateRowErrors(response);
+            if (rowErrors.length > 0) {
+                const backendError = extractVoiceTaskCreateErrorText(response) || 'Не удалось создать задачи';
+                throw new VoiceTaskCreateValidationError(backendError, rowErrors);
+            }
+
             useSessionsUIStore.getState().closeTicketsModal();
-            return true;
+            return { createdTaskIds, rowErrors: [] };
         } catch (e) {
+            if (isVoiceTaskCreateValidationError(e)) {
+                throw e;
+            }
             const backendPayload = axios.isAxiosError(e)
                 ? (e.response?.data as unknown)
                 : null;

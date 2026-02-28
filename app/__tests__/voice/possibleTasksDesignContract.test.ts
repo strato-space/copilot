@@ -16,7 +16,7 @@ describe('PossibleTasks design contract', () => {
 
   it('uses required-field highlighting without standalone status column', () => {
     expect(source.includes("title: 'Статус'")).toBe(false);
-    expect(source.includes('обязательное поле')).toBe(true);
+    expect(source.includes('обязательное поле')).toBe(false);
     expect(source.includes("status={record.__missing.includes('name') ? 'error' : ''}")).toBe(true);
     expect(source.includes("status={record.__missing.includes('description') ? 'error' : ''}")).toBe(true);
     expect(source.includes("status={record.__missing.includes('task_type_id') ? 'error' : ''}")).toBe(false);

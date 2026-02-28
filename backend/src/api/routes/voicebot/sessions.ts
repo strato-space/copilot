@@ -339,11 +339,15 @@ const normalizeGitRepo = (value: unknown): string => {
 };
 
 type CodexIssueSyncInput = {
+    index: number;
+    sourceTaskId: string;
     taskId: string;
     name: string;
     description: string;
     assignee?: string;
     externalRef: string;
+    performerId?: string;
+    projectId?: string;
 };
 
 const buildCodexIssueDescription = ({
@@ -368,9 +372,10 @@ type CreateTicketsRowRejectionReason =
     | 'missing_performer_id'
     | 'invalid_performer_id'
     | 'performer_not_found'
-    | 'codex_project_git_repo_required';
+    | 'codex_project_git_repo_required'
+    | 'codex_issue_sync_failed';
 
-type CreateTicketsRejectedField = 'performer_id' | 'project_id';
+type CreateTicketsRejectedField = 'performer_id' | 'project_id' | 'general';
 
 type CreateTicketsRejectedRow = {
     index: number;
@@ -3012,7 +3017,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
 
         const now = new Date();
         const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
-        const tasksToSave: Array<Record<string, unknown>> = [];
+        const tasksToSave: Array<{ sourceTaskId: string; task: Record<string, unknown> }> = [];
         const codexTasksToSync: Array<CodexIssueSyncInput> = [];
         const rejectedRows: CreateTicketsRejectedRow[] = [];
         const performerCache = new Map<string, Record<string, unknown> | null>();
@@ -3154,11 +3159,15 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                     continue;
                 }
                 codexTasksToSync.push({
+                    index: ticketIndex,
+                    sourceTaskId: ticketId,
                     taskId: publicTaskId,
                     name,
                     description,
                     assignee: toTaskText(creatorName || creatorEmail),
                     externalRef: canonicalExternalRef,
+                    performerId: rawPerformerId,
+                    projectId: projectCacheKey,
                 });
                 continue;
             }
@@ -3172,34 +3181,37 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             }
 
             tasksToSave.push({
-                id: publicTaskId,
-                name,
-                project_id: projectId,
-                project: projectName,
-                description,
-                task_type_id: toObjectIdOrNull(ticket.task_type_id),
-                priority: String(ticket.priority || 'P3'),
-                priority_reason: String(ticket.priority_reason || 'No reason provided'),
-                performer_id: performerId,
-                performer: taskPerformer,
-                created_at: now,
-                updated_at: now,
-                task_status: 'Ready',
-                task_status_history: [],
-                last_status_update: now,
-                status_update_checked: false,
-                task_id_from_ai: ticket.task_id_from_ai || null,
-                dependencies_from_ai: Array.isArray(ticket.dependencies_from_ai) ? ticket.dependencies_from_ai : [],
-                dialogue_reference: ticket.dialogue_reference || null,
-                dialogue_tag: ticket.dialogue_tag || null,
-                source: 'VOICE_BOT',
-                source_data: {
-                    session_name: String((session as Record<string, unknown>).session_name || ''),
-                    session_id: new ObjectId(sessionId),
+                sourceTaskId: ticketId,
+                task: {
+                    id: publicTaskId,
+                    name,
+                    project_id: projectId,
+                    project: projectName,
+                    description,
+                    task_type_id: toObjectIdOrNull(ticket.task_type_id),
+                    priority: String(ticket.priority || 'P3'),
+                    priority_reason: String(ticket.priority_reason || 'No reason provided'),
+                    performer_id: performerId,
+                    performer: taskPerformer,
+                    created_at: now,
+                    updated_at: now,
+                    task_status: 'Ready',
+                    task_status_history: [],
+                    last_status_update: now,
+                    status_update_checked: false,
+                    task_id_from_ai: ticket.task_id_from_ai || null,
+                    dependencies_from_ai: Array.isArray(ticket.dependencies_from_ai) ? ticket.dependencies_from_ai : [],
+                    dialogue_reference: ticket.dialogue_reference || null,
+                    dialogue_tag: ticket.dialogue_tag || null,
+                    source: 'VOICE_BOT',
+                    source_data: {
+                        session_name: String((session as Record<string, unknown>).session_name || ''),
+                        session_id: new ObjectId(sessionId),
+                    },
+                    ...(creatorId ? { created_by: creatorId } : {}),
+                    ...(creatorName ? { created_by_name: creatorName } : {}),
+                    runtime_tag: RUNTIME_TAG,
                 },
-                ...(creatorId ? { created_by: creatorId } : {}),
-                ...(creatorName ? { created_by_name: creatorName } : {}),
-                runtime_tag: RUNTIME_TAG,
             });
         }
 
@@ -3231,7 +3243,8 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         }
 
         let insertedCount = 0;
-        const filteredTasksToSave = tasksToSave.filter((task) => {
+        const createdTaskIds = new Set<string>();
+        const filteredTasksToSave = tasksToSave.filter(({ task }) => {
             const isCodexTask = codexPerformerUtils.isTaskDocument(task);
             if (!isCodexTask) return true;
 
@@ -3244,8 +3257,13 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             return false;
         });
         if (filteredTasksToSave.length > 0) {
-            const insertResult = await db.collection(COLLECTIONS.TASKS).insertMany(filteredTasksToSave);
+            const insertResult = await db.collection(COLLECTIONS.TASKS).insertMany(
+                filteredTasksToSave.map(({ task }) => task)
+            );
             insertedCount = insertResult.insertedCount;
+            for (const { sourceTaskId } of filteredTasksToSave) {
+                if (sourceTaskId) createdTaskIds.add(sourceTaskId);
+            }
         }
         const codexSyncErrors: Array<{ task_id: string; error: string }> = [];
 
@@ -3270,22 +3288,55 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                         task_id: codexTask.taskId,
                         issue_id: issueId,
                     });
+                    if (codexTask.sourceTaskId) createdTaskIds.add(codexTask.sourceTaskId);
                 } catch (error) {
+                    const syncError = error instanceof Error ? error.message : String(error);
                     logger.error('[voicebot.create_tickets] failed to create bd issue for codex task', {
                         task_id: codexTask.taskId,
-                        error: error instanceof Error ? error.message : String(error),
+                        error: syncError,
                     });
                     codexSyncErrors.push({
                         task_id: codexTask.taskId,
-                        error: error instanceof Error ? error.message : String(error),
+                        error: syncError,
                     });
+                    const codexRejectedRow: CreateTicketsRejectedRow = {
+                        index: codexTask.index,
+                        ticket_id: codexTask.sourceTaskId || codexTask.taskId,
+                        field: 'general',
+                        reason: 'codex_issue_sync_failed',
+                        message: `Не удалось создать Codex задачу в bd: ${syncError}`,
+                        ...(codexTask.performerId ? { performer_id: codexTask.performerId } : {}),
+                        ...(codexTask.projectId ? { project_id: codexTask.projectId } : {}),
+                    };
+                    rejectedRows.push(codexRejectedRow);
                 }
             }
+        }
+
+        const createdTaskIdList = Array.from(createdTaskIds).filter(Boolean);
+        if (createdTaskIdList.length > 0) {
+            const updatePayload: Record<string, unknown> = {
+                $pull: {
+                    'processors_data.CREATE_TASKS.data': {
+                        $or: [
+                            { id: { $in: createdTaskIdList } },
+                            { task_id_from_ai: { $in: createdTaskIdList } },
+                            { 'Task ID': { $in: createdTaskIdList } },
+                        ],
+                    },
+                },
+                $set: { updated_at: new Date() },
+            };
+            await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+                runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+                updatePayload
+            );
         }
 
         return res.status(200).json({
             success: true,
             insertedCount,
+            created_task_ids: createdTaskIdList,
             ...(codexSyncErrors.length > 0 ? { codex_issue_sync_errors: codexSyncErrors } : {}),
             ...(rejectedRows.length > 0 ? { rejected_rows: rejectedRows } : {}),
         });

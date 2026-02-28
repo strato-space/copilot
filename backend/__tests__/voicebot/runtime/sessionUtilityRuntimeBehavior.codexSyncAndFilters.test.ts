@@ -226,11 +226,22 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+    expect(response.body.created_task_ids).toEqual([]);
     expect(response.body.codex_issue_sync_errors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           task_id: expect.stringContaining('ticket-1'),
           error: expect.stringContaining('bd cli failed'),
+        }),
+      ])
+    );
+    expect(response.body.rejected_rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ticket_id: 'ticket-1',
+          field: 'general',
+          reason: 'codex_issue_sync_failed',
+          message: expect.stringContaining('Не удалось создать Codex задачу в bd'),
         }),
       ])
     );

@@ -441,9 +441,27 @@ function PossibleTasksSessionScope() {
     setIsSubmitting(true);
     setRowCreationErrors({});
     try {
-      await confirmSelectedTickets(selectedRowKeys, payload);
-      setSelectedRowKeys([]);
-      message.success(`Создано задач: ${payload.length}`);
+      const result = await confirmSelectedTickets(selectedRowKeys, payload);
+      const createdTaskIdSet = new Set(result.createdTaskIds);
+      if (createdTaskIdSet.size > 0) {
+        setSelectedRowKeys((prev) => prev.filter((id) => !createdTaskIdSet.has(id)));
+        setDrafts((prev) => {
+          if (Object.keys(prev).length === 0) return prev;
+          const next = { ...prev };
+          for (const id of createdTaskIdSet) {
+            delete next[id];
+          }
+          return next;
+        });
+        setRowCreationErrors((prev) => {
+          if (Object.keys(prev).length === 0) return prev;
+          const next = { ...prev };
+          for (const id of createdTaskIdSet) {
+            delete next[id];
+          }
+          return next;
+        });
+      }
     } catch (error) {
       if (isVoiceTaskCreateValidationError(error)) {
         const rowErrorsByTaskId: Record<string, TaskRowCreationErrors> = {};
@@ -462,6 +480,8 @@ function PossibleTasksSessionScope() {
 
         if (Object.keys(rowErrorsByTaskId).length > 0) {
           setRowCreationErrors(rowErrorsByTaskId);
+          const failedTaskIds = new Set(Object.keys(rowErrorsByTaskId));
+          setSelectedRowKeys((prev) => prev.filter((id) => failedTaskIds.has(id)));
         }
 
         const firstRowError = error.rowErrors[0];
@@ -642,9 +662,6 @@ function PossibleTasksSessionScope() {
                   value={record.name}
                   onChange={(event) => setDraftValue(record.id, 'name', event.target.value)}
                 />
-                {record.__missing.includes('name') ? (
-                  <Typography.Text type="danger">обязательное поле</Typography.Text>
-                ) : null}
               </div>
             ),
           },
@@ -659,9 +676,6 @@ function PossibleTasksSessionScope() {
                   value={record.description}
                   onChange={(event) => setDraftValue(record.id, 'description', event.target.value)}
                 />
-                {record.__missing.includes('description') ? (
-                  <Typography.Text type="danger">обязательное поле</Typography.Text>
-                ) : null}
               </div>
             ),
           },
@@ -699,9 +713,6 @@ function PossibleTasksSessionScope() {
                     style={{ width: '100%' }}
                     placeholder="Исполнитель"
                   />
-                  {record.__missing.includes('performer_id') ? (
-                    <Typography.Text type="danger">обязательное поле</Typography.Text>
-                  ) : null}
                   {!record.__missing.includes('performer_id') && performerErrorText ? (
                     <Typography.Text type="danger">{performerErrorText}</Typography.Text>
                   ) : null}

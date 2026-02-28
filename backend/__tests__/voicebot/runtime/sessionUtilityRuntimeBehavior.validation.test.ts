@@ -193,6 +193,129 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect((insertedDocs[0]?.performer_id as ObjectId).toHexString()).toBe(validPerformerId.toHexString());
   });
 
+  it('create_tickets returns created_task_ids and removes only created rows from session CREATE_TASKS data', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      processors_data: {
+        CREATE_TASKS: {
+          data: [
+            { id: 'invalid-performer' },
+            { id: 'valid-task' },
+          ],
+        },
+      },
+    }));
+
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async ({ _id }: { _id: ObjectId }) => (
+              _id.toHexString() === validPerformerId.toHexString()
+                ? { _id: validPerformerId, name: 'Assignee' }
+                : null
+            )),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            findOne: jest.fn(async () => null),
+            insertMany: insertManySpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [
+          {
+            id: 'invalid-performer',
+            name: 'Task with malformed performer id',
+            description: 'Should fail performer validation',
+            performer_id: 'not-an-object-id',
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+          {
+            id: 'valid-task',
+            name: 'Task with valid performer id',
+            description: 'Should be inserted',
+            performer_id: validPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.created_task_ids).toEqual(['valid-task']);
+    expect(response.body.rejected_rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ticket_id: 'invalid-performer',
+          field: 'performer_id',
+          reason: 'invalid_performer_id',
+        }),
+      ])
+    );
+
+    expect(insertManySpy).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateOneSpy).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $and: expect.arrayContaining([
+          expect.objectContaining({ _id: sessionId }),
+        ]),
+      }),
+      expect.objectContaining({
+        $pull: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': expect.objectContaining({
+            $or: expect.arrayContaining([
+              { id: { $in: ['valid-task'] } },
+              { task_id_from_ai: { $in: ['valid-task'] } },
+              { 'Task ID': { $in: ['valid-task'] } },
+            ]),
+          }),
+        }),
+      })
+    );
+  });
+
   it('create_tickets returns row-level invalid_rows details for invalid performer ids', async () => {
     const sessionId = new ObjectId();
     const projectId = new ObjectId();
