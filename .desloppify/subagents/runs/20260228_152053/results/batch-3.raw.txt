@@ -1,0 +1,103 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 3,
+  "assessments": {
+    "package_organization": 74.0,
+    "high_level_elegance": 76.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`app/src/hooks/useCRMSocket.ts` imports only CRM-facing collaborators (`../store/kanbanStore`, `../types/crm`, CRM socket constants) and has no non-CRM reuse signals, indicating feature affinity is CRM-specific rather than global hooks.",
+        "`app/src/hooks/useMCPWebSocket.ts` is tightly coupled to MCP request state (`../store/mcpRequestStore`) and MCP events, but is placed in the same flat shared hooks directory as app bootstrap logic.",
+        "`app/src/hooks/useAppInit.ts`, `useCRMSocket.ts`, and `useMCPWebSocket.ts` represent different ownership layers (app bootstrap, CRM realtime, MCP realtime) in one flat folder, reducing navigability by domain boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`useAppInit` combines startup orchestration and auth refresh side effects while returning a constant `{ initComplete: true }`, so its public role does not match its actual responsibilities.",
+        "`useCRMSocket` and `useMCPWebSocket` both implement direct socket lifecycle wiring (`on`/`off`, connect/disconnect handling, cleanup), but each does it ad hoc in feature hooks instead of through a coherent realtime boundary abstraction.",
+        "Current top-level hook ownership is historical/transport-driven rather than domain-driven, which makes system decomposition harder to explain quickly (bootstrap vs CRM vs MCP all presented as peer generic hooks)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "feature_hooks_not_colocated",
+      "summary": "Feature-specific realtime hooks are stored in a generic flat hooks package, obscuring ownership and change boundaries.",
+      "related_files": [
+        "app/src/hooks/useCRMSocket.ts",
+        "app/src/hooks/useMCPWebSocket.ts",
+        "app/src/hooks/useAppInit.ts"
+      ],
+      "evidence": [
+        "`useCRMSocket` depends on CRM-only store/types and CRM channel events.",
+        "`useMCPWebSocket` depends on MCP-only request store/events and auth gating.",
+        "Despite distinct domains, all are peers in `app/src/hooks/`, so folder placement does not match responsibility boundaries."
+      ],
+      "suggestion": "Staged reorg plan: 1) create target folders `app/src/features/crm/hooks/`, `app/src/features/mcp/hooks/`, and `app/src/app-init/hooks/`; 2) move `useCRMSocket.ts` to CRM hooks and `useMCPWebSocket.ts` to MCP hooks, then move `useAppInit.ts` to app-init hooks; 3) add temporary re-export shims in `app/src/hooks/` to keep imports stable during migration; 4) update imports incrementally with `rg \"from '../hooks/use(CRM|MCP|AppInit)\" -n app/src` and `rg \"from './hooks/use(CRM|MCP|AppInit)\" -n app/src`; 5) remove shims after callers are updated; 6) validate with `cd app && npm run build` and `cd app && npm run test:serial`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_domain_colocation_for_hooks"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "bootstrap_hook_role_mismatch",
+      "summary": "App initialization hook exposes a misleading surface (`initComplete` always true) while embedding hidden startup side effects.",
+      "related_files": [
+        "app/src/hooks/useAppInit.ts",
+        "app/src/hooks/useCRMSocket.ts"
+      ],
+      "evidence": [
+        "`useAppInit` always returns `{ initComplete: true }`, so callers cannot observe actual init lifecycle.",
+        "The same hook executes auth-dependent refresh plus periodic/focus refresh hooks, meaning it is an orchestrator rather than a simple readiness provider.",
+        "This weakens top-level role clarity versus other lifecycle hooks in the same package."
+      ],
+      "suggestion": "Split intent into explicit boundaries: create `app-init` orchestration hook (side effects only) and a separate readiness selector/hook that reflects real startup state from store. Keep naming aligned with behavior (`useBootstrapEffects`, `useAppReadiness`) and migrate callers in two steps: first introduce new hooks alongside old, then replace imports and remove legacy API after `cd app && npm run build` passes.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_domain_colocation_for_hooks"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "realtime_boundary_not_centralized",
+      "summary": "Realtime transport lifecycle logic is duplicated across feature hooks instead of flowing through a coherent subsystem boundary.",
+      "related_files": [
+        "app/src/hooks/useCRMSocket.ts",
+        "app/src/hooks/useMCPWebSocket.ts"
+      ],
+      "evidence": [
+        "Both hooks directly orchestrate socket connection/listener lifecycle and local cleanup state.",
+        "Both hooks embed transport concerns and domain update behavior in the same file, creating mixed responsibilities at the top-level hook layer.",
+        "No shared realtime adapter boundary is used to standardize subscription/cleanup semantics."
+      ],
+      "suggestion": "Introduce a `app/src/services/realtime/` boundary with typed channel adapters (e.g., `crmRealtimeClient`, `mcpRealtimeClient`) responsible for subscribe/unsubscribe and event binding. Then thin hooks to domain orchestration only. Migration order: 1) extract reusable socket lifecycle helper; 2) move MCP hook to adapter-backed path; 3) move CRM hook; 4) delete duplicated lifecycle code; 5) run `cd app && npm run build` and targeted grep checks `rg \"socket\\.on\\(|socket\\.off\\(\" app/src/hooks -n` to verify transport code has been centralized.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_domain_colocation_for_hooks"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Hooks package is organized as a flat technical bucket rather than domain-owned modules.",
+      "Transport-level socket concerns are not isolated behind a single realtime subsystem boundary.",
+      "Public hook names/contracts were allowed to drift from actual orchestration responsibilities."
+    ],
+    "likely_symptoms": [
+      "feature_hooks_not_colocated",
+      "bootstrap_hook_role_mismatch",
+      "realtime_boundary_not_centralized"
+    ],
+    "possible_false_positives": []
+  }
+}

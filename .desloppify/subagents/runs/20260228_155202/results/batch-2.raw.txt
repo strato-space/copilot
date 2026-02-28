@@ -1,0 +1,116 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 2,
+  "assessments": {
+    "design_coherence": 68.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Voice worker handlers repeat the same structural pipeline (load message/session, validate IDs, update `processors_data.*`, run OpenAI call, write success/error state, optional socket event) across `transcribeHandler.ts`, `categorizeHandler.ts`, `questionsHandler.ts`, and `customPrompt.ts` instead of sharing an execution scaffold.",
+        "`SessionsListPage.tsx` combines URL/query parsing, localStorage persistence, FAB polling sync, fetch orchestration, bulk merge/delete workflows, and full table column rendering in a single 1600+ LOC page component.",
+        "`CRMKanban.tsx` mixes domain mapping utilities, inline editing handlers, filter/stat recalculation logic, and full table rendering/actions in one large component, creating many tightly-coupled callbacks and memo chains.",
+        "Monthly grid/pinning UI behavior is implemented separately in `PlanFactGrid.tsx`, `BonusesGrid.tsx`, and `ExpensesGrid.tsx` with near-identical ordering/pin/header interaction structure, indicating a missing shared table-month abstraction."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_worker_processor_pipeline_duplication",
+      "summary": "Voice processor handlers duplicate one lifecycle pipeline instead of sharing a processor scaffold",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/categorizeHandler.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts"
+      ],
+      "evidence": [
+        "`transcribeHandler.ts` and `categorizeHandler.ts` each define local message-update queue helpers (`queueMessageUpdateEvent`, `emitMessageUpdateById`) with nearly identical behavior.",
+        "Multiple handlers independently perform the same sequence: parse/validate `message_id` or `session_id`, fetch active entities, update processor status fields under `processors_data.*`, call OpenAI, then set success/error timestamps and return shaped result objects.",
+        "Error and state-field conventions are manually repeated per handler (`is_processing`, `is_processed`, `error`, `error_message`, `error_timestamp`), increasing divergence risk when lifecycle rules change."
+      ],
+      "suggestion": "Introduce a shared processor execution framework in `backend/src/workers/voicebot/handlers/shared/` (for example `runMessageProcessor` / `runSessionProcessor`) that centralizes entity loading, processor-state transitions, standardized error mapping, and socket emission hooks. Keep handler files focused on domain-specific input/output transforms only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_voice_processor_framework"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "sessions_list_page_multi_responsibility",
+      "summary": "Sessions list page mixes persistence, orchestration, and rendering concerns in one component",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`SessionsListPage.tsx` defines many local parsing/persistence utilities (`parse*Filter`, `set*FilterParam`, `parseSessionTimestamp`) plus UI-only rendering helpers and action handlers in the same file.",
+        "The component owns both state synchronization concerns (search params + localStorage restore/persist + FAB polling via interval) and business workflows (bulk merge/delete, send to CRM, restart corrupted sessions).",
+        "Column definitions and table behavior are embedded directly with complex action logic, making navigation and change isolation difficult."
+      ],
+      "suggestion": "Split into focused modules: (1) `useSessionsListQueryState` for URL/localStorage filter sync, (2) `useSessionsBulkActions` for merge/delete/restart/send flows, (3) presentational `SessionsListTable` for columns/rendering. Keep the page as an orchestrator that composes these hooks/components.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "ui_orchestrator_overgrowth"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "crm_kanban_component_god_object",
+      "summary": "CRMKanban accumulates mapping logic, edit workflows, and table rendering in one unit",
+      "related_files": [
+        "app/src/components/crm/CRMKanban.tsx",
+        "app/src/components/crm/WorkHoursSidebar.tsx",
+        "app/src/components/crm/CRMCreateTicket.tsx"
+      ],
+      "evidence": [
+        "`CRMKanban.tsx` carries identity/project normalization helpers (`toLookupValue`, `resolveTicketDbId`, `resolveTicketRouteId`, `getProjectDisplayName`) together with UI callbacks and render logic.",
+        "The same component also handles inline editing mutation handlers (`handleProjectUpdate`, `handleTitleUpdate`, `handlePerformerUpdate`, etc.), filtering/statistics recomputation, and full column construction.",
+        "Heavy callback/memo coupling and broad dependency arrays indicate multiple responsibilities packed into one component boundary."
+      ],
+      "suggestion": "Extract domain mapping + row-identity logic into a dedicated `crmKanbanSelectors` module, move mutation handlers to a `useKanbanRowActions` hook, and isolate column definitions in a `useKanbanColumns` factory that consumes these dependencies.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "ui_orchestrator_overgrowth"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_month_grid_pattern_reimplemented",
+      "summary": "Month pin/order/header behavior is reimplemented across multiple FinOps grids",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx"
+      ],
+      "evidence": [
+        "Each grid reconstructs the same structure: create `pinnedSet`, compute ordered months by pinned/unpinned split, render the same month header with focus + pin toggle controls, then map month columns.",
+        "All three components repeat pinned-month lifecycle hooks (normalize pinned months against focus/current range and persist to localStorage).",
+        "Behavioral parity depends on parallel copy updates, which increases drift risk when month interaction rules evolve."
+      ],
+      "suggestion": "Create a shared `usePinnedMonths` hook plus a reusable month-column/header builder (for example `buildPinnedMonthColumns`) in a FinOps table utility module, with component-specific cell renderers injected as callbacks.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_finops_grid_abstraction"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Missing shared orchestration abstractions for repeated lifecycle workflows (voice processors, FinOps month-grid interactions).",
+      "Feature pages/components have grown as integration hubs without enforced decomposition boundaries."
+    ],
+    "likely_symptoms": [
+      "sessions_list_page_multi_responsibility",
+      "crm_kanban_component_god_object",
+      "finops_month_grid_pattern_reimplemented"
+    ],
+    "possible_false_positives": []
+  }
+}

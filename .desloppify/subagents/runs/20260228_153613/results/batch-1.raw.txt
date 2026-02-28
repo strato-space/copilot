@@ -1,0 +1,97 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 1,
+  "assessments": {
+    "package_organization": 68.0,
+    "high_level_elegance": 74.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`app/src/types/crm.ts` aggregates multiple concern domains in one package file: CRM entities (`Performer`, `Ticket`), Figma sync (`FigmaFile`, `SectionToSync`), finances (`ExpenseRecord`, `IncomeRecord`), week reporting (`WeekReportItem`), and bot command flow (`BotCommandStage`).",
+        "`app/src/types/voice.ts` includes non-voice contracts (`VoiceBotProject`, `CodexTask`, `TicketsModalData`) alongside voice session/message contracts, indicating directory-boundary leakage between voice and CRM/OperOps concerns.",
+        "With only two files in `app/src/types/`, each file has become a cross-domain catch-all instead of purpose-scoped modules, reducing navigability and ownership clarity."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Top-level contract ownership is ambiguous: `crm.ts` and `voice.ts` both define project/task-adjacent types, so engineers cannot infer authoritative type ownership from file/domain naming.",
+        "Public type surfaces are broad and history-shaped rather than capability-shaped; files expose unrelated contracts in a single entrypoint, increasing incidental coupling during edits.",
+        "Cross-domain type placement (voice file containing Codex/CRM-facing task contracts) blurs decomposition boundaries between Voice and OperOps/CRM subsystems."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "crm-types-mixed-domain-bucket",
+      "summary": "`crm.ts` is a mixed-domain type bucket that combines CRM, Figma sync, finance, reporting, and bot-command contracts in one file.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "`crm.ts` defines core CRM entities (`Performer`, `Project`, `Ticket`) together with unrelated concerns (`FigmaFile`, `ExpenseRecord`, `WeekReportItem`, `BotCommandStage`).",
+        "This placement forces multiple feature areas to depend on one shared file even when they only need one concern slice."
+      ],
+      "suggestion": "Staged reorg plan: (1) create target folders `app/src/types/crm/`, `app/src/types/voice/`, `app/src/types/finops/`, `app/src/types/integrations/figma/`; (2) move CRM-only contracts from `crm.ts` into `types/crm/entities.ts` first; (3) move finance/reporting contracts into `types/finops/*.ts`; (4) move Figma and bot-command contracts into integration-specific modules; (5) keep temporary barrel exports in `crm.ts` during transition, then remove; (6) update imports via `rg \"from ['\\\"]@?/?.*types/crm\" -n app/src` and targeted replacement; (7) validate with `cd app && npm run build` and `cd app && npm run test:serial`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "types_dumping_ground"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "voice-types-cross-boundary-contracts",
+      "summary": "`voice.ts` contains CRM/OperOps task and project contracts, creating package-boundary leakage from voice into adjacent domains.",
+      "related_files": [
+        "app/src/types/voice.ts",
+        "app/src/types/crm.ts"
+      ],
+      "evidence": [
+        "`voice.ts` includes `VoiceBotProject`, `CodexTask`, and `TicketsModalData`, which are task/project management contracts, not pure voice transport/session contracts.",
+        "Parallel `crm.ts` already defines overlapping project/task-adjacent concepts, indicating split ownership for similar domain concepts."
+      ],
+      "suggestion": "Staged reorg plan: (1) define boundary rule: `types/voice/*` keeps session/message/transcription/socket contracts only; (2) move `CodexTask` and `TicketsModalData` to `app/src/types/crm/tasks.ts` (or `operops/tasks.ts`) and `VoiceBotProject` to shared project contract module; (3) leave deprecated re-exports in `voice.ts` for one migration cycle; (4) migrate imports using `rg \"CodexTask|TicketsModalData|VoiceBotProject\" -n app/src`; (5) remove re-exports after all callsites are migrated; (6) validate with `cd app && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "types_dumping_ground"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "unclear-type-ownership-across-top-level-domains",
+      "summary": "Top-level type decomposition is history-driven, not domain-driven, so ownership and change boundaries are not predictable.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "Both files expose broad, mixed type surfaces rather than cohesive domain contracts, making it unclear where new or modified contracts should live.",
+        "Project/task concepts appear in both files, while non-CRM concerns reside in `crm.ts`, indicating decomposition drift."
+      ],
+      "suggestion": "Staged reorg plan: (1) establish explicit top-level contract map (`crm`, `voice`, `finops`, `integrations`) and document in `app/src/types/README.md`; (2) split each current file into capability modules with one authoritative owner per contract family; (3) add index barrels per domain only; (4) enforce import boundaries with ESLint `no-restricted-imports` rules between domain folders; (5) run import updates and validation: `cd app && npm run build && npm run test:serial`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "types_dumping_ground"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Type contracts are organized as broad historical files instead of domain-owned modules.",
+      "No explicit ownership boundary for shared task/project contracts between Voice and CRM/OperOps."
+    ],
+    "likely_symptoms": [
+      "crm-types-mixed-domain-bucket",
+      "voice-types-cross-boundary-contracts"
+    ],
+    "possible_false_positives": []
+  }
+}

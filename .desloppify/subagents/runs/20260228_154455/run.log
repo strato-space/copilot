@@ -1,0 +1,9 @@
+2026-02-28T15:44:55+00:00 run-start runner=codex parallel=False max_parallel=3 timeout=1200s heartbeat=15.0s stall_warning=0s stall_kill=120s retries=1 retry_backoff=2.0s upper_bound=80m selected=[1, 2, 3, 4]
+2026-02-28T15:44:55+00:00 run-path /home/strato-space/copilot/.desloppify/subagents/runs/20260228_154455
+2026-02-28T15:44:55+00:00 packet /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260228_154455.json
+2026-02-28T15:44:55+00:00 blind-packet /home/strato-space/copilot/.desloppify/review_packet_blind.json
+2026-02-28T15:44:55+00:00 batch-start batch=1 position=1/4
+2026-02-28T15:45:41+00:00 batch-done batch=1 position=1/4 code=0 elapsed=46
+2026-02-28T15:45:41+00:00 batch-start batch=2 position=2/4
+2026-02-28T15:47:44+00:00 batch-done batch=2 position=2/4 code=0 elapsed=123
+2026-02-28T15:47:44+00:00 batch-start batch=3 position=3/4

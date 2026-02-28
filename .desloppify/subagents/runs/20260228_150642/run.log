@@ -1,0 +1,20 @@
+2026-02-28T15:06:42+00:00 run-start runner=codex parallel=False max_parallel=3 timeout=1200s heartbeat=15.0s stall_warning=0s stall_kill=120s retries=1 retry_backoff=2.0s upper_bound=140m selected=[1, 2, 3, 4, 5, 6, 7]
+2026-02-28T15:06:42+00:00 run-path /home/strato-space/copilot/.desloppify/subagents/runs/20260228_150642
+2026-02-28T15:06:42+00:00 packet /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260228_150642.json
+2026-02-28T15:06:42+00:00 blind-packet /home/strato-space/copilot/.desloppify/review_packet_blind.json
+2026-02-28T15:06:42+00:00 batch-start batch=1 position=1/7
+2026-02-28T15:07:47+00:00 batch-done batch=1 position=1/7 code=0 elapsed=65
+2026-02-28T15:07:47+00:00 batch-start batch=2 position=2/7
+2026-02-28T15:09:25+00:00 batch-done batch=2 position=2/7 code=0 elapsed=97
+2026-02-28T15:09:25+00:00 batch-start batch=3 position=3/7
+2026-02-28T15:10:40+00:00 batch-done batch=3 position=3/7 code=0 elapsed=75
+2026-02-28T15:10:40+00:00 batch-start batch=4 position=4/7
+2026-02-28T15:12:07+00:00 batch-done batch=4 position=4/7 code=0 elapsed=87
+2026-02-28T15:12:07+00:00 batch-start batch=5 position=5/7
+2026-02-28T15:14:36+00:00 batch-done batch=5 position=5/7 code=0 elapsed=149
+2026-02-28T15:14:36+00:00 batch-start batch=6 position=6/7
+2026-02-28T15:17:32+00:00 batch-done batch=6 position=6/7 code=0 elapsed=176
+2026-02-28T15:17:32+00:00 batch-start batch=7 position=7/7
+2026-02-28T15:20:28+00:00 batch-done batch=7 position=7/7 code=0 elapsed=176
+2026-02-28T15:20:28+00:00 run-summary /home/strato-space/copilot/.desloppify/subagents/runs/20260228_150642/run_summary.json
+2026-02-28T15:20:28+00:00 run-finished successful=[1, 2, 3, 4, 5, 6, 7] failed=[] imported=/home/strato-space/copilot/.desloppify/subagents/runs/20260228_150642/holistic_findings_merged.json

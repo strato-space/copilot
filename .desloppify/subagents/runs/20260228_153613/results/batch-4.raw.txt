@@ -1,0 +1,301 @@
+{
+  "batch": "Full Codebase Sweep",
+  "batch_index": 4,
+  "assessments": {
+    "cross_module_architecture": 88.0,
+    "convention_outlier": 78.0,
+    "error_consistency": 91.0,
+    "abstraction_fitness": 72.0,
+    "api_surface_coherence": 70.0,
+    "authorization_consistency": 95.0,
+    "ai_generated_debt": 92.0,
+    "incomplete_migration": 68.0,
+    "package_organization": 74.0,
+    "high_level_elegance": 81.0,
+    "mid_level_elegance": 86.0,
+    "low_level_elegance": 90.0,
+    "design_coherence": 79.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Both files are pure type modules with no runtime imports or side effects.",
+        "Voice contracts and CRM contracts are at least separated by file boundary."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Type files still mix transport and view-model concerns, which weakens boundary integrity even without import coupling."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Mixed naming conventions in same files: `session_id`, `project_id`, `real_name` alongside `fileUrl`, `VoiceBotSession`, `mimeType`.",
+        "Type naming drift in voice file: `VoicebotPerson` vs `VoiceBotSession`/`VoiceBotMessage`."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "Files are declarations only and do not implement runtime error handling paths.",
+        "No throw/catch strategy drift appears inside these files."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Heavy `unknown` payload fields reduce compile-time guarantees and push failure handling to downstream consumers."
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Large weakly typed payload surfaces: `Ticket.notifications`, `Ticket.created_by`, `Ticket.source`, `Ticket.source_data` are `unknown`.",
+        "Voice message/session shapes rely on `Record<string, unknown>` for `processors_data`, `attachments`, and `widgets`, reducing type leverage.",
+        "`TicketsModalData` combines ad-hoc partial object with `Record<string, unknown>`, blurring contract intent."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 66.0,
+        "indirection_cost": 82.0,
+        "interface_honesty": 61.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Temporal fields use inconsistent unions: `created_at?: string` vs `created_at?: string | number | null` vs `created_at: number`.",
+        "Timestamp conventions vary (`message_timestamp`, `event_time`, `date_timestamp`) with different shapes and nullability.",
+        "ID fields oscillate between required, optional, nullable, and dual names (`_id`, `id`, `oid`, `message_oid`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "These are data contracts and do not encode route-level permission checks.",
+        "No conflicting auth gating patterns are visible inside these two files."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Fields like `allowed_users` and `access_level` remain loosely typed strings without shared enum/permission types."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "No obvious templated verbose comments or defensive try/catch boilerplate.",
+        "Interfaces are mostly concise and domain-labeled rather than generic utility naming."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Repeated `| undefined` and `Record<string, unknown>` patterns look like generated or convenience-first typing debt."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Legacy/current identifier overlap persists (`_id` plus `id` in `Performer`, `Ticket`, `WeekReportItem`, `CodexTask`).",
+        "Parallel legacy key families remain (`ticket_id` and `ticket_db_id`; `message_id` and `message_oid`; `source_file_url` snake_case beside camelCase fields).",
+        "File comments indicate 'new structure' while old and new shapes coexist in same contracts."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "package_organization": {
+      "evidence": [
+        "Packet structure signals: `app/src/types/` has exactly 2 files with `total_loc: 534` and mixed concerns concentrated in each file.",
+        "`crm.ts` contains multiple domains in one file: CRM core, tree, figma sync, finances, week reports, bot commands.",
+        "`voice.ts` combines transport DTOs and UI-facing row/group view models in one file."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Top-level type ownership is broad and mixed: one CRM file spans unrelated capability areas.",
+        "Voice type module mixes backend payload contracts and frontend presentation structs (`VoiceMessageRow`, `VoiceMessageGroup`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Interfaces are consistently grouped and named by major entities.",
+        "Several boundary fields are present for integration seams (`source_kind`, `source_ref`, attachment fields), reducing implicit coupling."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Handoff seams still rely on weak unions and unknown blobs, forcing downstream ad-hoc narrowing."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "No deep control-flow complexity exists; declarations are straightforward.",
+        "Most interfaces maintain coherent field grouping and readable layout."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Local clarity is reduced by redundant `| undefined` and inconsistent optional/null patterns."
+    },
+    "design_coherence": {
+      "evidence": [
+        "Structural concern mixing is repeated in both files rather than isolated exceptions.",
+        "A missing normalization boundary causes repeated dual-field patterns and permissive unions across entities."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "convention_outlier",
+      "identifier": "mixed_case_contracts_without_boundary",
+      "summary": "Snake_case API keys and camelCase app keys are mixed directly in shared interfaces without explicit DTO/domain separation.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "`crm.ts` mixes `real_name`, `project_id`, `task_status` with `fileUrl` and PascalCase type names.",
+        "`voice.ts` mixes `session_id`, `message_timestamp`, `source_type` with `mimeType` and `VoiceBot*` naming.",
+        "`VoicebotPerson` casing is inconsistent with neighboring `VoiceBotSession` and `VoiceBotMessage`."
+      ],
+      "suggestion": "Introduce explicit raw API DTO types (snake_case) and mapped app-domain types (camelCase), then enforce naming by layer via lint/type aliases. Rename `VoicebotPerson` to `VoiceBotPerson` and provide a compatibility alias during migration.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_transport_domain_boundary"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "overuse_unknown_in_core_contracts",
+      "summary": "Core interfaces leak `unknown`/`Record<string, unknown>` at critical fields, weakening abstraction value and contract safety.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "`Ticket` uses `unknown` for `notifications`, `created_by`, `source`, and `source_data`.",
+        "`VoiceBotSession.processors_data`, `VoiceBotMessage.attachments`, and `VoiceMessageGroup.widgets` are broad unknown records.",
+        "`TicketsModalData.tickets` allows arbitrary keys via intersection with `Record<string, unknown>`."
+      ],
+      "suggestion": "Define discriminated unions for known payload variants (`source_kind`, attachment kind/type, processor payload types) and replace broad unknown fields with versioned typed envelopes plus explicit `extra?: Record<string, unknown>` escape hatches only where required.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_transport_domain_boundary"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "timestamp_and_id_type_drift",
+      "summary": "ID and time fields use inconsistent shapes and nullability across adjacent contracts, creating unstable API expectations.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "`Comment.created_at` is `number`, while many peers use `string` or `string | number | null`.",
+        "`message_timestamp`, `event_time`, and `created_at/updated_at` have divergent unions and null rules.",
+        "Identifier families are inconsistent: `_id`, `id`, `oid`, `message_oid`, and optional/required combinations differ without clear semantics."
+      ],
+      "suggestion": "Standardize on canonical primitives (`IsoDateString` and `EntityId`) with explicit legacy adapters. Keep legacy fields in `Legacy*` DTOs only, and convert once at API boundary.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_contract_overlap"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_new_schema_overlap_persists",
+      "summary": "Legacy and new schema fields coexist in active interfaces, indicating migration debt still embedded in core types.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "Simultaneous `_id` and `id` in multiple entities (`Performer`, `Ticket`, `WeekReportItem`, `CodexTask`).",
+        "Parallel legacy keys remain (`ticket_id` + `ticket_db_id`; `message_id` + `message_oid`).",
+        "Snake_case migration-era fields are still first-class in app-facing interfaces instead of isolated compatibility layers."
+      ],
+      "suggestion": "Run a staged migration: (1) add normalized domain types and mapping functions, (2) switch consumers to normalized types, (3) deprecate dual identifiers behind compatibility adapters, (4) remove legacy fields after usage audit and contract test pass.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "legacy_contract_overlap"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "types_folder_concern_overload",
+      "summary": "Two large files in `app/src/types/` act as mixed-concern buckets, reducing navigability and ownership clarity.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "Holistic structure reports `app/src/types/` with 2 files and 534 LOC total, both broad multi-domain containers.",
+        "`crm.ts` bundles CRM entities, tree models, figma sync contracts, finance records, week reports, and bot command types.",
+        "`voice.ts` includes both backend transport contracts and UI projection types (`VoiceMessageRow`, `VoiceMessageGroup`)."
+      ],
+      "suggestion": "Staged reorg plan: 1) create `app/src/types/crm/{entities.ts,tree.ts,figma.ts,finance.ts,reports.ts,bot.ts}` and `app/src/types/voice/{api.ts,events.ts,view-models.ts}`; 2) move type blocks without semantic changes; 3) add temporary barrel exports in old paths; 4) update imports with `rg \"from ['\\\"]@?/?.*types/(crm|voice)\" -n app/src` + codemod; 5) validate with `cd app && npm run build` and `cd app && npm run test` before removing compatibility barrels.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_transport_domain_boundary"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "top_level_type_ownership_blur",
+      "summary": "Top-level type modules do not align cleanly to domain ownership boundaries, causing broad ripple risk for small schema changes.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "Single-file ownership in `crm.ts` spans unrelated product areas (CRM core, Figma sync, finance, week reports, bot commands).",
+        "`voice.ts` conflates backend session/message contracts with presentation grouping models used for UI rendering."
+      ],
+      "suggestion": "Define ownership by capability and layer: domain entities, transport DTOs, and UI projections in separate modules with explicit import direction (`ui -> domain <- transport`). Enforce via lint rule banning UI modules from importing transport DTO files directly.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_transport_domain_boundary"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "missing_normalization_boundary_creates_contract_noise",
+      "summary": "A single structural gap (no normalization boundary) manifests as naming drift, dual identifiers, and permissive unions across both files.",
+      "related_files": [
+        "app/src/types/crm.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "Repeated dual-field and mixed-convention patterns appear in many entities rather than isolated edge cases.",
+        "Permissive unknown records are used to bridge incompatible shapes instead of explicit translation contracts."
+      ],
+      "suggestion": "Introduce one-way normalization boundaries per subsystem: raw DTOs -> mappers -> strict domain models -> view models. Add contract tests for mapper completeness and prohibit direct raw DTO usage in UI rendering code.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_transport_domain_boundary"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Missing explicit transport-to-domain normalization layer in frontend typing strategy.",
+      "Migration debt retained in primary interfaces instead of isolated compatibility contracts.",
+      "Type package organized as broad buckets rather than capability/layer-oriented modules."
+    ],
+    "likely_symptoms": [
+      "mixed_case_contracts_without_boundary",
+      "timestamp_and_id_type_drift",
+      "legacy_new_schema_overlap_persists"
+    ],
+    "possible_false_positives": [
+      "Some snake_case fields may be intentionally preserved for direct backend payload compatibility."
+    ]
+  }
+}

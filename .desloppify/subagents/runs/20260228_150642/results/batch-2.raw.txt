@@ -1,0 +1,177 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 2,
+  "assessments": {
+    "abstraction_fitness": 72.0,
+    "mid_level_elegance": 74.0,
+    "low_level_elegance": 70.0
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "`getBackendUrl/getProxyConfig` logic is duplicated in `permissionsStore.ts` and `requestStore.ts`, while similar runtime resolution already exists in `voicebotRuntimeConfig.ts`.",
+        "`sessionsUIStore.ts` re-implements MCP URL resolution and transcription text extraction inside `generateSessionTitle` instead of reusing existing helpers (`voicebotRuntimeConfig.resolveAgentsMcpServerUrl`, `buildTranscriptionText` in `voiceBotStore.ts`).",
+        "`sessionsUIStore.ts` contains near-duplicate actions (`setTicketsModalSelectedIds` and `setSelectedTicketIds`) and overlapping edit-commit actions (`saveTicketEdit` and `saveEditingTicket`), indicating abstraction drift."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 68.0,
+        "indirection_cost": 71.0,
+        "interface_honesty": 77.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "`voiceBotStore.ts` mixes `voicebotHttp.request` with direct `axios`/`fetch` calls for upload/download flows, creating multiple integration seams with different behavior.",
+        "`permissionsStore.ts` uses `voicebot/...` endpoints for most operations but `getUserPermissions` calls `permissions/users/permissions` (without `voicebot/`), making boundary contracts inconsistent within one module.",
+        "`kanbanStore.ts` request payload key typo (`satuses`) in `fetchTickets` undermines the request seam and can silently break filtering behavior."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "`kanbanStore.ts` keeps a very large inline transformer (`transformPaymentsTreeToTreeData`) nested inside an async action, with deep loops and mixed concerns (mapping + key building + UI shape), reducing local readability and testability.",
+        "`kanbanStore.ts` exposes `deleteIncomeRow` as a no-op TODO while keeping it in the public store API, leaving dead behavior on an active interface.",
+        "`sessionsUIStore.ts` keeps duplicated action internals and overlapping ticket-edit state mutations, increasing local cognitive load and divergence risk."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "runtime_config_duplication_drift",
+      "summary": "Runtime URL/proxy resolution is duplicated across stores instead of using one shared abstraction.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/requestStore.ts",
+        "app/src/store/voicebotRuntimeConfig.ts"
+      ],
+      "evidence": [
+        "`permissionsStore.ts` defines local `getBackendUrl/getProxyConfig` (lines 35-51).",
+        "`requestStore.ts` defines another local `getBackendUrl/getProxyConfig` pair (lines 22-46).",
+        "`voicebotRuntimeConfig.ts` already provides equivalent runtime/proxy helpers but is not used by those stores."
+      ],
+      "suggestion": "Extract and enforce a single runtime transport config source (e.g., extend `voicebotRuntimeConfig` or a generic `runtimeHttpConfig`) and migrate both stores to consume it; add a small contract test to prevent config divergence.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_transport_boundary"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "transport_seam_inconsistency_voice_store",
+      "summary": "Voice store mixes transport paths (`voicebotHttp`, raw `axios`, raw `fetch`) with inconsistent boundary behavior.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/voicebotRuntimeConfig.ts",
+        "app/src/store/permissionsStore.ts"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` uses `voicebotHttp.request(...)` for most endpoints but switches to direct `axios.post` for `uploadAudioFile`/`uploadSessionImageAttachment` (lines 1330-1372) and raw `fetch` for `downloadTranscription` (line 1627+).",
+        "Direct calls build headers/backend URL manually and bypass shared request behavior (proxy handling and centralized conventions).",
+        "`permissionsStore.ts` explicitly supports proxy mode in `voicebotRequest`, showing seam expectations differ across stores."
+      ],
+      "suggestion": "Route upload/download through a single typed transport layer (extend `voicebotHttp` with multipart and blob download helpers) so auth/proxy/error semantics are uniform.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_transport_boundary"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "permissions_endpoint_contract_drift",
+      "summary": "One permissions call uses a different endpoint namespace, creating an inconsistent API seam within the same store.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voicebotRuntimeConfig.ts"
+      ],
+      "evidence": [
+        "Most requests target `voicebot/permissions/...` (e.g., lines 93, 111, 124, 142, 165, 182, 213, 233).",
+        "`getUserPermissions` calls `permissions/users/permissions` (line 200) without the `voicebot/` prefix."
+      ],
+      "suggestion": "Normalize all permissions endpoints behind a typed endpoint map and use one namespace source (`voicebot/permissions/...`) to avoid seam-level drift.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "missing_shared_transport_boundary"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "kanban_fetch_filter_payload_typo",
+      "summary": "Ticket fetch sends a misspelled payload key (`satuses`), making filter behavior fragile.",
+      "related_files": [
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/crmStore.ts",
+        "app/src/store/requestStore.ts"
+      ],
+      "evidence": [
+        "`kanbanStore.ts` `fetchTickets` sends `{ satuses: statuses }` at line 300.",
+        "Store-level status filtering is central (`statusesFilter` in `kanbanStore.ts` and CRM status workflows in `crmStore.ts`), so this typo can silently desynchronize UI intent from API behavior."
+      ],
+      "suggestion": "Correct the payload key to `statuses`, add a typed request DTO for ticket list queries, and add a regression test that asserts status filters are transmitted correctly.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "untyped_request_contracts"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "kanban_nested_transformer_complexity",
+      "summary": "A large nested tree-conversion function inside store action creates high local complexity and weak test seams.",
+      "related_files": [
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/crmStore.ts"
+      ],
+      "evidence": [
+        "`transformPaymentsTreeToTreeData` is declared inline inside `fetchPerformersPaymentsTree` (starting line 1163) with multiple nested loops and shape conversions.",
+        "The same store also keeps UI orchestration/state updates and finance calculations, so this dense transformation compounds local complexity in one module."
+      ],
+      "suggestion": "Extract payments-tree normalization into a pure utility module with typed input/output and dedicated tests; keep the store action limited to orchestration and state assignment.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "overgrown_store_modules"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "sessionsui_duplicate_action_surface",
+      "summary": "Sessions UI store exposes duplicated and overlapping ticket-edit actions, indicating abstraction debt.",
+      "related_files": [
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`setTicketsModalSelectedIds` and `setSelectedTicketIds` perform the same update path (lines 417-420).",
+        "`saveTicketEdit` merges and clears edits (lines 449-472), while `saveEditingTicket` separately writes from `editingTickets` to `savedChanges` (lines 511-519), creating overlapping commit semantics.",
+        "`generateSessionTitle` duplicates MCP URL and transcription text assembly logic that already exists in voice-related store utilities."
+      ],
+      "suggestion": "Consolidate ticket-edit actions into one explicit edit-state state machine (`draft -> committed -> reset`) and move shared title-generation preprocessing to reusable helpers consumed by both stores.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "overgrown_store_modules"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Missing shared transport/config boundary causes parallel request implementations and seam drift.",
+      "Store modules have grown into mixed orchestration+transformation+UI-state hubs, producing duplicate action surfaces and local complexity.",
+      "Untyped request payload contracts allow subtle boundary bugs (e.g., misspelled keys) to pass compile-time checks."
+    ],
+    "likely_symptoms": [
+      "runtime_config_duplication_drift",
+      "transport_seam_inconsistency_voice_store",
+      "permissions_endpoint_contract_drift",
+      "kanban_fetch_filter_payload_typo",
+      "sessionsui_duplicate_action_surface"
+    ],
+    "possible_false_positives": []
+  }
+}

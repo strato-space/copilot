@@ -1,0 +1,325 @@
+{
+  "batch": "Full Codebase Sweep",
+  "batch_index": 7,
+  "assessments": {
+    "cross_module_architecture": 78.4,
+    "convention_outlier": 74.9,
+    "error_consistency": 72.6,
+    "abstraction_fitness": 82.1,
+    "api_surface_coherence": 73.8,
+    "authorization_consistency": 88.2,
+    "ai_generated_debt": 87.0,
+    "incomplete_migration": 71.7,
+    "package_organization": 68.3,
+    "high_level_elegance": 86.4,
+    "mid_level_elegance": 85.5,
+    "low_level_elegance": 85.8,
+    "design_coherence": 72.9
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`getBackendUrl/getProxyConfig` are implemented separately in `requestStore.ts`, `permissionsStore.ts`, and `voicebotRuntimeConfig.ts`.",
+        "`voiceBotStore.ts` mixes `voicebotHttp.request`, raw `axios.post`, and raw `fetch`, creating parallel transport paths for the same subsystem."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Naming style drifts across sibling stores: `api_request` (snake_case) in `requestStore.ts` vs camelCase everywhere else.",
+        "Multiple typo-based identifiers remain in production API/state names: `voiceMesagesData`, `secitionsToSync`, `editTiketProject`, `fetchPeformersMarginData`, and payload key `satuses`."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "Adjacent actions in `voiceBotStore.ts` have different failure contracts: some swallow and log (`updateSessionName`), others throw (`sendSessionToCrm`), others return fallback values (`fetchPersonsList`).",
+        "`permissionsStore.ts` `getUserPermissions` catches and returns `[]`, while other permission updates surface toast errors and keep error state.",
+        "`authStore.ts` `logout` catches and ignores remote failure entirely."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "`voiceBotStore.ts` contains transport, socket lifecycle, normalization/transforms, and UI side-effects in one abstraction boundary.",
+        "`kanbanStore.ts` aggregates many unrelated domains (tickets, finances, payments tree, bot commands, imports), reducing leverage of the store abstraction."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 66.8,
+        "indirection_cost": 80.3,
+        "interface_honesty": 79.2
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "`permissionsStore.ts` mixes endpoint families (`voicebot/permissions/...` vs `permissions/users/permissions`) for similar operations.",
+        "`kanbanStore.ts` sends `satuses` instead of `statuses` in ticket list payload, while related state and methods use `status`/`statuses` naming.",
+        "Store APIs expose mixed naming/protocols (`setTicketsModalSelectedIds` and `setSelectedTicketIds` both public, same effect)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Permission constants are centralized (`PERMISSIONS`, `ROLES`) and used by `useCurrentUserPermissions`.",
+        "Mutating actions in `voiceBotStore.ts` and `permissionsStore.ts` rely only on backend enforcement, with no shared client-side precheck contract."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Client-side guard usage is optional/inconsistent across stores; a uniform precheck helper for destructive actions would reduce accidental unauthorized flows."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Repeated catch/log blocks with near-identical structure across large stores (`voiceBotStore.ts`, `projectsStore.ts`, `permissionsStore.ts`).",
+        "Some ceremony wrappers remain low-value (`setSelectedTicketIds` and `setTicketsModalSelectedIds` duplication in `sessionsUIStore.ts`)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Template-like repetitive error/log boilerplate increases maintenance noise and hides true domain logic."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Legacy migration markers remain in active files (`Migrated from appkanban/...` headers across CRM stores).",
+        "`kanbanStore.ts` still contains `// TODO: implement` for `deleteIncomeRow`, leaving part of CRUD unfinished."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "package_organization": {
+      "evidence": [
+        "Holistic structure shows `app/src/store/` contains 20 production files and 6336 LOC in one flat directory.",
+        "Average fan-in is only 0.7, indicating many narrowly-scoped files co-located despite low shared import pressure.",
+        "The same directory mixes unrelated bounded contexts (auth, voicebot, crm, finops, notifications, mcp), reducing navigability and ownership clarity."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Domain boundaries exist conceptually (voicebot/crm/finops), but directory-level decomposition does not reflect them cleanly.",
+        "Large orchestrator stores make ownership less obvious than file names suggest."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Top-level store layout does not align with domain boundaries, so change ownership remains fuzzy."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Handoffs between UI actions and transport are repeated ad hoc (manual URL resolution and payload shaping duplicated between stores).",
+        "Some seam contracts are clear (`voicebotHttp.request`), but not uniformly adopted by all voice flows."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Integration seams are partly standardized but still fragmented enough to allow drift."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Most functions are straightforward, but repeated typo identifiers and duplicated setter methods reduce precision.",
+        "Large inline blocks in `voiceBotStore.ts` and `kanbanStore.ts` make local reasoning heavier than necessary."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Local implementation quality drops in the largest stores due to inline branching and repeated boilerplate."
+    },
+    "design_coherence": {
+      "evidence": [
+        "`voiceBotStore.ts` combines message normalization, attachment reconstruction, socket event wiring, and action orchestration in a single store surface.",
+        "`sessionsUIStore.ts` duplicates MCP URL resolution and message text extraction patterns already present in voice flows, showing repeated structural logic."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_voicebot_transport_stack",
+      "summary": "Voice/CRM transport config is duplicated across stores, causing boundary drift",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voicebotRuntimeConfig.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`requestStore.ts` and `permissionsStore.ts` each reimplement runtime backend/proxy lookup logic already present in `voicebotRuntimeConfig.ts`.",
+        "`voiceBotStore.ts` bypasses `voicebotHttp` in multiple actions (direct `axios.post` and direct `fetch`), creating multiple networking paths in one subsystem."
+      ],
+      "suggestion": "Create a single typed HTTP runtime module (`store/http/runtime.ts`) that owns backend/proxy/auth header resolution and request execution. Move `getBackendUrl/getProxyConfig` there, make `requestStore`, `permissionsStore`, and `voiceBotStore` call only that layer, then remove direct transport code from store actions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "transport_fragmentation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "permissions_endpoint_family_mismatch",
+      "summary": "Permissions API paths are inconsistent for sibling operations",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`permissionsStore.ts` uses `voicebot/permissions/users/permissions` for updates but `permissions/users/permissions` for reads (`getUserPermissions`).",
+        "Neighboring voicebot calls consistently use `voicebot/...` prefixes, so this one-off route shape is hard to reason about and easy to break."
+      ],
+      "suggestion": "Define endpoint constants for permission routes and use them for both read/update paths. If backend intentionally exposes both paths, keep one canonical constant and add a temporary fallback with telemetry before deleting the alias.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "transport_fragmentation"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "store_naming_drift_and_typos",
+      "summary": "Public store API names drift from project conventions via typo and snake_case islands",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/crmStore.ts",
+        "app/src/store/kanbanStore.ts"
+      ],
+      "evidence": [
+        "Snake_case public method `api_request` in `requestStore.ts` diverges from the camelCase convention used in most stores.",
+        "Multiple typo identifiers are exposed in state/action surfaces: `voiceMesagesData`, `secitionsToSync`, `editTiketProject`, `fetchPeformersMarginData`, and payload field `satuses`."
+      ],
+      "suggestion": "Run a staged rename: add camelCase aliases first, update all callers, then remove legacy names. Use `rg`-driven codemod pass for each symbol and enforce with a naming lint rule for store API members.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_crm_carryover"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "mixed_failure_contracts_in_store_actions",
+      "summary": "Store actions use incompatible error semantics (throw vs swallow vs fallback values)",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/store/projectsStore.ts"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` mixes patterns: `sendSessionToCrm` throws, `updateSessionName` logs and returns void, `fetchPersonsList` returns `[]` on errors.",
+        "`permissionsStore.ts` methods mostly swallow errors with toasts; `loadPermissionsLog` throws after toasting; `getUserPermissions` silently returns empty array.",
+        "`authStore.ts` `logout` intentionally ignores request failures, which differs from strict propagation in other auth methods."
+      ],
+      "suggestion": "Adopt one per-layer rule: data actions return `Result<T, E>` (or throw consistently) and UI layer decides toast behavior. Extract shared `handleStoreError` to normalize logging/context and avoid silent fallbacks for data reads unless explicitly modeled.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "transport_fragmentation"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_kanban_migration_leftovers",
+      "summary": "Migration residue remains in active CRM stores, including unfinished operations",
+      "related_files": [
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/crmStore.ts",
+        "app/src/store/projectsStore.ts"
+      ],
+      "evidence": [
+        "Files still carry migration headers from `appkanban`, and `kanbanStore.ts` contains active `// TODO: implement` for `deleteIncomeRow`.",
+        "Large use of loose `unknown` payloads in migrated sections indicates incomplete typing hardening of the old surface."
+      ],
+      "suggestion": "Create a migration-closure task for CRM stores: implement `deleteIncomeRow`, replace `unknown` API payloads with typed response interfaces, and remove migration-header comments once parity and typing checks pass.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_crm_carryover"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "god_store_aggregation_reduces_abstraction_value",
+      "summary": "Very large stores combine unrelated responsibilities and dilute abstraction benefits",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` includes transport orchestration, websocket lifecycle, data normalization, file upload logic, and UI message side-effects in one object.",
+        "`kanbanStore.ts` combines board CRUD, finances, payments, bot commands, imports, and analytics widgets in a single store boundary."
+      ],
+      "suggestion": "Split into domain slices with explicit ownership: for voice (`voiceSessionData`, `voiceSocket`, `voiceCatalog`, `voiceActions`) and CRM (`kanbanTickets`, `kanbanFinance`, `kanbanAutomation`). Keep each slice exposing focused interfaces and move pure transformation logic to `app/src/store/shared/*` utilities.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "store_overgrowth"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "flat_store_folder_mixes_domains",
+      "summary": "Single flat `store/` directory mixes unrelated domains and hides ownership boundaries",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/store/fxStore.ts"
+      ],
+      "evidence": [
+        "Holistic structure shows 20 files / 6336 LOC in one flat folder with mixed domains and low avg fan-in (0.7), indicating weak cohesion.",
+        "Voicebot, CRM, auth, MCP, and FinOps stores are co-located despite independent change cadences and responsibilities."
+      ],
+      "suggestion": "Staged reorg plan: (1) create `app/src/store/{voicebot,crm,finops,core,shared}`; (2) move leaf files first (`fxStore`, `fundStore`, `monthCloseStore`, `notificationStore`) then medium stores (`projectsStore`, `crmStore`, `permissionsStore`) then heavy stores (`voiceBotStore`, `kanbanStore`); (3) add temporary barrel exports in old paths for one PR; (4) migrate imports and remove temporary barrels. Validation commands: `cd app && rg -n \"from '../store/|from './store/|from '.*store/\" src`, then `cd app && npm run build`, then `cd app && npm run test`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "store_overgrowth"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "duplicated_mcp_session_title_flow",
+      "summary": "MCP title-generation flow is duplicated across stores instead of shared",
+      "related_files": [
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/voicebotRuntimeConfig.ts"
+      ],
+      "evidence": [
+        "`sessionsUIStore.ts` `generateSessionTitle` reimplements MCP URL resolution and message-text extraction patterns already present in `voiceBotStore.ts` flows.",
+        "The duplication increases divergence risk for timeout, parsing, and fallback behavior."
+      ],
+      "suggestion": "Extract shared helpers for MCP server URL resolution and transcription-to-prompt payload generation into `voicebotRuntimeConfig`/`voicebotHttp` adjacent utility module, then call from both stores.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "store_overgrowth"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Transport/config concerns are duplicated instead of centralized, causing endpoint and error-policy drift.",
+      "Legacy CRM migration left naming and typing debt that propagated into current store APIs.",
+      "Overgrown Zustand stores act as catch-all orchestration layers, mixing domain logic with IO/UI side effects."
+    ],
+    "likely_symptoms": [
+      "duplicated_voicebot_transport_stack",
+      "permissions_endpoint_family_mismatch",
+      "mixed_failure_contracts_in_store_actions",
+      "store_naming_drift_and_typos"
+    ],
+    "possible_false_positives": [
+      "Some client-side authorization checks may be intentionally deferred to backend middleware."
+    ]
+  }
+}

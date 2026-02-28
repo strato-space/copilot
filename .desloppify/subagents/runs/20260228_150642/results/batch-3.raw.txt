@@ -1,0 +1,116 @@
+{
+  "batch": "Testing & API",
+  "batch_index": 3,
+  "assessments": {
+    "api_surface_coherence": 68.0,
+    "mid_level_elegance": 72.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "authStore extracts auth payload from both envelope and flat forms (`payload.data.user` and `payload.user`) in `extractUserFromResponse` (app/src/store/authStore.ts:81-89), indicating unstable response contracts at the API boundary.",
+        "Auth token source and persistence are mixed across cookie and localStorage (`readCookieToken`, `saveAuthToCookies`) while axios client is configured for cookie-based credential transport (`withCredentials: true`) in app/src/services/api.ts:6-14."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "401 handling path differs between `checkAuth` and `refreshUserData`: `checkAuth` clears client auth persistence (`clearAuthCookies`) but `refreshUserData` does not (app/src/store/authStore.ts:113-116 vs 208-218), creating inconsistent session lifecycle seam behavior.",
+        "`tryLogin` success path does not set `ready: true` while other success/finalization paths do (`checkAuth`, `tryTokenAuth`, `refreshUserData`, `logout`), so consumers can observe inconsistent readiness after equivalent auth transitions (app/src/store/authStore.ts:129-137, 161, 191, 241).",
+        "Auth orchestration repeats near-identical state transition logic across four async actions (`checkAuth`, `tryLogin`, `tryTokenAuth`, `refreshUserData`) with ad-hoc differences, increasing drift risk at module boundaries."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "auth_response_shape_dual_contract",
+      "summary": "Auth store accepts two incompatible response shapes instead of enforcing one API contract.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "`extractUserFromResponse` reads both `data.user`/`data.auth_token` and top-level `user`/`auth_token` (app/src/store/authStore.ts:81-89).",
+        "All auth calls use the shared `apiClient`, so contract normalization is a cross-boundary concern rather than an isolated call-site quirk (app/src/services/api.ts:6-9, app/src/store/authStore.ts:103,124,151,181)."
+      ],
+      "suggestion": "Define a single typed auth response schema for `/auth/me`, `/try_login`, and `/auth_token` and normalize once in the API layer (or backend), then remove fallback extraction branches from `authStore`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_contract_drift"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_token_transport_contract",
+      "summary": "Auth token handling mixes cookie session semantics with localStorage token semantics.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "Axios clients are configured with `withCredentials: true`, which implies cookie-based auth transport (app/src/services/api.ts:6-14).",
+        "`authStore` still reads/writes token from/to localStorage (`VOICEBOT_AUTH_TOKEN`) and manually sets `auth_token` cookie from JS (app/src/store/authStore.ts:45-70)."
+      ],
+      "suggestion": "Choose one client auth contract for this surface (prefer cookie-only if backend is cookie-auth) and remove localStorage token fallback/write paths plus JS-managed `auth_token` cookie writes.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "auth_contract_drift"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "inconsistent_401_cleanup_path",
+      "summary": "Equivalent unauthorized outcomes trigger different client cleanup behavior.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "`checkAuth` on 401 clears persisted auth artifacts via `clearAuthCookies()` before updating state (app/src/store/authStore.ts:113-116).",
+        "`refreshUserData` on 401 updates Zustand state but does not clear persisted cookie/localStorage values (app/src/store/authStore.ts:208-218), leaving divergent side effects for the same failure class."
+      ],
+      "suggestion": "Centralize unauthorized handling into one helper used by all auth actions, ensuring state reset and persistence cleanup are deterministic for every 401 path.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_state_transition_drift"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "ready_flag_transition_drift",
+      "summary": "Login success path omits readiness transition used by other auth flows.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "`tryLogin` success sets auth/user/permissions/token but not `ready` (app/src/store/authStore.ts:129-137).",
+        "Other auth-success/finalization flows consistently set `ready: true` (`checkAuth`, `tryTokenAuth`, `refreshUserData`, `logout`) at app/src/store/authStore.ts:107,161,191,241."
+      ],
+      "suggestion": "Introduce a shared `setAuthenticatedState` transition (including `ready`) and use it across all successful auth paths to prevent lifecycle divergence.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "auth_state_transition_drift"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Auth API contracts are being compensated at the store boundary instead of enforced at a single interface boundary.",
+      "State transition logic is duplicated across auth actions, allowing small path-specific drifts to accumulate."
+    ],
+    "likely_symptoms": [
+      "auth_response_shape_dual_contract",
+      "mixed_token_transport_contract",
+      "inconsistent_401_cleanup_path",
+      "ready_flag_transition_drift"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -478,6 +478,19 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-02-28 19:10):
+  - `copilot-sxq1.14.8` scoped subjective batch execution is currently blocked by Codex runner quota/usage-limit response; issue kept `in_progress` with blocker evidence in notes.
+  - Decomposed `copilot-sxq1.14.8` into six independent scope tasks to avoid monolithic run dependency:
+    - `copilot-sxq1.14.8.1` (`app/src/store/**`)
+    - `copilot-sxq1.14.8.2` (`app/src/hooks/**`)
+    - `copilot-sxq1.14.8.3` (`app/src/services/**`)
+    - `copilot-sxq1.14.8.4` (`app/src/utils/**`)
+    - `copilot-sxq1.14.8.5` (`app/src/types/**`)
+    - `copilot-sxq1.14.8.6` (`app/src/constants/**`)
+  - Revalidated test contract on reorganized stage runner:
+    - reran flaky shard `cd app && npm run test:e2e:voice:shard:1of2` -> pass (`13/13`);
+    - canonical gate `./scripts/run-test-suite.sh full --fail-fast` -> `10/10 PASS`.
+  - Refreshed `desloppify next` triage anchor: `review::.::holistic::abstraction_fitness::overuse_unknown_in_core_contracts::5ff2ecc1` (Tier 1).
 - Closed testing modernization epic `copilot-2gs1` (stages 1-8): unified test runner now executes by parallel stages with fail-fast abort, backend tests are split into explicit parallel-safe and serialized groups, and app/voice Playwright suites run via shard jobs declared in `platforms.json`.
 - Final full-suite benchmark for this wave: `163.97s -> 80.01s` (`+51.20%` wall-clock improvement).
 - Closed `copilot-sxq1.8` and synced contract coverage with extracted helper modules in voice/frontend (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus TaskPage sanitize rendering contracts.

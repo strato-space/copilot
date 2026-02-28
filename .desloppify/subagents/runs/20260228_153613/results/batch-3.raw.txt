@@ -1,0 +1,258 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 3,
+  "assessments": {
+    "cross_module_architecture": 87.0,
+    "convention_outlier": 86.0,
+    "error_consistency": 78.0,
+    "abstraction_fitness": 79.0,
+    "api_surface_coherence": 76.0,
+    "authorization_consistency": 74.0,
+    "ai_generated_debt": 88.0,
+    "incomplete_migration": 72.0,
+    "mid_level_elegance": 82.0,
+    "low_level_elegance": 86.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Voice close semantics are split across multiple modules: `backend/src/api/routes/voicebot/uploads.ts` still implements `/close_session` with direct session mutation, while session lifecycle scripts/logging use `session_done` semantics (`backend/scripts/voicebot-close-inactive-sessions.ts`, `backend/src/services/voicebot/voicebotDoneNotify.ts`).",
+        "Legacy CRM route modules (`backend/src/api/routes/crm/legacy/*`) remain active beside newer route modules, increasing boundary ambiguity between compatibility and canonical API paths."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Legacy and canonical lifecycle paths still coexist in voice and CRM boundaries, which increases drift risk."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Mixed payload naming conventions persist in active interfaces (e.g., `mime_type` and `mimeType` both returned from `backend/src/api/routes/voicebot/uploads.ts`, while frontend types in `app/src/types/voice.ts` carry mixed snake_case/camelCase fields).",
+        "CRM/voice APIs continue to rely on action-style POST endpoints (`/list`, `/create`, `/update`) while other modules use more resource-style routes (`backend/src/api/routes/finops/employees.ts` GET)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Naming and route-style drift across sibling modules still requires adapter logic."
+    },
+    "error_consistency": {
+      "evidence": [
+        "Silent handling is still present: `app/src/pages/PlanFactPage.tsx` has `catch { message.error(...) }` without preserving error context; `app/e2e/voice-fab-lifecycle.spec.ts` repeatedly uses `.catch(() => undefined/false/'')` which can mask real failures.",
+        "UI components often reduce failures to generic UI messages with bare console logging (`app/src/components/voice/SessionLog.tsx`, `app/src/components/voice/AudioUploader.tsx`), while backend routes return raw `String(error)` payloads (`backend/src/api/routes/crm/customers.ts`, `backend/src/api/routes/crm/uploads.ts`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Type contracts are repeatedly bypassed with `Record<string, unknown>` + casts instead of stable schema typing (`app/src/components/voice/SessionLog.tsx`, `backend/src/api/routes/voicebot/messageHelpers.ts`).",
+        "Canonical data paths are hidden behind normalization utilities because upstream interfaces are too loose (e.g., mixed segment/id/text extraction across helper functions in `messageHelpers.ts` and UI reconstruction in `TranscriptionTableRow.tsx`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 76.0,
+        "indirection_cost": 79.0,
+        "interface_honesty": 73.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Session-close API is duplicated in a legacy upload route (`backend/src/api/routes/voicebot/uploads.ts` `/close_session`) instead of being fully centralized under canonical close endpoints, creating two write paths for the same lifecycle transition.",
+        "Route contract styles are inconsistent: CRM endpoints in `backend/src/api/routes/crm/customers.ts` and `backend/src/api/routes/crm/legacy/projectgroups.ts` use POST for read/list/update actions, while finops exposes typed GET query contracts in `backend/src/api/routes/finops/employees.ts`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Auth enforcement style is inconsistent across sibling route modules: `backend/src/api/routes/finops/employees.ts` applies `authMiddleware` at route level, while `backend/src/api/routes/crm/customers.ts` and `backend/src/api/routes/crm/uploads.ts` define handlers without in-file auth guards.",
+        "`backend/src/api/middleware/roleGuard.ts` builds `new ObjectId(user.userId)` directly; malformed IDs fall into generic 500 handling instead of deterministic auth failure, producing inconsistent authorization failure behavior."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Repeated boilerplate handler scaffolding (`try/catch + logger + 500`) appears across legacy CRM routes (`backend/src/api/routes/crm/legacy/botcommands.ts`, `backend/src/api/routes/crm/legacy/projectgroups.ts`, `backend/src/api/routes/crm/customers.ts`).",
+        "The repetition has not yet created catastrophic defects, but it keeps behavioral differences subtle and hard to standardize."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Boilerplate route patterns are still heavily copy-pasted instead of centralized through shared route helpers."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Transcription model migration is still dual-path: frontend types keep both `transcription.segments` and `transcription_chunks` (`app/src/types/voice.ts`), and UI components reconstruct from either path (`app/src/components/voice/SessionLog.tsx`, `app/src/components/voice/TranscriptionTableRow.tsx`).",
+        "Backend message contracts still normalize/consume legacy segment/chunk formats in core helpers (`backend/src/api/routes/voicebot/messageHelpers.ts`) and service-level dedupe logic (`backend/src/services/voicebot/voicebotWebmDedup.ts`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Boundary orchestration is overloaded in single modules: `backend/src/api/routes/voicebot/uploads.ts` mixes upload ingestion, session lifecycle mutation, permission checks, file streaming, and telegram fallback in one route surface.",
+        "Frontend seam code compensates for backend shape drift by re-hydrating legacy payloads inside view components (`app/src/components/voice/TranscriptionTableRow.tsx`, `app/src/components/voice/SessionLog.tsx`) instead of one normalization boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Several large handlers still contain broad imperative flows with deeply mixed concerns (e.g., aggregation + formatting + response shaping in `backend/src/api/routes/crm/legacy/performerspayments.ts`).",
+        "Despite size, many utility-level helpers remain direct and readable (`backend/src/api/routes/voicebot/sessionsSharedUtils.ts`, `backend/src/services/finopsFxRates.ts`)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Large mixed-responsibility handler internals remain in key route files."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "voice_dual_transcription_schema",
+      "summary": "Voice transcription still operates on parallel legacy and canonical schemas, forcing every consumer to branch on format.",
+      "related_files": [
+        "app/src/types/voice.ts",
+        "app/src/components/voice/SessionLog.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts"
+      ],
+      "evidence": [
+        "`VoiceBotMessage` exposes both `transcription.segments` and `transcription_chunks` in `app/src/types/voice.ts`.",
+        "`SessionLog` and `TranscriptionTableRow` each implement fallback parsing from legacy `transcription_chunks` when canonical segments are absent.",
+        "Backend helper/service code still accepts and normalizes `transcription_chunks` as first-class input, not migration-only fallback."
+      ],
+      "suggestion": "Define one canonical transcription contract (segments + metadata), add a backend read-repair/write-repair migration step, and remove legacy chunk branching from UI components after backfill completion.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voice_schema_duality"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "voice_close_route_split",
+      "summary": "Session close behavior is exposed through overlapping API paths, creating multiple lifecycle mutation entrypoints.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/scripts/voicebot-close-inactive-sessions.ts",
+        "backend/src/services/voicebot/voicebotDoneNotify.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` still defines `POST /close_session` and mutates session closure fields directly.",
+        "Other close flow tooling/logging references `session_done` semantics (`event: 'session_done'` in close-inactive script, `source: 'socket_session_done'` metadata in done notify logging), indicating split lifecycle paths."
+      ],
+      "suggestion": "Make `session_done` the sole mutation path, keep aliases as thin delegating adapters only, and centralize close-side effects/logging in one shared close service.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voice_lifecycle_surface_drift"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_error_masking_frontend_and_tests",
+      "summary": "Multiple frontend and test paths suppress rich failure context, reducing observability and making regressions harder to triage.",
+      "related_files": [
+        "app/src/pages/PlanFactPage.tsx",
+        "app/e2e/voice-fab-lifecycle.spec.ts",
+        "app/src/components/voice/SessionLog.tsx",
+        "app/src/components/voice/AudioUploader.tsx"
+      ],
+      "evidence": [
+        "`PlanFactPage` uses `catch { ... }` and discards the underlying exception object.",
+        "`voice-fab-lifecycle.spec.ts` has several `.catch(() => ...)` fallbacks (`undefined/false/''`) that can hide failing browser actions.",
+        "`SessionLog` and `AudioUploader` catch errors and mostly reduce them to generic UI messages while logging raw console output."
+      ],
+      "suggestion": "Adopt a shared error normalization helper for UI/test layers that preserves error code/context, and forbid empty catch/fallback masks in e2e except explicitly documented retries.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "non_uniform_failure_contracts"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "route_guard_and_auth_failure_drift",
+      "summary": "Authorization enforcement and failure behavior are inconsistent across sibling backend route modules.",
+      "related_files": [
+        "backend/src/api/routes/finops/employees.ts",
+        "backend/src/api/routes/crm/customers.ts",
+        "backend/src/api/routes/crm/uploads.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "`finops/employees.ts` applies `authMiddleware` directly on route definitions, while CRM route files in this batch define handlers without in-file auth guards.",
+        "`roleGuard.ts` uses `new ObjectId(user.userId)` inside a broad try/catch; malformed IDs fall through to generic 500 responses rather than explicit auth rejection."
+      ],
+      "suggestion": "Standardize auth at router boundary (either mandatory parent middleware plus explicit module contract, or explicit per-route guards), and convert malformed auth identifiers to deterministic 401/403 responses before DB access.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_policy_fragmentation"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "record_unknown_contract_leakage",
+      "summary": "Loose `Record<string, unknown>` payloads leak through core boundaries, forcing repeated ad-hoc parsing and weakening interface honesty.",
+      "related_files": [
+        "app/src/components/voice/SessionLog.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "app/src/types/voice.ts"
+      ],
+      "evidence": [
+        "`SessionLog` casts message objects through `unknown as Record<string, unknown>` to inspect runtime fields.",
+        "`messageHelpers.ts` contains many generic coercion utilities (`toTaskText`, `toIdString`, `toTaskReferenceList`) compensating for weak upstream shape guarantees.",
+        "UI extraction logic reimplements normalization branches instead of consuming one typed normalized view model."
+      ],
+      "suggestion": "Introduce zod-backed boundary schemas for message/task payloads and generate typed normalized DTOs consumed by UI, replacing local cast-based parsers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "weak_boundary_typing"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "mixed_responsibility_integration_modules",
+      "summary": "Integration seams are overloaded with unrelated orchestration concerns, increasing coupling and change risk.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/miniapp/routes/index.ts",
+        "app/src/components/voice/TranscriptionTableRow.tsx"
+      ],
+      "evidence": [
+        "`uploads.ts` combines upload IO, permission checks, session lifecycle mutation, attachment retrieval, and telegram file proxying in one module.",
+        "`miniapp/routes/index.ts` packs login verification, auth middleware, task query orchestration, and mutation endpoints into one large route file.",
+        "Frontend component `TranscriptionTableRow.tsx` performs both rendering and substantial backend-format normalization/fallback choreography."
+      ],
+      "suggestion": "Split seam modules by responsibility: route handler orchestration only, dedicated service layer for session lifecycle/file retrieval, and shared frontend normalizers outside render components.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "seam_overload"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Canonical contracts are defined but legacy compatibility logic remains in hot paths instead of isolated adapters.",
+      "Boundary typing is too permissive, so normalization and fallback logic is duplicated across backend and UI seams.",
+      "Large route/component files absorb orchestration that should be split into dedicated collaboration layers."
+    ],
+    "likely_symptoms": [
+      "voice_dual_transcription_schema",
+      "voice_close_route_split",
+      "record_unknown_contract_leakage",
+      "mixed_responsibility_integration_modules"
+    ],
+    "possible_false_positives": [
+      "Some auth guard differences may be partially mitigated by parent router middleware not included in this batch’s reviewed files."
+    ]
+  }
+}

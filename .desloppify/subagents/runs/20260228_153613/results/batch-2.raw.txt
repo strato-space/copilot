@@ -1,0 +1,140 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 2,
+  "assessments": {
+    "design_coherence": 72.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Two core UI surfaces remain monolithic and multi-purpose: `app/src/pages/voice/SessionsListPage.tsx` (1656 LOC) and `app/src/components/crm/CRMKanban.tsx` (1324 LOC), each combining data fetching, persistence, filtering, table-column construction, and action workflows in one component.",
+        "Voice task-creation behavior is duplicated across independent pipelines instead of shared orchestration: `backend/src/workers/voicebot/handlers/transcribeHandler.ts` and `backend/src/voicebot_tgbot/ingressHandlers.ts` both define trigger detection/title generation/project-performer lookup/task document construction/deferred review defaults.",
+        "FinOps grid behavior is copy-patterned across three components (`PlanFactGrid`, `BonusesGrid`, `ExpensesGrid`) with repeated month pinning/localStorage/table month-column choreography (`PIN_STORAGE_KEY`, `normalizePinnedMonths`, `togglePinnedMonth`, month ordering and pin rendering logic).",
+        "Route modules are overloaded as integration hubs: `backend/src/api/routes/voicebot/uploads.ts` (1010 LOC) mixes file intake, dedup, runtime scoping, session access, queueing, websocket emission, and public attachment retrieval in one file."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "ui_god_components_voice_crm",
+      "summary": "Large page/components mix unrelated responsibilities (query-state persistence, data orchestration, and complex table rendering), making behavior changes high-risk.",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/components/crm/CRMKanban.tsx",
+        "app/src/pages/AnalyticsPage.tsx"
+      ],
+      "evidence": [
+        "`SessionsListPage` contains query-param parsing/persistence (`SESSIONS_QUERY_KEYS`, localStorage restore/persist effects), network orchestration (`fetchVoiceBotSessionsList`, `fetchPreparedProjects`, `fetchPersonsList`), and full table action handling in one component (see hooks around lines ~300-750).",
+        "`CRMKanban` includes identity normalization helpers (`toLookupValue`), project/customer resolution, inline editing state machine, filters, and column rendering within one file (callbacks/useMemo clusters from ~126 through ~1226).",
+        "`AnalyticsPage` similarly centralizes numerous derivation pipelines in one component (dense useMemo/useCallback chain from ~202-582), reinforcing the same structural pattern."
+      ],
+      "suggestion": "Split each page into a container + feature hooks + presentational table modules. Extract URL/localStorage filter synchronization into a reusable hook, and isolate action handlers (delete/merge/send/restart) from column rendering.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "feature_containers_without_boundary_rules"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_codex_task_pipeline_duplication",
+      "summary": "Codex task creation logic is duplicated in worker and Telegram ingress paths, creating two evolving implementations of the same domain rule-set.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/src/services/voicebot/voicebotDoneNotify.ts"
+      ],
+      "evidence": [
+        "Both files define near-identical primitives (`normalizeString`, `toObjectIdOrNull`, title extraction helpers: `toCodexTaskTitle`/`toTaskTitle`) and then build codex task docs with same defaults (`priority: 'P2'`, `codex_task: true`, `codex_review_state: 'deferred'`, 15-minute deferred review window).",
+        "`transcribeHandler` path: trigger parsing + payload persist + task creation in `maybeCreateCodexTaskFromVoiceCommand` (~284 onward).",
+        "`ingressHandlers` path: signature parsing + payload persist + task creation in `processTaskSignatureIngress` and `createCodexTaskFromPayload` (~600 onward)."
+      ],
+      "suggestion": "Introduce a shared `codexTaskFactory`/`codexTaskOrchestrator` module used by both ingress and transcribe handlers. Keep source-specific parsing separate, but centralize project resolution, performer resolution, document shape, and dedup checks.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "parallel_feature_implementations_without_shared_domain_service"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_grid_pattern_copying",
+      "summary": "Plan/expense/bonus grids duplicate the same pinned-month and dynamic-month-column mechanics instead of sharing a composable grid abstraction.",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx",
+        "app/src/pages/PlanFactPage.tsx"
+      ],
+      "evidence": [
+        "All three components repeat local pin-state lifecycle: localStorage read/write, normalization by current months/focus month, and toggle handler (`PIN_STORAGE_KEY`, `normalizePinnedMonths`, `togglePinnedMonth`).",
+        "All three define per-file month width constants and custom month column ordering/pinning UI with duplicated pin controls (`MONTH_COL_WIDTH`, pushpin icons, ordered pinned-first month arrays).",
+        "`ExpensesGrid` embeds a custom `expenseGridUtils.buildColumns` while `PlanFactGrid`/`BonusesGrid` keep parallel inline builders, indicating near-same behavior split by copy rather than composition."
+      ],
+      "suggestion": "Extract shared month-pinning state + month-column builder into reusable hooks/utilities (e.g., `usePinnedMonths`, `buildPinnedMonthColumns`) and keep only domain-specific cell renderers per grid.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "copy_pasted_table_infrastructure"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "upload_route_overloaded_integration_hub",
+      "summary": "Voice upload route file acts as a catch-all integration layer, mixing unrelated responsibilities and increasing coupling between transport, storage, auth, dedup, and realtime concerns.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` is 1010 LOC and exposes many endpoints in one module (multiple `router.post` and `router.get` handlers around lines ~764-1008).",
+        "Within the same file, logic spans: extension/mime normalization, session authorization checks, duplicate detection, queue scheduling, websocket event emission (`new_message`, `session_update`), and attachment retrieval from both local and Telegram-backed storage.",
+        "A second extension sanitizer implementation exists in `transcribeHandler` (`sanitizeExtension`) with different fallback semantics (`''` vs `'.bin'`), showing route-layer internals bleeding into worker-level behavior without shared contract."
+      ],
+      "suggestion": "Decompose into focused route handlers (`audioUpload`, `attachmentUpload`, `publicAttachment`) and shared services (`extensionPolicy`, `attachmentFetch`, `uploadRealtimePublisher`, `sessionAccessGuard`). Ensure one canonical extension-resolution utility is reused by API and workers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "integration_logic_concentrated_in_route_files"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "config_module_contains_ui_factory_logic",
+      "summary": "Directory configuration module mixes static metadata with JSX table-factory behavior and directory-join logic, blurring config vs UI boundaries.",
+      "related_files": [
+        "app/src/services/guideDirectoryConfig.tsx",
+        "app/src/pages/DirectoriesPage.tsx",
+        "app/src/pages/directories/ClientsProjectsRatesPage.tsx"
+      ],
+      "evidence": [
+        "`guideDirectoryConfig.tsx` exports static `DIRECTORY_GROUPS` but also `buildDirectoryTable` with a large switch-case that constructs AntD column renderers and performs cross-directory joining logic.",
+        "The module is under `services/` yet imports UI components (`Button`, `Dropdown`, `Switch`, icons) and returns JSX render functions in column definitions, coupling presentation and data-shape logic.",
+        "`DirectoriesPage` consumes this module as source-of-truth for directory grouping, so changing display behavior currently requires editing service-level config code."
+      ],
+      "suggestion": "Split into: `directoryRegistry.ts` (pure metadata), `directoryViewModels.ts` (data joins/shape), and per-directory UI column builders in page/component layer. Keep `services/` free of JSX rendering concerns.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_configuration_vs_presentation_boundary"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Feature delivery favored local completion inside single files, with few enforced decomposition boundaries for pages/routes.",
+      "Cross-entrypoint domain logic (voice codex task creation, id normalization, month-pinning table behavior) lacks shared canonical modules.",
+      "Configuration, orchestration, and presentation responsibilities are routinely co-located."
+    ],
+    "likely_symptoms": [
+      "ui_god_components_voice_crm",
+      "voice_codex_task_pipeline_duplication",
+      "finops_grid_pattern_copying",
+      "upload_route_overloaded_integration_hub"
+    ],
+    "possible_false_positives": [
+      "Some duplicated helpers may be temporarily intentional for migration safety, but current similarity and drift risk still indicate structural debt."
+    ]
+  }
+}

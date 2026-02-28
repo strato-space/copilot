@@ -1,0 +1,120 @@
+{
+  "batch": "Testing & API",
+  "batch_index": 2,
+  "assessments": {
+    "api_surface_coherence": 74.0,
+    "mid_level_elegance": 78.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "`extractUserFromResponse` accepts two incompatible payload shapes (`data.user` and top-level `user`), so auth actions are coupled to legacy/new response variants instead of one contract.",
+        "Token source contract is ambiguous: `readCookieToken` reads cookie first, then localStorage (`VOICEBOT_AUTH_TOKEN`), while `apiClient` is configured for cookie credentials, creating mixed transport semantics in one API surface.",
+        "`checkAuth` clears auth storage on 401, but other auth entry points depend on different token/state flows, making caller expectations about storage and auth source non-uniform."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Unauthorized boundary handling diverges by seam: `checkAuth` 401 path calls `clearAuthCookies`, while `refreshUserData` 401 path leaves cookie/localStorage values intact and only mutates in-memory store state.",
+        "`RequireAuth` in `App.tsx` blocks on `ready`, but `tryLogin` success/error paths do not manage `ready`, unlike `checkAuth`, `tryTokenAuth` success, `refreshUserData`, and `logout`; lifecycle signaling across auth flows is inconsistent.",
+        "Refresh hooks (`usePeriodicUserRefresh`, `useRefreshOnFocus`) depend on consistent auth seam behavior, but they trigger `refreshUserData` path that applies different cleanup/error semantics than initial auth check."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "auth_response_contract_dual_shape",
+      "summary": "Auth store tolerates two response schemas instead of enforcing one API contract.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "`extractUserFromResponse` parses both `payload.data.user` and `payload.user` (`auth_token` similarly), indicating active dual-schema support in all auth actions.",
+        "The store’s public auth actions (`checkAuth`, `tryLogin`, `tryTokenAuth`, `refreshUserData`) all rely on this coercion layer, so callers cannot rely on one stable response shape."
+      ],
+      "suggestion": "Standardize backend auth responses to one envelope, then replace `extractUserFromResponse` with strict typed parsing (prefer runtime validation at the boundary) and remove the legacy branch.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_boundary_contract_drift"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_token_transport_contract",
+      "summary": "Auth API surface mixes cookie-session and localStorage token semantics.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/hooks/useTokenAuth.ts"
+      ],
+      "evidence": [
+        "`readCookieToken` prefers `auth_token` cookie but falls back to `localStorage` token; `saveAuthToCookies` writes both stores.",
+        "Token auth flow (`useTokenAuth` -> `tryTokenAuth`) feeds explicit token login while the shared API client is cookie-credential based, so auth source-of-truth is not singular."
+      ],
+      "suggestion": "Define one canonical client auth transport (cookie session or explicit bearer token), delete the secondary storage path, and align token-auth flow with that single model.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "auth_boundary_contract_drift"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "unauthorized_cleanup_semantics_diverge",
+      "summary": "Equivalent 401 outcomes trigger different cleanup behavior across auth seams.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/hooks/useUserRefresh.ts"
+      ],
+      "evidence": [
+        "In `checkAuth`, 401 invokes `clearAuthCookies()` and resets auth state.",
+        "In `refreshUserData`, 401 resets in-memory auth state but does not clear persisted cookie/localStorage token values, despite being the same unauthorized condition.",
+        "Refresh hooks repeatedly call `refreshUserData`, so this seam can keep stale persisted auth artifacts after unauthorized refresh cycles."
+      ],
+      "suggestion": "Centralize unauthorized handling in one helper used by all auth actions; apply identical storage cleanup, state reset, and error policy for every 401 path.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_lifecycle_seam_inconsistency"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "ready_lifecycle_contract_inconsistent",
+      "summary": "`ready` signaling is inconsistent across login/check flows and route guard usage.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/App.tsx",
+        "app/src/pages/LoginPage.tsx"
+      ],
+      "evidence": [
+        "`RequireAuth` in `App.tsx` gates on `!ready || loading`.",
+        "`checkAuth`, `refreshUserData`, `tryTokenAuth` success, and `logout` set `ready`, but `tryLogin` success/failure paths do not set it, creating flow-dependent lifecycle semantics.",
+        "Login page invokes `tryLogin` directly and depends on `isAuth` navigation side effects, not a consistent auth readiness state contract."
+      ],
+      "suggestion": "Make `ready` transitions explicit and uniform for every auth action (including login success/failure), or replace `ready` with a single finite auth status enum consumed by route guards.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_lifecycle_seam_inconsistency"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Auth boundary evolution kept backward-compatibility branches in the store instead of enforcing one canonical transport and payload contract.",
+      "Auth lifecycle concerns (persistence cleanup, readiness signaling, unauthorized policy) are duplicated per action rather than centralized."
+    ],
+    "likely_symptoms": [
+      "auth_response_contract_dual_shape",
+      "mixed_token_transport_contract",
+      "unauthorized_cleanup_semantics_diverge",
+      "ready_lifecycle_contract_inconsistent"
+    ],
+    "possible_false_positives": []
+  }
+}

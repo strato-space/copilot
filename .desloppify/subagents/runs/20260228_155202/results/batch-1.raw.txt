@@ -1,0 +1,85 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 1,
+  "assessments": {
+    "package_organization": 78.0,
+    "high_level_elegance": 80.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "Packet structural profile shows `app/src/constants/` contains only 2 files (`crm.ts`, `permissions.ts`), creating a broad catch-all package boundary instead of domain-scoped subpackages.",
+        "`app/src/constants/permissions.ts` mixes auth contract keys (`PERMISSIONS`, `ROLES`) with UI presentation dictionaries (`ROLE_COLORS`, `ROLE_NAMES`) and voice session UX labels/descriptions (`SESSION_ACCESS_LEVELS_*`), so one file spans at least three ownership zones.",
+        "`app/src/constants/crm.ts` mixes CRM workflow statuses (`TASK_STATUSES`) with external integration translation maps (`CRM_TO_NOTION_STATUSES`, `NOTION_TO_CRM_STATUSES`), indicating integration-boundary concerns are colocated with core domain constants."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Ownership is blurred because permission contracts, UI display metadata, and voice-specific access copy all live in `app/src/constants/permissions.ts`, while consumers are spread across stores/pages/components (`permissionsStore`, `MeetingCard`, `SessionsListPage`).",
+        "The CRM constants module acts as a historical bucket (`migrated from appkanban`) rather than a capability boundary; Notion bridge mappings and internal workflow taxonomy are coupled in one file.",
+        "Backend has a separate permission contract source (`backend/src/permissions/permissions-config.ts`), while frontend keeps its own constant tree in `app/src/constants/permissions.ts`, making top-level contract ownership non-obvious."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "constants_bucket_mixes_domains",
+      "summary": "Shared constants package is a mixed-domain bucket instead of domain-scoped modules.",
+      "related_files": [
+        "app/src/constants/permissions.ts",
+        "app/src/constants/crm.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/components/voice/MeetingCard.tsx"
+      ],
+      "evidence": [
+        "`permissions.ts` contains permission keys, role display metadata, and voice session-access labels in one file.",
+        "`crm.ts` contains both workflow status taxonomy and Notion integration mapping tables.",
+        "Consumers import unrelated slices from one bucket module, which ties independent changes to the same file path."
+      ],
+      "suggestion": "Staged reorg plan: (1) create target folders `app/src/domain/auth/constants/`, `app/src/domain/voice/constants/`, `app/src/domain/crm/constants/`, `app/src/integrations/notion/constants/`; (2) move auth contract symbols (`PERMISSIONS`, `ROLES`) first to `domain/auth/constants/permissions.ts`; (3) move role UI metadata (`ROLE_NAMES`, `ROLE_COLORS`, helpers) to `domain/auth/constants/rolePresentation.ts`; (4) move session access enums/texts to `domain/voice/constants/sessionAccess.ts`; (5) split `crm.ts` into `domain/crm/constants/taskWorkflow.ts` and `integrations/notion/constants/statusMapping.ts`; (6) update imports with `rg -n \"constants/(crm|permissions)\" app/src`; (7) validate with `cd app && npm run build` and `cd app && npm run test:serial`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "constants_domain_boundary_missing"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "permission_contract_ownership_split",
+      "summary": "Permission model ownership is split across frontend and backend without a clear canonical package boundary.",
+      "related_files": [
+        "app/src/constants/permissions.ts",
+        "backend/src/permissions/permissions-config.ts",
+        "app/src/pages/AdminPage.tsx",
+        "app/src/store/permissionsStore.ts"
+      ],
+      "evidence": [
+        "Frontend defines its own permission and role constant tree while backend defines a separate permission config module.",
+        "The frontend constants file embeds both contract-level identifiers and UI copy, so the module's role is not a stable public surface.",
+        "This split encourages drift and makes architectural ownership of permission taxonomy ambiguous."
+      ],
+      "suggestion": "Staged reorg plan: (1) establish canonical permission schema package under `shared/permissions/` (or backend-generated artifact consumed by frontend); (2) move backend permission identifiers there first and export typed contracts; (3) switch frontend `PERMISSIONS`/`ROLES` imports to the shared package; (4) keep frontend-only presentation labels in `app/src/domain/auth/constants/rolePresentation.ts`; (5) move voice-only access-level labels to `app/src/domain/voice/constants/sessionAccess.ts`; (6) run import update check `rg -n \"from .*constants/permissions|from .*permissions-config\" app/src backend/src`; (7) validate with `cd backend && npm run build` then `cd app && npm run build`.",
+      "confidence": "medium",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "constants_domain_boundary_missing"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Historical migration constants were consolidated into a flat `app/src/constants` bucket and not re-sliced by bounded context.",
+      "Contract identifiers and presentation metadata are co-located, obscuring ownership and package intent."
+    ],
+    "likely_symptoms": [
+      "constants_bucket_mixes_domains",
+      "permission_contract_ownership_split"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 4,
+  "assessments": {
+    "package_organization": 74.0,
+    "high_level_elegance": 76.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "Holistic structure data shows `app/src/store/` has 20 files (threshold breach for flat directory overload) with mixed concerns and low cohesion signals (`avg_fan_in: 0.7`, `avg_fan_out: 1.8`).",
+        "`app/src/store/codexTaskTimeline.ts` is a pure stateless helper object (no Zustand state) and has a single importer (`app/src/store/voiceBotStore.ts`), indicating placement mismatch with store ownership.",
+        "`app/src/store/crmStore.ts` bundles CRM UI state, Figma sync orchestration, metrics filters, bot command editing state, and cookie persistence in one package file, making directory boundaries weak."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`crmStore.ts` defines many unrelated slices (reports, editing, tree, forms, filters, comments/hours, Figma sync, section selection, metrics, bot command, additional filters) under one store export, so top-level ownership is not crisp.",
+        "`authStore.ts` combines transport calls (`/auth/me`, `/try_login`, `/auth_token`, `/logout`), cookie/localStorage persistence, and auth state transitions in one module, blending infrastructure and domain roles.",
+        "`codexTaskTimeline.ts` being in `store/` but implemented as utility logic reduces decomposition clarity: folder naming suggests state ownership while file behavior is pure transformation."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "store_flattening_mixed_concerns",
+      "summary": "`app/src/store` is overloaded with mixed responsibilities, weakening package boundaries.",
+      "related_files": [
+        "app/src/store/crmStore.ts",
+        "app/src/store/authStore.ts",
+        "app/src/store/codexTaskTimeline.ts"
+      ],
+      "evidence": [
+        "Holistic context flags `app/src/store/` as flat with 20 files and mixed imports across services/types/utils/constants.",
+        "`crmStore.ts` includes CRM UI, Figma sync, bot-command editing, and finance-month selectors in one store module.",
+        "`authStore.ts` and `codexTaskTimeline.ts` sit beside domain stores despite serving cross-cutting auth infra and pure timeline utility roles."
+      ],
+      "suggestion": "Staged reorg plan: 1) create `app/src/store/auth/`, `app/src/store/crm/`, and `app/src/utils/voice/`; 2) move `authStore.ts` to `store/auth/authStore.ts`, `crmStore.ts` to `store/crm/crmUIStore.ts`, `codexTaskTimeline.ts` to `utils/voice/codexTaskTimeline.ts`; 3) update imports with `rg -n \"authStore|crmStore|codexTaskTimeline\" app/src` and replace paths; 4) run `cd app && npm run build` and `cd app && npm run test` to validate module moves.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "store_boundary_erosion"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "crm_store_acts_as_multiple_subsystems",
+      "summary": "`crmStore.ts` acts as an omnibus module instead of a coherent bounded store.",
+      "related_files": [
+        "app/src/store/crmStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "app/src/components/crm/CRMKanban.tsx"
+      ],
+      "evidence": [
+        "`crmStore.ts` exposes unrelated domains in one top-level API (`setPairToSync`, `getSectionsToSync`, `setMetricMonth`, `setSelectedBotCommand`, `saveFilters`).",
+        "Consumers across CRM and Kanban paths depend on this shared omnibus surface, increasing ripple risk for unrelated changes.",
+        "Prior packet context already flagged `crmStore.ts` for structural smells; current code still keeps the same multi-domain shape."
+      ],
+      "suggestion": "Staged decomposition plan: 1) extract slices into `store/crm/uiFiltersStore.ts`, `store/crm/editingStore.ts`, `store/crm/figmaSyncStore.ts`, `store/crm/metricsStore.ts`, `store/crm/botCommandStore.ts`; 2) add a compatibility barrel `store/crm/index.ts` that re-exports hooks temporarily; 3) migrate call sites incrementally (start with CRM components, then `kanbanStore.ts`); 4) remove deprecated exports after import migration; 5) validate with `cd app && npm run build` and targeted grep `rg -n \"useCRMStore\" app/src`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "store_boundary_erosion"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "auth_store_blends_domain_and_infra",
+      "summary": "`authStore.ts` mixes auth state ownership with storage and transport infrastructure.",
+      "related_files": [
+        "app/src/store/authStore.ts",
+        "app/src/services/api.ts",
+        "app/src/hooks/useUserRefresh.ts"
+      ],
+      "evidence": [
+        "`authStore.ts` directly handles cookie/localStorage read-write (`readCookieToken`, `saveAuthToCookies`, `clearAuthCookies`) and API calls in the same module.",
+        "This makes `authStore` both a state container and persistence/transport adapter, reducing role clarity and making future auth transport changes invasive.",
+        "High importer count for `authStore.ts` amplifies this ownership blur across pages, hooks, and other stores."
+      ],
+      "suggestion": "Staged boundary cleanup: 1) move persistence helpers to `app/src/services/auth/authPersistence.ts`; 2) move HTTP interactions to `app/src/services/auth/authApi.ts`; 3) keep `authStore.ts` as orchestration/state only and inject the service helpers; 4) update imports via `rg -n \"readCookieToken|saveAuthToCookies|clearAuthCookies|/auth/me|/try_login\" app/src`; 5) validate with `cd app && npm run build` and smoke-check login/session flows.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "store_boundary_erosion"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "utility_misplaced_in_store_package",
+      "summary": "`codexTaskTimeline.ts` is a utility but is packaged as a store module.",
+      "related_files": [
+        "app/src/store/codexTaskTimeline.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/utils/voiceTimeline.ts"
+      ],
+      "evidence": [
+        "`codexTaskTimeline.ts` exports pure conversion/sorting functions and no Zustand state.",
+        "It has one importer (`voiceBotStore.ts`), indicating feature-local utility affinity rather than shared store ownership.",
+        "`app/src/utils/voiceTimeline.ts` already exists, showing the codebase has a voice utility namespace where this logic fits better."
+      ],
+      "suggestion": "Staged move plan: 1) move file to `app/src/utils/voice/codexTaskTimeline.ts`; 2) update `voiceBotStore.ts` import to `../utils/voice/codexTaskTimeline`; 3) search residual paths with `rg -n \"codexTaskTimeline\" app/src`; 4) run `cd app && npm run build` to verify path updates.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "store_boundary_erosion"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Store directory became a catch-all for any state-adjacent code, not just state containers.",
+      "Feature decomposition favored growth inside existing central stores instead of creating bounded subpackages."
+    ],
+    "likely_symptoms": [
+      "store_flattening_mixed_concerns",
+      "crm_store_acts_as_multiple_subsystems",
+      "utility_misplaced_in_store_package"
+    ],
+    "possible_false_positives": []
+  }
+}

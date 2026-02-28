@@ -1,0 +1,79 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 1,
+  "assessments": {
+    "package_organization": 78.0,
+    "high_level_elegance": 80.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`app/src/constants/crm.ts` mixes multiple concern types in one placement: CRM workflow statuses (`TASK_STATUSES`), external integration mapping (`CRM_TO_NOTION_STATUSES`, `NOTION_TO_CRM_STATUSES`), and UI action sheet identifiers (`ACTION_SHEETS`).",
+        "`app/src/constants/permissions.ts` combines auth contract constants (`PERMISSIONS`, `ROLES`) with presentation-specific mappings (`ROLE_COLORS`, human-readable labels) and voice session access copy (`SESSION_ACCESS_LEVELS_*`).",
+        "The batch structural context shows only `app/src/constants/` with two files, but each file is internally multi-domain, so directory-level cohesion is low despite small file count."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Top-level ownership is unclear: `app/src/constants/permissions.ts` acts as both policy contract and UI presentation dictionary, which creates ambiguous responsibility boundaries.",
+        "Comment in `app/src/constants/permissions.ts` states correspondence to backend permissions config, indicating duplicated source-of-truth risk instead of a single explicit contract boundary.",
+        "`app/src/constants/crm.ts` retains migration-era shape (`migrated from appkanban`) and mixes integration translation tables with core CRM status model, which blurs subsystem decomposition."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "constants-folder-mixed-domain-payload",
+      "summary": "Both constants files are placed as flat global constants while each contains multiple domain-specific concerns that should be packaged by ownership.",
+      "related_files": [
+        "app/src/constants/crm.ts",
+        "app/src/constants/permissions.ts"
+      ],
+      "evidence": [
+        "`crm.ts` includes CRM workflow model, Notion bridge mappings, and UI action-sheet identifiers in one module.",
+        "`permissions.ts` includes permission/role contract data together with role color/name display metadata and localized voice session access labels/descriptions."
+      ],
+      "suggestion": "Staged reorg plan: 1) create target folders `app/src/domains/crm/constants/`, `app/src/domains/crm/integrations/notion/`, `app/src/domains/auth/constants/`, `app/src/domains/voice/constants/`; 2) move core domain enums first (`TASK_STATUSES`, `TASK_CLASSES`, `PERMISSIONS`, `ROLES`), then move integration/presentation maps (`CRM_TO_NOTION_STATUSES`, `ROLE_COLORS`, localized access labels) into their domain modules; 3) add thin temporary re-exports in current files to avoid a big-bang break; 4) update imports with `rg \"from '.*constants/(crm|permissions)'\" app/src` then replace to new paths; 5) remove temporary re-exports after migration and validate with `cd app && npm run build` and `cd app && npm run test -- --runInBand`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "constants-as-catchall"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "duplicated-contract-and-ui-policy-coupling",
+      "summary": "Permission and status contracts are co-located with UI text/color concerns, creating blurred ownership and contract drift risk across frontend/backend boundaries.",
+      "related_files": [
+        "app/src/constants/permissions.ts",
+        "app/src/constants/crm.ts"
+      ],
+      "evidence": [
+        "`permissions.ts` comment declares backend correspondence, but frontend keeps its own contract literals plus UI helpers (`permissionsConstants.getRoleColor/getRoleName`), so policy and presentation are coupled.",
+        "`crm.ts` maps internal CRM statuses to external Notion statuses directly in a global constants file, embedding integration boundary logic into a generic constants location."
+      ],
+      "suggestion": "Staged reorg plan: 1) define explicit ownership boundaries: `domains/auth/policy` for permission keys, `domains/auth/presentation` for label/color maps, `domains/crm/model` for internal statuses, `domains/crm/integration-notion` for translation tables; 2) move policy/model modules first and enforce import direction (presentation/integration may depend on policy/model, not vice versa); 3) introduce a shared typed contract module consumed by both UI and adapters; 4) update imports incrementally (`rg \"PERMISSIONS|ROLES|CRM_TO_NOTION_STATUSES|NOTION_TO_CRM_STATUSES\" app/src`) and remove cross-boundary dependencies; 5) validate with `cd app && npm run build` and run focused checks on affected pages/components.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "constants-as-catchall"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Migration-era constants consolidation created a catch-all module pattern instead of domain-owned packages.",
+      "Contract literals and presentation dictionaries were grouped for convenience, obscuring ownership boundaries."
+    ],
+    "likely_symptoms": [
+      "constants-folder-mixed-domain-payload",
+      "duplicated-contract-and-ui-policy-coupling"
+    ],
+    "possible_false_positives": []
+  }
+}

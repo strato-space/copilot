@@ -1,0 +1,81 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 77.0,
+    "high_level_elegance": 79.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`useMCPWebSocket` writes a module-level socket singleton indirectly via `setSocketInstance(socket)`, while `sendMCPCall` in `mcpRequestStore` depends on that hidden global (`socketInstance`) being initialized first.",
+        "The hook removes listeners with `socket.off(SOCKET_EVENTS.MCP_CHUNK)` / `off(MCP_COMPLETE)` / `off(MCP_ERROR)` / `off('error')` without callback references, which can remove handlers registered by other modules sharing the same singleton socket from `services/socket.ts`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Connection ownership is split across hook/store/service: socket creation in `services/socket.ts`, lifecycle binding in `useMCPWebSocket.ts`, and request transport state in `mcpRequestStore.ts`, but no single explicit boundary object defines MCP socket responsibilities.",
+        "The current design makes initialization order a hidden contract (`useMCPWebSocket` must run before any `sendMCPCall`), which is architectural knowledge not expressed in API shape."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "mcp_socket_hidden_global_coupling",
+      "summary": "MCP request flow relies on hidden global socket initialization order across hook and store.",
+      "related_files": [
+        "app/src/hooks/useMCPWebSocket.ts",
+        "app/src/store/mcpRequestStore.ts",
+        "app/src/services/socket.ts"
+      ],
+      "evidence": [
+        "`useMCPWebSocket` calls `setSocketInstance(socket)` from inside `useEffect` after auth readiness checks.",
+        "`sendMCPCall` throws `Socket not connected` when module-global `socketInstance` is null/disconnected, but this dependency is not part of the store API contract.",
+        "This creates implicit boot-order coupling: hook mount timing controls whether store API is valid."
+      ],
+      "suggestion": "Replace module-global socket handoff with an explicit MCP transport module/provider (e.g., `createMcpClient(socket)`), and inject that dependency into the store at app bootstrap so `sendMCPCall` does not depend on hook execution order.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "implicit_socket_ownership_boundary"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "mcp_listener_ownership_not_isolated",
+      "summary": "MCP hook cleanup can tear down shared socket listeners outside its own ownership scope.",
+      "related_files": [
+        "app/src/hooks/useMCPWebSocket.ts",
+        "app/src/services/socket.ts",
+        "app/src/hooks/useCRMSocket.ts"
+      ],
+      "evidence": [
+        "Cleanup uses `socket.off(event)` without handler references for MCP/error events, removing all listeners for those events on a singleton socket.",
+        "`services/socket.ts` exposes one shared `getSocket()` instance and generic event subscription utilities, so multiple hooks can coexist on the same emitter.",
+        "This creates subsystem-level interference risk where unmounting one hook can disable another module’s listeners."
+      ],
+      "suggestion": "Register named handler functions for each MCP/error listener and always unsubscribe with `socket.off(event, sameHandler)`; consider an MCP-dedicated namespace/socket wrapper to isolate event ownership from other feature hooks.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_socket_ownership_boundary"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Shared singleton socket is used as a global integration surface without explicit per-domain ownership boundaries.",
+      "Lifecycle/orchestration responsibilities are split across modules without a single MCP transport abstraction."
+    ],
+    "likely_symptoms": [
+      "mcp_socket_hidden_global_coupling",
+      "mcp_listener_ownership_not_isolated"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -1,0 +1,196 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 6,
+  "assessments": {
+    "convention_outlier": 78.0,
+    "error_consistency": 74.0,
+    "authorization_consistency": 70.0,
+    "ai_generated_debt": 82.0,
+    "incomplete_migration": 76.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "app/src/store/permissionsStore.ts mixes endpoint prefixes in the same module: most calls use `voicebot/permissions/...` but `getUserPermissions` calls `permissions/users/permissions`.",
+        "backend/src/api/routes/crm/index.ts mounts mixed naming styles (`/taskTypes`, `/project_groups`, `/project_tree`) in one surface, indicating unresolved protocol conventions.",
+        "app/src/store/requestStore.ts and backend/src/api/routes/crm/uploads.ts disagree on upload response shape conventions (string URL vs object payload)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "app/src/store/requestStore.ts rethrows API errors (`throw error`), while app/src/store/permissionsStore.ts frequently catches and suppresses failures after toast/setState, creating inconsistent caller behavior.",
+        "app/src/store/permissionsStore.ts `getUserPermissions` catches all errors and returns `[]`, which conflates transport failure with 'no permissions' state.",
+        "app/src/store/voiceBotStore.ts has many catch blocks that only log and continue, while other actions throw, so consumers cannot rely on consistent failure semantics."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "backend/src/index.ts mounts `/api/crm` directly without a global auth guard.",
+        "backend/src/api/routes/crm/customers.ts and backend/src/api/routes/crm/uploads.ts expose mutating/listing routes without `authMiddleware` or role checks.",
+        "In contrast, backend/src/api/routes/finops/employees.ts explicitly applies `authMiddleware`, showing sibling-domain inconsistency in access control posture."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "app/src/store/voiceBotStore.ts contains a high volume of repetitive `try/catch + console.error + message` blocks with near-identical structure.",
+        "app/src/store/permissionsStore.ts repeats similar catch/toast boilerplate for each action instead of centralized request/error policy.",
+        "app/src/store/requestStore.ts includes generic failure strings (`Failed to fetch! Try again.`/`Failed to send! Try again.`) that discard structured backend error details."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "backend/src/api/routes/crm/index.ts still mounts multiple `legacy/*` routers as active first-class API endpoints.",
+        "backend/src/api/routes/crm/legacy/botcommands.ts contains an explicit migration stub (`TODO: Implement actual command testing logic`) but is called by app/src/store/kanbanStore.ts `testBotCommand`.",
+        "app/src/store/requestStore.ts still advertises migration origin and old assumptions (string upload return), while backend/src/api/routes/crm/uploads.ts now returns structured objects."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "crm-routes-missing-auth-guards",
+      "summary": "Several CRM routes are publicly mounted without auth/role middleware while sibling business routes require auth.",
+      "related_files": [
+        "backend/src/index.ts",
+        "backend/src/api/routes/crm/customers.ts",
+        "backend/src/api/routes/crm/uploads.ts",
+        "backend/src/api/routes/finops/employees.ts"
+      ],
+      "evidence": [
+        "`/api/crm` is mounted directly in backend/src/index.ts with no enclosing auth guard.",
+        "backend/src/api/routes/crm/customers.ts defines `/list`, `/create`, `/update` without `authMiddleware`/`requireAdmin`.",
+        "backend/src/api/routes/crm/uploads.ts defines `/file` and `/files` upload handlers without auth, unlike finops employees route that uses `authMiddleware`."
+      ],
+      "suggestion": "Apply a consistent access-control policy at CRM router entry (preferred) or per-route middleware, then explicitly whitelist only intended public endpoints.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing-router-level-security-baseline"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "store-error-contract-drift",
+      "summary": "Zustand stores use incompatible failure contracts (throw vs swallow vs fallback value), causing ambiguous UI behavior.",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "requestStore `api_request`/`sendFile` rethrow errors after setting state.",
+        "permissionsStore update actions mostly catch/log/show toast and do not throw, while `loadPermissionsLog` does throw.",
+        "permissionsStore `getUserPermissions` returns `[]` on any exception, masking backend failures as valid empty state."
+      ],
+      "suggestion": "Define one store-level error contract (e.g., always throw typed errors and let callers decide UI messaging) and enforce it across request helpers and store actions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "uncentralized-frontend-error-policy"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "permissions-endpoint-prefix-drift",
+      "summary": "A single permissions API call uses a different route prefix than all sibling calls, likely breaking that path.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "permissionsStore uses `voicebot/permissions/...` for most calls, but `getUserPermissions` calls `permissions/users/permissions`.",
+        "Backend route is documented/implemented under voicebot permissions router (`POST /permissions/users/permissions`) and is mounted under `/api/voicebot` path family."
+      ],
+      "suggestion": "Normalize `getUserPermissions` to the same `voicebot/permissions/users/permissions` prefix and add a small request path unit/integration test for this store.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "endpoint-naming-fragmentation"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy-botcommands-test-stub-active",
+      "summary": "Legacy bot-command test API is still a TODO stub while frontend continues to treat it as a functional feature.",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/botcommands.ts",
+        "backend/src/api/routes/crm/index.ts",
+        "app/src/store/kanbanStore.ts"
+      ],
+      "evidence": [
+        "legacy `botcommands.ts` endpoint `/test` has `TODO: Implement actual command testing logic` and returns placeholder payload.",
+        "CRM index router mounts `legacy/botcommands` in active API surface.",
+        "kanbanStore `testBotCommand` calls `bot-commands/test` and stores result for user-facing flow."
+      ],
+      "suggestion": "Either implement real command test execution with validated output contract or remove/feature-flag the frontend action until migration is complete.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy-route-still-canonical"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "upload-contract-old-new-coexistence",
+      "summary": "Frontend upload helper still assumes a legacy string response while backend now returns structured file objects.",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/kanbanStore.ts",
+        "backend/src/api/routes/crm/uploads.ts"
+      ],
+      "evidence": [
+        "requestStore `sendFile` is typed as `Promise<string>` and returns `response.data` directly.",
+        "crm uploads backend returns `{ success, file: { ..., url } }` (single) and `{ success, files: [...] }` (multi).",
+        "kanbanStore `uploadFile` concatenates `backendUrl + relative_url`, assuming `relative_url` is a path string."
+      ],
+      "suggestion": "Unify upload contract by returning a typed object from `sendFile` and updating consumers to read `file.url` explicitly; add a type-safe DTO for CRM upload responses.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy-api-contract-carryover"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "repetitive-catch-toast-boilerplate",
+      "summary": "Repeated copy-pattern catch/log/toast blocks inflate noise and make behavior drift easy.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/requestStore.ts"
+      ],
+      "evidence": [
+        "voiceBotStore contains many near-identical catch blocks with localized error strings and `console.error` calls.",
+        "permissionsStore repeats almost identical error handling for each update/load action.",
+        "requestStore manually duplicates loading/error boilerplate in `api_request` and `sendFile`."
+      ],
+      "suggestion": "Introduce shared request wrappers (typed success/error handlers with optional toast policy) and remove duplicated per-action catch scaffolding.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "uncentralized-frontend-error-policy"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Security and error-handling policies are applied at leaf handlers instead of enforced at router/store boundaries.",
+      "Migration retained legacy modules and contracts without a strict deprecation gate, producing mixed conventions and partial behavior."
+    ],
+    "likely_symptoms": [
+      "permissions-endpoint-prefix-drift",
+      "upload-contract-old-new-coexistence",
+      "repetitive-catch-toast-boilerplate"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 2,
+  "assessments": {
+    "design_coherence": 71.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Large UI containers mix orchestration and presentation in one file: `app/src/pages/voice/SessionsListPage.tsx` handles URL-state persistence, localStorage sync, polling (`setInterval`), filtering/sorting/pagination, and destructive actions; `app/src/pages/operops/CRMPage.tsx` combines data bootstrap, MCP orchestration, report-generation workflows, and large tabbed UI rendering.",
+        "FinOps business rules are duplicated and embedded in UI components: `app/src/pages/PlanFactPage.tsx` computes income/expense/fund totals and hardcodes month rule (`month === '2026-01'`), while `app/src/components/BonusesGrid.tsx` and `app/src/components/ExpensesGrid.tsx` re-implement overlapping monthly aggregation and pinned-month table mechanics.",
+        "Legacy payload-shape normalization is repeated across backend and frontend: `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts` normalizes keys like `Task ID`/`Task Title`, `app/src/components/voice/PossibleTasks.tsx` repeats the same normalization, and `app/src/pages/operops/CRMPage.tsx` adds another mapping path in `normalizeVoiceTask`.",
+        "Normalization/link-building helpers are scattered with near-duplicate semantics: `app/src/pages/operops/taskPageUtils.ts`, `app/src/components/crm/CRMKanban.tsx`, and `backend/src/voicebot_tgbot/ingressHandlers.ts` all define local ID/string normalization and source-link reconstruction logic.",
+        "Processor lifecycle updates are hand-coded repeatedly across worker handlers (`customPrompt.ts`, `questionsHandler.ts`, `oneCustomPrompt.ts`, `finalizationHandler.ts`, `categorizeHandler.ts`), increasing structural drift risk for `processors_data.*` state transitions."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "ui_god_containers_voice_operops",
+      "summary": "Top-level pages combine state orchestration, side-effect workflows, and heavy rendering, creating unstable change boundaries.",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/pages/operops/CRMPage.tsx",
+        "app/src/pages/AnalyticsPage.tsx",
+        "app/src/pages/operops/ProjectsTree.tsx"
+      ],
+      "evidence": [
+        "`SessionsListPage` owns URL filter parsing/writing, localStorage restore/persist, FAB polling (`setInterval`), bulk delete/merge flows, and table rendering in one component.",
+        "`CRMPage` handles auth/bootstrap fetches, MCP-driven task regeneration, report modal flows, tab/subtab state, and multiple tables/edit modes in one component tree.",
+        "`AnalyticsPage` and `ProjectsTree` follow the same mixed pattern (data fetch + transformation + complex UI interactions), suggesting a repeated page-level architecture style."
+      ],
+      "suggestion": "Split each page into three layers: route container (navigation/query params), domain controller hooks (fetch/mutations/workflows), and presentational sections (tables/forms). Move mutation flows (bulk merge/delete, MCP create-tasks, report generation) into dedicated hooks/services with explicit input/output contracts.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "page_level_orchestration_overload"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_rule_duplication_in_ui",
+      "summary": "FinOps monthly calculations and policy rules are duplicated across page and grid components instead of centralized domain logic.",
+      "related_files": [
+        "app/src/pages/PlanFactPage.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx",
+        "app/src/components/PlanFactGrid.tsx"
+      ],
+      "evidence": [
+        "`PlanFactPage` computes `incomeTotals`, `expenseTotals`, and `fundDeltaByMonth` with embedded business constants/rules, including fixed month logic (`'2026-01'`).",
+        "`BonusesGrid` duplicates expense aggregation (`buildExpenseTotals`) and embeds separate bonus policy constants (`BONUS_START_MONTH`, `targetEmployees`, `percentMap`).",
+        "`PlanFactGrid` and `ExpensesGrid` both carry similar pinned-month column ordering and summary-cell layout mechanics, indicating repeated structural table logic."
+      ],
+      "suggestion": "Extract FinOps calculation policies into shared pure domain modules (e.g., `finopsRules.ts` / `finopsCalculators.ts`) and keep grids UI-only. Replace hardcoded month/person constants with configuration from API/store so policy changes do not require cross-component edits.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "finops_domain_logic_in_view_layer"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "legacy_task_payload_normalization_scattered",
+      "summary": "Task payload canonicalization for legacy key variants is re-implemented in multiple layers, causing contract drift risk.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+        "app/src/components/voice/PossibleTasks.tsx",
+        "app/src/pages/operops/CRMPage.tsx",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts"
+      ],
+      "evidence": [
+        "`createTasksFromChunks.normalizeTask` maps mixed schemas (`Task ID`, `Task Title`, `Description`, `Priority`) to canonical fields.",
+        "`PossibleTasks.parseTask` repeats the same fallback mapping logic for the UI table/editor.",
+        "`CRMPage.normalizeVoiceTask` introduces a third normalization path for voice task rows before rendering."
+      ],
+      "suggestion": "Define a single shared canonical task schema + normalizer (backend-owned contract with typed frontend adapter) and reuse it everywhere. Keep legacy-key translation in one boundary module only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_contract_normalization_scatter"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "id_and_source_resolution_reimplemented",
+      "summary": "ID/source-link resolution and lookup normalization are duplicated with slight semantic differences across CRM and voice flows.",
+      "related_files": [
+        "app/src/pages/operops/taskPageUtils.ts",
+        "app/src/components/crm/CRMKanban.tsx",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+      ],
+      "evidence": [
+        "`taskPageUtils` defines `toLookupValue`, source kind normalization, Telegram/voice link builders, and project/creator fallbacks.",
+        "`CRMKanban` redefines local `toLookupValue` and ticket ID/project/performer resolution stack independently.",
+        "`ingressHandlers` and `transcribeHandler` each maintain their own string/id normalization and link/attachment reference derivation paths."
+      ],
+      "suggestion": "Introduce shared identity/source resolvers per domain (`ticketIdentity`, `sourceRef`, `projectLookup`) and consume them from both frontend CRM and backend voice ingestion paths, with tests for edge-case parity.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "identity_resolution_fragmentation"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_processor_state_machine_copy_paste",
+      "summary": "Worker handlers manually replicate processor state transitions, producing a fragile distributed state machine.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/finalizationHandler.ts",
+        "backend/src/workers/voicebot/handlers/categorizeHandler.ts"
+      ],
+      "evidence": [
+        "Each handler directly writes `processors_data.<processor>.is_processing/is_processed/error/error_timestamp` with similar but not identical sequences.",
+        "Failure/success branches are repeated per handler rather than composed through a shared transition utility, making behavior consistency dependent on manual updates.",
+        "The same pattern appears for queueing/finished timestamps and cleanup of error fields, indicating a systemic duplication rather than handler-specific logic."
+      ],
+      "suggestion": "Create a shared processor-state transition API (e.g., `markQueued`, `markSuccess`, `markFailure`, `markSkipped`) and make handlers declare intent instead of mutating state fields ad hoc.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "processor_state_machine_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "extension_sanitization_logic_divergence",
+      "summary": "File-extension sanitization is duplicated with inconsistent defaults across upload and transcription paths.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` `sanitizeExtension` falls back to `.bin` for invalid/empty values.",
+        "`transcribeHandler.ts` `sanitizeExtension` returns empty string for invalid/empty values and relies on later fallback (`.ogg`) in a different function.",
+        "Both implementations perform near-identical normalization steps but encode different fallback policy in separate places."
+      ],
+      "suggestion": "Unify extension sanitization/fallback policy in one shared utility with explicit mode (`image`, `audio`) and consume it from both route and worker codepaths.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "normalization_policy_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Domain logic is embedded in UI and handler files instead of centralized policy modules.",
+      "Legacy compatibility concerns are handled repeatedly at many boundaries, not at a single adapter seam.",
+      "State-transition and normalization utilities are missing, so teams re-implement local variants."
+    ],
+    "likely_symptoms": [
+      "finops_rule_duplication_in_ui",
+      "legacy_task_payload_normalization_scattered",
+      "extension_sanitization_logic_divergence"
+    ],
+    "possible_false_positives": [
+      "Some page-level breadth may be intentional during active migration, but repeated duplication across multiple files indicates structural debt beyond temporary scaffolding."
+    ]
+  }
+}

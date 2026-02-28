@@ -2,6 +2,8 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **19:10** `copilot-sxq1.14.8` could not be executed reliably as one scope because Codex subjective-review batch runs hit runner quota/usage limits, which blocked deterministic progress and left a high-risk single-task bottleneck.
+- **19:10** Full-suite validation briefly produced conflicting outcomes for the same pipeline (`full` pass in one run and a voice-shard failure in another), creating ambiguity for close-session quality gates until the flaky shard was rechecked and the full suite was rerun.
 - **18:18** Unified monorepo test execution remained partially sequential and undocumented by stage, which made runtime optimization hard to measure and caused hidden duplicate execution (notably overlapping app/voice e2e coverage).
 - **17:18** Session closeout quality gate was blocked because `make test` is not defined in this repo and refactoring of Voice/CRM helpers left string-contract tests out of sync, causing initial `full` suite failures in app/backend checks.
 - **14:12** Voice session inline Codex details (`Подробности Codex задачи`) used a narrower side panel and plain-text rendering, so Description/Notes paragraph breaks were collapsed and the layout diverged from OperOps Codex task view (`copilot-4o2c`).
@@ -32,6 +34,14 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **19:10** Decomposed `copilot-sxq1.14.8` into six independent remediation tracks to remove single-runner dependency and enable isolated execution by scope:
+  - `copilot-sxq1.14.8.1` (`app/src/store/**`)
+  - `copilot-sxq1.14.8.2` (`app/src/hooks/**`)
+  - `copilot-sxq1.14.8.3` (`app/src/services/**`)
+  - `copilot-sxq1.14.8.4` (`app/src/utils/**`)
+  - `copilot-sxq1.14.8.5` (`app/src/types/**`)
+  - `copilot-sxq1.14.8.6` (`app/src/constants/**`)
+- **19:10** Completed close-session validation loop for the reorganized test pipeline with explicit rerun policy (targeted shard rerun + final `full --fail-fast`) and refreshed `desloppify next` triage output for follow-up execution.
 - **18:18** Completed and closed test-pipeline epic `copilot-2gs1`:
   - implemented stage-based parallel runner in `scripts/run-test-suite.sh`,
   - introduced explicit backend split (`parallel-safe` + `serialized`) and bounded frontend/backend Jest worker strategy,
@@ -81,6 +91,14 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **19:10** Close-session validation and triage updates:
+  - `make test` confirmed absent (`No rule to make target 'test'`), so canonical runner remained `./scripts/run-test-suite.sh`.
+  - reran flaky shard directly: `cd app && npm run test:e2e:voice:shard:1of2` -> pass (`13/13`).
+  - reran canonical suite: `./scripts/run-test-suite.sh full --fail-fast` -> `10/10 PASS`.
+  - refreshed triage pointer: `desloppify next` now reports top item `review::.::holistic::abstraction_fitness::overuse_unknown_in_core_contracts::5ff2ecc1` (Tier 1).
+- **19:10** Updated `bd` tracking for `copilot-sxq1.14.8`:
+  - appended execution note with quota blocker details and post-test gate status,
+  - created six child issues as independent scope slices (`copilot-sxq1.14.8.1`..`.6`) with per-scope acceptance criteria.
 - **18:18** Test platform/runtime contract updates:
   - `scripts/run-test-suite.sh`: stage-aware parallel execution with per-job logs, stage summaries, and fail-fast stage abort behavior.
   - `platforms.json`: explicit stage metadata, backend split jobs (`backend-unit-parallel` + `backend-unit-serial`), app e2e shard jobs, and voice e2e shard jobs.

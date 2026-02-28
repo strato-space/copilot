@@ -314,6 +314,19 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-02-28 19:10):
+  - `copilot-sxq1.14.8` execution hit Codex runner quota/usage-limit blocker during scoped subjective batch execution; task remained `in_progress` with explicit blocker note in issue history.
+  - Decomposed `copilot-sxq1.14.8` into six independent child tasks by file-scope to remove one-shot batch dependency:
+    - `copilot-sxq1.14.8.1` (`app/src/store/**`)
+    - `copilot-sxq1.14.8.2` (`app/src/hooks/**`)
+    - `copilot-sxq1.14.8.3` (`app/src/services/**`)
+    - `copilot-sxq1.14.8.4` (`app/src/utils/**`)
+    - `copilot-sxq1.14.8.5` (`app/src/types/**`)
+    - `copilot-sxq1.14.8.6` (`app/src/constants/**`)
+  - Validation rerun for reorganized test pipeline:
+    - `cd app && npm run test:e2e:voice:shard:1of2` passed (`13/13`) after transient shard failure in one full run;
+    - canonical gate passed: `./scripts/run-test-suite.sh full --fail-fast` (`10/10 PASS`).
+  - Updated `desloppify` triage pointer for next remediation step: `review::.::holistic::abstraction_fitness::overuse_unknown_in_core_contracts::5ff2ecc1` (`desloppify next`, Tier 1).
 - Closed testing modernization epic `copilot-2gs1` (stages 1-8): unified runner is stage-parallel with fail-fast stage control, backend tests are split into parallel-safe/serialized groups, app+voice e2e run via shard jobs, and testing docs are synchronized (`README`/`AGENTS`/`docs/TESTING_PROCEDURE.md`) with benchmark history.
 - Final full-suite benchmark for this wave: `163.97s -> 80.01s` (`+51.20%`).
 - Closed `copilot-sxq1.8` and aligned contract tests with extracted voice/frontend helper modules (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus sanitized TaskPage render contract updates.

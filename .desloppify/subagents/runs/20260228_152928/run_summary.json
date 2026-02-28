@@ -1,0 +1,78 @@
+{
+  "created_at": "2026-02-28T15:29:28+00:00",
+  "run_stamp": "20260228_152928",
+  "runner": "codex",
+  "parallel": false,
+  "selected_batches": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "successful_batches": [],
+  "failed_batches": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "allow_partial": false,
+  "max_parallel_batches": 1,
+  "batch_timeout_seconds": 1200,
+  "batch_max_retries": 1,
+  "batch_retry_backoff_seconds": 2.0,
+  "batch_heartbeat_seconds": null,
+  "batch_stall_warning_seconds": null,
+  "batch_stall_kill_seconds": 120,
+  "immutable_packet": "/home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260228_152928.json",
+  "blind_packet": "/home/strato-space/copilot/.desloppify/review_packet_blind.json",
+  "run_dir": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928",
+  "logs_dir": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/logs",
+  "run_log": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/run.log",
+  "batches": {
+    "1": {
+      "position": 1,
+      "status": "failed",
+      "prompt_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/prompts/batch-1.md",
+      "result_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/results/batch-1.raw.txt",
+      "log_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/logs/batch-1.log",
+      "started_at": "2026-02-28T15:29:28+00:00",
+      "elapsed_seconds": 10,
+      "exit_code": 1,
+      "completed_at": "2026-02-28T15:29:38+00:00"
+    },
+    "2": {
+      "position": 2,
+      "status": "failed",
+      "prompt_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/prompts/batch-2.md",
+      "result_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/results/batch-2.raw.txt",
+      "log_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/logs/batch-2.log",
+      "started_at": "2026-02-28T15:29:38+00:00",
+      "elapsed_seconds": 10,
+      "exit_code": 1,
+      "completed_at": "2026-02-28T15:29:48+00:00"
+    },
+    "3": {
+      "position": 3,
+      "status": "failed",
+      "prompt_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/prompts/batch-3.md",
+      "result_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/results/batch-3.raw.txt",
+      "log_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/logs/batch-3.log",
+      "started_at": "2026-02-28T15:29:48+00:00",
+      "elapsed_seconds": 10,
+      "exit_code": 1,
+      "completed_at": "2026-02-28T15:29:58+00:00"
+    },
+    "4": {
+      "position": 4,
+      "status": "failed",
+      "prompt_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/prompts/batch-4.md",
+      "result_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/results/batch-4.raw.txt",
+      "log_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_152928/logs/batch-4.log",
+      "started_at": "2026-02-28T15:29:58+00:00",
+      "elapsed_seconds": 11,
+      "exit_code": 1,
+      "completed_at": "2026-02-28T15:30:09+00:00"
+    }
+  }
+}

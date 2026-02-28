@@ -1,0 +1,138 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 5,
+  "assessments": {
+    "design_coherence": 78.6
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Voice worker handlers repeat the same end-to-end processor lifecycle (ID validation, DB fetch, OpenAI call, processors_data state updates, success/error logging) across `customPrompt.ts`, `questionsHandler.ts`, `oneCustomPrompt.ts`, and `finalizationHandler.ts` with only prompt/model/target differences.",
+        "Task payload normalization is duplicated across backend and frontend (`normalizeTask` in `createTasksFromChunks.ts` and `parseTask` in `PossibleTasks.tsx`) including the same legacy key fallbacks (`Task ID`, `Task Title`, `Description`, `Priority`, `Priority Reason`, `Dependencies`, `Dialogue Reference`).",
+        "Identifier/link normalization helpers are reimplemented in multiple places (`toLookupValue` in `taskPageUtils.ts` and `CRMKanban.tsx`, plus message/link normalization functions in `ingressHandlers.ts`), creating parallel normalization dialects.",
+        "Large UI modules combine unrelated responsibilities: `SessionPage.tsx` handles data loading + error mapping + clipboard image transformation/upload orchestration + tab policy; `SessionsListPage.tsx` combines URL/state serialization, filter parsing, identity normalization, and table/action UI."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_processor_lifecycle_duplication",
+      "summary": "Voice processor handlers duplicate the same orchestration skeleton instead of sharing a processor pipeline abstraction.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/finalizationHandler.ts"
+      ],
+      "evidence": [
+        "`customPrompt.ts` and `questionsHandler.ts` both do message/session fetch, categorization gating, OpenAI call, and near-identical processors_data success/error state writes.",
+        "`oneCustomPrompt.ts` and `finalizationHandler.ts` repeat the same session-level version of the pattern (validate, fetch session, collect input rows, OpenAI call, mark processor flags, clear/set error fields).",
+        "Error-state fields and success flags (`is_processing`, `is_processed`, `error`, `error_message`, timestamps) are manually duplicated, increasing drift risk in retry/telemetry semantics."
+      ],
+      "suggestion": "Introduce a shared processor executor (template method) that centralizes lifecycle steps (load target, preconditions, run model call, normalize output, persist status, emit logs/events), and keep each handler focused on prompt/input/output mapping only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_voice_processor_abstraction"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "task_payload_mapping_duplicated_front_back",
+      "summary": "Task shape normalization logic is duplicated in backend generation and frontend rendering paths.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "`normalizeTask` and `parseTask` both map the same mixed key variants (`Task ID` vs `task_id_from_ai`, `Task Title` vs `name`, `Priority` vs `priority`, etc.).",
+        "Both modules also replicate defaulting behavior (`P3`, generated fallback IDs, default dialogue tag) instead of using one canonical mapper contract.",
+        "Schema migration handling is encoded twice (producer + consumer), so future contract updates require synchronized edits in two distant layers."
+      ],
+      "suggestion": "Define a shared canonical CREATE_TASKS schema/normalizer module (or generated Zod-based contract) used by both worker output and UI parsing so legacy-key support and defaults are maintained in one place.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "normalization_logic_scatter"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "identity_normalization_scatter",
+      "summary": "ID and source-link normalization is reimplemented across CRM/voice modules with no common utility boundary.",
+      "related_files": [
+        "app/src/pages/operops/taskPageUtils.ts",
+        "app/src/components/crm/CRMKanban.tsx",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts"
+      ],
+      "evidence": [
+        "`taskPageUtils.ts` and `CRMKanban.tsx` both define local `toLookupValue` variants for string/number/ObjectId-like records.",
+        "`taskPageUtils.ts` includes source kind/link inference and Telegram/voice link synthesis while `ingressHandlers.ts` independently rebuilds Telegram/public-link canonicalization rules.",
+        "Normalization behavior is distributed between UI and backend helper islands, making consistency accidental rather than enforced."
+      ],
+      "suggestion": "Extract shared normalization primitives (ID coercion, source kind detection, Telegram/voice link canonicalization) into domain utilities consumed by CRM views and voice ingress, with test vectors for legacy formats.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "normalization_logic_scatter"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "ui_components_mix_domain_and_infra",
+      "summary": "Major UI components bundle presentation with transport/transformation orchestration, creating hard-to-change multi-responsibility files.",
+      "related_files": [
+        "app/src/pages/voice/SessionPage.tsx",
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "app/src/components/voice/MeetingCard.tsx"
+      ],
+      "evidence": [
+        "`SessionPage.tsx` contains low-level image read/resize logic, clipboard event plumbing, API error-to-copy translation, and tab composition in one module.",
+        "`SessionsListPage.tsx` mixes query-param protocol parsing, identity filtering normalization, visual-state derivation, and table command UX.",
+        "`TranscriptionTableRow.tsx` embeds parsing/normalization utilities (timestamps, segment reconstruction, attachment extraction) that are domain logic rather than row rendering concerns."
+      ],
+      "suggestion": "Split these into focused hooks/services (`useSessionClipboardUpload`, `sessionListQueryState`, `transcriptionRowModel`) and keep components as render orchestrators over already-normalized view models.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "ui_orchestration_overgrowth"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "request_transport_logic_duplicated_in_stores",
+      "summary": "Transport/proxy request plumbing is duplicated across stores instead of centralized behind one HTTP client boundary.",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`requestStore.ts` and `permissionsStore.ts` each implement their own backend URL resolution and proxy config extraction from `window` + env vars.",
+        "Both stores manually perform axios POST transport setup and loading/error/message side effects, but with different headers and endpoint prefix conventions.",
+        "`voiceBotStore.ts` already depends on dedicated HTTP helpers (`voicebotHttp`), making the parallel custom request stacks in other stores a design inconsistency."
+      ],
+      "suggestion": "Standardize store networking through shared HTTP clients (CRM/voice variants if needed) and move URL/proxy/header policy into one transport layer to remove per-store request dialects.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "transport_policy_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Normalization and contract adaptation logic is spread across UI, store, route, and worker layers instead of having canonical adapters.",
+      "Repeated processor/state-update choreography suggests missing domain workflow primitives for voice processing.",
+      "Feature modules have grown by accretion, so orchestration and rendering responsibilities are no longer separated."
+    ],
+    "likely_symptoms": [
+      "voice_processor_lifecycle_duplication",
+      "task_payload_mapping_duplicated_front_back",
+      "identity_normalization_scatter"
+    ],
+    "possible_false_positives": [
+      "Previously flagged exact duplicate `renderSanitizedHtml` across OperOps/miniapp appears reduced; current concern is broader normalization/orchestration duplication rather than that specific clone."
+    ]
+  }
+}
