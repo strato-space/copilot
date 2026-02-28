@@ -36,9 +36,13 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
     const highlightedMessageId = useVoiceBotStore((state) => state.highlightedMessageId);
     const toggleSelectedCategorizationRow = useSessionsUIStore((state) => state.toggleSelectedCategorizationRow);
     const isCategorizationRowSelected = useSessionsUIStore((state) => state.isCategorizationRowSelected);
+    const materialTargetMessageId = useSessionsUIStore((state) => state.materialTargetMessageId);
+    const setMaterialTargetMessageId = useSessionsUIStore((state) => state.setMaterialTargetMessageId);
 
     const isHighlighted = highlightedMessageId && row.message_id === highlightedMessageId;
     const isSelected = isCategorizationRowSelected(row);
+    const rowMessageRef = typeof row.message_id === 'string' ? row.message_id.trim() : '';
+    const isMaterialTarget = Boolean(rowMessageRef && materialTargetMessageId === rowMessageRef);
     const hasMaterial = typeof row.imageUrl === 'string' && row.imageUrl.trim().length > 0;
     const isImageRow = row.kind === 'image' && hasMaterial;
     const isSelectable = !isImageRow;
@@ -54,6 +58,9 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
     const handleRowClick = (event: React.MouseEvent<HTMLDivElement>): void => {
         const target = event.target as HTMLInputElement;
         if (target?.type === 'checkbox') return;
+        if (rowMessageRef) {
+            setMaterialTargetMessageId(isMaterialTarget ? null : rowMessageRef);
+        }
         if (!isSelectable) return;
 
         if (event.ctrlKey || event.metaKey) {
@@ -69,10 +76,11 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
         : isSelected
             ? 'bg-blue-500/5'
             : '';
+    const materialTargetClass = isMaterialTarget ? 'ring-1 ring-inset ring-teal-500/70' : '';
 
     return (
         <div
-            className={`flex w-full transition-colors duration-150 ${isSelectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'border-l-2 border-blue-500' : ''} ${rowBgClass}`}
+            className={`flex w-full transition-colors duration-150 ${isSelectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'border-l-2 border-blue-500' : ''} ${rowBgClass} ${materialTargetClass}`}
             onClick={handleRowClick}
         >
             <div className="w-12 flex flex-col justify-center items-start p-1">

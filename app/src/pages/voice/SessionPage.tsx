@@ -16,6 +16,7 @@ import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
 import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
+import { useSessionsUIStore } from '../../store/sessionsUIStore';
 
 const VOICE_SESSION_TASK_SUBTAB_CONFIGS = {
     work: {
@@ -113,6 +114,8 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 export default function SessionPage() {
     const { sessionId } = useParams();
     const { fetchVoiceBotSession, voiceBotSession, sessionAttachments, addSessionTextChunk, addSessionImageChunk } = useVoiceBotStore();
+    const materialTargetMessageId = useSessionsUIStore((state) => state.materialTargetMessageId);
+    const clearMaterialTargetMessageId = useSessionsUIStore((state) => state.clearMaterialTargetMessageId);
     const { hasPermission } = useCurrentUserPermissions();
     const [customPromptResult, setCustomPromptResult] = useState<unknown>(null);
     const [activeTab, setActiveTab] = useState('2');
@@ -153,6 +156,10 @@ export default function SessionPage() {
     }, [sessionId, fetchVoiceBotSession]);
 
     useEffect(() => {
+        clearMaterialTargetMessageId();
+    }, [sessionId, clearMaterialTargetMessageId]);
+
+    useEffect(() => {
         if (!sessionId) return undefined;
 
         const handlePaste = (event: ClipboardEvent): void => {
@@ -182,11 +189,16 @@ export default function SessionPage() {
                                 name: file.name || `clipboard-${Date.now()}-${index + 1}.png`,
                                 caption: index === 0 ? pastedText : '',
                                 size: file.size,
+                                ...(materialTargetMessageId ? { targetMessageId: materialTargetMessageId } : {}),
                             });
                             insertedCount += 1;
                         }
                         if (insertedCount > 0) {
-                            message.success('Изображение добавлено в сессию');
+                            message.success(
+                                materialTargetMessageId
+                                    ? 'Материал прикреплен к выбранной строке'
+                                    : 'Изображение добавлено в сессию'
+                            );
                             return;
                         }
                     }
@@ -206,7 +218,7 @@ export default function SessionPage() {
         return () => {
             window.removeEventListener('paste', handlePaste);
         };
-    }, [sessionId, addSessionTextChunk, addSessionImageChunk]);
+    }, [sessionId, addSessionTextChunk, addSessionImageChunk, materialTargetMessageId]);
 
     if (isLoading) {
         return (

@@ -48,6 +48,7 @@ interface SessionsUIState {
     participantModal: ParticipantModalState;
     accessUsersModal: AccessUsersModalState;
     selectedCategorizationRows: CategorizationRow[];
+    materialTargetMessageId: string | null;
     categorizationSort: CategorizationSortState;
     transcriptionSort: TranscriptionSortState;
     ticketsModal: TicketsModalState;
@@ -79,6 +80,8 @@ interface SessionsUIState {
     toggleSelectedCategorizationRow: (row: CategorizationRow) => void;
     isCategorizationRowSelected: (row: CategorizationRow) => boolean;
     clearSelectedCategorizationRows: () => void;
+    setMaterialTargetMessageId: (messageId: string | null) => void;
+    clearMaterialTargetMessageId: () => void;
     toggleCategorizationSort: () => void;
     setCategorizationSortAscending: (ascending: boolean) => void;
     initCategorizationSort: (sessionIsActive?: boolean) => void;
@@ -177,6 +180,7 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
     participantModal: initialParticipantModal,
     accessUsersModal: initialAccessUsersModal,
     selectedCategorizationRows: [],
+    materialTargetMessageId: null,
     categorizationSort: {
         ascending: resolveInitialSortAscending(SORT_STORAGE_KEYS.categorization, false),
     },
@@ -314,6 +318,14 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
         );
     },
     clearSelectedCategorizationRows: () => set({ selectedCategorizationRows: [] }),
+    setMaterialTargetMessageId: (messageId) =>
+        set({
+            materialTargetMessageId:
+                typeof messageId === 'string' && messageId.trim().length > 0
+                    ? messageId.trim()
+                    : null,
+        }),
+    clearMaterialTargetMessageId: () => set({ materialTargetMessageId: null }),
     toggleCategorizationSort: () =>
         set((state) => {
             const ascending = !state.categorizationSort.ascending;

@@ -913,6 +913,47 @@ const isImageAttachmentPayload = (attachment: unknown): boolean => {
     return mimeType.startsWith('image/');
 };
 
+const normalizeLinkedMessageRef = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    return value.trim();
+};
+
+const resolveLinkedImageTargetMessageRef = async ({
+    db,
+    sessionObjectId,
+    linkedMessageRef,
+}: {
+    db: Db;
+    sessionObjectId: ObjectId;
+    linkedMessageRef: string;
+}): Promise<string | null> => {
+    const normalizedRef = normalizeLinkedMessageRef(linkedMessageRef);
+    if (!normalizedRef) return null;
+
+    const targetQuery: Record<string, unknown> = {
+        session_id: sessionObjectId,
+        is_deleted: { $ne: true },
+        $or: [
+            { message_id: normalizedRef },
+        ],
+    };
+    if (ObjectId.isValid(normalizedRef)) {
+        (targetQuery.$or as Array<Record<string, unknown>>).push({ _id: new ObjectId(normalizedRef) });
+    }
+
+    const targetMessage = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+        runtimeMessageQuery(targetQuery),
+        { projection: { _id: 1, message_id: 1 } }
+    ) as { _id?: ObjectId; message_id?: unknown } | null;
+    if (!targetMessage) return null;
+
+    if (targetMessage._id instanceof ObjectId) return targetMessage._id.toHexString();
+    if (typeof targetMessage.message_id === 'string' && targetMessage.message_id.trim()) {
+        return targetMessage.message_id.trim();
+    }
+    return null;
+};
+
 const emitSessionRealtimeUpdate = ({
     req,
     sessionId,
@@ -945,6 +986,7 @@ const emitSessionRealtimeUpdate = ({
         to_transcribe: messageDoc.to_transcribe,
         attachments: Array.isArray(messageDoc.attachments) ? messageDoc.attachments : [],
         image_anchor_message_id: messageDoc.image_anchor_message_id ?? null,
+        image_anchor_linked_message_id: messageDoc.image_anchor_linked_message_id ?? null,
         created_at: createdAt.toISOString(),
         updated_at: createdAt.toISOString(),
     });
@@ -1702,6 +1744,7 @@ router.post('/add_text', async (req: Request, res: Response) => {
             ? req.body.attachments.filter((item: unknown) => !!item && typeof item === 'object')
             : [];
         const hasImageAttachment = attachments.some(isImageAttachmentPayload);
+        const linkedMessageRef = normalizeLinkedMessageRef(req.body?.image_anchor_linked_message_id);
 
         if (!sessionId || !ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'session_id is required' });
@@ -1717,11 +1760,23 @@ router.post('/add_text', async (req: Request, res: Response) => {
         });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+        const sessionObjectId = new ObjectId(sessionId);
+        let resolvedLinkedMessageRef: string | null = null;
+        if (hasImageAttachment && linkedMessageRef) {
+            resolvedLinkedMessageRef = await resolveLinkedImageTargetMessageRef({
+                db,
+                sessionObjectId,
+                linkedMessageRef,
+            });
+            if (!resolvedLinkedMessageRef) {
+                return res.status(400).json({ error: 'image_anchor_linked_message_id is invalid for this session' });
+            }
+        }
 
         const sessionRecord = session as VoiceSessionRecord;
         const createdAt = new Date();
         const messageDoc: Record<string, unknown> = {
-            session_id: new ObjectId(sessionId),
+            session_id: sessionObjectId,
             chat_id: Number(sessionRecord.chat_id),
             text,
             source_type: 'web',
@@ -1740,13 +1795,14 @@ router.post('/add_text', async (req: Request, res: Response) => {
             created_at: createdAt,
             updated_at: createdAt,
             ...(hasImageAttachment ? { is_image_anchor: true } : {}),
+            ...(resolvedLinkedMessageRef ? { image_anchor_linked_message_id: resolvedLinkedMessageRef } : {}),
         };
 
         const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
         const insertedMessageId = String(op.insertedId);
         messageDoc._id = op.insertedId;
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            mergeWithProdAwareRuntimeFilter({ _id: new ObjectId(sessionId) }),
+            mergeWithProdAwareRuntimeFilter({ _id: sessionObjectId }),
             {
                 $set: {
                     updated_at: createdAt,
@@ -1774,6 +1830,7 @@ router.post('/add_text', async (req: Request, res: Response) => {
             success: true,
             message_id: insertedMessageId,
             image_anchor_message_id: hasImageAttachment ? insertedMessageId : null,
+            image_anchor_linked_message_id: resolvedLinkedMessageRef,
         });
     } catch (error) {
         logger.error('Error in add_text:', error);
@@ -1795,6 +1852,7 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
             ? req.body.attachments.filter((item: unknown) => !!item && typeof item === 'object')
             : [];
         const hasImageAttachment = attachments.some(isImageAttachmentPayload);
+        const linkedMessageRef = normalizeLinkedMessageRef(req.body?.image_anchor_linked_message_id);
         const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
         if (!sessionId || !ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'session_id is required' });
@@ -1810,11 +1868,23 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
         });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+        const sessionObjectId = new ObjectId(sessionId);
+        let resolvedLinkedMessageRef: string | null = null;
+        if (hasImageAttachment && linkedMessageRef) {
+            resolvedLinkedMessageRef = await resolveLinkedImageTargetMessageRef({
+                db,
+                sessionObjectId,
+                linkedMessageRef,
+            });
+            if (!resolvedLinkedMessageRef) {
+                return res.status(400).json({ error: 'image_anchor_linked_message_id is invalid for this session' });
+            }
+        }
 
         const sessionRecord = session as VoiceSessionRecord;
         const createdAt = new Date();
         const messageDoc: Record<string, unknown> = {
-            session_id: new ObjectId(sessionId),
+            session_id: sessionObjectId,
             chat_id: Number(sessionRecord.chat_id),
             text,
             source_type: 'web',
@@ -1832,13 +1902,14 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
             created_at: createdAt,
             updated_at: createdAt,
             ...(hasImageAttachment ? { is_image_anchor: true } : {}),
+            ...(resolvedLinkedMessageRef ? { image_anchor_linked_message_id: resolvedLinkedMessageRef } : {}),
         };
 
         const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
         const insertedMessageId = String(op.insertedId);
         messageDoc._id = op.insertedId;
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            mergeWithProdAwareRuntimeFilter({ _id: new ObjectId(sessionId) }),
+            mergeWithProdAwareRuntimeFilter({ _id: sessionObjectId }),
             {
                 $set: {
                     updated_at: createdAt,
@@ -1866,6 +1937,7 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
             success: true,
             message_id: insertedMessageId,
             image_anchor_message_id: hasImageAttachment ? insertedMessageId : null,
+            image_anchor_linked_message_id: resolvedLinkedMessageRef,
         });
     } catch (error) {
         logger.error('Error in add_attachment:', error);

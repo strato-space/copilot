@@ -20,8 +20,15 @@ describe('Voice image anchor grouping contract', () => {
   });
 
   it('hides standalone anchor-only block once the next message consumes it', () => {
-    expect(source).toContain('if (ownImageRows.length > 0 && messageRefs.some((ref) => linkedImageAnchorRefs.has(ref))) {');
+    expect(source).toContain('messageRefs.some((ref) => linkedImageAnchorRefs.has(ref) || explicitlyLinkedAnchorRefs.has(ref))');
     expect(source).toContain('return [];');
+  });
+
+  it('supports explicit row-targeted materials via linked message refs', () => {
+    expect(source).toContain('const explicitLinkedImageRowsByTargetRef = new Map<string, Array<{ anchorMessageRef: string; rows: VoiceMessageRow[] }>>();');
+    expect(source).toContain('const imageAnchorLinkedTargetRef = normalizeMessageRef(record.image_anchor_linked_message_id);');
+    expect(source).toContain('const explicitLinkedEntries = messageRefs.flatMap((ref) => explicitLinkedImageRowsByTargetRef.get(ref) ?? []);');
+    expect(source).toContain('const explicitLinkedRows = explicitLinkedEntries.flatMap((entry) => entry.rows);');
   });
 
   it('adds explicit material cross-link fields to grouped rows', () => {

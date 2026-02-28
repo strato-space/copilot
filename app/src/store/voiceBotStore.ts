@@ -110,6 +110,7 @@ interface VoiceBotState {
             name?: string;
             caption?: string;
             size?: number | null;
+            targetMessageId?: string;
         }
     ) => Promise<void>;
     updateSessionAllowedUsers: (sessionId: string, allowedUserIds: string[]) => Promise<boolean>;
@@ -368,10 +369,13 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
     if (!Array.isArray(voiceBotMessages)) return [];
 
     const imageRowsByMessageRef = new Map<string, VoiceMessageRow[]>();
+    const explicitLinkedImageRowsByTargetRef = new Map<string, Array<{ anchorMessageRef: string; rows: VoiceMessageRow[] }>>();
     const linkedImageAnchorRefs = new Set<string>();
+    const allMessageRefs = new Set<string>();
     for (const msg of voiceBotMessages) {
         if (isMessageDeleted(msg)) continue;
         const messageRefs = getMessageLinkRefs(msg);
+        for (const ref of messageRefs) allMessageRefs.add(ref);
         const imageRows = getImageRowsFromMessage(msg);
         if (messageRefs.length > 0 && imageRows.length > 0) {
             for (const ref of messageRefs) {
@@ -382,6 +386,27 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
         const record = getMessageRecord(msg);
         const imageAnchorRef = normalizeMessageRef(record.image_anchor_message_id);
         if (imageAnchorRef) linkedImageAnchorRefs.add(imageAnchorRef);
+
+        const imageAnchorLinkedTargetRef = normalizeMessageRef(record.image_anchor_linked_message_id);
+        const anchorMessageRef = messageRefs[0] ?? '';
+        if (imageRows.length > 0 && imageAnchorLinkedTargetRef && anchorMessageRef) {
+            const current = explicitLinkedImageRowsByTargetRef.get(imageAnchorLinkedTargetRef) ?? [];
+            explicitLinkedImageRowsByTargetRef.set(imageAnchorLinkedTargetRef, [
+                ...current,
+                {
+                    anchorMessageRef,
+                    rows: imageRows,
+                },
+            ]);
+        }
+    }
+
+    const explicitlyLinkedAnchorRefs = new Set<string>();
+    for (const [targetRef, entries] of explicitLinkedImageRowsByTargetRef.entries()) {
+        if (!allMessageRefs.has(targetRef)) continue;
+        for (const entry of entries) {
+            explicitlyLinkedAnchorRefs.add(entry.anchorMessageRef);
+        }
     }
 
     return voiceBotMessages.flatMap((msg) => {
@@ -392,8 +417,13 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
         const record = getMessageRecord(msg);
         const imageAnchorRef = normalizeMessageRef(record.image_anchor_message_id);
         const linkedAnchorRows = imageAnchorRef ? (imageRowsByMessageRef.get(imageAnchorRef) ?? []) : [];
+        const explicitLinkedEntries = messageRefs.flatMap((ref) => explicitLinkedImageRowsByTargetRef.get(ref) ?? []);
+        const explicitLinkedRows = explicitLinkedEntries.flatMap((entry) => entry.rows);
 
-        if (ownImageRows.length > 0 && messageRefs.some((ref) => linkedImageAnchorRefs.has(ref))) {
+        if (
+            ownImageRows.length > 0 &&
+            messageRefs.some((ref) => linkedImageAnchorRefs.has(ref) || explicitlyLinkedAnchorRefs.has(ref))
+        ) {
             return [];
         }
 
@@ -449,8 +479,12 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
         if (linkedAnchorRows.length > 0) {
             rows = [...linkedAnchorRows, ...rows];
         }
+        if (explicitLinkedRows.length > 0) {
+            rows = [...explicitLinkedRows, ...rows];
+        }
 
-        const materialAnchorMessageId = imageAnchorRef || (ownImageRows.length > 0 ? primaryMessageRef : '');
+        const explicitAnchorMessageId = explicitLinkedEntries[0]?.anchorMessageRef ?? '';
+        const materialAnchorMessageId = imageAnchorRef || explicitAnchorMessageId || (ownImageRows.length > 0 ? primaryMessageRef : '');
         const materialTargetMessageId = primaryMessageRef;
         const materialGroupId = materialAnchorMessageId && materialTargetMessageId
             ? `${materialAnchorMessageId}::${materialTargetMessageId}`
@@ -1409,6 +1443,9 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
         if (!normalizedSessionId) return;
         const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
         if (!dataUrl) return;
+        const targetMessageId = typeof payload?.targetMessageId === 'string'
+            ? payload.targetMessageId.trim()
+            : '';
 
         const mimeType = typeof payload?.mimeType === 'string' && payload.mimeType.trim()
             ? payload.mimeType.trim()
@@ -1430,6 +1467,7 @@ export const useVoiceBotStore = create<VoiceBotState>((set, get) => ({
                 session_id: normalizedSessionId,
                 text: fallbackText,
                 kind: 'image',
+                ...(targetMessageId ? { image_anchor_linked_message_id: targetMessageId } : {}),
                 attachments: [
                     {
                         ...uploadedAttachment,

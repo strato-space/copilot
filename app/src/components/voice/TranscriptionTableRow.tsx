@@ -3,6 +3,7 @@ import { Button, Input, Tooltip, message } from 'antd';
 import { CheckOutlined, CloseOutlined, CopyOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
+import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import type { VoiceBotMessage } from '../../types/voice';
 
 interface TranscriptionTableRowProps {
@@ -432,14 +433,27 @@ const copyTextToClipboard = async (text: string): Promise<boolean> => {
     return false;
 };
 
+const isMaterialTargetInteractiveElement = (target: EventTarget | null): boolean => {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest('button, a, input, textarea, [contenteditable="true"], [contenteditable=""]'));
+};
+
 export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestampMs }: TranscriptionTableRowProps) {
     const voiceBotSession = useVoiceBotStore((state) => state.voiceBotSession);
     const fetchVoiceBotSession = useVoiceBotStore((state) => state.fetchVoiceBotSession);
     const fetchSessionLog = useVoiceBotStore((state) => state.fetchSessionLog);
     const editTranscriptChunk = useVoiceBotStore((state) => state.editTranscriptChunk);
     const deleteTranscriptChunk = useVoiceBotStore((state) => state.deleteTranscriptChunk);
+    const materialTargetMessageId = useSessionsUIStore((state) => state.materialTargetMessageId);
+    const setMaterialTargetMessageId = useSessionsUIStore((state) => state.setMaterialTargetMessageId);
 
     const segments = getSegmentsFromMessage(row);
+    const rowMessageRef = typeof row?.message_id === 'string' && row.message_id.trim()
+        ? row.message_id.trim()
+        : typeof row?._id === 'string' && row._id.trim()
+            ? row._id.trim()
+            : '';
+    const isMaterialTarget = Boolean(rowMessageRef && materialTargetMessageId === rowMessageRef);
     const imageAttachment = extractImageAttachment(row);
     const visibleSegments = segments.filter((seg) => {
         if (seg?.is_deleted) return false;
@@ -556,6 +570,12 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
         }
     };
 
+    const handleMaterialTargetClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+        if (!rowMessageRef) return;
+        if (isMaterialTargetInteractiveElement(event.target)) return;
+        setMaterialTargetMessageId(isMaterialTarget ? null : rowMessageRef);
+    };
+
     return (
         <div
             className={`self-stretch flex flex-col justify-start items-stretch h-full ${
@@ -573,7 +593,11 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                             const isEditing = editingOid === seg?.id;
 
                             return (
-                                <div className="relative w-full p-1 group" key={segmentKey}>
+                                <div
+                                    className={`relative w-full p-1 group ${isMaterialTarget ? 'bg-teal-50/60 ring-1 ring-inset ring-teal-500/70' : ''}`}
+                                    key={segmentKey}
+                                    onClick={handleMaterialTargetClick}
+                                >
                                     {showActions || segmentMeta ? (
                                         <div className="w-full flex items-start justify-between gap-2">
                                             <div className="min-w-0 flex-1">
@@ -676,7 +700,10 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                             );
                         })
                     ) : (
-                        <div className="self-stretch text-black/90 text-[10px] font-normal leading-3 p-1 whitespace-pre-wrap break-words">
+                        <div
+                            className={`self-stretch text-black/90 text-[10px] font-normal leading-3 p-1 whitespace-pre-wrap break-words ${isMaterialTarget ? 'bg-teal-50/60 ring-1 ring-inset ring-teal-500/70' : ''}`}
+                            onClick={handleMaterialTargetClick}
+                        >
                             {resolveFallbackBodyText(row)}
                             {imageAttachment ? (
                                 <a
