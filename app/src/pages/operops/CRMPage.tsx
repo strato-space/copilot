@@ -42,6 +42,19 @@ interface VoiceTask {
     dialogue_reference?: string;
 }
 
+interface CodexIssue {
+    id?: string;
+    title?: string;
+    description?: string;
+    status?: string;
+    priority?: number | string;
+    issue_type?: string;
+    assignee?: string;
+    owner?: string;
+    updated_at?: string;
+    created_at?: string;
+}
+
 const coerceString = (value: unknown): string | undefined => {
     if (typeof value === 'string') {
         const trimmed = value.trim();
@@ -114,6 +127,8 @@ const CRMPage = () => {
 
     const [voiceSessions, setVoiceSessions] = useState<VoiceSession[]>([]);
     const [voiceLoading, setVoiceLoading] = useState(false);
+    const [codexIssues, setCodexIssues] = useState<CodexIssue[]>([]);
+    const [codexLoading, setCodexLoading] = useState(false);
     const [restartCreateTasksId, setRestartCreateTasksId] = useState<string | null>(null);
     const [jiraModalOpen, setJiraModalOpen] = useState(false);
     const [performerModalOpen, setPerformerModalOpen] = useState(false);
@@ -154,6 +169,20 @@ const CRMPage = () => {
             setVoiceSessions([]);
         } finally {
             setVoiceLoading(false);
+        }
+    }, [isAuth]);
+
+    const fetchCodexIssues = useCallback(async () => {
+        if (!isAuth) return;
+        setCodexLoading(true);
+        try {
+            const data = await api_request<CodexIssue[]>('codex/issues', { limit: 500 }, { silent: true });
+            setCodexIssues(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Ошибка при загрузке Codex-задач из bd:', error);
+            setCodexIssues([]);
+        } finally {
+            setCodexLoading(false);
         }
     }, [isAuth]);
 
@@ -410,6 +439,7 @@ const CRMPage = () => {
         { key: 'review', label: 'Review', configKey: 'review' },
         { key: 'done', label: 'Done', configKey: 'done' },
         { key: 'archive', label: 'Archive', configKey: 'archive' },
+        { key: 'codex', label: 'Codex' },
     ], []);
 
     const mainTabKeys = mainTabs.map((tab) => tab.key);
@@ -445,6 +475,10 @@ const CRMPage = () => {
             fetchVoiceSessions();
             return;
         }
+        if (activeMainTab === 'codex') {
+            fetchCodexIssues();
+            return;
+        }
         if (activeConfig?.filter?.task_status) {
             fetchTickets(activeConfig.filter.task_status as string[]);
         }
@@ -461,6 +495,12 @@ const CRMPage = () => {
             fetchVoiceSessions();
         }
     }, [activeMainTab, fetchVoiceSessions]);
+
+    useEffect(() => {
+        if (activeMainTab === 'codex') {
+            fetchCodexIssues();
+        }
+    }, [activeMainTab, fetchCodexIssues]);
 
     const resolveSessionTimestamp = (session: VoiceSession): number | string | null => {
         return session?.done_at ?? session?.last_voice_timestamp ?? session?.created_at ?? null;
@@ -513,6 +553,72 @@ const CRMPage = () => {
                     Перезапустить
                 </Button>
             ),
+        },
+    ];
+
+    const formatCodexIssueTimestamp = (value: unknown): string => {
+        const source = coerceString(value);
+        if (!source) return '—';
+        const date = dayjs(source);
+        return date.isValid() ? date.format('DD.MM.YYYY HH:mm') : '—';
+    };
+
+    const codexIssueColumns: TableColumnType<CodexIssue>[] = [
+        {
+            title: 'Issue',
+            dataIndex: 'id',
+            key: 'id',
+            width: 150,
+            render: (value) => <span className="font-mono text-[12px]">{coerceString(value) ?? '—'}</span>,
+        },
+        {
+            title: 'Заголовок',
+            dataIndex: 'title',
+            key: 'title',
+            render: (value, record) => (
+                <div className="flex flex-col">
+                    <span>{coerceString(value) ?? '—'}</span>
+                    {record?.description ? (
+                        <Tooltip title={record.description}>
+                            <span className="text-[11px] text-[#667085] truncate max-w-[560px]">{record.description}</span>
+                        </Tooltip>
+                    ) : null}
+                </div>
+            ),
+        },
+        {
+            title: 'Статус',
+            dataIndex: 'status',
+            key: 'status',
+            width: 130,
+            render: (value) => (coerceString(value) ? <Tag>{coerceString(value)}</Tag> : '—'),
+        },
+        {
+            title: 'Приоритет',
+            dataIndex: 'priority',
+            key: 'priority',
+            width: 95,
+            align: 'right',
+            render: (value) => (typeof value === 'number' || typeof value === 'string' ? String(value) : '—'),
+        },
+        {
+            title: 'Тип',
+            dataIndex: 'issue_type',
+            key: 'issue_type',
+            width: 130,
+            render: (value) => coerceString(value) ?? '—',
+        },
+        {
+            title: 'Исполнитель',
+            key: 'assignee',
+            width: 180,
+            render: (_, record) => coerceString(record.assignee) ?? coerceString(record.owner) ?? '—',
+        },
+        {
+            title: 'Обновлено',
+            key: 'updated_at',
+            width: 170,
+            render: (_, record) => formatCodexIssueTimestamp(record.updated_at ?? record.created_at),
         },
     ];
 
@@ -772,6 +878,17 @@ const CRMPage = () => {
                                         rowExpandable: (record) => (record?.agent_results?.create_tasks ?? []).length > 0,
                                     }}
                                     locale={{ emptyText: 'Нет сессий для CRM' }}
+                                />
+                            </div>
+                        ) : activeMainTab === 'codex' ? (
+                            <div className="bg-white border border-[#E6EBF3] rounded-2xl p-6">
+                                <Table<CodexIssue>
+                                    columns={codexIssueColumns}
+                                    dataSource={codexIssues}
+                                    rowKey={(record, index) => record.id ?? `${record.title ?? 'codex-issue'}-${String(index)}`}
+                                    loading={codexLoading}
+                                    pagination={{ pageSize: 50, showSizeChanger: false }}
+                                    locale={{ emptyText: 'Нет Codex issues' }}
                                 />
                             </div>
                         ) : activeConfig ? (

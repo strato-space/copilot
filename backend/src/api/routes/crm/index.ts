@@ -16,6 +16,7 @@ import importRouter from './import.js';
 import uploadsRouter from './uploads.js';
 import voicebotRouter from './voicebot.js';
 import reportsRouter from './reports.js';
+import codexRouter from './codex.js';
 
 const router = Router();
 
@@ -37,5 +38,6 @@ router.use('/import', importRouter);
 router.use('/upload', uploadsRouter);
 router.use('/voicebot', voicebotRouter);
 router.use('/reports', reportsRouter);
+router.use('/codex', codexRouter);
 
 export default router;
