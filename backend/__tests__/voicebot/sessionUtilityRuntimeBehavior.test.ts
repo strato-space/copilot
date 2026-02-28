@@ -316,6 +316,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(inserted.codex_task).toBe(true);
     expect(inserted.codex_review_state).toBe('deferred');
     expect(inserted.codex_review_due_at).toBeInstanceOf(Date);
+    expect(inserted.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
 
     const dueAt = (inserted.codex_review_due_at as Date).getTime();
     const lowerBound = before + 15 * 60 * 1000;

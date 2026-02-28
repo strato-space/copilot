@@ -153,6 +153,12 @@ const activeSessionUrl = (sessionId?: string | null): string => {
     return `${base}/${sessionId}`;
 };
 
+const canonicalVoiceSessionUrl = (sessionId?: string | null): string => {
+    const normalizedSessionId = String(sessionId || '').trim();
+    if (!normalizedSessionId) return DEFAULT_PUBLIC_INTERFACE_BASE;
+    return `${DEFAULT_PUBLIC_INTERFACE_BASE}/${normalizedSessionId}`;
+};
+
 const enqueueVoicebotNotify = async ({
     sessionId,
     event,
@@ -2979,6 +2985,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                 ...(creatorName ? { created_by_name: creatorName } : {}),
                 ...(isCodexTask
                     ? {
+                        external_ref: canonicalVoiceSessionUrl(sessionId),
                         codex_task: true,
                         codex_review_state: 'deferred',
                         codex_review_due_at: new Date(now.getTime() + CODEX_REVIEW_DEFERRED_WINDOW_MS),
