@@ -81,6 +81,7 @@ interface CRMKanbanProps {
         epic?: string[];
         title?: string[];
         performer?: string[];
+        source_ref?: string[];
     };
     columns?: string[];
     column_width?: Record<string, number> | undefined;
@@ -1193,6 +1194,24 @@ const CRMKanban = (props: CRMKanbanProps) => {
         filteredTickets = filteredTickets.filter((record) =>
             projectFilter.includes(getProjectDisplayName(record))
         );
+    }
+    const sourceRefFilterValues = (props.filter.source_ref ?? [])
+        .map((value) => toLookupValue(value).trim())
+        .filter((value) => value.length > 0);
+    if (sourceRefFilterValues.length > 0) {
+        filteredTickets = filteredTickets.filter((record) => {
+            const directSourceRef = toLookupValue(record.source_ref).trim();
+            if (directSourceRef && sourceRefFilterValues.includes(directSourceRef)) return true;
+
+            const sourceRecord =
+                record.source && typeof record.source === 'object' && !Array.isArray(record.source)
+                    ? (record.source as Record<string, unknown>)
+                    : null;
+            const embeddedVoiceSessionRef = toLookupValue(sourceRecord?.voice_session_id).trim();
+            if (embeddedVoiceSessionRef && sourceRefFilterValues.includes(embeddedVoiceSessionRef)) return true;
+
+            return false;
+        });
     }
 
     return (

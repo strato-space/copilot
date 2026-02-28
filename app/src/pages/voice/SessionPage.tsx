@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Tabs, message } from 'antd';
 import { useParams } from 'react-router-dom';
 
+import { CRMKanban } from '../../components/crm';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import SessionStatusWidget from '../../components/voice/SessionStatusWidget';
 import MeetingCard from '../../components/voice/MeetingCard';
@@ -14,6 +15,53 @@ import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
 import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
+
+const VOICE_SESSION_TASK_SUBTAB_CONFIGS = {
+    work: {
+        statuses: ['READY_10', 'PROGRESS_0', 'PROGRESS_10', 'PROGRESS_20', 'PROGRESS_30', 'PROGRESS_40'],
+        columns: [
+            'mark',
+            'created_at',
+            'updated_at',
+            'project',
+            'epic',
+            'title',
+            'performer',
+            'priority',
+            'task_status',
+            'task_type',
+            'shipment_date',
+            'estimated_time_edit',
+            'total_hours',
+            'dashboard_comment',
+            'edit_action',
+            'notification',
+        ],
+    },
+    review: {
+        statuses: ['REVIEW_10', 'REVIEW_20'],
+        columns: [
+            'mark',
+            'created_at',
+            'updated_at',
+            'project',
+            'epic',
+            'title',
+            'performer',
+            'priority',
+            'task_status',
+            'task_type',
+            'shipment_date',
+            'estimated_time_edit',
+            'total_hours',
+            'dashboard_comment',
+            'edit_action',
+            'notification',
+        ],
+    },
+} as const;
+
+type VoiceSessionTaskSubTabKey = keyof typeof VOICE_SESSION_TASK_SUBTAB_CONFIGS;
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -67,6 +115,7 @@ export default function SessionPage() {
     const { hasPermission } = useCurrentUserPermissions();
     const [customPromptResult, setCustomPromptResult] = useState<unknown>(null);
     const [activeTab, setActiveTab] = useState('2');
+    const [sessionTasksSubTab, setSessionTasksSubTab] = useState<VoiceSessionTaskSubTabKey>('work');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -198,6 +247,7 @@ export default function SessionPage() {
     )?.data;
     const hasPossibleTasks = Array.isArray(possibleTasks) && possibleTasks.length > 0;
     const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
+    const activeTasksConfig = VOICE_SESSION_TASK_SUBTAB_CONFIGS[sessionTasksSubTab];
 
     const tabs = [
         {
@@ -219,6 +269,32 @@ export default function SessionPage() {
                 },
             ]
             : []),
+        {
+            key: 'operops_tasks',
+            label: 'Задачи',
+            children: (
+                <div className="flex flex-col gap-3">
+                    <Tabs
+                        activeKey={sessionTasksSubTab}
+                        onChange={(nextTab) => setSessionTasksSubTab(nextTab as VoiceSessionTaskSubTabKey)}
+                        size="small"
+                        className="bg-transparent"
+                        items={[
+                            { key: 'work', label: 'Work' },
+                            { key: 'review', label: 'Review' },
+                        ]}
+                    />
+                    <CRMKanban
+                        key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab}`}
+                        filter={{
+                            task_status: [...activeTasksConfig.statuses],
+                            source_ref: sessionId ? [sessionId] : [],
+                        }}
+                        columns={[...activeTasksConfig.columns]}
+                    />
+                </div>
+            ),
+        },
         {
             key: 'screenshort',
             label: 'Screenshort',
