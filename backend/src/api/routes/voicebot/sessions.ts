@@ -318,6 +318,8 @@ const isCodexPerformer = (value: unknown): boolean => {
     return localPart === 'codex';
 };
 
+const CODEX_REVIEW_DEFERRED_WINDOW_MS = 15 * 60 * 1000;
+
 const toTaskDependencies = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
     return value
@@ -2920,7 +2922,8 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             }
             if (!taskPerformer) continue;
 
-            if (isCodexPerformer(taskPerformer)) {
+            const isCodexTask = isCodexPerformer(taskPerformer);
+            if (isCodexTask) {
                 const projectCacheKey = projectId.toHexString();
                 let projectDoc = projectCache.get(projectCacheKey);
                 if (projectDoc === undefined) {
@@ -2974,6 +2977,13 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
                 },
                 ...(creatorId ? { created_by: creatorId } : {}),
                 ...(creatorName ? { created_by_name: creatorName } : {}),
+                ...(isCodexTask
+                    ? {
+                        codex_task: true,
+                        codex_review_state: 'deferred',
+                        codex_review_due_at: new Date(now.getTime() + CODEX_REVIEW_DEFERRED_WINDOW_MS),
+                    }
+                    : {}),
                 runtime_tag: RUNTIME_TAG,
             });
         }

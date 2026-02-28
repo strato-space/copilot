@@ -24,6 +24,8 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("source: 'VOICE_BOT'");
     expect(source).toContain('source_data: {');
     expect(source).toContain('session_id: new ObjectId(sessionId)');
+    expect(source).toContain("codex_review_state: 'deferred'");
+    expect(source).toContain('codex_review_due_at: new Date(now.getTime() + CODEX_REVIEW_DEFERRED_WINDOW_MS)');
   });
 
   it('normalizes save_create_tasks payload into canonical task fields', () => {

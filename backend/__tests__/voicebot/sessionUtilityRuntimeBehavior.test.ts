@@ -229,6 +229,101 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(insertManySpy).not.toHaveBeenCalled();
   });
 
+  it('create_tickets marks codex assignment as deferred for 15 minutes', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const taskPerformerId = new ObjectId();
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: taskPerformerId,
+              name: 'Codex',
+              corporate_email: 'codex@strato.space',
+            })),
+          };
+        }
+        if (name === COLLECTIONS.PROJECTS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: projectId,
+              git_repo: 'git@github.com:strato-space/copilot.git',
+            })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            findOne: jest.fn(async () => null),
+            insertMany: insertManySpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const before = Date.now();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [
+          {
+            id: 'ticket-1',
+            name: 'Investigate ingress regression',
+            description: 'Details',
+            performer_id: taskPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Copilot',
+          },
+        ],
+      });
+    const after = Date.now();
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(insertManySpy).toHaveBeenCalledTimes(1);
+
+    const [insertedDocs] = insertManySpy.mock.calls[0] as [Array<Record<string, unknown>>];
+    expect(insertedDocs).toHaveLength(1);
+
+    const inserted = insertedDocs[0] as Record<string, unknown>;
+    expect(inserted.codex_task).toBe(true);
+    expect(inserted.codex_review_state).toBe('deferred');
+    expect(inserted.codex_review_due_at).toBeInstanceOf(Date);
+
+    const dueAt = (inserted.codex_review_due_at as Date).getTime();
+    const lowerBound = before + 15 * 60 * 1000;
+    const upperBound = after + 15 * 60 * 1000;
+    expect(dueAt).toBeGreaterThanOrEqual(lowerBound);
+    expect(dueAt).toBeLessThanOrEqual(upperBound);
+  });
+
   it('task_types reads execution plans with prod-family runtime filter', async () => {
     const rootId = new ObjectId();
     const childId = new ObjectId();
