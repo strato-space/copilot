@@ -474,6 +474,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Closed `copilot-4o2c` (Voice/OperOps Codex details parity): Voice inline `Подробности Codex задачи` now reuses the same `CodexIssueDetailsCard` as OperOps, preserving Description/Notes paragraph breaks and widening the drawer to `min(1180px, calc(100vw - 48px))`; updated contracts in `app/__tests__/voice/codexTasksInlineDetailsContract.test.ts` and `app/__tests__/operops/codexTaskPageContract.test.ts`.
 - Closed `copilot-y9qy` (Wave 1 `desloppify` debug-logs + exact duplicates) with full swarm execution:
   - completed/closed all child tasks `copilot-y9qy.1`..`.19`,
   - removed Tier-1 tagged logs and unified duplicate helper clusters across app/backend/voice workers,

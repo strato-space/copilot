@@ -2,6 +2,7 @@
 
 ## 2026-02-28
 ### PROBLEM SOLVED
+- **14:12** Voice session inline Codex details (`Подробности Codex задачи`) used a narrower side panel and plain-text rendering, so Description/Notes paragraph breaks were collapsed and the layout diverged from OperOps Codex task view (`copilot-4o2c`).
 - **13:52** Wave-1 technical debt from `desloppify` (`copilot-y9qy`) still left noisy runtime logs and duplicated helper logic across app/backend/voice-worker paths, which increased incident-triage time and made behavior changes harder to verify.
 - **13:52** Security wave backlog (`copilot-6obm`) had 20 untriaged scanner findings mixed between exploitable issues and rule-level false positives, which blocked deterministic risk reporting and patch planning.
 - **13:40** TypeDB ontology assets had contract drift after latest Voice/OperOps/Codex changes: task lineage/deferred-review fields were missing in schema/mapping, task runtime-tag diagnostics were absent, and validation tooling had non-compilable anchor checks in TypeDB 3 (`copilot-gym6.*` wave).
@@ -29,6 +30,9 @@
 - **01:05** OperOps short-link behavior (generation, collision handling, lookup order) was implemented in code but not documented as a single operator/developer contract, which made incident triage and future integrations error-prone.
 
 ### FEATURE IMPLEMENTED
+- **14:12** Implemented shared Codex details presentation between OperOps and Voice:
+  - introduced reusable `CodexIssueDetailsCard` and switched both OperOps Codex task page and Voice inline drawer to the same component;
+  - expanded Voice secondary drawer width so the card is displayed at near full-size with side paddings.
 - **13:52** Completed and closed `copilot-y9qy` end-to-end:
   - removed Tier-1 tagged debug logs in frontend/backend scripts (`y9qy.1-.8`);
   - unified exact-duplicate helper clusters in frontend, CRM/miniapp backend, and voice workers (`y9qy.9-.18`);
@@ -69,6 +73,12 @@
 - **01:05** Added canonical short-link contract documentation for OperOps tasks, including public-id generation rules, collision suffix policy, deterministic lookup order, operator runbook, and developer checklist for new task-creation entry points.
 
 ### CHANGES
+- **14:12** UI parity + contract test sync for `copilot-4o2c`:
+  - added `app/src/components/codex/CodexIssueDetailsCard.tsx`;
+  - updated `app/src/components/codex/CodexIssuesTable.tsx` to render shared card in drawer and set width `min(1180px, calc(100vw - 48px))`;
+  - updated `app/src/pages/operops/CodexTaskPage.tsx` to reuse shared card;
+  - updated contract tests: `app/__tests__/voice/codexTasksInlineDetailsContract.test.ts`, `app/__tests__/operops/codexTaskPageContract.test.ts`;
+  - verification: `cd app && npm run build`; `cd app && npm run test -- __tests__/voice/codexTasksInlineDetailsContract.test.ts __tests__/operops/codexTaskPageContract.test.ts __tests__/operops/codexIssuesTableContract.test.ts`.
 - **13:52** `copilot-y9qy` implementation set:
   - frontend dedupe helpers: `app/src/utils/{performerLifecycle.ts,voiceFabSync.ts,pinnedMonths.ts}`;
   - backend shared helpers: `backend/src/utils/crmMiniappShared.ts`;

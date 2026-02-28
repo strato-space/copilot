@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Alert, Card, Descriptions, Empty, Spin, Tag, Typography } from 'antd';
-import dayjs from 'dayjs';
+import { Alert, Card, Empty, Spin, Tag, Typography } from 'antd';
 import { useRequestStore } from '../../store/requestStore';
+import CodexIssueDetailsCard from '../../components/codex/CodexIssueDetailsCard';
 
-const { Paragraph, Text, Title } = Typography;
+const { Text, Title } = Typography;
 
 interface CodexIssue {
     _id?: string;
@@ -33,11 +33,6 @@ interface CodexIssue {
 const toText = (value: unknown): string => {
     if (typeof value !== 'string') return '';
     return value.trim();
-};
-
-const toTextList = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value.map((item) => toText(item)).filter(Boolean);
 };
 
 const normalizeIssuePayload = (payload: unknown): unknown => {
@@ -70,13 +65,6 @@ const normalizeIssuePayload = (payload: unknown): unknown => {
     }
 
     return null;
-};
-
-const formatDateTime = (value: unknown): string => {
-    const source = toText(value);
-    if (!source) return '—';
-    const parsed = dayjs(source);
-    return parsed.isValid() ? parsed.format('DD.MM.YYYY HH:mm:ss') : '—';
 };
 
 const pickIssue = (payload: unknown): CodexIssue | null => {
@@ -144,24 +132,6 @@ export default function CodexTaskPage() {
     }, [loadIssue]);
 
     const displayIssueId = toText(issue?.id) || toText(issue?._id) || normalizedIssueId || '—';
-    const labels = toTextList(issue?.labels);
-    const dependencies = useMemo(() => {
-        const explicitDependencies = toTextList(issue?.dependencies);
-        if (explicitDependencies.length > 0) {
-            return explicitDependencies;
-        }
-
-        if (!Array.isArray(issue?.dependents)) return [];
-        return issue.dependents
-            .map((dependency) => {
-                if (typeof dependency === 'object' && dependency !== null) {
-                    return toText(dependency.id) || toText((dependency as Record<string, unknown>).title);
-                }
-                return '';
-            })
-            .filter(Boolean);
-    }, [issue]);
-
     if (loading) {
         return (
             <div className="flex min-h-[40vh] items-center justify-center">
@@ -208,44 +178,7 @@ export default function CodexTaskPage() {
 
             {error ? <Alert type="warning" showIcon message={error} /> : null}
 
-            <Card title={toText(issue.title) || 'Без заголовка'}>
-                <Descriptions bordered size="small" column={1} labelStyle={{ width: 220 }}>
-                    <Descriptions.Item label="Issue ID">
-                        <Text code copyable={{ text: displayIssueId }}>
-                            {displayIssueId}
-                        </Text>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Тип">{toText(issue.issue_type) || '—'}</Descriptions.Item>
-                    <Descriptions.Item label="Исполнитель">
-                        {toText(issue.assignee) || toText(issue.owner) || '—'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Создал">{toText(issue.created_by) || '—'}</Descriptions.Item>
-                    <Descriptions.Item label="Source Ref">{toText(issue.source_ref) || '—'}</Descriptions.Item>
-                    <Descriptions.Item label="External Ref">{toText(issue.external_ref) || '—'}</Descriptions.Item>
-                    <Descriptions.Item label="Labels">
-                        {labels.length > 0 ? labels.map((label) => <Tag key={label}>{label}</Tag>) : '—'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Dependencies">
-                        {dependencies.length > 0 ? dependencies.join(', ') : '—'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Created At">{formatDateTime(issue.created_at)}</Descriptions.Item>
-                    <Descriptions.Item label="Updated At">{formatDateTime(issue.updated_at)}</Descriptions.Item>
-                </Descriptions>
-
-                <div className="mt-5">
-                    <Text strong>Описание</Text>
-                    <Paragraph className="!mb-0 whitespace-pre-wrap">
-                        {toText(issue.description) || '—'}
-                    </Paragraph>
-                </div>
-
-                <div className="mt-5">
-                    <Text strong>Notes</Text>
-                    <Paragraph className="!mb-0 whitespace-pre-wrap">
-                        {toText(issue.notes) || '—'}
-                    </Paragraph>
-                </div>
-            </Card>
+            <CodexIssueDetailsCard issue={issue} issueIdFallback={displayIssueId} />
         </div>
     );
 }

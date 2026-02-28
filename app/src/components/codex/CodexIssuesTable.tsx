@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LinkOutlined } from '@ant-design/icons';
-import { Alert, Button, Descriptions, Drawer, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Drawer, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import type { TableColumnsType } from 'antd';
 import dayjs from 'dayjs';
 import { useRequestStore } from '../../store/requestStore';
 import { ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
+import CodexIssueDetailsCard from './CodexIssueDetailsCard';
 
 const { Text } = Typography;
 
@@ -378,6 +379,8 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
         [filteredIssues]
     );
 
+    const selectedTaskLink = selectedTask ? resolveTaskLink(selectedTask) : null;
+
     return (
         <div className="w-full">
             <Tabs
@@ -418,60 +421,21 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
                 title="Подробности Codex задачи"
                 open={selectedTask !== null}
                 onClose={() => setSelectedKey(null)}
-                width={620}
+                width="min(1180px, calc(100vw - 48px))"
             >
                 {selectedTask ? (
-                    <>
-                        <Descriptions column={1} bordered size="small" labelStyle={{ width: 170 }}>
-                            <Descriptions.Item label="Task ID">{resolveTaskId(selectedTask)}</Descriptions.Item>
-                            <Descriptions.Item label="Issue type">{toText(selectedTask.issue_type) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Статус">{toText(selectedTask.status) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Приоритет">{String(selectedTask.priority ?? '—')}</Descriptions.Item>
-                            <Descriptions.Item label="Source kind">{toText(selectedTask.source_kind) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Source ref">{toText(selectedTask.source_ref) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="External ref">{toText(selectedTask.external_ref) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Assignee">{toText(selectedTask.assignee) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Owner">{toText(selectedTask.owner) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Review state">
-                                {toText(selectedTask.codex_review_state) || '—'}
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Создано">{formatTimestamp(selectedTask.created_at)}</Descriptions.Item>
-                            <Descriptions.Item label="Обновлено">{formatTimestamp(selectedTask.updated_at)}</Descriptions.Item>
-                            <Descriptions.Item label="Заголовок">{toText(selectedTask.title) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Описание">{toText(selectedTask.description) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Заметки">{toText(selectedTask.notes) || '—'}</Descriptions.Item>
-                            <Descriptions.Item label="Labels">
-                                {(Array.isArray(selectedTask.labels) && selectedTask.labels.length > 0) ? (
-                                    <Space wrap size={[4, 4]}>
-                                        {selectedTask.labels.map((label) => (
-                                            <Tag key={label}>{label}</Tag>
-                                        ))}
-                                    </Space>
-                                ) : (
-                                    '—'
-                                )}
-                            </Descriptions.Item>
-                            <Descriptions.Item label="Dependencies">
-                                {(Array.isArray(selectedTask.dependencies) && selectedTask.dependencies.length > 0) ? (
-                                    selectedTask.dependencies.join(', ')
-                                ) : (
-                                    '—'
-                                )}
-                            </Descriptions.Item>
-                        </Descriptions>
-                        {resolveTaskLink(selectedTask) ? (
-                            <div className="mt-3">
-                                <Button
-                                    href={resolveTaskLink(selectedTask) ?? '#'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    type="primary"
-                                >
-                                    Открыть задачу в OperOps
-                                </Button>
-                            </div>
-                        ) : null}
-                    </>
+                    <div className="px-2 py-1">
+                        <CodexIssueDetailsCard
+                            issue={selectedTask}
+                            extra={
+                                selectedTaskLink ? (
+                                    <Button href={selectedTaskLink} target="_blank" rel="noopener noreferrer" type="primary">
+                                        Открыть задачу в OperOps
+                                    </Button>
+                                ) : undefined
+                            }
+                        />
+                    </div>
                 ) : null}
             </Drawer>
         </div>

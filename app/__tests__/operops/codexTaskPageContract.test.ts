@@ -27,4 +27,9 @@ describe('OperOps Codex task page contract', () => {
         expect(appSource).toContain("path=\"codex/task/:issueId\" element={<CodexTaskPage />} ");
         expect(indexSource).toContain("export { default as CodexTaskPage } from './CodexTaskPage';");
     });
+
+    it('reuses shared codex issue details card for markdown-preserving body rendering', () => {
+        expect(source).toContain("import CodexIssueDetailsCard from '../../components/codex/CodexIssueDetailsCard';");
+        expect(source).toContain('<CodexIssueDetailsCard issue={issue} issueIdFallback={displayIssueId} />');
+    });
 });

@@ -12,10 +12,10 @@ describe('Voice Codex tab inline details contract', () => {
     expect(source).toContain('<Drawer');
   });
 
-  it('renders bd-show-like payload inside inline details drawer', () => {
-    expect(source).toContain('<Descriptions.Item label=\"Task ID\">');
-    expect(source).toContain('<Descriptions.Item label=\"Dependencies\">');
-    expect(source).toContain('<Descriptions.Item label=\"Labels\">');
+  it('reuses shared codex details card and wide drawer for inline task details', () => {
+    expect(source).toContain("import CodexIssueDetailsCard from './CodexIssueDetailsCard';");
+    expect(source).toContain('<CodexIssueDetailsCard');
+    expect(source).toContain('width=\"min(1180px, calc(100vw - 48px))\"');
   });
 
   it('uses codex task route for external task links', () => {
