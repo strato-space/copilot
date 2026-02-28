@@ -19,6 +19,8 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
     const hasMaterial = typeof row.imageUrl === 'string' && row.imageUrl.trim().length > 0;
     const isImageRow = row.kind === 'image' && hasMaterial;
     const isSelectable = !isImageRow;
+    const speakerLabel = typeof row.name === 'string' ? row.name.trim() : '';
+    const showSpeakerLabel = speakerLabel.length > 0 && speakerLabel.toLowerCase() !== 'unknown';
 
     const handleCheckboxChange = (): void => {
         if (!isSelectable) return;
@@ -61,7 +63,9 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
                 <span className="w-3 h-3 bg-black/40 rounded-full flex items-start justify-center text-white text-[6px] font-semibold leading-[11px]">
                     {row.avatar}
                 </span>
-                <span className="flex-1 text-black/90 text-[8px] font-normal leading-[10px] truncate">{row.name}</span>
+                {showSpeakerLabel ? (
+                    <span className="flex-1 text-black/90 text-[8px] font-normal leading-[10px] truncate">{speakerLabel}</span>
+                ) : null}
             </div>
             <div className="flex-1 min-w-0 flex items-start p-1 gap-2">
                 {isSelectable ? (
