@@ -16,7 +16,8 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
 
     const isHighlighted = highlightedMessageId && row.message_id === highlightedMessageId;
     const isSelected = isCategorizationRowSelected(row);
-    const isImageRow = row.kind === 'image' && typeof row.imageUrl === 'string' && row.imageUrl.trim().length > 0;
+    const hasMaterial = typeof row.imageUrl === 'string' && row.imageUrl.trim().length > 0;
+    const isImageRow = row.kind === 'image' && hasMaterial;
     const isSelectable = !isImageRow;
 
     const handleCheckboxChange = (): void => {
@@ -63,32 +64,37 @@ export default function CategorizationTableRow({ row }: CategorizationTableRowPr
                 <span className="flex-1 text-black/90 text-[8px] font-normal leading-[10px] truncate">{row.name}</span>
             </div>
             <div className="flex-1 min-w-0 flex items-start p-1 gap-2">
-                <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={handleCheckboxChange}
-                    disabled={!isSelectable}
-                    className="w-3 h-3 rounded border border-gray-300 text-blue-600 focus:ring-blue-500"
-                    onClick={(event) => event.stopPropagation()}
-                />
-                <div className="min-w-0">
+                {isSelectable ? (
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={handleCheckboxChange}
+                        className="w-3 h-3 rounded border border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onClick={(event) => event.stopPropagation()}
+                    />
+                ) : (
+                    <span className="w-3 h-3 shrink-0" aria-hidden="true" />
+                )}
+                {!isImageRow ? (
                     <span className="text-black/90 text-[10px] font-normal leading-3 whitespace-pre-line">{row.text}</span>
-                    {isImageRow ? (
-                        <a
-                            href={row.imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 block"
-                            onClick={(event) => event.stopPropagation()}
-                        >
-                            <img
-                                src={row.imageUrl}
-                                alt={row.imageName || 'attachment'}
-                                className="max-h-36 max-w-[220px] rounded border border-slate-200 object-contain bg-white"
-                            />
-                        </a>
-                    ) : null}
-                </div>
+                ) : null}
+            </div>
+            <div className="w-[220px] shrink-0 p-1 border-l border-slate-200">
+                {hasMaterial ? (
+                    <a
+                        href={row.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <img
+                            src={row.imageUrl}
+                            alt={row.imageName || 'attachment'}
+                            className="max-h-36 max-w-[210px] rounded border border-slate-200 object-contain bg-white"
+                        />
+                    </a>
+                ) : null}
             </div>
         </div>
     );

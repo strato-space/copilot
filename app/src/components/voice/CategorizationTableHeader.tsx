@@ -22,6 +22,13 @@ export default function CategorizationTableHeader() {
                     </div>
                 </div>
             </div>
+            <div className="w-[220px] flex justify-start items-center">
+                <div className="flex-1 self-stretch py-2 flex justify-start items-center gap-2.5">
+                    <div className="flex-1 px-1 border-l border-slate-200 flex justify-start items-center gap-2">
+                        <div className="flex-1 text-black/60 text-[10px] font-semibold leading-3">Materials</div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
