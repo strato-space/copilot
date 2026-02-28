@@ -8,6 +8,7 @@ import {
   handleVoiceIngress,
   type QueueLike,
 } from './ingressHandlers.js';
+import { handleCodexReviewCallback } from './codexReviewCallbacks.js';
 
 type LoggerLike = {
   info?: (message: string, meta?: Record<string, unknown>) => void;
@@ -230,5 +231,57 @@ export const installNonCommandHandlers = (bot: BotLike, deps: RuntimeNonCommandD
     });
 
     warnIfFailed(deps, 'audio_ingress', result);
+  });
+
+  bot.on('callback_query', async (ctx) => {
+    const callbackQuery = asRecord((ctx as { callbackQuery?: unknown }).callbackQuery);
+    const callbackData = callbackQuery.data;
+    if (typeof callbackData !== 'string' || !callbackData.trim()) return;
+
+    const result = await handleCodexReviewCallback({
+      db: deps.getDb(),
+      callbackData,
+      telegramUserId: ctx.from?.id ? String(ctx.from.id) : null,
+    });
+
+    if (!result.handled) return;
+
+    const answerCbQuery = (ctx as { answerCbQuery?: unknown }).answerCbQuery;
+    if (typeof answerCbQuery === 'function') {
+      try {
+        await (answerCbQuery as (text: string, extra: { show_alert: boolean }) => Promise<unknown>)(
+          result.text,
+          { show_alert: Boolean(result.alert) }
+        );
+      } catch (error) {
+        deps.logger.warn?.(`[tgbot-runtime] callback_query_answer_failed ${deps.serializeForLog({
+          callback_data: callbackData,
+          error: error instanceof Error ? error.message : String(error),
+        })}`);
+      }
+    }
+
+    if (result.removeKeyboard) {
+      const editMessageReplyMarkup = (ctx as { editMessageReplyMarkup?: unknown }).editMessageReplyMarkup;
+      if (typeof editMessageReplyMarkup === 'function') {
+        try {
+          await (editMessageReplyMarkup as (markup: Record<string, unknown>) => Promise<unknown>)({
+            inline_keyboard: [],
+          });
+        } catch (error) {
+          deps.logger.warn?.(`[tgbot-runtime] callback_query_clear_markup_failed ${deps.serializeForLog({
+            callback_data: callbackData,
+            error: error instanceof Error ? error.message : String(error),
+          })}`);
+        }
+      }
+    }
+
+    if (!result.ok) {
+      deps.logger.warn?.(`[tgbot-runtime] codex_review_callback_failed ${deps.serializeForLog({
+        callback_data: callbackData,
+        result,
+      })}`);
+    }
   });
 };

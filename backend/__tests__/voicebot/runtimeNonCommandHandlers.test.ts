@@ -4,12 +4,17 @@ const buildIngressDepsMock = jest.fn((args: Record<string, unknown>) => args);
 const handleVoiceIngressMock = jest.fn(async () => ({ ok: true }));
 const handleTextIngressMock = jest.fn(async () => ({ ok: true }));
 const handleAttachmentIngressMock = jest.fn(async () => ({ ok: true }));
+const handleCodexReviewCallbackMock = jest.fn(async () => ({ handled: false, ok: false, text: '' }));
 
 jest.unstable_mockModule('../../src/voicebot_tgbot/ingressHandlers.js', () => ({
   buildIngressDeps: buildIngressDepsMock,
   handleVoiceIngress: handleVoiceIngressMock,
   handleTextIngress: handleTextIngressMock,
   handleAttachmentIngress: handleAttachmentIngressMock,
+}));
+
+jest.unstable_mockModule('../../src/voicebot_tgbot/codexReviewCallbacks.js', () => ({
+  handleCodexReviewCallback: handleCodexReviewCallbackMock,
 }));
 
 const {
@@ -54,6 +59,7 @@ describe('runtimeNonCommandHandlers', () => {
     handleVoiceIngressMock.mockResolvedValue({ ok: true });
     handleTextIngressMock.mockResolvedValue({ ok: true });
     handleAttachmentIngressMock.mockResolvedValue({ ok: true });
+    handleCodexReviewCallbackMock.mockResolvedValue({ handled: false, ok: false, text: '' });
   });
 
   it('extracts forwarded context and reply text into common ingress context', () => {
@@ -103,7 +109,7 @@ describe('runtimeNonCommandHandlers', () => {
     const deps = makeDeps();
     installNonCommandHandlers(bot as any, deps as any);
 
-    expect(bot.on).toHaveBeenCalledTimes(5);
+    expect(bot.on).toHaveBeenCalledTimes(6);
 
     const voiceHandler = handlers.get('voice');
     expect(voiceHandler).toBeDefined();
@@ -218,5 +224,42 @@ describe('runtimeNonCommandHandlers', () => {
     expect(deps.logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('[tgbot-runtime] photo_ingress_failed')
     );
+  });
+
+  it('handles codex callback query and clears inline keyboard on success', async () => {
+    handleCodexReviewCallbackMock.mockResolvedValueOnce({
+      handled: true,
+      ok: true,
+      text: 'Task is started.',
+      removeKeyboard: true,
+    });
+
+    const { bot, handlers } = createBot();
+    const deps = makeDeps();
+    installNonCommandHandlers(bot as any, deps as any);
+
+    const callbackHandler = handlers.get('callback_query');
+    expect(callbackHandler).toBeDefined();
+
+    const answerCbQuery = jest.fn(async () => ({}));
+    const editMessageReplyMarkup = jest.fn(async () => ({}));
+
+    await callbackHandler?.({
+      from: { id: 2004 },
+      callbackQuery: {
+        data: 'cdr:start:65f5f87cfb4b31f8f6e09f1a',
+      },
+      answerCbQuery,
+      editMessageReplyMarkup,
+    });
+
+    expect(handleCodexReviewCallbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callbackData: 'cdr:start:65f5f87cfb4b31f8f6e09f1a',
+        telegramUserId: '2004',
+      })
+    );
+    expect(answerCbQuery).toHaveBeenCalledWith('Task is started.', { show_alert: false });
+    expect(editMessageReplyMarkup).toHaveBeenCalledWith({ inline_keyboard: [] });
   });
 });
