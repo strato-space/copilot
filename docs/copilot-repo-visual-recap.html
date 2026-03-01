@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Copilot Platform Recap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+
+  --bg: #f5f8fc;
+  --surface: #ffffff;
+  --surface-2: #eef3fa;
+  --surface-elev: #f9fbff;
+  --border: rgba(10, 35, 66, 0.12);
+  --border-strong: rgba(10, 35, 66, 0.24);
+  --text: #0d223a;
+  --text-dim: #5d6f86;
+
+  --blue: #1e3a5f;
+  --teal: #0f766e;
+  --amber: #d4a73a;
+  --green: #2f8f5b;
+  --red: #be3e3e;
+
+  --blue-dim: rgba(30, 58, 95, 0.08);
+  --teal-dim: rgba(15, 118, 110, 0.08);
+  --amber-dim: rgba(212, 167, 58, 0.12);
+  --green-dim: rgba(47, 143, 91, 0.10);
+  --red-dim: rgba(190, 62, 62, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08121f;
+    --surface: #0d1b2c;
+    --surface-2: #13263d;
+    --surface-elev: #172d48;
+    --border: rgba(177, 200, 232, 0.14);
+    --border-strong: rgba(177, 200, 232, 0.28);
+    --text: #d9e6f7;
+    --text-dim: #8fa3bf;
+
+    --blue: #78a4d8;
+    --teal: #5dc0b8;
+    --amber: #e0b95e;
+    --green: #74ca93;
+    --red: #df8a8a;
+
+    --blue-dim: rgba(120, 164, 216, 0.14);
+    --teal-dim: rgba(93, 192, 184, 0.14);
+    --amber-dim: rgba(224, 185, 94, 0.16);
+    --green-dim: rgba(116, 202, 147, 0.16);
+    --red-dim: rgba(223, 138, 138, 0.16);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(rgba(10, 35, 66, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 35, 66, 0.04) 1px, transparent 1px),
+    radial-gradient(ellipse at 8% 0%, var(--blue-dim), transparent 44%),
+    radial-gradient(ellipse at 90% 100%, var(--amber-dim), transparent 40%);
+  background-size: 26px 26px, 26px 26px, auto, auto;
+  min-height: 100vh;
+  padding: 28px 36px;
+}
+
+.wrap {
+  max-width: 1460px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 0 34px;
+}
+
+.main { min-width: 0; }
+
+.toc {
+  position: sticky;
+  top: 22px;
+  align-self: start;
+  max-height: calc(100dvh - 44px);
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.toc-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  color: var(--text-dim);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toc a {
+  display: block;
+  text-decoration: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
+  line-height: 1.35;
+  margin-bottom: 2px;
+  transition: all .14s ease;
+}
+
+.toc a:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.toc a.active {
+  color: var(--text);
+  background: var(--surface-2);
+  border-left-color: var(--amber);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate {
+  animation: fadeUp .42s ease-out both;
+  animation-delay: calc(var(--i, 0) * .05s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.hero {
+  background: var(--surface-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 28px 30px;
+  box-shadow: 0 10px 28px rgba(6, 20, 38, 0.10);
+  margin-bottom: 24px;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -0.8px;
+  margin-bottom: 12px;
+  max-width: 920px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 980px;
+}
+
+.kpi-grid {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kpi {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 12px;
+  background: var(--surface);
+}
+
+.kpi .label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.kpi .value {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.kpi .meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.section {
+  margin-bottom: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+}
+
+.sec-head {
+  scroll-margin-top: 60px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sec-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: var(--blue-dim);
+  border: 1px solid var(--border);
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+h2 {
+  font-size: 24px;
+  letter-spacing: -0.3px;
+}
+
+.sec-sub {
+  margin-top: 2px;
+  margin-bottom: 14px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 14px;
+  min-width: 0;
+}
+
+.card h3 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.card p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.pill.ok { background: var(--green-dim); color: var(--green); }
+.pill.warn { background: var(--amber-dim); color: var(--amber); }
+.pill.attn { background: var(--red-dim); color: var(--red); }
+
+.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border-bottom: 2px solid var(--border-strong);
+  padding: 12px 12px;
+  white-space: nowrap;
+}
+
+td {
+  vertical-align: top;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+tbody tr:nth-child(even) { background: var(--blue-dim); }
+
+tbody tr:last-child td { border-bottom: none; }
+
+td code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.mermaid-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 30px 20px;
+  background: var(--surface-2);
+  overflow: auto;
+}
+
+.mermaid-wrap .mermaid {
+  display: flex;
+  justify-content: center;
+  transform-origin: top center;
+  transition: transform .2s ease;
+}
+
+.zoom-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  z-index: 8;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 2px;
+}
+
+.zoom-controls button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.zoom-controls button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.mermaid-wrap.is-zoomed { cursor: grab; }
+.mermaid-wrap.is-panning { cursor: grabbing; user-select: none; }
+
+.mermaid .nodeLabel { font-family: var(--font-body) !important; font-size: 16px !important; }
+.mermaid .edgeLabel { font-family: var(--font-mono) !important; font-size: 12px !important; }
+
+.footer-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+@media (max-width: 1180px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1000px) {
+  body { padding: 22px 20px; }
+  .wrap { grid-template-columns: 1fr; }
+
+  .toc {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    max-height: none;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    margin: 0 -20px 12px;
+    padding: 10px 20px;
+  }
+
+  .toc-title { display: none; }
+
+  .toc a {
+    white-space: nowrap;
+    flex-shrink: 0;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 4px 4px 0 0;
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  .toc a.active {
+    border-left: none;
+    border-bottom-color: var(--amber);
+  }
+
+  .card-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="toc" id="toc">
+    <div class="toc-title">Contents</div>
+    <a href="#s1">1. Topology</a>
+    <a href="#s2">2. Product Surfaces</a>
+    <a href="#s3">3. Hard Contracts</a>
+    <a href="#s4">4. Interfaces</a>
+    <a href="#s5">5. Runtime & Deploy</a>
+    <a href="#s6">6. Repo Map</a>
+  </nav>
+
+  <main class="main">
+    <section class="hero animate" style="--i:0;">
+      <div class="kicker">Visual Explainer / Project Recap</div>
+      <h1>Copilot Platform Recap<br/>for <code>/home/strato-space/copilot</code></h1>
+      <p class="subtitle">
+        Multi-surface platform spanning FinOps, OperOps/CRM, Voice, and Miniapp. Backend is TypeScript/Express + Socket.IO with Redis/BullMQ runtime workers and a separate Fast-Agent service for AI cards.
+      </p>
+      <div class="kpi-grid">
+        <article class="kpi">
+          <div class="label">Top-level products</div>
+          <div class="value">4</div>
+          <div class="meta">FinOps, OperOps/CRM, Voice, Miniapp</div>
+        </article>
+        <article class="kpi">
+          <div class="label">Primary frontends</div>
+          <div class="value">2</div>
+          <div class="meta"><code>app/</code> + <code>miniapp/</code></div>
+        </article>
+        <article class="kpi">
+          <div class="label">Critical interfaces</div>
+          <div class="value">5</div>
+          <div class="meta">Voice upload/close/attachment + socket + URL contract</div>
+        </article>
+        <article class="kpi">
+          <div class="label">Runtime lanes</div>
+          <div class="value">3</div>
+          <div class="meta">prod, dev, local via PM2 mode scripts</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section animate" id="s1" style="--i:1;">
+      <div class="sec-head">
+        <span class="sec-num">Section 1</span>
+        <h2>System Topology</h2>
+      </div>
+      <p class="sec-sub">
+        Control plane from browser surfaces into backend/API, realtime bus, queue workers, and agent sidecar.
+      </p>
+
+      <div class="mermaid-wrap" id="topology-wrap">
+        <div class="zoom-controls">
+          <button data-action="zoom-in" aria-label="Zoom in">+</button>
+          <button data-action="zoom-out" aria-label="Zoom out">−</button>
+          <button data-action="reset" aria-label="Reset zoom">⟳</button>
+        </div>
+        <div class="mermaid" id="topology-diagram">
+flowchart LR
+  A["Web App<br/>app/"] --> B["Copilot Backend<br/>/api + /api/voicebot"]
+  A --> C["Socket.IO /voicebot<br/>subscribe_on_session"]
+  M["Miniapp UI<br/>miniapp/"] --> N["Miniapp Backend<br/>backend/src/miniapp"]
+  N --> D["MongoDB"]
+  B --> D
+  B --> E["Redis"]
+  B --> F["BullMQ Queues"]
+  F --> G["Voice Workers TS<br/>processing/transcribe/categorize"]
+  F --> H["Voice TG Runtime TS<br/>ingress + callbacks"]
+  B --> I["Socket Events Worker<br/>queue -> rooms"]
+  B --> J["Fast-Agent Service :8722<br/>agent-cards"]
+  J --> K["create_tasks"]
+  J --> L["generate_session_title"]
+  C --> A
+  I --> C
+
+  classDef ui fill:#e8f0fb,stroke:#1e3a5f,stroke-width:1.4,color:#0d223a;
+  classDef api fill:#dff3f0,stroke:#0f766e,stroke-width:1.4,color:#0d223a;
+  classDef data fill:#f8efd9,stroke:#d4a73a,stroke-width:1.4,color:#0d223a;
+  classDef worker fill:#e5f5e7,stroke:#2f8f5b,stroke-width:1.4,color:#0d223a;
+
+  class A,M ui;
+  class B,C,N,J,K,L api;
+  class D,E,F data;
+  class G,H,I worker;
+        </div>
+      </div>
+      <p class="footer-note">
+        Voice invariants from repo contracts: close is REST-first (<code>POST /api/voicebot/session_done</code>), websocket is update transport, and runtime isolation is enforced with <code>runtime_tag</code> semantics.
+      </p>
+    </section>
+
+    <section class="section animate" id="s2" style="--i:2;">
+      <div class="sec-head">
+        <span class="sec-num">Section 2</span>
+        <h2>Product Surfaces & Ownership</h2>
+      </div>
+      <p class="sec-sub">Domain boundaries in the same repository, with shared auth and realtime substrate.</p>
+      <div class="card-grid">
+        <article class="card">
+          <h3>FinOps</h3>
+          <p>Plan-fact, analytics, FX rates, expenses and month closure operations. Frontend state is store-driven and backend APIs are under <code>/api/finops/*</code> + <code>/api/plan-fact/*</code>.</p>
+          <div class="pill-row">
+            <span class="pill">app/src/pages/PlanFactPage</span>
+            <span class="pill">app/src/store/fxStore.ts</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>OperOps / CRM</h3>
+          <p>Kanban, performers, project tree, task details, codex issue pages. Realtime events include ticket/epic/comment/work-hours updates and deep links resolve by <code>id || _id</code>.</p>
+          <div class="pill-row">
+            <span class="pill">app/src/pages/operops</span>
+            <span class="pill">backend/src/api/routes/crm</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Voice</h3>
+          <p>Native voice session UI under <code>/voice/*</code>; backend source of truth under <code>/api/voicebot/*</code>. Upload and workers must emit <code>new_message</code>, <code>session_update</code>, and <code>message_update</code> for refresh-free UX.</p>
+          <div class="pill-row">
+            <span class="pill attn">REST close contract</span>
+            <span class="pill warn">runtime_tag isolation</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Miniapp + Agents Sidecar</h3>
+          <p>Miniapp has dedicated backend entrypoint and build lane. AI actions run through local Fast-Agent service (<code>127.0.0.1:8722</code>) with agent-cards for session title and task extraction.</p>
+          <div class="pill-row">
+            <span class="pill">miniapp/src</span>
+            <span class="pill">agents/agent-cards</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section animate" id="s3" style="--i:3;">
+      <div class="sec-head">
+        <span class="sec-num">Section 3</span>
+        <h2>Hard Contracts (Do Not Reinterpret)</h2>
+      </div>
+      <p class="sec-sub">Repository constitution defines non-negotiable behavior across voice lifecycle and UI semantics.</p>
+      <div class="card-grid">
+        <article class="card">
+          <h3>Voice Session Lifecycle</h3>
+          <p><code>Done</code> must be deterministic from recording/paused states. Close failures keep session active. Browser is not the origin for <code>session_done</code> events.</p>
+          <div class="pill-row">
+            <span class="pill ok">REST-first close</span>
+            <span class="pill warn">No fake closed state</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Realtime Guarantees</h3>
+          <p>Upload path and processing workers are required to push room updates; transcription/categorization tabs must update without manual refresh.</p>
+          <div class="pill-row">
+            <span class="pill ok">new_message</span>
+            <span class="pill ok">session_update</span>
+            <span class="pill ok">message_update</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Sessions List UX Contract</h3>
+          <p>Quick tabs and deleted toggle are persisted and restored across navigation/reload. Include-deleted mode must force-sync under in-flight load.</p>
+          <div class="pill-row">
+            <span class="pill">Все / Без проекта / Активные / Мои</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Task Payload Contract</h3>
+          <p>Possible Tasks payload shape remains <code>id/name/description/priority/...</code>; <code>task_type_id</code> remains optional in UI and processing paths.</p>
+          <div class="pill-row">
+            <span class="pill ok">Canonicalized writes</span>
+            <span class="pill warn">Legacy keys normalized</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section animate" id="s4" style="--i:4;">
+      <div class="sec-head">
+        <span class="sec-num">Section 4</span>
+        <h2>Critical Interface Table</h2>
+      </div>
+      <p class="sec-sub">Endpoints/events that define platform behavior and compatibility.</p>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Interface</th>
+                <th>Type</th>
+                <th>Primary Role</th>
+                <th>Realtime Tie-In</th>
+                <th>Contract Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>POST /api/voicebot/upload_audio</code></td>
+                <td>REST</td>
+                <td>Chunk upload ingress</td>
+                <td><code>new_message</code>, <code>session_update</code></td>
+                <td>Structured 413 diagnostics; request correlation id propagated.</td>
+              </tr>
+              <tr>
+                <td><code>POST /api/voicebot/session_done</code><br/><code>/close_session</code> alias</td>
+                <td>REST</td>
+                <td>Canonical close trigger</td>
+                <td>Server-origin lifecycle updates</td>
+                <td>Browser must not be source of socket <code>session_done</code> emits.</td>
+              </tr>
+              <tr>
+                <td><code>POST /api/voicebot/upload_attachment</code><br/><code>/attachment</code> alias</td>
+                <td>REST</td>
+                <td>Image/file attachment persistence</td>
+                <td>Rendered in message grouping</td>
+                <td>Stored under <code>backend/uploads/voicebot/attachments</code>.</td>
+              </tr>
+              <tr>
+                <td><code>/voicebot</code> namespace + <code>subscribe_on_session</code></td>
+                <td>Socket.IO</td>
+                <td>Room subscription + incremental updates</td>
+                <td>Required for live transcribe/categorize UX</td>
+                <td>Root namespace usage drops voice updates.</td>
+              </tr>
+              <tr>
+                <td><code>https://copilot.stratospace.fun/voice/session/:id</code></td>
+                <td>URL</td>
+                <td>Canonical cross-surface session reference</td>
+                <td>Used in task/source linking</td>
+                <td>Voice ↔ OperOps source matching depends on this pattern.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section animate" id="s5" style="--i:5;">
+      <div class="sec-head">
+        <span class="sec-num">Section 5</span>
+        <h2>Runtime & Deployment Model</h2>
+      </div>
+      <p class="sec-sub">Mode-specific build lanes, PM2 runtime matrix, and worker ownership boundaries.</p>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Mode</th>
+                <th>Entrypoint</th>
+                <th>Build Expectation</th>
+                <th>Operational Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>copilot-backend-*</code></td>
+                <td>prod/dev/local</td>
+                <td><code>backend/src/index.ts</code></td>
+                <td><code>npm run build|build-dev|build-local</code></td>
+                <td>Serves API + static frontend + socket wiring + queue bootstrap.</td>
+              </tr>
+              <tr>
+                <td><code>copilot-miniapp-backend-*</code></td>
+                <td>prod/dev/local</td>
+                <td><code>backend/src/miniapp/index.ts</code></td>
+                <td>Miniapp dist must exist</td>
+                <td>Dedicated miniapp backend router with BullMQ notification queue.</td>
+              </tr>
+              <tr>
+                <td><code>copilot-voicebot-workers-prod</code></td>
+                <td>prod</td>
+                <td><code>backend/dist/workers/voicebot/runtime.js</code></td>
+                <td>TS compiled dist required</td>
+                <td>Consumes voice queues for transcribe/categorize/finalization loops.</td>
+              </tr>
+              <tr>
+                <td><code>copilot-voicebot-tgbot-prod</code></td>
+                <td>prod</td>
+                <td><code>backend/dist/voicebot_tgbot/runtime.js</code></td>
+                <td>TS compiled dist required</td>
+                <td>Telegram ingress with distributed lock for poller ownership.</td>
+              </tr>
+              <tr>
+                <td><code>copilot-agent-services</code></td>
+                <td>dev/prod sidecar</td>
+                <td><code>agents/fast-agent</code></td>
+                <td>Python env + agent-cards</td>
+                <td>Bind loopback <code>127.0.0.1:8722</code>; backend proxy is canonical caller.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section animate" id="s6" style="--i:6;">
+      <div class="sec-head">
+        <span class="sec-num">Section 6</span>
+        <h2>Repository Map (Execution-Oriented)</h2>
+      </div>
+      <p class="sec-sub">Where to look first when touching each platform concern.</p>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Path</th>
+                <th>Responsibility</th>
+                <th>Key Anchors</th>
+                <th>Change Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>app/src</code></td>
+                <td>Main web frontend (FinOps/OperOps/Voice/Admin)</td>
+                <td><code>App.tsx</code>, page routes, Zustand stores</td>
+                <td>High: route + state regressions surface immediately</td>
+              </tr>
+              <tr>
+                <td><code>backend/src/api</code></td>
+                <td>REST + socket API boundaries</td>
+                <td><code>routes/voicebot</code>, <code>routes/crm</code>, middleware</td>
+                <td>High: contract break impacts all clients</td>
+              </tr>
+              <tr>
+                <td><code>backend/src/workers/voicebot</code></td>
+                <td>Async processing orchestration</td>
+                <td>transcribe/categorize/done/summarize handlers</td>
+                <td>High: queue semantics and realtime update guarantees</td>
+              </tr>
+              <tr>
+                <td><code>backend/src/voicebot_tgbot</code></td>
+                <td>Telegram ingestion runtime</td>
+                <td>runtime, ingress handlers, callback bridges</td>
+                <td>Medium/High: lock ownership + transport recovery</td>
+              </tr>
+              <tr>
+                <td><code>miniapp/src</code> + <code>backend/src/miniapp</code></td>
+                <td>Miniapp UI + backend host</td>
+                <td>Kanban UI, auth boot flow, miniapp router</td>
+                <td>Medium: isolated surface but shared infra dependencies</td>
+              </tr>
+              <tr>
+                <td><code>agents/agent-cards</code></td>
+                <td>Fast-Agent prompt contracts</td>
+                <td><code>create_tasks.md</code>, <code>generate_session_title.md</code></td>
+                <td>Medium: impacts AI-assisted automation quality</td>
+              </tr>
+              <tr>
+                <td><code>ontology/typedb/scripts</code></td>
+                <td>Canonical TypeDB tooling lane</td>
+                <td>ingest/validate scripts</td>
+                <td>Medium: contract says do not duplicate under backend scripts</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="footer-note">
+        Snapshot source: repository structure and AGENTS/README contracts as of 2026-03-01.
+      </p>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+import elkLayouts from 'https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0/dist/mermaid-layout-elk.esm.min.mjs';
+
+mermaid.registerLayoutLoaders(elkLayouts);
+mermaid.initialize({
+  startOnLoad: true,
+  look: 'classic',
+  theme: 'base',
+  layout: 'elk',
+  securityLevel: 'loose',
+  themeVariables: {
+    fontFamily: 'IBM Plex Sans',
+    fontSize: '18px',
+    primaryColor: getComputedStyle(document.documentElement).getPropertyValue('--surface').trim(),
+    primaryTextColor: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+    primaryBorderColor: getComputedStyle(document.documentElement).getPropertyValue('--blue').trim(),
+    lineColor: getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim(),
+    edgeLabelBackground: getComputedStyle(document.documentElement).getPropertyValue('--surface').trim(),
+    tertiaryColor: getComputedStyle(document.documentElement).getPropertyValue('--surface-2').trim()
+  },
+  flowchart: {
+    curve: 'basis',
+    useMaxWidth: true,
+    htmlLabels: true,
+    nodeSpacing: 40,
+    rankSpacing: 50,
+    padding: 20
+  }
+});
+
+// TOC scroll-spy
+(function setupToc() {
+  const toc = document.getElementById('toc');
+  const links = toc.querySelectorAll('a');
+  const sections = [];
+
+  links.forEach(link => {
+    const id = link.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ id, el, link });
+  });
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      links.forEach(l => l.classList.remove('active'));
+      const current = sections.find(s => s.el === entry.target);
+      if (!current) return;
+      current.link.classList.add('active');
+      if (window.innerWidth <= 1000) {
+        current.link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    });
+  }, { rootMargin: '-14% 0px -72% 0px' });
+
+  sections.forEach(s => observer.observe(s.el));
+
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = link.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      history.replaceState(null, '', '#' + id);
+    });
+  });
+})();
+
+// Mermaid zoom + pan controls
+(function setupMermaidZoom() {
+  const wrap = document.getElementById('topology-wrap');
+  const mermaidEl = document.getElementById('topology-diagram');
+  if (!wrap || !mermaidEl) return;
+
+  let scale = 1;
+  const minScale = 0.6;
+  const maxScale = 2.4;
+  let isPanning = false;
+  let startX = 0;
+  let startY = 0;
+  let scrollLeft = 0;
+  let scrollTop = 0;
+
+  const applyScale = () => {
+    mermaidEl.style.transform = `scale(${scale})`;
+    wrap.classList.toggle('is-zoomed', scale > 1.02);
+  };
+
+  const zoomIn = () => {
+    scale = Math.min(maxScale, scale + 0.12);
+    applyScale();
+  };
+
+  const zoomOut = () => {
+    scale = Math.max(minScale, scale - 0.12);
+    applyScale();
+  };
+
+  const reset = () => {
+    scale = 1;
+    wrap.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+    applyScale();
+  };
+
+  wrap.addEventListener('wheel', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (e.deltaY < 0) zoomIn();
+    else zoomOut();
+  }, { passive: false });
+
+  wrap.addEventListener('mousedown', (e) => {
+    if (scale <= 1.02) return;
+    isPanning = true;
+    wrap.classList.add('is-panning');
+    startX = e.pageX - wrap.offsetLeft;
+    startY = e.pageY - wrap.offsetTop;
+    scrollLeft = wrap.scrollLeft;
+    scrollTop = wrap.scrollTop;
+  });
+
+  wrap.addEventListener('mouseleave', () => {
+    isPanning = false;
+    wrap.classList.remove('is-panning');
+  });
+
+  wrap.addEventListener('mouseup', () => {
+    isPanning = false;
+    wrap.classList.remove('is-panning');
+  });
+
+  wrap.addEventListener('mousemove', (e) => {
+    if (!isPanning) return;
+    e.preventDefault();
+    const x = e.pageX - wrap.offsetLeft;
+    const y = e.pageY - wrap.offsetTop;
+    const walkX = (x - startX) * 1.25;
+    const walkY = (y - startY) * 1.25;
+    wrap.scrollLeft = scrollLeft - walkX;
+    wrap.scrollTop = scrollTop - walkY;
+  });
+
+  document.querySelectorAll('.zoom-controls button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-action');
+      if (action === 'zoom-in') zoomIn();
+      if (action === 'zoom-out') zoomOut();
+      if (action === 'reset') reset();
+    });
+  });
+})();
+</script>
+</body>
+</html>
