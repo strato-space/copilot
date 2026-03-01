@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-01
+### PROBLEM SOLVED
+- **18:55** Visual recap Mermaid blocks were rendered with broken line-break semantics, so diagrams could fail to parse and made session handoff artifacts unreliable.
+
+### FEATURE IMPLEMENTED
+- **18:55** Added a corrected visual recap HTML artifact with Mermaid-safe line breaks to keep architecture/session diagrams readable in one self-contained document.
+
+### CHANGES
+- **18:55** Added `docs/copilot-repo-visual-recap.html` with fixed Mermaid line-break formatting and updated recap content.
+
 ## 2026-02-28
 ### PROBLEM SOLVED
 - **19:10** `copilot-sxq1.14.8` could not be executed reliably as one scope because Codex subjective-review batch runs hit runner quota/usage limits, which blocked deterministic progress and left a high-risk single-task bottleneck.

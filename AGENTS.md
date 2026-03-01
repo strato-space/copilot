@@ -478,6 +478,10 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-01 22:02):
+  - Captured outstanding local docs commit `e577500` (`docs: fix Mermaid line breaks in visual recap diagram`) into close-session artifacts and prepared final release handoff.
+  - Added `CHANGELOG.md` date block `2026-03-01` with explicit problem/feature/change entries for `docs/copilot-repo-visual-recap.html`.
+  - Synced `AGENTS.md` and `README.md` session-closeout sections to keep closeout evidence aligned before final push and Telegram broadcast.
 - Close-session refresh (2026-02-28 19:10):
   - `copilot-sxq1.14.8` scoped subjective batch execution is currently blocked by Codex runner quota/usage-limit response; issue kept `in_progress` with blocker evidence in notes.
   - Decomposed `copilot-sxq1.14.8` into six independent scope tasks to avoid monolithic run dependency:

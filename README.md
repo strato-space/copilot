@@ -314,6 +314,10 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-01 22:02):
+  - Captured outstanding local docs commit `e577500` (`docs: fix Mermaid line breaks in visual recap diagram`) into close-session artifacts and prepared final release handoff.
+  - Added `CHANGELOG.md` date block `2026-03-01` with explicit problem/feature/change entries for `docs/copilot-repo-visual-recap.html`.
+  - Synced `AGENTS.md` and `README.md` session-closeout sections to keep closeout evidence aligned before final push and Telegram broadcast.
 - Close-session refresh (2026-02-28 19:10):
   - `copilot-sxq1.14.8` execution hit Codex runner quota/usage-limit blocker during scoped subjective batch execution; task remained `in_progress` with explicit blocker note in issue history.
   - Decomposed `copilot-sxq1.14.8` into six independent child tasks by file-scope to remove one-shot batch dependency:
