@@ -1,10 +1,10 @@
-import dayjs from 'dayjs';
 import { Button, Input, Tooltip, message } from 'antd';
 import { CheckOutlined, CloseOutlined, CopyOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import type { VoiceBotMessage } from '../../types/voice';
+import { formatVoiceMetadataSignature } from '../../utils/voiceMetadataSignature';
 
 interface TranscriptionTableRowProps {
     row: VoiceBotMessage;
@@ -42,16 +42,6 @@ const toTimestampMs = (value: unknown): number | null => {
     }
 
     return null;
-};
-
-const formatRelativeTime = (secondsValue: unknown): string | null => {
-    const seconds = Number(secondsValue);
-    if (!Number.isFinite(seconds) || seconds < 0) return null;
-
-    const totalSeconds = Math.floor(seconds);
-    const minutes = Math.floor(totalSeconds / 60);
-    const rem = totalSeconds % 60;
-    return `${minutes}:${String(rem).padStart(2, '0')}`;
 };
 
 const parseSecondsValue = (value: unknown): number | null => {
@@ -370,8 +360,6 @@ const formatSegmentTimeline = (
             ? messageTimestampMs + start * 1000
             : toTimestampMs(segment?.absoluteTimestampMs);
 
-    const absoluteLabel = segmentAbsoluteStartMs != null ? dayjs(segmentAbsoluteStartMs).format('HH:mm:ss') : null;
-
     let relativeStartSeconds = start;
     let relativeEndSeconds: number | null = hasEnd ? end : null;
 
@@ -392,18 +380,12 @@ const formatSegmentTimeline = (
         }
     }
 
-    const relativeStart = formatRelativeTime(relativeStartSeconds);
-    if (!relativeStart) return null;
-
-    const relativeEnd = hasEnd && relativeEndSeconds != null
-        ? formatRelativeTime(relativeEndSeconds)
-        : relativeStart;
-    const rangeLabel = relativeEnd ? `${relativeStart} - ${relativeEnd}` : relativeStart;
-    const fileName = extractSourceFileName(row);
-
-    const parts = [rangeLabel, fileName, absoluteLabel].filter((part): part is string => Boolean(part && part.trim()));
-    if (parts.length === 0) return null;
-    return parts.join(', ');
+    return formatVoiceMetadataSignature({
+        startSeconds: relativeStartSeconds,
+        endSeconds: relativeEndSeconds ?? relativeStartSeconds,
+        sourceFileName: extractSourceFileName(row),
+        absoluteTimestampMs: segmentAbsoluteStartMs,
+    });
 };
 
 const copyTextToClipboard = async (text: string): Promise<boolean> => {

@@ -1271,7 +1271,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
                     ? (paymentData.hourly_rate ?? 0) * stats.totalWorkHours
                     : paymentData.monthly_rate ?? 0;
 
-            const basicBonus = payment * 0.15;
+            const basicBonus = payment * 0.05;
 
             const k_hours = 1 - 0.5 * (stats.daysBelowANormal / stats.totalDaysWithWork);
             const k_review = stats.averageReviewsCount <= 1.25 ? 1 : 1 - (stats.averageReviewsCount - 1.25);

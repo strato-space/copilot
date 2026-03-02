@@ -12,19 +12,41 @@ describe('OperOps Codex issues table contract', () => {
         expect(source).toContain('const parsed = normalizeIssueList(response);');
     });
 
-    it('uses Open/Deferred/Closed/All subtabs with local deferred compatibility filtering', () => {
-        expect(source).toContain("type CodexIssuesView = 'open' | 'deferred' | 'closed' | 'all';");
+    it('uses Open/In Progress/Deferred/Blocked/Closed/All subtabs with strict status segmentation', () => {
+        expect(source).toContain("type CodexIssuesView = 'open' | 'in_progress' | 'deferred' | 'blocked' | 'closed' | 'all';");
         expect(source).toContain("{ key: 'open', label: 'Open' }");
+        expect(source).toContain("{ key: 'in_progress', label: 'In Progress' }");
         expect(source).toContain("{ key: 'deferred', label: 'Deferred' }");
+        expect(source).toContain("{ key: 'blocked', label: 'Blocked' }");
         expect(source).toContain("{ key: 'closed', label: 'Closed' }");
         expect(source).toContain("{ key: 'all', label: 'All' }");
         expect(source).toContain('const [view, setView] = useState<CodexIssuesView>(\'open\');');
         expect(source).toContain("const response = await api_request<unknown>('codex/issues', { view: 'all', limit }, { silent: true });");
-        expect(source).toContain('const isDeferredIssue = (issue: CodexIssue): boolean => {');
-        expect(source).toContain("if (status === 'deferred') return true;");
-        expect(source).toContain("return status === 'open' && hasDeferUntil(issue);");
+        expect(source).toContain("const isOpenIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'open';");
+        expect(source).toContain("const isInProgressIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'in_progress';");
+        expect(source).toContain("const isDeferredIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'deferred';");
+        expect(source).toContain("const isBlockedIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'blocked';");
+        expect(source).toContain("if (view === 'in_progress') return sourceFilteredIssues.filter((issue) => isInProgressIssue(issue));");
         expect(source).toContain("if (view === 'open') return sourceFilteredIssues.filter((issue) => isOpenIssue(issue));");
         expect(source).toContain("if (view === 'deferred') return sourceFilteredIssues.filter((issue) => isDeferredIssue(issue));");
+        expect(source).toContain("if (view === 'blocked') return sourceFilteredIssues.filter((issue) => isBlockedIssue(issue));");
+        expect(source).not.toContain("return status === 'open' && hasDeferUntil(issue);");
+    });
+
+    it('renders toolbar tabs with status pictograms and muted counters', () => {
+        expect(source).toContain("const statusPictogram = (status: string): { icon: string; className: string } => {");
+        expect(source).toContain("if (status === 'open') return { icon: '⚪', className: 'text-slate-400' };");
+        expect(source).toContain("if (status === 'in_progress') return { icon: '🟡', className: '' };");
+        expect(source).toContain("if (status === 'blocked') return { icon: '⛔', className: '' };");
+        expect(source).toContain("if (status === 'deferred') return { icon: '💤', className: '' };");
+        expect(source).toContain("if (status === 'closed') return { icon: '✅', className: '' };");
+        expect(source).toContain("return { icon: '❔', className: 'text-slate-400' };");
+        expect(source).toContain('const viewCounts = useMemo<Record<CodexIssuesView, number>>(() => {');
+        expect(source).toContain('all: sourceFilteredIssues.length,');
+        expect(source).toContain('const tabItems = useMemo(');
+        expect(source).toContain('const count = viewCounts[tab.key] ?? 0;');
+        expect(source).toContain('<Text type="secondary" className="!text-xs">');
+        expect(source).toContain('items={tabItems}');
     });
 
     it('keeps configurable pagination with size selector up to 1000 rows', () => {
@@ -37,9 +59,13 @@ describe('OperOps Codex issues table contract', () => {
         expect(source).toContain('onChange: (page, nextPageSize) => {');
     });
 
+    it('disables antd tree-mode expand controls for a flat codex list', () => {
+        expect(source).toContain("const CODEX_DISABLED_TREE_CHILDREN_COLUMN = '__codex_tree_children_disabled__';");
+        expect(source).toContain('childrenColumnName={CODEX_DISABLED_TREE_CHILDREN_COLUMN}');
+    });
+
     it('supports legacy dependencies/dependents fields in Codex issue payload', () => {
         expect(source).toContain('dependencies: toTextArray(record.dependencies || record.dependents)');
-        expect(source).toContain("defer_until: pickStringField(record, ['defer_until', 'deferUntil']),");
     });
 
     it('keeps raw bd relationship payload for details card relationship rendering', () => {

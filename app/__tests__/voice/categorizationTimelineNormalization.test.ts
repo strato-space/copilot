@@ -30,7 +30,7 @@ describe('categorization timeline normalization', () => {
         const storeSource = fs.readFileSync(storePath, 'utf8');
         const rowSource = fs.readFileSync(rowPath, 'utf8');
 
-        expect(storeSource).toContain('normalizeTimelineRangeSeconds(cat.start, cat.end)');
+        expect(storeSource).toContain('normalizeTimelineRangeSeconds(catRecord.start, catRecord.end)');
         expect(rowSource).toContain('formatTimelineSecondsLabel(row.timeStart)');
         expect(rowSource).toContain('formatTimelineSecondsLabel(row.timeEnd)');
     });

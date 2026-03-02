@@ -1576,6 +1576,9 @@
 - **13:44** Codex issues in OperOps mixed deferred tasks into `Open` without a dedicated deferred view, so active work and deferred backlog were not separable in UI.
 - **13:44** Voice sessions list empty/loading state still surfaced generic AntD `No data` messaging, which produced false-empty perception while data was loading or filters were narrowing results.
 - **13:43** FinOps scope discovery artifacts were scattered across canonical/mirror/sandbox sources without a single repository-owned inventory document.
+- **16:54** Voice categorization still had block-level selection noise, image/text coupling, and no row-level mutation contract, so operators could not safely edit/delete categorization rows with deterministic realtime updates.
+- **17:06** Codex details/list views lacked unified status semantics: relationship IDs did not show status pictograms, and list tabs did not separate `in_progress`/`blocked` from `open`.
+- **21:58** Auth architecture alternatives and UX-video processing requirements were not captured as repository-owned execution plans, which blocked structured implementation planning.
 
 ### FEATURE IMPLEMENTED
 - **13:19** Closed `copilot-9ifu`: Codex details card now hides empty metadata rows, normalizes escaped newlines, and renders grouped relationships (`parent-child`, `waits-for`, `blocks`, `discovered-from`, fallback dependencies).
@@ -1587,6 +1590,10 @@
 - **13:44** Closed `copilot-wtz7`: shared Codex table now exposes `Open / Deferred / Closed / All` tabs; deferred compatibility logic treats `status=deferred` and transitional `status=open + defer_until` as deferred while keeping `Open` active-only.
 - **13:44** Closed `copilot-ai1b`: Voice sessions list now renders AI-style loading placeholder and domain-specific empty state with reset-filters CTA instead of generic `No data`.
 - **13:43** Added FinOps discovery documentation (`copilot-081q` support): canonical spec inventory, mirror/sandbox references, and open product-scope questions are consolidated in one document.
+- **16:54** Closed `copilot-7r94` epic and child tasks `copilot-7r94.1`..`copilot-7r94.11`: shipped stable categorization row identity, no-processing-column layout, materials-only rendering lane, shared metadata signature formatter, typed categorization edit/delete APIs, realtime mutation events, cascade transcript delete for last-row removal, and row-level Copy/Edit/Delete actions.
+- **17:06** Closed `copilot-j54y`: Codex relationship tags now reuse Issue-ID link+copy token rendering with per-item status pictograms; Codex list tabs now expose `Open / In Progress / Deferred / Blocked / Closed / All` with counters.
+- **21:58** Added auth strategy planning artifacts (Option A vs Option B) and a UX video-parser specification package (`videoparser/`) for implementation scoping.
+- **22:00** Updated performer compensation coefficient baseline in Kanban finances: `basicBonus` now uses `payment * 0.05` instead of `0.15`.
 
 ### CHANGES
 - **13:19** Updated `app/src/components/codex/CodexIssueDetailsCard.tsx` with relationship parsing/rendering, escaped-newline normalization, and clickable `copilot-*` issue links.
@@ -1605,3 +1612,19 @@
 - **13:44** Updated `app/src/pages/voice/SessionsListPage.tsx` with AI-style loading/empty placeholders, reset-filters CTA, and explicit table `emptyText` contract; added `app/__tests__/voice/sessionsListEmptyStateContract.test.ts`.
 - **13:43** Added `docs/FINOPS_SPEC_DISCOVERY.md` and synchronized references in `README.md` and `AGENTS.md` to keep FinOps scope-alignment text current.
 - **13:45** Validation run: `cd app && npm run test:serial -- __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/sessionCodexTasksFilterOrderContract.test.ts __tests__/voice/sessionsListEmptyStateContract.test.ts` and `cd app && npm run build` passed.
+- **16:54** Voice categorization runtime/UI contract updates:
+  - frontend: `app/src/components/voice/{Categorization.tsx,CategorizationTableRow.tsx,TranscriptionTableRow.tsx}`, `app/src/store/{sessionsUIStore.ts,voiceBotStore.ts}`, `app/src/types/voice.ts`, new utils `app/src/utils/{categorizationRowIdentity.ts,voiceMetadataSignature.ts}`;
+  - backend: `backend/src/api/routes/voicebot/{messageHelpers.ts,sessions.ts}` with new routes `POST /api/voicebot/edit_categorization_chunk` and `POST /api/voicebot/delete_categorization_chunk`;
+  - tests: updated/added frontend categorization contracts and backend runtime/session-log contracts, including `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.categorizationChunkValidation.test.ts`.
+- **17:06** Codex status/UI parity updates:
+  - `app/src/components/codex/CodexIssueDetailsCard.tsx` (shared Issue-ID token renderer + relationship status pictograms),
+  - `app/src/components/codex/CodexIssuesTable.tsx` (strict status segmentation tabs with per-tab counters and disabled tree expansion controls),
+  - updated contracts `app/__tests__/operops/codexIssueDetailsCardContract.test.ts`, `app/__tests__/operops/codexIssuesTableContract.test.ts`, and `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
+- **21:58** Added planning/spec artifacts:
+  - `voice-categorization-ux-cleanup-plan.md`,
+  - `plan/auth-option-a-copilot-oauth-provider-plan.md`,
+  - `plan/auth-option-b-google-oauth-plan.md`,
+  - `plan/auth-options-a-vs-b-comparison.md`,
+  - `videoparser/specs/{ux_video_processing_guide.md,ux_video_processing_library_cli_spec.md}`.
+- **22:00** Updated `app/src/store/kanbanStore.ts` performer payout formula (`basicBonus` coefficient `0.05`).
+- **22:03** Type-safety gates passed: `cd app && npm run build`, `cd backend && npm run build`.

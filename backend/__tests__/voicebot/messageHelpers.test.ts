@@ -107,6 +107,31 @@ describe('buildCategorizationCleanupPayload', () => {
     ]);
   });
 
+  it('prioritizes segment_oid over fallback segment ids when resolving row locator', () => {
+    const payload = buildCategorizationCleanupPayload({
+      message: {
+        _id: new ObjectId(),
+        categorization: [
+          { id: 'row-priority-keep', segment_oid: 'ch_other', source_segment_id: 'ch_target', text: 'keep me' },
+          { id: 'row-priority-drop', segment_oid: 'ch_target', source_segment_id: 'ch_other', text: 'drop me' },
+          { id: 'row-fallback-drop', source_segment_id: 'ch_target', text: 'drop by fallback' },
+          { id: 'row-keep', source_segment_id: 'ch_other', text: 'keep fallback mismatch' },
+        ],
+      } as any,
+      segment: {
+        id: 'ch_target',
+        start: null,
+        end: null,
+        text: 'drop me',
+      },
+    });
+
+    expect(payload.categorization).toEqual([
+      { id: 'row-priority-keep', segment_oid: 'ch_other', source_segment_id: 'ch_target', text: 'keep me' },
+      { id: 'row-keep', source_segment_id: 'ch_other', text: 'keep fallback mismatch' },
+    ]);
+  });
+
   it('removes categorization rows containing deleted segment text', () => {
     const payload = buildCategorizationCleanupPayload({
       message: {

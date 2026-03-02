@@ -23,6 +23,7 @@ import type {
 } from '../types/voice';
 import { getVoicebotSocket, SOCKET_EVENTS } from '../services/socket';
 import { normalizeTimelineRangeSeconds } from '../utils/voiceTimeline';
+import { buildCategorizationRowIdentity, resolveCategorizationSegmentOid } from '../utils/categorizationRowIdentity';
 import { ensureCodexPerformerRecords } from '../utils/codexPerformer';
 import {
     buildVoiceSessionTaskSourceRefs,
@@ -98,8 +99,16 @@ interface VoiceBotSessionProcessingActionsSlice {
         payload: { session_id: string; message_id: string; segment_oid: string; new_text: string; reason?: string },
         options?: { silent?: boolean }
     ) => Promise<void>;
+    editCategorizationChunk: (
+        payload: { session_id: string; message_id: string; row_oid: string; new_text: string; reason?: string },
+        options?: { silent?: boolean }
+    ) => Promise<void>;
     deleteTranscriptChunk: (
         payload: { session_id: string; message_id: string; segment_oid: string; reason?: string },
+        options?: { silent?: boolean }
+    ) => Promise<void>;
+    deleteCategorizationChunk: (
+        payload: { session_id: string; message_id: string; row_oid: string; reason?: string },
         options?: { silent?: boolean }
     ) => Promise<void>;
     rollbackSessionEvent: (
@@ -211,6 +220,81 @@ const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
     return lines.join('\n');
 };
 
+const normalizeIdentityMessageRef = (value: unknown): string => {
+    if (typeof value === 'string') return value.trim();
+    return '';
+};
+
+const normalizeIdentityIndex = (value: unknown, fallback: number): number => {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric >= 0) return Math.floor(numeric);
+    return fallback;
+};
+
+const withStableRowIdentity = (row: VoiceMessageRow, fallbackRowIndex: number): VoiceMessageRow => {
+    const row_index = normalizeIdentityIndex(row.row_index, fallbackRowIndex);
+    const segment_oid = resolveCategorizationSegmentOid(row as unknown as Record<string, unknown>) || undefined;
+    const messageRef = normalizeIdentityMessageRef(row.message_id ?? row.material_source_message_id);
+    const row_id = buildCategorizationRowIdentity({
+        explicitRowId: row.row_id,
+        segmentOid: segment_oid,
+        messageRef,
+        timeStart: row.timeStart,
+        timeEnd: row.timeEnd,
+        text: row.text,
+        sourceIndex: row_index,
+    });
+
+    return {
+        ...row,
+        row_index,
+        segment_oid,
+        row_id,
+    };
+};
+
+const dedupeMaterialRows = (rows: VoiceMessageRow[]): VoiceMessageRow[] => {
+    const seen = new Set<string>();
+    const uniqueRows: VoiceMessageRow[] = [];
+    for (const row of rows) {
+        const key = [
+            typeof row.imageUrl === 'string' ? row.imageUrl : '',
+            typeof row.imageName === 'string' ? row.imageName : '',
+            typeof row.material_source_message_id === 'string'
+                ? row.material_source_message_id
+                : (typeof row.message_id === 'string' ? row.message_id : ''),
+        ].join('::');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        uniqueRows.push(row);
+    }
+    return uniqueRows;
+};
+
+const extractMessageSourceFileName = (msg: VoiceBotMessage): string => {
+    const msgRecord = msg && typeof msg === 'object' ? (msg as unknown as Record<string, unknown>) : {};
+    const candidates: Array<unknown> = [
+        msgRecord.file_name,
+        msg.file_metadata?.original_filename,
+    ];
+
+    const attachments = Array.isArray(msgRecord.attachments) ? msgRecord.attachments : [];
+    if (attachments.length > 0) {
+        const firstAttachment = attachments[0];
+        if (firstAttachment && typeof firstAttachment === 'object') {
+            const item = firstAttachment as Record<string, unknown>;
+            candidates.push(item.name, item.filename, item.file_name);
+        }
+    }
+
+    for (const candidate of candidates) {
+        if (typeof candidate !== 'string') continue;
+        const trimmed = candidate.trim();
+        if (trimmed) return trimmed;
+    }
+    return '';
+};
+
 
 const voiceMessageLinkUtils = {
     getMessageRecord(msg: VoiceBotMessage): Record<string, unknown> {
@@ -254,6 +338,7 @@ const voiceMessageLinkUtils = {
         const record = this.getMessageRecord(msg);
         const attachments = Array.isArray(record.attachments) ? record.attachments : [];
         const messageRef = this.getPrimaryMessageRef(msg);
+        const sourceFileName = extractMessageSourceFileName(msg);
 
         return attachments
             .map((attachment) => {
@@ -296,6 +381,8 @@ const voiceMessageLinkUtils = {
                     imageUrl: url,
                     imageName,
                     message_id: messageRef || undefined,
+                    source_file_name: sourceFileName || undefined,
+                    message_timestamp: msg.message_timestamp,
                     material_source_message_id: messageRef || undefined,
                 } satisfies VoiceMessageRow;
             })
@@ -351,8 +438,10 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
         if (voiceMessageLinkUtils.isMessageDeleted(msg)) return [];
         const messageRefs = voiceMessageLinkUtils.getMessageLinkRefs(msg);
         const primaryMessageRef = messageRefs[0] ?? '';
+        const messageDbId = typeof msg._id === 'string' ? msg._id.trim() : '';
         const ownImageRows = voiceMessageLinkUtils.getRowsByMessageRefs(imageRowsByMessageRef, messageRefs);
         const record = voiceMessageLinkUtils.getMessageRecord(msg);
+        const sourceFileName = extractMessageSourceFileName(msg);
         const imageAnchorRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_message_id);
         const linkedAnchorRows = imageAnchorRef ? (imageRowsByMessageRef.get(imageAnchorRef) ?? []) : [];
         const explicitLinkedEntries = messageRefs.flatMap((ref) => explicitLinkedImageRowsByTargetRef.get(ref) ?? []);
@@ -365,10 +454,18 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
             return [];
         }
 
-        const categorizationRows: VoiceMessageRow[] = (msg.categorization || []).map((cat) => {
-            const { startSeconds, endSeconds } = normalizeTimelineRangeSeconds(cat.start, cat.end);
+        const categorizationRows: VoiceMessageRow[] = (msg.categorization || []).map((cat, catIndex) => {
+            const catRecord = cat && typeof cat === 'object' ? (cat as Record<string, unknown>) : {};
+            const { startSeconds, endSeconds } = normalizeTimelineRangeSeconds(catRecord.start, catRecord.end);
             let avatar = 'U';
-            const speaker = typeof cat.speaker === 'string' ? cat.speaker : '';
+            const speaker = typeof catRecord.speaker === 'string' ? catRecord.speaker : '';
+            const sourceSegmentId =
+                typeof catRecord.source_segment_id === 'string'
+                    ? catRecord.source_segment_id.trim()
+                    : typeof catRecord.id === 'string'
+                        ? catRecord.id.trim()
+                        : '';
+            const segmentOid = resolveCategorizationSegmentOid(catRecord) || undefined;
             if (speaker && speaker !== 'Unknown' && speaker.length > 0) {
                 avatar = speaker[0]?.toUpperCase() ?? 'U';
             }
@@ -376,53 +473,58 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                 timeStart: startSeconds,
                 timeEnd: endSeconds,
                 avatar,
-                name: cat.speaker,
-                text: typeof cat.text === 'string' ? cat.text.trim() : '',
+                row_index: catIndex,
+                segment_oid: segmentOid,
+                source_segment_id: sourceSegmentId || undefined,
+                name: speaker,
+                text: typeof catRecord.text === 'string' ? catRecord.text.trim() : '',
                 kind: 'categorization' as const,
-                goal: cat.related_goal || '',
-                patt: cat.new_pattern_detected || '',
-                flag: cat.quality_flag || '',
-                keywords: cat.topic_keywords || '',
+                goal: typeof catRecord.related_goal === 'string' ? catRecord.related_goal : '',
+                patt: typeof catRecord.new_pattern_detected === 'string' ? catRecord.new_pattern_detected : '',
+                flag: typeof catRecord.quality_flag === 'string' ? catRecord.quality_flag : '',
+                keywords: typeof catRecord.topic_keywords === 'string' ? catRecord.topic_keywords : '',
+                source_file_name: sourceFileName || undefined,
+                message_timestamp: msg.message_timestamp,
                 message_id: primaryMessageRef || undefined,
+                message_db_id: messageDbId || undefined,
             };
         }).filter((row) => typeof row.text === 'string' && row.text.trim().length > 0);
 
         let rows: VoiceMessageRow[] = categorizationRows;
         if (rows.length === 0) {
-            if (ownImageRows.length > 0) {
-                rows = ownImageRows;
-            } else {
-                const fallbackText =
-                    typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
-                        ? msg.transcription_text.trim()
-                        : typeof msg.text === 'string' && msg.text.trim()
-                            ? msg.text.trim()
-                            : '';
-                if (fallbackText) {
-                    rows = [
-                        {
-                            avatar: 'T',
-                            name: 'Text',
-                            text: fallbackText,
-                            kind: 'text' as const,
-                            message_id: primaryMessageRef || undefined,
-                        },
-                    ];
-                }
+            const fallbackText =
+                typeof msg.transcription_text === 'string' && msg.transcription_text.trim()
+                    ? msg.transcription_text.trim()
+                    : typeof msg.text === 'string' && msg.text.trim()
+                        ? msg.text.trim()
+                        : '';
+            if (fallbackText) {
+                rows = [
+                    {
+                        avatar: 'T',
+                        name: 'Text',
+                        text: fallbackText,
+                        kind: 'text' as const,
+                        source_file_name: sourceFileName || undefined,
+                        message_timestamp: msg.message_timestamp,
+                        message_id: primaryMessageRef || undefined,
+                        message_db_id: messageDbId || undefined,
+                    },
+                ];
             }
-        } else if (ownImageRows.length > 0) {
-            rows = [...ownImageRows, ...rows];
         }
 
-        if (linkedAnchorRows.length > 0) {
-            rows = [...linkedAnchorRows, ...rows];
-        }
-        if (explicitLinkedRows.length > 0) {
-            rows = [...explicitLinkedRows, ...rows];
-        }
+        let materialRows = dedupeMaterialRows([
+            ...explicitLinkedRows,
+            ...linkedAnchorRows,
+            ...ownImageRows,
+        ]);
 
         const explicitAnchorMessageId = explicitLinkedEntries[0]?.anchorMessageRef ?? '';
-        const materialAnchorMessageId = imageAnchorRef || explicitAnchorMessageId || (ownImageRows.length > 0 ? primaryMessageRef : '');
+        const materialAnchorMessageId =
+            imageAnchorRef ||
+            explicitAnchorMessageId ||
+            (materialRows.length > 0 ? primaryMessageRef : '');
         const materialTargetMessageId = primaryMessageRef;
         const materialGroupId = materialAnchorMessageId && materialTargetMessageId
             ? `${materialAnchorMessageId}::${materialTargetMessageId}`
@@ -435,7 +537,26 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                 material_target_message_id: materialTargetMessageId,
                 material_source_message_id: row.material_source_message_id ?? row.message_id,
             }));
+            materialRows = materialRows.map((row) => ({
+                ...row,
+                material_group_id: materialGroupId,
+                material_anchor_message_id: materialAnchorMessageId,
+                material_target_message_id: materialTargetMessageId,
+                material_source_message_id: row.material_source_message_id ?? row.message_id,
+            }));
         }
+        rows = rows.map((row) => ({
+            ...row,
+            source_file_name: (row.source_file_name ?? sourceFileName) || undefined,
+            message_timestamp: row.message_timestamp ?? msg.message_timestamp,
+        }));
+        materialRows = materialRows.map((row) => ({
+            ...row,
+            source_file_name: (row.source_file_name ?? sourceFileName) || undefined,
+            message_timestamp: row.message_timestamp ?? msg.message_timestamp,
+        }));
+        rows = rows.map((row, rowIndex) => withStableRowIdentity(row, rowIndex));
+        materialRows = materialRows.map((row, rowIndex) => withStableRowIdentity(row, rowIndex));
 
         return [
             {
@@ -446,6 +567,7 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                 material_target_message_id: materialTargetMessageId || undefined,
                 original_message: msg,
                 rows,
+                materials: materialRows,
                 summary: {
                     text: (msg.processors_data?.summarization?.data?.[0]?.summary as string) || '',
                 },
@@ -1054,6 +1176,25 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         }
     },
 
+    editCategorizationChunk: async (payload, options) => {
+        const body = {
+            session_id: payload.session_id,
+            message_id: payload.message_id,
+            row_oid: payload.row_oid,
+            new_text: payload.new_text,
+            reason: payload.reason,
+        };
+        try {
+            await voicebotHttp.request('voicebot/edit_categorization_chunk', body, Boolean(options?.silent));
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка при изменении строки категоризации:', error);
+                message.error('Не удалось обновить строку категоризации');
+            }
+            throw error;
+        }
+    },
+
     deleteTranscriptChunk: async (payload, options) => {
         try {
             await voicebotHttp.request('voicebot/delete_transcript_chunk', payload, Boolean(options?.silent));
@@ -1061,6 +1202,18 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             if (!options?.silent) {
                 console.error('Ошибка при удалении сегмента транскрипции:', error);
                 message.error('Не удалось удалить сегмент');
+            }
+            throw error;
+        }
+    },
+
+    deleteCategorizationChunk: async (payload, options) => {
+        try {
+            await voicebotHttp.request('voicebot/delete_categorization_chunk', payload, Boolean(options?.silent));
+        } catch (error) {
+            if (!options?.silent) {
+                console.error('Ошибка при удалении строки категоризации:', error);
+                message.error('Не удалось удалить строку категоризации');
             }
             throw error;
         }

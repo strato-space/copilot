@@ -11,6 +11,8 @@ describe('Voicebot session log backend contract', () => {
     expect(source).toContain("router.post('/session_log'");
     expect(source).toContain("router.post('/edit_transcript_chunk'");
     expect(source).toContain("router.post('/delete_transcript_chunk'");
+    expect(source).toContain("router.post('/edit_categorization_chunk'");
+    expect(source).toContain("router.post('/delete_categorization_chunk'");
     expect(source).toContain("router.post('/rollback_event'");
   });
 

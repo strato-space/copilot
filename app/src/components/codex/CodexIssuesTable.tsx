@@ -34,7 +34,6 @@ interface CodexIssue {
     notes?: string;
     codex_review_state?: string;
     source_kind?: string;
-    defer_until?: string;
 }
 
 interface CodexIssuesTableProps {
@@ -54,15 +53,27 @@ interface CodexIssuePayload {
 const CODEX_DEFAULT_LIMIT = 1000;
 const CODEX_DEFAULT_PAGE_SIZE = 10;
 const CODEX_PAGE_SIZE_OPTIONS = ['10', '50', '100', '200', '500', '1000'];
+const CODEX_DISABLED_TREE_CHILDREN_COLUMN = '__codex_tree_children_disabled__';
 
-type CodexIssuesView = 'open' | 'deferred' | 'closed' | 'all';
+type CodexIssuesView = 'open' | 'in_progress' | 'deferred' | 'blocked' | 'closed' | 'all';
 
 const CODEX_VIEW_TABS: Array<{ key: CodexIssuesView; label: string }> = [
     { key: 'open', label: 'Open' },
+    { key: 'in_progress', label: 'In Progress' },
     { key: 'deferred', label: 'Deferred' },
+    { key: 'blocked', label: 'Blocked' },
     { key: 'closed', label: 'Closed' },
     { key: 'all', label: 'All' },
 ];
+
+const statusPictogram = (status: string): { icon: string; className: string } => {
+    if (status === 'open') return { icon: '⚪', className: 'text-slate-400' };
+    if (status === 'in_progress') return { icon: '🟡', className: '' };
+    if (status === 'blocked') return { icon: '⛔', className: '' };
+    if (status === 'deferred') return { icon: '💤', className: '' };
+    if (status === 'closed') return { icon: '✅', className: '' };
+    return { icon: '❔', className: 'text-slate-400' };
+};
 
 const toText = (value: unknown): string => {
     if (typeof value === 'string') return value.trim();
@@ -131,7 +142,6 @@ const normalizeIssue = (issue: CodexIssueSource): CodexIssue | null => {
         notes: toText(record.notes),
         codex_review_state: toText(record.codex_review_state),
         source_kind: toText(record.source_kind),
-        defer_until: pickStringField(record, ['defer_until', 'deferUntil']),
     };
 };
 
@@ -197,21 +207,15 @@ const reviewStateColor = (state: string): string => {
 
 const normalizeStatus = (value: unknown): string => toText(value).toLowerCase();
 
-const hasDeferUntil = (issue: CodexIssue): boolean => Boolean(toText(issue.defer_until));
+const isOpenIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'open';
 
-const isDeferredIssue = (issue: CodexIssue): boolean => {
-    const status = normalizeStatus(issue.status);
-    if (status === 'deferred') return true;
-    return status === 'open' && hasDeferUntil(issue);
-};
+const isInProgressIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'in_progress';
+
+const isDeferredIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'deferred';
+
+const isBlockedIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'blocked';
 
 const isClosedIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'closed';
-
-const isOpenIssue = (issue: CodexIssue): boolean => {
-    const status = normalizeStatus(issue.status);
-    if (!['open', 'in_progress', 'blocked'].includes(status)) return false;
-    return !isDeferredIssue(issue);
-};
 
 const OPER_OPS_TASK_LINK_LABEL = 'Открыть задачу в OperOps';
 
@@ -233,9 +237,67 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
     const filteredIssues = useMemo(() => {
         if (view === 'all') return sourceFilteredIssues;
         if (view === 'open') return sourceFilteredIssues.filter((issue) => isOpenIssue(issue));
+        if (view === 'in_progress') return sourceFilteredIssues.filter((issue) => isInProgressIssue(issue));
         if (view === 'deferred') return sourceFilteredIssues.filter((issue) => isDeferredIssue(issue));
+        if (view === 'blocked') return sourceFilteredIssues.filter((issue) => isBlockedIssue(issue));
         return sourceFilteredIssues.filter((issue) => isClosedIssue(issue));
     }, [sourceFilteredIssues, view]);
+
+    const viewCounts = useMemo<Record<CodexIssuesView, number>>(() => {
+        const counts: Record<CodexIssuesView, number> = {
+            open: 0,
+            in_progress: 0,
+            deferred: 0,
+            blocked: 0,
+            closed: 0,
+            all: sourceFilteredIssues.length,
+        };
+        sourceFilteredIssues.forEach((issue) => {
+            if (isOpenIssue(issue)) {
+                counts.open += 1;
+                return;
+            }
+            if (isInProgressIssue(issue)) {
+                counts.in_progress += 1;
+                return;
+            }
+            if (isDeferredIssue(issue)) {
+                counts.deferred += 1;
+                return;
+            }
+            if (isBlockedIssue(issue)) {
+                counts.blocked += 1;
+                return;
+            }
+            if (isClosedIssue(issue)) {
+                counts.closed += 1;
+            }
+        });
+        return counts;
+    }, [sourceFilteredIssues]);
+
+    const tabItems = useMemo(
+        () =>
+            CODEX_VIEW_TABS.map((tab) => {
+                const pictogram = statusPictogram(tab.key);
+                const count = viewCounts[tab.key] ?? 0;
+                return {
+                    key: tab.key,
+                    label: (
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className={pictogram.className} aria-hidden>
+                                {pictogram.icon}
+                            </span>
+                            <span>{tab.label}</span>
+                            <Text type="secondary" className="!text-xs">
+                                {count}
+                            </Text>
+                        </span>
+                    ),
+                };
+            }),
+        [viewCounts]
+    );
 
     const fetchIssues = useCallback(async () => {
         setLoading(true);
@@ -417,7 +479,7 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
         <div className="w-full">
             <Tabs
                 activeKey={view}
-                items={CODEX_VIEW_TABS}
+                items={tabItems}
                 onChange={(key) => {
                     setView(key as CodexIssuesView);
                     setCurrentPage(1);
@@ -429,6 +491,7 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
                 columns={columns}
                 dataSource={dataSource}
                 loading={loading}
+                childrenColumnName={CODEX_DISABLED_TREE_CHILDREN_COLUMN}
                 locale={{ emptyText: error ? `Ошибка: ${error}` : 'Нет Codex issues' }}
                 pagination={{
                     current: currentPage,

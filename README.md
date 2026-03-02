@@ -68,8 +68,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
 - OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
 - Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing), so Source->Voice navigation keeps task visibility consistent.
-- Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, including status segmentation tabs (`Open` / `Deferred` / `Closed` / `All`) with the same row-open behavior and source filtering.
+- Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
+- Codex issue IDs now use one token renderer across `Issue ID` and `Relationships` (blue link + copy action); relationship rows also show status pictograms (`open`, `in_progress`, `blocked`, `deferred`, `closed`, fallback).
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 
 ## Voice notes
@@ -121,6 +122,12 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice sessions list supports bulk delete for selected active rows (`Удалить выбранные`) with confirmation and safe exclusion of already deleted sessions.
 - Voice sessions list state marker is now a dedicated pictogram column aligned with session state semantics (`recording`, `cutting`, `paused`, `final_uploading`, `closed`, `ready`, `error`).
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
+- Categorization table contract is now `Time | Audio | Text | Materials`; the old processing (`Обработка`) column/renderer path was removed.
+- Categorization rows now use stable identity (`row_id`/`segment_oid` priority + deterministic fallback), so selection/actions are row-local and collision-safe.
+- Categorization rows support Copy/Edit/Delete actions via backend routes `POST /api/voicebot/edit_categorization_chunk` and `POST /api/voicebot/delete_categorization_chunk`.
+- Categorization mutation APIs emit realtime `message_update` + `session_update`, and return deterministic validation/runtime errors (`invalid_row_oid`, `message_session_mismatch`, `ambiguous_row_locator`, `row_already_deleted`, etc.).
+- Deleting the last active categorization row cascades deletion of the linked transcript segment with compensating rollback when log persistence fails.
+- Image attachments in categorization are rendered only in the Materials column; image-only blocks remain visible without image-as-text rows.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page shows `Возможные задачи` tab when `processors_data.CREATE_TASKS.data` is present and user has `PROJECTS.UPDATE`; the table uses compact design (no standalone status/project/AI columns), keeps `description`, and validates required fields inline.
@@ -315,6 +322,12 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-02 22:03):
+  - Closed `copilot-7r94` epic (`copilot-7r94.1`..`copilot-7r94.11`) and delivered Voice categorization cleanup: stable row identities, no processing column, materials-only rendering, typed edit/delete APIs, realtime mutation events, and last-row cascade transcript deletion.
+  - Closed `copilot-j54y`: Codex relationship IDs now match Issue-ID behavior (`link + copy`) with status pictograms; shared Codex status tabs now include `In Progress` and `Blocked`.
+  - Added planning artifacts for auth/video parser tracks: `voice-categorization-ux-cleanup-plan.md`, `plan/auth-option-a-copilot-oauth-provider-plan.md`, `plan/auth-option-b-google-oauth-plan.md`, `plan/auth-options-a-vs-b-comparison.md`, and `videoparser/specs/*`.
+  - Included payout formula update in `app/src/store/kanbanStore.ts` (`basicBonus` coefficient `0.05`).
+  - Validation passed: `cd app && npm run build`, `cd backend && npm run build`; `bd ready --json` returned empty queue.
 - Close-session refresh (2026-03-02 13:45):
   - Closed `copilot-wtz7`: shared Codex table now uses explicit status tabs `Open / Deferred / Closed / All`; deferred compatibility treats both `status=deferred` and transitional `status=open + defer_until` as deferred, so Open no longer mixes deferred backlog.
   - Closed `copilot-ai1b`: `/voice` sessions list now renders AI-style loading placeholder and domain empty state (`Пока нет сессий по текущим фильтрам`) with reset-filters CTA; generic `No data` text is removed from this flow.

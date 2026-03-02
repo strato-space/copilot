@@ -7,6 +7,8 @@ describe('Categorization unknown speaker display contract', () => {
         const source = fs.readFileSync(rowPath, 'utf8');
 
         expect(source).toContain("const showSpeakerLabel = speakerLabel.length > 0 && speakerLabel.toLowerCase() !== 'unknown';");
+        expect(source).toContain('const showSpeakerBadge = showSpeakerLabel;');
+        expect(source).toContain('{showSpeakerBadge ? (');
         expect(source).toContain('{showSpeakerLabel ? (');
         expect(source).not.toContain('>{row.name}<');
     });

@@ -125,21 +125,35 @@ const hasStrongTextMatch = (left: string, right: string): boolean => {
   return false;
 };
 
-const getSegmentLinkId = (row: Record<string, unknown>): string => {
+const normalizeLocatorToken = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return trimmed || '';
+};
+
+export const resolveCategorizationRowSegmentLocator = (
+  row: Record<string, unknown>
+): { segment_oid: string; fallback_segment_id: string } => {
+  const segment_oid = normalizeLocatorToken(row.segment_oid);
+  if (segment_oid) return { segment_oid, fallback_segment_id: '' };
+
   const candidates = [
     row.source_segment_id,
     row.segment_id,
     row.transcript_segment_id,
     row.chunk_id,
     row.transcription_chunk_id,
-    row.segment_oid,
   ];
   for (const candidate of candidates) {
-    if (typeof candidate !== 'string') continue;
-    const trimmed = candidate.trim();
-    if (trimmed) return trimmed;
+    const trimmed = normalizeLocatorToken(candidate);
+    if (trimmed) return { segment_oid: '', fallback_segment_id: trimmed };
   }
-  return '';
+  return { segment_oid: '', fallback_segment_id: '' };
+};
+
+const getSegmentLinkId = (row: Record<string, unknown>): string => {
+  const locator = resolveCategorizationRowSegmentLocator(row);
+  return locator.segment_oid || locator.fallback_segment_id;
 };
 
 const collectCategorizationCleanupCandidates = (basePath: string, candidate: unknown) => {

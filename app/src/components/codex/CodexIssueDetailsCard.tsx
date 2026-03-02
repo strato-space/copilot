@@ -7,6 +7,7 @@ const { Paragraph, Text } = Typography;
 type CodexRelationshipItem = {
     id: string;
     title?: string;
+    status?: string;
 };
 
 type CodexRelationshipGroups = {
@@ -91,7 +92,11 @@ const toRelationshipItem = (value: unknown): CodexRelationshipItem | null => {
     if (!id) return null;
 
     const title = toText(record.title) || toText(record.name);
-    return title ? { id, title } : { id };
+    const status = toText(record.status) || toText(record.state);
+    if (title && status) return { id, title, status };
+    if (title) return { id, title };
+    if (status) return { id, status };
+    return { id };
 };
 
 const relationType = (value: unknown): string => {
@@ -113,7 +118,40 @@ const addUniqueRelationship = (
 };
 
 const resolveIssueLink = (issueId: string): string => `/operops/codex/task/${encodeURIComponent(issueId)}`;
-const isCopilotIssueId = (value: string): boolean => value.startsWith('copilot-');
+
+const normalizeIssueStatus = (value: unknown): string => toText(value).toLowerCase().replace(/[\s-]+/g, '_');
+
+const resolveStatusPictogram = (
+    status: unknown
+): { icon: string; className: string; normalizedStatus: string } => {
+    const normalizedStatus = normalizeIssueStatus(status);
+    switch (normalizedStatus) {
+    case 'open':
+        return { icon: '⚪', className: 'text-gray-400', normalizedStatus };
+    case 'in_progress':
+        return { icon: '🟡', className: '', normalizedStatus };
+    case 'blocked':
+        return { icon: '⛔', className: '', normalizedStatus };
+    case 'deferred':
+        return { icon: '💤', className: '', normalizedStatus };
+    case 'closed':
+        return { icon: '✅', className: '', normalizedStatus };
+    default:
+        return { icon: '❔', className: '', normalizedStatus: normalizedStatus || 'unknown' };
+    }
+};
+
+const renderIssueIdToken = (issueId: string): ReactNode => {
+    const normalizedIssueId = toText(issueId);
+    if (!normalizedIssueId || normalizedIssueId === '—') return '—';
+    return (
+        <Text code copyable={{ text: normalizedIssueId }}>
+            <a href={resolveIssueLink(normalizedIssueId)} className="text-blue-600 hover:underline">
+                {normalizedIssueId}
+            </a>
+        </Text>
+    );
+};
 
 const collectRelationships = (issue: CodexIssueDetails): CodexRelationshipGroups => {
     const groups: CodexRelationshipGroups = {
@@ -195,13 +233,20 @@ const renderRelationshipItems = (items: CodexRelationshipItem[], keyPrefix: stri
         <Space wrap size={[4, 4]}>
             {items.map((item) => (
                 <Tag key={`${keyPrefix}-${item.id}`} title={item.title || item.id}>
-                    {isCopilotIssueId(item.id) ? (
-                        <a href={resolveIssueLink(item.id)} className="hover:underline">
-                            <Text code>{item.id}</Text>
-                        </a>
-                    ) : (
-                        <Text code>{item.id}</Text>
-                    )}
+                    <Space size={4} wrap={false}>
+                        {(() => {
+                            const pictogram = resolveStatusPictogram(item.status);
+                            return (
+                                <span
+                                    className={`text-xs leading-none ${pictogram.className}`.trim()}
+                                    aria-label={`status-${pictogram.normalizedStatus}`}
+                                >
+                                    {pictogram.icon}
+                                </span>
+                            );
+                        })()}
+                        {renderIssueIdToken(item.id)}
+                    </Space>
                     {item.title ? <span className="ml-1 text-xs text-gray-500">{item.title}</span> : null}
                 </Tag>
             ))}
@@ -267,15 +312,7 @@ export default function CodexIssueDetailsCard({ issue, issueIdFallback, extra }:
         <Card title={toText(issue.title) || 'Без заголовка'}>
             <Descriptions bordered size="small" column={1} labelStyle={{ width: 220 }}>
                 <Descriptions.Item label="Issue ID">
-                    <Text code copyable={{ text: displayIssueId }}>
-                        {isCopilotIssueId(displayIssueId) ? (
-                            <a href={resolveIssueLink(displayIssueId)} className="hover:underline">
-                                {displayIssueId}
-                            </a>
-                        ) : (
-                            displayIssueId
-                        )}
-                    </Text>
+                    {renderIssueIdToken(displayIssueId)}
                 </Descriptions.Item>
                 {metadataRows.map((row) => (
                     <Descriptions.Item key={row.key} label={row.label}>

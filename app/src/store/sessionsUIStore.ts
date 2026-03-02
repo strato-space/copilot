@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { message } from 'antd';
 import type { TicketsModalData, VoiceBotMessage, VoiceMessageRow } from '../types/voice';
+import { getCategorizationRowIdentity } from '../utils/categorizationRowIdentity';
 
 interface ParticipantModalState {
     visible: boolean;
@@ -198,6 +199,18 @@ const resolveInitialSortAscending = (storageKey: string, fallbackAscending: bool
     return stored == null ? fallbackAscending : stored;
 };
 
+const dedupeCategorizationRows = (rows: CategorizationRow[]): CategorizationRow[] => {
+    const seen = new Set<string>();
+    const next: CategorizationRow[] = [];
+    for (const row of rows) {
+        const identity = getCategorizationRowIdentity(row);
+        if (!identity || seen.has(identity)) continue;
+        seen.add(identity);
+        next.push(row);
+    }
+    return next;
+};
+
 export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
     participantModal: initialParticipantModal,
     accessUsersModal: initialAccessUsersModal,
@@ -298,12 +311,12 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
             },
         })),
 
-    setSelectedCategorizationRows: (rows) => set({ selectedCategorizationRows: rows }),
+    setSelectedCategorizationRows: (rows) => set({ selectedCategorizationRows: dedupeCategorizationRows(rows) }),
     addSelectedCategorizationRow: (row) =>
         set((state) => {
-            const rowId = `${row.message_id}-${row.timeStart}-${row.timeEnd}`;
+            const rowId = getCategorizationRowIdentity(row);
             const existingIndex = state.selectedCategorizationRows.findIndex(
-                (selectedRow) => `${selectedRow.message_id}-${selectedRow.timeStart}-${selectedRow.timeEnd}` === rowId
+                (selectedRow) => getCategorizationRowIdentity(selectedRow) === rowId
             );
             if (existingIndex === -1) {
                 return { selectedCategorizationRows: [...state.selectedCategorizationRows, row] };
@@ -312,31 +325,33 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
         }),
     removeSelectedCategorizationRow: (row) =>
         set((state) => {
-            const rowId = `${row.message_id}-${row.timeStart}-${row.timeEnd}`;
+            const rowId = getCategorizationRowIdentity(row);
             return {
                 selectedCategorizationRows: state.selectedCategorizationRows.filter(
-                    (selectedRow) => `${selectedRow.message_id}-${selectedRow.timeStart}-${selectedRow.timeEnd}` !== rowId
+                    (selectedRow) => getCategorizationRowIdentity(selectedRow) !== rowId
                 ),
             };
         }),
     toggleSelectedCategorizationRow: (row) =>
         set((state) => {
-            const rowId = `${row.message_id}-${row.timeStart}-${row.timeEnd}`;
+            const rowId = getCategorizationRowIdentity(row);
             const existingIndex = state.selectedCategorizationRows.findIndex(
-                (selectedRow) => `${selectedRow.message_id}-${selectedRow.timeStart}-${selectedRow.timeEnd}` === rowId
+                (selectedRow) => getCategorizationRowIdentity(selectedRow) === rowId
             );
             if (existingIndex !== -1) {
                 return {
-                    selectedCategorizationRows: state.selectedCategorizationRows.filter((_, index) => index !== existingIndex),
+                    selectedCategorizationRows: state.selectedCategorizationRows.filter(
+                        (selectedRow) => getCategorizationRowIdentity(selectedRow) !== rowId
+                    ),
                 };
             }
             return { selectedCategorizationRows: [...state.selectedCategorizationRows, row] };
         }),
     isCategorizationRowSelected: (row) => {
         const state = get();
-        const rowId = `${row.message_id}-${row.timeStart}-${row.timeEnd}`;
+        const rowId = getCategorizationRowIdentity(row);
         return state.selectedCategorizationRows.some(
-            (selectedRow) => `${selectedRow.message_id}-${selectedRow.timeStart}-${selectedRow.timeEnd}` === rowId
+            (selectedRow) => getCategorizationRowIdentity(selectedRow) === rowId
         );
     },
     clearSelectedCategorizationRows: () => set({ selectedCategorizationRows: [] }),

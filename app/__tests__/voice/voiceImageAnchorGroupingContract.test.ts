@@ -9,7 +9,8 @@ describe('Voice image anchor grouping contract', () => {
     expect(source).toContain('const linkedImageAnchorRefs = new Set<string>()');
     expect(source).toContain('const imageAnchorRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_message_id);');
     expect(source).toContain('const linkedAnchorRows = imageAnchorRef ? (imageRowsByMessageRef.get(imageAnchorRef) ?? []) : []');
-    expect(source).toContain('rows = [...linkedAnchorRows, ...rows];');
+    expect(source).toContain('let materialRows = dedupeMaterialRows([');
+    expect(source).toContain('...linkedAnchorRows');
   });
 
   it('resolves anchor links by both message_id and _id references', () => {
@@ -37,5 +38,6 @@ describe('Voice image anchor grouping contract', () => {
     expect(source).toContain('material_anchor_message_id: materialAnchorMessageId');
     expect(source).toContain('material_target_message_id: materialTargetMessageId');
     expect(source).toContain('material_source_message_id: row.material_source_message_id ?? row.message_id');
+    expect(source).toContain('materials: materialRows');
   });
 });

@@ -7,8 +7,8 @@ import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import PermissionGate from './PermissionGate';
 import { PERMISSIONS } from '../../constants/permissions';
 import CategorizationTableRow from './CategorizationTableRow';
-import CategorizationStatusColumn from './CategorizationStatusColumn';
 import CategorizationTableHeader from './CategorizationTableHeader';
+import { getCategorizationRowIdentity } from '../../utils/categorizationRowIdentity';
 
 const voiceMessageSources = {
     TELEGRAM: 'telegram',
@@ -16,7 +16,7 @@ const voiceMessageSources = {
 } as const;
 
 export default function Categorization() {
-    const { voiceBotSession, voiceMesagesData, getMessageDataById, createTasksFromRows, socket } = useVoiceBotStore();
+    const { voiceBotSession, voiceMesagesData, createTasksFromRows, socket } = useVoiceBotStore();
     const {
         selectedCategorizationRows,
         clearSelectedCategorizationRows,
@@ -75,15 +75,16 @@ export default function Categorization() {
 
             return categorizationSort.ascending ? -comparison : comparison;
         });
-        return list.filter((group) =>
-            Array.isArray(group.rows) && group.rows.some((row) => {
-                if (row.kind === 'image' && typeof row.imageUrl === 'string' && row.imageUrl.trim().length > 0) {
-                    return true;
-                }
+        return list.filter((group) => {
+            const hasTextRows = Array.isArray(group.rows) && group.rows.some((row) => {
                 const text = typeof row.text === 'string' ? row.text.trim() : '';
                 return text.length > 0;
-            })
-        );
+            });
+            const hasMaterials = Array.isArray(group.materials) && group.materials.some((material) =>
+                typeof material.imageUrl === 'string' && material.imageUrl.trim().length > 0
+            );
+            return hasTextRows || hasMaterials;
+        });
     }, [voiceMesagesData, categorizationSort.ascending]);
 
     const handleCreateTasks = (): void => {
@@ -123,15 +124,6 @@ export default function Categorization() {
                 <table className="w-full border-collapse bg-white shadow-sm">
                     <thead className="border-b border-t border-black/30">
                         <tr>
-                            <th className="w-[104px] border-r border-black/30 align-top">
-                                <div className="w-[104px] flex justify-start items-center">
-                                    <div className="flex-1 self-stretch py-2 flex justify-start items-center gap-2.5">
-                                        <div className="flex-1 px-1 border-r border-slate-200 flex justify-start items-center gap-2">
-                                            <div className="flex-1 text-center text-black/60 text-[10px] font-semibold leading-3">Обработка</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </th>
                             <th className="align-top">
                                 <div className="flex items-center gap-2 py-2 px-1">
                                     <button
@@ -163,33 +155,51 @@ export default function Categorization() {
                         </tr>
                     </thead>
                     <tbody>
-                        {groups.map((group, idx) => (
-                            <tr key={group.message_id || idx} className="align-top border-b border-black/20">
-                                <td className="border-r border-black/30 align-top p-0">
-                                    <CategorizationStatusColumn
-                                        message={group.message_id ? getMessageDataById(group.message_id) : null}
-                                        session={voiceBotSession}
-                                    />
-                                </td>
-                                <td className="align-top p-0">
-                                    {(categorizationSort.ascending
-                                        ? _.sortBy(group.rows, ['timeEnd'])
-                                        : _.reverse(_.sortBy(group.rows, ['timeEnd']))
-                                    ).map((row, i) => {
-                                        const rowId = `${group.message_id}-${row.timeStart}-${row.timeEnd}`;
-                                        const rowWithMessageId = group.message_id ? { ...row, message_id: group.message_id } : row;
-                                        return (
-                                            <CategorizationTableRow
-                                                row={rowWithMessageId}
-                                                key={rowId}
-                                                rowId={rowId}
-                                                isLast={i === group.rows.length - 1}
-                                            />
-                                        );
-                                    })}
-                                </td>
-                            </tr>
-                        ))}
+                        {groups.map((group, idx) => {
+                            const sortedRows = categorizationSort.ascending
+                                ? _.sortBy(group.rows, ['timeEnd'])
+                                : _.reverse(_.sortBy(group.rows, ['timeEnd']));
+                            const materials = Array.isArray(group.materials)
+                                ? group.materials.filter((material) =>
+                                    typeof material.imageUrl === 'string' && material.imageUrl.trim().length > 0
+                                )
+                                : [];
+                            const rowsToRender = sortedRows.length > 0
+                                ? sortedRows
+                                : materials.length > 0
+                                    ? [
+                                        {
+                                            avatar: '',
+                                            name: '',
+                                            text: '',
+                                            kind: 'text' as const,
+                                            message_id: group.message_id,
+                                            message_timestamp: group.message_timestamp,
+                                            row_index: 0,
+                                        },
+                                    ]
+                                    : [];
+
+                            return (
+                                <tr key={group.message_id || idx} className="align-top border-b border-black/20">
+                                    <td className="align-top p-0">
+                                        {rowsToRender.map((row, i) => {
+                                            const rowWithMessageId = group.message_id ? { ...row, message_id: group.message_id } : row;
+                                            const rowId = getCategorizationRowIdentity(rowWithMessageId);
+                                            return (
+                                                <CategorizationTableRow
+                                                    row={rowWithMessageId}
+                                                    materials={i === 0 ? materials : []}
+                                                    key={rowId}
+                                                    rowId={rowId}
+                                                    isLast={i === rowsToRender.length - 1}
+                                                />
+                                            );
+                                        })}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

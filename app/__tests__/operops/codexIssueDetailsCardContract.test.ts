@@ -17,7 +17,21 @@ describe('OperOps Codex issue details card contract', () => {
     it('renders dedicated relationships block with bd semantics', () => {
         expect(source).toContain('const relationships = collectRelationships(issue);');
         expect(source).toContain('const resolveIssueLink = (issueId: string): string => `/operops/codex/task/${encodeURIComponent(issueId)}`;');
-        expect(source).toContain("const isCopilotIssueId = (value: string): boolean => value.startsWith('copilot-');");
+        expect(source).toContain('const renderIssueIdToken = (issueId: string): ReactNode => {');
+        expect(source).toContain('copyable={{ text: normalizedIssueId }}');
+        expect(source).toContain('className="text-blue-600 hover:underline"');
+        expect(source).toContain('const resolveStatusPictogram = (');
+        expect(source).toContain("case 'open':");
+        expect(source).toContain("icon: '⚪'");
+        expect(source).toContain("case 'in_progress':");
+        expect(source).toContain("icon: '🟡'");
+        expect(source).toContain("case 'blocked':");
+        expect(source).toContain("icon: '⛔'");
+        expect(source).toContain("case 'deferred':");
+        expect(source).toContain("icon: '💤'");
+        expect(source).toContain("case 'closed':");
+        expect(source).toContain("icon: '✅'");
+        expect(source).toContain("icon: '❔'");
         expect(source).toContain("if (normalizedType === 'parent-child') {");
         expect(source).toContain("if (normalizedType === 'waits-for') {");
         expect(source).toContain('[issue.parent, issue.bd_parent, issue.parent_id].forEach((candidate) => {');
@@ -26,10 +40,9 @@ describe('OperOps Codex issue details card contract', () => {
         expect(source).toContain("{ key: 'waits_for', label: 'Depends On (waits-for)', items: relationships.waitsFor },");
         expect(source).toContain('<Text strong>Relationships</Text>');
         expect(source).toContain("{renderRelationshipItems(row.items, row.key)}");
-        expect(source).toContain('{isCopilotIssueId(item.id) ? (');
-        expect(source).toContain('{isCopilotIssueId(displayIssueId) ? (');
-        expect(source).toContain('<a href={resolveIssueLink(item.id)} className=\"hover:underline\">');
-        expect(source).toContain('<a href={resolveIssueLink(displayIssueId)} className=\"hover:underline\">');
+        expect(source).toContain('aria-label={`status-${pictogram.normalizedStatus}`}');
+        expect(source).toContain('{renderIssueIdToken(item.id)}');
+        expect(source).toContain('{renderIssueIdToken(displayIssueId)}');
     });
 
     it('normalizes escaped newline sequences in description and notes', () => {

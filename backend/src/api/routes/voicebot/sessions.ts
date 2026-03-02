@@ -61,6 +61,7 @@ import {
   buildCategorizationCleanupPayload,
   ensureMessageCanonicalTranscription,
   getOptionalTrimmedString,
+  resolveCategorizationRowSegmentLocator,
   resetCategorizationForMessage,
   runtimeMessageQuery,
   runtimeSessionQuery,
@@ -139,6 +140,21 @@ const mergeSessionsInputSchema = z.object({
     confirmation_phrase: z.string().trim().min(1),
     operation_id: z.string().trim().optional(),
 });
+const categorizationChunkMutationBaseInputSchema = z.object({
+    session_id: z.string().trim().optional(),
+    session_oid: z.string().trim().optional(),
+    message_id: z.string().trim().optional(),
+    message_oid: z.string().trim().optional(),
+    segment_oid: z.string().trim().optional(),
+    chunk_oid: z.string().trim().optional(),
+    row_oid: z.string().trim().optional(),
+    reason: z.string().trim().optional().nullable(),
+});
+const editCategorizationChunkInputSchema = categorizationChunkMutationBaseInputSchema.extend({
+    text: z.string().optional(),
+    new_text: z.string().optional(),
+});
+const deleteCategorizationChunkInputSchema = categorizationChunkMutationBaseInputSchema;
 type SessionDoneInput = z.input<typeof sessionDoneInputSchema>;
 
 const projectFilesUploadDir = resolve(VOICEBOT_FILE_STORAGE.uploadsDir, 'project-files');
@@ -529,6 +545,130 @@ const categorizationCleanup = {
         };
     },
 };
+
+type CategorizationRowSource = {
+    path: string;
+    rows: Array<Record<string, unknown>>;
+};
+
+type CategorizationRowLocatorMatch = {
+    path: string;
+    index: number;
+    row: Record<string, unknown>;
+};
+
+const collectCategorizationRowSources = (message: Record<string, unknown>): CategorizationRowSource[] => {
+    const sources: CategorizationRowSource[] = [];
+    const candidates: Array<{ path: string; value: unknown }> = [
+        { path: 'categorization', value: message.categorization },
+        { path: 'categorization_data.data', value: nestedRecordPath.get(message, 'categorization_data.data') },
+        { path: 'processors_data.categorization.rows', value: nestedRecordPath.get(message, 'processors_data.categorization.rows') },
+        { path: 'processors_data.CATEGORIZATION', value: nestedRecordPath.get(message, 'processors_data.CATEGORIZATION') },
+    ];
+
+    for (const candidate of candidates) {
+        if (!Array.isArray(candidate.value)) continue;
+        const rows = candidate.value
+            .filter((entry) => entry && typeof entry === 'object')
+            .map((entry) => entry as Record<string, unknown>);
+        if (rows.length === 0) continue;
+        sources.push({ path: candidate.path, rows });
+    }
+
+    return sources;
+};
+
+const toNonEmptyString = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    return trimmed || '';
+};
+
+const collectCategorizationRowLocatorCandidates = (row: Record<string, unknown>): string[] => {
+    const locator = resolveCategorizationRowSegmentLocator(row);
+    const explicitRowId = toNonEmptyString(row.row_id);
+    const normalizedRowId = explicitRowId.startsWith('seg:') ? explicitRowId.slice(4) : explicitRowId;
+    const idField = toNonEmptyString(row.id);
+    const candidates = [
+        locator.segment_oid,
+        locator.fallback_segment_id,
+        normalizedRowId,
+        idField,
+    ].filter((value) => value.length > 0);
+
+    return Array.from(new Set(candidates));
+};
+
+const findCategorizationRowLocatorMatches = ({
+    message,
+    rowOid,
+}: {
+    message: Record<string, unknown>;
+    rowOid: string;
+}): CategorizationRowLocatorMatch[] => {
+    const matches: CategorizationRowLocatorMatch[] = [];
+    const sources = collectCategorizationRowSources(message);
+    for (const source of sources) {
+        source.rows.forEach((row, index) => {
+            const locatorCandidates = collectCategorizationRowLocatorCandidates(row);
+            if (!locatorCandidates.includes(rowOid)) return;
+            matches.push({
+                path: source.path,
+                index,
+                row,
+            });
+        });
+    }
+    return matches;
+};
+
+const isMarkedDeleted = (value: unknown): boolean => {
+    if (value === true) return true;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+    return false;
+};
+
+const buildCategorizationMutationInput = (
+    parsedBody: Record<string, unknown>
+): {
+    sessionInput: string;
+    messageInput: string;
+    rowOidInput: string;
+    textInput: string;
+    reason: string | null;
+} => {
+    const sessionInput = toNonEmptyString(parsedBody.session_oid) || toNonEmptyString(parsedBody.session_id);
+    const messageInput = toNonEmptyString(parsedBody.message_oid) || toNonEmptyString(parsedBody.message_id);
+    const rowOidInput =
+        toNonEmptyString(parsedBody.row_oid) ||
+        toNonEmptyString(parsedBody.segment_oid) ||
+        toNonEmptyString(parsedBody.chunk_oid);
+    const textInput =
+        toNonEmptyString(parsedBody.new_text) ||
+        (typeof parsedBody.text === 'string' ? parsedBody.text.trim() : '');
+    const reasonRaw = typeof parsedBody.reason === 'string' ? parsedBody.reason.trim() : '';
+    return {
+        sessionInput,
+        messageInput,
+        rowOidInput,
+        textInput,
+        reason: reasonRaw || null,
+    };
+};
+
+const sendCategorizationMutationError = (
+    res: Response,
+    status: number,
+    error_code: string,
+    error: string,
+    details?: Record<string, unknown>
+) =>
+    res.status(status).json({
+        error,
+        error_code,
+        ...(details || {}),
+    });
 
 type ProjectFileRecord = Record<string, unknown> & {
     _id?: ObjectId;
@@ -950,6 +1090,47 @@ const emitSessionRealtimeUpdate = ({
         image_anchor_linked_message_id: messageDoc.image_anchor_linked_message_id ?? null,
         created_at: createdAt.toISOString(),
         updated_at: createdAt.toISOString(),
+    });
+    namespace.to(room).emit('session_update', {
+        _id: sessionId,
+        session_id: sessionId,
+        is_messages_processed: false,
+        updated_at: new Date().toISOString(),
+    });
+};
+
+const emitCategorizationRealtimeUpdate = async ({
+    req,
+    db,
+    sessionId,
+    messageObjectId,
+}: {
+    req: Request;
+    db: Db;
+    sessionId: string;
+    messageObjectId: ObjectId;
+}): Promise<void> => {
+    const io = req.app.get('io') as SocketIOServer | undefined;
+    if (!io) return;
+
+    const updatedMessage = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+        runtimeMessageQuery({ _id: messageObjectId })
+    ) as Record<string, unknown> | null;
+    if (!updatedMessage) return;
+
+    const room = getVoicebotSessionRoom(sessionId);
+    const namespace = io.of('/voicebot');
+    const messageIdRef = typeof updatedMessage.message_id === 'string' && updatedMessage.message_id.trim()
+        ? updatedMessage.message_id.trim()
+        : messageObjectId.toHexString();
+
+    namespace.to(room).emit('message_update', {
+        message_id: messageIdRef,
+        message: {
+            ...updatedMessage,
+            _id: updatedMessage._id instanceof ObjectId ? updatedMessage._id.toHexString() : String(updatedMessage._id || messageObjectId.toHexString()),
+            session_id: updatedMessage.session_id instanceof ObjectId ? updatedMessage.session_id.toHexString() : String(updatedMessage.session_id || sessionId),
+        },
     });
     namespace.to(room).emit('session_update', {
         _id: sessionId,
@@ -4411,6 +4592,517 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
     } catch (error) {
         logger.error('Error in delete_transcript_chunk:', error);
         return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/edit_categorization_chunk', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+    try {
+        const parsedBody = editCategorizationChunkInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return sendCategorizationMutationError(res, 400, 'invalid_payload', 'Invalid request payload');
+        }
+        const input = buildCategorizationMutationInput(parsedBody.data);
+        if (!input.sessionInput || !input.messageInput || !input.rowOidInput || !input.textInput) {
+            return sendCategorizationMutationError(
+                res,
+                400,
+                'missing_required_fields',
+                'session_id, message_id, row_oid and text are required'
+            );
+        }
+        if (!ObjectId.isValid(input.sessionInput) || !ObjectId.isValid(input.messageInput)) {
+            return sendCategorizationMutationError(res, 400, 'invalid_object_id', 'Invalid session_id or message_id');
+        }
+        let rowOid: string;
+        try {
+            ({ oid: rowOid } = parseEmbeddedOid(input.rowOidInput, { allowedPrefixes: ['ch', 'cat'] }));
+        } catch {
+            return sendCategorizationMutationError(res, 400, 'invalid_row_oid', 'Invalid row_oid');
+        }
+
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
+            db,
+            performer,
+            sessionId: input.sessionInput,
+        });
+        if (!session) return sendCategorizationMutationError(res, 404, 'session_not_found', 'Session not found');
+        if (!hasAccess) return sendCategorizationMutationError(res, 403, 'access_denied', 'Access denied to this session');
+
+        const messageObjectId = new ObjectId(input.messageInput);
+        const sessionObjectId = new ObjectId(input.sessionInput);
+        const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+            runtimeMessageQuery({
+                _id: messageObjectId,
+                session_id: sessionObjectId,
+            })
+        ) as (Record<string, unknown> & { _id: ObjectId }) | null;
+        if (!messageDoc) {
+            const crossSessionMessage = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+                runtimeMessageQuery({ _id: messageObjectId })
+            ) as (Record<string, unknown> & { _id: ObjectId }) | null;
+            if (crossSessionMessage) {
+                return sendCategorizationMutationError(
+                    res,
+                    409,
+                    'message_session_mismatch',
+                    'Message does not belong to provided session'
+                );
+            }
+            return sendCategorizationMutationError(res, 404, 'message_not_found', 'Message not found');
+        }
+
+        const matches = findCategorizationRowLocatorMatches({ message: messageDoc, rowOid });
+        if (matches.length === 0) {
+            return sendCategorizationMutationError(res, 404, 'categorization_row_not_found', 'Categorization row not found');
+        }
+        if (matches.length > 1) {
+            return sendCategorizationMutationError(
+                res,
+                409,
+                'ambiguous_row_locator',
+                'Categorization row locator is ambiguous',
+                { matched_paths: matches.map((match) => match.path) }
+            );
+        }
+
+        const target = matches[0];
+        if (!target) {
+            return sendCategorizationMutationError(res, 404, 'categorization_row_not_found', 'Categorization row not found');
+        }
+        if (isMarkedDeleted(target.row.is_deleted)) {
+            return sendCategorizationMutationError(res, 409, 'row_already_deleted', 'Categorization row is already deleted');
+        }
+
+        const sourceRows = nestedRecordPath.get(messageDoc, target.path);
+        if (!Array.isArray(sourceRows) || sourceRows.length <= target.index) {
+            return sendCategorizationMutationError(res, 404, 'categorization_row_not_found', 'Categorization row not found');
+        }
+        const previousRowsSnapshot = sourceRows.map((entry) =>
+            entry && typeof entry === 'object' ? { ...(entry as Record<string, unknown>) } : entry
+        );
+        const previousRow =
+            sourceRows[target.index] && typeof sourceRows[target.index] === 'object'
+                ? { ...(sourceRows[target.index] as Record<string, unknown>) }
+                : null;
+        const nextRows = sourceRows.map((entry, index) => {
+            if (index !== target.index) return entry;
+            if (!entry || typeof entry !== 'object') return entry;
+            const row = entry as Record<string, unknown>;
+            return {
+                ...row,
+                text: input.textInput,
+                is_edited: true,
+            };
+        });
+
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+            runtimeMessageQuery({ _id: messageObjectId }),
+            {
+                $set: {
+                    [target.path]: nextRows,
+                    updated_at: new Date(),
+                    is_finalized: false,
+                },
+            }
+        );
+
+        const logEvent = await insertSessionLogEvent({
+            db,
+            session_id: sessionObjectId,
+            message_id: messageObjectId,
+            project_id: toObjectIdOrNull((session as VoiceSessionRecord)?.project_id),
+            event_name: 'categorization_chunk_edited',
+            actor: buildActorFromPerformer(performer),
+            target: {
+                entity_type: 'categorization',
+                entity_oid: rowOid,
+                path: `/messages/${formatOid('msg', messageObjectId)}/${target.path}[index=${target.index}]`,
+                stage: 'categorization',
+            },
+            diff: {
+                op: 'replace',
+                old_value: previousRow,
+                new_value: nextRows[target.index] ?? null,
+            },
+            source: buildWebSource(req),
+            action: { type: 'none', available: false, handler: null, args: {} },
+            reason: input.reason,
+            metadata: {
+                categorization_row_path: target.path,
+                categorization_row_index: target.index,
+                rollback_policy: 'no_rollback',
+            },
+        });
+
+        try {
+            await emitCategorizationRealtimeUpdate({
+                req,
+                db,
+                sessionId: sessionObjectId.toHexString(),
+                messageObjectId,
+            });
+        } catch (emitError) {
+            logger.warn('Failed to emit categorization edit realtime update', {
+                session_id: sessionObjectId.toHexString(),
+                message_id: messageObjectId.toHexString(),
+                error: emitError instanceof Error ? emitError.message : String(emitError),
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            row_oid: rowOid,
+            path: target.path,
+            index: target.index,
+            reason: input.reason,
+            event: mapEventForApi(logEvent),
+        });
+    } catch (error) {
+        logger.error('Error in edit_categorization_chunk:', error);
+        return sendCategorizationMutationError(res, 500, 'internal_error', String(error));
+    }
+});
+
+router.post('/delete_categorization_chunk', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+    try {
+        const parsedBody = deleteCategorizationChunkInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return sendCategorizationMutationError(res, 400, 'invalid_payload', 'Invalid request payload');
+        }
+        const input = buildCategorizationMutationInput(parsedBody.data);
+        if (!input.sessionInput || !input.messageInput || !input.rowOidInput) {
+            return sendCategorizationMutationError(
+                res,
+                400,
+                'missing_required_fields',
+                'session_id, message_id and row_oid are required'
+            );
+        }
+        if (!ObjectId.isValid(input.sessionInput) || !ObjectId.isValid(input.messageInput)) {
+            return sendCategorizationMutationError(res, 400, 'invalid_object_id', 'Invalid session_id or message_id');
+        }
+
+        let rowOid: string;
+        try {
+            ({ oid: rowOid } = parseEmbeddedOid(input.rowOidInput, { allowedPrefixes: ['ch', 'cat'] }));
+        } catch {
+            return sendCategorizationMutationError(res, 400, 'invalid_row_oid', 'Invalid row_oid');
+        }
+
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
+            db,
+            performer,
+            sessionId: input.sessionInput,
+        });
+        if (!session) return sendCategorizationMutationError(res, 404, 'session_not_found', 'Session not found');
+        if (!hasAccess) return sendCategorizationMutationError(res, 403, 'access_denied', 'Access denied to this session');
+
+        const messageObjectId = new ObjectId(input.messageInput);
+        const sessionObjectId = new ObjectId(input.sessionInput);
+        const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+            runtimeMessageQuery({
+                _id: messageObjectId,
+                session_id: sessionObjectId,
+            })
+        ) as (Record<string, unknown> & { _id: ObjectId }) | null;
+        if (!messageDoc) {
+            const crossSessionMessage = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+                runtimeMessageQuery({ _id: messageObjectId })
+            ) as (Record<string, unknown> & { _id: ObjectId }) | null;
+            if (crossSessionMessage) {
+                return sendCategorizationMutationError(
+                    res,
+                    409,
+                    'message_session_mismatch',
+                    'Message does not belong to provided session'
+                );
+            }
+            return sendCategorizationMutationError(res, 404, 'message_not_found', 'Message not found');
+        }
+
+        const matches = findCategorizationRowLocatorMatches({ message: messageDoc, rowOid });
+        if (matches.length === 0) {
+            return sendCategorizationMutationError(res, 404, 'categorization_row_not_found', 'Categorization row not found');
+        }
+        if (matches.length > 1) {
+            return sendCategorizationMutationError(
+                res,
+                409,
+                'ambiguous_row_locator',
+                'Categorization row locator is ambiguous',
+                { matched_paths: matches.map((match) => match.path) }
+            );
+        }
+
+        const target = matches[0];
+        if (!target) {
+            return sendCategorizationMutationError(res, 404, 'categorization_row_not_found', 'Categorization row not found');
+        }
+        if (isMarkedDeleted(target.row.is_deleted)) {
+            return sendCategorizationMutationError(res, 409, 'row_already_deleted', 'Categorization row is already deleted');
+        }
+
+        const sourceRows = nestedRecordPath.get(messageDoc, target.path);
+        if (!Array.isArray(sourceRows) || sourceRows.length <= target.index) {
+            return sendCategorizationMutationError(res, 404, 'categorization_row_not_found', 'Categorization row not found');
+        }
+        const previousRowsSnapshot = sourceRows.map((entry) =>
+            entry && typeof entry === 'object' ? { ...(entry as Record<string, unknown>) } : entry
+        );
+        const previousRow =
+            sourceRows[target.index] && typeof sourceRows[target.index] === 'object'
+                ? { ...(sourceRows[target.index] as Record<string, unknown>) }
+                : null;
+        const nextRows = sourceRows.map((entry, index) => {
+            if (index !== target.index) return entry;
+            if (!entry || typeof entry !== 'object') return entry;
+            const row = entry as Record<string, unknown>;
+            return {
+                ...row,
+                is_deleted: true,
+            };
+        });
+        const activeRowsAfterDelete = nextRows.filter((entry) => {
+            if (!entry || typeof entry !== 'object') return false;
+            return !isMarkedDeleted((entry as Record<string, unknown>).is_deleted);
+        });
+        const shouldCascadeDeleteTranscript = activeRowsAfterDelete.length === 0;
+
+        let cascadeSegmentOid: string | null = null;
+        let cascadeApplied = false;
+        let cascadeSkipReason: string | null = null;
+        let cascadePreviousSegment: Record<string, unknown> | null = null;
+        let cascadeUpdatedTranscription: Record<string, unknown> | null = null;
+        let cascadeUpdatedChunks: Array<Record<string, unknown>> | null = null;
+        let rollbackSetPayload: Record<string, unknown> | null = null;
+
+        if (shouldCascadeDeleteTranscript) {
+            const linkedLocator = resolveCategorizationRowSegmentLocator(target.row);
+            const linkedSegmentOid = linkedLocator.segment_oid || linkedLocator.fallback_segment_id;
+            if (!linkedSegmentOid) {
+                return sendCategorizationMutationError(
+                    res,
+                    409,
+                    'missing_linked_transcript_segment',
+                    'Cannot cascade delete without linked transcript segment id'
+                );
+            }
+            cascadeSegmentOid = linkedSegmentOid;
+
+            const ensured = await ensureMessageCanonicalTranscription({
+                db,
+                message: messageDoc as Record<string, unknown> & { _id: ObjectId },
+            });
+            const ensuredMessage = ensured.message as Record<string, unknown>;
+            const transcription = ensured.transcription;
+            const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
+            const segmentIndex = segments.findIndex((segment) => segment?.id === linkedSegmentOid);
+            if (segmentIndex === -1) {
+                return sendCategorizationMutationError(
+                    res,
+                    409,
+                    'linked_transcript_segment_not_found',
+                    'Linked transcript segment not found for cascade delete',
+                    { linked_segment_oid: linkedSegmentOid }
+                );
+            }
+
+            const previousSegment = segments[segmentIndex] as Record<string, unknown> | undefined;
+            cascadePreviousSegment = previousSegment ? { ...previousSegment } : null;
+            const segmentAlreadyDeleted = isMarkedDeleted(previousSegment?.is_deleted);
+            segments[segmentIndex] = {
+                ...(segments[segmentIndex] || {}),
+                is_deleted: true,
+            };
+            cascadeApplied = !segmentAlreadyDeleted;
+            if (!cascadeApplied) {
+                cascadeSkipReason = 'segment_already_deleted';
+            }
+
+            cascadeUpdatedTranscription = {
+                ...(transcription || {}),
+                segments,
+                text: normalizeSegmentsText(segments),
+            };
+
+            const ensuredChunks = Array.isArray(ensuredMessage?.transcription_chunks)
+                ? [...(ensuredMessage.transcription_chunks as Array<Record<string, unknown>>)]
+                : (Array.isArray(messageDoc.transcription_chunks) ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)] : []);
+            cascadeUpdatedChunks = ensuredChunks.length > 0
+                ? ensuredChunks.map((chunk) => {
+                    if (!chunk || typeof chunk !== 'object') return chunk;
+                    if (chunk.id === linkedSegmentOid) {
+                        return {
+                            ...chunk,
+                            is_deleted: true,
+                        };
+                    }
+                    return chunk;
+                })
+                : ensuredChunks;
+
+            rollbackSetPayload = {
+                [target.path]: previousRowsSnapshot,
+                transcription: ensuredMessage?.transcription ?? messageDoc.transcription ?? null,
+                transcription_text: typeof ensuredMessage?.transcription_text === 'string'
+                    ? ensuredMessage.transcription_text
+                    : (typeof messageDoc.transcription_text === 'string' ? messageDoc.transcription_text : ''),
+                text: typeof ensuredMessage?.text === 'string'
+                    ? ensuredMessage.text
+                    : (typeof messageDoc.text === 'string' ? messageDoc.text : ''),
+                transcription_chunks: Array.isArray(ensuredMessage?.transcription_chunks)
+                    ? [...(ensuredMessage.transcription_chunks as Array<Record<string, unknown>>)]
+                    : (Array.isArray(messageDoc.transcription_chunks)
+                        ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)]
+                        : []),
+                updated_at: messageDoc.updated_at instanceof Date ? messageDoc.updated_at : new Date(),
+                is_finalized: messageDoc.is_finalized ?? false,
+            };
+        }
+
+        const updateSetPayload: Record<string, unknown> = {
+            [target.path]: nextRows,
+            updated_at: new Date(),
+            is_finalized: false,
+        };
+        if (shouldCascadeDeleteTranscript && cascadeUpdatedTranscription && cascadeUpdatedChunks) {
+            updateSetPayload.transcription = cascadeUpdatedTranscription;
+            updateSetPayload.transcription_text =
+                typeof cascadeUpdatedTranscription.text === 'string' ? cascadeUpdatedTranscription.text : '';
+            updateSetPayload.text =
+                typeof cascadeUpdatedTranscription.text === 'string' ? cascadeUpdatedTranscription.text : '';
+            updateSetPayload.transcription_chunks = cascadeUpdatedChunks;
+        }
+
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+            runtimeMessageQuery({ _id: messageObjectId }),
+            {
+                $set: updateSetPayload,
+            }
+        );
+
+        let logEvent: Awaited<ReturnType<typeof insertSessionLogEvent>> | null = null;
+        try {
+            logEvent = await insertSessionLogEvent({
+                db,
+                session_id: sessionObjectId,
+                message_id: messageObjectId,
+                project_id: toObjectIdOrNull((session as VoiceSessionRecord)?.project_id),
+                event_name: 'categorization_chunk_deleted',
+                actor: buildActorFromPerformer(performer),
+                target: {
+                    entity_type: 'categorization',
+                    entity_oid: rowOid,
+                    path: `/messages/${formatOid('msg', messageObjectId)}/${target.path}[index=${target.index}]`,
+                    stage: 'categorization',
+                },
+                diff: {
+                    op: 'delete',
+                    old_value: previousRow,
+                    new_value: null,
+                },
+                source: buildWebSource(req),
+                action: { type: 'none', available: false, handler: null, args: {} },
+                reason: input.reason,
+                metadata: {
+                    categorization_row_path: target.path,
+                    categorization_row_index: target.index,
+                    rollback_policy: shouldCascadeDeleteTranscript ? 'compensating_revert_on_log_failure' : 'no_rollback',
+                    cascade: {
+                        requested: shouldCascadeDeleteTranscript,
+                        linked_segment_oid: cascadeSegmentOid,
+                        applied: cascadeApplied,
+                        skip_reason: cascadeSkipReason,
+                    },
+                },
+            });
+
+            if (shouldCascadeDeleteTranscript && cascadeSegmentOid && cascadeApplied) {
+                await insertSessionLogEvent({
+                    db,
+                    session_id: sessionObjectId,
+                    message_id: messageObjectId,
+                    project_id: toObjectIdOrNull((session as VoiceSessionRecord)?.project_id),
+                    event_name: 'transcript_segment_deleted',
+                    actor: buildActorFromPerformer(performer),
+                    target: {
+                        entity_type: 'transcript_segment',
+                        entity_oid: cascadeSegmentOid,
+                        path: `/messages/${formatOid('msg', messageObjectId)}/transcription/segments[id=${cascadeSegmentOid}]`,
+                        stage: 'transcript',
+                    },
+                    diff: {
+                        op: 'delete',
+                        old_value: cascadePreviousSegment,
+                        new_value: null,
+                    },
+                    source: buildWebSource(req),
+                    action: { type: 'none', available: false, handler: null, args: {} },
+                    reason: input.reason,
+                    metadata: {
+                        rollback_policy: 'compensating_revert_on_log_failure',
+                        cascade_from_row_oid: rowOid,
+                    },
+                });
+            }
+        } catch (logError) {
+            if (shouldCascadeDeleteTranscript && rollbackSetPayload) {
+                try {
+                    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+                        runtimeMessageQuery({ _id: messageObjectId }),
+                        {
+                            $set: rollbackSetPayload,
+                        }
+                    );
+                } catch (rollbackError) {
+                    logger.error('Failed to rollback cascaded categorization delete after log write error', {
+                        session_id: sessionObjectId.toHexString(),
+                        message_id: messageObjectId.toHexString(),
+                        error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+                    });
+                }
+            }
+            throw logError;
+        }
+
+        try {
+            await emitCategorizationRealtimeUpdate({
+                req,
+                db,
+                sessionId: sessionObjectId.toHexString(),
+                messageObjectId,
+            });
+        } catch (emitError) {
+            logger.warn('Failed to emit categorization delete realtime update', {
+                session_id: sessionObjectId.toHexString(),
+                message_id: messageObjectId.toHexString(),
+                error: emitError instanceof Error ? emitError.message : String(emitError),
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            row_oid: rowOid,
+            path: target.path,
+            index: target.index,
+            reason: input.reason,
+            event: mapEventForApi(logEvent),
+            cascade: {
+                requested: shouldCascadeDeleteTranscript,
+                linked_segment_oid: cascadeSegmentOid,
+                applied: cascadeApplied,
+                skip_reason: cascadeSkipReason,
+            },
+        });
+    } catch (error) {
+        logger.error('Error in delete_categorization_chunk:', error);
+        return sendCategorizationMutationError(res, 500, 'internal_error', String(error));
     }
 });
 

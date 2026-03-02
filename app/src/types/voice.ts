@@ -93,6 +93,12 @@ export interface CategorizationChunk {
 export interface VoiceMessageRow {
     timeStart?: number | undefined;
     timeEnd?: number | undefined;
+    row_id?: string | undefined;
+    row_index?: number | undefined;
+    segment_oid?: string | undefined;
+    source_segment_id?: string | undefined;
+    source_file_name?: string | undefined;
+    message_timestamp?: string | number | undefined;
     avatar: string;
     name?: string | undefined;
     text?: string | undefined;
@@ -104,6 +110,7 @@ export interface VoiceMessageRow {
     flag?: string | undefined;
     keywords?: string | undefined;
     message_id?: string | undefined;
+    message_db_id?: string | undefined;
     material_group_id?: string | undefined;
     material_anchor_message_id?: string | undefined;
     material_target_message_id?: string | undefined;
@@ -118,6 +125,7 @@ export interface VoiceMessageGroup {
     material_target_message_id?: string | undefined;
     original_message: VoiceBotMessage;
     rows: VoiceMessageRow[];
+    materials?: VoiceMessageRow[];
     summary: {
         text: string;
     };

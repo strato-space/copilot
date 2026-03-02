@@ -221,6 +221,8 @@ Preferred engineering principles for this repo:
 - CRM performer filtering must be identifier-compatible (`_id` and legacy `id`), and project labels must resolve via `project_data`/`project_id`/`project` fallback chain.
 - Ticket create/update diagnostics should log normalized `project/project_id/performer` payload values to speed up CRM incident triage.
 - CRM work-hours joins are canonical on `ticket_db_id` (`automation_tasks._id`) across CRM routes, miniapp routes, and reporting services; `ticket_id` remains migration-only input and must be normalized before writes.
+- OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
+- Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
 
 ## Product Notes (VoiceBot)
 - VoiceBot backend routes live in `backend/src/api/routes/voicebot/`.
@@ -265,6 +267,12 @@ Preferred engineering principles for this repo:
 - Voice sessions list supports `include_deleted` server filter and frontend `Показывать удаленные`; creator/participant filters drop numeric identity placeholders so only human labels are shown.
 - Voice sessions list must force a refetch when `include_deleted` intent changes during an in-flight list load; loading guard should not block `force=true` mode sync.
 - Voice sessions list supports bulk delete for selected non-deleted rows (`Удалить выбранные` with confirmation) while preserving row-click navigation behavior.
+- Categorization table contract is now `Time | Audio | Text | Materials`; legacy `Обработка`/processing column rendering path was removed.
+- Categorization rows use stable identity (`row_id`/`segment_oid` first, deterministic fallback key second), so row selection/actions are row-local and collision-safe.
+- Categorization row actions now include Copy/Edit/Delete in the frontend and call backend routes `POST /api/voicebot/edit_categorization_chunk` and `POST /api/voicebot/delete_categorization_chunk`.
+- Categorization mutation routes return deterministic validation/runtime errors (`invalid_row_oid`, `message_session_mismatch`, `ambiguous_row_locator`, `row_already_deleted`, etc.) and emit realtime `message_update` + `session_update` on success.
+- Deleting the last active categorization row in a message now cascades transcript-segment delete with compensating rollback if log persistence fails, to avoid partial state.
+- Categorization materials are rendered only in the dedicated Materials column; image-only blocks remain visible without image-as-text rows.
 - Notify worker (`backend/src/workers/voicebot/handlers/notify.ts`) now supports both HTTP notify transport and local hooks parity:
   - HTTP path uses `VOICE_BOT_NOTIFIES_URL` + `VOICE_BOT_NOTIFIES_BEARER_TOKEN`,
   - local hooks use `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON; default `./notifies.hooks.yaml`; empty value disables),
@@ -479,6 +487,12 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-02 22:03):
+  - Closed `copilot-7r94` epic (`copilot-7r94.1`..`copilot-7r94.11`): completed Voice categorization UX/API cleanup including stable row identity, row-level actions, materials-only rendering, typed edit/delete routes, realtime mutation emits, and cascade transcript deletion for last-row removal.
+  - Closed `copilot-j54y`: Codex relationship rows now match Issue ID behavior (`link + copy`) and display status pictograms; shared Codex list now separates `In Progress` and `Blocked` tabs with counters.
+  - Added planning artifacts for upcoming auth and video-parser tracks: `voice-categorization-ux-cleanup-plan.md`, `plan/auth-option-a-copilot-oauth-provider-plan.md`, `plan/auth-option-b-google-oauth-plan.md`, `plan/auth-options-a-vs-b-comparison.md`, `videoparser/specs/*`.
+  - Included operational formula update from working tree: `app/src/store/kanbanStore.ts` `basicBonus` coefficient changed from `0.15` to `0.05`.
+  - Validation passed: `cd app && npm run build`, `cd backend && npm run build`; `bd ready --json` returned `[]`.
 - Close-session refresh (2026-03-02 13:45):
   - Closed `copilot-wtz7`: shared Codex table now uses explicit status tabs `Open / Deferred / Closed / All`; deferred compatibility treats both `status=deferred` and transitional `status=open + defer_until` as deferred, so Open no longer mixes deferred backlog.
   - Closed `copilot-ai1b`: `/voice` sessions list now renders AI-style loading placeholder and domain empty state (`Пока нет сессий по текущим фильтрам`) with reset-filters CTA; generic `No data` text is removed from this flow.
