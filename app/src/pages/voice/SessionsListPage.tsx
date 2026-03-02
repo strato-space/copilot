@@ -9,7 +9,6 @@ import {
     Modal,
     Popconfirm,
     Select,
-    Spin,
     Table,
     Tabs,
     Tag,
@@ -78,6 +77,45 @@ interface BulkActionsState {
     isMergeModalOpen: boolean;
     isBulkMerging: boolean;
 }
+
+const VoiceListLoadingPlaceholder = () => (
+    <div
+        role="status"
+        aria-live="polite"
+        className="mx-auto flex w-full max-w-[720px] flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/80 px-5 py-6"
+    >
+        <div className="flex items-center gap-2 text-slate-700">
+            <RobotOutlined style={{ color: '#2563eb', fontSize: 18 }} />
+            <span className="text-sm font-medium">AI подготавливает список сессий</span>
+        </div>
+        <div className="grid gap-2">
+            <div className="h-3 w-full animate-pulse rounded bg-slate-200" />
+            <div className="h-3 w-11/12 animate-pulse rounded bg-slate-200" />
+            <div className="h-3 w-4/5 animate-pulse rounded bg-slate-200" />
+        </div>
+        <div className="text-xs text-slate-500">Загружаем данные и применяем фильтры, таблица появится автоматически</div>
+    </div>
+);
+
+const VoiceListEmptyPlaceholder = ({
+    hasFilters,
+    onResetFilters,
+}: {
+    hasFilters: boolean;
+    onResetFilters: () => void;
+}) => (
+    <div className="mx-auto flex w-full max-w-[640px] flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-8 text-center">
+        <div className="text-sm font-medium text-slate-700">Пока нет сессий по текущим фильтрам</div>
+        <div className="text-xs text-slate-500">
+            Измените фильтры или дождитесь новых данных, чтобы увидеть элементы в таблице
+        </div>
+        {hasFilters ? (
+            <Button size="small" onClick={onResetFilters}>
+                Сбросить фильтры
+            </Button>
+        ) : null}
+    </div>
+);
 
 const SESSION_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_ID';
 const SESSIONS_LIST_FILTERS_STORAGE_KEY = 'voicebot_sessions_list_filters_v1';
@@ -288,6 +326,7 @@ export default function SessionsListPage() {
         restartCorruptedSession,
         sendSessionToCrmWithMcp,
         sessionsListIncludeDeleted,
+        isSessionsListLoading,
         mergeSessions,
     } = useVoiceBotStore();
     const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
@@ -568,6 +607,20 @@ export default function SessionsListPage() {
             setManyFilterParam(params, SESSIONS_QUERY_KEYS.ACCESS_LEVEL, manyFilterValues(filters.access_level));
             setManyFilterParam(params, SESSIONS_QUERY_KEYS.CREATOR, manyFilterValues(filters.performer));
             setManyFilterParam(params, SESSIONS_QUERY_KEYS.PARTICIPANT, manyFilterValues(filters.participants));
+        });
+    };
+
+    const resetListFilters = (): void => {
+        updateListParams((params) => {
+            params.delete(SESSIONS_QUERY_KEYS.TAB);
+            params.delete(SESSIONS_QUERY_KEYS.PROJECT);
+            params.delete(SESSIONS_QUERY_KEYS.DIALOGUE_TAG);
+            params.delete(SESSIONS_QUERY_KEYS.SESSION_NAME);
+            params.delete(SESSIONS_QUERY_KEYS.ACCESS_LEVEL);
+            params.delete(SESSIONS_QUERY_KEYS.CREATOR);
+            params.delete(SESSIONS_QUERY_KEYS.PARTICIPANT);
+            params.set(SESSIONS_QUERY_KEYS.PAGE, String(DEFAULT_SESSIONS_PAGE));
+            params.set(SESSIONS_QUERY_KEYS.PAGE_SIZE, String(pageSize));
         });
     };
 
@@ -867,10 +920,24 @@ export default function SessionsListPage() {
                     minHeight: '300px',
                 }}
             >
-                <Spin size="large" />
+                <VoiceListLoadingPlaceholder />
             </div>
         );
     }
+
+    const hasActiveListFilters =
+        projectTab !== 'all'
+        || Boolean(projectFilterValue)
+        || Boolean(dialogueTagFilterValue)
+        || Boolean(sessionNameFilterValue)
+        || accessLevelFilterValues.length > 0
+        || creatorFilterValues.length > 0
+        || participantFilterValues.length > 0
+        || showDeletedSessions;
+
+    const sessionsTableEmptyState = isSessionsListLoading
+        ? <VoiceListLoadingPlaceholder />
+        : <VoiceListEmptyPlaceholder hasFilters={hasActiveListFilters} onResetFilters={resetListFilters} />;
 
     const columns: ColumnsType<SessionRow> = [
         {
@@ -1535,6 +1602,7 @@ export default function SessionsListPage() {
                     className="w-full sessions-table"
                     size="small"
                     sticky={{ offsetHeader: 0 }}
+                    loading={isSessionsListLoading && sortedSessionsList.length > 0}
                     pagination={{
                         position: ['bottomRight'],
                         current: currentPage,
@@ -1545,6 +1613,7 @@ export default function SessionsListPage() {
                         className: 'bg-white p-4 !m-0 !mb-2 rounded-lg shadow-sm',
                     }}
                     dataSource={sortedSessionsList}
+                    locale={{ emptyText: sessionsTableEmptyState }}
                     rowKey="_id"
                     rowClassName={(record) => (record.is_deleted ? 'sessions-row-deleted' : '')}
                     rowSelection={{

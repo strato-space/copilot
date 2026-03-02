@@ -19,8 +19,9 @@ describe('Voice session Codex list filter/order contract', () => {
   it('renders Codex issues with shared status segmentation tabs', () => {
     expect(componentSource).toContain('<Table<CodexIssue>');
     expect(componentSource).toContain('<Tabs');
-    expect(componentSource).toContain("type CodexIssuesView = 'open' | 'closed' | 'all';");
+    expect(componentSource).toContain("type CodexIssuesView = 'open' | 'deferred' | 'closed' | 'all';");
     expect(componentSource).toContain("{ key: 'open', label: 'Open' }");
+    expect(componentSource).toContain("{ key: 'deferred', label: 'Deferred' }");
     expect(componentSource).toContain("{ key: 'closed', label: 'Closed' }");
     expect(componentSource).toContain("{ key: 'all', label: 'All' }");
   });

@@ -34,6 +34,7 @@ interface CodexIssue {
     notes?: string;
     codex_review_state?: string;
     source_kind?: string;
+    defer_until?: string;
 }
 
 interface CodexIssuesTableProps {
@@ -54,10 +55,11 @@ const CODEX_DEFAULT_LIMIT = 1000;
 const CODEX_DEFAULT_PAGE_SIZE = 10;
 const CODEX_PAGE_SIZE_OPTIONS = ['10', '50', '100', '200', '500', '1000'];
 
-type CodexIssuesView = 'open' | 'closed' | 'all';
+type CodexIssuesView = 'open' | 'deferred' | 'closed' | 'all';
 
 const CODEX_VIEW_TABS: Array<{ key: CodexIssuesView; label: string }> = [
     { key: 'open', label: 'Open' },
+    { key: 'deferred', label: 'Deferred' },
     { key: 'closed', label: 'Closed' },
     { key: 'all', label: 'All' },
 ];
@@ -129,6 +131,7 @@ const normalizeIssue = (issue: CodexIssueSource): CodexIssue | null => {
         notes: toText(record.notes),
         codex_review_state: toText(record.codex_review_state),
         source_kind: toText(record.source_kind),
+        defer_until: pickStringField(record, ['defer_until', 'deferUntil']),
     };
 };
 
@@ -192,6 +195,24 @@ const reviewStateColor = (state: string): string => {
     return 'default';
 };
 
+const normalizeStatus = (value: unknown): string => toText(value).toLowerCase();
+
+const hasDeferUntil = (issue: CodexIssue): boolean => Boolean(toText(issue.defer_until));
+
+const isDeferredIssue = (issue: CodexIssue): boolean => {
+    const status = normalizeStatus(issue.status);
+    if (status === 'deferred') return true;
+    return status === 'open' && hasDeferUntil(issue);
+};
+
+const isClosedIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'closed';
+
+const isOpenIssue = (issue: CodexIssue): boolean => {
+    const status = normalizeStatus(issue.status);
+    if (!['open', 'in_progress', 'blocked'].includes(status)) return false;
+    return !isDeferredIssue(issue);
+};
+
 const OPER_OPS_TASK_LINK_LABEL = 'Открыть задачу в OperOps';
 
 export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAULT_LIMIT }: CodexIssuesTableProps) {
@@ -204,17 +225,23 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
     const [pageSize, setPageSize] = useState<number>(CODEX_DEFAULT_PAGE_SIZE);
     const [currentPage, setCurrentPage] = useState<number>(1);
 
-    const filteredIssues = useMemo(() => {
+    const sourceFilteredIssues = useMemo(() => {
         if (!sourceRefs.length) return issues;
         return issues.filter((issue) => ticketMatchesVoiceSessionSourceRefs(issue, sourceRefs));
     }, [issues, sourceRefs]);
+
+    const filteredIssues = useMemo(() => {
+        if (view === 'all') return sourceFilteredIssues;
+        if (view === 'open') return sourceFilteredIssues.filter((issue) => isOpenIssue(issue));
+        if (view === 'deferred') return sourceFilteredIssues.filter((issue) => isDeferredIssue(issue));
+        return sourceFilteredIssues.filter((issue) => isClosedIssue(issue));
+    }, [sourceFilteredIssues, view]);
 
     const fetchIssues = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const requestLimit = view === 'open' ? limit : 0;
-            const response = await api_request<unknown>('codex/issues', { view, limit: requestLimit }, { silent: true });
+            const response = await api_request<unknown>('codex/issues', { view: 'all', limit }, { silent: true });
             const parsed = normalizeIssueList(response);
             const deduplicated = parsed.filter(
                 (issue, index, all) => all.findIndex((candidate) => resolveTaskKey(candidate) === resolveTaskKey(issue)) === index

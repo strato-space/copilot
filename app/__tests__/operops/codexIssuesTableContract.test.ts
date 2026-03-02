@@ -12,13 +12,19 @@ describe('OperOps Codex issues table contract', () => {
         expect(source).toContain('const parsed = normalizeIssueList(response);');
     });
 
-    it('uses Open/Closed/All subtabs and forwards selected view to codex/issues API', () => {
-        expect(source).toContain("type CodexIssuesView = 'open' | 'closed' | 'all';");
+    it('uses Open/Deferred/Closed/All subtabs with local deferred compatibility filtering', () => {
+        expect(source).toContain("type CodexIssuesView = 'open' | 'deferred' | 'closed' | 'all';");
         expect(source).toContain("{ key: 'open', label: 'Open' }");
+        expect(source).toContain("{ key: 'deferred', label: 'Deferred' }");
         expect(source).toContain("{ key: 'closed', label: 'Closed' }");
         expect(source).toContain("{ key: 'all', label: 'All' }");
         expect(source).toContain('const [view, setView] = useState<CodexIssuesView>(\'open\');');
-        expect(source).toContain("const response = await api_request<unknown>('codex/issues', { view, limit: requestLimit }, { silent: true });");
+        expect(source).toContain("const response = await api_request<unknown>('codex/issues', { view: 'all', limit }, { silent: true });");
+        expect(source).toContain('const isDeferredIssue = (issue: CodexIssue): boolean => {');
+        expect(source).toContain("if (status === 'deferred') return true;");
+        expect(source).toContain("return status === 'open' && hasDeferUntil(issue);");
+        expect(source).toContain("if (view === 'open') return sourceFilteredIssues.filter((issue) => isOpenIssue(issue));");
+        expect(source).toContain("if (view === 'deferred') return sourceFilteredIssues.filter((issue) => isDeferredIssue(issue));");
     });
 
     it('keeps configurable pagination with size selector up to 1000 rows', () => {
@@ -33,6 +39,7 @@ describe('OperOps Codex issues table contract', () => {
 
     it('supports legacy dependencies/dependents fields in Codex issue payload', () => {
         expect(source).toContain('dependencies: toTextArray(record.dependencies || record.dependents)');
+        expect(source).toContain("defer_until: pickStringField(record, ['defer_until', 'deferUntil']),");
     });
 
     it('keeps raw bd relationship payload for details card relationship rendering', () => {

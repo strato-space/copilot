@@ -1573,6 +1573,9 @@
 - **13:23** Relationship navigation was incomplete: parent/child issue IDs were visible but not directly navigable from the details card.
 - **13:12** CRM Kanban lacked a one-click clone path for existing tasks, and Plan-Fact contract/subproject labels were overly forced to uppercase.
 - **13:14** Task-create E2E close/cancel coverage was brittle in unauth/stubbed environments due to auth/CRM dependency and fullscreen spinner pointer capture.
+- **13:44** Codex issues in OperOps mixed deferred tasks into `Open` without a dedicated deferred view, so active work and deferred backlog were not separable in UI.
+- **13:44** Voice sessions list empty/loading state still surfaced generic AntD `No data` messaging, which produced false-empty perception while data was loading or filters were narrowing results.
+- **13:43** FinOps scope discovery artifacts were scattered across canonical/mirror/sandbox sources without a single repository-owned inventory document.
 
 ### FEATURE IMPLEMENTED
 - **13:19** Closed `copilot-9ifu`: Codex details card now hides empty metadata rows, normalizes escaped newlines, and renders grouped relationships (`parent-child`, `waits-for`, `blocks`, `discovered-from`, fallback dependencies).
@@ -1581,6 +1584,9 @@
 - **13:14** Added ticket clone action in CRM Kanban with normalized payload generation for project/type/performer/date/notifications/description.
 - **13:12** Relaxed visual casing in Plan-Fact project rows by removing forced uppercase styling for contract and subproject labels.
 - **13:14** Strengthened task-create E2E workflow with explicit auth/CRM API mocks and deterministic close/cancel verification.
+- **13:44** Closed `copilot-wtz7`: shared Codex table now exposes `Open / Deferred / Closed / All` tabs; deferred compatibility logic treats `status=deferred` and transitional `status=open + defer_until` as deferred while keeping `Open` active-only.
+- **13:44** Closed `copilot-ai1b`: Voice sessions list now renders AI-style loading placeholder and domain-specific empty state with reset-filters CTA instead of generic `No data`.
+- **13:43** Added FinOps discovery documentation (`copilot-081q` support): canonical spec inventory, mirror/sandbox references, and open product-scope questions are consolidated in one document.
 
 ### CHANGES
 - **13:19** Updated `app/src/components/codex/CodexIssueDetailsCard.tsx` with relationship parsing/rendering, escaped-newline normalization, and clickable `copilot-*` issue links.
@@ -1589,3 +1595,13 @@
 - **13:14** Updated `app/src/components/crm/CRMKanban.tsx` (`CopyOutlined` clone action + `createTicket` payload normalization) and `app/src/components/PlanFactGrid.tsx` (label typography casing).
 - **13:14** Updated `app/e2e/task-create.spec.ts` for unauth close/cancel stability (mocked APIs + spinner click-through) and refreshed `docs/copilot-repo-visual-recap.html` with a MongoDB→TypeDB mapping-focused structure.
 - **13:31** Validation run: `cd app && npm run test:serial -- __tests__/operops/codexIssueDetailsCardContract.test.ts __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/codexTasksInlineDetailsContract.test.ts __tests__/operops/codexTaskPageContract.test.ts` and `cd app && npm run build` passed.
+- **13:44** Updated `app/src/components/codex/CodexIssuesTable.tsx`:
+  - introduced `deferred` tab key and tab order `Open / Deferred / Closed / All`,
+  - added deferred-compatibility predicates (`status=deferred` OR `status=open && defer_until`),
+  - switched API fetch to `view=all` + local status segmentation to preserve transitional semantics.
+- **13:44** Updated Codex contracts:
+  - `app/__tests__/operops/codexIssuesTableContract.test.ts`,
+  - `app/__tests__/voice/sessionCodexTasksFilterOrderContract.test.ts`.
+- **13:44** Updated `app/src/pages/voice/SessionsListPage.tsx` with AI-style loading/empty placeholders, reset-filters CTA, and explicit table `emptyText` contract; added `app/__tests__/voice/sessionsListEmptyStateContract.test.ts`.
+- **13:43** Added `docs/FINOPS_SPEC_DISCOVERY.md` and synchronized references in `README.md` and `AGENTS.md` to keep FinOps scope-alignment text current.
+- **13:45** Validation run: `cd app && npm run test:serial -- __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/sessionCodexTasksFilterOrderContract.test.ts __tests__/voice/sessionsListEmptyStateContract.test.ts` and `cd app && npm run build` passed.

@@ -52,6 +52,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - The Expenses tab combines payroll and other costs, with category-level operations and sticky totals.
 - Expense attachments are uploaded via `/api/uploads/expense-attachments` and served from `/uploads/expenses`.
 - Guide directories fall back to mock data when the automation API is unavailable, and the Guide header includes a global Log sidebar.
+- FinOps spec discovery/index for scope alignment is tracked in `docs/FINOPS_SPEC_DISCOVERY.md` (canonical vs mirror sources + open product questions).
 
 ## OperOps/CRM notes
 - CRM components migrated from `automation/appkanban` live in `app/src/components/crm/`.
@@ -67,7 +68,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
 - OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
 - Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing), so Source->Voice navigation keeps task visibility consistent.
-- Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, including status segmentation tabs (`Open` / `Closed` / `All`) with the same row-open behavior and source filtering.
+- Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, including status segmentation tabs (`Open` / `Deferred` / `Closed` / `All`) with the same row-open behavior and source filtering.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 
@@ -314,6 +315,11 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-02 13:45):
+  - Closed `copilot-wtz7`: shared Codex table now uses explicit status tabs `Open / Deferred / Closed / All`; deferred compatibility treats both `status=deferred` and transitional `status=open + defer_until` as deferred, so Open no longer mixes deferred backlog.
+  - Closed `copilot-ai1b`: `/voice` sessions list now renders AI-style loading placeholder and domain empty state (`Пока нет сессий по текущим фильтрам`) with reset-filters CTA; generic `No data` text is removed from this flow.
+  - Added `docs/FINOPS_SPEC_DISCOVERY.md` and synced `README.md`/`AGENTS.md` references as progress artifact for `copilot-081q` (scope remains pending product decisions).
+  - Validation passed: `cd app && npm run test:serial -- __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/sessionCodexTasksFilterOrderContract.test.ts __tests__/voice/sessionsListEmptyStateContract.test.ts` and `cd app && npm run build`.
 - Close-session refresh (2026-03-02 13:30):
   - Closed `copilot-9ifu`: Codex details card now hides empty metadata rows, normalizes escaped newlines in Description/Notes, and renders explicit relationship groups from bd payload.
   - Closed follow-ups `copilot-x06u` and `copilot-2qne`: `copilot-*` IDs in `Relationships` and top `Issue ID` are now clickable to `/operops/codex/task/:id` while keeping Issue ID copy action intact.

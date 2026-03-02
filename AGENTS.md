@@ -209,6 +209,7 @@ Preferred engineering principles for this repo:
 - Plan-fact project edits are persisted via `PUT /api/plan-fact/project` (fields: `project_name`, `subproject_name`, `contract_type`, `rate_rub_per_hour`) and contract type updates are propagated to facts/forecasts.
 - Expense attachments are served from `/uploads/expenses`.
 - Guide directories use mock fallback data when automation APIs fail and expose a global Log sidebar from the Guide header.
+- FinOps spec-source inventory and open scope questions are tracked in `docs/FINOPS_SPEC_DISCOVERY.md` until product scope is approved.
 
 ## Product Notes (OperOps/CRM)
 - CRM components migrated from `automation/appkanban` live in `app/src/components/crm/`.
@@ -478,6 +479,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-02 13:45):
+  - Closed `copilot-wtz7`: shared Codex table now uses explicit status tabs `Open / Deferred / Closed / All`; deferred compatibility treats both `status=deferred` and transitional `status=open + defer_until` as deferred, so Open no longer mixes deferred backlog.
+  - Closed `copilot-ai1b`: `/voice` sessions list now renders AI-style loading placeholder and domain empty state (`Пока нет сессий по текущим фильтрам`) with reset-filters CTA; generic `No data` text is removed from this flow.
+  - Added `docs/FINOPS_SPEC_DISCOVERY.md` and synced `README.md`/`AGENTS.md` references as progress artifact for `copilot-081q` (scope remains pending product decisions).
+  - Validation passed: `cd app && npm run test:serial -- __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/sessionCodexTasksFilterOrderContract.test.ts __tests__/voice/sessionsListEmptyStateContract.test.ts` and `cd app && npm run build`.
 - Close-session refresh (2026-03-02 13:30):
   - Closed `copilot-9ifu`: OperOps/Voice Codex details card now hides empty metadata rows (no placeholder `—` noise), renders escaped `\n`/`\r\n` as real line breaks in Description/Notes, and shows a dedicated `Relationships` block with bd semantics (`parent-child`, `waits-for`, `blocks`, `discovered-from`, fallback dependencies).
   - Closed follow-ups `copilot-x06u` and `copilot-2qne`: all `copilot-*` IDs in the `Relationships` block are clickable links to `/operops/codex/task/:id`; top `Issue ID` is also clickable while preserving the existing copy mini-button behavior.
@@ -587,7 +593,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Completed Wave 4 (`copilot-l3j6`, `copilot-c1xj`, `copilot-zwjl`) and merged all commits to `main`.
 - Added Voice session tabs contract:
   - `Задачи` tab (CRMKanban, `source_ref` scoped to current session, Work/Review subtabs),
-  - `Codex` tab with backend `POST /api/voicebot/codex_tasks` route, newest-first canonical filtering by `external_ref`, and shared status tabs (`Open`/`Closed`/`All`) matching OperOps `Codex`.
+  - `Codex` tab with backend `POST /api/voicebot/codex_tasks` route, newest-first canonical filtering by `external_ref`, and shared status tabs (`Open`/`Deferred`/`Closed`/`All`) matching OperOps `Codex`.
 - Added OperOps `Codex` tab (`copilot-ex9q`) backed by `POST /api/crm/codex/issues` (`bd --no-daemon list --all --json --limit 500`) and inline refresh workflow.
 - Added inline Voice Codex issue detail drawer (`copilot-gb72`) with bd-show-like payload fields (`labels`, `dependencies`, `notes`, ownership metadata).
 - Added shared canonical source matcher (`app/src/utils/voiceSessionTaskSource.ts`) for Voice `Задачи`/`Codex` tabs and OperOps `CRMKanban` filtering, covering `source_ref`, `external_ref`, `source_data.session_id`, and `source_data.session_db_id`.
