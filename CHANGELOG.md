@@ -1555,3 +1555,37 @@
 - **04:36** Validation run: targeted app/backend Jest suites for every wave (`voice tabs`, `codex routes`, `deferred callbacks`, `categorization/materials grouping`) passed; `app/backend` full builds remain blocked by pre-existing unrelated TypeScript errors in CRM and voicebot-persons files.
 - **04:48** `/session_done` permission compatibility fix: replaced unavailable route middleware call with inline permission resolution (`PermissionManager.getUserPermissions`) and explicit `VOICEBOT_SESSIONS.UPDATE` guard in `backend/src/api/routes/voicebot/sessions.ts`.
 - **04:49** Validation run (full): `cd app && npm test -- --runInBand` (`50 suites`, `113 tests`) and `cd backend && npm test -- --runInBand` (`76 suites`, `365 tests`) both passed.
+
+## 2026-03-01
+### PROBLEM SOLVED
+- **18:55** Visual recap documentation had Mermaid formatting drift and close-session artifacts were not fully synchronized with repository docs.
+
+### FEATURE IMPLEMENTED
+- **22:02** Added close-session documentation synchronization for recap artifacts and handoff evidence.
+
+### CHANGES
+- **18:55** Fixed Mermaid line-break rendering and recap formatting in `docs/copilot-repo-visual-recap.html`.
+- **22:02** Updated close-session documentation artifacts (`AGENTS.md`, `README.md`) to align with recap handoff context.
+
+## 2026-03-02
+### PROBLEM SOLVED
+- **13:08** OperOps/Voice Codex details still rendered noisy placeholder metadata (`—`), lacked explicit relationship semantics from bd payload, and showed escaped newline literals in Description/Notes.
+- **13:23** Relationship navigation was incomplete: parent/child issue IDs were visible but not directly navigable from the details card.
+- **13:12** CRM Kanban lacked a one-click clone path for existing tasks, and Plan-Fact contract/subproject labels were overly forced to uppercase.
+- **13:14** Task-create E2E close/cancel coverage was brittle in unauth/stubbed environments due to auth/CRM dependency and fullscreen spinner pointer capture.
+
+### FEATURE IMPLEMENTED
+- **13:19** Closed `copilot-9ifu`: Codex details card now hides empty metadata rows, normalizes escaped newlines, and renders grouped relationships (`parent-child`, `waits-for`, `blocks`, `discovered-from`, fallback dependencies).
+- **13:24** Closed `copilot-x06u`: child relationship IDs in `Children (parent-child)` now deep-link to `/operops/codex/task/:id`.
+- **13:27** Closed `copilot-2qne`: parent relationship IDs and top `Issue ID` now deep-link to `/operops/codex/task/:id` while preserving copy behavior.
+- **13:14** Added ticket clone action in CRM Kanban with normalized payload generation for project/type/performer/date/notifications/description.
+- **13:12** Relaxed visual casing in Plan-Fact project rows by removing forced uppercase styling for contract and subproject labels.
+- **13:14** Strengthened task-create E2E workflow with explicit auth/CRM API mocks and deterministic close/cancel verification.
+
+### CHANGES
+- **13:19** Updated `app/src/components/codex/CodexIssueDetailsCard.tsx` with relationship parsing/rendering, escaped-newline normalization, and clickable `copilot-*` issue links.
+- **13:19** Updated `app/src/components/codex/CodexIssuesTable.tsx` to pass through raw relationship payload (`dependents`, `children`, `parent`, raw dependencies) to the details card.
+- **13:19** Added `app/__tests__/operops/codexIssueDetailsCardContract.test.ts` and updated `app/__tests__/operops/codexIssuesTableContract.test.ts` for relationship/clickable-id contracts.
+- **13:14** Updated `app/src/components/crm/CRMKanban.tsx` (`CopyOutlined` clone action + `createTicket` payload normalization) and `app/src/components/PlanFactGrid.tsx` (label typography casing).
+- **13:14** Updated `app/e2e/task-create.spec.ts` for unauth close/cancel stability (mocked APIs + spinner click-through) and refreshed `docs/copilot-repo-visual-recap.html` with a MongoDB→TypeDB mapping-focused structure.
+- **13:31** Validation run: `cd app && npm run test:serial -- __tests__/operops/codexIssueDetailsCardContract.test.ts __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/codexTasksInlineDetailsContract.test.ts __tests__/operops/codexTaskPageContract.test.ts` and `cd app && npm run build` passed.

@@ -26,6 +26,11 @@ interface CodexIssue {
     external_ref?: string;
     labels?: string[];
     dependencies?: string[];
+    dependents?: unknown[];
+    parent?: unknown;
+    children?: unknown[];
+    bd_dependencies?: unknown[];
+    bd_parent?: unknown;
     notes?: string;
     codex_review_state?: string;
     source_kind?: string;
@@ -117,6 +122,10 @@ const normalizeIssue = (issue: CodexIssueSource): CodexIssue | null => {
         external_ref: toText(record.external_ref),
         labels: toTextArray(record.labels),
         dependencies: toTextArray(record.dependencies || record.dependents),
+        dependents: Array.isArray(record.dependents) ? record.dependents : [],
+        children: Array.isArray(record.children) ? record.children : [],
+        bd_dependencies: Array.isArray(record.dependencies) ? record.dependencies : [],
+        ...(record.parent !== undefined ? { parent: record.parent, bd_parent: record.parent } : {}),
         notes: toText(record.notes),
         codex_review_state: toText(record.codex_review_state),
         source_kind: toText(record.source_kind),

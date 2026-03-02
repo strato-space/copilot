@@ -466,41 +466,41 @@ td code {
 <div class="wrap">
   <nav class="toc" id="toc">
     <div class="toc-title">Contents</div>
-    <a href="#s1">1. Topology</a>
-    <a href="#s2">2. Product Surfaces</a>
-    <a href="#s3">3. Hard Contracts</a>
-    <a href="#s4">4. Interfaces</a>
-    <a href="#s5">5. Runtime & Deploy</a>
-    <a href="#s6">6. Repo Map</a>
+    <a href="#s1">1. Mapping Topology</a>
+    <a href="#s2">2. Domain Coverage</a>
+    <a href="#s3">3. Collection Map</a>
+    <a href="#s4">4. Relation Wiring</a>
+    <a href="#s5">5. Data Integrity</a>
+    <a href="#s6">6. Schema Scope</a>
   </nav>
 
   <main class="main">
     <section class="hero animate" style="--i:0;">
-      <div class="kicker">Visual Explainer / Project Recap</div>
-      <h1>Copilot Platform Recap<br/>for <code>/home/strato-space/copilot</code></h1>
+      <div class="kicker">Visual Explainer / TypeDB Mapping Recap</div>
+      <h1>Copilot MongoDB → TypeDB Data Contract<br/>for <code>ontology/typedb</code></h1>
       <p class="subtitle">
-        Multi-surface platform spanning FinOps, OperOps/CRM, Voice, and Miniapp. Backend is TypeScript/Express + Socket.IO with Redis/BullMQ runtime workers and a separate Fast-Agent service for AI cards.
+        Deep snapshot based on <code>ontology/typedb/mappings/mongodb_to_typedb_v1.yaml</code>. Schema context from <code>ontology/typedb/schema/str_opsportal_v1.tql</code> is limited to structures that are explicitly mapped.
       </p>
       <div class="kpi-grid">
         <article class="kpi">
-          <div class="label">Top-level products</div>
-          <div class="value">4</div>
-          <div class="meta">FinOps, OperOps/CRM, Voice, Miniapp</div>
+          <div class="label">Mapped collections</div>
+          <div class="value">29</div>
+          <div class="meta">All collection blocks declared in mapping spec</div>
         </article>
         <article class="kpi">
-          <div class="label">Primary frontends</div>
-          <div class="value">2</div>
-          <div class="meta"><code>app/</code> + <code>miniapp/</code></div>
+          <div class="label">TypeDB entities used</div>
+          <div class="value">28</div>
+          <div class="meta">Unique <code>target_entity</code> values (schema-aligned)</div>
         </article>
         <article class="kpi">
-          <div class="label">Critical interfaces</div>
-          <div class="value">5</div>
-          <div class="meta">Voice upload/close/attachment + socket + URL contract</div>
+          <div class="label">Mapped relations</div>
+          <div class="value">25</div>
+          <div class="meta">All relation edges from mapping + owner lookups</div>
         </article>
         <article class="kpi">
-          <div class="label">Runtime lanes</div>
-          <div class="value">3</div>
-          <div class="meta">prod, dev, local via PM2 mode scripts</div>
+          <div class="label">Integrity checks</div>
+          <div class="value">9</div>
+          <div class="meta"><code>quality_gates</code>; out-of-scope collections listed separately (19)</div>
         </article>
       </div>
     </section>
@@ -508,10 +508,10 @@ td code {
     <section class="section animate" id="s1" style="--i:1;">
       <div class="sec-head">
         <span class="sec-num">Section 1</span>
-        <h2>System Topology</h2>
+        <h2>Mapping Topology (MongoDB → TypeDB)</h2>
       </div>
       <p class="sec-sub">
-        Control plane from browser surfaces into backend/API, realtime bus, queue workers, and agent sidecar.
+        Data lineage from mapped Mongo collections through normalization/key strategy into the TypeDB subset that is explicitly covered by the mapping file.
       </p>
 
       <div class="mermaid-wrap" id="topology-wrap">
@@ -521,76 +521,108 @@ td code {
           <button data-action="reset" aria-label="Reset zoom">⟳</button>
         </div>
         <div class="mermaid" id="topology-diagram">
-flowchart LR
-  A["Web App<br/>app/"] --> B["Copilot Backend<br/>/api + /api/voicebot"]
-  A --> C["Socket.IO /voicebot<br/>subscribe_on_session"]
-  M["Miniapp UI<br/>miniapp/"] --> N["Miniapp Backend<br/>backend/src/miniapp"]
-  N --> D["MongoDB"]
-  B --> D
-  B --> E["Redis"]
-  B --> F["BullMQ Queues"]
-  F --> G["Voice Workers TS<br/>processing/transcribe/categorize"]
-  F --> H["Voice TG Runtime TS<br/>ingress + callbacks"]
-  B --> I["Socket Events Worker<br/>queue -> rooms"]
-  B --> J["Fast-Agent Service :8722<br/>agent-cards"]
-  J --> K["create_tasks"]
-  J --> L["generate_session_title"]
-  C --> A
-  I --> C
+flowchart TD
+  subgraph SRC["MongoDB Collections (29 mapped)"]
+    O["OperOps/Core<br/>12 collections"]
+    V["Voice/TG<br/>6 collections"]
+    D["Drive<br/>3 collections"]
+    F["FinOps/Finance<br/>8 collections"]
+  end
 
-  classDef ui fill:#e8f0fb,stroke:#1e3a5f,stroke-width:1.4,color:#0d223a;
-  classDef api fill:#dff3f0,stroke:#0f766e,stroke-width:1.4,color:#0d223a;
-  classDef data fill:#f8efd9,stroke:#d4a73a,stroke-width:1.4,color:#0d223a;
-  classDef worker fill:#e5f5e7,stroke:#2f8f5b,stroke-width:1.4,color:#0d223a;
+  subgraph MAP["Mapping Spec<br/>mongodb_to_typedb_v1.yaml"]
+    N1["id_normalization<br/>ObjectId/int/double -> string"]
+    N2["key strategy<br/>27 direct keys + 2 compose keys"]
+    N3["attributes projection<br/>per collection -> target entity"]
+    N4["relation mapping<br/>25 owner_lookup edges"]
+  end
 
-  class A,M ui;
-  class B,C,N,J,K,L api;
-  class D,E,F data;
-  class G,H,I worker;
+  subgraph TDB["TypeDB Scope in Use<br/>str_opsportal_v1.tql intersection"]
+    E["28 entities"]
+    R["25 relations"]
+    Q["9 quality gates"]
+  end
+
+  O --> N3
+  V --> N3
+  D --> N3
+  F --> N3
+  O --> N4
+  V --> N4
+  F --> N4
+  N1 --> E
+  N2 --> E
+  N3 --> E
+  N4 --> R
+  E --> Q
+  R --> Q
+
+  classDef src fill:#e8f0fb,stroke:#1e3a5f,stroke-width:1.4,color:#0d223a;
+  classDef map fill:#dff3f0,stroke:#0f766e,stroke-width:1.4,color:#0d223a;
+  classDef tdb fill:#f8efd9,stroke:#d4a73a,stroke-width:1.4,color:#0d223a;
+
+  class O,V,D,F src;
+  class N1,N2,N3,N4 map;
+  class E,R,Q tdb;
         </div>
       </div>
       <p class="footer-note">
-        Voice invariants from repo contracts: close is REST-first (<code>POST /api/voicebot/session_done</code>), websocket is update transport, and runtime isolation is enforced with <code>runtime_tag</code> semantics.
+        Compose keys in scope: <code>forecast_project_month_id = forecast_version_id + project_id + month</code> and <code>fx_monthly_id = month + pair</code>.
       </p>
     </section>
 
     <section class="section animate" id="s2" style="--i:2;">
       <div class="sec-head">
         <span class="sec-num">Section 2</span>
-        <h2>Product Surfaces & Ownership</h2>
+        <h2>Domain Coverage by Real Collections</h2>
       </div>
-      <p class="sec-sub">Domain boundaries in the same repository, with shared auth and realtime substrate.</p>
+      <p class="sec-sub">Coverage buckets are derived from actual collection names in <code>mongodb_to_typedb_v1.yaml</code>.</p>
       <div class="card-grid">
         <article class="card">
-          <h3>FinOps</h3>
-          <p>Plan-fact, analytics, FX rates, expenses and month closure operations. Frontend state is store-driven and backend APIs are under <code>/api/finops/*</code> + <code>/api/plan-fact/*</code>.</p>
+          <h3>OperOps/Core</h3>
+          <p>12 collections mapped into 11 entities. This bucket carries project/task/person hierarchy, task typing, and work-log lineage.</p>
           <div class="pill-row">
-            <span class="pill">app/src/pages/PlanFactPage</span>
-            <span class="pill">app/src/store/fxStore.ts</span>
+            <span class="pill"><code>automation_tasks</code> → <code>oper_task</code></span>
+            <span class="pill"><code>automation_projects</code> → <code>project</code></span>
+            <span class="pill"><code>automation_project_groups</code> → <code>project_group</code></span>
+            <span class="pill"><code>automation_task_types/tree</code> → <code>task_type</code>/<code>task_type_tree</code></span>
+            <span class="pill"><code>automation_work_hours</code> → <code>work_log</code></span>
+            <span class="pill"><code>automation_performers</code> + <code>automation_persons</code> → <code>person</code></span>
+            <span class="pill"><code>automation_customers/clients</code> → <code>client</code>/<code>legacy_client</code></span>
           </div>
         </article>
         <article class="card">
-          <h3>OperOps / CRM</h3>
-          <p>Kanban, performers, project tree, task details, codex issue pages. Realtime events include ticket/epic/comment/work-hours updates and deep links resolve by <code>id || _id</code>.</p>
+          <h3>Voice / TG</h3>
+          <p>6 collections mapped into voice session/message/topic/history/merge entities plus TG binding. Includes runtime-tagged records and image-anchor/session linking fields.</p>
           <div class="pill-row">
-            <span class="pill">app/src/pages/operops</span>
-            <span class="pill">backend/src/api/routes/crm</span>
+            <span class="pill"><code>automation_voice_bot_sessions</code> → <code>voice_session</code></span>
+            <span class="pill"><code>automation_voice_bot_messages</code> → <code>voice_message</code></span>
+            <span class="pill"><code>automation_voice_bot_topics</code> → <code>voice_topic</code></span>
+            <span class="pill"><code>automation_voice_bot_session_log</code> → <code>history_step</code></span>
+            <span class="pill"><code>automation_voice_bot_session_merge_log</code> → <code>voice_session_merge_log</code></span>
+            <span class="pill"><code>automation_tg_voice_sessions</code> → <code>tg_voice_session</code></span>
           </div>
         </article>
         <article class="card">
-          <h3>Voice</h3>
-          <p>Native voice session UI under <code>/voice/*</code>; backend source of truth under <code>/api/voicebot/*</code>. Upload and workers must emit <code>new_message</code>, <code>session_update</code>, and <code>message_update</code> for refresh-free UX.</p>
+          <h3>Google Drive Subgraph</h3>
+          <p>3 collections for project files, watch channels, and directory structure snapshots.</p>
           <div class="pill-row">
-            <span class="pill attn">REST close contract</span>
-            <span class="pill warn">runtime_tag isolation</span>
+            <span class="pill"><code>automation_google_drive_projects_files</code> → <code>drive_project_file</code></span>
+            <span class="pill"><code>automation_google_drive_events_channels</code> → <code>drive_event_channel</code></span>
+            <span class="pill"><code>automation_google_drive_structure</code> → <code>drive_node</code></span>
           </div>
         </article>
         <article class="card">
-          <h3>Miniapp + Agents Sidecar</h3>
-          <p>Miniapp has dedicated backend entrypoint and build lane. AI actions run through local Fast-Agent service (<code>127.0.0.1:8722</code>) with agent-cards for session title and task extraction.</p>
+          <h3>FinOps / Legacy Finance</h3>
+          <p>8 collections for legacy income/expense, monthly forecasts, expense operations/logs, and FX monthly rates.</p>
           <div class="pill-row">
-            <span class="pill">miniapp/src</span>
-            <span class="pill">agents/agent-cards</span>
+            <span class="pill"><code>automation_finances_expenses</code> → <code>legacy_finance_expense</code></span>
+            <span class="pill"><code>automation_finances_income</code> → <code>legacy_finance_income</code></span>
+            <span class="pill"><code>automation_finances_income_types</code> → <code>legacy_finance_income_type</code></span>
+            <span class="pill"><code>forecasts_project_month</code> → <code>forecast_project_month</code></span>
+            <span class="pill"><code>finops_expense_categories</code> → <code>cost_category</code></span>
+            <span class="pill"><code>finops_expense_operations</code> → <code>cost_expense</code></span>
+            <span class="pill"><code>finops_expense_operations_log</code> → <code>finops_expense_operation_log</code></span>
+            <span class="pill"><code>finops_fx_rates</code> → <code>fx_monthly</code></span>
           </div>
         </article>
       </div>
@@ -599,99 +631,101 @@ flowchart LR
     <section class="section animate" id="s3" style="--i:3;">
       <div class="sec-head">
         <span class="sec-num">Section 3</span>
-        <h2>Hard Contracts (Do Not Reinterpret)</h2>
+        <h2>Collection → Entity Mapping Matrix</h2>
       </div>
-      <p class="sec-sub">Repository constitution defines non-negotiable behavior across voice lifecycle and UI semantics.</p>
-      <div class="card-grid">
-        <article class="card">
-          <h3>Voice Session Lifecycle</h3>
-          <p><code>Done</code> must be deterministic from recording/paused states. Close failures keep session active. Browser is not the origin for <code>session_done</code> events.</p>
-          <div class="pill-row">
-            <span class="pill ok">REST-first close</span>
-            <span class="pill warn">No fake closed state</span>
-          </div>
-        </article>
-        <article class="card">
-          <h3>Realtime Guarantees</h3>
-          <p>Upload path and processing workers are required to push room updates; transcription/categorization tabs must update without manual refresh.</p>
-          <div class="pill-row">
-            <span class="pill ok">new_message</span>
-            <span class="pill ok">session_update</span>
-            <span class="pill ok">message_update</span>
-          </div>
-        </article>
-        <article class="card">
-          <h3>Sessions List UX Contract</h3>
-          <p>Quick tabs and deleted toggle are persisted and restored across navigation/reload. Include-deleted mode must force-sync under in-flight load.</p>
-          <div class="pill-row">
-            <span class="pill">Все / Без проекта / Активные / Мои</span>
-          </div>
-        </article>
-        <article class="card">
-          <h3>Task Payload Contract</h3>
-          <p>Possible Tasks payload shape remains <code>id/name/description/priority/...</code>; <code>task_type_id</code> remains optional in UI and processing paths.</p>
-          <div class="pill-row">
-            <span class="pill ok">Canonicalized writes</span>
-            <span class="pill warn">Legacy keys normalized</span>
-          </div>
-        </article>
+      <p class="sec-sub">Direct extract from mapping spec: keys, representative attributes, and outbound relation hooks.</p>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Mongo Collection</th>
+                <th>TypeDB Entity</th>
+                <th>Key Mapping</th>
+                <th>Selected Mapped Attributes</th>
+                <th>Outbound Relations</th>
+              </tr>
+            </thead>
+            <tbody>
+<tr><td><code>automation_clients</code></td><td><code>legacy_client</code></td><td><code>legacy_client_id</code> &larr; <code>_id</code></td><td><code>name</code>, <code>status</code>, <code>drive_folder_id</code>, <code>project_groups_ids</code></td><td>&mdash;</td></tr>
+<tr><td><code>automation_customers</code></td><td><code>client</code></td><td><code>client_id</code> &larr; <code>_id</code></td><td><code>name</code>, <code>status</code>, <code>project_groups_ids</code>, <code>created_at</code>, <code>updated_at</code></td><td>&mdash;</td></tr>
+<tr><td><code>automation_epic_tasks</code></td><td><code>epic_task</code></td><td><code>epic_task_id</code> &larr; <code>_id</code></td><td><code>is_deleted</code>, <code>name</code>, <code>description</code>, <code>project_id</code>, <code>created_at</code></td><td><code>project_has_epic_task</code></td></tr>
+<tr><td><code>automation_finances_expenses</code></td><td><code>legacy_finance_expense</code></td><td><code>legacy_finance_expense_id</code> &larr; <code>_id</code></td><td><code>month_number</code>, <code>year_number</code>, <code>performer_id</code>, <code>payments</code></td><td><code>person_has_legacy_finance_expense</code></td></tr>
+<tr><td><code>automation_finances_income</code></td><td><code>legacy_finance_income</code></td><td><code>legacy_finance_income_id</code> &larr; <code>_id</code></td><td><code>month_number</code>, <code>year_number</code>, <code>performer</code>, <code>project_ref</code>, <code>task_type_name</code>, <code>hours_amount</code>, <code>hour_price</code></td><td><code>project_has_legacy_finance_income</code><br/><code>legacy_finance_income_has_type</code></td></tr>
+<tr><td><code>automation_finances_income_types</code></td><td><code>legacy_finance_income_type</code></td><td><code>legacy_finance_income_type_id</code> &larr; <code>_id</code></td><td><code>name</code></td><td>&mdash;</td></tr>
+<tr><td><code>automation_google_drive_events_channels</code></td><td><code>drive_event_channel</code></td><td><code>drive_event_channel_id</code> &larr; <code>_id</code></td><td><code>channel_id</code>, <code>resource_id</code>, <code>expiration</code>, <code>token</code>, <code>page_token</code>, <code>is_active</code></td><td>&mdash;</td></tr>
+<tr><td><code>automation_google_drive_projects_files</code></td><td><code>drive_project_file</code></td><td><code>drive_project_file_id</code> &larr; <code>_id</code></td><td><code>created_time</code>, <code>drive_folder_id</code>, <code>file_id</code>, <code>file_name</code>, <code>file_path</code>, <code>file_size</code>, <code>last_scanned_at</code> + 7 more</td><td><code>project_has_google_drive_file</code></td></tr>
+<tr><td><code>automation_google_drive_structure</code></td><td><code>drive_node</code></td><td><code>drive_node_id</code> &larr; <code>_id</code></td><td><code>node_id</code>, <code>name</code>, <code>parent_node_id</code>, <code>date_indexed</code>, <code>is_folder</code>, <code>mime_type</code></td><td>&mdash;</td></tr>
+<tr><td><code>automation_object_locator</code></td><td><code>object_locator</code></td><td><code>object_locator_id</code> &larr; <code>_id</code></td><td><code>oid</code>, <code>entity_type</code>, <code>parent_collection</code>, <code>parent_id</code>, <code>parent_prefix</code>, <code>path</code>, <code>created_at</code> + 1 more</td><td>&mdash;</td></tr>
+<tr><td><code>automation_performers</code></td><td><code>person</code></td><td><code>person_id</code> &larr; <code>_id</code></td><td><code>name</code>, <code>external_id</code>, <code>role_name</code>, <code>additional_roles</code>, <code>corporate_email</code>, <code>telegram_user_id</code>, <code>telegram_name</code> + 19 more</td><td>&mdash;</td></tr>
+<tr><td><code>automation_persons</code></td><td><code>person</code></td><td><code>person_id</code> &larr; <code>_id</code></td><td><code>name</code>, <code>notifications</code>, <code>projects_access</code>, <code>performer_id</code>, <code>updated_at</code>, <code>created_at</code></td><td>&mdash;</td></tr>
+<tr><td><code>automation_project_groups</code></td><td><code>project_group</code></td><td><code>project_group_id</code> &larr; <code>_id</code></td><td><code>name</code>, <code>status</code>, <code>project_groups_ids</code>, <code>client_id</code>, <code>updated_at</code>, <code>created_at</code></td><td><code>client_has_project_group</code></td></tr>
+<tr><td><code>automation_projects</code></td><td><code>project</code></td><td><code>project_id</code> &larr; <code>_id</code></td><td><code>name</code>, <code>status</code>, <code>project_group_ref</code>, <code>board_id</code>, <code>description</code>, <code>git_repo</code>, <code>drive_folder_id</code> + 9 more</td><td><code>project_group_has_project</code></td></tr>
+<tr><td><code>automation_task_types</code></td><td><code>task_type</code></td><td><code>task_type_id</code> &larr; <code>_id</code></td><td><code>name</code></td><td>&mdash;</td></tr>
+<tr><td><code>automation_task_types_tree</code></td><td><code>task_type_tree</code></td><td><code>task_type_tree_id</code> &larr; <code>_id</code></td><td><code>title</code>, <code>description</code>, <code>type_class</code>, <code>execution_plan</code>, <code>roles</code>, <code>parent_type_id</code>, <code>task_id</code></td><td><code>task_type_tree_classifies_oper_task</code></td></tr>
+<tr><td><code>automation_tasks</code></td><td><code>oper_task</code></td><td><code>task_id</code> &larr; <code>_id</code></td><td><code>external_id</code>, <code>old_id</code>, <code>title</code>, <code>description</code>, <code>status</code>, <code>last_status</code>, <code>last_status_update</code> + 73 more</td><td><code>project_has_oper_task</code><br/><code>voice_session_sources_oper_task</code><br/><code>oper_task_classified_as_task_type</code><br/><code>oper_task_assigned_to_person</code></td></tr>
+<tr><td><code>automation_tg_voice_sessions</code></td><td><code>tg_voice_session</code></td><td><code>tg_voice_session_id</code> &larr; <code>_id</code></td><td><code>telegram_user_id</code>, <code>chat_id</code>, <code>username</code>, <code>active_session_id</code>, <code>runtime_tag</code>, <code>created_at</code>, <code>updated_at</code></td><td><code>tg_voice_session_bound_to_voice_session</code></td></tr>
+<tr><td><code>automation_voice_bot_messages</code></td><td><code>voice_message</code></td><td><code>voice_message_id</code> &larr; <code>_id</code></td><td><code>source_type</code>, <code>session_id</code>, <code>session_type</code>, <code>message_type</code>, <code>message_id</code>, <code>chat_id</code>, <code>speaker</code> + 48 more</td><td><code>voice_session_has_message</code></td></tr>
+<tr><td><code>automation_voice_bot_session_log</code></td><td><code>history_step</code></td><td><code>history_step_id</code> &larr; <code>_id</code></td><td><code>status</code>, <code>session_id</code>, <code>event_time</code>, <code>event_name</code>, <code>event_version</code>, <code>action</code>, <code>actor</code> + 13 more</td><td><code>voice_session_has_history_step</code></td></tr>
+<tr><td><code>automation_voice_bot_session_merge_log</code></td><td><code>voice_session_merge_log</code></td><td><code>voice_session_merge_log_id</code> &larr; <code>_id</code></td><td><code>operation_type</code>, <code>entity_type</code>, <code>entity_id</code>, <code>related_entity_ids</code>, <code>payload_before</code>, <code>payload_after</code>, <code>stats_before</code> + 9 more</td><td><code>voice_session_has_merge_log</code></td></tr>
+<tr><td><code>automation_voice_bot_sessions</code></td><td><code>voice_session</code></td><td><code>voice_session_id</code> &larr; <code>_id</code></td><td><code>status</code>, <code>source_type</code>, <code>session_name</code>, <code>session_type</code>, <code>project_id</code>, <code>chat_id</code>, <code>user_id</code> + 40 more</td><td><code>project_has_voice_session</code></td></tr>
+<tr><td><code>automation_voice_bot_topics</code></td><td><code>voice_topic</code></td><td><code>voice_topic_id</code> &larr; <code>_id</code></td><td><code>session_id</code>, <code>project_id</code>, <code>topic_title</code>, <code>topic_description</code>, <code>chunks</code>, <code>assignment_reasoning</code>, <code>created_at</code></td><td><code>voice_session_has_topic</code><br/><code>project_has_voice_topic</code></td></tr>
+<tr><td><code>automation_work_hours</code></td><td><code>work_log</code></td><td><code>work_log_id</code> &larr; <code>_id</code></td><td><code>ticket_id</code>, <code>ticket_db_id</code>, <code>created_by</code>, <code>date</code>, <code>date_timestamp</code>, <code>comment</code>, <code>comment_id</code> + 6 more</td><td><code>oper_task_has_work_log</code><br/><code>person_creates_work_log</code></td></tr>
+<tr><td><code>finops_expense_categories</code></td><td><code>cost_category</code></td><td><code>cost_category_id</code> &larr; <code>category_id</code></td><td><code>name</code>, <code>status</code>, <code>created_by</code>, <code>updated_by</code></td><td>&mdash;</td></tr>
+<tr><td><code>finops_expense_operations</code></td><td><code>cost_expense</code></td><td><code>cost_expense_id</code> &larr; <code>operation_id</code></td><td><code>month_key</code>, <code>currency</code>, <code>amount_original</code>, <code>amount_rub</code>, <code>status</code>, <code>created_at</code>, <code>updated_at</code> + 8 more</td><td><code>cost_category_classifies_expense</code><br/><code>project_has_cost_expense</code></td></tr>
+<tr><td><code>finops_expense_operations_log</code></td><td><code>finops_expense_operation_log</code></td><td><code>finops_expense_operation_log_id</code> &larr; <code>log_id</code></td><td><code>operation_id</code>, <code>action</code>, <code>before_payload</code>, <code>after_payload</code>, <code>changed_at</code>, <code>changed_by</code>, <code>comment</code> + 1 more</td><td><code>expense_operation_has_log</code></td></tr>
+<tr><td><code>finops_fx_rates</code></td><td><code>fx_monthly</code></td><td><code>fx_monthly_id</code> &larr; compose(month, pair)</td><td><code>month_key</code>, <code>currency</code>, <code>value_number</code>, <code>source</code>, <code>created_by</code>, <code>created_at</code></td><td>&mdash;</td></tr>
+<tr><td><code>forecasts_project_month</code></td><td><code>forecast_project_month</code></td><td><code>forecast_project_month_id</code> &larr; compose(forecast_version_id, project_id, month)</td><td><code>forecast_version_id</code>, <code>project_id</code>, <code>month_key</code>, <code>source_type</code>, <code>currency</code>, <code>amount_original</code>, <code>amount_rub</code> + 7 more</td><td><code>project_has_forecast_month</code></td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
     <section class="section animate" id="s4" style="--i:4;">
       <div class="sec-head">
         <span class="sec-num">Section 4</span>
-        <h2>Critical Interface Table</h2>
+        <h2>Mapped Relation Wiring</h2>
       </div>
-      <p class="sec-sub">Endpoints/events that define platform behavior and compatibility.</p>
+      <p class="sec-sub">Only relations declared in mapping are shown; each row captures lookup target and source field used for join resolution.</p>
       <div class="table-wrap">
         <div class="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>Interface</th>
-                <th>Type</th>
-                <th>Primary Role</th>
-                <th>Realtime Tie-In</th>
-                <th>Contract Notes</th>
+                <th>Relation</th>
+                <th>Source Leg</th>
+                <th>Owner Role</th>
+                <th>Lookup Entity</th>
+                <th>Lookup Source Field</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><code>POST /api/voicebot/upload_audio</code></td>
-                <td>REST</td>
-                <td>Chunk upload ingress</td>
-                <td><code>new_message</code>, <code>session_update</code></td>
-                <td>Structured 413 diagnostics; request correlation id propagated.</td>
-              </tr>
-              <tr>
-                <td><code>POST /api/voicebot/session_done</code><br/><code>/close_session</code> alias</td>
-                <td>REST</td>
-                <td>Canonical close trigger</td>
-                <td>Server-origin lifecycle updates</td>
-                <td>Browser must not be source of socket <code>session_done</code> emits.</td>
-              </tr>
-              <tr>
-                <td><code>POST /api/voicebot/upload_attachment</code><br/><code>/attachment</code> alias</td>
-                <td>REST</td>
-                <td>Image/file attachment persistence</td>
-                <td>Rendered in message grouping</td>
-                <td>Stored under <code>backend/uploads/voicebot/attachments</code>.</td>
-              </tr>
-              <tr>
-                <td><code>/voicebot</code> namespace + <code>subscribe_on_session</code></td>
-                <td>Socket.IO</td>
-                <td>Room subscription + incremental updates</td>
-                <td>Required for live transcribe/categorize UX</td>
-                <td>Root namespace usage drops voice updates.</td>
-              </tr>
-              <tr>
-                <td><code>https://copilot.stratospace.fun/voice/session/:id</code></td>
-                <td>URL</td>
-                <td>Canonical cross-surface session reference</td>
-                <td>Used in task/source linking</td>
-                <td>Voice ↔ OperOps source matching depends on this pattern.</td>
-              </tr>
+<tr><td><code>client_has_project_group</code></td><td><code>automation_project_groups</code> &rarr; <code>project_group</code></td><td><code>owned_project_group</code></td><td><code>client</code> by <code>client_id</code></td><td><code>customer</code></td></tr>
+<tr><td><code>cost_category_classifies_expense</code></td><td><code>finops_expense_operations</code> &rarr; <code>cost_expense</code></td><td><code>cost_category</code></td><td><code>cost_category</code> by <code>cost_category_id</code></td><td><code>category_id</code></td></tr>
+<tr><td><code>expense_operation_has_log</code></td><td><code>finops_expense_operations_log</code> &rarr; <code>finops_expense_operation_log</code></td><td><code>expense_operation_log</code></td><td><code>cost_expense</code> by <code>cost_expense_id</code></td><td><code>operation_id</code></td></tr>
+<tr><td><code>legacy_finance_income_has_type</code></td><td><code>automation_finances_income</code> &rarr; <code>legacy_finance_income</code></td><td><code>legacy_finance_income</code></td><td><code>legacy_finance_income_type</code> by <code>name</code></td><td><code>task_type</code></td></tr>
+<tr><td><code>oper_task_assigned_to_person</code></td><td><code>automation_tasks</code> &rarr; <code>oper_task</code></td><td><code>oper_task</code></td><td><code>person</code> by <code>person_id</code></td><td><code>performer_id</code></td></tr>
+<tr><td><code>oper_task_classified_as_task_type</code></td><td><code>automation_tasks</code> &rarr; <code>oper_task</code></td><td><code>oper_task</code></td><td><code>task_type</code> by <code>task_type_id</code></td><td><code>task_type_id</code></td></tr>
+<tr><td><code>oper_task_has_work_log</code></td><td><code>automation_work_hours</code> &rarr; <code>work_log</code></td><td><code>work_log</code></td><td><code>oper_task</code> by <code>task_id</code></td><td><code>ticket_db_id</code></td></tr>
+<tr><td><code>person_creates_work_log</code></td><td><code>automation_work_hours</code> &rarr; <code>work_log</code></td><td><code>work_log</code></td><td><code>person</code> by <code>person_id</code></td><td><code>created_by</code></td></tr>
+<tr><td><code>person_has_legacy_finance_expense</code></td><td><code>automation_finances_expenses</code> &rarr; <code>legacy_finance_expense</code></td><td><code>legacy_finance_expense</code></td><td><code>person</code> by <code>person_id</code></td><td><code>performer_id</code></td></tr>
+<tr><td><code>project_group_has_project</code></td><td><code>automation_projects</code> &rarr; <code>project</code></td><td><code>linked_project</code></td><td><code>project_group</code> by <code>project_group_id</code></td><td><code>project_group</code></td></tr>
+<tr><td><code>project_has_cost_expense</code></td><td><code>finops_expense_operations</code> &rarr; <code>cost_expense</code></td><td><code>owner_project</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project_id</code></td></tr>
+<tr><td><code>project_has_epic_task</code></td><td><code>automation_epic_tasks</code> &rarr; <code>epic_task</code></td><td><code>epic_task</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project</code></td></tr>
+<tr><td><code>project_has_forecast_month</code></td><td><code>forecasts_project_month</code> &rarr; <code>forecast_project_month</code></td><td><code>owner_project</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project_id</code></td></tr>
+<tr><td><code>project_has_google_drive_file</code></td><td><code>automation_google_drive_projects_files</code> &rarr; <code>drive_project_file</code></td><td><code>drive_project_file</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project_id</code></td></tr>
+<tr><td><code>project_has_legacy_finance_income</code></td><td><code>automation_finances_income</code> &rarr; <code>legacy_finance_income</code></td><td><code>legacy_finance_income</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project</code></td></tr>
+<tr><td><code>project_has_oper_task</code></td><td><code>automation_tasks</code> &rarr; <code>oper_task</code></td><td><code>owner_project</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project_id</code></td></tr>
+<tr><td><code>project_has_voice_session</code></td><td><code>automation_voice_bot_sessions</code> &rarr; <code>voice_session</code></td><td><code>owner_project</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project_id</code></td></tr>
+<tr><td><code>project_has_voice_topic</code></td><td><code>automation_voice_bot_topics</code> &rarr; <code>voice_topic</code></td><td><code>voice_topic</code></td><td><code>project</code> by <code>project_id</code></td><td><code>project_id</code></td></tr>
+<tr><td><code>task_type_tree_classifies_oper_task</code></td><td><code>automation_task_types_tree</code> &rarr; <code>task_type_tree</code></td><td><code>task_type_tree</code></td><td><code>oper_task</code> by <code>task_id</code></td><td><code>task_id</code></td></tr>
+<tr><td><code>tg_voice_session_bound_to_voice_session</code></td><td><code>automation_tg_voice_sessions</code> &rarr; <code>tg_voice_session</code></td><td><code>tg_voice_session</code></td><td><code>voice_session</code> by <code>voice_session_id</code></td><td><code>active_session_id</code></td></tr>
+<tr><td><code>voice_session_has_history_step</code></td><td><code>automation_voice_bot_session_log</code> &rarr; <code>history_step</code></td><td><code>voice_session</code></td><td><code>voice_session</code> by <code>voice_session_id</code></td><td><code>session_id</code></td></tr>
+<tr><td><code>voice_session_has_merge_log</code></td><td><code>automation_voice_bot_session_merge_log</code> &rarr; <code>voice_session_merge_log</code></td><td><code>target_session</code></td><td><code>voice_session</code> by <code>voice_session_id</code></td><td><code>entity_id</code></td></tr>
+<tr><td><code>voice_session_has_message</code></td><td><code>automation_voice_bot_messages</code> &rarr; <code>voice_message</code></td><td><code>voice_session</code></td><td><code>voice_session</code> by <code>voice_session_id</code></td><td><code>session_id</code></td></tr>
+<tr><td><code>voice_session_has_topic</code></td><td><code>automation_voice_bot_topics</code> &rarr; <code>voice_topic</code></td><td><code>voice_topic</code></td><td><code>voice_session</code> by <code>voice_session_id</code></td><td><code>session_id</code></td></tr>
+<tr><td><code>voice_session_sources_oper_task</code></td><td><code>automation_tasks</code> &rarr; <code>oper_task</code></td><td><code>source_voice_session</code></td><td><code>voice_session</code> by <code>voice_session_id</code></td><td><code>source_ref</code></td></tr>
             </tbody>
           </table>
         </div>
@@ -701,129 +735,125 @@ flowchart LR
     <section class="section animate" id="s5" style="--i:5;">
       <div class="sec-head">
         <span class="sec-num">Section 5</span>
-        <h2>Runtime & Deployment Model</h2>
+        <h2>Data Integrity & Normalization Rules</h2>
       </div>
-      <p class="sec-sub">Mode-specific build lanes, PM2 runtime matrix, and worker ownership boundaries.</p>
+      <p class="sec-sub">Integrity controls are taken from mapping quality gates and normalization policy, without adding schema-only checks.</p>
       <div class="table-wrap">
         <div class="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>Service</th>
-                <th>Mode</th>
-                <th>Entrypoint</th>
-                <th>Build Expectation</th>
-                <th>Operational Notes</th>
+                <th>Quality Gate</th>
+                <th>Check</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><code>copilot-backend-*</code></td>
-                <td>prod/dev/local</td>
-                <td><code>backend/src/index.ts</code></td>
-                <td><code>npm run build|build-dev|build-local</code></td>
-                <td>Serves API + static frontend + socket wiring + queue bootstrap.</td>
-              </tr>
-              <tr>
-                <td><code>copilot-miniapp-backend-*</code></td>
-                <td>prod/dev/local</td>
-                <td><code>backend/src/miniapp/index.ts</code></td>
-                <td>Miniapp dist must exist</td>
-                <td>Dedicated miniapp backend router with BullMQ notification queue.</td>
-              </tr>
-              <tr>
-                <td><code>copilot-voicebot-workers-prod</code></td>
-                <td>prod</td>
-                <td><code>backend/dist/workers/voicebot/runtime.js</code></td>
-                <td>TS compiled dist required</td>
-                <td>Consumes voice queues for transcribe/categorize/finalization loops.</td>
-              </tr>
-              <tr>
-                <td><code>copilot-voicebot-tgbot-prod</code></td>
-                <td>prod</td>
-                <td><code>backend/dist/voicebot_tgbot/runtime.js</code></td>
-                <td>TS compiled dist required</td>
-                <td>Telegram ingress with distributed lock for poller ownership.</td>
-              </tr>
-              <tr>
-                <td><code>copilot-agent-services</code></td>
-                <td>dev/prod sidecar</td>
-                <td><code>agents/fast-agent</code></td>
-                <td>Python env + agent-cards</td>
-                <td>Bind loopback <code>127.0.0.1:8722</code>; backend proxy is canonical caller.</td>
-              </tr>
+<tr><td><code>no_orphan_tasks</code></td><td>each oper_task must link to exactly one project</td></tr>
+<tr><td><code>no_orphan_voice_messages</code></td><td>each voice_message must link to one voice_session</td></tr>
+<tr><td><code>no_orphan_voice_history_steps</code></td><td>each history_step must link to one voice_session</td></tr>
+<tr><td><code>no_orphan_voice_merge_logs</code></td><td>each voice_session_merge_log must link to one target voice_session</td></tr>
+<tr><td><code>image_anchor_link_integrity</code></td><td>image anchor pointers must resolve to existing session messages</td></tr>
+<tr><td><code>session_done_has_done_at</code></td><td>voice_session rows with is_active=false and to_finalize=true must have done_at</td></tr>
+<tr><td><code>runtime_tag_coverage_voice</code></td><td>runtime-scoped voice collections should carry runtime_tag (legacy gaps are explicitly counted)</td></tr>
+<tr><td><code>no_forecast_without_project</code></td><td>each forecast_project_month must link to one project</td></tr>
+<tr><td><code>type_normalized_ids</code></td><td>all key attributes are non-empty strings</td></tr>
             </tbody>
           </table>
         </div>
+      </div>
+      <div class="card-grid" style="margin-top:12px;">
+        <article class="card">
+          <h3>ID Normalization Strategy</h3>
+          <p>Global strategy is <code>stringify</code>: BSON ObjectId to hex string, numeric ids to decimal strings, null/empty ids skipped and logged to deadletter.</p>
+          <div class="pill-row">
+            <span class="pill ok">bson.ObjectId → hex</span>
+            <span class="pill ok">int/double → decimal string</span>
+            <span class="pill warn">null/empty → skip + deadletter</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Compose-Key Collections</h3>
+          <p>Two collections use compose keys rather than single source fields. This is part of the canonical import contract.</p>
+          <div class="pill-row">
+            <span class="pill"><code>forecasts_project_month</code>: <code>forecast_version_id + project_id + month</code></span>
+            <span class="pill"><code>finops_fx_rates</code>: <code>month + pair</code></span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Coalesce Rule in Scope</h3>
+          <p><code>automation_tasks</code> applies coalesced status mapping: <code>task_status</code> fallback to <code>status</code>. This is the only coalesce block declared in v1 mapping.</p>
+          <div class="pill-row">
+            <span class="pill ok">status := task_status || status</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Runtime Coverage Focus</h3>
+          <p>Voice runtime integrity is explicitly tracked in quality gates via <code>runtime_tag_coverage_voice</code>, matching runtime-scoped collections and legacy-gap accounting.</p>
+          <div class="pill-row">
+            <span class="pill warn">runtime_tag coverage check</span>
+            <span class="pill">legacy gaps counted, not ignored</span>
+          </div>
+        </article>
       </div>
     </section>
 
     <section class="section animate" id="s6" style="--i:6;">
       <div class="sec-head">
         <span class="sec-num">Section 6</span>
-        <h2>Repository Map (Execution-Oriented)</h2>
+        <h2>Schema Scope & Explicit Exclusions</h2>
       </div>
-      <p class="sec-sub">Where to look first when touching each platform concern.</p>
+      <p class="sec-sub">From <code>str_opsportal_v1.tql</code>, this page includes only entities/relations referenced by mapping. Everything below is explicitly listed as missing spec in mapping v1.</p>
+      <div class="card-grid" style="margin-bottom:12px;">
+        <article class="card">
+          <h3>Schema Alignment</h3>
+          <p>Mapped structures are fully present in schema: 28/28 target entities and 25/25 mapped relations resolve in <code>str_opsportal_v1.tql</code>.</p>
+          <div class="pill-row">
+            <span class="pill ok">entity alignment: full</span>
+            <span class="pill ok">relation alignment: full</span>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Missing-Spec Backlog</h3>
+          <p><code>missing_spec_collections</code> currently contains 19 collections. They are intentionally excluded from this recap and from v1 mapping semantics.</p>
+          <div class="pill-row">
+            <span class="pill warn">19 collections out-of-scope</span>
+          </div>
+        </article>
+      </div>
       <div class="table-wrap">
         <div class="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>Path</th>
-                <th>Responsibility</th>
-                <th>Key Anchors</th>
-                <th>Change Risk</th>
+                <th>missing_spec_collections (v1 mapping)</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><code>app/src</code></td>
-                <td>Main web frontend (FinOps/OperOps/Voice/Admin)</td>
-                <td><code>App.tsx</code>, page routes, Zustand stores</td>
-                <td>High: route + state regressions surface immediately</td>
-              </tr>
-              <tr>
-                <td><code>backend/src/api</code></td>
-                <td>REST + socket API boundaries</td>
-                <td><code>routes/voicebot</code>, <code>routes/crm</code>, middleware</td>
-                <td>High: contract break impacts all clients</td>
-              </tr>
-              <tr>
-                <td><code>backend/src/workers/voicebot</code></td>
-                <td>Async processing orchestration</td>
-                <td>transcribe/categorize/done/summarize handlers</td>
-                <td>High: queue semantics and realtime update guarantees</td>
-              </tr>
-              <tr>
-                <td><code>backend/src/voicebot_tgbot</code></td>
-                <td>Telegram ingestion runtime</td>
-                <td>runtime, ingress handlers, callback bridges</td>
-                <td>Medium/High: lock ownership + transport recovery</td>
-              </tr>
-              <tr>
-                <td><code>miniapp/src</code> + <code>backend/src/miniapp</code></td>
-                <td>Miniapp UI + backend host</td>
-                <td>Kanban UI, auth boot flow, miniapp router</td>
-                <td>Medium: isolated surface but shared infra dependencies</td>
-              </tr>
-              <tr>
-                <td><code>agents/agent-cards</code></td>
-                <td>Fast-Agent prompt contracts</td>
-                <td><code>create_tasks.md</code>, <code>generate_session_title.md</code></td>
-                <td>Medium: impacts AI-assisted automation quality</td>
-              </tr>
-              <tr>
-                <td><code>ontology/typedb/scripts</code></td>
-                <td>Canonical TypeDB tooling lane</td>
-                <td>ingest/validate scripts</td>
-                <td>Medium: contract says do not duplicate under backend scripts</td>
-              </tr>
+<tr><td><code>facts_project_month</code></td></tr>
+<tr><td><code>finops_month_closures</code></td></tr>
+<tr><td><code>forecast_versions</code></td></tr>
+<tr><td><code>project_rates</code></td></tr>
+<tr><td><code>employee_month_cost</code></td></tr>
+<tr><td><code>timesheets_monthly</code></td></tr>
+<tr><td><code>agent_requests</code></td></tr>
+<tr><td><code>alert_settings</code></td></tr>
+<tr><td><code>audit_events</code></td></tr>
+<tr><td><code>automation_comments</code></td></tr>
+<tr><td><code>automation_task_supertypes</code></td></tr>
+<tr><td><code>automation_performer_payments</code></td></tr>
+<tr><td><code>automation_reports_log</code></td></tr>
+<tr><td><code>automation_permissions_log</code></td></tr>
+<tr><td><code>automation_project_tree_log</code></td></tr>
+<tr><td><code>automation_tasks_histrory</code></td></tr>
+<tr><td><code>automation_agents_status</code></td></tr>
+<tr><td><code>automation_agents_run_results</code></td></tr>
+<tr><td><code>automation_calendar_month_work_hours</code></td></tr>
             </tbody>
           </table>
         </div>
       </div>
       <p class="footer-note">
-        Snapshot source: repository structure and AGENTS/README contracts as of 2026-03-01.
+        Snapshot source: <code>ontology/typedb/mappings/mongodb_to_typedb_v1.yaml</code> + mapped intersection of <code>ontology/typedb/schema/str_opsportal_v1.tql</code>, updated 2026-03-02.
       </p>
     </section>
   </main>

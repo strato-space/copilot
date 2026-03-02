@@ -25,7 +25,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import {
     LinkOutlined,
     CommentOutlined,
-    PlusOutlined,
+    CopyOutlined,
     SearchOutlined,
     EditOutlined,
     ExclamationCircleFilled,
@@ -87,6 +87,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         projects,
         task_types,
         updateTicket,
+        createTicket,
         massiveChangeStatus,
         fetchTickets,
         fetchDictionary,
@@ -100,7 +101,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
     const {
         editingColumn,
         setEditingColumn,
-        setEditingTicketToNew,
         editingTicket,
         setEditingTicket,
         statusFilter,
@@ -532,6 +532,55 @@ const CRMKanban = (props: CRMKanbanProps) => {
             closeInlineEditor();
         },
         [closeInlineEditor, updateTicket]
+    );
+
+    const handleCloneTicket = useCallback(
+        async (record: Ticket) => {
+            const performerId = typeof record.performer === 'object' && record.performer
+                ? toLookupValue((record.performer as Performer)._id ?? (record.performer as Performer).id)
+                : toLookupValue(record.performer);
+
+            const notifications = Array.isArray(record.notifications)
+                ? record.notifications
+                    .map((notification) => toLookupValue(notification))
+                    .filter((notification): notification is string => Boolean(notification))
+                : undefined;
+
+            const normalizedProject = getProjectByValue(record.project_id) ?? getProjectByValue(record.project);
+            const projectValue = normalizedProject?._id ?? toLookupValue(record.project_id) ?? record.project;
+
+            const shipmentDate = typeof record.shipment_date === 'string' && dayjs(record.shipment_date).isValid()
+                ? dayjs(record.shipment_date).format('YYYY-MM-DD')
+                : undefined;
+
+            const estimatedTimeNumeric = Number(record.estimated_time);
+            const estimatedTime = Number.isFinite(estimatedTimeNumeric) ? estimatedTimeNumeric : undefined;
+
+            const ticketName = typeof record.name === 'string' ? record.name.trim() : '';
+
+            const clonePayload: Partial<Ticket> = {
+                name: `${ticketName || 'Задача'} копия`,
+            };
+
+            if (projectValue) clonePayload.project = projectValue;
+
+            const taskTypeValue = toLookupValue(record.task_type);
+            if (taskTypeValue) clonePayload.task_type = taskTypeValue;
+
+            if (performerId) clonePayload.performer = performerId;
+            if (typeof record.priority === 'string') clonePayload.priority = record.priority;
+            if (estimatedTime !== undefined) clonePayload.estimated_time = estimatedTime;
+            if (shipmentDate) clonePayload.shipment_date = shipmentDate;
+
+            const epicValue = toLookupValue(record.epic);
+            if (epicValue) clonePayload.epic = epicValue;
+
+            if (notifications && notifications.length > 0) clonePayload.notifications = notifications;
+            if (typeof record.description === 'string') clonePayload.description = record.description;
+
+            await createTicket(clonePayload);
+        },
+        [createTicket, getProjectByValue, toLookupValue]
     );
 
     const rowSelection: TableProps<Ticket>['rowSelection'] = {
@@ -1139,6 +1188,15 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 return (
                     <div className="flex gap-4">
                         <EditOutlined className="hover:text-cyan-500" onClick={() => setEditingTicket(record)} />
+                        <Tooltip title="Клонировать задачу">
+                            <CopyOutlined
+                                className="hover:text-cyan-500"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleCloneTicket(record);
+                                }}
+                            />
+                        </Tooltip>
                         {routeTaskId ? (
                             <a
                                 href={`/operops/task/${encodeURIComponent(routeTaskId)}`}
@@ -1190,6 +1248,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         handleStatusUpdate,
         handleTaskTypeUpdate,
         handleShipmentDateUpdate,
+        handleCloneTicket,
         setProjectFilter,
         setProjectGroupFilter,
         setEditingColumn,

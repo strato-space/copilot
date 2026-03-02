@@ -314,6 +314,18 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-02 13:30):
+  - Closed `copilot-9ifu`: Codex details card now hides empty metadata rows, normalizes escaped newlines in Description/Notes, and renders explicit relationship groups from bd payload.
+  - Closed follow-ups `copilot-x06u` and `copilot-2qne`: `copilot-*` IDs in `Relationships` and top `Issue ID` are now clickable to `/operops/codex/task/:id` while keeping Issue ID copy action intact.
+  - Added/updated Codex contracts:
+    - added `app/__tests__/operops/codexIssueDetailsCardContract.test.ts`,
+    - updated `app/__tests__/operops/codexIssuesTableContract.test.ts` for raw relationship payload pass-through.
+  - Included accumulated working-tree deltas in this closeout:
+    - `app/src/components/crm/CRMKanban.tsx`: clone ticket action with normalized create payload,
+    - `app/src/components/PlanFactGrid.tsx`: contract/subproject labels no longer forced to uppercase,
+    - `app/e2e/task-create.spec.ts`: unauth-friendly task-create close/cancel test with mocked CRM/auth APIs and spinner click-through handling,
+    - `docs/copilot-repo-visual-recap.html`: rewritten as MongoDB→TypeDB mapping-centric visual recap.
+  - Validation: `cd app && npm run test:serial -- __tests__/operops/codexIssueDetailsCardContract.test.ts __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/codexTasksInlineDetailsContract.test.ts __tests__/operops/codexTaskPageContract.test.ts` and `cd app && npm run build` passed.
 - Close-session refresh (2026-03-01 22:02):
   - Captured outstanding local docs commit `e577500` (`docs: fix Mermaid line breaks in visual recap diagram`) into close-session artifacts and prepared final release handoff.
   - Added `CHANGELOG.md` date block `2026-03-01` with explicit problem/feature/change entries for `docs/copilot-repo-visual-recap.html`.

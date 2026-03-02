@@ -478,6 +478,12 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-02 13:30):
+  - Closed `copilot-9ifu`: OperOps/Voice Codex details card now hides empty metadata rows (no placeholder `—` noise), renders escaped `\n`/`\r\n` as real line breaks in Description/Notes, and shows a dedicated `Relationships` block with bd semantics (`parent-child`, `waits-for`, `blocks`, `discovered-from`, fallback dependencies).
+  - Closed follow-ups `copilot-x06u` and `copilot-2qne`: all `copilot-*` IDs in the `Relationships` block are clickable links to `/operops/codex/task/:id`; top `Issue ID` is also clickable while preserving the existing copy mini-button behavior.
+  - Added Codex UI regression coverage: new contract `app/__tests__/operops/codexIssueDetailsCardContract.test.ts` and updated `app/__tests__/operops/codexIssuesTableContract.test.ts` for relationship payload passthrough and clickable-id contracts.
+  - Included pending UI/QA/doc deltas in this closeout package: CRM Kanban ticket cloning action (`CopyOutlined` + normalized payload), Plan-Fact casing cleanup (no forced uppercase for contract/subproject labels), strengthened unauth task-create Playwright flow with mocked CRM/auth APIs, and refreshed `docs/copilot-repo-visual-recap.html` as a MongoDB→TypeDB mapping-focused explainer.
+  - Validation for current wave passed: `cd app && npm run test:serial -- __tests__/operops/codexIssueDetailsCardContract.test.ts __tests__/operops/codexIssuesTableContract.test.ts __tests__/voice/codexTasksInlineDetailsContract.test.ts __tests__/operops/codexTaskPageContract.test.ts` and `cd app && npm run build`.
 - Close-session refresh (2026-03-01 22:02):
   - Captured outstanding local docs commit `e577500` (`docs: fix Mermaid line breaks in visual recap diagram`) into close-session artifacts and prepared final release handoff.
   - Added `CHANGELOG.md` date block `2026-03-01` with explicit problem/feature/change entries for `docs/copilot-repo-visual-recap.html`.

@@ -34,4 +34,11 @@ describe('OperOps Codex issues table contract', () => {
     it('supports legacy dependencies/dependents fields in Codex issue payload', () => {
         expect(source).toContain('dependencies: toTextArray(record.dependencies || record.dependents)');
     });
+
+    it('keeps raw bd relationship payload for details card relationship rendering', () => {
+        expect(source).toContain('dependents: Array.isArray(record.dependents) ? record.dependents : []');
+        expect(source).toContain('children: Array.isArray(record.children) ? record.children : []');
+        expect(source).toContain('bd_dependencies: Array.isArray(record.dependencies) ? record.dependencies : []');
+        expect(source).toContain('...(record.parent !== undefined ? { parent: record.parent, bd_parent: record.parent } : {}),');
+    });
 });

@@ -281,14 +281,14 @@ const buildColumns = (
       },
       render: (value: string | undefined, row: RowItem): ReactElement => (
         <div className={row.row_type === 'project' ? 'pl-2' : ''}>
-          <div className="text-sm font-semibold uppercase text-slate-900 flex items-center gap-2">
+          <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
             <Tag className="!m-0" color={row.contract_type === 'Fix' ? 'volcano' : 'cyan'}>
               {row.contract_type ?? '—'}
             </Tag>
             <span>{value}</span>
           </div>
           {row.subproject_name ? (
-            <div className="text-xs uppercase text-slate-500">{row.subproject_name}</div>
+            <div className="text-xs text-slate-500">{row.subproject_name}</div>
           ) : null}
         </div>
       ),
