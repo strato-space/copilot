@@ -35,7 +35,7 @@ describe('voicebotDoneNotify service', () => {
     expect(preview.telegram_message.split('\n')).toHaveLength(4);
   });
 
-  it('writes notify_requested session log with session_done metadata', async () => {
+  it('writes notify_requested session log with source-derived rest metadata', async () => {
     const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
     const db = {
       collection: (name: string) => {
@@ -51,7 +51,7 @@ describe('voicebotDoneNotify service', () => {
       session_id: new ObjectId(),
       session: { _id: new ObjectId(), session_name: 'S' },
       actor: { type: 'performer', performer_id: 'u1' },
-      source: { type: 'socket' },
+      source: { type: 'rest', route: '/api/voicebot/session_done', method: 'POST' },
       preview: {
         event_name: 'Сессия завершена',
         telegram_message: 'line1\nline2\nline3\nline4',
@@ -64,5 +64,35 @@ describe('voicebotDoneNotify service', () => {
     const metadata = doc.metadata as Record<string, unknown>;
     expect(metadata.notify_event).toBe(VOICEBOT_JOBS.notifies.SESSION_DONE);
     expect(metadata.telegram_message).toBe('line1\nline2\nline3\nline4');
+    expect(metadata.source).toBe('rest_session_done');
+  });
+
+  it('writes notify_requested session log with queue metadata for done_multiprompt worker', async () => {
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return { insertOne };
+        }
+        return { findOne: async () => null };
+      },
+    } as any;
+
+    await writeDoneNotifyRequestedLog({
+      db,
+      session_id: new ObjectId(),
+      session: { _id: new ObjectId(), session_name: 'S' },
+      actor: { type: 'worker', worker: 'done_multiprompt' },
+      source: { type: 'queue', queue: 'voicebot--common', job: 'DONE_MULTIPROMPT' },
+      preview: {
+        event_name: 'Сессия завершена',
+        telegram_message: 'line1\nline2\nline3\nline4',
+      },
+    });
+
+    expect(insertOne).toHaveBeenCalledTimes(1);
+    const [doc] = insertOne.mock.calls[0] as [Record<string, unknown>];
+    const metadata = doc.metadata as Record<string, unknown>;
+    expect(metadata.source).toBe('queue_done_multiprompt');
   });
 });
