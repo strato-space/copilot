@@ -182,9 +182,14 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - If non-breaking metadata (such as `notify_preview`) is surfaced, add assertions for it only when stable.
 - **validation**:
   - Actions endpoint tests remain green and no route schema drift is introduced.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Updated Actions unit coverage to lock in the stable `done_active_session` / `done_session` response shape after the REST-first transport switch.
+  - `tests/unit/actions/test_actions_api_unit.py` now asserts the full JSON payload (`ok`, `session_id`, `url`, `source`) and optional `notify_preview` passthrough instead of only spot-checking single fields.
+  - No production code change was required in `src/actions/main.py`; the actions layer already passes through the client payload unchanged.
+  - Validation: `cd /home/tools/voice && ./.venv/bin/python -m pytest -o addopts='' tests/unit/actions/test_actions_api_unit.py -q` passed (`25 passed`).
 - **files edited/created**:
+  - `/home/tools/voice/tests/unit/actions/test_actions_api_unit.py`
 
 ### T6: Verify and update `mcp@voice` parity
 - **depends_on**: [T4]
@@ -197,9 +202,14 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - Confirm no tool signature change is required.
 - **validation**:
   - MCP tests still pass and tool signatures remain backward compatible.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Updated MCP unit coverage so `done_active_session` / `done_session` explicitly preserve the stable outward payload and optional `notify_preview` after the client transport switch.
+  - Added signature assertions to pin tool compatibility: `done_active_session(ctx=None)` and `done_session(session, ctx=None)`.
+  - No production code change was required in `src/mcp_voicebot/server.py`; the MCP wrappers already pass through the client payload unchanged.
+  - Validation: `cd /home/tools/voice && ./.venv/bin/python -m pytest -o addopts='' tests/unit/mcp/test_voicebot_new_tools.py -q` passed (`19 passed`).
 - **files edited/created**:
+  - `/home/tools/voice/tests/unit/mcp/test_voicebot_new_tools.py`
 
 ### T7: Add explicit CLI parity coverage
 - **depends_on**: [T4]
@@ -214,9 +224,15 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - Confirm no CLI flag or output format change is required.
 - **validation**:
   - CLI tests catch regressions in success and failure behavior before the final validation wave.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Expanded CLI regression coverage for `done-active-session` and `done-session`.
+  - The fake client now simulates stable `done_*` payloads, optional `notify_preview`, deterministic `RuntimeError` failures, and explicitly fails if any socket-related attribute is touched.
+  - Added success-path assertions for full payload passthrough and explicit error-path assertions that the exact client exception surfaces without extra stdout/stderr noise.
+  - No production code change was required in `src/cli/main.py`; the CLI already passed through the client payload unchanged.
+  - Validation: `cd /home/tools/voice && ./.venv/bin/python -m pytest -o addopts='' tests/unit/test_cli_voice_sessions.py -q` passed (`11 passed`).
 - **files edited/created**:
+  - `/home/tools/voice/tests/unit/test_cli_voice_sessions.py`
 
 ### T8: Update operator-facing docs and contracts
 - **depends_on**: [T4]
@@ -231,9 +247,16 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - Document any retained compatibility behavior (for example, alias fallback only for route absence).
 - **validation**:
   - Repository docs no longer contradict the actual runtime behavior.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Updated operator-facing docs to reflect the actual REST-first close path.
+  - `AGENTS.md`, `README.md`, and `docs/SRS_VOICE_SESSION.md` no longer claim that `done_active_session()` / `done_session()` initiate close via Socket.IO `session_done`.
+  - The docs now explicitly state: close is initiated via `POST /api/voicebot/session_done`, uses a `5s` timeout budget, does not automatically retry, and only falls back to `POST /api/voicebot/close_session` for true route-absence `404/405` signatures.
+  - Corrected the SRS test-reference to point at the new REST close suite (`tests/unit/api/test_done_session_client_methods.py`) rather than the legacy socket helper tests.
 - **files edited/created**:
+  - `/home/tools/voice/AGENTS.md`
+  - `/home/tools/voice/README.md`
+  - `/home/tools/voice/docs/SRS_VOICE_SESSION.md`
 
 ### T9: Run the validation matrix and smoke the end-to-end close flow
 - **depends_on**: [T5, T6, T7]
@@ -255,8 +278,15 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
     - confirm `is_active=false`, `to_finalize=true`, and `done_at` is populated
 - **validation**:
   - All targeted tests pass and the smoke demonstrates that `tools/voice` now triggers the same REST close path as the Copilot UI.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Ran the targeted validation matrix covering the client, Actions, MCP, and CLI close-path tests in one batch.
+  - Validation command: `cd /home/tools/voice && ./.venv/bin/python -m pytest -o addopts='' tests/unit/api/test_done_session_client_methods.py tests/unit/api/test_done_session_contract.py tests/unit/actions/test_actions_api_unit.py tests/unit/mcp/test_voicebot_new_tools.py tests/unit/test_cli_voice_sessions.py -q`
+  - Validation result: `71 passed`.
+  - Completed a live disposable smoke via `VoicebotClient`:
+    - created session `69a6b86af8497624c92b0712`
+    - closed it via `done_session()` and received stable payload `{ ok, session_id, url, source, notify_preview }`
+    - verified via `fetch(..., mode='full')` that the session became `is_active=false`, `to_finalize=true`, and `done_at` was populated.
 - **files edited/created**:
 
 ### T10: Post-implementation validation on session `69a527c14b07162c36957e21`
@@ -273,8 +303,18 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - Allow up to `3 minutes` for background processing before treating the run as failed.
 - **validation**:
   - The session closes through the new path and all downstream side effects complete within the allowed wait window.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Ran a real `actions@voice` close against session `69a527c14b07162c36957e21` using local actions service `POST http://127.0.0.1:1204/voicebot/done_session`.
+  - Actions response was `200 OK` with stable payload `{ ok: true, session_id, url, source: "explicit" }`.
+  - Baseline before rerun: the session was already closed (`done_count=1`, `done_at=2026-03-02T06:29:08.430Z`, `CREATE_TASKS.data=5`), so validation treated this as a deliberate re-close/requeue to verify the new automation path and downstream processing.
+  - Within the allowed wait window:
+    - `done_count` advanced from `1` to `2`
+    - `done_at` changed to `2026-03-03T10:33:49.918Z`
+    - `to_finalize` became `true`
+    - `CREATE_TASKS.job_finished_timestamp` changed and `CREATE_TASKS.data` grew from `5` to `15`, confirming the task list refreshed after the rerun
+    - new `session_log` entries included `notify_requested`, `notify_http_sent`, and `notify_hook_started`, confirming summary/notify preparation and delivery hooks fired
+  - Follow-up bug registered for logging inconsistency observed during the same run: `copilot-q5cc` (`session_log` source metadata still reports legacy socket origin even though the initiation path was `actions@voice` -> REST close).
 - **files edited/created**:
 
 ## Parallel Execution Groups
