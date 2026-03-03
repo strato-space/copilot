@@ -154,10 +154,10 @@ export const buildPlanFactGrid = async (
     groupIds.forEach((groupId) => {
       // Find all projects where project.project_group matches this groupId
       projects.forEach((project) => {
-        const projectGroupId = typeof project.project_group === 'string' 
-          ? project.project_group 
+        const projectGroupId = typeof project.project_group === 'string'
+          ? project.project_group
           : project.project_group?.toString();
-        
+
         if (projectGroupId === groupId) {
           projectIds.add(project._id.toString());
         }
