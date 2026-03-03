@@ -166,8 +166,8 @@ const normalizePerformer = async (db: Db, rawPerformer: unknown): Promise<Perfor
             lookupFilters.length === 1
                 ? lookupFilters[0]
                 : {
-                      $or: lookupFilters,
-                  };
+                    $or: lookupFilters,
+                };
         const performerDoc = await db
             .collection<PerformerDocument>(COLLECTIONS.PERFORMERS)
             .findOne(lookupQuery as Record<string, unknown>);
