@@ -142,6 +142,40 @@ export const SESSION_TASKFLOW_CONTRACT = {
     },
 } as const;
 
+export const SESSION_DONE_REST_CONTRACT = {
+    version: '2026-03-03',
+    canonical_route: {
+        method: 'POST',
+        path: '/voicebot/session_done',
+    },
+    compatibility_route: {
+        method: 'POST',
+        path: '/voicebot/close_session',
+        use_only_for: 'route_absence',
+    },
+    success_payload: {
+        success: true,
+        notify_preview: {
+            event_name: 'string | undefined',
+        },
+    },
+    known_application_errors: [
+        'session_id is required',
+        'invalid_session_id',
+        'session_not_found',
+        'forbidden',
+        'insufficient_permissions',
+        'chat_id_missing',
+    ],
+    client_parity: {
+        tools_voice_response_keys: ['ok', 'session_id', 'url', 'source'],
+        optional_passthrough: ['notify_preview.event_name'],
+        client_timeout_seconds: 5,
+        compatibility_fallback_only_for_route_absence: true,
+        no_automatic_retry: true,
+    },
+} as const;
+
 const sessionTaskRowLocatorInputSchema = z
     .object({
         row_id: z.union([z.string(), z.number()]).optional(),

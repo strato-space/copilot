@@ -150,6 +150,10 @@ describe('Voicebot session_done REST route', () => {
         },
       })
     );
+    expect(response.body.ok).toBeUndefined();
+    expect(response.body.session_id).toBeUndefined();
+    expect(response.body.url).toBeUndefined();
+    expect(response.body.source).toBeUndefined();
 
     expect(completeSessionDoneFlowMock).toHaveBeenCalledWith(
       expect.objectContaining({
