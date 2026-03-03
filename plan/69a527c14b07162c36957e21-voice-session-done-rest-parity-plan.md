@@ -113,9 +113,14 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - If needed, split into “expected failure against old implementation” and “passes after refactor” assertions.
 - **validation**:
   - New tests fail against the old socket-based implementation and pass once the REST helper is wired.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Added direct unit coverage for public `VoicebotClient.done_session()` / `done_active_session()` in `tests/unit/api/test_done_session_client_methods.py`.
+  - The new suite pins REST-first transport expectations: `POST /voicebot/session_done`, `timeout=5`, preserved outward payload shape, alias fallback only for true route absence, deterministic business-error surfacing, no retry on timeout/5xx, malformed success rejection, and no `socketio` dependency.
+  - Validation was intentionally run before the refactor and failed against the legacy implementation because `done_session()` still touched `socketio.Client`; that expected fail established the contract boundary before T3/T4.
+  - Validation after T3/T4: `cd /home/tools/voice && ./.venv/bin/python -m pytest -o addopts='' tests/unit/api/test_done_session_client_methods.py -q` passed (`13 passed`).
 - **files edited/created**:
+  - `/home/tools/voice/tests/unit/api/test_done_session_client_methods.py`
 
 ### T3: Add a REST-backed close helper in `VoicebotClient`
 - **depends_on**: [T1, T2]
@@ -132,9 +137,14 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - Explicitly treat `409 chat_id_missing` as a surfaced backend error with partial-success risk, not as a retry candidate.
 - **validation**:
   - Client helper can successfully parse `{ success: true, notify_preview: ... }`, can distinguish route-missing vs business-error 404s, and surfaces backend errors deterministically.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Added private REST close helpers in `VoicebotClient`: HTTP error extraction, route-absence detection, deterministic HTTP error mapping, success-payload validation, and `_done_session_via_rest(session_id)`.
+  - The helper now calls `POST /voicebot/session_done` with `timeout=5`, allows fallback to `POST /voicebot/close_session` only for narrow route-absence signatures, and never retries on timeout/transport failures/5xx.
+  - Empty, non-JSON, non-dict, empty-dict, and `{ "success": false }` success-path payloads now fail explicitly with structured client-side error messages.
+  - Validation is covered by the client-level close test suite introduced in T2.
 - **files edited/created**:
+  - `/home/tools/voice/src/lib/core.py`
 
 ### T4: Rewire public client methods to the REST helper
 - **depends_on**: [T3]
@@ -152,9 +162,14 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - Ensure both methods no longer call `self.voicebot.sessions.session_done(...)`.
 - **validation**:
   - Both public methods share one transport path and preserve current outward return keys for existing wrappers and scripts.
-- **status**: Not Completed
+- **status**: Completed
 - **log**:
+  - Rewired public `done_session()` and `done_active_session()` to use the shared REST helper instead of `self.voicebot.sessions.session_done(...)`.
+  - Preserved the stable outward client payload (`ok`, `session_id`, `url`, `source`) and now pass through `notify_preview` only as optional non-breaking metadata when present.
+  - Public close methods no longer require `python-socketio`; the legacy low-level socket helper remains available but is no longer the transport used by the public wrappers.
+  - Validation: `cd /home/tools/voice && ./.venv/bin/python -m pytest -o addopts='' tests/unit/api/test_done_session_client_methods.py tests/unit/api/test_done_session_contract.py -q` passed (`16 passed`).
 - **files edited/created**:
+  - `/home/tools/voice/src/lib/core.py`
 
 ### T5: Verify and update `actions@voice` parity
 - **depends_on**: [T4]
