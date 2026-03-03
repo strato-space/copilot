@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+html { background: #0E1A2B; }
+body {
+  width: 720pt;
+  height: 405pt;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  background: #0E1A2B;
+  font-family: Verdana, Arial, sans-serif;
+  color: #EEF3FB;
+}
+.canvas {
+  width: 100%;
+  height: 100%;
+  padding: 28pt 30pt;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+h1 {
+  margin: 0 0 12pt 0;
+  font-size: 30pt;
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+}
+.subtitle {
+  margin: 0 0 14pt 0;
+  color: #B8C5D8;
+  font-size: 13pt;
+}
+.grid {
+  display: flex;
+  gap: 12pt;
+  flex: 1;
+}
+.card {
+  flex: 1;
+  background: #16263C;
+  border: 1.5pt solid #263A56;
+  border-radius: 10pt;
+  padding: 12pt;
+}
+.card h2 {
+  margin: 0 0 8pt 0;
+  font-size: 17pt;
+  color: #1FB8A6;
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+}
+.card ul {
+  margin: 0;
+  padding-left: 18pt;
+  font-size: 11pt;
+  line-height: 1.42;
+}
+.line {
+  margin-top: 10pt;
+  padding: 8pt 10pt;
+  border-left: 6pt solid #FF6A3D;
+  background: #15233A;
+}
+.line p { margin: 0; font-size: 12pt; }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <h1>Что такое Copilot</h1>
+    <p class="subtitle">Один workspace для финансового контроля, операционного исполнения и голосовых рабочих сессий.</p>
+    <div class="grid">
+      <div class="card">
+        <h2>FinOps</h2>
+        <ul>
+          <li>План-факт и версии прогноза.</li>
+          <li>Lock месяца и контроль FX.</li>
+          <li>KPI по выручке, затратам и марже.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>OperOps/CRM</h2>
+        <ul>
+          <li>Kanban задач и контроль исполнителей.</li>
+          <li>Структура проектов и связанный audit.</li>
+          <li>Прямой путь от сигнала к задаче.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Voice</h2>
+        <ul>
+          <li>Сессии, транскрипция, категоризация.</li>
+          <li>Realtime-статусы и доступы.</li>
+          <li>Создание задач из обсуждений.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="line"><p>Core promise: <strong>one data contract + one action loop</strong> вместо набора разрозненных инструментов.</p></div>
+  </div>
+</body>
+</html>

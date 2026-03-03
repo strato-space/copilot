@@ -2,6 +2,8 @@
 
 ## 2026-03-03
 ### PROBLEM SOLVED
+- **20:20** Multi-agent orchestration guidance for UI decomposition lived in fragmented chat notes, so role boundaries, dependency handling, and hierarchy contracts (`CJM -> BPMN -> UserFlow -> Screens -> Widgets -> Atoms/Tokens`) were not preserved as a reusable repository artifact.
+- **20:20** Session closeout had undocumented local artifacts (`.agents/`, `output/`, `tmp/`) pending in the working tree; without explicit acceptance and changelog coverage this would leave close-session history incomplete.
 - **15:20** Deleting all transcript segments from Voice UI could still leave orphan `categorization` rows on the session payload, so the `Категоризация` tab displayed stale tails even when transcription chunks were fully removed.
 - **12:28** Voice session taskflow parity was fragmented across backend routes, Voice UI, and `mcp@voice`: assistants could not manage `CREATE_TASKS` rows by `session_id` with one canonical contract, and clients still needed manual refresh after list mutations.
 - **12:28** Token-based automation via `tools/voice` Actions API had no parity path for session-scoped Possible Tasks / Tasks / Codex operations, which forced mixed MCP-only flows and increased drift risk.
@@ -10,6 +12,8 @@
 - **13:55** Documentation and operator-facing contract text still described a route-absence fallback to `/api/voicebot/close_session`, even though the desired close semantics are strict fail-fast.
 
 ### FEATURE IMPLEMENTED
+- **20:20** Added canonical multi-agent distillation guidance to `docs/` with explicit `bd`-native forward-only dependency-graph workflow, context-isolated worker protocol, and hierarchy/domain-linking requirements for UI artifacts.
+- **20:20** Completed close-session documentation sync across `AGENTS.md`, `README.md`, and `CHANGELOG.md` for the current documentation/artifact wave.
 - **15:20** Added full-delete cleanup parity for session reads: when a message has no active transcript segments (`all is_deleted=true`), backend now clears categorization payload paths deterministically before returning data to UI.
 - **12:28** Completed and closed epic `copilot-zktc`: session-scoped taskflow parity now spans backend, Voice UI consumers, `mcp@voice`, Actions API, regression coverage, and operator/assistant runbooks.
 - **12:28** Added canonical backend support for session-scoped Possible Tasks list/create/delete with deterministic `row_id`, explicit `operation_status`, partial-success metadata, and websocket `taskflow_refresh` hints consumed by Voice `Возможные задачи` / `Задачи` / `Codex` tabs.
@@ -18,6 +22,13 @@
 - **13:55** Re-aligned the Voice close contract to explicit fail-fast semantics: clients close only through `POST /api/voicebot/session_done` and must not fall back to the legacy alias.
 
 ### CHANGES
+- **20:20** Documentation:
+  - added `docs/MULTI_AGENT_DISTILLATION_2026-03-03.md` (deduplicated final version with `bd`-native dependency operations, role-isolated handoff contract, and explicit hierarchy model `CJM -> BPMN -> UserFlow -> Screens -> Widgets -> Atoms/Tokens`);
+  - updated `AGENTS.md` and `README.md` session-closeout notes for this wave.
+- **20:20** Accepted working-tree artifacts into the close-session package:
+  - `.agents/product-marketing-context.md`;
+  - `output/copilot-marketing-discovery-2026-03-03.pptx`;
+  - `tmp/copilot-marketing-ppt/**` (local build workspace with slides/toolchain snapshot).
 - **15:20** Backend:
   - updated `backend/src/api/routes/voicebot/sessions.ts` (`categorizationCleanup.applyForDeletedSegments`) with a full-delete guard that wipes `categorization`, `categorization_data.data`, `processors_data.categorization.rows`, and `processors_data.CATEGORIZATION` when all transcript segments are deleted.
   - added regression test `POST /voicebot/session clears categorization when all transcript segments are deleted` in `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts`.

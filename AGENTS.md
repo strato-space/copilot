@@ -510,6 +510,9 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-03 20:20):
+  - Added `docs/MULTI_AGENT_DISTILLATION_2026-03-03.md` as the canonical multi-agent note for this session (deduplicated summary, `bd`-native forward-only dependency workflow, and explicit hierarchy contract `CJM -> BPMN -> UserFlow -> Screens -> Widgets -> Atoms/Tokens`).
+  - Synced closeout documentation (`CHANGELOG.md`, `README.md`, `AGENTS.md`) and explicitly accepted pending local artifacts in this package: `.agents/product-marketing-context.md`, `output/copilot-marketing-discovery-2026-03-03.pptx`, and `tmp/copilot-marketing-ppt/**`.
 - Close-session refresh (2026-03-03 13:37):
   - Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`) for Voice session-done REST parity: `tools/voice` close wrappers now use backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout, fail-fast semantics (no client fallback to the legacy alias), and no automatic retry.
   - Completed targeted parity validation (`71` voice tests passed), a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21`; observed downstream `CREATE_TASKS` refresh (`5 -> 15` items), new `done_at`, and notify events.

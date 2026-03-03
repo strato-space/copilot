@@ -328,6 +328,9 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-03 20:20):
+  - Added `docs/MULTI_AGENT_DISTILLATION_2026-03-03.md` as the canonical session artifact for multi-agent orchestration guidance: isolated worker context, `bd`-native forward-only graph usage, and explicit hierarchy mapping `CJM -> BPMN -> UserFlow -> Screens -> Widgets -> Atoms/Tokens`.
+  - Synchronized closeout records in `CHANGELOG.md` / `AGENTS.md` / `README.md` and accepted pending local artifacts in this closeout package: `.agents/product-marketing-context.md`, `output/copilot-marketing-discovery-2026-03-03.pptx`, and `tmp/copilot-marketing-ppt/**`.
 - Close-session refresh (2026-03-03 13:55):
   - Closed `copilot-q5cc`: `notify_requested` session-log entries now derive `metadata.source` from the real close/worker path instead of hardcoding `socket_session_done`.
   - Closed `copilot-zd9x`: `tools/voice` close wrappers are now strict fail-fast and do not fall back to `POST /api/voicebot/close_session`.

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+html { background: #F7F8FB; }
+body {
+  width: 720pt;
+  height: 405pt;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  background: #F7F8FB;
+  font-family: Verdana, Arial, sans-serif;
+  color: #15233A;
+}
+.canvas {
+  width: 100%;
+  height: 100%;
+  padding: 28pt 30pt;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+h1 {
+  margin: 0 0 12pt 0;
+  font-size: 29pt;
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+}
+.layout {
+  display: flex;
+  gap: 12pt;
+  flex: 1;
+}
+.col {
+  flex: 1;
+  border-radius: 10pt;
+  border: 1.4pt solid #D7E3F2;
+  background: #FFFFFF;
+  padding: 12pt;
+}
+.col h2 {
+  margin: 0 0 7pt 0;
+  font-size: 16pt;
+  color: #102E4E;
+}
+.col ul {
+  margin: 0;
+  padding-left: 18pt;
+  font-size: 11.2pt;
+  line-height: 1.45;
+}
+.col li { margin-bottom: 8pt; }
+.answer {
+  margin-top: 5pt;
+  color: #0D6B5E;
+  font-size: 10.8pt;
+}
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <h1>Типовые возражения и ответы</h1>
+    <div class="layout">
+      <div class="col">
+        <h2>Возражения</h2>
+        <ul>
+          <li>"У нас уже есть CRM и таблицы"</li>
+          <li>"Новая система = долгий онбординг"</li>
+          <li>"AI-правки слишком рискованны"</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h2>Ответ Copilot</h2>
+        <ul>
+          <li>Мы не заменяем источники, а связываем их в управляемый action loop.<p class="answer">FinOps + OperOps + Voice в одном контуре.</p></li>
+          <li>Основа уже встроена в текущую инфраструктуру Strato Space.<p class="answer">Меньше интеграционного трения.</p></li>
+          <li>Workflow построен на контроле и audit trail.<p class="answer">Suggest -> Approve -> Apply, без silent-изменений.</p></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

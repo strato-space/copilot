@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+html { background: #0E1A2B; }
+body {
+  width: 720pt;
+  height: 405pt;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  background: #0E1A2B;
+  font-family: Verdana, Arial, sans-serif;
+  color: #F0F5FC;
+}
+.canvas {
+  width: 100%;
+  height: 100%;
+  padding: 28pt 30pt;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+h1 {
+  margin: 0 0 12pt 0;
+  font-size: 29pt;
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+}
+.kpis {
+  display: flex;
+  gap: 10pt;
+  margin-bottom: 10pt;
+}
+.kpi {
+  flex: 1;
+  background: #17273E;
+  border-radius: 9pt;
+  border: 1.3pt solid #2E4568;
+  padding: 10pt;
+}
+.kpi .label {
+  margin: 0;
+  font-size: 10.2pt;
+  color: #AFC0D8;
+}
+.kpi .value {
+  margin: 2pt 0 0 0;
+  font-size: 20pt;
+  color: #FF6A3D;
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+  font-weight: 700;
+}
+.themes {
+  flex: 1;
+  background: #132339;
+  border-radius: 9pt;
+  padding: 12pt;
+}
+.themes h2 {
+  margin: 0 0 7pt 0;
+  color: #1FB8A6;
+  font-size: 16pt;
+}
+.themes ul {
+  margin: 0;
+  padding-left: 18pt;
+  font-size: 11.4pt;
+  line-height: 1.46;
+}
+.foot {
+  margin-top: 8pt;
+  font-size: 10.4pt;
+  color: #9EB0C8;
+}
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <h1>Proof Points и ориентиры</h1>
+    <div class="kpis">
+      <div class="kpi"><p class="label">Целевой масштаб</p><p class="value">1000</p><p class="label">проектов</p></div>
+      <div class="kpi"><p class="label">Plan-Fact response</p><p class="value"><=5s</p><p class="label">на 1000 проектов</p></div>
+      <div class="kpi"><p class="label">Обновление факта</p><p class="value"><=10s</p><p class="label">цель UX</p></div>
+      <div class="kpi"><p class="label">Voice regression run</p><p class="value">71</p><p class="label">таргетный тест</p></div>
+    </div>
+    <div class="themes">
+      <h2>Ценности, которые можно доказать</h2>
+      <ul>
+        <li><strong>Скорость:</strong> KPI + alerts + drilldown + actions в одном интерфейсе.</li>
+        <li><strong>Контроль:</strong> month lock, audit лог, контрактные API и role-based доступы.</li>
+        <li><strong>Прозрачность:</strong> путь от voice-сигнала до задачи и финального решения.</li>
+      </ul>
+    </div>
+    <p class="foot">Источник: рабочие спецификации и README/AGENTS репозитория Copilot.</p>
+  </div>
+</body>
+</html>

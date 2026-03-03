@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+html { background: #F7F8FB; }
+body {
+  width: 720pt;
+  height: 405pt;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  background: #F7F8FB;
+  font-family: Verdana, Arial, sans-serif;
+  color: #142033;
+}
+.canvas {
+  width: 100%;
+  height: 100%;
+  padding: 28pt 30pt;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+h1 {
+  margin: 0 0 14pt 0;
+  font-size: 31pt;
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+}
+.grid {
+  display: flex;
+  gap: 12pt;
+  flex: 1;
+}
+.card {
+  flex: 1;
+  background: #FFFFFF;
+  border: 1.5pt solid #DEE5F0;
+  border-top: 6pt solid #FF6A3D;
+  border-radius: 10pt;
+  padding: 12pt;
+}
+.card h2 {
+  margin: 0 0 8pt 0;
+  font-size: 16pt;
+  font-family: 'Trebuchet MS', Arial, sans-serif;
+  color: #102036;
+}
+.card ul {
+  margin: 0;
+  padding-left: 18pt;
+  font-size: 11pt;
+  line-height: 1.45;
+}
+.impact {
+  margin-top: 12pt;
+  padding: 9pt 12pt;
+  border-radius: 8pt;
+  background: #132339;
+}
+.impact p {
+  margin: 0;
+  color: #F1F5FB;
+  font-size: 12pt;
+}
+.impact strong { color: #1FB8A6; }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <h1>Проблема, которую закрывает Copilot</h1>
+    <div class="grid">
+      <div class="card">
+        <h2>Разрозненные данные</h2>
+        <ul>
+          <li>Финансы, задачи и встречи живут в разных контурах.</li>
+          <li>Сложно получить единую картину по проекту и месяцу.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Поздние сигналы</h2>
+        <ul>
+          <li>Риски маржи видны постфактум.</li>
+          <li>Решения принимаются после ручных сверок.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Операционный шум</h2>
+        <ul>
+          <li>Month-close зависит от ручных ритуалов команды.</li>
+          <li>Слабая трассируемость изменений без audit trail.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="impact">
+      <p><strong>Цена проблемы:</strong> потеря маржи, задержки закрытия периода, лишние часы руководителей на проверку цифр.</p>
+    </div>
+  </div>
+</body>
+</html>
