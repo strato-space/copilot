@@ -70,6 +70,7 @@ type ProjectDoc = {
   subproject_name?: string;
   contract_type?: ContractType;
   rate_rub_per_hour?: number | null;
+  project_group?: string | ObjectId;
   updated_at?: Date | string;
   updated_by?: string;
 };
@@ -151,12 +152,15 @@ export const buildPlanFactGrid = async (
     const projectIds = new Set<string>();
 
     groupIds.forEach((groupId) => {
-      const group = projectGroupsById.get(groupId);
-      if (!group || !Array.isArray(group.projects_ids)) {
-        return;
-      }
-      group.projects_ids.forEach((projectId) => {
-        projectIds.add(projectId.toString());
+      // Find all projects where project.project_group matches this groupId
+      projects.forEach((project) => {
+        const projectGroupId = typeof project.project_group === 'string' 
+          ? project.project_group 
+          : project.project_group?.toString();
+        
+        if (projectGroupId === groupId) {
+          projectIds.add(project._id.toString());
+        }
       });
     });
 
