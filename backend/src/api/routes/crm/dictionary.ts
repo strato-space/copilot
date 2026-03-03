@@ -94,16 +94,19 @@ router.post('/', async (req: Request, res: Response) => {
                 existing.push(customer);
                 customersByGroupId.set(groupId, existing);
 
-                if (group.projects_ids && Array.isArray(group.projects_ids)) {
-                    for (const projectId of group.projects_ids) {
-                        const project = projectsById[projectId.toString()];
-                        if (!project) {
-                            continue;
-                        }
-                        projectIds.add(project._id.toString());
-                        if (project.name) {
-                            projectNames.add(project.name);
-                        }
+                // Use direct link from project.project_group instead of group.projects_ids array
+                const groupProjects = projects.filter((project) => {
+                    const projectGroupId =
+                        typeof project.project_group === 'string'
+                            ? project.project_group
+                            : project.project_group?.toString();
+                    return projectGroupId === groupId;
+                });
+
+                for (const project of groupProjects) {
+                    projectIds.add(project._id.toString());
+                    if (project.name) {
+                        projectNames.add(project.name);
                     }
                 }
             });

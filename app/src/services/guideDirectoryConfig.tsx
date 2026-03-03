@@ -154,7 +154,6 @@ export const buildDirectoryTable = (
         }>;
         const projectGroupMap = new Map<string, string>();
         const projectGroupCustomerMap = new Map<string, string>();
-        const projectGroupByProject = new Map<string, string>();
         projectGroups.forEach((group) => {
           const groupId = group.project_group_id ?? group._id;
           if (groupId && group.name) {
@@ -163,12 +162,6 @@ export const buildDirectoryTable = (
           if (groupId && group.customer_id) {
             projectGroupCustomerMap.set(groupId, group.customer_id);
           }
-          const projectIds = group.projects_ids ?? [];
-          projectIds.forEach((projectId) => {
-            if (groupId) {
-              projectGroupByProject.set(projectId, groupId);
-            }
-          });
         });
         const rates = (directories['project-rates']?.items ?? []) as Array<{
           project_id?: string;
@@ -208,7 +201,8 @@ export const buildDirectoryTable = (
               dataIndex: 'customer_id',
               key: 'customer_id',
               render: (_: unknown, row: { customer_id?: string; project_group_id?: string; project_id?: string }) => {
-                const groupId = row.project_group_id ?? (row.project_id ? projectGroupByProject.get(row.project_id) : undefined);
+                // Use direct project_group_id link instead of projectGroupByProject map
+                const groupId = row.project_group_id;
                 const customerId = row.customer_id ?? (groupId ? projectGroupCustomerMap.get(groupId) : undefined);
                 if (!customerId) {
                   return '—';
@@ -220,8 +214,9 @@ export const buildDirectoryTable = (
               title: 'Группа',
               dataIndex: 'project_group_id',
               key: 'project_group_id',
-              render: (value: string, row: { project_id?: string }) => {
-                const groupId = value ?? (row.project_id ? projectGroupByProject.get(row.project_id) : undefined);
+              render: (value: string, _row: { project_id?: string }) => {
+                // Use direct project_group_id link instead of projectGroupByProject map
+                const groupId = value;
                 if (!groupId) {
                   return '—';
                 }

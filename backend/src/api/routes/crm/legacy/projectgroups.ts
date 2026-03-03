@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { ObjectId } from 'mongodb';
+import { ObjectId, type Document } from 'mongodb';
 import _ from 'lodash';
 import { getDb } from '../../../../services/db.js';
 import { getLogger } from '../../../../utils/logger.js';
@@ -123,6 +123,18 @@ router.post('/create', async (req: Request, res: Response) => {
         };
 
         const dbRes = await db.collection(COLLECTIONS.PROJECT_GROUPS).insertOne(newProjectGroup);
+
+        // Update customer's project_groups_ids array to maintain consistency
+        if (customerId) {
+            await db.collection(COLLECTIONS.CUSTOMERS).updateOne(
+                { _id: customerId },
+                {
+                    $push: {
+                        project_groups_ids: dbRes.insertedId,
+                    },
+                } as Document
+            );
+        }
 
         res.status(200).json({ db_op_result: dbRes, project_group: { ...newProjectGroup, _id: dbRes.insertedId } });
     } catch (error) {
@@ -260,6 +272,31 @@ router.post('/move', async (req: Request, res: Response) => {
             .collection(COLLECTIONS.PROJECT_GROUPS)
             .updateOne({ _id: groupId }, { $set: updateData });
         const after = await db.collection(COLLECTIONS.PROJECT_GROUPS).findOne({ _id: groupId });
+
+        // Update customer.project_groups_ids arrays to maintain consistency
+        // Remove from source customer
+        if (before.customer) {
+            await db.collection(COLLECTIONS.CUSTOMERS).updateOne(
+                { _id: before.customer },
+                {
+                    $pull: {
+                        project_groups_ids: groupId,
+                    },
+                } as Document
+            );
+        }
+
+        // Add to destination customer
+        if (updateData.customer) {
+            await db.collection(COLLECTIONS.CUSTOMERS).updateOne(
+                { _id: updateData.customer },
+                {
+                    $push: {
+                        project_groups_ids: groupId,
+                    },
+                } as Document
+            );
+        }
 
         await writeProjectTreeAuditLog(db, req, {
             operationType: 'move_project_group',

@@ -238,55 +238,39 @@ router.post('/', async (req: Request, res: Response) => {
         const customers = await db.collection(COLLECTIONS.CUSTOMERS).find().toArray();
 
         const projectGroupsById = _.keyBy(projectGroups, (group) => group._id.toString());
-        const projectsCustomers = new Map<string, string>();
-        const projectsGroups = new Map<string, string>();
+        const customersById = _.keyBy(customers, (customer) => customer._id.toString());
 
-        for (const group of projectGroups) {
-            if (!group.projects_ids || !Array.isArray(group.projects_ids)) {
-                continue;
-            }
-            for (const projectId of group.projects_ids) {
-                const projectKey = projectId.toString();
-                if (!projectsGroups.has(projectKey) && typeof group.name === 'string') {
-                    projectsGroups.set(projectKey, group.name);
-                }
-            }
-        }
-
-        for (const customer of customers) {
-            const groupIds = Array.isArray(customer.project_groups_ids)
-                ? customer.project_groups_ids
-                : [];
-            for (const groupId of groupIds) {
-                const group = projectGroupsById[groupId.toString()];
-                if (!group || !Array.isArray(group.projects_ids)) {
-                    continue;
-                }
-                for (const projectId of group.projects_ids) {
-                    const projectKey = projectId.toString();
-                    if (!projectsCustomers.has(projectKey) && typeof customer.name === 'string') {
-                        projectsCustomers.set(projectKey, customer.name);
-                    }
-                }
-            }
-        }
-
-        // Enrich tickets with client and track info
+        // Enrich tickets with client and track info using direct links
         for (const ticket of data) {
             try {
-                const projectKey = ticket.project_id?.toString();
-                if (projectKey) {
-                    const customerName = projectsCustomers.get(projectKey);
-                    const groupName = projectsGroups.get(projectKey);
-                    if (customerName) {
-                        ticket.client = customerName;
-                    }
-                    if (groupName) {
-                        ticket.track = groupName;
+                // Use project_data from $lookup instead of arrays
+                const project = ticket.project_data?.[0];
+                if (!project) continue;
+
+                // Get group from project.project_group (direct link)
+                const groupId =
+                    typeof project.project_group === 'string'
+                        ? project.project_group
+                        : project.project_group?.toString();
+                const group = groupId ? projectGroupsById[groupId] : undefined;
+
+                if (group) {
+                    // Set track from group name
+                    ticket.track = group.name;
+
+                    // Get customer from group.customer (direct link)
+                    const customerId =
+                        typeof group.customer === 'string'
+                            ? group.customer
+                            : group.customer?.toString();
+                    const customer = customerId ? customersById[customerId] : undefined;
+
+                    if (customer) {
+                        ticket.client = customer.name;
                     }
                 }
             } catch {
-                // Skip if project not found
+                // Skip if project/group/customer not found
             }
         }
 

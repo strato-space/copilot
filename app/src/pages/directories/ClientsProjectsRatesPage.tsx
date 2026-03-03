@@ -168,14 +168,7 @@ export default function ClientsProjectsRatesPage(): ReactElement {
 
   const projectGroupByProjectId = useMemo(() => {
     const map = new Map<string, string>();
-    projectGroups.forEach((group) => {
-      const groupId = group.project_group_id ?? group._id;
-      if (!groupId) {
-        return;
-      }
-      const ids = group.projects_ids ?? [];
-      ids.forEach((projectId) => map.set(projectId, groupId));
-    });
+    // Build from projects using direct link instead of group.projects_ids array
     projects.forEach((project) => {
       const projectId = project.project_id ?? project._id;
       if (!projectId) {
@@ -186,7 +179,7 @@ export default function ClientsProjectsRatesPage(): ReactElement {
       }
     });
     return map;
-  }, [projectGroups, projects]);
+  }, [projects]);
 
   const customerByProjectId = useMemo(() => {
     const map = new Map<string, string>();
