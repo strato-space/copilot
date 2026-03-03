@@ -25,6 +25,22 @@ describe('Voice socket realtime contract', () => {
     expect(source).toContain('to_finalize: true');
   });
 
+  it('consumes taskflow_refresh hints to refresh possible-tasks data and bump tab refresh tokens', () => {
+    expect(source).toContain("socket.on('session_update'");
+    expect(source).toContain('const refreshHint = data?.taskflow_refresh');
+    expect(source).toContain('nextState.sessionTasksRefreshToken = state.sessionTasksRefreshToken + 1;');
+    expect(source).toContain('nextState.sessionCodexRefreshToken = state.sessionCodexRefreshToken + 1;');
+    expect(source).toContain('get().getSessionData(activeSessionId)');
+    expect(source).toContain('Failed to refresh voice session possible tasks after realtime hint');
+  });
+
+  it('uses additive refresh token increments so repeated taskflow hints stay concurrency-safe', () => {
+    expect(source).toContain('nextState.sessionTasksRefreshToken = state.sessionTasksRefreshToken + 1;');
+    expect(source).toContain('nextState.sessionCodexRefreshToken = state.sessionCodexRefreshToken + 1;');
+    expect(source).not.toContain('nextState.sessionTasksRefreshToken = 1;');
+    expect(source).not.toContain('nextState.sessionCodexRefreshToken = 1;');
+  });
+
   it('closes session through REST API and reports backend close errors', () => {
     expect(source).toContain("await voicebotHttp.request('voicebot/session_done', { session_id: normalizedSessionId });");
     expect(source).toContain("message.error(errorText ? `Done failed: ${errorText}` : 'Done failed');");

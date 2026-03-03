@@ -11,7 +11,7 @@ describe('SessionPage codex tab contract', () => {
     expect(source).toContain("import CodexIssuesTable from '../../components/codex/CodexIssuesTable';");
     expect(source).toContain("key: 'codex'");
     expect(source).toContain("label: 'Codex'");
-    expect(source).toContain('children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} />');
+    expect(source).toContain('children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} refreshToken={sessionCodexRefreshToken} />');
   });
 
   it('keeps Codex tab before Screenshort and Log tabs', () => {

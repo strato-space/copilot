@@ -128,6 +128,11 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Categorization mutation APIs emit realtime `message_update` + `session_update`, and return deterministic validation/runtime errors (`invalid_row_oid`, `message_session_mismatch`, `ambiguous_row_locator`, `row_already_deleted`, etc.).
 - Deleting the last active categorization row cascades deletion of the linked transcript segment with compensating rollback when log persistence fails.
 - Image attachments in categorization are rendered only in the Materials column; image-only blocks remain visible without image-as-text rows.
+- Session-scoped taskflow parity is now canonical across backend + Voice UI + mcp@voice:
+  - backend route `POST /api/voicebot/possible_tasks` exposes canonical `row_id` values,
+  - mutations emit `session_update.taskflow_refresh` flags for `possible_tasks` / `tasks` / `codex`,
+  - frontend consumes those hints with additive refresh tokens so `Возможные задачи`, `Задачи`, and `Codex` refresh without manual reload,
+  - assistant workflow is fixed to `discuss -> preview -> apply -> verify`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page shows `Возможные задачи` tab when `processors_data.CREATE_TASKS.data` is present and user has `PROJECTS.UPDATE`; the table uses compact design (no standalone status/project/AI columns), keeps `description`, and validates required fields inline.

@@ -8,6 +8,8 @@ describe('OperOps Codex issues table contract', () => {
     it('normalizes payloads as plain arrays and codex envelopes before table render', () => {
         expect(source).toContain('const CODEX_DEFAULT_LIMIT = 1000;');
         expect(source).toContain('const normalizeIssueList = (payload: unknown): CodexIssue[] => {');
+        expect(source).toContain('refreshToken?: number;');
+        expect(source).toContain('refreshToken = 0');
         expect(source).toContain('const candidate = response.data ?? response.issues ?? response.items;');
         expect(source).toContain('const parsed = normalizeIssueList(response);');
     });
@@ -47,6 +49,12 @@ describe('OperOps Codex issues table contract', () => {
         expect(source).toContain('const count = viewCounts[tab.key] ?? 0;');
         expect(source).toContain('<Text type="secondary" className="!text-xs">');
         expect(source).toContain('items={tabItems}');
+    });
+
+    it('supports silent realtime refetch without resetting local table state', () => {
+        expect(source).toContain('if (refreshToken <= 0) return;');
+        expect(source).toContain('void fetchIssues();');
+        expect(source).toContain('}, [fetchIssues, refreshToken]);');
     });
 
     it('keeps configurable pagination with size selector up to 1000 rows', () => {

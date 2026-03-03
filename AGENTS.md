@@ -258,6 +258,24 @@ Preferred engineering principles for this repo:
 - Screenshort cards must keep canonical `https://...` URLs fully visible, while `data:image/...;base64,...` values are rendered in truncated preview form (`data:image/...;base64,...`) with Copy action preserving the full raw URL.
 - Session page should render `Возможные задачи` only when `processors_data.CREATE_TASKS.data` exists and user has `PROJECTS.UPDATE`; keep compact task-table contract (no standalone status/project/AI columns, keep `description`).
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
+- Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
+  - list: `POST /api/voicebot/possible_tasks` (assistant-side wrappers: `session_possible_tasks`)
+  - create regular: `create_session_tasks`
+  - create codex: `create_session_codex_tasks`
+  - delete row: `delete_session_possible_task`
+- Assistant/taskflow runbook is fixed to `discuss -> preview -> apply -> verify`:
+  - preview is local-only and must not mutate backend state
+  - if all rows reject locally, apply must fail locally without POSTing
+  - only `created_task_ids` are considered committed
+- Taskflow mutation result contract is fixed:
+  - `operation_status`: `success | partial | failed`
+  - `rejected_rows`: machine-readable row errors
+  - `removed_row_ids`: only rows actually removed from `CREATE_TASKS`
+  - `codex_issue_sync_errors`: present only when Codex/BD sync fails after create
+- Realtime refresh contract is fixed:
+  - backend emits `session_update.taskflow_refresh` with per-list flags `possible_tasks/tasks/codex`
+  - frontend consumes the hint without full-page reload
+  - refresh tokens must increment additively so repeated hints remain concurrency-safe
 - `CREATE_TASKS` persistence in API/worker paths is canonicalized to `id/name/description/priority/...` shape; legacy keys (`Task ID`, `Task Title`, `Description`, `Priority`) are normalized on write and accepted for delete matching.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.

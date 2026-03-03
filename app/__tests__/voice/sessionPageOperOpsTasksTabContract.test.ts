@@ -11,6 +11,7 @@ describe('SessionPage OperOps tasks tab contract', () => {
     expect(source).toContain('<CRMKanban');
     expect(source).toContain('buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession)');
     expect(source).toContain('source_ref: sessionTaskSourceRefs');
+    expect(source).toContain('refreshToken={sessionTasksRefreshToken}');
   });
 
   it('keeps tasks tab before Screenshort and provides Work/Review sub-tabs', () => {

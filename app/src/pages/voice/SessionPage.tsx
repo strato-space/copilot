@@ -114,7 +114,15 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 
 export default function SessionPage() {
     const { sessionId } = useParams();
-    const { fetchVoiceBotSession, voiceBotSession, sessionAttachments, addSessionTextChunk, addSessionImageChunk } = useVoiceBotStore();
+    const {
+        fetchVoiceBotSession,
+        voiceBotSession,
+        sessionAttachments,
+        addSessionTextChunk,
+        addSessionImageChunk,
+        sessionTasksRefreshToken,
+        sessionCodexRefreshToken,
+    } = useVoiceBotStore();
     const materialTargetMessageId = useSessionsUIStore((state) => state.materialTargetMessageId);
     const clearMaterialTargetMessageId = useSessionsUIStore((state) => state.clearMaterialTargetMessageId);
     const { hasPermission } = useCurrentUserPermissions();
@@ -275,6 +283,7 @@ export default function SessionPage() {
                             task_status: [...activeTasksConfig.statuses],
                             source_ref: sessionTaskSourceRefs,
                         }}
+                        refreshToken={sessionTasksRefreshToken}
                         columns={[...activeTasksConfig.columns]}
                     />
                 </div>
@@ -283,7 +292,7 @@ export default function SessionPage() {
         {
             key: 'codex',
             label: 'Codex',
-            children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} />,
+            children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} refreshToken={sessionCodexRefreshToken} />,
         },
         {
             key: 'screenshort',

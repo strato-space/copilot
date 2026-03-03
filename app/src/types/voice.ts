@@ -1,3 +1,11 @@
+export interface VoiceSessionTaskflowRefreshHint {
+    reason?: string;
+    possible_tasks?: boolean;
+    tasks?: boolean;
+    codex?: boolean;
+    updated_at?: string;
+}
+
 export interface VoiceBotSession {
     _id: string;
     session_id?: string;
@@ -23,6 +31,7 @@ export interface VoiceBotSession {
     custom_prompt_run?: {
         result?: unknown;
     } | null;
+    taskflow_refresh?: VoiceSessionTaskflowRefreshHint | null;
 }
 
 export interface VoicebotPerson {

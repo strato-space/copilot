@@ -96,19 +96,104 @@ const createSessionInputSchema = z.object({
     chat_id: z.union([z.string(), z.number()]).optional().nullable(),
 });
 
+const SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD = 'row_id' as const;
+const SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS = ['id', 'task_id_from_ai', 'Task ID'] as const;
+const SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS = [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS, 'task_id'] as const;
+
+export const SESSION_TASKFLOW_CONTRACT = {
+    version: '2026-03-03',
+    row_locator: {
+        canonical_field: SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD,
+        compatibility_input_aliases: [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS],
+        delete_input_aliases: ['task_id'],
+        errors: {
+            ambiguous_row_locator: 'ambiguous_row_locator',
+        },
+    },
+    create_regular_payload: {
+        session_id: 'string',
+        tickets: 'SessionTaskRow[]',
+    },
+    create_codex_payload: {
+        session_id: 'string',
+        tickets: 'SessionTaskRow[]',
+    },
+    remove_flags: {
+        remove_from_possible_tasks: {
+            type: 'boolean',
+            default: true,
+        },
+        remove_items: {
+            type: 'row_locator[]',
+            optional: true,
+        },
+    },
+    mutation_result: {
+        operation_status: ['success', 'partial', 'failed'],
+        created_task_ids: 'string[]',
+        rejected_rows: 'CreateTicketsRejectedRow[]',
+        codex_issue_sync_errors: '{ task_id, error }[]',
+    },
+    errors: {
+        runtime_mismatch: {
+            http_status: 409,
+            body: { error: 'runtime_mismatch' },
+        },
+    },
+} as const;
+
+const sessionTaskRowLocatorInputSchema = z
+    .object({
+        row_id: z.union([z.string(), z.number()]).optional(),
+        id: z.union([z.string(), z.number()]).optional(),
+        task_id_from_ai: z.union([z.string(), z.number()]).optional(),
+        'Task ID': z.union([z.string(), z.number()]).optional(),
+    })
+    .passthrough();
+
 const createTicketsInputSchema = z.object({
     session_id: z.string().trim().min(1),
-    tickets: z.array(z.object({}).passthrough()).min(1),
+    tickets: z.array(sessionTaskRowLocatorInputSchema).min(1),
+    remove_from_possible_tasks: z.boolean().optional(),
+    remove_items: z
+        .array(
+            z.union([
+                z.string(),
+                z.number(),
+                sessionTaskRowLocatorInputSchema,
+            ])
+        )
+        .optional(),
 });
 
 const sessionCodexTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
 });
 
-const deleteTaskFromSessionInputSchema = z.object({
+const sessionPossibleTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
-    task_id: z.union([z.string(), z.number()]),
 });
+
+const deleteTaskFromSessionInputSchema = z
+    .object({
+        session_id: z.string().trim().min(1),
+        row_id: z.union([z.string(), z.number()]).optional(),
+        task_id: z.union([z.string(), z.number()]).optional(),
+        id: z.union([z.string(), z.number()]).optional(),
+        task_id_from_ai: z.union([z.string(), z.number()]).optional(),
+        'Task ID': z.union([z.string(), z.number()]).optional(),
+    })
+    .superRefine((value, ctx) => {
+        const hasLocator = [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS].some(
+            (field) => String(value[field as keyof typeof value] ?? '').trim().length > 0
+        );
+        if (!hasLocator) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'row_id is required',
+            });
+        }
+    });
 
 const topicsInputSchema = z.object({
     project_id: z.string().trim().min(1),
@@ -383,6 +468,87 @@ const buildCodexIssueDescription = ({
     `Source: Voice session ${sessionId}`,
     `Creator: ${creatorName || 'unknown'}`,
 ].join('\n');
+
+type SessionTaskRowLocatorResolution =
+    | { ok: true; row_id: string; source_fields: string[] }
+    | {
+        ok: false;
+        error_code: 'missing_row_id' | 'ambiguous_row_locator';
+        source_fields: string[];
+        values?: Array<{ field: string; value: string }>;
+    };
+
+const resolveSessionTaskRowLocator = (
+    value: unknown,
+    { allowDeleteAlias = false }: { allowDeleteAlias?: boolean } = {}
+): SessionTaskRowLocatorResolution => {
+    const candidateFields = allowDeleteAlias
+        ? [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS]
+        : [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS];
+    const values: Array<{ field: string; value: string }> = [];
+
+    if (typeof value === 'string' || typeof value === 'number') {
+        const scalarValue = toTaskText(value);
+        if (!scalarValue) {
+            return { ok: false, error_code: 'missing_row_id', source_fields: [] };
+        }
+        return {
+            ok: true,
+            row_id: scalarValue,
+            source_fields: [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD],
+        };
+    }
+
+    if (!value || typeof value !== 'object') {
+        return { ok: false, error_code: 'missing_row_id', source_fields: [] };
+    }
+
+    const record = value as Record<string, unknown>;
+    for (const field of candidateFields) {
+        const fieldValue = toTaskText(record[field]);
+        if (!fieldValue) continue;
+        values.push({ field, value: fieldValue });
+    }
+
+    if (values.length === 0) {
+        return { ok: false, error_code: 'missing_row_id', source_fields: [] };
+    }
+
+    const uniqueValues = Array.from(new Set(values.map((entry) => entry.value)));
+    if (uniqueValues.length > 1) {
+        return {
+            ok: false,
+            error_code: 'ambiguous_row_locator',
+            source_fields: values.map((entry) => entry.field),
+            values,
+        };
+    }
+
+    return {
+        ok: true,
+        row_id: uniqueValues[0]!,
+        source_fields: values.map((entry) => entry.field),
+    };
+};
+
+const buildSessionTaskRowPullFilter = (rowIds: string[]): Record<string, unknown> => ({
+    $or: [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS].map((field) => ({
+        [field]: { $in: rowIds },
+    })),
+});
+
+const normalizeSessionPossibleTaskForApi = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object') return null;
+    const row = value as Record<string, unknown>;
+    const resolved = resolveSessionTaskRowLocator(row);
+    const canonicalRowId = resolved.ok
+        ? resolved.row_id
+        : toTaskText(row[SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD]);
+    return {
+        ...row,
+        ...(canonicalRowId ? { row_id: canonicalRowId } : {}),
+    };
+};
 
 type CreateTicketsRowRejectionReason =
     | 'missing_performer_id'
@@ -1137,6 +1303,44 @@ const emitCategorizationRealtimeUpdate = async ({
         session_id: sessionId,
         is_messages_processed: false,
         updated_at: new Date().toISOString(),
+    });
+};
+
+const emitSessionTaskflowRefreshHint = ({
+    req,
+    sessionId,
+    reason,
+    possibleTasks = false,
+    tasks = false,
+    codex = false,
+}: {
+    req: Request;
+    sessionId: string;
+    reason: 'create_tickets' | 'delete_task_from_session';
+    possibleTasks?: boolean;
+    tasks?: boolean;
+    codex?: boolean;
+}): void => {
+    if (!possibleTasks && !tasks && !codex) return;
+
+    const io = req.app.get('io') as SocketIOServer | undefined;
+    if (!io) return;
+
+    const room = getVoicebotSessionRoom(sessionId);
+    const namespace = io.of('/voicebot');
+    const updatedAt = new Date().toISOString();
+
+    namespace.to(room).emit('session_update', {
+        _id: sessionId,
+        session_id: sessionId,
+        updated_at: updatedAt,
+        taskflow_refresh: {
+            reason,
+            possible_tasks: possibleTasks,
+            tasks,
+            codex,
+            updated_at: updatedAt,
+        },
     });
 };
 
@@ -3188,12 +3392,38 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
 
         const sessionId = parsedBody.data.session_id;
         const tickets = parsedBody.data.tickets;
+        const removeFromPossibleTasks = parsedBody.data.remove_from_possible_tasks ?? true;
+        const explicitRemoveRowIds = new Set<string>();
+        for (const [removeItemIndex, removeItem] of (parsedBody.data.remove_items ?? []).entries()) {
+            const resolvedRemoveItem = resolveSessionTaskRowLocator(removeItem, { allowDeleteAlias: true });
+            if (!resolvedRemoveItem.ok) {
+                if (resolvedRemoveItem.error_code === 'ambiguous_row_locator') {
+                    return res.status(409).json({
+                        error: 'ambiguous_row_locator',
+                        error_code: 'ambiguous_row_locator',
+                        item_index: removeItemIndex,
+                        values: resolvedRemoveItem.values ?? [],
+                    });
+                }
+                return res.status(400).json({
+                    error: 'remove_items[].row_id is required',
+                    error_code: 'missing_row_id',
+                    item_index: removeItemIndex,
+                });
+            }
+            explicitRemoveRowIds.add(resolvedRemoveItem.row_id);
+        }
         if (!ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'Invalid session_id' });
         }
 
-        const { session, hasAccess } = await sessionAccessUtils.resolve({ db, performer, sessionId });
-        if (!session) return res.status(404).json({ error: 'Session not found' });
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({ db, performer, sessionId });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const now = new Date();
@@ -3400,10 +3630,17 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             if (rejectedRows.length > 0) {
                 return res.status(400).json({
                     error: 'No valid tasks to create tickets',
+                    operation_status: 'failed',
+                    created_task_ids: [],
+                    rejected_rows: rejectedRows,
                     invalid_rows: rejectedRows,
                 });
             }
-            return res.status(400).json({ error: 'No valid tasks to create tickets' });
+            return res.status(400).json({
+                error: 'No valid tasks to create tickets',
+                operation_status: 'failed',
+                created_task_ids: [],
+            });
         }
 
         if (codexTasksToSync.length > 0) {
@@ -3495,16 +3732,17 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         }
 
         const createdTaskIdList = Array.from(createdTaskIds).filter(Boolean);
-        if (createdTaskIdList.length > 0) {
+        const removableRowIds = !removeFromPossibleTasks
+            ? []
+            : (
+                explicitRemoveRowIds.size > 0
+                    ? createdTaskIdList.filter((rowId) => explicitRemoveRowIds.has(rowId))
+                    : createdTaskIdList
+            );
+        if (removableRowIds.length > 0) {
             const updatePayload: Record<string, unknown> = {
                 $pull: {
-                    'processors_data.CREATE_TASKS.data': {
-                        $or: [
-                            { id: { $in: createdTaskIdList } },
-                            { task_id_from_ai: { $in: createdTaskIdList } },
-                            { 'Task ID': { $in: createdTaskIdList } },
-                        ],
-                    },
+                    'processors_data.CREATE_TASKS.data': buildSessionTaskRowPullFilter(removableRowIds),
                 },
                 $set: { updated_at: new Date() },
             };
@@ -3514,10 +3752,27 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             );
         }
 
+        const operationStatus =
+            createdTaskIdList.length === 0
+                ? 'failed'
+                : (rejectedRows.length > 0 || codexSyncErrors.length > 0 ? 'partial' : 'success');
+
+        emitSessionTaskflowRefreshHint({
+            req,
+            sessionId,
+            reason: 'create_tickets',
+            possibleTasks: removableRowIds.length > 0,
+            tasks: insertedCount > 0,
+            codex: codexTasksToSync.length > 0,
+        });
+
         return res.status(200).json({
             success: true,
+            operation_status: operationStatus,
             insertedCount,
             created_task_ids: createdTaskIdList,
+            remove_from_possible_tasks: removeFromPossibleTasks,
+            ...(removableRowIds.length > 0 ? { removed_row_ids: removableRowIds } : {}),
             ...(codexSyncErrors.length > 0 ? { codex_issue_sync_errors: codexSyncErrors } : {}),
             ...(rejectedRows.length > 0 ? { rejected_rows: rejectedRows } : {}),
         });
@@ -3609,6 +3864,55 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
     }
 });
 
+router.post('/possible_tasks', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = sessionPossibleTasksInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({ db, performer, sessionId });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const sessionRecord = session as Record<string, unknown>;
+        const processorsData = sessionRecord.processors_data && typeof sessionRecord.processors_data === 'object'
+            ? sessionRecord.processors_data as Record<string, unknown>
+            : null;
+        const createTasksData = processorsData?.CREATE_TASKS && typeof processorsData.CREATE_TASKS === 'object'
+            ? processorsData.CREATE_TASKS as { data?: unknown[] }
+            : null;
+        const items = Array.isArray(createTasksData?.data)
+            ? createTasksData.data
+                .map((item) => normalizeSessionPossibleTaskForApi(item))
+                .filter((item): item is Record<string, unknown> => item !== null)
+            : [];
+
+        return res.status(200).json({
+            success: true,
+            session_id: sessionId,
+            items,
+        });
+    } catch (error) {
+        logger.error('Error in possible_tasks:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
 router.post('/delete_task_from_session', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
@@ -3617,28 +3921,38 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
     try {
         const parsedBody = deleteTaskFromSessionInputSchema.safeParse(req.body || {});
         if (!parsedBody.success) {
-            return res.status(400).json({ error: 'session_id and task_id are required' });
+            return res.status(400).json({ error: 'session_id and row_id are required' });
         }
 
         const sessionId = parsedBody.data.session_id;
-        const taskId = String(parsedBody.data.task_id).trim();
+        const resolvedRowLocator = resolveSessionTaskRowLocator(parsedBody.data, { allowDeleteAlias: true });
+        if (!resolvedRowLocator.ok) {
+            if (resolvedRowLocator.error_code === 'ambiguous_row_locator') {
+                return res.status(409).json({
+                    error: 'ambiguous_row_locator',
+                    error_code: 'ambiguous_row_locator',
+                    values: resolvedRowLocator.values ?? [],
+                });
+            }
+            return res.status(400).json({ error: 'row_id is required', error_code: 'missing_row_id' });
+        }
+        const rowId = resolvedRowLocator.row_id;
         if (!ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'Invalid session_id' });
         }
 
-        const { session, hasAccess } = await sessionAccessUtils.resolve({ db, performer, sessionId });
-        if (!session) return res.status(404).json({ error: 'Session not found' });
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({ db, performer, sessionId });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const updatePayload: Record<string, unknown> = {
             $pull: {
-                'processors_data.CREATE_TASKS.data': {
-                    $or: [
-                        { id: taskId },
-                        { task_id_from_ai: taskId },
-                        { 'Task ID': taskId },
-                    ],
-                },
+                'processors_data.CREATE_TASKS.data': buildSessionTaskRowPullFilter([rowId]),
             },
             $set: { updated_at: new Date() },
         };
@@ -3652,7 +3966,22 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
             return res.status(404).json({ error: 'Session not found' });
         }
 
-        return res.status(200).json({ success: true });
+        emitSessionTaskflowRefreshHint({
+            req,
+            sessionId,
+            reason: 'delete_task_from_session',
+            possibleTasks: true,
+        });
+
+        return res.status(200).json({
+            success: true,
+            operation_status: 'success',
+            row_id: rowId,
+            matched_count: result.matchedCount,
+            modified_count: result.modifiedCount,
+            deleted_count: result.modifiedCount > 0 ? 1 : 0,
+            not_found: result.modifiedCount === 0,
+        });
     } catch (error) {
         logger.error('Error in delete_task_from_session:', error);
         return res.status(500).json({ error: String(error) });

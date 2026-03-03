@@ -73,6 +73,7 @@ interface CRMKanbanProps {
         performer?: string[];
         source_ref?: string[];
     };
+    refreshToken?: number;
     columns?: string[];
     column_width?: Record<string, number> | undefined;
     pagination?: boolean | undefined;
@@ -249,6 +250,16 @@ const CRMKanban = (props: CRMKanbanProps) => {
             }
         }
     }, [isAuth, tickets.length, props.filter.task_status, fetchTickets]);
+
+    const lastRefreshTokenRef = useRef<number>(props.refreshToken ?? 0);
+
+    useEffect(() => {
+        if (!isAuth) return;
+        const nextRefreshToken = props.refreshToken ?? 0;
+        if (nextRefreshToken <= 0 || nextRefreshToken === lastRefreshTokenRef.current) return;
+        lastRefreshTokenRef.current = nextRefreshToken;
+        void fetchTickets(props.filter.task_status ?? []);
+    }, [isAuth, props.refreshToken, props.filter.task_status, fetchTickets]);
 
     useEffect(() => {
         const nextStatusFilter = props.filter.task_status ?? [];

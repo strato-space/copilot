@@ -39,6 +39,7 @@ interface CodexIssue {
 interface CodexIssuesTableProps {
     sourceRefs?: unknown[];
     limit?: number;
+    refreshToken?: number;
 }
 
 type CodexIssueSource = unknown;
@@ -219,7 +220,7 @@ const isClosedIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.stat
 
 const OPER_OPS_TASK_LINK_LABEL = 'Открыть задачу в OperOps';
 
-export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAULT_LIMIT }: CodexIssuesTableProps) {
+export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAULT_LIMIT, refreshToken = 0 }: CodexIssuesTableProps) {
     const { api_request } = useRequestStore();
     const [issues, setIssues] = useState<CodexIssue[]>([]);
     const [loading, setLoading] = useState(false);
@@ -321,6 +322,11 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
     useEffect(() => {
         void fetchIssues();
     }, [fetchIssues]);
+
+    useEffect(() => {
+        if (refreshToken <= 0) return;
+        void fetchIssues();
+    }, [fetchIssues, refreshToken]);
 
     const selectedTask = useMemo(
         () => filteredIssues.find((issue) => resolveTaskKey(issue) === selectedKey) ?? null,

@@ -257,6 +257,14 @@ describe('Voicebot utility routes runtime behavior', () => {
     getRawDbMock.mockReturnValue(rawDbStub);
 
     const app = buildApp();
+    const emitSpy = jest.fn();
+    app.set('io', {
+      of: jest.fn(() => ({
+        to: jest.fn(() => ({
+          emit: emitSpy,
+        })),
+      })),
+    });
     const response = await request(app)
       .post('/voicebot/create_tickets')
       .send({
@@ -313,6 +321,19 @@ describe('Voicebot utility routes runtime behavior', () => {
           }),
         }),
       })
+    );
+    expect(emitSpy).toHaveBeenCalledWith(
+      'session_update',
+      expect.objectContaining({
+        _id: sessionId.toHexString(),
+        session_id: sessionId.toHexString(),
+        taskflow_refresh: expect.objectContaining({
+          reason: 'create_tickets',
+          possible_tasks: true,
+          tasks: true,
+          codex: false,
+        }),
+      }),
     );
   });
 
@@ -614,6 +635,395 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(insertedDocs).toHaveLength(1);
     expect(String(insertedDocs[0]?.id ?? '')).toContain('regular-row');
     expect((insertedDocs[0]?.performer_id as ObjectId).toHexString()).toBe(regularPerformerId.toHexString());
+  });
+
+  it('create_tickets keeps created rows but skips possible-task removal when remove_from_possible_tasks=false', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({ _id: validPerformerId, name: 'Assignee' })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            findOne: jest.fn(async () => null),
+            insertMany: insertManySpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+      .send({
+        session_id: sessionId.toHexString(),
+        remove_from_possible_tasks: false,
+        tickets: [
+          {
+            id: 'valid-task',
+            name: 'Task with valid performer id',
+            description: 'Should be inserted',
+            performer_id: validPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.operation_status).toBe('success');
+    expect(response.body.remove_from_possible_tasks).toBe(false);
+    expect(response.body.created_task_ids).toEqual(['valid-task']);
+    expect(response.body.removed_row_ids).toBeUndefined();
+    expect(insertManySpy).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
+  });
+
+  it('create_tickets deduplicates explicit remove_items aliases before removing possible-task rows', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      processors_data: {
+        CREATE_TASKS: {
+          data: [
+            { id: 'row-1' },
+            { id: 'row-2' },
+          ],
+        },
+      },
+    }));
+
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({ _id: validPerformerId, name: 'Assignee' })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            findOne: jest.fn(async () => null),
+            insertMany: insertManySpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+      .send({
+        session_id: sessionId.toHexString(),
+        remove_items: [{ row_id: 'row-1' }, { task_id: 'row-1' }],
+        tickets: [
+          {
+            id: 'row-1',
+            name: 'Task one',
+            description: 'Should be removed once',
+            performer_id: validPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+          {
+            id: 'row-2',
+            name: 'Task two',
+            description: 'Should stay in possible tasks',
+            performer_id: validPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.operation_status).toBe('success');
+    expect(response.body.created_task_ids).toEqual(['row-1', 'row-2']);
+    expect(response.body.removed_row_ids).toEqual(['row-1']);
+    expect(insertManySpy).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $and: expect.arrayContaining([
+          expect.objectContaining({ _id: sessionId }),
+        ]),
+      }),
+      expect.objectContaining({
+        $pull: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': expect.objectContaining({
+            $or: expect.arrayContaining([
+              { row_id: { $in: ['row-1'] } },
+              { id: { $in: ['row-1'] } },
+              { task_id_from_ai: { $in: ['row-1'] } },
+              { 'Task ID': { $in: ['row-1'] } },
+            ]),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('create_tickets returns 409 runtime_mismatch when session exists outside current runtime scope', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+    const sessionFindOne = jest
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        _id: sessionId,
+        runtime_tag: 'dev-p2',
+        is_deleted: false,
+      });
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue({
+      collection: () => buildDefaultCollection(),
+    });
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [
+          {
+            id: 'valid-task',
+            name: 'Task with valid performer id',
+            description: 'Should be rejected by runtime mismatch first',
+            performer_id: validPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('runtime_mismatch');
+  });
+
+  it('possible_tasks returns canonical row_id values for legacy alias rows', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      processors_data: {
+        CREATE_TASKS: {
+          data: [
+            { id: 'row-a', name: 'A' },
+            { task_id_from_ai: 'row-b', name: 'B' },
+            { 'Task ID': 'row-c', name: 'C' },
+          ],
+        },
+      },
+    }));
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue({
+      collection: () => buildDefaultCollection(),
+    });
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/possible_tasks')
+      .send({ session_id: sessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({ row_id: 'row-a', id: 'row-a' }),
+      expect.objectContaining({ row_id: 'row-b', task_id_from_ai: 'row-b' }),
+      expect.objectContaining({ row_id: 'row-c', 'Task ID': 'row-c' }),
+    ]);
+  });
+
+  it('delete_task_from_session supports alias locators and returns idempotent counters', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+    const updateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 0 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { updateOne: updateOneSpy };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const emitSpy = jest.fn();
+    app.set('io', {
+      of: jest.fn(() => ({
+        to: jest.fn(() => ({
+          emit: emitSpy,
+        })),
+      })),
+    });
+    const response = await request(app)
+      .post('/voicebot/delete_task_from_session')
+      .send({
+        session_id: sessionId.toHexString(),
+        task_id_from_ai: 'legacy-row',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.row_id).toBe('legacy-row');
+    expect(response.body.matched_count).toBe(1);
+    expect(response.body.modified_count).toBe(0);
+    expect(response.body.deleted_count).toBe(0);
+    expect(response.body.not_found).toBe(true);
+    expect(updateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $and: expect.arrayContaining([
+          expect.objectContaining({ _id: sessionId }),
+        ]),
+      }),
+      expect.objectContaining({
+        $pull: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': expect.objectContaining({
+            $or: expect.arrayContaining([
+              { row_id: { $in: ['legacy-row'] } },
+              { id: { $in: ['legacy-row'] } },
+              { task_id_from_ai: { $in: ['legacy-row'] } },
+              { 'Task ID': { $in: ['legacy-row'] } },
+            ]),
+          }),
+        }),
+      }),
+    );
+    expect(emitSpy).toHaveBeenCalledWith(
+      'session_update',
+      expect.objectContaining({
+        _id: sessionId.toHexString(),
+        session_id: sessionId.toHexString(),
+        taskflow_refresh: expect.objectContaining({
+          reason: 'delete_task_from_session',
+          possible_tasks: true,
+          tasks: false,
+          codex: false,
+        }),
+      }),
+    );
+  });
+
+  it('delete_task_from_session returns 409 for ambiguous row locator payloads', async () => {
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/delete_task_from_session')
+      .send({
+        session_id: new ObjectId().toHexString(),
+        row_id: 'row-a',
+        task_id: 'row-b',
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('ambiguous_row_locator');
+    expect(response.body.error_code).toBe('ambiguous_row_locator');
   });
 
 });

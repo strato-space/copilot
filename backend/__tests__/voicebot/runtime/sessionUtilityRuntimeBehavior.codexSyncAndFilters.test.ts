@@ -97,6 +97,14 @@ describe('Voicebot utility routes runtime behavior', () => {
     getRawDbMock.mockReturnValue(rawDbStub);
 
     const app = buildApp();
+    const emitSpy = jest.fn();
+    app.set('io', {
+      of: jest.fn(() => ({
+        to: jest.fn(() => ({
+          emit: emitSpy,
+        })),
+      })),
+    });
     process.env.VOICE_WEB_INTERFACE_URL = 'https://copilot-dev.stratospace.fun/voice/session';
     const response = await request(app)
       .post('/voicebot/create_tickets')
@@ -143,6 +151,19 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(insertedDocs).toHaveLength(1);
     expect(String(insertedDocs[0]?.id ?? '')).toContain('regular-ticket');
     expect((insertedDocs[0]?.performer_id as ObjectId).toHexString()).toBe(regularPerformerId.toHexString());
+    expect(emitSpy).toHaveBeenCalledWith(
+      'session_update',
+      expect.objectContaining({
+        _id: sessionId.toHexString(),
+        session_id: sessionId.toHexString(),
+        taskflow_refresh: expect.objectContaining({
+          reason: 'create_tickets',
+          possible_tasks: true,
+          tasks: true,
+          codex: true,
+        }),
+      }),
+    );
   });
 
   it('create_tickets returns codex_issue_sync_errors and keeps no mongo codex rows on bd sync failure', async () => {

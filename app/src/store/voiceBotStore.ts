@@ -18,6 +18,7 @@ import type {
     CreateTaskChunk,
     VoiceBotSessionResponse,
     VoiceSessionAttachment,
+    VoiceSessionTaskflowRefreshHint,
     VoiceSessionLogEvent,
     CodexTask,
 } from '../types/voice';
@@ -55,6 +56,8 @@ interface VoiceBotSessionDataSlice {
     sessionAttachments: VoiceSessionAttachment[];
     sessionLogEvents: VoiceSessionLogEvent[];
     highlightedMessageId: string | null;
+    sessionTasksRefreshToken: number;
+    sessionCodexRefreshToken: number;
 }
 
 interface VoiceBotSocketDataSlice {
@@ -792,6 +795,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
     socketPort: null,
     socket: null,
     highlightedMessageId: null,
+    sessionTasksRefreshToken: 0,
+    sessionCodexRefreshToken: 0,
     task_types: null,
     voiceBotSessionsList: [],
     prepared_projects: null,
@@ -953,6 +958,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             socketToken: normalized.socket_token ?? null,
             socketPort: normalized.socket_port ?? null,
             currentSessionId: sessionId,
+            sessionTasksRefreshToken: 0,
+            sessionCodexRefreshToken: 0,
         });
 
         if (!get().socket && normalized.socket_token) {
@@ -998,10 +1005,44 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 });
             });
 
-            socket.on('session_update', (data: Partial<VoiceBotSession>) => {
-                set((state) => ({
-                    voiceBotSession: state.voiceBotSession ? { ...state.voiceBotSession, ...data } : state.voiceBotSession,
-                }));
+            socket.on('session_update', (data: Partial<VoiceBotSession> & { taskflow_refresh?: VoiceSessionTaskflowRefreshHint | null }) => {
+                const refreshHint = data?.taskflow_refresh && typeof data.taskflow_refresh === 'object'
+                    ? data.taskflow_refresh as VoiceSessionTaskflowRefreshHint
+                    : null;
+                const eventSessionId = String(data?.session_id || data?._id || '').trim();
+                const activeSessionId = String(get().currentSessionId || '').trim();
+                const sessionPatch = { ...data };
+                delete sessionPatch.taskflow_refresh;
+
+                set((state) => {
+                    const nextState: Partial<VoiceBotStoreShape> = {
+                        voiceBotSession: state.voiceBotSession ? { ...state.voiceBotSession, ...sessionPatch } : state.voiceBotSession,
+                    };
+                    if (refreshHint?.tasks) {
+                        nextState.sessionTasksRefreshToken = state.sessionTasksRefreshToken + 1;
+                    }
+                    if (refreshHint?.codex) {
+                        nextState.sessionCodexRefreshToken = state.sessionCodexRefreshToken + 1;
+                    }
+                    return nextState;
+                });
+
+                if (refreshHint?.possible_tasks && activeSessionId && (!eventSessionId || eventSessionId === activeSessionId)) {
+                    void get().getSessionData(activeSessionId)
+                        .then((sessionData) => {
+                            set((state) => {
+                                if (state.currentSessionId !== activeSessionId) {
+                                    return state;
+                                }
+                                return {
+                                    voiceBotSession: sessionData.voice_bot_session,
+                                };
+                            });
+                        })
+                        .catch((error) => {
+                            console.error('Failed to refresh voice session possible tasks after realtime hint:', error);
+                        });
+                }
             });
 
             socket.on(
