@@ -122,6 +122,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice sessions list supports bulk delete for selected active rows (`Удалить выбранные`) with confirmation and safe exclusion of already deleted sessions.
 - Voice sessions list state marker is now a dedicated pictogram column aligned with session state semantics (`recording`, `cutting`, `paused`, `final_uploading`, `closed`, `ready`, `error`).
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
+- Session read path force-clears categorization rows when all transcript segments are deleted in a message, so UI does not show orphan categorization tails after full transcript deletion.
 - Categorization table contract is now `Time | Audio | Text | Materials`; the old processing (`Обработка`) column/renderer path was removed.
 - Categorization rows now use stable identity (`row_id`/`segment_oid` priority + deterministic fallback), so selection/actions are row-local and collision-safe.
 - Categorization rows support Copy/Edit/Delete actions via backend routes `POST /api/voicebot/edit_categorization_chunk` and `POST /api/voicebot/delete_categorization_chunk`.

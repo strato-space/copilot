@@ -300,6 +300,7 @@ Preferred engineering principles for this repo:
   - writes `notify_hook_started`, `notify_hook_failed`, `notify_http_sent`, `notify_http_failed` into `automation_voice_bot_session_log`,
   - `notify_hook_started.metadata.log_path` stores exact hook-run log file path for diagnostics.
 - Session payload normalization now removes stale categorization rows that reference already deleted transcript segments (including punctuation/spacing variants), and persists cleanup on read.
+- Session payload normalization now force-clears all categorization rows when every transcript segment in a message is marked `is_deleted=true`, preventing orphan categorization tails after full transcript cleanup from UI.
 - Categorization handler must treat non-text placeholders (`image`, `[Image]`, `[Screenshot]`) as non-blocking: mark message as processed with empty categorization and emit `message_update` for realtime consistency.
 - WebRTC unload persistence now writes non-recording states as `paused` to prevent stale `recording` state recovery after refresh/unload races.
 - Transcription/Categorization tables expose explicit chronological direction toggle (up/down) and persist user preference in `sessionsUIStore` local storage.
@@ -472,9 +473,11 @@ Notes:
 - ✅ Always use `--json` flag for programmatic use
 - ✅ Link discovered work with `discovered-from` dependencies
 - ✅ Check `bd ready` before asking "what should I work on?"
+- ✅ Create only user-scoped or implementation-scoped issues; keep parser/orchestration probes in memory/logs
 - ❌ Do NOT create markdown TODO lists
 - ❌ Do NOT use external issue trackers
 - ❌ Do NOT duplicate tracking systems
+- ❌ Do NOT create synthetic temporary issues in bd (for example `tmp-*`, `*parse-check*`), including `--ephemeral` probe issues
 
 For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help`.
 

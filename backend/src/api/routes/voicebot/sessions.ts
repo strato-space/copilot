@@ -708,6 +708,39 @@ const categorizationCleanup = {
             };
         }
 
+        // If the transcript was fully deleted, categorization cannot remain trustworthy.
+        // In this case remove all categorization rows regardless of text/timing matching.
+        const hasActiveSegments = segments.some((segment) => segment?.is_deleted !== true);
+        if (!hasActiveSegments) {
+            const aggregatePayload: Record<string, unknown> = {};
+            if (Array.isArray(message?.categorization)) {
+                aggregatePayload.categorization = [];
+            }
+            const categorizationDataRows = nestedRecordPath.get(message, 'categorization_data.data');
+            if (Array.isArray(categorizationDataRows)) {
+                aggregatePayload['categorization_data.data'] = [];
+            }
+            const processorRows = nestedRecordPath.get(message, 'processors_data.categorization.rows');
+            if (Array.isArray(processorRows)) {
+                aggregatePayload['processors_data.categorization.rows'] = [];
+            }
+            const processorRowsUppercase = nestedRecordPath.get(message, 'processors_data.CATEGORIZATION');
+            if (Array.isArray(processorRowsUppercase)) {
+                aggregatePayload['processors_data.CATEGORIZATION'] = [];
+            }
+
+            const cleanupStats = this.buildStats(message, aggregatePayload);
+            const updatedMessage = { ...message };
+            for (const [path, value] of Object.entries(aggregatePayload)) {
+                nestedRecordPath.set(updatedMessage, path, value);
+            }
+            return {
+                message: updatedMessage,
+                cleanupPayload: aggregatePayload,
+                cleanupStats,
+            };
+        }
+
         const cloneValue = <T>(value: T): T => {
             if (value == null) return value;
             if (typeof value !== 'object') return value;

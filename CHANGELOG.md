@@ -2,6 +2,7 @@
 
 ## 2026-03-03
 ### PROBLEM SOLVED
+- **15:20** Deleting all transcript segments from Voice UI could still leave orphan `categorization` rows on the session payload, so the `Категоризация` tab displayed stale tails even when transcription chunks were fully removed.
 - **12:28** Voice session taskflow parity was fragmented across backend routes, Voice UI, and `mcp@voice`: assistants could not manage `CREATE_TASKS` rows by `session_id` with one canonical contract, and clients still needed manual refresh after list mutations.
 - **12:28** Token-based automation via `tools/voice` Actions API had no parity path for session-scoped Possible Tasks / Tasks / Codex operations, which forced mixed MCP-only flows and increased drift risk.
 - **12:28** Cross-repo taskflow behavior lacked explicit regression coverage for duplicate row locators, retry-safe local apply, and repeated realtime refresh hints, making partial-success and concurrency regressions harder to catch before rollout.
@@ -9,6 +10,7 @@
 - **13:55** Documentation and operator-facing contract text still described a route-absence fallback to `/api/voicebot/close_session`, even though the desired close semantics are strict fail-fast.
 
 ### FEATURE IMPLEMENTED
+- **15:20** Added full-delete cleanup parity for session reads: when a message has no active transcript segments (`all is_deleted=true`), backend now clears categorization payload paths deterministically before returning data to UI.
 - **12:28** Completed and closed epic `copilot-zktc`: session-scoped taskflow parity now spans backend, Voice UI consumers, `mcp@voice`, Actions API, regression coverage, and operator/assistant runbooks.
 - **12:28** Added canonical backend support for session-scoped Possible Tasks list/create/delete with deterministic `row_id`, explicit `operation_status`, partial-success metadata, and websocket `taskflow_refresh` hints consumed by Voice `Возможные задачи` / `Задачи` / `Codex` tabs.
 - **12:28** Added the assistant/taskflow runbook `discuss -> preview -> apply -> verify` to repository docs and aligned Voice/OperOps runtime notes with the new session-taskflow contract.
@@ -16,6 +18,12 @@
 - **13:55** Re-aligned the Voice close contract to explicit fail-fast semantics: clients close only through `POST /api/voicebot/session_done` and must not fall back to the legacy alias.
 
 ### CHANGES
+- **15:20** Backend:
+  - updated `backend/src/api/routes/voicebot/sessions.ts` (`categorizationCleanup.applyForDeletedSegments`) with a full-delete guard that wipes `categorization`, `categorization_data.data`, `processors_data.categorization.rows`, and `processors_data.CATEGORIZATION` when all transcript segments are deleted.
+  - added regression test `POST /voicebot/session clears categorization when all transcript segments are deleted` in `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts`.
+  - validated via `cd backend && npm run test:parallel-safe -- __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts`.
+- **15:20** Documentation:
+  - updated `AGENTS.md` and `README.md` with the full-delete categorization cleanup contract note.
 - **12:28** Backend:
   - updated `backend/src/api/routes/voicebot/sessions.ts` with `POST /api/voicebot/possible_tasks`, extended `create_tickets`/`delete_task_from_session` contract, explicit `runtime_mismatch` / `ambiguous_row_locator`, and `session_update.taskflow_refresh` emission;
   - expanded runtime tests in `backend/__tests__/voicebot/runtime/{sessionUtilityRoutes.test.ts,sessionUtilityRuntimeBehavior.validation.test.ts,sessionUtilityRuntimeBehavior.codexSyncAndFilters.test.ts}`.
