@@ -327,6 +327,11 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-03 13:37):
+  - Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`) and completed Voice session-done REST parity for `mcp@voice` and `actions@voice`.
+  - `tools/voice` now closes sessions through backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout, route-absence-only alias fallback, and no automatic retry.
+  - Validation passed: `71` targeted voice tests, a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21`; downstream `CREATE_TASKS` refreshed (`5 -> 15`), `done_at` advanced, and notify events were emitted.
+  - Added execution evidence to `plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md` and registered follow-up bug `copilot-q5cc` for stale socket-origin source metadata in session logs.
 - Close-session refresh (2026-03-02 22:03):
   - Closed `copilot-7r94` epic (`copilot-7r94.1`..`copilot-7r94.11`) and delivered Voice categorization cleanup: stable row identities, no processing column, materials-only rendering, typed edit/delete APIs, realtime mutation events, and last-row cascade transcript deletion.
   - Closed `copilot-j54y`: Codex relationship IDs now match Issue-ID behavior (`link + copy`) with status pictograms; shared Codex status tabs now include `In Progress` and `Blocked`.
