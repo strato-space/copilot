@@ -5,11 +5,15 @@
 - **12:28** Voice session taskflow parity was fragmented across backend routes, Voice UI, and `mcp@voice`: assistants could not manage `CREATE_TASKS` rows by `session_id` with one canonical contract, and clients still needed manual refresh after list mutations.
 - **12:28** Token-based automation via `tools/voice` Actions API had no parity path for session-scoped Possible Tasks / Tasks / Codex operations, which forced mixed MCP-only flows and increased drift risk.
 - **12:28** Cross-repo taskflow behavior lacked explicit regression coverage for duplicate row locators, retry-safe local apply, and repeated realtime refresh hints, making partial-success and concurrency regressions harder to catch before rollout.
+- **13:55** `notify_requested` session-log entries still stamped `metadata.source=socket_session_done` after REST-initiated closes, which polluted incident diagnostics by masking the real initiator path.
+- **13:55** Documentation and operator-facing contract text still described a route-absence fallback to `/api/voicebot/close_session`, even though the desired close semantics are strict fail-fast.
 
 ### FEATURE IMPLEMENTED
 - **12:28** Completed and closed epic `copilot-zktc`: session-scoped taskflow parity now spans backend, Voice UI consumers, `mcp@voice`, Actions API, regression coverage, and operator/assistant runbooks.
 - **12:28** Added canonical backend support for session-scoped Possible Tasks list/create/delete with deterministic `row_id`, explicit `operation_status`, partial-success metadata, and websocket `taskflow_refresh` hints consumed by Voice `Возможные задачи` / `Задачи` / `Codex` tabs.
 - **12:28** Added the assistant/taskflow runbook `discuss -> preview -> apply -> verify` to repository docs and aligned Voice/OperOps runtime notes with the new session-taskflow contract.
+- **13:55** Fixed session-log source labeling for done-notify events so `metadata.source` now reflects the actual REST/socket/queue initiator.
+- **13:55** Re-aligned the Voice close contract to explicit fail-fast semantics: clients close only through `POST /api/voicebot/session_done` and must not fall back to the legacy alias.
 
 ### CHANGES
 - **12:28** Backend:
@@ -21,6 +25,11 @@
 - **12:28** Documentation:
   - updated `AGENTS.md` and `README.md`;
   - added/updated plan artifact `plan/mcp-voice-session-taskflow-plan.md`.
+- **13:55** Backend:
+  - updated `backend/src/services/voicebot/voicebotDoneNotify.ts` to derive `metadata.source` from the actual close/worker path;
+  - expanded `backend/__tests__/voicebot/notify/doneNotifyService.test.ts` for REST and queue source labels.
+- **13:55** Documentation:
+  - updated `AGENTS.md` and `README.md` to remove client-side fallback guidance and document fail-fast close semantics.
 
 ## 2026-03-01
 ### PROBLEM SOLVED
@@ -1588,6 +1597,19 @@
 ### CHANGES
 - **18:55** Fixed Mermaid line-break rendering and recap formatting in `docs/copilot-repo-visual-recap.html`.
 - **22:02** Updated close-session documentation artifacts (`AGENTS.md`, `README.md`) to align with recap handoff context.
+
+## 2026-03-03
+### PROBLEM SOLVED
+- **13:37** `mcp@voice`, `actions@voice`, and CLI close flows still depended on a legacy Socket.IO `session_done` initiation path in `tools/voice`, so automation transport semantics, timeout behavior, and failure handling diverged from the canonical Copilot REST close route.
+- **13:37** The execution status for the session-done REST parity plan was only captured in local commits and open `bd` work, without a repository changelog/closeout summary tying the validation evidence to the finished epic.
+
+### FEATURE IMPLEMENTED
+- **13:37** Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`): `tools/voice` close wrappers now use backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout, route-absence-only alias fallback, and no automatic retry, while preserving the stable outward payload for MCP/Actions/CLI callers.
+- **13:37** Completed the full validation chain for the parity rollout: targeted voice test matrix (`71 passed`), a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21` with downstream `CREATE_TASKS` refresh, new `done_at`, and notify delivery events confirmed.
+
+### CHANGES
+- **13:37** Updated execution evidence in `plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md` and closed the corresponding `bd` tasks/epic (`copilot-7b9y`, `.1`..`.10`).
+- **13:37** Registered follow-up bug `copilot-q5cc` because fresh `session_log` entries still report legacy socket-origin source metadata for REST-initiated `actions@voice` closes.
 
 ## 2026-03-02
 ### PROBLEM SOLVED

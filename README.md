@@ -38,7 +38,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 ## Interface Contracts (High Impact)
 
 - `POST /api/voicebot/upload_audio`
-- `POST /api/voicebot/session_done` and `POST /api/voicebot/close_session` (alias)
+- `POST /api/voicebot/session_done` (legacy `POST /api/voicebot/close_session` alias remains server-side only)
 - `POST /api/voicebot/upload_attachment` and `POST /api/voicebot/attachment` (alias)
 - Socket namespace `/voicebot` with room subscription `subscribe_on_session`
 - Canonical session links: `https://copilot.stratospace.fun/voice/session/:id`
@@ -89,7 +89,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - `POST /api/voicebot/sessions/get` now differentiates missing vs runtime-scoped sessions: `404 Session not found` for true absence and `409 runtime_mismatch` when session exists outside current runtime scope.
 - Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + text + `Materials` with sortable order.
-- Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` (legacy alias `POST /api/voicebot/close_session`), while websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
+- Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - WebRTC close path no longer emits `session_done` from browser Socket.IO; FAB/page/yesterday close flows use the same REST close endpoint for deterministic behavior across host/path variants.
@@ -327,6 +327,14 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-03 13:55):
+  - Closed `copilot-q5cc`: `notify_requested` session-log entries now derive `metadata.source` from the real close/worker path instead of hardcoding `socket_session_done`.
+  - Closed `copilot-zd9x`: `tools/voice` close wrappers are now strict fail-fast and do not fall back to `POST /api/voicebot/close_session`.
+- Close-session refresh (2026-03-03 13:37):
+  - Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`) and completed Voice session-done REST parity for `mcp@voice` and `actions@voice`.
+  - `tools/voice` now closes sessions through backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout and no automatic retry.
+  - Validation passed: `71` targeted voice tests, a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21`; downstream `CREATE_TASKS` refreshed (`5 -> 15`), `done_at` advanced, and notify events were emitted.
+  - Added execution evidence to `plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md`.
 - Close-session refresh (2026-03-02 22:03):
   - Closed `copilot-7r94` epic (`copilot-7r94.1`..`copilot-7r94.11`) and delivered Voice categorization cleanup: stable row identities, no processing column, materials-only rendering, typed edit/delete APIs, realtime mutation events, and last-row cascade transcript deletion.
   - Closed `copilot-j54y`: Codex relationship IDs now match Issue-ID behavior (`link + copy`) with status pictograms; shared Codex status tabs now include `In Progress` and `Blocked`.

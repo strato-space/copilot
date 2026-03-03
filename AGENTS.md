@@ -11,7 +11,8 @@ These decisions are part of the current platform contract and must be preserved 
   - API: local `/api/voicebot/*`
   - Legacy `voice.stratospace.fun` is not the implementation target for new changes.
 - Session close is REST-first:
-  - frontend/WebRTC closes via `POST /api/voicebot/session_done` (alias `/api/voicebot/close_session`),
+  - frontend/WebRTC closes via `POST /api/voicebot/session_done`,
+  - legacy alias `POST /api/voicebot/close_session` may remain server-side for compatibility, but clients must not fall back to it,
   - browser must not be the source of `session_done` socket emits.
 - Voice controls contract is fixed to `New / Rec / Cut / Pause / Done` with unified behavior between page toolbar and FAB.
 - Full-track archive chunks are visible in monitor/runtime metadata but must not auto-upload until diarization rollout is enabled.
@@ -44,6 +45,7 @@ Use these as non-negotiable implementation constraints derived from `origin/main
 
 - Voice close path:
   - close requests are REST-only (`/api/voicebot/session_done`);
+  - clients fail fast and do not fall back to `/api/voicebot/close_session`;
   - browser-side `session_done` socket emit is not a valid source of truth.
 - FAB/toolbar done semantics:
   - `Done` must work from both `recording` and `paused` session states;
@@ -505,6 +507,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-03 13:37):
+  - Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`) for Voice session-done REST parity: `tools/voice` close wrappers now use backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout, fail-fast semantics (no client fallback to the legacy alias), and no automatic retry.
+  - Completed targeted parity validation (`71` voice tests passed), a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21`; observed downstream `CREATE_TASKS` refresh (`5 -> 15` items), new `done_at`, and notify events.
+  - Added execution evidence to `plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md` and closed the epic in `bd`.
+  - Registered follow-up bug `copilot-q5cc`: session-log source metadata still reports legacy socket origin for REST-initiated `actions@voice` closes.
 - Close-session refresh (2026-03-02 22:03):
   - Closed `copilot-7r94` epic (`copilot-7r94.1`..`copilot-7r94.11`): completed Voice categorization UX/API cleanup including stable row identity, row-level actions, materials-only rendering, typed edit/delete routes, realtime mutation emits, and cascade transcript deletion for last-row removal.
   - Closed `copilot-j54y`: Codex relationship rows now match Issue ID behavior (`link + copy`) and display status pictograms; shared Codex list now separates `In Progress` and `Blocked` tabs with counters.

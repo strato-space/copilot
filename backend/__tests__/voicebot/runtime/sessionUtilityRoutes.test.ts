@@ -43,6 +43,7 @@ describe('Voicebot utility routes parity contract', () => {
 
   it('publishes canonical session taskflow contract for MCP/client parity', () => {
     expect(source).toContain('export const SESSION_TASKFLOW_CONTRACT = {');
+    expect(source).toContain('export const SESSION_DONE_REST_CONTRACT = {');
     expect(source).toContain('const emitSessionTaskflowRefreshHint = ({');
     expect(source).toContain("canonical_field: SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD");
     expect(source).toContain("compatibility_input_aliases: [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS]");
@@ -50,6 +51,17 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("remove_from_possible_tasks: {");
     expect(source).toContain("operation_status: ['success', 'partial', 'failed']");
     expect(source).toContain("body: { error: 'runtime_mismatch' }");
+    expect(source).toContain("canonical_route: {");
+    expect(source).toContain("path: '/voicebot/session_done'");
+    expect(source).toContain("path: '/voicebot/close_session'");
+    expect(source).toContain("use_only_for: 'route_absence'");
+    expect(source).toContain("'session_not_found'");
+    expect(source).toContain("'chat_id_missing'");
+    expect(source).toContain("tools_voice_response_keys: ['ok', 'session_id', 'url', 'source']");
+    expect(source).toContain("optional_passthrough: ['notify_preview.event_name']");
+    expect(source).toContain('client_timeout_seconds: 5');
+    expect(source).toContain('compatibility_fallback_only_for_route_absence: true');
+    expect(source).toContain('no_automatic_retry: true');
     expect(source).toContain('taskflow_refresh: {');
     expect(source).toContain("reason: 'create_tickets'");
     expect(source).toContain("reason: 'delete_task_from_session'");
