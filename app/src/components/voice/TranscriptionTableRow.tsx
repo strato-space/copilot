@@ -584,7 +584,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                                         <div className="w-full flex items-start justify-between gap-2">
                                             <div className="min-w-0 flex-1">
                                                 {segmentMeta ? (
-                                                    <div className="text-black/45 text-[9px] font-normal leading-3">{segmentMeta}</div>
+                                                    <div className="text-black/45 text-[10px] font-normal leading-4">{segmentMeta}</div>
                                                 ) : null}
                                             </div>
                                             {showActions ? (
@@ -624,7 +624,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                                                     value={draftText}
                                                     onChange={(e) => setDraftText(e.target.value)}
                                                     autoSize={{ minRows: 3, maxRows: 10 }}
-                                                    className="text-[10px] font-normal leading-3"
+                                                    className="text-[12px] font-normal leading-5"
                                                     disabled={busyOid === seg?.id}
                                                 />
                                                 <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -646,18 +646,18 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                                                         value={draftReason}
                                                         onChange={(e) => setDraftReason(e.target.value)}
                                                         placeholder="Reason (optional)"
-                                                        className="max-w-[420px] text-[10px] font-normal leading-3"
+                                                        className="max-w-[420px] text-[11px] font-normal leading-4"
                                                         disabled={busyOid === seg?.id}
                                                     />
                                                 </div>
                                             </div>
                                         ) : (
                                             <>
-                                                <div className="self-stretch text-black/90 text-[10px] font-normal leading-3 whitespace-pre-wrap break-words">
+                                                <div className="self-stretch text-black/90 text-[12px] font-normal leading-5 whitespace-pre-wrap break-words">
                                                     {seg?.text}
                                                 </div>
                                                 {timelineLabel ? (
-                                                    <div className="mt-1 text-black/55 text-[9px] font-normal leading-3">
+                                                    <div className="mt-1 text-black/55 text-[10px] font-normal leading-4">
                                                         {timelineLabel}
                                                     </div>
                                                 ) : null}
@@ -683,7 +683,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                         })
                     ) : (
                         <div
-                            className={`self-stretch text-black/90 text-[10px] font-normal leading-3 p-1 whitespace-pre-wrap break-words ${isMaterialTarget ? 'bg-teal-50/60 ring-1 ring-inset ring-teal-500/70' : ''}`}
+                            className={`self-stretch text-black/90 text-[12px] font-normal leading-5 p-1 whitespace-pre-wrap break-words ${isMaterialTarget ? 'bg-teal-50/60 ring-1 ring-inset ring-teal-500/70' : ''}`}
                             onClick={handleMaterialTargetClick}
                         >
                             {resolveFallbackBodyText(row)}

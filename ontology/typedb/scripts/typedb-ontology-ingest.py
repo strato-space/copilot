@@ -832,6 +832,8 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
         append_string_attr(fields, "error_message_id", normalize_id(doc.get("error_message_id")))
         append_datetime_attr(fields, "error_timestamp", as_datetime(doc.get("error_timestamp")))
         append_string_attr(fields, "current_spreadsheet_file_id", as_string(doc.get("current_spreadsheet_file_id")))
+        append_string_attr(fields, "summary_md_text", as_string(doc.get("summary_md_text")))
+        append_datetime_attr(fields, "summary_saved_at", as_datetime(doc.get("summary_saved_at")))
         append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
         append_datetime_attr(fields, "updated_at", as_datetime(doc.get("updated_at")))
         append_datetime_attr(fields, "created_at", as_datetime(doc.get("created_at")))
@@ -1408,6 +1410,12 @@ def append_mapped_attr(
     raw_value: Any,
 ) -> None:
     if attr_type == "string":
+        # Preserve historical active/inactive semantics for status-like flags.
+        if attr == "status":
+            bool_status = as_bool(raw_value)
+            if bool_status is not None:
+                append_string_attr(parts, attr, normalize_status_from_bool(bool_status))
+                return
         append_string_attr(parts, attr, to_stringish(raw_value))
         return
     if attr_type == "double":
@@ -1423,6 +1431,29 @@ def append_mapped_attr(
     if attr_type == "datetime":
         append_datetime_attr(parts, attr, as_datetime(raw_value))
         return
+
+
+def is_non_empty_mapped_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
+def resolve_mapped_value(
+    doc: dict[str, Any],
+    default_source_field: str,
+    coalesce_fields: Optional[list[str]],
+) -> Any:
+    if not coalesce_fields:
+        return doc.get(default_source_field)
+
+    for field in coalesce_fields:
+        candidate = doc.get(field)
+        if is_non_empty_mapped_value(candidate):
+            return candidate
+    return None
 
 
 def resolve_relation_roles_for_entities(
@@ -1470,6 +1501,7 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
     target_entity = mapping_cfg.get("target_entity")
     key_cfg = mapping_cfg.get("key") or {}
     attributes_cfg = mapping_cfg.get("attributes") or {}
+    coalesce_cfg = mapping_cfg.get("coalesce") or {}
     relations_cfg = mapping_cfg.get("relations") or []
 
     if not isinstance(target_entity, str) or not target_entity:
@@ -1506,7 +1538,17 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
                 attr_type = ctx.schema_attr_types.get(attr)
                 if not attr_type:
                     continue
-                append_mapped_attr(fields, attr, attr_type, doc.get(source_field))
+                coalesce_fields: Optional[list[str]] = None
+                if isinstance(coalesce_cfg, dict):
+                    raw_coalesce_fields = coalesce_cfg.get(attr)
+                    if isinstance(raw_coalesce_fields, list):
+                        coalesce_fields = [
+                            field
+                            for field in raw_coalesce_fields
+                            if isinstance(field, str) and field
+                        ]
+                raw_value = resolve_mapped_value(doc, source_field, coalesce_fields)
+                append_mapped_attr(fields, attr, attr_type, raw_value)
 
         query = f"{', '.join(fields)};"
         insert_query(
@@ -1625,16 +1667,16 @@ def init_typedb(options: CliOptions) -> Any:
 
 
 INGESTERS: dict[str, Callable[[IngestContext], CollectionStats]] = {
-    "automation_customers": ingest_customers,
-    "automation_projects": ingest_projects,
+    "automation_customers": lambda ctx: ingest_collection_from_mapping(ctx, "automation_customers"),
+    "automation_projects": lambda ctx: ingest_collection_from_mapping(ctx, "automation_projects"),
     # Keep automation_tasks strictly mapping-driven to avoid schema/mapping drift.
     "automation_tasks": lambda ctx: ingest_collection_from_mapping(ctx, "automation_tasks"),
     "automation_voice_bot_sessions": ingest_voice_sessions,
     "automation_voice_bot_messages": ingest_voice_messages,
-    "forecasts_project_month": ingest_forecasts,
-    "finops_expense_categories": ingest_expense_categories,
-    "finops_expense_operations": ingest_expense_operations,
-    "finops_fx_rates": ingest_fx_rates,
+    "forecasts_project_month": lambda ctx: ingest_collection_from_mapping(ctx, "forecasts_project_month"),
+    "finops_expense_categories": lambda ctx: ingest_collection_from_mapping(ctx, "finops_expense_categories"),
+    "finops_expense_operations": lambda ctx: ingest_collection_from_mapping(ctx, "finops_expense_operations"),
+    "finops_fx_rates": lambda ctx: ingest_collection_from_mapping(ctx, "finops_fx_rates"),
 }
 
 

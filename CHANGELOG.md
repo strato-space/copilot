@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-03-04
+### PROBLEM SOLVED
+- **08:55** Voice Categorization still mixed per-row metadata noise and narrow typography, so large sessions became harder to scan and metadata traceability was duplicated across rows.
+- **08:55** Voice sessions had no canonical persisted markdown summary API; summaries could not be saved with deterministic validation, session-log trace, and realtime refresh.
+- **08:55** Done-flow summarize orchestration lacked explicit correlation/idempotency audit trail for downstream summarize notifications, making incident triage harder across retries.
+- **08:55** Codex relationship rendering in OperOps details card did not fully normalize `waits-for/blocks/dependents` semantics into explicit dependency groups.
+
+### FEATURE IMPLEMENTED
+- **08:55** Delivered Voice Categorization UX cleanup wave (`copilot-8gto` scope): metadata signature is rendered once per block footer, row selection remains blue-only, readability typography is increased, and a new `Summary` panel supports edit/save/conflict handling.
+- **08:55** Added `POST /api/voicebot/save_summary` contract with strict payload checks, session persistence (`summary_md_text`, `summary_saved_at`), `summary_save` session-log event, and realtime `session_update.taskflow_refresh.summary` hint.
+- **08:55** Added summarize correlation/idempotency propagation through done-flow (`summary_correlation_id`) and summary audit events (`summary_telegram_send`, `summary_save`) for queue-driven summarize routing.
+- **08:55** Updated OperOps Codex relationship grouping to explicit `Parent`, `Children`, `Depends On (blocks/waits-for)`, `Blocks (dependents)` with shared issue-id token rendering.
+
+### CHANGES
+- **08:55** Frontend Voice:
+  - updated `app/src/components/voice/{Categorization.tsx,CategorizationTableHeader.tsx,CategorizationTableRow.tsx,CategorizationTableSummary.tsx}`.
+  - added `app/src/utils/voiceMetadataSignature.ts` block-footer helper path (`buildCategorizationBlockMetadataSignature`).
+  - updated `app/src/store/voiceBotStore.ts` + `app/src/types/voice.ts` for summary save/realtime refresh support.
+  - simplified `app/src/components/voice/PossibleTasks.tsx` by removing editable `task_type_id`/`dialogue_tag` columns from the session table.
+- **08:55** Backend Voice:
+  - added route `POST /api/voicebot/save_summary` in `backend/src/api/routes/voicebot/sessions.ts`.
+  - extended done pipeline/logging in `backend/src/services/{voicebotSessionDoneFlow.ts,voicebot/voicebotDoneNotify.ts,voicebotSessionLog.ts}` and `backend/src/workers/voicebot/handlers/doneMultiprompt.ts`.
+  - added/updated tests: `backend/__tests__/voicebot/runtime/saveSummaryRoute.test.ts`, `backend/__tests__/voicebot/session/sessionDoneFlowService.test.ts`, `backend/__tests__/voicebot/{notify/doneNotifyService.test.ts,workers/workerDoneMultipromptHandler.test.ts,runtime/sessionUtilityRoutes.test.ts,session/sessionLogRouteContract.test.ts,session/sessionLogAppendOnlyContract.test.ts,session/sessionLogServiceMap.test.ts}`.
+- **08:55** OperOps/CRM + Miniapp:
+  - updated `app/src/components/codex/CodexIssueDetailsCard.tsx` (+ contract test) for relationship normalization.
+  - updated miniapp debug ticket-read path in `backend/src/miniapp/routes/index.ts` to use raw DB in `IS_MINIAPP_DEBUG_MODE=true` for runtime-tag mismatch diagnostics.
+  - minor FinOps label copy update in `app/src/components/PlanFactGrid.tsx` (`Заказчик` -> `Клиент`).
+- **08:55** Agent/ontology/docs:
+  - updated `agents/agent-cards/create_tasks.md` to canonical JSON output contract (`id/name/description/priority/...` keys).
+  - synchronized ontology assets (`ontology/typedb/{schema,mappings,queries,scripts}` + ontology docs/changelog) with summary persistence and mapping-driven ingest updates.
+  - expanded multi-agent distillation notes in `docs/MULTI_AGENT_DISTILLATION_2026-03-03.md`.
+- **08:55** Validation:
+  - `cd app && npm run build` passed.
+  - `cd backend && npm run build` passed.
+
 ## 2026-03-03
 ### PROBLEM SOLVED
 - **20:20** Multi-agent orchestration guidance for UI decomposition lived in fragmented chat notes, so role boundaries, dependency handling, and hierarchy contracts (`CJM -> BPMN -> UserFlow -> Screens -> Widgets -> Atoms/Tokens`) were not preserved as a reusable repository artifact.

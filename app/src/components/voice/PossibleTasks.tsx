@@ -18,7 +18,6 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
-import type { TaskTypeNode } from '../../types/voice';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
 import { isVoiceTaskCreateValidationError } from '../../utils/voiceTaskCreation';
 
@@ -32,8 +31,6 @@ type TaskRow = {
   priority_reason: string;
   performer_id: string;
   project_id: string;
-  task_type_id: string;
-  dialogue_tag: string;
   task_id_from_ai: string;
   dependencies_from_ai: string[];
   dialogue_reference: string;
@@ -51,13 +48,6 @@ type TaskRowCreationErrors = {
 };
 
 const PRIORITY_OPTIONS = ['🔥 P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
-
-const DIALOGUE_TAG_OPTIONS = [
-  { value: 'voice', label: 'Голос', color: 'blue' },
-  { value: 'chat', label: 'Чат', color: 'green' },
-  { value: 'doc', label: 'Док', color: 'purple' },
-  { value: 'call', label: 'Звонок', color: 'orange' },
-];
 
 const PERFORMER_PICKER_POPUP_HEIGHT = {
   mobile: 320,
@@ -88,8 +78,6 @@ const REQUIRED_FIELD_LABELS: Record<keyof TaskRow, string> = {
   priority_reason: 'обоснование приоритета',
   performer_id: 'исполнитель',
   project_id: 'проект',
-  task_type_id: 'тип задачи',
-  dialogue_tag: 'тег',
   task_id_from_ai: 'task_id',
   dependencies_from_ai: 'зависимости',
   dialogue_reference: 'референс',
@@ -115,72 +103,10 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
     priority_reason: priorityReason,
     performer_id: toText(raw.performer_id),
     project_id: toText(raw.project_id) || defaultProjectId,
-    task_type_id: toText(raw.task_type_id),
-    dialogue_tag: toText(raw.dialogue_tag) || 'voice',
     task_id_from_ai: taskIdFromAi,
     dependencies_from_ai: parseDependencies(raw.dependencies_from_ai ?? raw.Dependencies),
     dialogue_reference: dialogueReference,
   };
-};
-
-type TaskTypeOptionGroup = {
-  label: string;
-  options: Array<{ label: string; value: string }>;
-};
-
-const buildTaskTypeOptions = (taskTypes: TaskTypeNode[] | null): TaskTypeOptionGroup[] => {
-  if (!Array.isArray(taskTypes) || taskTypes.length === 0) return [];
-
-  const groups: TaskTypeOptionGroup[] = [];
-  const fallback: Array<{ label: string; value: string }> = [];
-
-  for (const node of taskTypes) {
-    const parentLabel = toText((node as Record<string, unknown>).title) || toText(node.name);
-    const children = Array.isArray(node.children) ? node.children : [];
-    if (children.length > 0) {
-      const options = children
-        .map((child) => {
-          const raw = child as Record<string, unknown>;
-          const value = toText(raw._id) || toText(raw.id);
-          if (!value) return null;
-          const taskId = toText(raw.task_id);
-          const title = toText(raw.title) || toText(raw.name) || value;
-          return {
-            value,
-            label: taskId ? `${taskId} ${title}` : title,
-          };
-        })
-        .filter((entry): entry is { label: string; value: string } => entry !== null);
-
-      if (options.length > 0) {
-        groups.push({
-          label: parentLabel || 'Типы',
-          options,
-        });
-      }
-      continue;
-    }
-
-    const nodeRaw = node as Record<string, unknown>;
-    const nodeValue = toText(nodeRaw._id) || toText(nodeRaw.id);
-    const nodeTaskId = toText(nodeRaw.task_id);
-    if (!nodeValue) continue;
-    fallback.push({
-      value: nodeValue,
-      label: nodeTaskId
-        ? `${nodeTaskId} ${parentLabel || nodeValue}`
-        : parentLabel || nodeValue,
-    });
-  }
-
-  if (fallback.length > 0) {
-    groups.unshift({
-      label: 'Типы',
-      options: fallback,
-    });
-  }
-
-  return groups;
 };
 
 function PossibleTasksSessionScope() {
@@ -189,9 +115,7 @@ function PossibleTasksSessionScope() {
   const {
     voiceBotSession,
     performers_for_tasks_list,
-    task_types,
     fetchPerformersForTasksList,
-    fetchTaskTypes,
     confirmSelectedTickets,
     deleteTaskFromSession,
   } = useVoiceBotStore();
@@ -248,14 +172,11 @@ function PossibleTasksSessionScope() {
     if (!performers_for_tasks_list || missingHistoricalPerformer) {
       void fetchPerformersForTasksList(historicalPerformerIds);
     }
-    if (!task_types) void fetchTaskTypes();
   }, [
     fetchPerformersForTasksList,
-    fetchTaskTypes,
     historicalPerformerIds,
     missingHistoricalPerformer,
     performers_for_tasks_list,
-    task_types,
   ]);
 
   const rows = useMemo(
@@ -309,8 +230,6 @@ function PossibleTasksSessionScope() {
     return result;
   }, [historicalPerformerIds, performers_for_tasks_list]);
 
-  const taskTypeOptions = useMemo(() => buildTaskTypeOptions(task_types), [task_types]);
-
   const rowsWithMeta = useMemo(
     () =>
       rows.map((row) => {
@@ -338,7 +257,6 @@ function PossibleTasksSessionScope() {
         row.priority_reason,
         row.dialogue_reference,
         row.task_id_from_ai,
-        row.dialogue_tag,
         row.dependencies_from_ai.join(' '),
       ]
         .filter(Boolean)
@@ -427,7 +345,6 @@ function PossibleTasksSessionScope() {
       id: task.id,
       name: toText(task.name),
       description: toText(task.description),
-      task_type_id: toText(task.task_type_id),
       performer_id: toText(task.performer_id),
       project_id: defaultProjectId,
       priority: toText(task.priority),
@@ -435,7 +352,6 @@ function PossibleTasksSessionScope() {
       task_id_from_ai: toText(task.task_id_from_ai) || null,
       dependencies_from_ai: task.dependencies_from_ai,
       dialogue_reference: toText(task.dialogue_reference) || null,
-      dialogue_tag: toText(task.dialogue_tag) || 'voice',
     }));
 
     setIsSubmitting(true);
@@ -600,7 +516,7 @@ function PossibleTasksSessionScope() {
         size="small"
         tableLayout="fixed"
         sticky
-        scroll={{ x: 1400 }}
+        scroll={{ x: 1120 }}
         pagination={{ pageSize: 50, showSizeChanger: true, pageSizeOptions: ['50', '100', '200'] }}
         dataSource={filteredRows}
         rowSelection={{
@@ -719,44 +635,6 @@ function PossibleTasksSessionScope() {
                 </div>
               );
             },
-          },
-          {
-            title: 'Тип задачи',
-            dataIndex: 'task_type_id',
-            width: 220,
-            render: (_value, record) => (
-              <Select
-                allowClear
-                value={record.task_type_id || undefined}
-                onChange={(value) => setDraftValue(record.id, 'task_type_id', toText(value))}
-                options={taskTypeOptions}
-                showSearch
-                optionFilterProp="label"
-                style={{ width: '100%' }}
-                placeholder="Тип"
-              />
-            ),
-          },
-          {
-            title: 'Тег',
-            dataIndex: 'dialogue_tag',
-            width: 124,
-            render: (_value, record) => (
-              <Select
-                allowClear
-                value={record.dialogue_tag || undefined}
-                onChange={(value) => setDraftValue(record.id, 'dialogue_tag', toText(value))}
-                options={DIALOGUE_TAG_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                }))}
-                optionRender={(option) => {
-                  const found = DIALOGUE_TAG_OPTIONS.find((entry) => entry.value === option.value);
-                  return found ? <Tag color={found.color}>{found.label}</Tag> : option.label;
-                }}
-                style={{ width: '100%' }}
-              />
-            ),
           },
           {
             title: '',

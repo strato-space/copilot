@@ -30,6 +30,17 @@ export interface VoiceMetadataSignatureInput {
     omitZeroRange?: boolean;
 }
 
+export interface VoiceMetadataSignatureRowLike {
+    source_file_name?: string | null | undefined;
+    message_timestamp?: unknown;
+}
+
+export interface CategorizationBlockMetadataSignatureInput {
+    rows?: VoiceMetadataSignatureRowLike[] | null | undefined;
+    materials?: VoiceMetadataSignatureRowLike[] | null | undefined;
+    messageTimestamp?: unknown;
+}
+
 export const formatVoiceMetadataSignature = ({
     startSeconds,
     endSeconds,
@@ -56,4 +67,37 @@ export const formatVoiceMetadataSignature = ({
     const parts = [rangeLabel, fileName, absoluteLabel].filter((part) => part.length > 0);
     if (parts.length === 0) return null;
     return parts.join(', ');
+};
+
+export const formatVoiceMetadataFooterSignature = ({
+    sourceFileName,
+    absoluteTimestampMs,
+}: {
+    sourceFileName?: string | null | undefined;
+    absoluteTimestampMs?: unknown;
+}): string | null => {
+    const fileName = typeof sourceFileName === 'string' ? sourceFileName.trim() : '';
+    const absoluteMs = toTimestampMs(absoluteTimestampMs);
+    if (!fileName || absoluteMs == null) return null;
+
+    return `${fileName}, ${dayjs(absoluteMs).format('HH:mm:ss')}`;
+};
+
+export const buildCategorizationBlockMetadataSignature = ({
+    rows,
+    materials,
+    messageTimestamp,
+}: CategorizationBlockMetadataSignatureInput): string | null => {
+    const candidates = [...(rows || []), ...(materials || [])];
+    const withFileName = candidates.find((item) =>
+        typeof item?.source_file_name === 'string' && item.source_file_name.trim().length > 0
+    );
+
+    const sourceFileName = withFileName?.source_file_name;
+    const timestampCandidate = withFileName?.message_timestamp ?? messageTimestamp;
+
+    return formatVoiceMetadataFooterSignature({
+        sourceFileName,
+        absoluteTimestampMs: timestampCandidate,
+    });
 };

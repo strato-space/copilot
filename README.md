@@ -39,6 +39,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 
 - `POST /api/voicebot/upload_audio`
 - `POST /api/voicebot/session_done` (legacy `POST /api/voicebot/close_session` alias remains server-side only)
+- `POST /api/voicebot/save_summary`
 - `POST /api/voicebot/upload_attachment` and `POST /api/voicebot/attachment` (alias)
 - Socket namespace `/voicebot` with room subscription `subscribe_on_session`
 - Canonical session links: `https://copilot.stratospace.fun/voice/session/:id`
@@ -71,6 +72,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
 - Codex issue IDs now use one token renderer across `Issue ID` and `Relationships` (blue link + copy action); relationship rows also show status pictograms (`open`, `in_progress`, `blocked`, `deferred`, `closed`, fallback).
+- Codex relationship groups are normalized in details card as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency reading.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 
 ## Voice notes
@@ -138,8 +140,16 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page shows `Возможные задачи` tab when `processors_data.CREATE_TASKS.data` is present and user has `PROJECTS.UPDATE`; the table uses compact design (no standalone status/project/AI columns), keeps `description`, and validates required fields inline.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
+- Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - CREATE_TASKS payloads are normalized to canonical `id/name/description/priority/...` shape in both worker (`createTasksFromChunks`) and API utility (`save_create_tasks`) write paths.
 - Task deletion from session now matches canonical and legacy identifiers (`id`, `task_id_from_ai`, `Task ID`) to handle mixed historical payloads.
+- Categorization metadata signature is rendered once per message block footer (`source_file_name + HH:mm:ss`) instead of repeating per row; row focus uses blue selection only.
+- Categorization readability contract now uses larger typography in `Time/Audio/Text/Materials` columns for dense session review.
+- Session summary now has a canonical persistence path:
+  - backend route `POST /api/voicebot/save_summary` validates `{ session_id, md_text }` and writes `summary_md_text` + `summary_saved_at`,
+  - backend emits realtime `session_update.taskflow_refresh.summary`,
+  - frontend summary panel (`Summary`) supports edit/save/conflict states bound to those canonical fields.
+- Done-flow summarize orchestration now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys to session log.
 - TS categorization/create-tasks chain treats non-text placeholders (`image`, `[Image]`, `[Screenshot]`) as non-blocking: rows are marked processed with empty categorization, and `CREATE_TASKS` can finalize without waiting on uncategorizable chunks.
 - Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).
 - Transcription/Categorization tables support client-side chronological direction switching (up/down) with preference persisted in local storage.
@@ -218,6 +228,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Miniapp frontend sources live in `miniapp/src/` and build to `miniapp/dist`.
 - Miniapp backend is served by the Copilot backend runtime (`npm run dev:miniapp` / `npm run start:miniapp`).
 - PM2 mode scripts start both backend APIs (`copilot-backend-*` and `copilot-miniapp-backend-*`) together.
+- In `IS_MINIAPP_DEBUG_MODE=true`, miniapp `/tickets` reads from raw DB (`getRawDb`) to keep debug ticket visibility when runtime tags differ between test data and scoped runtime.
 
 ## What is included
 - `app/` React + Vite frontend for Finance Ops and OperOps/CRM.

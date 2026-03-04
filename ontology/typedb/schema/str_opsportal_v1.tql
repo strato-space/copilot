@@ -10,6 +10,7 @@ attribute status, value string;
 attribute description, value string;
 attribute title, value string;
 attribute summary, value string;
+attribute summary_md_text, value string;
 attribute link_label, value string;
 attribute url, value string;
 attribute link, value string;
@@ -74,6 +75,7 @@ attribute codex_review_summary_last_error_at, value datetime;
 attribute codex_review_summary_finished_at, value datetime;
 attribute codex_review_summary_note_synced_at, value datetime;
 attribute codex_review_approval_card_sent_at, value datetime;
+attribute summary_saved_at, value datetime;
 attribute shipment_date, value datetime;
 attribute date_indexed, value datetime;
 attribute created_time, value datetime;
@@ -277,6 +279,7 @@ attribute mime_type, value string;
 attribute drive_folder_id, value string;
 attribute forecast_hours, value double;
 attribute forecast_cost_rub, value double;
+attribute rate_rub_per_hour_snapshot, value double;
 attribute updated_source, value string;
 attribute fx_used, value string;
 attribute vendor, value string;
@@ -395,6 +398,8 @@ entity project_group,
   owns project_group_id @key,
   owns name,
   owns status,
+  owns project_groups_ids,
+  owns client_id,
   owns created_at,
   owns updated_at,
   plays client_has_project_group:owned_project_group,
@@ -469,6 +474,7 @@ entity person,
   owns telegram_user_id,
   owns telegram_name,
   owns notifications,
+  owns performer_id,
   owns payments_settings,
   owns created_at,
   owns updated_at,
@@ -635,6 +641,7 @@ entity oper_task,
   owns codex_review_approval_card_start_callback,
   owns codex_review_approval_card_cancel_callback,
   owns runtime_tag,
+  owns is_deleted,
   owns stop_comment_parsing,
   owns created_at,
   owns updated_at,
@@ -788,10 +795,19 @@ entity forecast_project_month,
   owns forecast_version_id,
   owns project_id,
   owns month_key,
+  owns source_type,
   owns currency,
   owns amount_original,
   owns amount_rub,
+  owns forecast_hours,
+  owns forecast_cost_rub,
+  owns rate_rub_per_hour_snapshot,
+  owns fx_used,
+  owns comment,
   owns row_version,
+  owns updated_by,
+  owns updated_source,
+  owns updated_at,
   plays project_has_forecast_month:forecast_project_month,
   plays forecast_version_contains_forecast_month:forecast_project_month,
   plays period_governs_forecast_month:forecast_project_month,
@@ -802,6 +818,9 @@ entity fx_monthly,
   owns month_key,
   owns currency,
   owns value_number,
+  owns source,
+  owns created_by,
+  owns created_at,
   plays fx_converts_fact_month:fx_monthly,
   plays fx_converts_forecast_month:fx_monthly;
 
@@ -818,6 +837,8 @@ entity cost_category,
   owns cost_category_id @key,
   owns name,
   owns status,
+  owns created_by,
+  owns updated_by,
   plays cost_category_classifies_expense:cost_category;
 
 entity cost_expense,
@@ -955,6 +976,8 @@ entity voice_session,
   owns last_message_timestamp,
   owns last_voice_timestamp,
   owns done_at,
+  owns summary_saved_at,
+  owns summary_md_text,
   owns done_count,
   owns is_messages_processed,
   owns is_waiting,

@@ -8,7 +8,9 @@ import PermissionGate from './PermissionGate';
 import { PERMISSIONS } from '../../constants/permissions';
 import CategorizationTableRow from './CategorizationTableRow';
 import CategorizationTableHeader from './CategorizationTableHeader';
+import CategorizationTableSummary from './CategorizationTableSummary';
 import { getCategorizationRowIdentity } from '../../utils/categorizationRowIdentity';
+import { buildCategorizationBlockMetadataSignature } from '../../utils/voiceMetadataSignature';
 
 const voiceMessageSources = {
     TELEGRAM: 'telegram',
@@ -16,7 +18,7 @@ const voiceMessageSources = {
 } as const;
 
 export default function Categorization() {
-    const { voiceBotSession, voiceMesagesData, createTasksFromRows, socket } = useVoiceBotStore();
+    const { voiceBotSession, voiceMesagesData, createTasksFromRows, saveSessionSummary, socket } = useVoiceBotStore();
     const {
         selectedCategorizationRows,
         clearSelectedCategorizationRows,
@@ -164,6 +166,11 @@ export default function Categorization() {
                                     typeof material.imageUrl === 'string' && material.imageUrl.trim().length > 0
                                 )
                                 : [];
+                            const metadataSignature = buildCategorizationBlockMetadataSignature({
+                                rows: sortedRows,
+                                materials,
+                                messageTimestamp: group.message_timestamp,
+                            });
                             const rowsToRender = sortedRows.length > 0
                                 ? sortedRows
                                 : materials.length > 0
@@ -192,16 +199,26 @@ export default function Categorization() {
                                                     materials={i === 0 ? materials : []}
                                                     key={rowId}
                                                     rowId={rowId}
-                                                    isLast={i === rowsToRender.length - 1}
                                                 />
                                             );
                                         })}
+                                        {metadataSignature ? (
+                                            <div className="px-1 pb-1 text-black/45 text-[9px] font-normal leading-3">
+                                                {metadataSignature}
+                                            </div>
+                                        ) : null}
                                     </td>
                                 </tr>
                             );
                         })}
                     </tbody>
                 </table>
+                <CategorizationTableSummary
+                    sessionId={voiceBotSession?._id}
+                    summaryText={voiceBotSession?.summary_md_text || ''}
+                    summarySavedAt={voiceBotSession?.summary_saved_at}
+                    onSave={saveSessionSummary}
+                />
             </div>
         </>
     );

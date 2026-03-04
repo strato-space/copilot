@@ -96,6 +96,10 @@ interface VoiceBotSessionProcessingActionsSlice {
     sendSessionToCrm: (sessionId: string) => Promise<boolean>;
     sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
     triggerSessionReadyToSummarize: (sessionId: string) => Promise<Record<string, unknown>>;
+    saveSessionSummary: (
+        payload: { session_id: string; md_text: string },
+        options?: { silent?: boolean }
+    ) => Promise<{ md_text: string; updated_at: string }>;
     fetchSessionLog: (sessionId: string, options?: { silent?: boolean }) => Promise<void>;
     fetchSessionCodexTasks: (sessionId: string) => Promise<CodexTask[]>;
     editTranscriptChunk: (
@@ -1027,7 +1031,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                     return nextState;
                 });
 
-                if (refreshHint?.possible_tasks && activeSessionId && (!eventSessionId || eventSessionId === activeSessionId)) {
+                const shouldRefreshSessionData = Boolean(refreshHint?.possible_tasks || refreshHint?.summary);
+                if (shouldRefreshSessionData && activeSessionId && (!eventSessionId || eventSessionId === activeSessionId)) {
                     void get().getSessionData(activeSessionId)
                         .then((sessionData) => {
                             set((state) => {
@@ -1040,7 +1045,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                             });
                         })
                         .catch((error) => {
-                            console.error('Failed to refresh voice session possible tasks after realtime hint:', error);
+                            const refreshType = refreshHint?.summary ? 'summary' : 'possible tasks';
+                            console.error(`Failed to refresh voice session ${refreshType} after realtime hint:`, error);
                         });
                 }
             });
@@ -1158,6 +1164,45 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             });
         } catch (error) {
             console.error('Ошибка при ручном запуске Summarize:', error);
+            throw error;
+        }
+    },
+
+    saveSessionSummary: async (payload, options) => {
+        try {
+            const response = await voicebotHttp.request<{ summary?: { md_text?: string; updated_at?: string } }>(
+                'voicebot/save_summary',
+                payload,
+                Boolean(options?.silent)
+            );
+            const savedText = typeof response?.summary?.md_text === 'string' ? response.summary.md_text : payload.md_text;
+            const savedAt = typeof response?.summary?.updated_at === 'string'
+                ? response.summary.updated_at
+                : new Date().toISOString();
+
+            set((state) => ({
+                voiceBotSession: state.voiceBotSession
+                    ? {
+                        ...state.voiceBotSession,
+                        summary_md_text: savedText,
+                        summary_saved_at: savedAt,
+                        updated_at: savedAt,
+                    }
+                    : state.voiceBotSession,
+            }));
+
+            return { md_text: savedText, updated_at: savedAt };
+        } catch (error) {
+            if (!options?.silent) {
+                const backendError = axios.isAxiosError(error)
+                    ? (error.response?.data as { error?: unknown } | undefined)?.error
+                    : null;
+                const backendErrorText = typeof backendError === 'string' ? backendError : '';
+                const fallbackError = error instanceof Error ? error.message : '';
+                const errorText = backendErrorText || fallbackError || 'Не удалось сохранить summary';
+                console.error('Ошибка при сохранении summary:', error);
+                message.error(errorText);
+            }
             throw error;
         }
     },

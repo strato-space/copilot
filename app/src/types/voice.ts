@@ -3,6 +3,7 @@ export interface VoiceSessionTaskflowRefreshHint {
     possible_tasks?: boolean;
     tasks?: boolean;
     codex?: boolean;
+    summary?: boolean;
     updated_at?: string;
 }
 
@@ -31,6 +32,8 @@ export interface VoiceBotSession {
     custom_prompt_run?: {
         result?: unknown;
     } | null;
+    summary_md_text?: string;
+    summary_saved_at?: string;
     taskflow_refresh?: VoiceSessionTaskflowRefreshHint | null;
 }
 

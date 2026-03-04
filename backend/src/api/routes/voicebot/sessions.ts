@@ -95,6 +95,12 @@ const createSessionInputSchema = z.object({
     project_id: z.string().trim().optional().nullable(),
     chat_id: z.union([z.string(), z.number()]).optional().nullable(),
 });
+const SESSION_SUMMARY_MAX_CHARS = 20_000;
+const VOICE_SESSION_SUMMARY_FIELD = 'summary_md_text' as const;
+const saveSummaryInputSchema = z.object({
+    session_id: z.string().trim().min(1),
+    md_text: z.string().max(SESSION_SUMMARY_MAX_CHARS),
+});
 
 const SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD = 'row_id' as const;
 const SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS = ['id', 'task_id_from_ai', 'Task ID'] as const;
@@ -253,6 +259,36 @@ const uploadProjectFileInputSchema = z.object({
 const getFileContentInputSchema = z.object({
     file_id: z.string().trim().min(1),
 });
+
+const parseSaveSummaryInput = (
+    body: unknown
+): { ok: true; data: z.input<typeof saveSummaryInputSchema> } | { ok: false; error: string } => {
+    const parsedBody = saveSummaryInputSchema.safeParse(body ?? {});
+    if (parsedBody.success) {
+        return { ok: true, data: parsedBody.data };
+    }
+
+    const payload = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+    const sessionIdRaw = payload.session_id;
+    if (typeof sessionIdRaw !== 'string' || sessionIdRaw.trim().length === 0) {
+        return { ok: false, error: 'session_id is required' };
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(payload, 'md_text')) {
+        return { ok: false, error: 'md_text is required' };
+    }
+
+    const mdTextRaw = payload.md_text;
+    if (typeof mdTextRaw !== 'string') {
+        return { ok: false, error: 'md_text must be a string' };
+    }
+
+    if (mdTextRaw.length > SESSION_SUMMARY_MAX_CHARS) {
+        return { ok: false, error: `md_text exceeds ${SESSION_SUMMARY_MAX_CHARS} characters` };
+    }
+
+    return { ok: false, error: 'invalid_payload' };
+};
 const mergeSessionsInputSchema = z.object({
     session_ids: z.array(z.string().trim().min(1)).min(2),
     target_session_id: z.string().trim().min(1),
@@ -1406,6 +1442,32 @@ const emitSessionTaskflowRefreshHint = ({
             possible_tasks: possibleTasks,
             tasks,
             codex,
+            updated_at: updatedAt,
+        },
+    });
+};
+
+const emitSessionSummaryRefreshHint = ({
+    req,
+    sessionId,
+}: {
+    req: Request;
+    sessionId: string;
+}): void => {
+    const io = req.app.get('io') as SocketIOServer | undefined;
+    if (!io) return;
+
+    const room = getVoicebotSessionRoom(sessionId);
+    const namespace = io.of('/voicebot');
+    const updatedAt = new Date().toISOString();
+
+    namespace.to(room).emit('session_update', {
+        _id: sessionId,
+        session_id: sessionId,
+        updated_at: updatedAt,
+        taskflow_refresh: {
+            reason: 'save_summary',
+            summary: true,
             updated_at: updatedAt,
         },
     });
@@ -4285,6 +4347,77 @@ router.post('/save_custom_prompt_result', async (req: Request, res: Response) =>
         return res.status(200).json({ success: true, message: 'Custom prompt result saved successfully' });
     } catch (error) {
         logger.error('Error in save_custom_prompt_result:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/save_summary', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = parseSaveSummaryInput(req.body);
+        if (!parsedBody.ok) {
+            return res.status(400).json({ error: parsedBody.error });
+        }
+
+        const { session_id, md_text } = parsedBody.data;
+        if (!ObjectId.isValid(session_id)) {
+            return res.status(400).json({ error: 'invalid_session_id' });
+        }
+
+        const { session, hasAccess } = await sessionAccessUtils.resolve({ db, performer, sessionId: session_id });
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const sessionObjectId = new ObjectId(session_id);
+        const summarySavedAt = new Date();
+        const updateResult = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+            runtimeSessionQuery({ _id: sessionObjectId }),
+            {
+                $set: {
+                    [VOICE_SESSION_SUMMARY_FIELD]: md_text,
+                    summary_saved_at: summarySavedAt,
+                    updated_at: summarySavedAt,
+                },
+            }
+        );
+        if (updateResult.matchedCount === 0) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        const summarySaveEvent = await insertSessionLogEvent({
+            db,
+            session_id: sessionObjectId,
+            project_id: toObjectIdOrNull(session.project_id),
+            event_name: 'summary_save',
+            status: 'done',
+            actor: buildActorFromPerformer(performer),
+            source: buildWebSource(req),
+            action: {
+                type: 'save',
+                available: false,
+            },
+            metadata: {
+                summary_field: VOICE_SESSION_SUMMARY_FIELD,
+                summary_chars: md_text.length,
+            },
+        });
+
+        emitSessionSummaryRefreshHint({ req, sessionId: session_id });
+
+        return res.status(200).json({
+            success: true,
+            session_id,
+            summary: {
+                md_text,
+                updated_at: summarySavedAt.toISOString(),
+            },
+            summary_event_oid: summarySaveEvent?._id ? formatOid('evt', summarySaveEvent._id as ObjectId) : null,
+        });
+    } catch (error) {
+        logger.error('Error in save_summary:', error);
         return res.status(500).json({ error: String(error) });
     }
 });

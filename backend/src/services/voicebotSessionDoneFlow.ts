@@ -1,4 +1,5 @@
 import { ObjectId, type Db } from 'mongodb';
+import { randomUUID } from 'node:crypto';
 import {
   IS_PROD_RUNTIME,
   VOICEBOT_COLLECTIONS,
@@ -65,6 +66,7 @@ export type CompleteSessionDoneFlowParams = {
 export type CompleteSessionDoneFlowResult = {
   ok: boolean;
   session_id?: string;
+  summary_correlation_id?: string;
   mode?: DoneFlowMode;
   notify_preview?: DoneNotifyPreview;
   error?: string;
@@ -86,6 +88,11 @@ const hasValidChatId = (value: unknown): boolean => {
 const normalizeTelegramUserId = (value: unknown): string | null => {
   if (value === null || value === undefined) return null;
   const raw = String(value).trim();
+  return raw.length > 0 ? raw : null;
+};
+
+const normalizeSummaryCorrelationId = (value: unknown): string | null => {
+  const raw = String(value || '').trim();
   return raw.length > 0 ? raw : null;
 };
 
@@ -173,6 +180,10 @@ export const completeSessionDoneFlow = async ({
 
   const chat_id = chatIdInput !== undefined ? chatIdInput : (session.chat_id as unknown);
   const normalizedTelegramUserId = normalizeTelegramUserId(telegram_user_id);
+  const existingSummaryCorrelationId =
+    normalizeSummaryCorrelationId(session.summary_correlation_id) ||
+    normalizeSummaryCorrelationId(session.summary_flow_correlation_id);
+  const summaryCorrelationId = existingSummaryCorrelationId || randomUUID();
   const commonQueue = queues?.[VOICEBOT_QUEUES.COMMON];
   const eventsQueue = queues?.[VOICEBOT_QUEUES.EVENTS];
   const preview =
@@ -183,7 +194,13 @@ export const completeSessionDoneFlow = async ({
       eventName: notify_event_name,
     }));
 
-  if (!already_closed) {
+  const sessionAlreadyClosed =
+    already_closed ||
+    session.is_active === false ||
+    session.to_finalize === true ||
+    Boolean(session.done_at);
+
+  if (!sessionAlreadyClosed) {
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
       runtimeSessionQuery({ _id: sessionObjectId }),
       {
@@ -191,10 +208,21 @@ export const completeSessionDoneFlow = async ({
           is_active: false,
           to_finalize: true,
           done_at: new Date(),
+          summary_correlation_id: summaryCorrelationId,
           updated_at: new Date(),
         },
         $inc: {
           done_count: 1,
+        },
+      }
+    );
+  } else if (!existingSummaryCorrelationId) {
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+      runtimeSessionQuery({ _id: sessionObjectId }),
+      {
+        $set: {
+          summary_correlation_id: summaryCorrelationId,
+          updated_at: new Date(),
         },
       }
     );
@@ -208,6 +236,7 @@ export const completeSessionDoneFlow = async ({
       chat_id,
       telegram_user_id: normalizedTelegramUserId,
       notify_preview: preview,
+      summary_correlation_id: summaryCorrelationId,
       already_closed: true,
     });
     mode = 'queued';
@@ -294,6 +323,7 @@ export const completeSessionDoneFlow = async ({
   return {
     ok: true,
     session_id,
+    summary_correlation_id: summaryCorrelationId,
     mode,
     notify_preview: preview,
   };

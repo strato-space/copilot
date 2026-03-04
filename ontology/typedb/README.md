@@ -49,6 +49,30 @@ This folder contains a first executable scaffold of the STR OpsPortal ontology i
 - Ingest script alignment:
   - `scripts/typedb-ontology-ingest.py` now routes `automation_tasks` through the mapping-driven path to minimize schema/mapping/script drift.
 
+## Runtime Contract Alignment (2026-03-03, copilot-3opd)
+
+- Schema alignment completed for mapping-owned fields that previously were silently skipped:
+  - `project_group`: `project_groups_ids`, `client_id`
+  - `person`: `performer_id`
+  - `oper_task`: `is_deleted`
+  - `forecast_project_month`: `source_type`, `forecast_hours`, `forecast_cost_rub`, `rate_rub_per_hour_snapshot`, `fx_used`, `comment`, `updated_by`, `updated_source`, `updated_at`
+  - `cost_category`: `created_by`, `updated_by`
+  - `fx_monthly`: `source`, `created_by`, `created_at`
+  - `voice_session`: `summary_md_text`, `summary_saved_at`
+- Mapping alignment updates:
+  - `automation_voice_bot_sessions` includes summary persistence fields.
+  - `automation_tasks` includes `issue_type` coalesce (`issue_type | type`) in addition to existing status coalesce.
+  - `forecasts_project_month` includes `rate_rub_per_hour_snapshot` and `fx_used`.
+- Ingestion engine alignment:
+  - `ingest_collection_from_mapping` now supports `coalesce` resolution per attribute.
+  - status normalization for bool-backed status sources is applied in generic mapping path (`active`/`inactive`).
+  - reduced custom ingesters replaced by mapping-driven ingestion for:
+    `automation_customers`, `automation_projects`, `forecasts_project_month`,
+    `finops_expense_categories`, `finops_expense_operations`, `finops_fx_rates`.
+- Validation pack extended with summary persistence checks:
+  - `sessions_summary_saved_at_without_text`
+  - `sessions_summary_text_without_saved_at`
+
 ## Contents
 
 - `scripts/typedb-ontology-ingest.py` - MongoDB -> TypeDB ingestion tool

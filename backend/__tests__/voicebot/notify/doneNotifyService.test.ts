@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS } from '../../../src/constants.js';
 import {
   buildDoneNotifyPreview,
+  writeSummaryAuditLog,
   writeDoneNotifyRequestedLog,
 } from '../../../src/services/voicebot/voicebotDoneNotify.js';
 
@@ -36,11 +37,12 @@ describe('voicebotDoneNotify service', () => {
   });
 
   it('writes notify_requested session log with source-derived rest metadata', async () => {
+    const findOne = jest.fn(async () => null);
     const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
     const db = {
       collection: (name: string) => {
         if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
-          return { insertOne };
+          return { findOne, insertOne };
         }
         return { findOne: async () => null };
       },
@@ -68,11 +70,12 @@ describe('voicebotDoneNotify service', () => {
   });
 
   it('writes notify_requested session log with queue metadata for done_multiprompt worker', async () => {
+    const findOne = jest.fn(async () => null);
     const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
     const db = {
       collection: (name: string) => {
         if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
-          return { insertOne };
+          return { findOne, insertOne };
         }
         return { findOne: async () => null };
       },
@@ -94,5 +97,87 @@ describe('voicebotDoneNotify service', () => {
     const [doc] = insertOne.mock.calls[0] as [Record<string, unknown>];
     const metadata = doc.metadata as Record<string, unknown>;
     expect(metadata.source).toBe('queue_done_multiprompt');
+  });
+
+  it('writes summary_telegram_send audit record with correlation id and idempotency key', async () => {
+    const sessionId = new ObjectId();
+    const findOne = jest.fn(async () => null);
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return { findOne, insertOne };
+        }
+        return { findOne: async () => null };
+      },
+    } as any;
+
+    await writeSummaryAuditLog({
+      db,
+      session_id: sessionId,
+      session: { _id: sessionId },
+      event_name: 'summary_telegram_send',
+      status: 'queued',
+      correlation_id: 'corr-1',
+      idempotency_key: 'idem-1',
+      metadata: { source: 'done_multiprompt_auto' },
+    });
+
+    expect(findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session_id: sessionId,
+        event_name: 'summary_telegram_send',
+        correlation_id: 'corr-1',
+        'metadata.idempotency_key': 'idem-1',
+      }),
+      expect.any(Object)
+    );
+    expect(insertOne).toHaveBeenCalledTimes(1);
+    const [doc] = insertOne.mock.calls[0] as [Record<string, unknown>];
+    expect(doc.event_name).toBe('summary_telegram_send');
+    expect(doc.correlation_id).toBe('corr-1');
+    expect(doc.status).toBe('queued');
+    expect((doc.metadata as Record<string, unknown>).idempotency_key).toBe('idem-1');
+  });
+
+  it('keeps summary audit writes idempotent by correlation_id + idempotency_key', async () => {
+    const sessionId = new ObjectId();
+    const existingId = new ObjectId();
+    const findOne = jest
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _id: existingId });
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return { findOne, insertOne };
+        }
+        return { findOne: async () => null };
+      },
+    } as any;
+
+    await writeSummaryAuditLog({
+      db,
+      session_id: sessionId,
+      session: { _id: sessionId },
+      event_name: 'summary_save',
+      status: 'pending',
+      correlation_id: 'corr-2',
+      idempotency_key: 'idem-2',
+      metadata: { source: 'done_multiprompt_auto' },
+    });
+    await writeSummaryAuditLog({
+      db,
+      session_id: sessionId,
+      session: { _id: sessionId },
+      event_name: 'summary_save',
+      status: 'pending',
+      correlation_id: 'corr-2',
+      idempotency_key: 'idem-2',
+      metadata: { source: 'done_multiprompt_auto' },
+    });
+
+    expect(insertOne).toHaveBeenCalledTimes(1);
   });
 });

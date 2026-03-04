@@ -16,6 +16,7 @@ describe('session log append-only + rollback metadata contract', () => {
   });
 
   it('keeps session log writes append-only via insertOne with event version metadata', () => {
+    expect(serviceSource).toContain("eventName.startsWith('summary_')");
     expect(serviceSource).toContain('source_event_id?: ObjectId | null;');
     expect(serviceSource).toContain('is_replay?: boolean;');
     expect(serviceSource).toContain('event_version?: number;');

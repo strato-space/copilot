@@ -62,3 +62,25 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - Data cleanup was partially applied after review:
   - one recoverable orphan session was restored as a PMO stub session,
   - remaining low-value orphan messages without reliable linkage were removed from MongoDB.
+
+## Session Outcome (2026-03-03)
+
+- Deep ontology refresh (`copilot-3opd`) synchronized schema/mapping/ingest with current software contracts across Voice, OperOps/Codex, and FinOps.
+- Schema contract updates:
+  - `voice_session` now owns summary persistence fields (`summary_md_text`, `summary_saved_at`).
+  - `forecast_project_month` now owns full forecast payload used by backend (`source_type`, `forecast_hours`, `forecast_cost_rub`, `rate_rub_per_hour_snapshot`, `fx_used`, `comment`, `updated_by`, `updated_source`, `updated_at`).
+  - alignment fixes for mapping-owned fields in `project_group`, `person`, `oper_task`, `cost_category`, `fx_monthly`.
+- Mapping contract updates:
+  - `automation_voice_bot_sessions` now maps `summary_md_text` and `summary_saved_at`.
+  - `automation_tasks` coalesce extended for `issue_type <- issue_type|type`.
+  - `forecasts_project_month` maps `rate_rub_per_hour_snapshot` and `fx_used`.
+- Ingestion runtime updates:
+  - generic mapping ingester now supports `coalesce` field resolution and status normalization for bool-backed status fields.
+  - selected collections switched from reduced custom ingestion to mapping-driven ingestion (`automation_customers`, `automation_projects`, `forecasts_project_month`, `finops_expense_categories`, `finops_expense_operations`, `finops_fx_rates`).
+- Validation/gates updates:
+  - added summary persistence checks (`summary_saved_at` <-> `summary_md_text`) in TypeDB validation script/query pack.
+- Verification runbook executed successfully:
+  1. `npm run ontology:typedb:ingest:dry`
+  2. `npm run ontology:typedb:ingest:apply -- --init-schema --limit 200 --collections automation_customers,automation_projects,automation_project_groups,automation_tasks,automation_voice_bot_sessions,forecasts_project_month,finops_expense_categories,finops_expense_operations,finops_fx_rates`
+  3. `npm run ontology:typedb:validate`
+  4. No new critical orphan regressions introduced; legacy runtime-tag/orphan-message warnings remain visible as expected diagnostics.

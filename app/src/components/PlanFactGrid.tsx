@@ -235,7 +235,7 @@ const buildColumns = (
   ];
   const base: ColumnsType<RowItem> = [
     {
-      title: 'Заказчик',
+      title: 'Клиент',
       dataIndex: 'customer_name',
       key: 'customer_name',
       filters: customerFilters,

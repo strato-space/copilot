@@ -13,7 +13,7 @@ type CodexRelationshipItem = {
 type CodexRelationshipGroups = {
     parent: CodexRelationshipItem[];
     child: CodexRelationshipItem[];
-    waitsFor: CodexRelationshipItem[];
+    dependsOn: CodexRelationshipItem[];
     blocks: CodexRelationshipItem[];
     discoveredFrom: CodexRelationshipItem[];
     dependencies: CodexRelationshipItem[];
@@ -157,7 +157,7 @@ const collectRelationships = (issue: CodexIssueDetails): CodexRelationshipGroups
     const groups: CodexRelationshipGroups = {
         parent: [],
         child: [],
-        waitsFor: [],
+        dependsOn: [],
         blocks: [],
         discoveredFrom: [],
         dependencies: [],
@@ -166,7 +166,7 @@ const collectRelationships = (issue: CodexIssueDetails): CodexRelationshipGroups
     const seenByGroup: Record<keyof CodexRelationshipGroups, Set<string>> = {
         parent: new Set<string>(),
         child: new Set<string>(),
-        waitsFor: new Set<string>(),
+        dependsOn: new Set<string>(),
         blocks: new Set<string>(),
         discoveredFrom: new Set<string>(),
         dependencies: new Set<string>(),
@@ -189,11 +189,11 @@ const collectRelationships = (issue: CodexIssueDetails): CodexRelationshipGroups
             return;
         }
         if (normalizedType === 'waits-for') {
-            addUniqueRelationship(groups.waitsFor, seenByGroup.waitsFor, item);
+            addUniqueRelationship(groups.dependsOn, seenByGroup.dependsOn, item);
             return;
         }
         if (normalizedType === 'blocks') {
-            addUniqueRelationship(groups.blocks, seenByGroup.blocks, item);
+            addUniqueRelationship(groups.dependsOn, seenByGroup.dependsOn, item);
             return;
         }
         if (normalizedType === 'discovered-from') {
@@ -213,17 +213,30 @@ const collectRelationships = (issue: CodexIssueDetails): CodexRelationshipGroups
         addUniqueRelationship(groups.parent, seenByGroup.parent, toRelationshipItem(candidate));
     });
 
-    const childrenSources: unknown[] = [];
     if (Array.isArray(issue.dependents)) {
-        childrenSources.push(...issue.dependents);
-    }
-    if (Array.isArray(issue.children)) {
-        childrenSources.push(...issue.children);
+        issue.dependents.forEach((candidate) => {
+            const normalizedType = relationType(candidate).toLowerCase();
+            const item = toRelationshipItem(candidate);
+
+            if (normalizedType === 'parent-child') {
+                addUniqueRelationship(groups.child, seenByGroup.child, item);
+                return;
+            }
+
+            if (normalizedType === 'blocks' || normalizedType === 'waits-for' || !normalizedType) {
+                addUniqueRelationship(groups.blocks, seenByGroup.blocks, item);
+                return;
+            }
+
+            addUniqueRelationship(groups.dependencies, seenByGroup.dependencies, item);
+        });
     }
 
-    childrenSources.forEach((candidate) => {
-        addUniqueRelationship(groups.child, seenByGroup.child, toRelationshipItem(candidate));
-    });
+    if (Array.isArray(issue.children)) {
+        issue.children.forEach((candidate) => {
+            addUniqueRelationship(groups.child, seenByGroup.child, toRelationshipItem(candidate));
+        });
+    }
 
     return groups;
 };
@@ -302,8 +315,8 @@ export default function CodexIssueDetailsCard({ issue, issueIdFallback, extra }:
     const relationshipRows: Array<{ key: string; label: string; items: CodexRelationshipItem[] }> = [
         { key: 'parent', label: 'Parent (parent-child)', items: relationships.parent },
         { key: 'child', label: 'Children (parent-child)', items: relationships.child },
-        { key: 'waits_for', label: 'Depends On (waits-for)', items: relationships.waitsFor },
-        { key: 'blocks', label: 'Blocks', items: relationships.blocks },
+        { key: 'depends_on', label: 'Depends On (blocks/waits-for)', items: relationships.dependsOn },
+        { key: 'blocks', label: 'Blocks (dependents)', items: relationships.blocks },
         { key: 'discovered_from', label: 'Discovered From', items: relationships.discoveredFrom },
         { key: 'dependencies', label: 'Dependencies', items: relationships.dependencies },
     ].filter((row) => row.items.length > 0);

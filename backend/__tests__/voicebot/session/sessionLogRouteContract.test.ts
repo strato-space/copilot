@@ -20,6 +20,7 @@ describe('Voicebot session log backend contract', () => {
     expect(source).toContain("'transcript_segment_edited'");
     expect(source).toContain("'transcript_segment_deleted'");
     expect(source).toContain("event_name: 'transcript_segment_restored'");
+    expect(source).toContain("event_name: 'summary_save'");
   });
 
   it('persists replay-friendly actor and target metadata in log events', () => {

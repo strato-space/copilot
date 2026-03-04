@@ -7,24 +7,16 @@ import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import type { CategorizationRow } from '../../store/sessionsUIStore';
 import { formatTimelineSecondsLabel } from '../../utils/voiceTimeline';
 import { resolveCategorizationSegmentOid } from '../../utils/categorizationRowIdentity';
-import { formatVoiceMetadataSignature } from '../../utils/voiceMetadataSignature';
 
 interface CategorizationTableRowProps {
     row: CategorizationRow;
     materials?: CategorizationRow[];
     rowId: string;
-    isLast?: boolean;
 }
 
 const hasNonZeroTimelineValue = (value: unknown): boolean => {
     const numeric = Number(value);
     return Number.isFinite(numeric) && Math.abs(numeric) > 0;
-};
-
-const toTimestampMs = (value: unknown): number | null => {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return null;
-    return numeric > 1e11 ? numeric : numeric * 1000;
 };
 
 const OBJECT_ID_RE = /^[a-f0-9]{24}$/i;
@@ -73,23 +65,6 @@ const copyTextToClipboard = async (text: string): Promise<boolean> => {
     return false;
 };
 
-const buildMetadataSignature = (row: CategorizationRow): string | null => {
-    const startSeconds = Number(row.timeStart);
-    const messageTimestampMs = toTimestampMs(row.message_timestamp);
-    const absoluteTimestampMs =
-        Number.isFinite(startSeconds) && startSeconds >= 0 && messageTimestampMs != null
-            ? messageTimestampMs + startSeconds * 1000
-            : null;
-
-    return formatVoiceMetadataSignature({
-        startSeconds: row.timeStart,
-        endSeconds: row.timeEnd,
-        sourceFileName: row.source_file_name,
-        absoluteTimestampMs,
-        omitZeroRange: true,
-    });
-};
-
 export default function CategorizationTableRow({ row, materials = [], rowId }: CategorizationTableRowProps) {
     const voiceBotSession = useVoiceBotStore((state) => state.voiceBotSession);
     const fetchVoiceBotSession = useVoiceBotStore((state) => state.fetchVoiceBotSession);
@@ -114,7 +89,6 @@ export default function CategorizationTableRow({ row, materials = [], rowId }: C
     const showTimeline = hasNonZeroTimelineValue(row.timeStart) || hasNonZeroTimelineValue(row.timeEnd);
     const startTimelineLabel = showTimeline ? formatTimelineSecondsLabel(row.timeStart) : '';
     const endTimelineLabel = showTimeline ? formatTimelineSecondsLabel(row.timeEnd) : '';
-    const metadataSignature = buildMetadataSignature(row);
     const rowSegmentOid = resolveCategorizationSegmentOid(row as unknown as Record<string, unknown>) || '';
     const fallbackSegmentOid =
         typeof row.source_segment_id === 'string' && row.source_segment_id.trim().startsWith('ch_')
@@ -238,35 +212,34 @@ export default function CategorizationTableRow({ row, materials = [], rowId }: C
         : isSelected
             ? 'bg-blue-100/70'
             : '';
-    const materialTargetClass = isMaterialTarget ? 'ring-1 ring-inset ring-teal-500/70' : '';
 
     return (
         <div
             data-row-id={rowId}
-            className={`flex w-full transition-colors duration-150 ${isSelectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'border-l-2 border-blue-500' : ''} ${rowBgClass} ${materialTargetClass}`}
+            className={`flex w-full transition-colors duration-150 ${isSelectable ? 'cursor-pointer hover:bg-slate-50' : ''} ${isSelected ? 'border-l-2 border-blue-500' : ''} ${rowBgClass}`}
             onClick={handleRowClick}
         >
             <div className="w-12 flex flex-col justify-center items-start p-1">
-                <span className="text-black/60 text-[8px] font-normal leading-[10px]">
+                <span className="text-black/60 text-[10px] font-normal leading-4">
                     {startTimelineLabel}
                 </span>
-                <span className="text-black/60 text-[8px] font-normal leading-[10px]">
+                <span className="text-black/60 text-[10px] font-normal leading-4">
                     {endTimelineLabel}
                 </span>
             </div>
             <div className="w-[88px] flex items-start gap-1 p-1 overflow-hidden">
                 {showSpeakerBadge ? (
-                    <span className="w-3 h-3 bg-black/40 rounded-full flex items-start justify-center text-white text-[6px] font-semibold leading-[11px]">
+                    <span className="w-4 h-4 bg-black/40 rounded-full flex items-start justify-center text-white text-[8px] font-semibold leading-[14px]">
                         {row.avatar}
                     </span>
                 ) : null}
                 {showSpeakerLabel ? (
-                    <span className="flex-1 text-black/90 text-[8px] font-normal leading-[10px] truncate">{speakerLabel}</span>
+                    <span className="flex-1 text-black/90 text-[10px] font-normal leading-4 truncate">{speakerLabel}</span>
                 ) : null}
             </div>
             <div className="flex-1 min-w-0 flex items-start p-1">
                 <div className="flex-1 min-w-0 group">
-                    {canMutate || metadataSignature ? (
+                    {canMutate ? (
                         <div className="w-full flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1" />
                             {canMutate ? (
@@ -314,7 +287,7 @@ export default function CategorizationTableRow({ row, materials = [], rowId }: C
                                 value={draftText}
                                 onChange={(event) => setDraftText(event.target.value)}
                                 autoSize={{ minRows: 2, maxRows: 8 }}
-                                className="text-[10px] font-normal leading-3"
+                                className="text-[12px] font-normal leading-5"
                                 disabled={busyAction !== null}
                             />
                             <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -341,16 +314,13 @@ export default function CategorizationTableRow({ row, materials = [], rowId }: C
                                     value={draftReason}
                                     onChange={(event) => setDraftReason(event.target.value)}
                                     placeholder="Reason (optional)"
-                                    className="max-w-[420px] text-[10px] font-normal leading-3"
+                                    className="max-w-[420px] text-[11px] font-normal leading-4"
                                     disabled={busyAction !== null}
                                 />
                             </div>
                         </div>
                     ) : hasText ? (
-                        <span className="text-black/90 text-[10px] font-normal leading-3 whitespace-pre-line">{row.text}</span>
-                    ) : null}
-                    {metadataSignature ? (
-                        <div className="mt-1 text-black/45 text-[9px] font-normal leading-3">{metadataSignature}</div>
+                        <span className="text-black/90 text-[12px] font-normal leading-5 whitespace-pre-line">{row.text}</span>
                     ) : null}
                 </div>
             </div>

@@ -11,6 +11,7 @@ const getDbMock = jest.fn();
 const getVoicebotQueuesMock = jest.fn();
 const buildDoneNotifyPreviewMock = jest.fn();
 const writeDoneNotifyRequestedLogMock = jest.fn();
+const writeSummaryAuditLogMock = jest.fn();
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -23,6 +24,7 @@ jest.unstable_mockModule('../../../src/services/voicebotQueues.js', () => ({
 jest.unstable_mockModule('../../../src/services/voicebot/voicebotDoneNotify.js', () => ({
   buildDoneNotifyPreview: buildDoneNotifyPreviewMock,
   writeDoneNotifyRequestedLog: writeDoneNotifyRequestedLogMock,
+  writeSummaryAuditLog: writeSummaryAuditLogMock,
 }));
 
 const { handleDoneMultipromptJob } = await import('../../../src/workers/voicebot/handlers/doneMultiprompt.js');
@@ -33,12 +35,14 @@ describe('handleDoneMultipromptJob', () => {
     getVoicebotQueuesMock.mockReset();
     buildDoneNotifyPreviewMock.mockReset();
     writeDoneNotifyRequestedLogMock.mockReset();
+    writeSummaryAuditLogMock.mockReset();
 
     buildDoneNotifyPreviewMock.mockResolvedValue({
       event_name: 'Сессия завершена',
       telegram_message: 'line1\nline2\nline3\nline4',
     });
     writeDoneNotifyRequestedLogMock.mockResolvedValue({});
+    writeSummaryAuditLogMock.mockResolvedValue({});
   });
 
   it('updates session, enqueues postprocessing/notify jobs and writes notify log', async () => {
@@ -100,6 +104,7 @@ describe('handleDoneMultipromptJob', () => {
 
     expect(buildDoneNotifyPreviewMock).toHaveBeenCalledTimes(1);
     expect(writeDoneNotifyRequestedLogMock).toHaveBeenCalledTimes(1);
+    expect(writeSummaryAuditLogMock).not.toHaveBeenCalled();
   });
 
   it('enqueues SESSION_READY_TO_SUMMARIZE when closed session has project_id', async () => {
@@ -158,11 +163,32 @@ describe('handleDoneMultipromptJob', () => {
       VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
       expect.objectContaining({
         session_id: sessionId.toString(),
-        payload: { project_id: projectId.toHexString() },
+        payload: expect.objectContaining({
+          project_id: projectId.toHexString(),
+          correlation_id: expect.any(String),
+          idempotency_key: expect.any(String),
+        }),
       }),
       expect.objectContaining({ attempts: 1 })
     );
     expect(sessionLogInsertOne).toHaveBeenCalled();
+    expect(writeSummaryAuditLogMock).toHaveBeenCalledTimes(2);
+    expect(writeSummaryAuditLogMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event_name: 'summary_telegram_send',
+        status: 'queued',
+        correlation_id: expect.any(String),
+      })
+    );
+    expect(writeSummaryAuditLogMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event_name: 'summary_save',
+        status: 'pending',
+        correlation_id: expect.any(String),
+      })
+    );
   });
 
   it('returns session_not_found for unknown session', async () => {

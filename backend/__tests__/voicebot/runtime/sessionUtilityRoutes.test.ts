@@ -14,6 +14,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("router.post('/task_types'");
     expect(source).toContain("router.post('/topics'");
     expect(source).toContain("router.post('/save_custom_prompt_result'");
+    expect(source).toContain("router.post('/save_summary'");
     expect(source).toContain("router.post('/get_project_files'");
     expect(source).toContain("router.post('/get_all_project_files'");
     expect(source).toContain("router.post('/upload_file_to_project'");
@@ -65,6 +66,8 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('taskflow_refresh: {');
     expect(source).toContain("reason: 'create_tickets'");
     expect(source).toContain("reason: 'delete_task_from_session'");
+    expect(source).toContain("reason: 'save_summary'");
+    expect(source).toContain('summary: true');
     expect(source).toContain("return res.status(200).json({");
     expect(source).toContain('matched_count: result.matchedCount');
     expect(source).toContain('deleted_count: result.modifiedCount > 0 ? 1 : 0');

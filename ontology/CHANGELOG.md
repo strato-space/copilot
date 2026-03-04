@@ -1,5 +1,47 @@
 # Ontology Changelog
 
+## 2026-03-03
+
+### PROBLEM SOLVED
+
+- **22:20** Mapping contract contained fields that were not owned in schema for several entities (`project_group`, `person`, `oper_task`, `forecast_project_month`, `cost_category`, `fx_monthly`), causing silent attribute drops in generic ingestion. Schema ownership was aligned to remove these gaps.
+- **22:30** Generic ingestion path did not honor mapping-level `coalesce` rules, so legacy fallback fields (for example task `status` and `type`) could be skipped even when declared in mapping. `coalesce` support was implemented.
+- **22:35** A subset of collections still used reduced custom ingesters despite richer mapping definitions, preserving schema/mapping/script drift. Those collections were moved to mapping-driven ingestion where special handling is not required.
+- **22:40** Voice session summary persistence fields introduced in backend (`summary_md_text`, `summary_saved_at`) were missing from ontology contract. Schema + mapping + ingestion were updated.
+
+### FEATURE IMPLEMENTED
+
+- **22:32** Added generic mapping ingestion enhancements:
+  - attribute-level `coalesce` resolution (`mapping.coalesce`),
+  - bool-backed `status` normalization (`active` / `inactive`) in mapping-driven path.
+- **22:38** Added validation quality gates for summary persistence:
+  - `sessions_summary_saved_at_without_text`,
+  - `sessions_summary_text_without_saved_at`.
+- **22:42** Added forecast payload coverage for runtime FinOps usage:
+  - `rate_rub_per_hour_snapshot`, `fx_used` in mapping + schema ownership.
+
+### CHANGES
+
+- Updated schema: `ontology/typedb/schema/str_opsportal_v1.tql`
+  - new attributes: `summary_md_text`, `summary_saved_at`, `rate_rub_per_hour_snapshot`,
+  - ownership alignment for mapped fields across Voice/OperOps/FinOps entities.
+- Updated mapping: `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
+  - `automation_voice_bot_sessions`: summary fields,
+  - `automation_tasks`: `issue_type` coalesce (`issue_type | type`),
+  - `forecasts_project_month`: `rate_rub_per_hour_snapshot`, `fx_used`.
+- Updated ingest runtime: `ontology/typedb/scripts/typedb-ontology-ingest.py`
+  - mapping `coalesce` support,
+  - status normalization in generic mapping path,
+  - switched to mapping-driven ingestion for:
+    `automation_customers`, `automation_projects`, `forecasts_project_month`,
+    `finops_expense_categories`, `finops_expense_operations`, `finops_fx_rates`.
+- Updated validation assets:
+  - `ontology/typedb/scripts/typedb-ontology-validate.py`
+  - `ontology/typedb/queries/validation_v1.tql`
+- Updated docs:
+  - `ontology/README.md`
+  - `ontology/typedb/README.md`
+
 ## 2026-02-28
 
 ### PROBLEM SOLVED

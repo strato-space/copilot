@@ -5,7 +5,7 @@ interface TranscriptionTableHeaderProps {
 
 export default function TranscriptionTableHeader({ ascending, onToggleSort }: TranscriptionTableHeaderProps) {
     return (
-        <div className="self-stretch h-7 bg-slate-50 shadow-sm border-b border-slate-200 flex items-center px-2 gap-2">
+        <div className="self-stretch h-8 bg-slate-50 shadow-sm border-b border-slate-200 flex items-center px-2 gap-2">
             <button
                 onClick={onToggleSort}
                 className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100 transition-colors"
@@ -29,7 +29,7 @@ export default function TranscriptionTableHeader({ ascending, onToggleSort }: Tr
                     </svg>
                 )}
             </button>
-            <div className="text-black/60 text-[10px] font-semibold leading-3">Transcription</div>
+            <div className="text-black/60 text-[11px] font-semibold leading-4">Transcription</div>
         </div>
     );
 }

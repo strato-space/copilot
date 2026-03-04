@@ -35,6 +35,7 @@ These decisions are part of the current platform contract and must be preserved 
 
 - Voice close: `POST /api/voicebot/session_done` (and alias `POST /api/voicebot/close_session`)
 - Voice upload: `POST /api/voicebot/upload_audio`
+- Voice summary save: `POST /api/voicebot/save_summary`
 - Voice attachment upload: `POST /api/voicebot/upload_attachment` (alias `/api/voicebot/attachment`)
 - Voice realtime namespace: Socket.IO `/voicebot` + `subscribe_on_session`
 - Canonical voice session URL pattern: `https://copilot.stratospace.fun/voice/session/:session_id`
@@ -223,7 +224,9 @@ Preferred engineering principles for this repo:
 - CRM performer filtering must be identifier-compatible (`_id` and legacy `id`), and project labels must resolve via `project_data`/`project_id`/`project` fallback chain.
 - Ticket create/update diagnostics should log normalized `project/project_id/performer` payload values to speed up CRM incident triage.
 - CRM work-hours joins are canonical on `ticket_db_id` (`automation_tasks._id`) across CRM routes, miniapp routes, and reporting services; `ticket_id` remains migration-only input and must be normalized before writes.
+- Miniapp `/tickets` route in debug mode (`IS_MINIAPP_DEBUG_MODE=true`) reads through raw DB to preserve test-ticket visibility when runtime-tag scope differs from current runtime.
 - OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
+- OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
 
 ## Product Notes (VoiceBot)
@@ -260,6 +263,7 @@ Preferred engineering principles for this repo:
 - Screenshort cards must keep canonical `https://...` URLs fully visible, while `data:image/...;base64,...` values are rendered in truncated preview form (`data:image/...;base64,...`) with Copy action preserving the full raw URL.
 - Session page should render `Возможные задачи` only when `processors_data.CREATE_TASKS.data` exists and user has `PROJECTS.UPDATE`; keep compact task-table contract (no standalone status/project/AI columns, keep `description`).
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
+- Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
   - list: `POST /api/voicebot/possible_tasks` (assistant-side wrappers: `session_possible_tasks`)
   - create regular: `create_session_tasks`
@@ -275,10 +279,15 @@ Preferred engineering principles for this repo:
   - `removed_row_ids`: only rows actually removed from `CREATE_TASKS`
   - `codex_issue_sync_errors`: present only when Codex/BD sync fails after create
 - Realtime refresh contract is fixed:
-  - backend emits `session_update.taskflow_refresh` with per-list flags `possible_tasks/tasks/codex`
+  - backend emits `session_update.taskflow_refresh` with per-list flags `possible_tasks/tasks/codex/summary`
   - frontend consumes the hint without full-page reload
   - refresh tokens must increment additively so repeated hints remain concurrency-safe
 - `CREATE_TASKS` persistence in API/worker paths is canonicalized to `id/name/description/priority/...` shape; legacy keys (`Task ID`, `Task Title`, `Description`, `Priority`) are normalized on write and accepted for delete matching.
+- Session summary persistence is canonical:
+  - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
+  - route emits realtime `session_update.taskflow_refresh.summary`,
+  - frontend Summary panel binds to canonical session fields and supports edit/save/conflict states.
+- Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.
 - Finalization backlog scan should prioritize newest sessions (`updated_at`/`_id` descending) with an expanded scan window so stale rows do not starve fresh closed sessions.
@@ -293,6 +302,8 @@ Preferred engineering principles for this repo:
 - Categorization mutation routes return deterministic validation/runtime errors (`invalid_row_oid`, `message_session_mismatch`, `ambiguous_row_locator`, `row_already_deleted`, etc.) and emit realtime `message_update` + `session_update` on success.
 - Deleting the last active categorization row in a message now cascades transcript-segment delete with compensating rollback if log persistence fails, to avoid partial state.
 - Categorization materials are rendered only in the dedicated Materials column; image-only blocks remain visible without image-as-text rows.
+- Categorization metadata signature is rendered once per message block footer (`source_file_name + HH:mm:ss`) instead of repeating per row.
+- Categorization row-local visual contract keeps blue selection highlight only (no extra material-target grid ring), and typography is increased for readability in dense sessions.
 - Notify worker (`backend/src/workers/voicebot/handlers/notify.ts`) now supports both HTTP notify transport and local hooks parity:
   - HTTP path uses `VOICE_BOT_NOTIFIES_URL` + `VOICE_BOT_NOTIFIES_BEARER_TOKEN`,
   - local hooks use `VOICE_BOT_NOTIFY_HOOKS_CONFIG` (YAML/JSON; default `./notifies.hooks.yaml`; empty value disables),

@@ -152,6 +152,16 @@ CHECKS = [
         "match $s isa voice_session, has is_active false, has to_finalize true; not { $s has done_at $done; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
+    AggregateCheck(
+        "sessions_summary_saved_at_without_text",
+        "match $s isa voice_session, has summary_saved_at $saved_at; not { $s has summary_md_text $summary; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
+    AggregateCheck(
+        "sessions_summary_text_without_saved_at",
+        "match $s isa voice_session, has summary_md_text $summary; not { $s has summary_saved_at $saved_at; }; reduce $count = count;",
+        warn_if=lambda value: value > 0,
+    ),
 ]
 
 

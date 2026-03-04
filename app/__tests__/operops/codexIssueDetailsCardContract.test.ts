@@ -34,10 +34,13 @@ describe('OperOps Codex issue details card contract', () => {
         expect(source).toContain("icon: '❔'");
         expect(source).toContain("if (normalizedType === 'parent-child') {");
         expect(source).toContain("if (normalizedType === 'waits-for') {");
+        expect(source).toContain('if (Array.isArray(issue.dependents)) {');
+        expect(source).toContain("if (normalizedType === 'blocks' || normalizedType === 'waits-for' || !normalizedType) {");
         expect(source).toContain('[issue.parent, issue.bd_parent, issue.parent_id].forEach((candidate) => {');
         expect(source).toContain("{ key: 'parent', label: 'Parent (parent-child)', items: relationships.parent },");
         expect(source).toContain("{ key: 'child', label: 'Children (parent-child)', items: relationships.child },");
-        expect(source).toContain("{ key: 'waits_for', label: 'Depends On (waits-for)', items: relationships.waitsFor },");
+        expect(source).toContain("{ key: 'depends_on', label: 'Depends On (blocks/waits-for)', items: relationships.dependsOn },");
+        expect(source).toContain("{ key: 'blocks', label: 'Blocks (dependents)', items: relationships.blocks },");
         expect(source).toContain('<Text strong>Relationships</Text>');
         expect(source).toContain("{renderRelationshipItems(row.items, row.key)}");
         expect(source).toContain('aria-label={`status-${pictogram.normalizedStatus}`}');

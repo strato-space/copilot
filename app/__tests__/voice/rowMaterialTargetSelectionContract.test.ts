@@ -24,10 +24,11 @@ describe('row-level material target selection contract', () => {
     expect(transcriptionRowSource).toContain("setMaterialTargetMessageId(isMaterialTarget ? null : rowMessageRef);");
   });
 
-  it('allows categorization row click to select attachment target', () => {
+  it('allows categorization row click to select attachment target without block-level teal ring highlight', () => {
     expect(categorizationRowSource).toContain('const setMaterialTargetMessageId = useSessionsUIStore((state) => state.setMaterialTargetMessageId);');
     expect(categorizationRowSource).toContain("setMaterialTargetMessageId(isMaterialTarget ? null : rowMessageRef);");
-    expect(categorizationRowSource).toContain("const materialTargetClass = isMaterialTarget ? 'ring-1 ring-inset ring-teal-500/70' : '';");
+    expect(categorizationRowSource).not.toContain('ring-teal-500');
+    expect(categorizationRowSource).not.toContain('ring-1 ring-inset');
   });
 
   it('sends explicit linked-message target in add_text image payload', () => {

@@ -155,6 +155,21 @@ match
 get $l;
 count;
 
+# 9.7 Summary persistence contract checks
+# 9.7.1 summary_saved_at must imply summary_md_text exists
+match
+  $s isa voice_session, has summary_saved_at $saved_at;
+  not { $s has summary_md_text $summary_md_text; };
+get $s, $saved_at;
+count;
+
+# 9.7.2 summary_md_text should carry summary_saved_at timestamp
+match
+  $s isa voice_session, has summary_md_text $summary_md_text;
+  not { $s has summary_saved_at $saved_at; };
+get $s, $summary_md_text;
+count;
+
 # 10) OperTask/Codex runtime-contract checks
 # 10.1 VoiceSession -> OperTask links (spot-check)
 match

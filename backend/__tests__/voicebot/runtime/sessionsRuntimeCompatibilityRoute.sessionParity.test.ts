@@ -302,6 +302,13 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
                 end: 0,
                 is_deleted: true,
               },
+              {
+                id: `ch_${new ObjectId().toHexString()}`,
+                text: 'Keep me',
+                start: 1,
+                end: 1,
+                is_deleted: false,
+              },
             ],
           },
           categorization: [

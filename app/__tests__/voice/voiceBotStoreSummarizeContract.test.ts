@@ -11,4 +11,13 @@ describe('voiceBotStore summarize endpoint contract', () => {
     expect(source).toContain("voicebot/trigger_session_ready_to_summarize");
     expect(source).toContain("session_id: sessionId");
   });
+
+  it('exposes saveSessionSummary action bound to save_summary endpoint and patches canonical session summary fields', () => {
+    expect(source).toContain('saveSessionSummary: (');
+    expect(source).toContain("saveSessionSummary: async (payload, options) => {");
+    expect(source).toContain("voicebot/save_summary");
+    expect(source).toContain('summary_md_text: savedText');
+    expect(source).toContain('summary_saved_at: savedAt');
+    expect(source).toContain('session_id: string; md_text: string');
+  });
 });

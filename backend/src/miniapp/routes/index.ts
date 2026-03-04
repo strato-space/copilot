@@ -9,6 +9,7 @@ import type { Queue } from 'bullmq';
 import type { Logger } from 'winston';
 
 import { COLLECTIONS, NOTIFICATIONS, TASK_CLASSES, TASK_STATUSES } from '../../constants.js';
+import { getRawDb } from '../../services/db.js';
 import {
     buildWorkHoursLookupByTicketDbId,
     normalizeTicketDbId,
@@ -176,6 +177,11 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
 
     router.post('/tickets', requireAuth, async (req: MiniappRequest, res: Response) => {
         try {
+            const isDebug = process.env.IS_MINIAPP_DEBUG_MODE === 'true';
+            // In debug mode miniapp is expected to work against the shared test user data.
+            // Runtime-scoped DB can hide these tasks when runtime_tag differs (e.g. prod-p2 vs dev-p2),
+            // so reads switch to raw DB only for debug ticket listing.
+            const readDb = isDebug ? getRawDb() : db;
             const userId = req.user?.id as string | undefined;
             if (!userId) {
                 res.status(401).json({ error: 'Access denied' });
@@ -197,7 +203,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                 }
             }
 
-            let data = await db
+            let data = await readDb
                 .collection(COLLECTIONS.TASKS)
                 .aggregate([
                     {
@@ -232,8 +238,8 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                 ])
                 .toArray();
 
-            const typesTreeData = await db.collection(COLLECTIONS.TASK_TYPES_TREE).find({}).toArray();
-            const executionPlanItems = await db.collection(COLLECTIONS.EXECUTION_PLANS_ITEMS).find({}).toArray();
+            const typesTreeData = await readDb.collection(COLLECTIONS.TASK_TYPES_TREE).find({}).toArray();
+            const executionPlanItems = await readDb.collection(COLLECTIONS.EXECUTION_PLANS_ITEMS).find({}).toArray();
             const taskTypes: Record<string, unknown>[] = [];
 
             for (const element of typesTreeData) {

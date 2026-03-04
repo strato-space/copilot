@@ -1,5 +1,5 @@
 import { ObjectId, type Db } from 'mongodb';
-import { VOICEBOT_JOBS } from '../../constants.js';
+import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS } from '../../constants.js';
 import { insertSessionLogEvent } from '../voicebotSessionLog.js';
 import { formatTelegramSessionEventMessage } from '../../voicebot_tgbot/sessionTelegramMessage.js';
 
@@ -13,6 +13,104 @@ const toObjectIdOrNull = (value: unknown): ObjectId | null => {
   const raw = String(value || '').trim();
   if (!raw || !ObjectId.isValid(raw)) return null;
   return new ObjectId(raw);
+};
+
+const normalizeMetadata = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object') return {};
+  return { ...(value as Record<string, unknown>) };
+};
+
+type SummaryAuditEventName = 'summary_telegram_send' | 'summary_save';
+type SummaryAuditStatus = 'queued' | 'pending' | 'done' | 'failed' | 'blocked';
+
+type WriteSummaryAuditLogParams = {
+  db: Db;
+  session_id: ObjectId;
+  session: Record<string, unknown>;
+  event_name: SummaryAuditEventName;
+  status: SummaryAuditStatus;
+  correlation_id: string;
+  idempotency_key: string;
+  actor?: Record<string, unknown> | null;
+  source?: Record<string, unknown> | null;
+  action?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+const findExistingSummaryAuditLog = async ({
+  db,
+  session_id,
+  event_name,
+  correlation_id,
+  idempotency_key,
+}: {
+  db: Db;
+  session_id: ObjectId;
+  event_name: SummaryAuditEventName;
+  correlation_id: string;
+  idempotency_key: string;
+}): Promise<Record<string, unknown> | null> => {
+  return db.collection(VOICEBOT_COLLECTIONS.SESSION_LOG).findOne(
+    {
+      session_id,
+      event_name,
+      correlation_id,
+      'metadata.idempotency_key': idempotency_key,
+    },
+    {
+      projection: {
+        _id: 1,
+      },
+    }
+  ) as Promise<Record<string, unknown> | null>;
+};
+
+export const writeSummaryAuditLog = async ({
+  db,
+  session_id,
+  session,
+  event_name,
+  status,
+  correlation_id,
+  idempotency_key,
+  actor = null,
+  source = null,
+  action = null,
+  metadata = {},
+}: WriteSummaryAuditLogParams) => {
+  const correlationId = String(correlation_id || '').trim();
+  if (!correlationId) {
+    throw new Error('writeSummaryAuditLog: correlation_id is required');
+  }
+  const idempotencyKey = String(idempotency_key || '').trim();
+  if (!idempotencyKey) {
+    throw new Error('writeSummaryAuditLog: idempotency_key is required');
+  }
+
+  const existing = await findExistingSummaryAuditLog({
+    db,
+    session_id,
+    event_name,
+    correlation_id: correlationId,
+    idempotency_key: idempotencyKey,
+  });
+  if (existing) return existing;
+
+  return insertSessionLogEvent({
+    db,
+    session_id,
+    project_id: toObjectIdOrNull(session.project_id),
+    event_name,
+    status,
+    actor,
+    source,
+    action,
+    correlation_id: correlationId,
+    metadata: {
+      ...normalizeMetadata(metadata),
+      idempotency_key: idempotencyKey,
+    },
+  });
 };
 
 export const buildDoneNotifyPreview = async ({

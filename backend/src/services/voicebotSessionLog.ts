@@ -13,6 +13,7 @@ type SessionLogEvent = Record<string, unknown> & {
 const computeEventGroup = (eventName: string): string => {
   if (!eventName) return 'system';
   if (eventName.startsWith('session_')) return 'session';
+  if (eventName.startsWith('summary_')) return 'summary';
   if (eventName.startsWith('message_ingested_')) return 'message_ingest';
   if (eventName.startsWith('transcript_') || eventName.startsWith('transcription_')) return 'transcript';
   if (eventName.startsWith('categorization_')) return 'categorization';
@@ -28,6 +29,20 @@ export const mapEventForApi = (eventDoc: SessionLogEvent | null): SessionLogEven
   if (eventDoc.session_id) out.session_oid = formatOid('se', eventDoc.session_id);
   if (eventDoc.message_id) out.message_oid = formatOid('msg', eventDoc.message_id as ObjectId);
   if (eventDoc.project_id) out.project_oid = formatOid('prj', eventDoc.project_id as ObjectId);
+  const correlationIdRaw = (eventDoc as Record<string, unknown>).correlation_id;
+  const correlationId = typeof correlationIdRaw === 'string' ? correlationIdRaw.trim() : '';
+  if (correlationId) {
+    out.correlation_id = correlationId;
+    out.correlation_key = correlationId;
+  }
+  const metadata = eventDoc.metadata && typeof eventDoc.metadata === 'object'
+    ? eventDoc.metadata as Record<string, unknown>
+    : null;
+  const idempotencyKeyRaw = metadata?.idempotency_key;
+  const idempotencyKey = typeof idempotencyKeyRaw === 'string' ? idempotencyKeyRaw.trim() : '';
+  if (idempotencyKey) {
+    out.idempotency_key = idempotencyKey;
+  }
   return out;
 };
 
