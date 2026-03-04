@@ -1,0 +1,173 @@
+{
+  "batch": "Conventions & Errors",
+  "batch_index": 2,
+  "assessments": {
+    "convention_outlier": 72.0,
+    "error_consistency": 76.0,
+    "mid_level_elegance": 74.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "Route path naming drifts heavily inside one router: `/taskTypes` (camelCase), `/project_groups` and `/project_tree` (snake_case), and `/bot-commands` (kebab-case) in `backend/src/api/routes/crm/index.ts`.",
+        "VoiceBot router keeps mixed-casing endpoint style (`/LLMGate`) while sibling endpoints are lowercase, and mixes singular/plural path semantics (`/upload` in CRM vs `/uploads` aliasing in VoiceBot).",
+        "All three hubs use different outward conventions for route composition (`crm/index.ts` explicit prefixes vs `finops/index.ts` and `voicebot/index.ts` heavy root mounts)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "`sessionsSharedUtils.ts` normalizers frequently collapse invalid input to empty/null (`toTaskText`, `normalizeLinkedMessageRef`, `toObjectIdOrNull`) with no typed error path or diagnostics.",
+        "`sessionUrlUtils.ts` silently rewrites misconfigured legacy hosts and accepts any `VOICE_WEB_INTERFACE_URL` string without URL validation, producing fallback behavior rather than explicit configuration failure.",
+        "Across these shared utilities, failure signaling style is inconsistent: invalid input is sometimes preserved (`normalizeDateField` returns original trimmed string), sometimes dropped (`''`/`null`), making downstream error handling unpredictable."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Router integration seams are inconsistent: `crm/index.ts` maps each child to explicit prefixes while `finops/index.ts` mounts many children at `'/'`, pushing boundary semantics into child modules and obscuring ownership at this seam.",
+        "`voicebot/index.ts` combines flat root mounts and legacy alias mounts in the same hub; this creates implicit overlap risk and makes lifecycle/deprecation boundaries hard to reason about at integration points.",
+        "Shared utility seams in `sessionsSharedUtils.ts` encode multiple legacy payload shapes (`id/task_id/title/name/reference`, `_id/id/key`) directly in generic converters, indicating adapter logic is spread rather than isolated per boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "convention_outlier",
+      "identifier": "mixed_route_naming_conventions",
+      "summary": "Route naming conventions drift across and within hubs, creating non-deterministic API style.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/finops/index.ts"
+      ],
+      "evidence": [
+        "`crm/index.ts` exposes mixed styles in one surface: `/taskTypes`, `/project_groups`, `/project_tree`, `/bot-commands`.",
+        "`voicebot/index.ts` includes uppercase route segment `/LLMGate` unlike lowercase siblings.",
+        "Hub-level path semantics differ (`/upload` in CRM, `/uploads` in VoiceBot aliases), reinforcing inconsistent public contract style."
+      ],
+      "suggestion": "Define one route-style convention (prefer lowercase kebab-case), codify it in a shared router-style guideline, and normalize hub mount paths + aliases through a planned compatibility window with explicit deprecation markers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "api_naming_policy_gap"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "inconsistent_hub_mount_patterns",
+      "summary": "Sibling route hubs use different composition protocols, creating style islands in entrypoints.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/finops/index.ts",
+        "backend/src/api/routes/voicebot/index.ts"
+      ],
+      "evidence": [
+        "`crm/index.ts` mostly uses explicit namespace mounting per module.",
+        "`finops/index.ts` mounts multiple independent routers at `'/'`, relying on child internals for segmentation.",
+        "`voicebot/index.ts` mixes both flat mounts and prefixed legacy mounts in one file."
+      ],
+      "suggestion": "Standardize hub composition to one protocol (explicit module prefixes or explicit documented flat contract) and apply consistently across all route hubs to reduce entrypoint-level drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "router_composition_drift"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_normalization_hides_invalid_input",
+      "summary": "Shared normalization utilities silently absorb malformed values instead of exposing explicit error outcomes.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/sessionUrlUtils.ts"
+      ],
+      "evidence": [
+        "`toTaskText` returns empty string for unsupported types; `normalizeLinkedMessageRef` returns empty string for non-string values.",
+        "`toObjectIdOrNull` drops invalid IDs to null without a reason code.",
+        "`active()` in `sessionUrlUtils` silently rewrites legacy host and does no URL validity check on configured base."
+      ],
+      "suggestion": "Introduce typed parse results for boundary helpers (e.g., `{ok,value}|{ok:false,code,details}`) and add config validation for `VOICE_WEB_INTERFACE_URL` at startup so malformed inputs fail predictably.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_fallback_error_policy"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "inconsistent_invalid_date_policy",
+      "summary": "Date normalization mixes preservation and nulling strategies, making invalid-value handling unpredictable.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/sessionUrlUtils.ts"
+      ],
+      "evidence": [
+        "`normalizeDateField` returns original trimmed string when parse fails, but returns `null` for empty values and ISO for parseable values.",
+        "Other helpers in the same module collapse invalid values to empty/null, so consumers cannot rely on a uniform invalid-input contract.",
+        "No companion error metadata is returned to distinguish intentionally preserved raw values from parsing failures."
+      ],
+      "suggestion": "Use one invalid-value contract across shared utils (either strict rejection or explicit tagged raw/parsed variants) and keep it consistent across all normalizers used at route boundaries.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "implicit_fallback_error_policy"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "boundary_translation_spread_across_generic_utils",
+      "summary": "Legacy shape translation is embedded in generic shared utils instead of isolated at explicit module boundaries.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/crm/index.ts"
+      ],
+      "evidence": [
+        "`toTaskReferenceList` accepts multiple heterogeneous key names (`id/task_id/title/name/reference`) in one generic helper.",
+        "`toIdString` recursively accepts `_id/id/key`, mixing distinct external/internal identity conventions.",
+        "Hub routers simultaneously maintain flat and legacy alias paths, so boundary adaptation is occurring in multiple places instead of one clear adapter layer."
+      ],
+      "suggestion": "Move legacy-shape adaptation into dedicated ingress adapters per route family (CRM/VoiceBot) and keep shared utils strict and schema-driven to reduce cross-boundary ambiguity.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_adapter_leakage"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "legacy_and_canonical_paths_coexist_without_seam_contract",
+      "summary": "VoiceBot hub combines canonical and legacy routes without an explicit seam contract, increasing coupling and ambiguity.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/finops/index.ts"
+      ],
+      "evidence": [
+        "`voicebot/index.ts` mounts canonical flat routes and legacy aliases in parallel (`/`, `/sessions`, `/uploads`, `/LLMGate`).",
+        "No explicit precedence/deprecation policy exists in code-level API composition to indicate lifespan or conflict rules.",
+        "`finops/index.ts` demonstrates similar implicitness by stacking many routers at `'/'`, making collision analysis dependent on child-route internals."
+      ],
+      "suggestion": "Introduce explicit adapter routers for legacy paths with deprecation telemetry and keep canonical routers isolated; avoid mixed mounting styles in one hub to clarify handoff ownership.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "router_composition_drift"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No enforced cross-router convention policy for path naming and mount strategy.",
+      "Migration compatibility logic is distributed across hubs and generic utilities rather than isolated in explicit adapter layers.",
+      "Shared utility layer favors silent coercion/fallback over explicit parse/error contracts."
+    ],
+    "likely_symptoms": [
+      "mixed_route_naming_conventions",
+      "silent_normalization_hides_invalid_input",
+      "legacy_and_canonical_paths_coexist_without_seam_contract"
+    ],
+    "possible_false_positives": []
+  }
+}
