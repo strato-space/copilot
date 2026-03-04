@@ -1,0 +1,286 @@
+{
+  "batch": "Full Codebase Sweep",
+  "batch_index": 4,
+  "assessments": {
+    "cross_module_architecture": 87.0,
+    "convention_outlier": 88.0,
+    "error_consistency": 74.0,
+    "abstraction_fitness": 76.0,
+    "api_surface_coherence": 79.0,
+    "authorization_consistency": 93.0,
+    "ai_generated_debt": 86.0,
+    "incomplete_migration": 72.0,
+    "package_organization": 81.0,
+    "high_level_elegance": 86.0,
+    "mid_level_elegance": 84.0,
+    "low_level_elegance": 89.0,
+    "design_coherence": 78.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`audioMerging.ts` and `sharedRuntime.ts` both define runtime-filter helpers bound to `runtime_tag`, creating duplicate boundary logic in sibling files.",
+        "Shared helper files import across `services/`, `utils/`, and worker-local handlers, indicating broad boundary touchpoints from a small folder."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Runtime-scope boundary logic is duplicated locally instead of centralized, which increases drift risk."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "String/error normalization responsibilities are split across `sharedRuntime.ts`, `errorMessage.ts`, and `openAiErrors.ts` with overlapping intent.",
+        "Some helpers return null sentinels while adjacent helpers return fallback strings for similar normalization tasks."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Utility conventions are close but not uniform, especially around normalization helper semantics."
+    },
+    "error_consistency": {
+      "evidence": [
+        "`getCustomPromptText` in `customPromptShared.ts` swallows file read failures (`catch { return null; }`) with no logging or context.",
+        "`createOpenAiClient` in `sharedRuntime.ts` silently returns `null` for missing API key, while other modules return explicit `{ ok:false, error }` objects.",
+        "Error extraction behavior differs between `resolveUnknownErrorMessage` (always string) and `normalizeErrorCode` (nullable code), requiring ad-hoc caller choreography."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "`handleCleanupEmptySessionsJob` is mostly a key-rename pass-through around `cleanupEmptySessions` with limited added policy.",
+        "`handleSendToSocketJob` validates one field, logs, and returns skipped-success; behavior is mostly a protocol shim rather than business abstraction.",
+        "`sharedRuntime.ts` exposes broad generic utilities (`normalizeString`, `getErrorMessage`, `createOpenAiClient`, `runtimeQuery`) that are only lightly composed and partly duplicated elsewhere."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "sub_axes": {
+        "abstraction_leverage": 73.0,
+        "indirection_cost": 77.0,
+        "interface_honesty": 78.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Error utilities expose mismatched contracts: `resolveUnknownErrorMessage(error,fallback)` vs `getErrorMessage(error)` vs `normalizeErrorCode(error)` + `isQuotaError(error,messageText)`.",
+        "Some handlers report unsupported behavior as `{ ok: true, skipped: true }` (`sendToSocket.ts`, `audioMerging.ts`), while invalid input returns `{ ok: false, error }`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Assigned files are worker internals/utilities and do not expose route-level auth checks directly.",
+        "No explicit authorization bypass logic appears in these seven files."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Because these files are backend worker internals, authorization posture is mostly implicit and not self-describing at call boundaries."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Multiple small wrappers exhibit formulaic patterns (validate/minor transform/log/return) with little domain-specific behavior.",
+        "Error helper overlap suggests incremental utility accretion rather than a single deliberate error strategy module."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Wrapper-heavy patterns and repeated utility shapes increase ceremony without proportional domain value."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "`audioMerging.ts` explicitly logs that telegram merge transport is unavailable in TS runtime and always skips despite valid session/chunk preconditions.",
+        "`sendToSocket.ts` is a retained handler that always skips because socket runtime is not available in dedicated workers.",
+        "Both `audioMerging.ts` and `sharedRuntime.ts` still build `runtime_tag` query filters, which aligns with legacy transitional patterns."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "package_organization": {
+      "evidence": [
+        "Holistic structure reports `backend/src/workers/voicebot/handlers/shared/` with 7 files and very low `avg_fan_in` (0.1), indicating low-cohesion shared placement.",
+        "The same folder mixes job handlers (`audioMerging.ts`, `cleanupEmptySessions.ts`, `sendToSocket.ts`) with generic runtime/error utilities (`sharedRuntime.ts`, `errorMessage.ts`, `openAiErrors.ts`).",
+        "Directory imports span six external directories (`services`, `utils`, worker roots), suggesting broad concern mixing in one package."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Files are small and purpose-labeled, but folder-level role is blurred by coexistence of transport stubs, runtime helpers, and error parsing.",
+        "Shared package does not present a clearly minimal public surface; responsibilities are split by historical need rather than a single domain axis."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Top-level ownership for this shared package is not crisp due to mixed operational and utility concerns."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Cross-file handoff for error handling is inconsistent (`errorMessage.ts`, `openAiErrors.ts`, `sharedRuntime.ts`), forcing callers to combine helpers manually.",
+        "Lifecycle handoff between queue handlers and runtime capabilities uses skipped-success responses rather than one explicit capability boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Most functions are short and locally readable, with straightforward control flow.",
+        "Primary local rough edge is silent catch in `customPromptShared.ts`, but internals are otherwise direct."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "A few internals hide failure causes (`catch {}` and nullable sentinels) rather than expressing explicit local failure paths."
+    },
+    "design_coherence": {
+      "evidence": [
+        "Two handlers (`audioMerging.ts`, `sendToSocket.ts`) are shaped as active job handlers but implement permanent skip behavior, making intent and runtime role ambiguous.",
+        "Utility boundaries are fragmented: normalization/query/client-creation/error-parsing responsibilities are distributed across multiple small files with overlap."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_runtime_tag_scope_in_worker_shared",
+      "summary": "Worker shared utilities still depend on legacy runtime_tag query scoping.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts"
+      ],
+      "evidence": [
+        "Both files define a `runtimeQuery` helper using `mergeWithRuntimeFilter(... field: 'runtime_tag' ...)`.",
+        "This retains transitional routing logic in active worker code instead of isolating runtime at deployment/DB boundary."
+      ],
+      "suggestion": "Remove local `runtime_tag` query filtering from shared worker utilities and move environment isolation to connection-level DB selection. Keep a temporary compatibility adapter in one place only, then delete both local `runtimeQuery` helpers after migration verification.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "legacy_runtime_scope_carryover"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_io_failure_in_custom_prompt_loader",
+      "summary": "Prompt file read failures are swallowed without diagnostics, obscuring root cause.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+        "backend/src/workers/voicebot/handlers/shared/errorMessage.ts"
+      ],
+      "evidence": [
+        "`getCustomPromptText` catches any read error and returns `null` without logging or wrapping the error.",
+        "Adjacent error utilities are designed to preserve messages, but this path drops all context before those utilities can be used."
+      ],
+      "suggestion": "Replace silent catch with structured error reporting (`logger.warn/error` with `processorName` and path) and return a typed result (`{ok:false,error_code,error_message}`) so callers can distinguish missing file from unreadable/corrupt file.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "silent_failure_contracts"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "fragmented_error_helper_contracts",
+      "summary": "Error helpers use incompatible contracts that force ad-hoc caller composition.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/errorMessage.ts",
+        "backend/src/workers/voicebot/handlers/shared/openAiErrors.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts"
+      ],
+      "evidence": [
+        "`resolveUnknownErrorMessage` always resolves to a string with fallback, while `normalizeErrorCode` returns nullable code and `isQuotaError` additionally requires an external `messageText` argument.",
+        "`getErrorMessage` in `sharedRuntime.ts` provides another overlapping extraction path with different fallback behavior."
+      ],
+      "suggestion": "Unify error parsing into one typed helper (e.g., `{message, code, status, category}`) and refactor `isQuotaError` to depend on this normalized envelope instead of independent parameters.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fragmented_error_utilities"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "low_leverage_worker_wrapper_layers",
+      "summary": "Several shared handlers are thin wrappers that add little policy but add indirection.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts",
+        "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts"
+      ],
+      "evidence": [
+        "`handleCleanupEmptySessionsJob` mostly remaps snake_case fields then forwards to service.",
+        "`handleSendToSocketJob` performs minimal validation and returns skipped-success, functioning as a compatibility layer rather than active behavior.",
+        "Combined with broad helper exposure in `sharedRuntime.ts`, callers face multiple tiny layers with low functional gain."
+      ],
+      "suggestion": "Collapse no-policy wrappers into the owning module where possible, and keep only boundary adapters that enforce real invariants (validation, telemetry, retry semantics). For retained adapters, standardize one adapter pattern with explicit capability status type.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "compatibility_wrapper_overhang"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "shared_folder_mixes_handlers_and_utilities",
+      "summary": "The shared folder combines unrelated concerns, lowering cohesion and discoverability.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts",
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+        "backend/src/workers/voicebot/handlers/shared/errorMessage.ts",
+        "backend/src/workers/voicebot/handlers/shared/openAiErrors.ts",
+        "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts"
+      ],
+      "evidence": [
+        "Directory profile: 7 files, avg fan-in 0.1, indicating weak shared reuse despite broad imports from multiple directories.",
+        "Job handlers and generic utility logic are colocated under one `shared/` package without clear sub-boundary."
+      ],
+      "suggestion": "Staged reorg plan: (1) create `shared/runtime/` (`sharedRuntime.ts`, runtime-query helpers), `shared/errors/` (`errorMessage.ts`, `openAiErrors.ts`), and `handlers/capability-stubs/` (`audioMerging.ts`, `sendToSocket.ts`); keep `cleanupEmptySessions.ts` under `handlers/maintenance/`. (2) Move files in that order, update imports with `rg \"handlers/shared\" backend/src/workers/voicebot -n` then apply path updates. (3) Validate with `cd backend && npm run build` and `cd backend && npm run test -- --runInBand` for touched worker suites.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "shared_folder_cohesion_drift"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "capability_stubs_report_successful_jobs",
+      "summary": "Unsupported capabilities are modeled as successful skipped jobs, blurring operational intent.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts"
+      ],
+      "evidence": [
+        "Both handlers return `ok: true, skipped: true` with reasons indicating runtime capability absence.",
+        "They live in production handler paths and look like executable capabilities, but semantics are effectively permanent no-op compatibility behavior."
+      ],
+      "suggestion": "Introduce an explicit capability-state contract (e.g., `status: 'unsupported' | 'executed' | 'invalid'`) and gate scheduling upstream so unsupported jobs are not enqueued. Keep handler paths only for real executable capabilities.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "compatibility_wrapper_overhang"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Legacy migration artifacts remain in active worker paths (`runtime_tag` scoping and capability stubs).",
+      "Shared utilities evolved incrementally without a single error/capability contract, causing API and seam drift.",
+      "Folder-level ownership is too broad, mixing operational handlers with generic runtime/error helpers."
+    ],
+    "likely_symptoms": [
+      "legacy_runtime_tag_scope_in_worker_shared",
+      "fragmented_error_helper_contracts",
+      "capability_stubs_report_successful_jobs"
+    ],
+    "possible_false_positives": [
+      "If queue producers intentionally rely on skipped-success semantics as a stable compatibility contract, severity of the stub-related findings may be reduced."
+    ]
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 6,
+  "assessments": {
+    "api_surface_coherence": 76.0,
+    "authorization_consistency": 82.0,
+    "ai_generated_debt": 84.0,
+    "incomplete_migration": 74.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "app/src/store/permissionsStore.ts uses mixed endpoint prefixes: most calls target `voicebot/permissions/*`, but `getUserPermissions` calls `permissions/users/permissions`.",
+        "backend/src/api/routes/voicebot/permissions.ts defines permission endpoints under the voicebot permissions router path (`/permissions/...`), creating a divergent caller contract in the same frontend store.",
+        "backend/src/constants.ts defines socket event names as `session_updated` / `message_updated`, while backend emitters use `session_update` (backend/src/api/routes/voicebot/uploads.ts) and `message_update` (backend/src/workers/voicebot/handlers/transcribeHandler.ts)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "backend/src/api/routes/voicebot/permissions.ts has privileged mutation routes that call `new ObjectId(user_id)` without pre-validation (`ObjectId.isValid`), so malformed IDs fall into generic 500 handling instead of deterministic 400 boundary rejection.",
+        "The same route file repeats this pattern across multiple admin-protected endpoints (`/users/role`, `/users/permission/add`, `/users/permission/remove`), indicating inconsistent trust-boundary validation.",
+        "app/src/store/permissionsStore.ts forwards raw `userId` strings to these routes without client-side shape checks, amplifying server-side boundary inconsistency."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "backend/src/services/redis.ts repeatedly suppresses typing (`eslint-disable ... no-explicit-any`) and exports `any`-typed connection surfaces instead of a typed adapter.",
+        "backend/src/services/mcp/proxyClient.ts uses `as any` to connect transport and relies on broad unknown/error casting patterns instead of explicit transport typing.",
+        "Both services include verbose boilerplate logging and suppression-first typing that increase maintenance noise without strengthening contracts."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "backend/src/services/runtimeScope.ts now no-ops runtime filtering (`buildRuntimeFilter` returns `{}`, `mergeWithRuntimeFilter` returns input), but many callsites still pass runtime-tag filtering options as if runtime-tag routing were active.",
+        "Active callsites still build runtime-tag query wrappers (backend/src/workers/voicebot/handlers/processingLoop.ts, backend/src/workers/voicebot/handlers/transcribeHandler.ts, backend/src/services/voicebot/voicebotWebmDedup.ts).",
+        "backend/scripts/runtime-tag-backfill.ts still performs `runtime_tag` data backfill, and backend/src/miniapp/routes/index.ts contains runtime-tag mismatch commentary, showing migration residue left in operational code paths."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "permissions_endpoint_prefix_drift",
+      "summary": "Permissions store uses inconsistent API base path, causing one permissions call to diverge from the voicebot permissions surface.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`loadRolesAndPermissions`, `loadUsers`, and other actions call `voicebot/permissions/*`, but `getUserPermissions` calls `permissions/users/permissions`.",
+        "Backend route module exposes `/permissions/users/permissions` within voicebot permissions routing, so mixed caller prefixes create a fractured contract and likely 404 path in one call path.",
+        "`getUserPermissions` catches and returns `[]`, masking path contract failures from callers."
+      ],
+      "suggestion": "Centralize permission endpoint construction in one helper (single prefix source), switch `getUserPermissions` to the same voicebot prefix, and propagate API errors instead of returning silent empty permissions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "surface_contract_drift"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "socket_event_contract_name_split",
+      "summary": "Declared socket event constants and emitted runtime event names have diverged (`*_updated` vs `*_update`).",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+      ],
+      "evidence": [
+        "Constants define server events as `SESSION_UPDATED`=`session_updated` and `MESSAGE_UPDATED`=`message_updated`.",
+        "Upload route emits `session_update` over socket.",
+        "Transcribe handler schedules socket event `message_update`."
+      ],
+      "suggestion": "Define a single canonical event-name map and use it in all emitters/consumers; add a compatibility bridge only if required, then remove stale names after rollout.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "surface_contract_drift"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "permission_routes_missing_objectid_boundary_checks",
+      "summary": "Admin permission routes trust `user_id` shape and convert directly to ObjectId, producing inconsistent auth-boundary failure behavior.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/permissions.ts",
+        "app/src/store/permissionsStore.ts"
+      ],
+      "evidence": [
+        "Routes such as `/users/role`, `/users/permission/add`, and `/users/permission/remove` instantiate `new ObjectId(user_id)` without `ObjectId.isValid` checks.",
+        "Invalid IDs fall into catch blocks and return generic 500s instead of deterministic 400 validation errors at the authorization boundary.",
+        "Frontend store forwards arbitrary `userId` strings to these endpoints, so malformed inputs are not rejected early."
+      ],
+      "suggestion": "Add route-level schema validation (e.g., Zod) for all permission mutation payloads and enforce `ObjectId.isValid` before DB calls; return structured 400 errors for invalid IDs.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "boundary_validation_gap"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "suppression_first_typing_in_infra_adapters",
+      "summary": "Infrastructure adapters rely on repeated `any` suppressions and casts instead of explicit adapter contracts.",
+      "related_files": [
+        "backend/src/services/redis.ts",
+        "backend/src/services/mcp/proxyClient.ts"
+      ],
+      "evidence": [
+        "Redis service uses `any` for singleton client and public API return types with multiple `eslint-disable` directives.",
+        "MCP proxy uses `as any` for client transport connection and broad runtime casts where typed transport wrappers are feasible.",
+        "These patterns make contract drift harder to detect and encourage copy-paste suppression debt."
+      ],
+      "suggestion": "Introduce typed adapter interfaces for Redis and MCP transports, remove `any` return surfaces, and localize unavoidable SDK type escapes to one narrow compatibility layer.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "typed_boundary_erosion"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_noop_migration_residue",
+      "summary": "Runtime-tag migration is only partially cleaned up: filtering APIs are no-op but runtime-tag call patterns and scripts remain active.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/scripts/runtime-tag-backfill.ts",
+        "backend/src/miniapp/routes/index.ts"
+      ],
+      "evidence": [
+        "runtimeScope now returns pass-through/no-op filters (`buildRuntimeFilter`, `mergeWithRuntimeFilter`).",
+        "Operational services still wrap queries with runtime-tag options and `mergeWithRuntimeFilter`, indicating stale migration-era routing patterns.",
+        "A dedicated runtime-tag backfill script still mutates `runtime_tag`, and miniapp comments still reference runtime-tag mismatch behavior."
+      ],
+      "suggestion": "Execute a migration cleanup pass: remove runtime-tag query wrappers from operational code, retire runtime-tag backfill tooling, and replace residual comments/logic with explicit environment-isolation mechanisms.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_tag_deprecation_drift"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Contract definitions are split between constants, route files, and callers without a single enforced source of truth.",
+      "Migration cleanup stopped at compatibility no-ops, leaving legacy call shapes and scripts in place.",
+      "Boundary validation is inconsistent across privileged endpoints, relying on downstream exceptions instead of upfront schema checks."
+    ],
+    "likely_symptoms": [
+      "permissions_endpoint_prefix_drift",
+      "socket_event_contract_name_split",
+      "runtime_tag_noop_migration_residue"
+    ],
+    "possible_false_positives": []
+  }
+}

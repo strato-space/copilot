@@ -1,0 +1,146 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 5,
+  "assessments": {
+    "design_coherence": 72.5
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/sessions.ts` combines many unrelated responsibilities in one file: route registration (`1545-1667`), session access policy (`1070-1123`), attachment normalization/building (`1500-1543`), taskflow contracts (`107-181`), and project-file/runtime helpers (`953-1068`).",
+        "`app/src/store/voiceBotStore.ts` is a monolithic store (2016 LOC) containing realtime socket lifecycle (`969-1103`), API orchestration (`842-947`, `1438-1470`), upload transport (`1574-1625`), and UI notifications/errors (`861-876`, `1196-1205`).",
+        "Voice-session list page contains heavy mixed concerns in one component (`app/src/pages/voice/SessionsListPage.tsx`): URL/localStorage persistence (`389-436`), polling global runtime state (`723-750`), bulk merge/delete workflows (`830-908`), and large table/filter rendering definitions (`942-1360`).",
+        "Worker handlers repeat processor state machine and OpenAI I/O patterns instead of sharing one lifecycle abstraction: `customPrompt.ts` (`94-125`, `136-186`), `questionsHandler.ts` (`95-115`, `134-171`), `oneCustomPrompt.ts` (`89-120`, `137-149`, `212-220`), `finalizationHandler.ts` (`125-182`, `214-259`), `createTasksFromChunks.ts` (`177-198`, `283-299`).",
+        "Categorization/requeue semantics are duplicated in two orchestrators with overlapping but separate implementations: `processingLoop.ts` (`323-412`) and `createTasksPostprocessing.ts` (`66-92`, `164-223`), increasing drift risk.",
+        "FinOps monthly aggregation logic is duplicated across UI modules instead of centralized derivation: `PlanFactPage.tsx` computes expense/income totals (`75-121`), while `BonusesGrid.tsx` recomputes expense totals (`94-125`) and additional bonus distribution rules (`127-219`); `PlanFactPage.tsx` also hardcodes month-specific fund behavior (`123-137`, `'2026-01'`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_sessions_route_god_module",
+      "summary": "Voice session API route file is a god-module that mixes transport, policy, data shaping, and domain workflows.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` defines multiple contracts/constants (`107-181`), access control utilities (`965-1123`), attachment normalization (`1500-1543`), and primary endpoints (`1545-1820`) in one file.",
+        "Helper responsibilities already exist in sibling modules (`messageHelpers.ts`, `permissions.ts`), but `sessions.ts` still owns significant overlapping orchestration and data shaping.",
+        "Prior structural flag remains valid: file size and responsibility breadth are still extreme (6001 LOC)."
+      ],
+      "suggestion": "Split `sessions.ts` by bounded concerns: dedicated modules for taskflow/session-done contracts, access policy, attachment/message projection, and route handlers (list/get/mutations), with route layer kept thin and delegating to services.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_missing_service_boundaries"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_frontend_state_and_orchestration_overlap",
+      "summary": "Voice frontend orchestration is spread across store/pages/components with duplicated workflow logic and mixed responsibilities.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/components/voice/MeetingCard.tsx"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` mixes socket lifecycle (`969-1103`), request orchestration (`842-947`, `1438-1470`), and UI messaging concerns (`861-876`, `1196-1205`) in one store.",
+        "`sessionsUIStore.ts` includes modal selection state and also MCP title-generation orchestration (`537-620`), which is domain workflow logic rather than UI-state-only.",
+        "`MeetingCard.tsx` independently rebuilds transcription/categorization prompt input (`259-279`) while `voiceBotStore.ts` and `sessionsUIStore.ts` also perform similar message-to-text shaping (`213-228`, `572-587`).",
+        "`SessionsListPage.tsx` combines persistence/polling/business actions/table rendering (`389-436`, `723-750`, `830-908`, `942+`) in a single component."
+      ],
+      "suggestion": "Introduce a dedicated voice-session domain service layer (pure functions/use-cases) for message-to-input shaping, MCP task/title workflows, and realtime update reducers; keep stores/pages as thin adapters to that shared layer.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_missing_service_boundaries"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "worker_processor_lifecycle_duplicated",
+      "summary": "Processor handlers duplicate the same state-machine and error/update patterns, indicating a missing shared processor execution abstraction.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/finalizationHandler.ts",
+        "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts"
+      ],
+      "evidence": [
+        "Each handler repeats nearly identical phases: validate IDs, load records, create OpenAI client, call `responses.create`, parse/normalize, write `processors_data.*` success/failure flags, and structured error fields.",
+        "Examples: `customPrompt.ts` (`94-125`, `136-186`), `questionsHandler.ts` (`95-115`, `134-171`), `oneCustomPrompt.ts` (`89-120`, `137-149`, `212-220`), `finalizationHandler.ts` (`125-182`, `214-259`), `createTasksFromChunks.ts` (`177-198`, `283-299`).",
+        "This pattern duplication raises drift risk (field names/timestamps/error semantics diverging over time) and makes new processors expensive."
+      ],
+      "suggestion": "Extract a shared processor-execution framework (load/guard, OpenAI invocation, parse strategy hooks, standardized processor-state writes, error policy) and migrate individual handlers to declarative strategy configs.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_processor_framework_gap"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "categorization_requeue_logic_split_brain",
+      "summary": "Categorization readiness and requeue behavior is implemented in multiple places with separate rules, creating split-brain orchestration.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+        "backend/src/workers/voicebot/handlers/categorizeHandler.ts"
+      ],
+      "evidence": [
+        "`processingLoop.ts` resets stale categorization locks and requeues jobs (`323-412`) with quota-specific retry checks.",
+        "`createTasksPostprocessing.ts` independently decides `shouldRequireCategorization` and `isCategorizationReady` (`66-92`) and separately enqueues categorization jobs (`164-223`).",
+        "Both modules mutate the same categorization processor flags and queue behavior, but through independent implementations."
+      ],
+      "suggestion": "Consolidate categorization readiness/retry/requeue logic into one shared orchestration module used by both loop and postprocessing handlers; expose explicit policy functions to avoid behavior drift.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_processor_framework_gap"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_aggregation_duplication_and_hardcoded_time_rule",
+      "summary": "FinOps monthly calculation logic is duplicated across pages/components, and one rule is hardcoded to a specific month.",
+      "related_files": [
+        "app/src/pages/PlanFactPage.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx",
+        "app/src/pages/AnalyticsPage.tsx"
+      ],
+      "evidence": [
+        "`PlanFactPage.tsx` recomputes income/expense totals (`75-121`) while `BonusesGrid.tsx` recomputes expense totals with similar loops (`94-125`).",
+        "Fund-delta logic in `PlanFactPage.tsx` is month-hardcoded (`123-137`, `month === '2026-01'`), which bakes temporal policy into UI code.",
+        "Parallel month-aggregation loops also exist in `AnalyticsPage.tsx` (`490-523`) and `ExpensesGrid.tsx` (`443-458`), indicating no single source of truth for financial derivations."
+      ],
+      "suggestion": "Move financial monthly derivations (income/expense/fund delta and month eligibility rules) into shared domain selectors/services, parameterize the applicable month policy, and have all grids/pages consume those selectors.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "finops_derived_data_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Voice subsystem lacks strict boundary between route/store adapters and domain workflow services.",
+      "Processor execution lifecycle has no shared framework, so each handler re-implements state and error transitions.",
+      "FinOps derived metrics are computed in presentation modules instead of centralized selectors."
+    ],
+    "likely_symptoms": [
+      "voice_sessions_route_god_module",
+      "voice_frontend_state_and_orchestration_overlap",
+      "worker_processor_lifecycle_duplicated",
+      "categorization_requeue_logic_split_brain",
+      "finops_aggregation_duplication_and_hardcoded_time_rule"
+    ],
+    "possible_false_positives": [
+      "Some duplication is intentional for short-term migration compatibility, but repeated state-transition logic remains structurally risky even if intentional."
+    ]
+  }
+}
