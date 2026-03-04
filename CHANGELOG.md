@@ -2,6 +2,7 @@
 
 ## 2026-03-04
 ### PROBLEM SOLVED
+- **22:00** Miniapp backend had no dedicated Telegram entrypoint for opening the WebApp from chat commands, so users needed manual links and operators lacked a fast in-chat diagnostics command for target chat metadata.
 - **12:22** `CREATE_TASKS` realtime delivery still depended on `socket_id`-targeted emission, so session-room clients without explicit socket binding did not receive `tickets_prepared` updates.
 - **12:22** Socket events worker treated payload as object-only data, which made array payload contracts (for `tickets_prepared`) brittle and caused silent delivery gaps.
 - **12:22** Transcription fallback rows with quota errors lacked the metadata signature line (`mm:ss - mm:ss, file.webm, HH:mm:ss`), so operators could not map placeholders to source chunks while waiting for retries.
@@ -14,6 +15,7 @@
 - **08:55** Codex relationship rendering in OperOps details card did not fully normalize `waits-for/blocks/dependents` semantics into explicit dependency groups.
 
 ### FEATURE IMPLEMENTED
+- **22:00** Added optional Miniapp Telegram bot bootstrap in miniapp runtime: `/start` and `/miniapp` now return an inline WebApp button, `/get_info` provides chat diagnostics, and launch/shutdown are logged with deterministic env-based Miniapp URL resolution.
 - **12:22** Closed quota-recovery realtime fix wave `copilot-w8l0` (`.1`/`.2`/`.3`): `tickets_prepared` is now emitted for session-room delivery (with optional socket targeting), socket dispatch supports array payloads, and fallback quota rows render metadata signature while being replaceable in-place by realtime transcript updates.
 - **11:34** Completed runtime-tag deprecation epic `copilot-f75b` (`T0..T8`) with swarm execution: runtime-tag behavior is neutralized in runtime scope/data-access, write paths stop emitting `runtime_tag`, queue/poller naming no longer relies on runtime tags, docs/env contract is updated, and final voice QA gate is green.
 - **11:34** Added migration support for historical CREATE_TASKS payload normalization with a dedicated script and runbook (`backend/scripts/voicebot-migrate-create-tasks-schema.ts`, `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md`) while keeping runtime strict canonical key contract.
@@ -24,6 +26,10 @@
 - **08:55** Updated OperOps Codex relationship grouping to explicit `Parent`, `Children`, `Depends On (blocks/waits-for)`, `Blocks (dependents)` with shared issue-id token rendering.
 
 ### CHANGES
+- **22:00** Miniapp Telegram bot integration:
+  - updated `backend/src/miniapp/index.ts` to initialize Telegraf from `TG_MINIAPP_BOT_TOKEN`, resolve WebApp URL via `TG_MINIAPP_WEBAPP_URL` (with prod/dev defaults), register `/start`, `/miniapp`, `/get_info` handlers, and add structured error logging;
+  - wired graceful shutdown to stop the miniapp bot before HTTP/DB shutdown flow;
+  - updated `AGENTS.md` and `README.md` Miniapp contracts with the new bot/runtime behavior.
 - **12:22** Voice realtime/taskflow and UI fallback updates:
   - updated worker/socket runtime contracts in `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts` and `backend/src/services/voicebot/voicebotSocketEventsWorker.ts` (session-room `tickets_prepared` + array payload support);
   - updated fallback-row rendering in `app/src/components/voice/TranscriptionTableRow.tsx` (error signature footer via shared metadata formatter);

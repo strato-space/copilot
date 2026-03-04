@@ -226,6 +226,7 @@ Preferred engineering principles for this repo:
 - Ticket create/update diagnostics should log normalized `project/project_id/performer` payload values to speed up CRM incident triage.
 - CRM work-hours joins are canonical on `ticket_db_id` (`automation_tasks._id`) across CRM routes, miniapp routes, and reporting services; `ticket_id` remains migration-only input and must be normalized before writes.
 - Miniapp `/tickets` route in debug mode (`IS_MINIAPP_DEBUG_MODE=true`) reads through raw DB to preserve test-ticket visibility when debug runtime boundaries diverge from default API filters.
+- Miniapp backend can optionally launch a dedicated Telegram bot when `TG_MINIAPP_BOT_TOKEN` is configured: `/start` and `/miniapp` return an inline WebApp button, `/get_info` returns chat diagnostics, and runtime shutdown stops the bot explicitly.
 - OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
 - OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.

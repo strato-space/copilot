@@ -232,6 +232,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Miniapp backend is served by the Copilot backend runtime (`npm run dev:miniapp` / `npm run start:miniapp`).
 - PM2 mode scripts start both backend APIs (`copilot-backend-*` and `copilot-miniapp-backend-*`) together.
 - In `IS_MINIAPP_DEBUG_MODE=true`, miniapp `/tickets` reads from raw DB (`getRawDb`) to keep debug ticket visibility when runtime tags differ between test data and scoped runtime.
+- Miniapp backend can optionally start a Telegram bot via `TG_MINIAPP_BOT_TOKEN`; `/start` and `/miniapp` return an inline WebApp button, `/get_info` prints chat metadata for diagnostics, and graceful shutdown stops the bot before process exit.
 
 ## What is included
 - `app/` React + Vite frontend for Finance Ops and OperOps/CRM.

@@ -9,6 +9,7 @@ import morgan from 'morgan';
 import { createServer } from 'http';
 import { createMiniappRouter } from './routes/index.js';
 import { Queue } from 'bullmq';
+import { Telegraf, Markup, type Context } from 'telegraf';
 
 import { initLogger, getLogger } from '../utils/logger.js';
 import { connectDb, closeDb } from '../services/db.js';
@@ -83,10 +84,72 @@ const TEST_DATA = {
     photo_url: 'https://t.me/i/userpic/320/wDaP5a5Shm1UsJdjf1tCYr5nIvDeaMOA9c8Lb_vVtYU.svg',
 };
 
+const toSafeErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
+const resolveMiniappWebAppUrl = (): string => {
+    const fromEnv = (process.env.TG_MINIAPP_WEBAPP_URL ?? '').trim();
+    if (fromEnv.length > 0) {
+        return fromEnv;
+    }
+    return envName === 'production'
+        ? 'https://crm-miniapp.stratospace.fun'
+        : 'https://crm-miniapp-dev.stratospace.fun';
+};
+
+const initMiniappTelegramBot = (): Telegraf<Context> | null => {
+    const botToken = (process.env.TG_MINIAPP_BOT_TOKEN ?? '').trim();
+    if (!botToken) {
+        logger.warn('Miniapp tgbot is disabled: TG_MINIAPP_BOT_TOKEN is not configured');
+        return null;
+    }
+
+    const miniappUrl = resolveMiniappWebAppUrl();
+    const bot = new Telegraf<Context>(botToken);
+    const openMiniappKeyboard = () =>
+        Markup.inlineKeyboard([Markup.button.webApp('Open Miniapp', miniappUrl)]);
+
+    bot.start(async (ctx) => {
+        await ctx.reply('Open Copilot Miniapp:', openMiniappKeyboard());
+    });
+
+    bot.command('miniapp', async (ctx) => {
+        await ctx.reply('Open Copilot Miniapp:', openMiniappKeyboard());
+    });
+
+    bot.command('get_info', async (ctx) => {
+        logger.info('Miniapp tgbot chat info requested', {
+            chat_id: ctx.chat?.id,
+            chat_type: ctx.chat?.type,
+            user_id: ctx.from?.id,
+        });
+        await ctx.reply(JSON.stringify(ctx.chat, null, 2));
+    });
+
+    bot.catch((error, ctx) => {
+        logger.error('Miniapp tgbot update failed', {
+            error: toSafeErrorMessage(error),
+            update_type: ctx.updateType,
+        });
+    });
+
+    logger.info('Miniapp tgbot launch requested', { miniapp_url: miniappUrl, env: envName });
+    void bot.launch()
+        .then(() => {
+            logger.info('Miniapp tgbot started', { miniapp_url: miniappUrl, env: envName });
+        })
+        .catch((error) => {
+            logger.error('Miniapp tgbot failed to initialize', { error: toSafeErrorMessage(error) });
+        });
+
+    return bot;
+};
+
 const startServer = async () => {
     const db = await connectDb();
     connectRedis();
     const notificationQueue = new Queue(QUEUES.NOTIFICATIONS, { connection: getBullMQConnection() });
+    const miniappBot = initMiniappTelegramBot();
 
     app.use('/', createMiniappRouter({ db, notificationQueue, logger, testData: TEST_DATA }));
 
@@ -107,9 +170,23 @@ const startServer = async () => {
         logger.info(`Miniapp Webserver running on port ${port}`);
     });
 
+    let shuttingDown = false;
     const gracefulShutdown = async (signal: string) => {
+        if (shuttingDown) {
+            return;
+        }
+        shuttingDown = true;
         logger.info(`Received ${signal}. Starting graceful shutdown...`);
         setHealthStatus(false);
+
+        if (miniappBot) {
+            try {
+                miniappBot.stop(signal);
+                logger.info('Miniapp tgbot stopped');
+            } catch (error) {
+                logger.error('Miniapp tgbot shutdown failed', { error: toSafeErrorMessage(error) });
+            }
+        }
 
         await new Promise<void>((resolveClose) => {
             httpServer.close(() => {
