@@ -1,0 +1,107 @@
+{
+  "batch": "Testing & API",
+  "batch_index": 3,
+  "assessments": {
+    "api_surface_coherence": 78.0,
+    "mid_level_elegance": 80.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "backend/src/voicebot_tgbot/ingressHandlers.ts defines its own `runtimeQuery` wrapper instead of reusing `sharedRuntime.runtimeQuery`, with different merge options for `mergeWithRuntimeFilter`.",
+        "Multiple voicebot handlers duplicate runtime-query wrappers with slightly different policy wiring, creating parallel contracts for the same concern.",
+        "The same conceptual utility (`createOpenAiClient`) exists as a shared export in `backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts` returning `OpenAI | null`, while `backend/src/workers/voicebot/handlers/transcribeHandler.ts` redefines `createOpenAiClient` returning `{ apiKey, client }`, forcing call-site-specific interpretation."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "`backend/src/workers/voicebot/customPromptsDir.ts` swallows all filesystem errors in `listCustomPromptProcessorNames` and returns `[]`, which causes prompt processors to be silently skipped.",
+        "If `VOICEBOT_CUSTOM_PROMPTS_DIR` is misconfigured (missing/not a directory), callers (`oneCustomPrompt.ts`, `allCustomPrompts.ts`) receive an empty processor list and continue as a normal no-op instead of surfacing a configuration error.",
+        "Prompt text load path has the same silent-failure posture via `readFileSync` try/catch returning `null`, reducing diagnosability of broken runtime setup."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "runtime_query_contract_drift",
+      "summary": "Runtime filter policy is duplicated with different defaults across handlers, producing inconsistent DB scoping behavior.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+      ],
+      "evidence": [
+        "`sharedRuntime.ts` exports `runtimeQuery` wrapping `mergeWithRuntimeFilter` with `{ field: 'runtime_tag', familyMatch: IS_PROD_RUNTIME, includeLegacyInProd: IS_PROD_RUNTIME }`.",
+        "`ingressHandlers.ts` defines a local `runtimeQuery` with only `{ field: 'runtime_tag' }`.",
+        "Several handlers define similar local wrappers, but with potentially different implicit semantics; this pattern is repeated in the runtime surface for similar queries."
+      ],
+      "suggestion": "Introduce a single shared runtime filter helper with explicit `RuntimeScopeOptions` parameter and replace local duplicated wrappers so all handlers call the same contract; require explicit policy decisions at call sites instead of implicit defaults.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_filter_fragmentation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "openai_client_factory_inconsistency",
+      "summary": "`createOpenAiClient` has incompatible return shapes across modules, weakening API discoverability at call sites.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts"
+      ],
+      "evidence": [
+        "`sharedRuntime.ts` exports `createOpenAiClient(): OpenAI | null`.",
+        "`transcribeHandler.ts` redeclares `createOpenAiClient(): { apiKey: string; client: OpenAI | null }` with a different shape.",
+        "Callers now infer different contracts for the same conceptual dependency; API docs/types no longer convey a stable boundary."
+      ],
+      "suggestion": "Replace local redefinitions with a single shared factory type in `sharedRuntime` that returns a stable object (e.g., `{ client, apiKey }`) and update call sites to consume that contract consistently.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "utility_interface_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "custom_prompts_fail_silence",
+      "summary": "Custom-prompt discovery treats filesystem/runtime errors as empty configuration, obscuring broken ingress state.",
+      "related_files": [
+        "backend/src/workers/voicebot/customPromptsDir.ts",
+        "backend/src/workers/voicebot/handlers/allCustomPrompts.ts",
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts"
+      ],
+      "evidence": [
+        "`listCustomPromptProcessorNames` returns `[]` for any `readdirSync` failure (including ENOENT/permissions), without surfacing a caller-visible error.",
+        "When called from `allCustomPrompts.ts`, an empty list causes prompt jobs to skip with no alert beyond debug logs.",
+        "`getCustomPromptText` likewise returns `null` for read errors, so failed processor loading is interpreted as missing data rather than configuration failure."
+      ],
+      "suggestion": "Fail fast on invalid/missing prompt directory and emit explicit operational errors (or structured error response) when configured path is invalid, while preserving a tested recovery path for empty-but-valid directories.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "error_visibility_gap"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "utility duplication without canonical contracts for shared runtime and OpenAI client creation",
+      "silent error swallowing at filesystem ingress boundaries",
+      "implicit behavior defaults that mask misconfiguration"
+    ],
+    "likely_symptoms": [
+      "inconsistent isolation behavior across voicebot DB queries",
+      "prompt-processing jobs being skipped without operational alert",
+      "higher support burden from ambiguous `createOpenAiClient` usage"
+    ],
+    "possible_false_positives": [
+      "If `runtimeScope` filtering behavior is intentionally no-op in this deployment branch, runtime filter drift has lower operational impact; still a maintainability/API debt."
+    ]
+  }
+}

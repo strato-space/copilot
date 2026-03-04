@@ -20,6 +20,7 @@
 - **08:55** Updated OperOps Codex relationship grouping to explicit `Parent`, `Children`, `Depends On (blocks/waits-for)`, `Blocks (dependents)` with shared issue-id token rendering.
 
 ### CHANGES
+- **11:36** Refreshed local `desloppify` review artifacts for the latest scan cycle (`.desloppify/query.json`, `.desloppify/review_packet_blind.json`, `.desloppify/review_packets/*`, `.desloppify/subagents/runs/*`) to keep scanner state synchronized with post-deploy workspace.
 - **11:34** Backend runtime-tag deprecation:
   - neutralized runtime-tag filter/injection helpers in `backend/src/services/{runtimeScope.ts,db.ts}`;
   - removed runtime-tag-scoped read/write branches in Voice routes/services (`backend/src/api/routes/voicebot/{sessions.ts,uploads.ts,transcription.ts,permissions.ts,messageHelpers.ts}`, `backend/src/api/routes/auth.ts`, `backend/src/services/voicebotObjectLocator.ts`, `backend/src/voicebot_tgbot/{activeSessionMapping.ts,commandHandlers.ts,ingressHandlers.ts}`, `backend/src/workers/voicebot/handlers/transcribeHandler.ts`);

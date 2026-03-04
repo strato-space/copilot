@@ -1,0 +1,108 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 4,
+  "assessments": {
+    "package_organization": 81.0,
+    "high_level_elegance": 82.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`backend/src/workers/voicebot/handlers/shared/audioMerging.ts` and `backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts` are exposed as queue handlers, not reusable utilities, and are only wired in through `backend/src/workers/voicebot/manifest.ts`.",
+        "`backend/src/workers/voicebot/manifest.ts` registers `handleAudioMergingJob` and `handleCleanupEmptySessionsJob` as top-level postprocessing handlers, while those modules live under `handlers/shared/`, which inverts that directory’s ownership semantics.",
+        "The custom-prompt data path is split between `backend/src/workers/voicebot/customPromptsDir.ts` and `backend/src/workers/voicebot/handlers/shared/customPromptShared.ts`, with consumers in `backend/src/workers/voicebot/handlers/customPrompt.ts` and `backend/src/workers/voicebot/handlers/oneCustomPrompt.ts`, creating no clear package anchor for the prompt subsystem.",
+        "The worker domain shows only 3 top-level dirs (`voicebot`, `voicebot/handlers`, `voicebot/handlers/shared`), but there is no dedicated subpackage for postprocessing jobs versus core handlers, so intent is obscured."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/workers/voicebot/handlers/codexDeferredReview.ts` mixes at least three external-integration responsibilities: CLI/process execution (`spawn`, `codex` invocation), BD issue updates (`bd update`), and Telegram HTTP callbacks/cards in the same file plus db claim/update state transitions.",
+        "`backend/src/workers/voicebot/manifest.ts` and `backend/src/workers/voicebot/runner.ts` treat this as a monolithic handler unit, so the current ownership boundary for the deferred-review workflow is unclear and hard to evolve independently.",
+        "The prompt-domain pipeline is split across `customPromptsDir.ts` and `handlers/shared/customPromptShared.ts` plus two handler entry points, without a cohesive package boundary that encodes 'prompt lifecycle' responsibilities."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "move_oneoff_shared_handlers",
+      "summary": "Concrete queue handlers are misclassified under shared, blurring utility vs executable ownership.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts",
+        "backend/src/workers/voicebot/manifest.ts"
+      ],
+      "evidence": [
+        "`manifest.ts` imports both `handleAudioMergingJob` and `handleCleanupEmptySessionsJob` as handler entry points from `handlers/shared`.",
+        "`audioMerging.ts` and `cleanupEmptySessions.ts` each export a single `handle...Job` function and are not shared helper modules; they are queue-facing operations.",
+        "There are no cross-handler utility call-sites that justify their `shared` location as a true shared abstraction."
+      ],
+      "suggestion": "Create a new package for concrete postprocessing jobs (e.g., `backend/src/workers/voicebot/handlers/postprocessing/`), move both handlers there, then update `manifest.ts` imports. After move, keep `handlers/shared/` for cross-cutting utility modules only. Validate by running targeted import checks and a full `npm run build` in `backend`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "shared_folder_boundary"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "unify_prompt_domain_boundary",
+      "summary": "Prompt discovery and prompt parsing helpers are split across root and shared tiers without a dedicated domain package.",
+      "related_files": [
+        "backend/src/workers/voicebot/customPromptsDir.ts",
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts"
+      ],
+      "evidence": [
+        "Prompt directory resolution (`resolveCustomPromptsDir`) lives in `customPromptsDir.ts` at `handlers` root, while prompt file read/row normalization lives in `handlers/shared/customPromptShared.ts`.",
+        "`customPrompt.ts` and `oneCustomPrompt.ts` must import from both locations, so prompt-subsystem ownership spans unrelated package levels.",
+        "No clear cohesive folder boundary exists for 'custom prompt' domain responsibilities."
+      ],
+      "suggestion": "Introduce a cohesive prompt domain package (e.g., `backend/src/workers/voicebot/prompts/` with `resolver.ts` and `schema.ts`), move both discovery and parsing there, then update `customPrompt.ts`/`oneCustomPrompt.ts` imports. Keep only thin handler files in `handlers/`; run `npm run build` after moving files.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "domain_scatter"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "split_codex_deferred_review_concerns",
+      "summary": "Codex deferred review handler mixes process orchestration, integrations, and persistence in one module.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/codexDeferredReview.ts",
+        "backend/src/workers/voicebot/manifest.ts"
+      ],
+      "evidence": [
+        "The same module owns spawn-based process execution, external `bd` command invocations, Telegram API request construction/send/response handling, and task document state transitions.",
+        "`manifest.ts` exposes it as a single handler while runtime responsibilities imply multiple integration adapters with different operational failure domains.",
+        "This coupling makes adapter-level changes (e.g., codex CLI model flags, Telegram target config, or BD note format) coupled to worker orchestration and makes testing/operation brittle."
+      ],
+      "suggestion": "Refactor into dedicated modules: `codexExecutor` (CLI invocation), `issueSyncService` (bd show/update), `telegramNotifier`, and a thin `handleCodexDeferredReviewJob` coordinator. Update `manifest.ts` to call only coordinator. Add integration boundaries with explicit input/output contracts and add/adjust worker tests for each module.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "single_monolithic_handler"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Boundary inversion: directories named `shared` used for executable jobs that are not shared utilities.",
+      "Missing domain packaging for prompt infrastructure, leading to cross-layer scatter.",
+      "Monolithic handler composition in `codexDeferredReview` that fuses process/integration/db orchestration."
+    ],
+    "likely_symptoms": [
+      "New contributors cannot quickly infer ownership from folder layout",
+      "Unclear import paths for prompt-related changes",
+      "Increased risk of regressions when changing one integration in deferred review"
+    ],
+    "possible_false_positives": [
+      "Historical compatibility convention may intentionally keep certain one-off handlers under `shared/` and prompt helpers split until migration backlog is completed"
+    ]
+  }
+}

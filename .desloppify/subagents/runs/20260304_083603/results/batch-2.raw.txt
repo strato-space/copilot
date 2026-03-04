@@ -1,0 +1,136 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 2,
+  "assessments": {
+    "abstraction_fitness": 82.5,
+    "mid_level_elegance": 80.0,
+    "low_level_elegance": 84.0
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "manifest.ts maps each job name through a per-entry lambda that only forwards `payload` via a type cast (`payload as SomeJobData`) to typed handlers, so the dispatch layer provides almost no compile-time contract separation.",
+        "The same forwarding pattern is repeated across the entire job set, creating wide handoff overhead without behavior transformation.",
+        "The only common handler contract is `unknown -> Promise<unknown>`, which weakens interface honesty at orchestration boundaries."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 64.0,
+        "indirection_cost": 58.0,
+        "interface_honesty": 70.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "createTasksPostprocessing.ts short-circuits `categorization_pending` as `skipped` when `processorsQueue` is unavailable instead of forcing a controlled retry path, leaving downstream task-creation pipeline without a guaranteed re-entry point.",
+        "doneMultiprompt.ts publishes a summary-notify job with a fixed dedupe key per session (`${session_id}-SESSION_READY_TO_SUMMARIZE`) while payload includes varying correlation IDs, so later attempts can be silently dropped.",
+        "notify and postprocessing flow coupling is handled by local side-effect branches that differ by queue availability, but errors are expressed as soft skips in multiple places, which makes lifecycle behavior harder to predict."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "notifyHandler.ts spawns hook processes in detached mode and only handles `spawn` errors; process exit failure codes are never checked, so hook execution failures can be silently classified as started/successful.",
+        "Because hook completion status is not observed, the function cannot deterministically update local-hook delivery state for failed hook exits."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "manifest_type_dispatch_through_unknown",
+      "summary": "Job dispatch drops type boundaries with blind payload casts through the manifest",
+      "related_files": [
+        "backend/src/workers/voicebot/manifest.ts",
+        "backend/src/workers/voicebot/runner.ts"
+      ],
+      "evidence": [
+        "manifest.ts uses repeated `async (payload: unknown) => handler(payload as TypedPayload)` for almost every job entry instead of a typed envelope dispatch path.",
+        "runner.ts treats handlers as `VoicebotWorkerHandler = (payload: unknown) => Promise<unknown>`, forcing every boundary contract to be erased at the dispatcher level."
+      ],
+      "suggestion": "Introduce a discriminated job envelope (`{ job_name, data }`) and a typed registry that validates/ narrows payloads before dispatch; remove per-entry casts by binding handlers through a generic `registerJob<TData>(name, schema, handler)` helper.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "dispatcher_contract_erasure"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "create_tasks_stalls_when_processors_queue_absent",
+      "summary": "Postprocessing returns success path without retry when processors queue is unavailable",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+        "backend/src/workers/voicebot/handlers/doneMultiprompt.ts"
+      ],
+      "evidence": [
+        "createTasksPostprocessing.ts checks `!allCategorized` and calls enqueue for categorization; when processors queue is missing, it logs and returns `{ skipped: true, reason: 'categorization_pending', requeued: false }`.",
+        "doneMultiprompt.ts always schedules one CREATE_TASKS postprocessing run for the session; if that run exits via the non-requeued skip, there is no automatic re-entry when queue connectivity returns."
+      ],
+      "suggestion": "Treat missing processors queue as an actionable failure path: fail the job (or explicitly reschedule with backoff) and persist a `pending` marker so work is retried when queues recover.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "queue_orchestration_fragility"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "summary_dedupe_key_ignores_correlation",
+      "summary": "Summary-ready notify jobs can be de-duplicated across different correlation contexts",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/doneMultiprompt.ts",
+        "backend/src/workers/voicebot/manifest.ts"
+      ],
+      "evidence": [
+        "doneMultiprompt.ts builds `idempotencyKey = `${session_id}-SUMMARY-${correlation_id}`` for audit metadata but enqueues with dedupe id fixed as `${session_id}-SESSION_READY_TO_SUMMARIZE`.",
+        "The queue payload includes a variable `correlation_id`, so retry/reissue attempts with a new correlation can be suppressed by the fixed dedupe key."
+      ],
+      "suggestion": "Use `correlation_id` (or a dedicated job attempt id) in the queue dedupe identifier, or include full notify payload hash in dedupe keys so each distinct summarize event can be independently observed while still preventing exact duplicates.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "queue_orchestration_fragility"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "notify_hooks_fire_and_forget_without_exit_check",
+      "summary": "Local notification hooks are treated as success without waiting for process exit status",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/notifyHandler.ts",
+        "backend/src/workers/voicebot/handlers/notify/hooksRuntime.ts"
+      ],
+      "evidence": [
+        "notifyHandler.ts only handles `child.on('error')` after `spawn` and logs hook_started immediately.",
+        "There is no logic to await the child process exit code or capture non-zero termination as a failure path, yet logs are written as started/successful based on launch only."
+      ],
+      "suggestion": "Await hook process completion with a bounded timeout, record exit code/stdout/stderr, and emit `notify_hook_failed` when exit code is non-zero so queue consumers can decide on retry behavior.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "hook_completion_observability"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Job orchestration contracts are not centralized, so payload honesty and retry/idempotency behavior are implemented inconsistently inside individual handlers.",
+      "Queue interactions use per-handler ad-hoc dedupe and skip logic without a uniform retry contract.",
+      "Async side effects (local hooks) are launched without completion contracts, weakening observability."
+    ],
+    "likely_symptoms": [
+      "create-tasks creation can stop indefinitely when a queue dependency is unavailable at one processing moment",
+      "summary-ready notifications can be silently suppressed on repeated attempts for the same session",
+      "local hooks can be reported as sent while actually failing in-process",
+      "typed dispatch invariants not enforced before runtime"
+    ],
+    "possible_false_positives": [
+      "If hook execution is intentionally fire-and-forget by design, waiting for exit codes may be considered unnecessary operationally",
+      "If queue dedupe key per session was intentionally designed as a strict global guard, correlation-specific retries may be intentionally dropped"
+    ]
+  }
+}

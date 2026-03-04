@@ -1,0 +1,127 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 78.0,
+    "high_level_elegance": 76.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "runtimeScope.ts declares `buildRuntimeFilter`, `buildRuntimeFilterExpressionForPath`, `mergeWithRuntimeFilter`, `recordMatchesRuntime` but all public helpers effectively return identity/no-op values (`{}`, `{ $literal: true }`, unchanged query) while being imported broadly across workers/routes.",
+        "db.ts keeps runtime-safety function names (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedDbProxy`) implemented as pass-through wrappers, then exposes `scopedDatabase = createRuntimeScopedDbProxy(rawDatabase)` with no effective scoping semantics.",
+        "`sharedRuntime.ts` and many voice handlers rely on `runtimeQuery` wrappers to represent canonical filtering, creating an architecture where a cross-module boundary appears enforced but is not actually enforced at runtime."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "constants.ts combines FinOps, CRM, voice bot, socket, queue, mongo constants, and runtime markers in one module with high import fan-in (`backend/src/utils/logger.ts`, `backend/src/services/db.ts`, `backend/src/workers/...`, `backend/src/api/...`), reducing predictability of module ownership.",
+        "logger.ts both defines logger behavior and performs side-effectful default initialization in `getLogger` (creating directories via `getLogsDir` and instantiating transports) even though the exported JSDoc says \"Throws if logger hasn't been initialized\".",
+        "The same domain concerns (runtime, queue naming, voice constants, db constants) are mirrored in multiple places (`constants.ts` + `runtimeScope.ts` + `db.ts`) but coordinated via compatibility-style indirection rather than one clear owning boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "RUNTIME_FILTER_SHIM_PASSTHROUGH",
+      "summary": "Runtime scoping APIs are architecturally preserved as no-op shims, creating a misleading cross-module contract.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`buildRuntimeFilter` and `mergeWithRuntimeFilter` in runtimeScope.ts are part of the public query API but return pass-through/no-op results, while call sites in voice handlers treat them as boundary-enforcing filters.",
+        "db.ts exposes runtime-scope wrappers (`createRuntimeScopedDbProxy`, `createRuntimeScopedCollectionProxy`) yet `patchRuntimeTagIntoSetOnInsert` and `applyRuntimeScopeToAggregatePipeline` are no-ops.",
+        "`sharedRuntime.ts` centralizes runtime query wrapping and is imported by multiple handlers, making this false abstraction a shared runtime contract across subsystems without actual behavior."
+      ],
+      "suggestion": "Replace the compatibility shim layer with an explicit contract: either fully remove runtime-scope filtering calls and rename helpers as explicit no-op utilities with deprecation warnings, or reintroduce enforced isolation in one dedicated persistence layer and keep call sites simple/explicit. Avoid maintaining a dead cross-module abstraction in both runtimeScope and db wrappers simultaneously.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_scope_compat_layer"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "CONSTANTS_GOD_MODULE_MULTIDOMAIN",
+      "summary": "Single monolithic constants module blurs subsystem boundaries and couples unrelated domains.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`constants.ts` contains socket events, collections, task statuses, finops CRM/task vocab, MCP events, queue names, and voice-specific runtime/queue wiring in one file.",
+        "Many unrelated modules import this same module for domain-specific symbols, creating non-local coupling and implicit transitive dependencies.",
+        "Both `COLLECTIONS` and `VOICEBOT_COLLECTIONS` contain overlapping domain constants, but ownership remains mixed in one umbrella module instead of clear package boundaries."
+      ],
+      "suggestion": "Split constants by bounded context (e.g., `voicebotConstants`, `crmConstants`, `finopsConstants`) and make an explicit public index for cross-domain constants. Keep shared keys in one small stable module and remove duplication.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "god_module_concentration"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "LOGGER_SIDE_EFFECT_MISMATCH",
+      "summary": "Logger API contract and initialization semantics are inconsistent, weakening startup ownership clarity.",
+      "related_files": [
+        "backend/src/utils/logger.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/index.ts"
+      ],
+      "evidence": [
+        "`getLogger` docs claim it throws if uninitialized, but implementation auto-initializes via `initLogger()`.",
+        "The module imports create child transports from Winston and creates filesystem directories (`getLogsDir`) as part of `initLogger`, so logger initialization is now an implicit global side effect triggered by any `getLogger` call.",
+        "This pattern appears across many modules (`getLogger` is imported via many routes/services), obscuring explicit initialization order and making startup coupling implicit."
+      ],
+      "suggestion": "Align behavior and docs: either make `getLogger` strict (throw on missing init) with explicit startup initialization flow, or rename/refactor API to reflect lazy initialization and document side effects so lifecycle is explicit and intentional.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "VOICE_COLLECTION_DUPLICATION",
+      "summary": "Voice and generic collection constants are duplicated with partial semantic overlap, reducing long-term consistency.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts",
+        "backend/src/workers/voicebot/handlers/categorizeHandler.ts"
+      ],
+      "evidence": [
+        "`COLLECTIONS` and `VOICEBOT_COLLECTIONS` both expose `automation_voice_bot_sessions` and `automation_voice_bot_messages` (and related names), implying two pseudo-authorities for the same concept.",
+        "Handlers and services select between these namespaces inconsistently across files, increasing risk of drift and accidental misuse during schema or migration updates.",
+        "The same duplication appears in runtime-scoped index/type metadata in other modules, making ownership and evolution plans harder to reason about."
+      ],
+      "suggestion": "Consolidate collection naming for voice domains into one canonical source and migrate all callsites to it; keep domain-specific aliases only where needed as typed re-export shims with deprecation notices.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "god_module_concentration"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Compatibility-layer abstractions retained after architectural migration, preserving outdated runtime-boundary vocabulary.",
+      "Monolithic constants organization that optimizes convenience over domain ownership.",
+      "Implicit lifecycle side effects through globally accessed utility modules."
+    ],
+    "likely_symptoms": [
+      "RUNTIME_FILTER_SHIM_PASSTHROUGH",
+      "CONSTANTS_GOD_MODULE_MULTIDOMAIN",
+      "VOICE_COLLECTION_DUPLICATION"
+    ],
+    "possible_false_positives": [
+      "In some deployments this no-op runtime scope may be an intentional transitional stop-gap; verify against current migration plan before refactoring broadly."
+    ]
+  }
+}
