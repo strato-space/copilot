@@ -1,0 +1,144 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 64.0,
+    "high_level_elegance": 59.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/constants.ts` aggregates unrelated concerns (socket events, queue names, collection names, statuses, VoiceBot storage/env config) in one high-fan-in module (`review_context.import_graph_summary.top_imported` shows 23 importers), creating a cross-domain dependency hub.",
+        "`backend/src/constants.ts:355-368` and `:523-533` compute environment-derived values at module load time, so imports trigger runtime configuration decisions outside composition roots.",
+        "Auth/permission path duplicates identity loading across modules: `backend/src/api/middleware/auth.ts:87-114` fetches performer and permissions, `backend/src/api/middleware/roleGuard.ts:45-58` fetches performer again, and `backend/src/permissions/permission-manager.ts:202-227` fetches performer again."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/services/db.ts:84-99` exposes runtime-scope extension points (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`) that are currently no-ops, while still presenting a proxy-based architecture (`:101-114`) as if scoping is active.",
+        "Index/bootstrap policy still depends on `runtime_tag` keys in `backend/src/constants.ts:149-167`, while DB layer exports runtime-scoping primitives that do not enforce any scope, producing unclear ownership of isolation policy.",
+        "`backend/src/api/routes/crm/codex.ts` combines HTTP transport, process orchestration (`spawn`), sync-retry policy, JSON parsing, and repo-path resolution in one route module (`:45-285`, `:291-402`), mixing infra adapter and API layer responsibilities."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "constants_domain_hub",
+      "summary": "A single constants hub couples CRM/FinOps/VoiceBot/runtime concerns and amplifies change blast radius.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts:10-534` contains socket events, queue names, DB collection names, business statuses, VoiceBot jobs, and storage config in one file.",
+        "`backend/src/services/db.ts:11` and `backend/src/permissions/permission-manager.ts:11` both import constants from this monolith, forcing low-level services and permission logic to depend on broad cross-domain definitions."
+      ],
+      "suggestion": "Split constants by bounded context and layer (`domain/*`, `infra/*`, `voicebot/*`, `db/*`), keep only small re-export façades where needed, and stop using a single global constants entrypoint for unrelated modules.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_bounded_context_boundaries"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_config_side_effects",
+      "summary": "Import-time environment evaluation in shared modules introduces hidden runtime coupling.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/utils/logger.ts",
+        "backend/src/api/routes/crm/codex.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts:355-368` computes `VOICEBOT_QUEUES` from `process.env.APP_ENV` during module evaluation.",
+        "`backend/src/constants.ts:523-533` resolves file-size/storage defaults from env at import time.",
+        "`backend/src/utils/logger.ts:95-99` auto-initializes logger on first import chain call, and init path mutates filesystem (`:20-24`).",
+        "`backend/src/api/routes/crm/codex.ts:194-212` resolves binary/workdir from env in route module helpers, further spreading env-coupled behavior into import-heavy paths."
+      ],
+      "suggestion": "Move env reads and side-effectful setup to explicit bootstrap factories (e.g., `buildRuntimeConfig()`, `createLogger(config)`), inject config into modules, and keep shared imports pure/data-only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_global_runtime_state"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_auth_resolution_chain",
+      "summary": "Auth, role guard, and permission middleware repeat performer loading and diverge request contracts.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`auth.ts:25-43` defines one `AuthenticatedRequest` shape with required `user/performer/db`.",
+        "`roleGuard.ts:17-26` defines a second request shape with optional `user/db` and independently reloads performer (`:45-50`).",
+        "`permission-manager.ts:165-178` defines a third request shape and reloads performer in `requirePermission` (`:202-206`)."
+      ],
+      "suggestion": "Introduce a single shared auth context type and one performer-resolution middleware stage; downstream guards should consume that context instead of re-querying DB.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "duplicated_identity_pipeline"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "runtime_scope_abstraction_drift",
+      "summary": "DB runtime-scoping architecture is represented as layered proxy abstractions but currently behaves as pass-through.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/constants.ts"
+      ],
+      "evidence": [
+        "`db.ts:84-87`, `:89-93`, and `:95-99` export scoping helpers that return unchanged values/collections.",
+        "`db.ts:101-114` wraps DB in proxy but delegates collection unchanged (`:108`).",
+        "Despite no-op runtime scoping in DB layer, index policy still encodes `runtime_tag` in startup indexes (`constants.ts:149-167`), so responsibility for isolation is ambiguous."
+      ],
+      "suggestion": "Either remove the proxy/scoping façade until real behavior exists, or implement real scoped behavior and enforce it consistently; align index strategy and runtime isolation policy under one explicit owner module.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "abstraction_without_enforced_policy"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "codex_route_infra_leak",
+      "summary": "The CRM Codex route owns process execution and sync orchestration, collapsing API and infrastructure boundaries.",
+      "related_files": [
+        "backend/src/api/routes/crm/codex.ts",
+        "backend/src/api/middleware/response.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`codex.ts:45-180` implements command lifecycle, timeout kill logic, retry flow, and sync remediation in-route.",
+        "`codex.ts:182-285` adds command parsing and execution-context resolution logic inside the route module.",
+        "Route returns ad-hoc payloads directly (`codex.ts:291-402`) instead of reusing shared response/error middleware conventions from `response.ts` and `error.ts`."
+      ],
+      "suggestion": "Extract a `CodexIssuesService` (command adapter + retry policy + parsing), keep route handlers thin (validation + mapping), and normalize route output through shared response/error envelope helpers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "transport_and_infra_mixed"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Missing bounded-context packaging for shared primitives (constants/auth/context) causes coupling hubs.",
+      "Legacy/runtime-transition scaffolding was kept as abstractions without enforcing the intended policy.",
+      "Middleware ownership is fragmented, so identity/permission behavior is reimplemented at multiple layers."
+    ],
+    "likely_symptoms": [
+      "constants_domain_hub",
+      "duplicated_auth_resolution_chain",
+      "runtime_scope_abstraction_drift"
+    ],
+    "possible_false_positives": []
+  }
+}

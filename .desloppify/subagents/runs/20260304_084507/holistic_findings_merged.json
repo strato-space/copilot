@@ -1,0 +1,1412 @@
+{
+  "assessments": {
+    "abstraction_fitness": {
+      "score": 51.5,
+      "components": [
+        "Abstraction Leverage",
+        "Indirection Cost",
+        "Interface Honesty"
+      ],
+      "component_scores": {
+        "Abstraction Leverage": 56.5,
+        "Indirection Cost": 72.5,
+        "Interface Honesty": 64.4
+      }
+    },
+    "ai_generated_debt": 65.3,
+    "api_surface_coherence": 49.8,
+    "authorization_consistency": 35.4,
+    "convention_outlier": 55.0,
+    "cross_module_architecture": 43.1,
+    "design_coherence": 50.0,
+    "error_consistency": 55.3,
+    "high_level_elegance": 41.6,
+    "incomplete_migration": 39.0,
+    "low_level_elegance": 60.7,
+    "mid_level_elegance": 44.1,
+    "package_organization": 52.5
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/constants.ts` aggregates unrelated concerns (socket events, queue names, collection names, statuses, VoiceBot storage/env config) in one high-fan-in module (`review_context.import_graph_summary.top_imported` shows 23 importers), creating a cross-domain dependency hub.",
+        "`backend/src/constants.ts:355-368` and `:523-533` compute environment-derived values at module load time, so imports trigger runtime configuration decisions outside composition roots.",
+        "Auth/permission path duplicates identity loading across modules: `backend/src/api/middleware/auth.ts:87-114` fetches performer and permissions, `backend/src/api/middleware/roleGuard.ts:45-58` fetches performer again, and `backend/src/permissions/permission-manager.ts:202-227` fetches performer again."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/services/db.ts:84-99` exposes runtime-scope extension points (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`) that are currently no-ops, while still presenting a proxy-based architecture (`:101-114`) as if scoping is active.",
+        "Index/bootstrap policy still depends on `runtime_tag` keys in `backend/src/constants.ts:149-167`, while DB layer exports runtime-scoping primitives that do not enforce any scope, producing unclear ownership of isolation policy.",
+        "`backend/src/api/routes/crm/codex.ts` combines HTTP transport, process orchestration (`spawn`), sync-retry policy, JSON parsing, and repo-path resolution in one route module (`:45-285`, `:291-402`), mixing infra adapter and API layer responsibilities."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Route path naming drifts heavily inside one router: `/taskTypes` (camelCase), `/project_groups` and `/project_tree` (snake_case), and `/bot-commands` (kebab-case) in `backend/src/api/routes/crm/index.ts`.",
+        "VoiceBot router keeps mixed-casing endpoint style (`/LLMGate`) while sibling endpoints are lowercase, and mixes singular/plural path semantics (`/upload` in CRM vs `/uploads` aliasing in VoiceBot).",
+        "All three hubs use different outward conventions for route composition (`crm/index.ts` explicit prefixes vs `finops/index.ts` and `voicebot/index.ts` heavy root mounts)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "error_consistency": {
+      "evidence": [
+        "`sessionsSharedUtils.ts` normalizers frequently collapse invalid input to empty/null (`toTaskText`, `normalizeLinkedMessageRef`, `toObjectIdOrNull`) with no typed error path or diagnostics.",
+        "`sessionUrlUtils.ts` silently rewrites misconfigured legacy hosts and accepts any `VOICE_WEB_INTERFACE_URL` string without URL validation, producing fallback behavior rather than explicit configuration failure.",
+        "Across these shared utilities, failure signaling style is inconsistent: invalid input is sometimes preserved (`normalizeDateField` returns original trimmed string), sometimes dropped (`''`/`null`), making downstream error handling unpredictable."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Router integration seams are inconsistent: `crm/index.ts` maps each child to explicit prefixes while `finops/index.ts` mounts many children at `'/'`, pushing boundary semantics into child modules and obscuring ownership at this seam.",
+        "`voicebot/index.ts` combines flat root mounts and legacy alias mounts in the same hub; this creates implicit overlap risk and makes lifecycle/deprecation boundaries hard to reason about at integration points.",
+        "Shared utility seams in `sessionsSharedUtils.ts` encode multiple legacy payload shapes (`id/task_id/title/name/reference`, `_id/id/key`) directly in generic converters, indicating adapter logic is spread rather than isolated per boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium",
+      "issues_preventing_higher_score": ""
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "No-op runtime query wrappers are duplicated as pass-through indirection in multiple files (`voicebot/uploads.ts:38-40`, `voicebot/transcription.ts:17-21`, `voicebot/messageHelpers.ts:51-54`) without adding validation, policy, or translation.",
+        "Multiple routes re-implement near-identical coercion/parsing helpers instead of sharing typed boundary utilities (`crm/tickets.ts:51-69`, `crm/projects.ts:22-33`, `finops/expensesOperations.ts:17-51`, `finops/monthClosures.ts:10-20`).",
+        "`voicebot/sessions.ts` contains local utility ecosystems and alias adapters (`sessions.ts:402-417`, `sessions.ts:965-1010`) in the same file as endpoint orchestration, which increases abstraction surface without clear ownership boundaries."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "",
+      "sub_axes": {
+        "abstraction_leverage": 58.2,
+        "indirection_cost": 66.1,
+        "interface_honesty": 66.0
+      }
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "`voicebot/sessions.ts` is a 6001-line route module with dozens of handlers and mixed concerns, forcing dense local control flow and high branch surface in one file.",
+        "`crm/legacy/performerspayments.ts` (815 lines) mixes analytics computation, DB queries, Google Drive integration, and document workflow orchestration in route handlers (`performerspayments.ts:38+`, `24-32`), creating long imperative internals.",
+        "Large handlers repeatedly inline normalization/filter logic instead of composing focused local units (`voicebot/sessions.ts:1545-1652`, `1672-1794`; `crm/tickets.ts` long handler set from `205+`)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Auth middlewares that serve similar API boundaries use different identity validation and failure semantics: `requireRole` and `requirePermission` both call `new ObjectId(user.userId)` without pre-validation, so malformed IDs surface as 500s instead of contract-level 4xx rejections.",
+        "`requireRole` filters `is_banned` while `requirePermission` does not, so users can be denied in one guarded route family and still pass another.",
+        "403 payload shapes differ across sibling auth boundaries (`allowed_roles` + human names vs `required_permissions` + permission keys), making client-side error handling inconsistent."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Several session mutation endpoints update records directly without any access check (`/update_name`, `/update_access_level`, `/update_dialogue_tag`, `/update_participants`, `/update_allowed_users`) in `backend/src/api/routes/voicebot/sessions.ts` around lines 2396-2759, while neighboring endpoints in the same file use `sessionAccessUtils.resolve` (`/update_project` at lines 2446-2452).",
+        "`/public_attachment/:session_id/:file_unique_id` in `backend/src/api/routes/voicebot/uploads.ts` (lines 910-965) is unauthenticated and does not call `checkSessionAccess`, unlike `/message_attachment/:message_id/:attachment_index` (lines 842-875) which enforces permission + session access."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "package_organization": {
+      "evidence": [
+        "holistic_context.structure shows `backend/src/api/routes/crm/` importing `backend/src/api/routes/crm/legacy/` 7 times, so legacy code is not isolated and acts as a live dependency boundary.",
+        "`backend/src/api/routes/crm/customers.ts` imports `./legacy/projecttreeaudit.js`, pulling active CRM behavior from legacy namespace.",
+        "`backend/src/api/routes/voicebot/messageHelpers.ts` is route-adjacent but contains non-HTTP DB/domain normalization helpers (`ensureMessageCanonicalTranscription`, cleanup payload builders), indicating service logic placement drift inside routes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "design_coherence": {
+      "evidence": [
+        "Large UI orchestrators combine unrelated concerns in one component: `app/src/pages/voice/SessionsListPage.tsx` (1725 LOC) mixes URL state persistence, localStorage hydration, FAB polling/event sync, bulk-merge/delete workflows, and table render definitions; `app/src/components/crm/CRMKanban.tsx` (1394 LOC) similarly combines filtering, routing, edit flows, and table behavior.",
+        "Voice worker handlers duplicate a near-identical processor execution template instead of using a shared abstraction: `backend/src/workers/voicebot/handlers/customPrompt.ts` and `questionsHandler.ts` both do message/session lookup, categorization gating, OpenAI call, processor state writes, and parallel error plumbing with slightly different field names.",
+        "`backend/src/workers/voicebot/handlers/transcribeHandler.ts` centralizes too many responsibilities in one flow (transport recovery, split/segment transcription, retry policy, codex task side-effect, categorization enqueue, websocket update emission), while `processingLoop.ts` and `ingressHandlers.ts` also coordinate adjacent lifecycle concerns, increasing coupling.",
+        "FinOps table modules reimplement the same structural shell (pinned-month persistence, month-ordering, similar column builder patterns, repeated summary-cell cast workaround) in `app/src/components/PlanFactGrid.tsx`, `BonusesGrid.tsx`, and `ExpensesGrid.tsx`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Helper logic is reimplemented in multiple places with near-identical behavior (`toObjectIdOrNull` and `runtimeQuery` clones in `backend/src/api/routes/voicebot/sessionsSharedUtils.ts` and `backend/src/workers/voicebot/handlers/transcribeHandler.ts`, plus a parallel `runtimeQuery` in `processingLoop.ts`).",
+        "Error-response boilerplate is duplicated in `backend/src/api/routes/voicebot/uploads.ts` (`uploadAnyWithErrorHandling` and `uploadImageWithErrorHandling`), repeating nearly identical Multer error branching and payload shaping instead of one shared adapter.",
+        "Legacy-alias forwarding in `backend/src/api/routes/voicebot/sessions.ts` (`registerPostAlias` + many alias registrations) increases mechanical code volume without removing old surface area."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "`runtime_tag` remains in active index definitions and runtime filters (`backend/src/constants.ts`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/workers/voicebot/handlers/processingLoop.ts`, `backend/src/workers/voicebot/handlers/transcribeHandler.ts`) even though runtime-tag routing is marked deprecated.",
+        "VoiceBot still exposes and wires legacy endpoint families in parallel with canonical flat routes (`backend/src/api/routes/voicebot/index.ts` mounts `/sessions`, `/uploads`, `/transcription`, `/persons`, `/permissions`, `/LLMGate`; `sessions.ts` and `uploads.ts` both still serve `/close_session`).",
+        "CRM paths still depend on legacy compatibility layers (`backend/src/api/routes/crm/projects.ts` imports `./legacy/projecttreeaudit.js`; `backend/src/api/routes/crm/tickets.ts` still resolves `ticket_id` fallback path as legacy join input)."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "constants_domain_hub",
+      "summary": "A single constants hub couples CRM/FinOps/VoiceBot/runtime concerns and amplifies change blast radius.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts:10-534` contains socket events, queue names, DB collection names, business statuses, VoiceBot jobs, and storage config in one file.",
+        "`backend/src/services/db.ts:11` and `backend/src/permissions/permission-manager.ts:11` both import constants from this monolith, forcing low-level services and permission logic to depend on broad cross-domain definitions."
+      ],
+      "suggestion": "Split constants by bounded context and layer (`domain/*`, `infra/*`, `voicebot/*`, `db/*`), keep only small re-export fa\u00e7ades where needed, and stop using a single global constants entrypoint for unrelated modules.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_bounded_context_boundaries"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_config_side_effects",
+      "summary": "Import-time environment evaluation in shared modules introduces hidden runtime coupling.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/utils/logger.ts",
+        "backend/src/api/routes/crm/codex.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts:355-368` computes `VOICEBOT_QUEUES` from `process.env.APP_ENV` during module evaluation.",
+        "`backend/src/constants.ts:523-533` resolves file-size/storage defaults from env at import time.",
+        "`backend/src/utils/logger.ts:95-99` auto-initializes logger on first import chain call, and init path mutates filesystem (`:20-24`).",
+        "`backend/src/api/routes/crm/codex.ts:194-212` resolves binary/workdir from env in route module helpers, further spreading env-coupled behavior into import-heavy paths."
+      ],
+      "suggestion": "Move env reads and side-effectful setup to explicit bootstrap factories (e.g., `buildRuntimeConfig()`, `createLogger(config)`), inject config into modules, and keep shared imports pure/data-only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_global_runtime_state"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_auth_resolution_chain",
+      "summary": "Auth, role guard, and permission middleware repeat performer loading and diverge request contracts.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`auth.ts:25-43` defines one `AuthenticatedRequest` shape with required `user/performer/db`.",
+        "`roleGuard.ts:17-26` defines a second request shape with optional `user/db` and independently reloads performer (`:45-50`).",
+        "`permission-manager.ts:165-178` defines a third request shape and reloads performer in `requirePermission` (`:202-206`)."
+      ],
+      "suggestion": "Introduce a single shared auth context type and one performer-resolution middleware stage; downstream guards should consume that context instead of re-querying DB.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "duplicated_identity_pipeline"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "runtime_scope_abstraction_drift",
+      "summary": "DB runtime-scoping architecture is represented as layered proxy abstractions but currently behaves as pass-through.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/constants.ts"
+      ],
+      "evidence": [
+        "`db.ts:84-87`, `:89-93`, and `:95-99` export scoping helpers that return unchanged values/collections.",
+        "`db.ts:101-114` wraps DB in proxy but delegates collection unchanged (`:108`).",
+        "Despite no-op runtime scoping in DB layer, index policy still encodes `runtime_tag` in startup indexes (`constants.ts:149-167`), so responsibility for isolation is ambiguous."
+      ],
+      "suggestion": "Either remove the proxy/scoping fa\u00e7ade until real behavior exists, or implement real scoped behavior and enforce it consistently; align index strategy and runtime isolation policy under one explicit owner module.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "abstraction_without_enforced_policy"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "codex_route_infra_leak",
+      "summary": "The CRM Codex route owns process execution and sync orchestration, collapsing API and infrastructure boundaries.",
+      "related_files": [
+        "backend/src/api/routes/crm/codex.ts",
+        "backend/src/api/middleware/response.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`codex.ts:45-180` implements command lifecycle, timeout kill logic, retry flow, and sync remediation in-route.",
+        "`codex.ts:182-285` adds command parsing and execution-context resolution logic inside the route module.",
+        "Route returns ad-hoc payloads directly (`codex.ts:291-402`) instead of reusing shared response/error middleware conventions from `response.ts` and `error.ts`."
+      ],
+      "suggestion": "Extract a `CodexIssuesService` (command adapter + retry policy + parsing), keep route handlers thin (validation + mapping), and normalize route output through shared response/error envelope helpers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "transport_and_infra_mixed"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "mixed_route_naming_conventions",
+      "summary": "Route naming conventions drift across and within hubs, creating non-deterministic API style.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/finops/index.ts"
+      ],
+      "evidence": [
+        "`crm/index.ts` exposes mixed styles in one surface: `/taskTypes`, `/project_groups`, `/project_tree`, `/bot-commands`.",
+        "`voicebot/index.ts` includes uppercase route segment `/LLMGate` unlike lowercase siblings.",
+        "Hub-level path semantics differ (`/upload` in CRM, `/uploads` in VoiceBot aliases), reinforcing inconsistent public contract style."
+      ],
+      "suggestion": "Define one route-style convention (prefer lowercase kebab-case), codify it in a shared router-style guideline, and normalize hub mount paths + aliases through a planned compatibility window with explicit deprecation markers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "api_naming_policy_gap"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "inconsistent_hub_mount_patterns",
+      "summary": "Sibling route hubs use different composition protocols, creating style islands in entrypoints.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/finops/index.ts",
+        "backend/src/api/routes/voicebot/index.ts"
+      ],
+      "evidence": [
+        "`crm/index.ts` mostly uses explicit namespace mounting per module.",
+        "`finops/index.ts` mounts multiple independent routers at `'/'`, relying on child internals for segmentation.",
+        "`voicebot/index.ts` mixes both flat mounts and prefixed legacy mounts in one file."
+      ],
+      "suggestion": "Standardize hub composition to one protocol (explicit module prefixes or explicit documented flat contract) and apply consistently across all route hubs to reduce entrypoint-level drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "router_composition_drift"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_normalization_hides_invalid_input",
+      "summary": "Shared normalization utilities silently absorb malformed values instead of exposing explicit error outcomes.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/sessionUrlUtils.ts"
+      ],
+      "evidence": [
+        "`toTaskText` returns empty string for unsupported types; `normalizeLinkedMessageRef` returns empty string for non-string values.",
+        "`toObjectIdOrNull` drops invalid IDs to null without a reason code.",
+        "`active()` in `sessionUrlUtils` silently rewrites legacy host and does no URL validity check on configured base."
+      ],
+      "suggestion": "Introduce typed parse results for boundary helpers (e.g., `{ok,value}|{ok:false,code,details}`) and add config validation for `VOICE_WEB_INTERFACE_URL` at startup so malformed inputs fail predictably.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_fallback_error_policy"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "inconsistent_invalid_date_policy",
+      "summary": "Date normalization mixes preservation and nulling strategies, making invalid-value handling unpredictable.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/sessionUrlUtils.ts"
+      ],
+      "evidence": [
+        "`normalizeDateField` returns original trimmed string when parse fails, but returns `null` for empty values and ISO for parseable values.",
+        "Other helpers in the same module collapse invalid values to empty/null, so consumers cannot rely on a uniform invalid-input contract.",
+        "No companion error metadata is returned to distinguish intentionally preserved raw values from parsing failures."
+      ],
+      "suggestion": "Use one invalid-value contract across shared utils (either strict rejection or explicit tagged raw/parsed variants) and keep it consistent across all normalizers used at route boundaries.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "implicit_fallback_error_policy"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "boundary_translation_spread_across_generic_utils",
+      "summary": "Legacy shape translation is embedded in generic shared utils instead of isolated at explicit module boundaries.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/crm/index.ts"
+      ],
+      "evidence": [
+        "`toTaskReferenceList` accepts multiple heterogeneous key names (`id/task_id/title/name/reference`) in one generic helper.",
+        "`toIdString` recursively accepts `_id/id/key`, mixing distinct external/internal identity conventions.",
+        "Hub routers simultaneously maintain flat and legacy alias paths, so boundary adaptation is occurring in multiple places instead of one clear adapter layer."
+      ],
+      "suggestion": "Move legacy-shape adaptation into dedicated ingress adapters per route family (CRM/VoiceBot) and keep shared utils strict and schema-driven to reduce cross-boundary ambiguity.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_adapter_leakage"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "legacy_and_canonical_paths_coexist_without_seam_contract",
+      "summary": "VoiceBot hub combines canonical and legacy routes without an explicit seam contract, increasing coupling and ambiguity.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/finops/index.ts"
+      ],
+      "evidence": [
+        "`voicebot/index.ts` mounts canonical flat routes and legacy aliases in parallel (`/`, `/sessions`, `/uploads`, `/LLMGate`).",
+        "No explicit precedence/deprecation policy exists in code-level API composition to indicate lifespan or conflict rules.",
+        "`finops/index.ts` demonstrates similar implicitness by stacking many routers at `'/'`, making collision analysis dependent on child-route internals."
+      ],
+      "suggestion": "Introduce explicit adapter routers for legacy paths with deprecation telemetry and keep canonical routers isolated; avoid mixed mounting styles in one hub to clarify handoff ownership.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "router_composition_drift"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "noop_runtime_query_wrappers",
+      "summary": "Runtime query helpers are repeated as no-op pass-through wrappers, adding indirection without policy value.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "`uploads.ts:38-40` defines `runtimeSessionQuery`/`runtimeMessageQuery` as identity functions.",
+        "`transcription.ts:17-21` repeats the same identity wrappers.",
+        "`messageHelpers.ts:51-54` exports the same identity wrappers again."
+      ],
+      "suggestion": "Replace file-local identity wrappers with one shared runtime-filter utility (or remove wrappers entirely where no filter is required) so runtime policy is explicit and not duplicated.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_filter_abstraction_drift"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_input_coercion_layers",
+      "summary": "Input coercion helpers are reimplemented per route module with slight signature drift, indicating missing shared boundary abstraction.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/finops/monthClosures.ts"
+      ],
+      "evidence": [
+        "`tickets.ts:51-69` defines local `toNonEmptyString` and `toObjectId`.",
+        "`projects.ts:22-33` defines different local `toRecord`/`toObjectId` semantics.",
+        "`expensesOperations.ts:17-51` and `monthClosures.ts:10-20` duplicate month parsing/validation logic with separate helper names."
+      ],
+      "suggestion": "Introduce shared typed request parsers (Zod-backed or equivalent) for common primitives (`ObjectId`, month strings, non-empty text) and reuse them across route modules.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_boundary_parsers"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "route_contract_fragmentation",
+      "summary": "Sibling route modules expose inconsistent response/error contracts, making integration seams unpredictable.",
+      "related_files": [
+        "backend/src/api/routes/auth.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/finops/monthClosures.ts",
+        "backend/src/api/routes/crm/finances.ts",
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "`auth.ts` and FinOps routes use `sendOk`/`AppError` flow.",
+        "`crm/finances.ts` and `crm/projects.ts` return direct `res.status(...).json(...)` with varying payload shapes.",
+        "`voicebot/llmgate.ts` uses `success/data/error/timestamp` envelope unrelated to other route conventions."
+      ],
+      "suggestion": "Define one route-boundary contract per API family (or globally), and enforce it via shared responder helpers and schema-typed handler wrappers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "inconsistent_route_boundary_protocol"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "distributed_session_access_logic",
+      "summary": "Voicebot session access checks are implemented in multiple local variants instead of one policy seam.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`transcription.ts:42-62` defines `hasSessionReadAccess` with local permission checks.",
+        "`uploads.ts` introduces separate `checkSessionAccess` flow (declared around `327+`).",
+        "`sessions.ts` uses a separate `sessionAccessUtils.resolve` path (`1688-1692`), resulting in at least three access seams."
+      ],
+      "suggestion": "Extract a single voicebot session access service with canonical read/update predicates and consume it from all routes to prevent drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "duplicated_access_policy_seams"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "oversized_route_modules_mix_concerns",
+      "summary": "Very large route files combine unrelated responsibilities, producing dense control flow and brittle local internals.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` is 6001 lines and mixes alias routing (`402-417`), permissions, session CRUD, CRM sync, project file APIs, event retries, and transcript/categorization mutations.",
+        "`performerspayments.ts` is 815 lines and mixes DB analytics, payment calculation, and Google Drive document workflows (`38+`, `24-32`).",
+        "`tickets.ts` (686 lines) combines read/list aggregation, status mutation, comments, and work-hours migration compatibility paths in one module."
+      ],
+      "suggestion": "Split each route file by cohesive use-cases (query/read, mutation, external integration, compatibility aliases) and move heavy orchestration into dedicated service modules.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fat_route_module_pattern"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "unvalidated_objectid_at_auth_boundary",
+      "summary": "Auth middleware converts user IDs to ObjectId without validating input shape first.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`roleGuard.ts` uses `new ObjectId(user.userId)` at line 47 without `ObjectId.isValid` guard.",
+        "`permission-manager.ts` uses `new ObjectId(user.userId)` at line 204 without prior validation.",
+        "A malformed `userId` from token parsing or legacy rows throws and is caught as 500, producing inconsistent API behavior for authentication failures."
+      ],
+      "suggestion": "Introduce a shared auth ID parser (e.g., `parsePerformerObjectId`) used by both middlewares. Return a deterministic 401/400 response for invalid identifiers instead of allowing constructor exceptions to fall into generic 500 handling.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_identity_boundary_validation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "role_permission_guard_contract_drift",
+      "summary": "Two primary access guards enforce different account-state and error-response contracts.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`roleGuard.ts` includes `is_banned: { $ne: true }` in performer lookup (line 49).",
+        "`permission-manager.ts` performer lookup omits `is_banned` (lines 203-206).",
+        "403 responses differ in schema and semantics (`allowed_roles` + role names vs `required_permissions`), forcing clients to branch on middleware-specific payloads."
+      ],
+      "suggestion": "Define a single shared performer-loading + denial-response contract for middleware boundaries (common banned/deleted checks and normalized error envelope fields) and reuse it in both guards.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_identity_boundary_validation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "session_id_validation_diverges_between_context_checks",
+      "summary": "Contextual permission checks use inconsistent session ID validation paths.",
+      "related_files": [
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "`checkSessionOwnership` validates `session_id` with `ObjectId.isValid` before DB query (lines 314-320).",
+        "`checkProjectAssignment` uses `new ObjectId(sessionId)` without validity guard (lines 344-348), creating throw-based control flow for malformed IDs.",
+        "The seam handles equivalent request context with two incompatible error paths, which complicates middleware composition and observability."
+      ],
+      "suggestion": "Centralize request ID extraction + validation for `session_id`/`project_id` into one utility that returns typed parse results, then consume it from all contextual checks and role/permission middlewares.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_identity_boundary_validation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "audit_logger_uses_ad_hoc_request_identity_cast",
+      "summary": "Audit logging seam bypasses typed auth context and reinterprets request identity locally.",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/projecttreeaudit.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`projecttreeaudit.ts` accepts plain `Request` and casts it to a local shape with optional `user/performer` (lines 52-56).",
+        "A canonical `AuthenticatedRequest` type already exists in `permission-manager.ts` (lines 165-178), but this logger does not use it.",
+        "Local casting creates weak coupling where actor identity fields can drift silently from middleware-populated request contracts."
+      ],
+      "suggestion": "Use a shared request auth-context type (or a small `resolveRequesterId(req)` utility in a common module) so audit logging and permission middleware consume the same identity seam.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "request_context_contract_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "voicebot_session_mutations_missing_acl",
+      "summary": "Multiple session mutation endpoints bypass per-session authorization entirely.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` updates session records in `/update_name` (2396-2421), `/update_access_level` (2536-2555), `/update_dialogue_tag` (2565-2588), `/update_participants` (2665-2716), and `/update_allowed_users` (2726-2759) without calling `sessionAccessUtils.resolve` or checking permissions against the target session.",
+        "A sibling endpoint in the same file (`/update_project`, 2446-2452) correctly performs session-level access validation, proving this is inconsistent rather than intentional.",
+        "`uploads.ts` contains an explicit reusable access gate (`checkSessionAccess`, 327-385), further highlighting missing gate usage in the listed session handlers."
+      ],
+      "suggestion": "Require a single session-level authorization guard for all session mutations: validate `session_id`, resolve session via shared helper, enforce required permission tier (`UPDATE`/`DELETE` as applicable), and only then execute writes. Apply this uniformly to all mutation routes in `sessions.ts`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "authz_gate_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "public_attachment_acl_bypass",
+      "summary": "Public attachment endpoint allows file retrieval without session authorization checks.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` exposes `router.get('/public_attachment/:session_id/:file_unique_id', publicAttachmentHandler)` (965) with no `PermissionManager.requirePermission` middleware.",
+        "`publicAttachmentHandler` (910-963) fetches and serves files by `(session_id, file_unique_id)` without `checkSessionAccess`.",
+        "By contrast, `message_attachment` route (842-875) requires `VOICEBOT_SESSIONS.READ_OWN` and explicitly calls `checkSessionAccess`, showing a stricter model exists but is bypassed by the public path."
+      ],
+      "suggestion": "Either protect `public_attachment` with the same auth + `checkSessionAccess` flow as `message_attachment`, or issue short-lived signed URLs scoped to actor/session instead of direct stable IDs.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "authz_gate_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "duplicated_access_resolution_seam",
+      "summary": "Authorization seam is duplicated across route modules, causing behavioral drift and uneven hardening.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` defines `sessionAccessUtils.resolve` (1088-1121) while `uploads.ts` defines `checkSessionAccess` (327-385); both encode similar ownership/public/restricted logic separately.",
+        "Handler integration is inconsistent: some routes compose through shared resolver (`sessions.ts` `/update_project`), others embed custom logic (`/save_create_tasks`, `/delete`, `/send_to_crm`) or no logic at all (`/update_name`, `/update_access_level`, `/update_dialogue_tag`, `/update_participants`, `/update_allowed_users`).",
+        "This seam fragmentation directly enabled missed checks and route-by-route policy divergence."
+      ],
+      "suggestion": "Extract one canonical `resolveVoicebotSessionAccess` service (permission + session visibility + reason code) and require all session/attachment handlers to call it through a thin middleware or helper wrapper; remove ad-hoc authorization branches from individual handlers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "authz_gate_fragmentation"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "legacy_boundary_erosion_crm_routes",
+      "summary": "Active CRM routes depend on `crm/legacy` internals, so legacy is functioning as primary package space.",
+      "related_files": [
+        "backend/src/api/routes/crm/customers.ts",
+        "backend/src/api/routes/crm/legacy/projectgroups.ts",
+        "backend/src/api/routes/crm/legacy/botcommands.ts"
+      ],
+      "evidence": [
+        "`customers.ts` imports `./legacy/projecttreeaudit.js`, coupling current CRUD flows to legacy folder internals.",
+        "Blind packet coupling matrix reports `backend/src/api/routes/crm/ \u2192 backend/src/api/routes/crm/legacy/` = 7 edges, which is too high for a supposed migration-only namespace.",
+        "Legacy files (`projectgroups.ts`, `botcommands.ts`) still expose active production endpoints, not compatibility stubs."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/api/routes/crm/project-tree/` and move `projecttreeaudit` there as canonical module. 2) Move active legacy routes into purpose folders (`crm/config/botcommands.ts`, `crm/payments/performersPayments.ts`, `crm/project-groups/projectGroups.ts`) and keep `crm/legacy/*` as thin re-export adapters for one release. 3) Update imports in `customers.ts` and sibling routes to new canonical paths. 4) Validate with `rg -n \"crm/legacy|legacy/projecttreeaudit\" backend/src/api/routes/crm` (should only show adapters), then `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_boundary_erosion"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "performerspayments_multi_domain_module",
+      "summary": "One route module owns analytics, document generation, and external Drive orchestration at once.",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/crm/dictionary.ts"
+      ],
+      "evidence": [
+        "`performerspayments.ts` imports finance/stat libs (`dayjs`, lodash) and document infra (`googleapis`, `number-to-words-ru`) and executes both concerns in route handlers.",
+        "The same file handles DB aggregation (`WORK_HOURS`, `TASKS`) and document side effects (Google Docs/Drive copy, folder operations), signaling mixed ownership.",
+        "`dictionary.ts` repeats the same pattern by acting as an aggregation hub for unrelated dictionaries (tree, performers, task taxonomy, epics, income types) in one route-level module."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/services/crm/payments/` with `financeStats.ts` and `actDocumentService.ts`; keep route file as orchestration-only (`req/res` + validation + service calls). 2) Create `backend/src/services/crm/dictionaries/` and split dictionary loaders by bounded context (`projectTreeLoader`, `taskTypeLoader`, `epicsLoader`, `incomeTypeLoader`). 3) Move code in this order: pure transforms first, then external API calls, then route thin wrappers. 4) Update imports and run `cd backend && npm run build` plus targeted grep checks `rg -n \"google\\.docs|google\\.drive\" backend/src/api/routes` (should no longer match route files).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "route_owns_service_logic"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "voicebot_route_folder_hosts_service_code",
+      "summary": "Voicebot `routes/` folder contains reusable domain/DB helper module, not just transport adapters.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "`messageHelpers.ts` exports DB/domain operations (`ensureMessageCanonicalTranscription`, categorization cleanup builders) with no Express router surface.",
+        "`llmgate.ts` embeds OpenAI client lifecycle and provider mapping directly in a route module, mixing transport and external-service concerns in package placement.",
+        "Directory profile shows `backend/src/api/routes/voicebot/` as a 10-file high-LOC area (9088 LOC) with broad fan-out (avg_fan_out 5.4), consistent with route layer absorbing service responsibilities."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/services/voicebot/messages/` and move `messageHelpers.ts` logic there (`messageCanonicalization.ts`, `categorizationCleanup.ts`). 2) Create `backend/src/services/voicebot/llm/llmGateClient.ts` and keep `llmgate.ts` as request validation + response mapping only. 3) Update route imports to new services. 4) Validate with `rg -n \"ensureMessageCanonicalTranscription|new OpenAI\\(\" backend/src/api/routes/voicebot` (route hits should reduce to wrappers), then `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "route_owns_service_logic"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "voicebot_dual_surface_migration_stall",
+      "summary": "Voicebot hub exposes dual legacy and flat mount surfaces, preserving migration state as permanent architecture.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "`index.ts` mounts both flat routes and legacy aliases (`/sessions`, `/uploads`, `/LLMGate`), so responsibility is split between canonical and compatibility pathing.",
+        "Alias casing (`/LLMGate`) differs from modern lowercase conventions and keeps legacy naming at primary boundary.",
+        "The same hub mixes compatibility and canonical mounts in one layer instead of isolating compatibility adapters."
+      ],
+      "suggestion": "Staged reorg plan: 1) Introduce explicit `backend/src/api/routes/voicebot/legacy/index.ts` that owns all compatibility aliases. 2) Keep `voicebot/index.ts` canonical-only (`session_done`, upload, persons, permissions, transcription, llmgate under normalized lowercase path). 3) Route compatibility traffic through the legacy router with deprecation logging and expiry date. 4) Update import wiring and validate with `rg -n \"LLMGate|/sessions|/uploads\" backend/src/api/routes/voicebot` and `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "migration_surface_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_list_god_component",
+      "summary": "Sessions list page mixes routing, persistence, orchestration, and rendering in one monolith",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/components/voice/MeetingCard.tsx",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "`SessionsListPage.tsx` contains URL query schema, localStorage restore/persist, FAB sync interval/event wiring, bulk delete/merge mutations, and full table column/render logic in one component body.",
+        "`MeetingCard.tsx` and `PossibleTasks.tsx` repeat adjacent orchestration concerns (session-side effects, tag persistence, task mutation flows), indicating weak ownership boundaries in the voice UI layer."
+      ],
+      "suggestion": "Split voice session UI into domain hooks/modules: `useSessionListQueryState`, `useFabSessionSync`, `useBulkSessionActions`, and a pure `SessionsTable` view. Keep `MeetingCard`/`PossibleTasks` focused on presentation plus narrow action adapters, moving persistence and polling logic into shared hooks.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voice_ui_orchestration_without_feature_boundaries"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "processor_handler_template_duplication",
+      "summary": "Prompt processor handlers duplicate the same execution skeleton with drift-prone variations",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts"
+      ],
+      "evidence": [
+        "`customPrompt.ts` and `questionsHandler.ts` both implement identical lifecycle phases: validate ids, load message/session, skip on empty categorization, OpenAI request, write processor success state, write processor failure state, log result.",
+        "Field naming and update paths differ (`processors_data.<name>.*` vs mixed `questioning_*` fields), showing copy-and-modify evolution instead of a single processor contract."
+      ],
+      "suggestion": "Introduce a shared processor executor (e.g., `runMessageProcessor`) that standardizes load/guard/update/error flow and accepts strategy callbacks for prompt/instructions + output normalization. Unify persisted processor field layout across custom prompts and questioning.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "copied_worker_orchestration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "transcribe_handler_multi_responsibility",
+      "summary": "Transcribe handler combines transport, DSP, policy, tasking, and realtime side-effects",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts"
+      ],
+      "evidence": [
+        "`handleTranscribeJob` performs Telegram file recovery, fallback text path, dedup reuse-by-hash, large-file splitting/transcription, retry/quota policy, session corruption state writes, codex task creation, categorization enqueue, and socket event emission in one long routine.",
+        "Adjacent modules (`processingLoop.ts`, `ingressHandlers.ts`) also contain lifecycle/retry orchestration, making behavior spread across files with overlapping responsibilities."
+      ],
+      "suggestion": "Refactor into a pipeline with explicit stages: `resolveAudioSource`, `transcribeContent`, `persistTranscriptionResult`, `runPostTranscriptionHooks` (codex/categorization/events), and `applyRetryPolicy`. Keep `handleTranscribeJob` as a coordinator over typed stage results.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "copied_worker_orchestration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_grid_scaffold_duplication",
+      "summary": "FinOps grids duplicate month-pinning and table-scaffold mechanics across modules",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx"
+      ],
+      "evidence": [
+        "All three grids implement similar pinned-month localStorage handling, ordered month composition, per-month column generation, and summary-cell type casting.",
+        "Each file carries bespoke but structurally equivalent table shell logic, increasing change cost for shared behavior updates (pinning, month header UX, summary formatting)."
+      ],
+      "suggestion": "Extract a shared `FinancialMonthTable` scaffold/hook (`usePinnedMonths`, `buildOrderedMonthColumns`, summary helpers) and keep each grid responsible only for domain row mapping and cell render specifics.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_finops_table_abstraction"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "store_slice_overaggregation",
+      "summary": "UI stores combine multiple modal/workflow domains, creating broad mutable surfaces",
+      "related_files": [
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/projectsStore.ts",
+        "app/src/store/permissionsStore.ts"
+      ],
+      "evidence": [
+        "`sessionsUIStore.ts` bundles participant modal, access users modal, categorization selection, two sort preferences, tickets modal editing state, and title-generation workflow in one store.",
+        "`projectsStore.ts` and `permissionsStore.ts` similarly merge fetch lifecycle, cache policy, mutation side-effects, and UI messaging concerns, expanding blast radius of local changes."
+      ],
+      "suggestion": "Split stores into narrower domain slices (`sessionParticipantsUI`, `sessionTicketsUI`, `sessionSortPrefs`, `projectsDataStore`, `permissionsAdminStore`) and move notification side-effects into service/adaptor helpers to reduce cross-feature coupling.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "state_slice_boundary_drift"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_routing_not_fully_retired",
+      "summary": "Deprecated `runtime_tag` isolation is still part of active query/index logic across routes and workers.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` still defines startup indexes keyed by `runtime_tag` (`TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG`, `WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG`).",
+        "`backend/src/api/routes/voicebot/sessions.ts` repeatedly applies `mergeWithRuntimeFilter(..., { field: 'runtime_tag', ... })` and persists `runtime_tag` in write payloads.",
+        "`processingLoop.ts` and `transcribeHandler.ts` both define `runtimeQuery` wrappers over `mergeWithRuntimeFilter` with `field: 'runtime_tag'`.",
+        "`backend/src/api/routes/voicebot/uploads.ts` still reads and emits `session.runtime_tag` in socket payloads."
+      ],
+      "suggestion": "Complete the runtime isolation cutover by removing `runtime_tag` from active filters/index contracts and replacing remaining selectors with environment/database-level isolation only; keep read-only backward compatibility in dedicated migration scripts rather than hot paths.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_isolation_migration_incomplete"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "voicebot_dual_route_surface_persists",
+      "summary": "Canonical and legacy VoiceBot APIs are still exposed simultaneously, leaving migration in an unfinished steady state.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`backend/src/api/routes/voicebot/index.ts` mounts flat routers (`'/'`) and also mounts legacy prefixed routers (`'/sessions'`, `'/uploads'`, `'/transcription'`, `'/persons'`, `'/permissions'`, `'/LLMGate'`).",
+        "`backend/src/api/routes/voicebot/sessions.ts` still registers multiple POST aliases via `registerPostAlias(...)`, including `'/close_session' -> '/session_done'`.",
+        "`backend/src/api/routes/voicebot/uploads.ts` independently still implements `POST /close_session`, creating duplicate close handlers in different routers."
+      ],
+      "suggestion": "Constrain legacy paths to a single compatibility gateway with explicit sunset controls (feature flag + telemetry + removal date), and route all close-session semantics through one backend handler to avoid split behavior.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_api_migration_half_open"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "crm_legacy_dependencies_still_in_mainline",
+      "summary": "Active CRM routes still depend on legacy modules and legacy identifier fallbacks, indicating unfinished domain normalization.",
+      "related_files": [
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/crm/legacy/projecttreeaudit.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "`backend/src/api/routes/crm/projects.ts` imports and uses `./legacy/projecttreeaudit.js` from a non-legacy mainline route.",
+        "`backend/src/api/routes/crm/tickets.ts` still performs legacy `ticket_id` reconciliation (`legacyTicketId` fallback lookup by `{ id }` and optional `{ _id }`)."
+      ],
+      "suggestion": "Extract legacy adapters into an explicit migration boundary (single normalization module), and make mainline routes operate only on canonical IDs/types after adapter conversion.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "crm_contract_migration_incomplete"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "duplicated_helper_primitives_across_voicebot",
+      "summary": "Small utility primitives are copied across modules instead of shared, increasing mechanical drift and maintenance cost.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`toObjectIdOrNull` is defined in `sessionsSharedUtils.ts` and redefined with equivalent behavior in `transcribeHandler.ts`.",
+        "`runtimeQuery` wrappers are separately declared in `transcribeHandler.ts` and `processingLoop.ts` with the same `mergeWithRuntimeFilter` configuration."
+      ],
+      "suggestion": "Create a small shared `voicebot/queryUtils` module for ID normalization and runtime query shaping, then delete local clones and import canonical helpers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "mechanical_copy_paste_helpers"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "duplicated_upload_error_adapter_logic",
+      "summary": "Uploads router contains copy-pasted Multer error-to-response adapters with only minor differences.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`uploadAnyWithErrorHandling` and `uploadImageWithErrorHandling` in `uploads.ts` duplicate the same error branching (`MulterError` size check, generic error mapping, default fallback).",
+        "The project already has centralized response/error middleware (`response.ts`, `error.ts`), but this route keeps bespoke in-route mapping logic."
+      ],
+      "suggestion": "Unify file-upload error mapping in one reusable helper/middleware (optionally integrated with `sendError`/`AppError`) and parameterize only size-limit and request-id behavior.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "mechanical_copy_paste_helpers"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "crm_routes_missing_auth_guard",
+      "summary": "Most CRM routers are mounted without auth/role middleware, while only reports.ts enforces admin gating.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/crm/reports.ts",
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/crm/customers.ts",
+        "backend/src/api/routes/crm/import.ts"
+      ],
+      "evidence": [
+        "crm/index.ts mounts 18 subrouters but does not apply router.use(authMiddleware) or router.use(requireAdmin).",
+        "rg shows auth middleware usage in CRM only in reports.ts; tickets/projects/customers/import/uploads/legacy handlers are directly exposed."
+      ],
+      "suggestion": "Apply a consistent CRM authorization boundary in crm/index.ts (at least authMiddleware; requireAdmin or permission-based guard per route group). Then explicitly mark any intentional public CRM endpoints in code comments and tests.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "auth_boundary_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "finops_core_routes_unguarded",
+      "summary": "Fund and plan-fact routes are unauthenticated while sibling finops routes enforce auth/admin checks.",
+      "related_files": [
+        "backend/src/api/routes/fund.ts",
+        "backend/src/api/routes/planFact.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/finops/monthClosures.ts",
+        "backend/src/api/routes/index.ts"
+      ],
+      "evidence": [
+        "fund.ts and planFact.ts handlers have no authMiddleware/requireAdmin in route definitions.",
+        "finops subroutes (expensesOperations.ts, monthClosures.ts, fxRates.ts, expensesCategories.ts) explicitly apply authMiddleware and requireAdmin for write operations."
+      ],
+      "suggestion": "Enforce auth on fund/plan-fact endpoints to match FinOps policy; if read-only access differs, encode it with explicit permission checks and centralized route-level middleware.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_boundary_fragmentation"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "mixed_response_contracts",
+      "summary": "Route modules use incompatible success/error envelopes, producing inconsistent client failure semantics.",
+      "related_files": [
+        "backend/src/api/routes/auth.ts",
+        "backend/src/api/routes/finops/expensesCategories.ts",
+        "backend/src/api/routes/crm/customers.ts",
+        "backend/src/api/routes/crm/epics.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "auth.ts and finops routes use sendOk/AppError contract, while CRM routes frequently return res.status(...).json({ error: String(error) }).",
+        "llmgate.ts returns { success: boolean, data/error } instead of { data, error } envelope used by response middleware."
+      ],
+      "suggestion": "Standardize all route responses on middleware response helpers and typed error codes; migrate legacy ad-hoc payloads behind a compatibility adapter only where external clients still require old shapes.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "boundary_contract_drift"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "route_style_drift_across_domains",
+      "summary": "API surface mixes RPC-style POST endpoints and RESTful resources in the same backend, without a clear boundary contract.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/finops/fxRates.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "CRM routes use POST for read/get/list/delete actions (e.g., /get-by-id, /list, /delete).",
+        "FinOps routes in same API use GET/POST/PATCH/DELETE resource semantics, causing mixed client expectations for idempotency and caching."
+      ],
+      "suggestion": "Define per-domain API style rules (RPC vs REST), document them, and migrate endpoints in batches with compatibility aliases and deprecation headers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "boundary_contract_drift"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "path_naming_convention_fragmented",
+      "summary": "Sibling routes use conflicting path naming conventions (camelCase, snake_case, kebab-case, Pascal-like casing).",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/crm/legacy/tasktypes.ts",
+        "backend/src/api/routes/crm/legacy/projectgroups.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "crm/index.ts mixes /taskTypes, /project_groups, /project_tree, /bot-commands, /performers-payments.",
+        "voicebot/index.ts mounts /LLMGate while llmgate.ts path is /run_prompt and other voicebot paths are lowercase."
+      ],
+      "suggestion": "Adopt one URL naming convention (kebab-case recommended), add route aliases for backward compatibility, and add a route lint check to block new nonconforming paths.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "boundary_contract_drift"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "finops_router_reexports_parent_routes",
+      "summary": "FinOps router composes parent-level fund/plan-fact modules, creating duplicated mount points and blurred module direction.",
+      "related_files": [
+        "backend/src/api/routes/finops/index.ts",
+        "backend/src/api/routes/index.ts",
+        "backend/src/api/routes/fund.ts",
+        "backend/src/api/routes/planFact.ts"
+      ],
+      "evidence": [
+        "finops/index.ts imports ../fund.ts and ../planFact.ts and mounts them at '/'.",
+        "index.ts separately mounts fundRouter and planFactRouter directly, yielding two topologies for the same capabilities."
+      ],
+      "suggestion": "Move fund/plan-fact into dedicated finops submodules (or keep only one canonical mount path), then remove duplicate mounting and add contract tests for canonical endpoint paths.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "route_graph_duplication"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_aliases_and_duplicate_entrypoints",
+      "summary": "Migration shims remain active as first-class API entry points, extending old/new contract overlap.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/crm/voicebot.ts",
+        "backend/src/api/routes/crm/index.ts"
+      ],
+      "evidence": [
+        "voicebot/index.ts mounts flat '/' and legacy '/sessions' '/uploads' '/LLMGate' aliases simultaneously.",
+        "sessions.ts registers alias behavior (sessions_in_crm/in_crm) while CRM proxy route also exposes restart_create_tasks and sessions_in_crm, duplicating integration path."
+      ],
+      "suggestion": "Publish a migration cutoff plan: keep one canonical endpoint per capability, convert duplicates to thin 301/410-compatible adapters with telemetry, then remove legacy mounts after client confirmation windows.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "route_graph_duplication"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "crm_legacy_coupled_into_primary_package",
+      "summary": "Legacy CRM package is still tightly coupled to active CRM routes, reducing navigability and ownership clarity.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/crm/legacy/projecttree.ts",
+        "backend/src/api/routes/crm/legacy/projectgroups.ts",
+        "backend/src/api/routes/crm/projects.ts"
+      ],
+      "evidence": [
+        "holistic structure: crm/ has 14 files (3085 LOC) and crm/legacy has 6 files (1765 LOC), both marked production.",
+        "coupling matrix shows crm/ \u2192 crm/legacy import edge count 7, so legacy is not isolated."
+      ],
+      "suggestion": "Staged reorg plan: 1) create `backend/src/api/routes/crm/tree/` and `backend/src/api/routes/crm/payments/` for still-active legacy logic; 2) move files in order: projecttree.ts/projectgroups.ts/projecttreeaudit.ts, then performerspayments.ts, then tasktypes.ts/botcommands.ts; 3) keep temporary re-export stubs in `legacy/` for one release; 4) update imports with `rg -n \"crm/legacy\" backend/src/api/routes/crm backend/src` and replace; 5) validate with `cd backend && npm run build && npm run test:parallel-safe`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_layout_entanglement"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "identity_query_wrappers_add_indirection",
+      "summary": "Runtime query helper abstractions currently do no transformation and only add call-site noise.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/permissions.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "transcription.ts defines runtimeSessionQuery/runtimeMessageQuery as identity functions.",
+        "permissions.ts defines runtimePermissionsLogQuery(query) => query; wrappers are then threaded through find/findOne/update calls."
+      ],
+      "suggestion": "Either inline these calls now, or replace with one shared runtime-scope utility that enforces actual policy fields; avoid per-file identity wrappers with identical signatures.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "placeholder_abstractions"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "placeholder_migration_scaffolding_persisted",
+      "summary": "Scaffolding artifacts from migration (placeholder wrappers and repetitive migration headers) remain in production routes without behavioral value.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/permissions.ts",
+        "backend/src/api/routes/voicebot/persons.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "Multiple files include large migration provenance comments but no linked removal criteria.",
+        "No-op runtime wrapper helpers and repeated boilerplate patterns suggest generated scaffolding left in place after transition."
+      ],
+      "suggestion": "Create a migration debt cleanup pass: remove no-op scaffolding, convert provenance comments into tracked changelog/doc links, and enforce a lint rule forbidding identity helper wrappers in route modules.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "placeholder_abstractions"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "voicebot_sessions_overloaded_module_boundary",
+      "summary": "The sessions route file has become a subsystem-in-a-file, obscuring ownership and architectural boundaries.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/index.ts"
+      ],
+      "evidence": [
+        "sessions.ts is 6001 lines and combines endpoints for session listing/lifecycle, taskflow operations, categorization edits, socket queue side-effects, and compatibility aliases.",
+        "voicebot package profile totals 9088 LOC across 10 files, with one dominant file concentrating capability ownership."
+      ],
+      "suggestion": "Split sessions.ts by capability (`sessions.lifecycle.ts`, `sessions.taskflow.ts`, `sessions.categorization.ts`, `sessions.read.ts`) and keep index.ts as composition-only router wiring.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "monolithic_route_modules"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "ad_hoc_cross_route_proxy_seams",
+      "summary": "CRM-to-Voicebot integration is implemented as ad-hoc HTTP proxying at route layer, making boundary behavior inconsistent and hard to reason about.",
+      "related_files": [
+        "backend/src/api/routes/crm/voicebot.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/crm/reports.ts"
+      ],
+      "evidence": [
+        "crm/voicebot.ts manually forwards tokens from x-authorization/cookies and remaps response payloads/statuses via fetch.",
+        "Other integrations (reports) use direct service calls instead of route-to-route proxying, so seam strategy is inconsistent within CRM."
+      ],
+      "suggestion": "Replace route-to-route fetch proxy with a shared internal service function for restart/create-tasks and session reads; centralize auth context conversion once and call the service from both CRM and voicebot routers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "integration_seam_entropy"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "validation_and_mapping_logic_scattered",
+      "summary": "Request validation and payload normalization are repeatedly reimplemented per route, leading to structural drift and mixed behavior.",
+      "related_files": [
+        "backend/src/api/routes/planFact.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/crm/customers.ts",
+        "backend/src/api/routes/crm/epics.ts"
+      ],
+      "evidence": [
+        "FinOps routes use local parser helpers and AppError patterns; CRM routes manually mutate req.body objects and ObjectId conversion logic per handler.",
+        "No common schema boundary is used across these sibling domains, so validation strictness and error details vary by file."
+      ],
+      "suggestion": "Introduce shared route-boundary schemas (Zod) and mappers per domain (`crmSchemas`, `finopsSchemas`), then migrate handlers to parse once and pass typed payloads into service functions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "boundary_contract_drift"
+    }
+  ],
+  "review_quality": {
+    "batch_count": 9,
+    "dimension_coverage": 0.257,
+    "evidence_density": 1.434,
+    "high_score_missing_issue_note": 0,
+    "finding_pressure": 126.826,
+    "dimensions_with_findings": 13
+  },
+  "review_scope": {
+    "reviewed_files_count": 124,
+    "successful_batch_count": 9,
+    "full_sweep_included": true,
+    "total_files": 41,
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ]
+  },
+  "reviewed_files": [
+    "backend/src/utils/logger.ts",
+    "backend/src/constants.ts",
+    "backend/src/services/db.ts",
+    "backend/src/api/middleware/response.ts",
+    "backend/src/api/middleware/error.ts",
+    "backend/src/api/middleware/auth.ts",
+    "backend/src/api/middleware/roleGuard.ts",
+    "backend/src/permissions/permission-manager.ts",
+    "backend/src/utils/crmMiniappShared.ts",
+    "backend/src/permissions/permissions-config.ts",
+    "backend/src/api/routes/crm/codex.ts",
+    "crm/index.ts",
+    "finops/index.ts",
+    "voicebot/index.ts",
+    "voicebot/sessionUrlUtils.ts",
+    "voicebot/sessionsSharedUtils.ts",
+    "backend/src/api/routes/voicebot/sessions.ts",
+    "backend/src/api/routes/crm/legacy/performerspayments.ts",
+    "backend/src/api/routes/voicebot/uploads.ts",
+    "backend/src/api/routes/crm/tickets.ts",
+    "backend/src/api/routes/finops/expensesOperations.ts",
+    "backend/src/api/routes/auth.ts",
+    "backend/src/api/routes/crm/projects.ts",
+    "backend/src/api/routes/crm/epics.ts",
+    "backend/src/api/routes/voicebot/llmgate.ts",
+    "backend/src/api/routes/voicebot/sessionUrlUtils.ts",
+    "backend/src/api/routes/voicebot/permissions.ts",
+    "backend/src/api/routes/crm/dictionary.ts",
+    "backend/src/api/routes/voicebot/transcription.ts",
+    "backend/src/api/routes/crm/finances.ts",
+    "backend/src/api/routes/voicebot/persons.ts",
+    "backend/src/api/routes/finops/monthClosures.ts",
+    "backend/src/api/routes/voicebot/messageHelpers.ts",
+    "backend/src/api/routes/crm/legacy/projecttreeaudit.ts",
+    "backend/src/api/routes/crm/customers.ts",
+    "backend/src/api/routes/voicebot/index.ts",
+    "backend/src/api/routes/crm/legacy/botcommands.ts",
+    "backend/src/api/routes/crm/legacy/projectgroups.ts",
+    "app/e2e/voice-fab-lifecycle.spec.ts",
+    "app/src/components/NotificationsDrawer.tsx",
+    "app/src/components/PlanFactGrid.tsx",
+    "app/src/components/crm/CRMKanban.tsx",
+    "app/src/components/crm/projects/EditProject.tsx",
+    "app/src/components/voice/AudioUploader.tsx",
+    "app/src/components/voice/Categorization.tsx",
+    "app/src/components/voice/MeetingCard.tsx",
+    "app/src/components/voice/PossibleTasks.tsx",
+    "app/src/components/voice/SessionLog.tsx",
+    "app/src/components/voice/TranscriptionTableRow.tsx",
+    "app/src/pages/AnalyticsPage.tsx",
+    "app/src/pages/PlanFactPage.tsx",
+    "app/src/pages/operops/CRMPage.tsx",
+    "app/src/pages/operops/FinancesPerformersPage.tsx",
+    "app/src/pages/operops/ProjectsTree.tsx",
+    "app/src/pages/voice/SessionPage.tsx",
+    "app/src/pages/voice/SessionsListPage.tsx",
+    "app/src/services/guideDirectoryConfig.tsx",
+    "app/src/store/permissionsStore.ts",
+    "app/src/store/projectsStore.ts",
+    "app/src/store/sessionsUIStore.ts",
+    "backend/scripts/voicebot-close-inactive-sessions.ts",
+    "backend/src/miniapp/routes/index.ts",
+    "backend/src/services/voicebot/voicebotWebmDedup.ts",
+    "backend/src/voicebot_tgbot/ingressHandlers.ts",
+    "backend/src/workers/voicebot/handlers/processingLoop.ts",
+    "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+    "miniapp/src/components/ASTrackTime.tsx",
+    "app/src/components/BonusesGrid.tsx",
+    "app/src/components/crm/CRMCreateEpic.tsx",
+    "app/src/components/crm/CRMCreateTicket.tsx",
+    "app/src/components/crm/WorkHoursSidebar.tsx",
+    "app/src/components/crm/finances/PaymentForm.tsx",
+    "app/src/components/crm/projects/EditCustomer.tsx",
+    "app/src/components/voice/AccessUsersModal.tsx",
+    "app/src/components/voice/AddParticipantModal.tsx",
+    "app/src/components/voice/CategorizationStatusColumn.tsx",
+    "app/src/constants/crm.ts",
+    "app/src/pages/DirectoriesPage.tsx",
+    "app/src/pages/directories/AgentsPage.tsx",
+    "app/src/pages/directories/EmployeesSalariesPage.tsx",
+    "app/src/pages/operops/taskPageUtils.ts",
+    "app/src/services/types.ts",
+    "app/src/utils/voiceTimeline.ts",
+    "backend/scripts/backfill-work-hours-ticket-db-id.ts",
+    "backend/scripts/runtime-tag-backfill.ts",
+    "backend/scripts/summarize-mcp-watchdog.ts",
+    "backend/src/api/routes/crm/legacy/projecttree.ts",
+    "backend/src/api/routes/crm/uploads.ts",
+    "backend/src/api/routes/finops/employees.ts",
+    "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+    "backend/src/services/bdClient.ts",
+    "backend/src/services/finopsFxRates.ts",
+    "backend/src/services/google/sheets.ts",
+    "backend/src/services/reports/jiraStyleReport.ts",
+    "backend/src/services/voicebot/voicebotDoneNotify.ts",
+    "backend/src/voicebot_tgbot/activeSessionMapping.ts",
+    "backend/src/voicebot_tgbot/codexReviewCallbacks.ts",
+    "backend/src/workers/voicebot/handlers/allCustomPrompts.ts",
+    "backend/src/workers/voicebot/handlers/categorizeHandler.ts",
+    "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+    "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+    "backend/src/workers/voicebot/handlers/customPrompt.ts",
+    "backend/src/workers/voicebot/handlers/finalizationHandler.ts",
+    "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+    "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+    "miniapp/src/components/ASChangeStatus.tsx",
+    "miniapp/src/components/OneTicket.tsx",
+    "app/src/components/ExpensesGrid.tsx",
+    "app/src/components/codex/CodexIssueDetailsCard.tsx",
+    "app/src/pages/directories/ClientsProjectsRatesPage.tsx",
+    "backend/src/api/routes/crm/figma.ts",
+    "backend/src/api/routes/crm/import.ts",
+    "backend/src/api/routes/crm/index.ts",
+    "backend/src/api/routes/crm/legacy/tasktypes.ts",
+    "backend/src/api/routes/crm/reports.ts",
+    "backend/src/api/routes/crm/voicebot.ts",
+    "backend/src/api/routes/crm/warehouse.ts",
+    "backend/src/api/routes/finops/expensesCategories.ts",
+    "backend/src/api/routes/finops/fxRates.ts",
+    "backend/src/api/routes/finops/index.ts",
+    "backend/src/api/routes/fund.ts",
+    "backend/src/api/routes/index.ts",
+    "backend/src/api/routes/planFact.ts",
+    "backend/src/api/routes/uploads.ts"
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "codex",
+    "run_stamp": "20260304_084507",
+    "created_at": "2026-03-04T08:53:11+00:00",
+    "batch_count": 9,
+    "batch_indexes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "packet_path": "/home/strato-space/copilot/.desloppify/review_packet_blind.json",
+    "packet_sha256": "881c6b90c14e8eb542157be86af11a75ec187e271f348a5adfb5d6c93c8ada0d"
+  },
+  "assessment_coverage": {
+    "scored_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "selected_dimensions": [
+      "cross_module_architecture",
+      "convention_outlier",
+      "error_consistency",
+      "abstraction_fitness",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "ai_generated_debt",
+      "incomplete_migration",
+      "package_organization",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "design_coherence"
+    ],
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ],
+    "missing_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "initialization_coupling",
+      "dependency_health",
+      "test_strategy"
+    ]
+  }
+}

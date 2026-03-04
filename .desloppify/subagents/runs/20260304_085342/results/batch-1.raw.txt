@@ -1,0 +1,113 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 1,
+  "assessments": {
+    "abstraction_fitness": 76.0,
+    "mid_level_elegance": 79.0,
+    "low_level_elegance": 81.0
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "backend/src/api/middleware/roleGuard.ts:17 defines RoleGuardRequest with its own user/db shape, while backend/src/api/middleware/auth.ts:25 and backend/src/permissions/permission-manager.ts:165 define parallel auth request contracts.",
+        "roleGuard.ts:57-58 force-casts performer role fields (`as RoleKey`, `as RoleKey[]`) instead of using a shared typed performer/auth context from existing middleware contracts."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 68.0,
+        "indirection_cost": 74.0,
+        "interface_honesty": 71.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "roleGuard.ts:46-50 re-queries the performer from DB even though auth middleware already resolves and attaches performer (`auth.ts:117-126`), creating duplicated seam choreography on every guarded route.",
+        "permission-manager middleware has the same repeated 'user/db checks + performer lookup' pattern (`permission-manager.ts:194-206`), indicating boundary logic is spread instead of centralized."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "roleGuard.ts:47 constructs `new ObjectId(user.userId)` without `ObjectId.isValid`, so malformed IDs throw and drop into generic 500 handler (`roleGuard.ts:86-88`) instead of deterministic auth rejection.",
+        "auth middleware already uses a precise guard (`auth.ts:90`) before `new ObjectId`, showing a safer local pattern is available but not applied here."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated-auth-request-contracts",
+      "summary": "Role guard defines a parallel request/auth contract instead of reusing the canonical authenticated request type.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "roleGuard.ts:17-26 introduces `RoleGuardRequest` with optional `user`/`db` fields that overlap with `AuthenticatedRequest` in auth.ts:25-43 and permission-manager.ts:165-178.",
+        "roleGuard.ts:57-58 uses casts (`as RoleKey`, `as RoleKey[]`) because the local type is weaker than the already-established performer/auth types."
+      ],
+      "suggestion": "Unify middleware contracts around a single exported authenticated request/performer type and remove per-middleware request redefinitions; eliminate force-casts by validating role fields at the auth boundary.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_context_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "repeated-performer-lookup-seam",
+      "summary": "Role guard repeats performer lookup that upstream auth middleware already performs, creating noisy and expensive integration seams.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "roleGuard.ts:46-50 performs a DB read for performer each call, despite auth.ts:117-126 already attaching `performer` and `db` onto request.",
+        "permission-manager.ts:202-207 repeats the same lookup sequence, reinforcing seam duplication across authorization middlewares."
+      ],
+      "suggestion": "Introduce a shared authorization context resolver (or trust the `req.performer` populated by auth middleware) so role/permission guards consume one resolved identity object instead of reloading it.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_context_fragmentation"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "invalid-objectid-path-returns-500",
+      "summary": "Role guard turns malformed user IDs into internal errors instead of explicit authentication failures.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts"
+      ],
+      "evidence": [
+        "roleGuard.ts:47 directly calls `new ObjectId(user.userId)`; invalid IDs throw and are caught only by the broad catch block returning 500 (roleGuard.ts:86-88).",
+        "auth.ts:90 demonstrates the intended local defensive pattern with `ObjectId.isValid(payload.userId)` before constructing ObjectId."
+      ],
+      "suggestion": "Validate `user.userId` with `ObjectId.isValid` and return 401/400 before DB query; reserve catch-path 500 for true unexpected runtime failures.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "auth_context_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Authentication/authorization context is modeled independently per middleware instead of through one canonical request identity abstraction.",
+      "Authorization seams perform identity resolution repeatedly rather than composing from one authenticated context."
+    ],
+    "likely_symptoms": [
+      "duplicated-auth-request-contracts",
+      "repeated-performer-lookup-seam",
+      "invalid-objectid-path-returns-500"
+    ],
+    "possible_false_positives": []
+  }
+}

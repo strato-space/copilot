@@ -148,17 +148,22 @@ const formatTranscriptionErrorLabel = (errorCode: string): string => {
     return labels[normalized] || normalized;
 };
 
+const getTranscriptionText = (row: VoiceBotMessage): string =>
+    typeof row.transcription_text === 'string' ? row.transcription_text.trim() : '';
+
+const getTranscriptionErrorCode = (row: VoiceBotMessage): string =>
+    typeof (row as Record<string, unknown>).transcription_error === 'string'
+        ? String((row as Record<string, unknown>).transcription_error).trim()
+        : '';
+
 const resolveFallbackBodyText = (row: VoiceBotMessage): string => {
-    const transcriptionText = typeof row.transcription_text === 'string' ? row.transcription_text.trim() : '';
+    const transcriptionText = getTranscriptionText(row);
     if (transcriptionText) return transcriptionText;
 
     const plainText = typeof row.text === 'string' ? row.text.trim() : '';
     if (plainText) return plainText;
 
-    const errorCode =
-        typeof (row as Record<string, unknown>).transcription_error === 'string'
-            ? String((row as Record<string, unknown>).transcription_error).trim()
-            : '';
+    const errorCode = getTranscriptionErrorCode(row);
     if (errorCode) return `⚠ ${formatTranscriptionErrorLabel(errorCode)}`;
 
     if ((row as Record<string, unknown>).to_transcribe === true) {
@@ -170,6 +175,39 @@ const resolveFallbackBodyText = (row: VoiceBotMessage): string => {
     }
 
     return '⏳ Ожидание транскрибации...';
+};
+
+const resolveFallbackErrorSignature = (
+    row: VoiceBotMessage,
+    sessionBaseTimestampMs: number | null
+): string | null => {
+    const transcriptionText = getTranscriptionText(row);
+    if (transcriptionText) return null;
+
+    const plainText = typeof row.text === 'string' ? row.text.trim() : '';
+    if (plainText) return null;
+
+    const errorCode = getTranscriptionErrorCode(row);
+    if (!errorCode) return null;
+
+    const messageTimestampMs = toTimestampMs(row?.message_timestamp);
+    const sessionBaseMs =
+        typeof sessionBaseTimestampMs === 'number' && Number.isFinite(sessionBaseTimestampMs)
+            ? sessionBaseTimestampMs
+            : null;
+
+    const relativeStartSeconds =
+        messageTimestampMs != null && sessionBaseMs != null
+            ? Math.max(0, (messageTimestampMs - sessionBaseMs) / 1000)
+            : 0;
+
+    return formatVoiceMetadataSignature({
+        startSeconds: relativeStartSeconds,
+        endSeconds: relativeStartSeconds,
+        sourceFileName: extractSourceFileName(row),
+        absoluteTimestampMs: messageTimestampMs,
+        omitZeroRange: sessionBaseMs == null,
+    });
 };
 
 const getSegmentEndSeconds = (segment: TranscriptionSegment, row: VoiceBotMessage, startSeconds: number): number | null => {
@@ -437,6 +475,7 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
             : '';
     const isMaterialTarget = Boolean(rowMessageRef && materialTargetMessageId === rowMessageRef);
     const imageAttachment = extractImageAttachment(row);
+    const fallbackErrorSignature = resolveFallbackErrorSignature(row, sessionBaseTimestampMs);
     const visibleSegments = segments.filter((seg) => {
         if (seg?.is_deleted) return false;
         const text = typeof seg?.text === 'string' ? seg.text.trim() : '';
@@ -686,7 +725,14 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                             className={`self-stretch text-black/90 text-[12px] font-normal leading-5 p-1 whitespace-pre-wrap break-words ${isMaterialTarget ? 'bg-teal-50/60 ring-1 ring-inset ring-teal-500/70' : ''}`}
                             onClick={handleMaterialTargetClick}
                         >
-                            {resolveFallbackBodyText(row)}
+                            <div className="self-stretch text-black/90 text-[12px] font-normal leading-5 whitespace-pre-wrap break-words">
+                                {resolveFallbackBodyText(row)}
+                            </div>
+                            {fallbackErrorSignature ? (
+                                <div className="mt-1 text-black/55 text-[10px] font-normal leading-4">
+                                    {fallbackErrorSignature}
+                                </div>
+                            ) : null}
                             {imageAttachment ? (
                                 <a
                                     href={imageAttachment.url}

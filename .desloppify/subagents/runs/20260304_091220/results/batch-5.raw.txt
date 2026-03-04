@@ -1,0 +1,118 @@
+{
+  "batch": "Authorization",
+  "batch_index": 5,
+  "assessments": {
+    "authorization_consistency": 66.0,
+    "mid_level_elegance": 72.0
+  },
+  "dimension_notes": {
+    "authorization_consistency": {
+      "evidence": [
+        "`sessions.ts` defines many mutating and sensitive routes (`/add_text`, `/update_project`, `/delete_*`, `/session_done`) without route-level `PermissionManager.requirePermission(...)`, while `uploads.ts` applies explicit permission middleware per endpoint.",
+        "`uploads.ts` protects `/message_attachment/:message_id/:attachment_index` with permission + `checkSessionAccess`, but `/public_attachment/:session_id/:file_unique_id` is exposed without any auth or access check.",
+        "`sessions.ts` `/auth/list-users` returns performer email/role directory data without an explicit permission check in-handler."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Session authorization rules are re-implemented in multiple places (`sessions.ts` `sessionAccessUtils.resolve`, `sessions.ts` inline checks such as `/send_to_crm`, and `uploads.ts` `checkSessionAccess`) instead of one canonical policy seam.",
+        "These copies already diverge: some paths accept `READ_ALL/READ_OWN` + PUBLIC/RESTRICTED sharing rules, while others gate with `UPDATE` or omit sharing branches, causing boundary behavior drift."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "sessions_missing_explicit_route_guards",
+      "summary": "Sessions router relies on implicit external auth context rather than explicit per-route permission guards, creating a fragile trust boundary.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` registers many routes directly (`router.post('/get'...)`, `router.post('/active_session'...)`, `router.post('/add_text'...)`, etc.) with no `PermissionManager.requirePermission(...)` wrappers in this module (e.g., lines 1797-1874, 2177+).",
+        "By contrast, `uploads.ts` consistently wires route-level permission middleware for private endpoints (`/audio`, `/upload_audio`, `/attachment`, `/upload_attachment`, `/close_session`, `/message_attachment`)."
+      ],
+      "suggestion": "Add an explicit router-level guard or per-route permission wrappers in `sessions.ts` (matching the module’s required capability per endpoint), so authorization is enforced locally and cannot be bypassed by mount-time mistakes.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_route_auth_policy_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "list_users_endpoint_lacks_permission_gate",
+      "summary": "`/auth/list-users` exposes performer directory data without an explicit permission requirement in-handler.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` line 2134 defines `router.post('/auth/list-users', async ...)` and immediately queries `VOICEBOT_COLLECTIONS.PERFORMERS` with projected `_id/name/real_name/corporate_email/role`.",
+        "No `PermissionManager.requirePermission(...)` middleware or in-handler permission check is applied before returning this directory payload."
+      ],
+      "suggestion": "Require a specific permission for directory enumeration (for example `VOICEBOT_SESSIONS.UPDATE` or a dedicated `VOICEBOT_USERS.READ`) and reject unauthorized callers before DB query.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "voicebot_route_auth_policy_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "public_attachment_bypasses_session_acl",
+      "summary": "Public attachment endpoint bypasses the session ACL checks used by private attachment endpoints.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` `/message_attachment/:message_id/:attachment_index` is guarded with `PermissionManager.requirePermission(...)` and calls `checkSessionAccess` before file delivery (lines 842-875).",
+        "`uploads.ts` `/public_attachment/:session_id/:file_unique_id` has no auth middleware and no `checkSessionAccess`, serving files based only on ID pair lookup (lines 910-965)."
+      ],
+      "suggestion": "Either enforce the same ACL as `message_attachment` (preferred) or protect `public_attachment` with signed short-lived tokens tied to session/user scope; avoid raw identifier-based public access.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_route_auth_policy_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "session_access_logic_drift_across_handlers",
+      "summary": "Authorization handoff is duplicated across handlers and has already drifted into inconsistent policy branches.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` `sessionAccessUtils.resolve` (lines 1096-1118) encodes one policy variant (`READ_ALL`/`READ_OWN` plus PUBLIC/RESTRICTED checks).",
+        "`sessions.ts` `/send_to_crm` re-implements a narrower inline check (lines 3251-3260) instead of reusing the same utility.",
+        "`uploads.ts` `checkSessionAccess` (lines 355-377) independently duplicates similar logic, creating multiple seams that must stay in sync manually."
+      ],
+      "suggestion": "Extract one canonical `authorizeSessionAccess({ performer, session, action })` service used by both files and all routes; make action-level requirements explicit (`read`, `update`, `finalize`, `share`) to prevent policy drift.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_route_auth_policy_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Authorization policy is split between route middleware, ad-hoc in-handler checks, and duplicated helper functions without a single canonical enforcement seam.",
+      "Legacy compatibility endpoints increased endpoint count without consolidating permission contracts."
+    ],
+    "likely_symptoms": [
+      "sessions_missing_explicit_route_guards",
+      "public_attachment_bypasses_session_acl",
+      "session_access_logic_drift_across_handlers"
+    ],
+    "possible_false_positives": [
+      "Some missing in-file guards may currently be compensated by parent router middleware, but that protection is non-local and not self-enforced by these modules."
+    ]
+  }
+}

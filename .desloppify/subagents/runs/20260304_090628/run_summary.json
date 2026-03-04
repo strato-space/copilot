@@ -1,0 +1,39 @@
+{
+  "created_at": "2026-03-04T09:06:28+00:00",
+  "run_stamp": "20260304_090628",
+  "runner": "codex",
+  "parallel": false,
+  "selected_batches": [
+    2
+  ],
+  "successful_batches": [
+    2
+  ],
+  "failed_batches": [],
+  "allow_partial": false,
+  "max_parallel_batches": 1,
+  "batch_timeout_seconds": 1200,
+  "batch_max_retries": 1,
+  "batch_retry_backoff_seconds": 2.0,
+  "batch_heartbeat_seconds": null,
+  "batch_stall_warning_seconds": null,
+  "batch_stall_kill_seconds": 120,
+  "immutable_packet": "/home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085748.json",
+  "blind_packet": "/home/strato-space/copilot/.desloppify/review_packet_blind.json",
+  "run_dir": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628",
+  "logs_dir": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/logs",
+  "run_log": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/run.log",
+  "batches": {
+    "2": {
+      "position": 1,
+      "status": "succeeded",
+      "prompt_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/prompts/batch-2.md",
+      "result_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/results/batch-2.raw.txt",
+      "log_path": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/logs/batch-2.log",
+      "started_at": "2026-03-04T09:06:28+00:00",
+      "elapsed_seconds": 257,
+      "exit_code": 0,
+      "completed_at": "2026-03-04T09:10:46+00:00"
+    }
+  }
+}

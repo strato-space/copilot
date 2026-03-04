@@ -1,0 +1,166 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 3,
+  "assessments": {
+    "abstraction_fitness": 63.4,
+    "mid_level_elegance": 60.9,
+    "low_level_elegance": 57.8
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "No-op runtime query wrappers are duplicated as pass-through indirection in multiple files (`voicebot/uploads.ts:38-40`, `voicebot/transcription.ts:17-21`, `voicebot/messageHelpers.ts:51-54`) without adding validation, policy, or translation.",
+        "Multiple routes re-implement near-identical coercion/parsing helpers instead of sharing typed boundary utilities (`crm/tickets.ts:51-69`, `crm/projects.ts:22-33`, `finops/expensesOperations.ts:17-51`, `finops/monthClosures.ts:10-20`).",
+        "`voicebot/sessions.ts` contains local utility ecosystems and alias adapters (`sessions.ts:402-417`, `sessions.ts:965-1010`) in the same file as endpoint orchestration, which increases abstraction surface without clear ownership boundaries."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 58.2,
+        "indirection_cost": 66.1,
+        "interface_honesty": 66.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Route boundary contracts are inconsistent across sibling modules: some use middleware envelope (`sendOk`/`AppError` in `auth.ts`, `finops/expensesOperations.ts`, `finops/monthClosures.ts`), while others return ad-hoc payloads (`crm/finances.ts`, `crm/projects.ts`, `voicebot/llmgate.ts`).",
+        "Session access and permission seam logic is duplicated and distributed (`voicebot/transcription.ts:42-62` `hasSessionReadAccess`, `voicebot/uploads.ts:327+` `checkSessionAccess`, `voicebot/sessions.ts` `sessionAccessUtils.resolve` usage at `1688-1692`) rather than centralized as one policy boundary.",
+        "Backward-compat alias handling mutates `req.url` in-route (`voicebot/sessions.ts:402-406`) instead of using shared router-level compatibility mapping, increasing implicit control flow at module seams."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "`voicebot/sessions.ts` is a 6001-line route module with dozens of handlers and mixed concerns, forcing dense local control flow and high branch surface in one file.",
+        "`crm/legacy/performerspayments.ts` (815 lines) mixes analytics computation, DB queries, Google Drive integration, and document workflow orchestration in route handlers (`performerspayments.ts:38+`, `24-32`), creating long imperative internals.",
+        "Large handlers repeatedly inline normalization/filter logic instead of composing focused local units (`voicebot/sessions.ts:1545-1652`, `1672-1794`; `crm/tickets.ts` long handler set from `205+`)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "noop_runtime_query_wrappers",
+      "summary": "Runtime query helpers are repeated as no-op pass-through wrappers, adding indirection without policy value.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "`uploads.ts:38-40` defines `runtimeSessionQuery`/`runtimeMessageQuery` as identity functions.",
+        "`transcription.ts:17-21` repeats the same identity wrappers.",
+        "`messageHelpers.ts:51-54` exports the same identity wrappers again."
+      ],
+      "suggestion": "Replace file-local identity wrappers with one shared runtime-filter utility (or remove wrappers entirely where no filter is required) so runtime policy is explicit and not duplicated.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_filter_abstraction_drift"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_input_coercion_layers",
+      "summary": "Input coercion helpers are reimplemented per route module with slight signature drift, indicating missing shared boundary abstraction.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/finops/monthClosures.ts"
+      ],
+      "evidence": [
+        "`tickets.ts:51-69` defines local `toNonEmptyString` and `toObjectId`.",
+        "`projects.ts:22-33` defines different local `toRecord`/`toObjectId` semantics.",
+        "`expensesOperations.ts:17-51` and `monthClosures.ts:10-20` duplicate month parsing/validation logic with separate helper names."
+      ],
+      "suggestion": "Introduce shared typed request parsers (Zod-backed or equivalent) for common primitives (`ObjectId`, month strings, non-empty text) and reuse them across route modules.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_boundary_parsers"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "route_contract_fragmentation",
+      "summary": "Sibling route modules expose inconsistent response/error contracts, making integration seams unpredictable.",
+      "related_files": [
+        "backend/src/api/routes/auth.ts",
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/finops/monthClosures.ts",
+        "backend/src/api/routes/crm/finances.ts",
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "`auth.ts` and FinOps routes use `sendOk`/`AppError` flow.",
+        "`crm/finances.ts` and `crm/projects.ts` return direct `res.status(...).json(...)` with varying payload shapes.",
+        "`voicebot/llmgate.ts` uses `success/data/error/timestamp` envelope unrelated to other route conventions."
+      ],
+      "suggestion": "Define one route-boundary contract per API family (or globally), and enforce it via shared responder helpers and schema-typed handler wrappers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "inconsistent_route_boundary_protocol"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "distributed_session_access_logic",
+      "summary": "Voicebot session access checks are implemented in multiple local variants instead of one policy seam.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`transcription.ts:42-62` defines `hasSessionReadAccess` with local permission checks.",
+        "`uploads.ts` introduces separate `checkSessionAccess` flow (declared around `327+`).",
+        "`sessions.ts` uses a separate `sessionAccessUtils.resolve` path (`1688-1692`), resulting in at least three access seams."
+      ],
+      "suggestion": "Extract a single voicebot session access service with canonical read/update predicates and consume it from all routes to prevent drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "duplicated_access_policy_seams"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "oversized_route_modules_mix_concerns",
+      "summary": "Very large route files combine unrelated responsibilities, producing dense control flow and brittle local internals.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` is 6001 lines and mixes alias routing (`402-417`), permissions, session CRUD, CRM sync, project file APIs, event retries, and transcript/categorization mutations.",
+        "`performerspayments.ts` is 815 lines and mixes DB analytics, payment calculation, and Google Drive document workflows (`38+`, `24-32`).",
+        "`tickets.ts` (686 lines) combines read/list aggregation, status mutation, comments, and work-hours migration compatibility paths in one module."
+      ],
+      "suggestion": "Split each route file by cohesive use-cases (query/read, mutation, external integration, compatibility aliases) and move heavy orchestration into dedicated service modules.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fat_route_module_pattern"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Legacy migration preserved endpoint behavior but not a unified boundary architecture, leaving parallel helper/policy implementations.",
+      "Route modules act as both transport adapters and business orchestrators, so abstractions are local and duplicated rather than shared."
+    ],
+    "likely_symptoms": [
+      "noop_runtime_query_wrappers",
+      "duplicated_input_coercion_layers",
+      "distributed_session_access_logic"
+    ],
+    "possible_false_positives": [
+      "Some compatibility aliases in `voicebot/sessions.ts` may be intentionally temporary for external clients, but current implementation still increases seam complexity."
+    ]
+  }
+}

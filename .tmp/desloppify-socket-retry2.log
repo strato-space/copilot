@@ -1,0 +1,34 @@
+  → query.json updated
+  Immutable packet: /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085748.json
+  Blind packet: /home/strato-space/copilot/.desloppify/review_packet_blind.json
+  WARNING: this run targets 13/20 scored subjective dimensions (language default review dimension set).
+  Missing from this run: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +2 more
+  Rerun missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path /home/strato-space/copilot/backend/src/api/middleware --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy`
+  Runtime expectation: 1 batch(es), workers=1, timeout-per-batch=20m, worst-case upper bound ~20m.
+
+  Running holistic batches: [2]
+  Run artifacts: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628
+  Live run log: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/run.log
+  Batch 1/1 started (#2)
+  Batch 1/1 done in 257s (#2)
+  Run summary: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/run_summary.json
+  Reviewed files captured for cache refresh: 78
+  Coverage gap: imported assessments for 12/20 scored subjective dimensions.
+  Still missing: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +3 more
+  Run to cover missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path /home/strato-space/copilot/backend/src/api/middleware --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy,design_coherence`
+
+  Merged outputs: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090628/holistic_findings_merged.json
+  Review quality: dimension coverage 0.92, evidence density 4.00, high-score-missing-issue-note 0, finding-pressure 20.13 across 7 dims
+  Assessment import mode: trusted internal (durable scores)
+  Assessment updates applied: 12 dimension(s) (trusted internal run-batches import).
+
+  Holistic review imported:
+  +7 new issues (review findings), 18 resolved, 0 reopened
+
+  Assessments: abstraction fitness 86.0, ai generated debt 90.0, api surface coherence 66.5, authorization consistency 65.0, convention outlier 78.5, cross module architecture 87.0, design coherence 50.1, error consistency 72.5, high level elegance 86.0, incomplete migration 61.0, low level elegance 80.3, mid level elegance 85.5, package organization 68.8
+
+  13 review issues open total (13 review findings open total)
+  Run `desloppify issues` to see the work queue
+
+  Current scores: overall 52.4/100 · objective 12.9/100 · strict 52.4/100
+  Next command to improve subjective scores: `desloppify issues`

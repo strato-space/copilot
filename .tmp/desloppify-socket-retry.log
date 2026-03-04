@@ -1,0 +1,21 @@
+
+  Failed batches: [2]
+  Failure categories: runner missing=1
+  Retry command:
+    desloppify review --run-batches --packet /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085748.json --only-batches 2
+    log: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090138/logs/batch-2.log
+  Environment hints:
+    codex CLI not found on PATH. Install Codex CLI and verify `codex --version`.
+  Immutable packet: /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085748.json
+  Blind packet: /home/strato-space/copilot/.desloppify/review_packet_blind.json
+  WARNING: this run targets 13/20 scored subjective dimensions (language default review dimension set).
+  Missing from this run: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +2 more
+  Rerun missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path /home/strato-space/copilot/backend/src/api/middleware --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy`
+  Runtime expectation: 1 batch(es), workers=1, timeout-per-batch=20m, worst-case upper bound ~20m.
+
+  Running holistic batches: [2]
+  Run artifacts: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090138
+  Live run log: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090138/run.log
+  Batch 1/1 started (#2)
+  Batch 1/1 done in 262s (#2)
+  Run summary: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_090138/run_summary.json

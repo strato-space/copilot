@@ -1,0 +1,98 @@
+{
+  "batch": "Authorization",
+  "batch_index": 5,
+  "assessments": {
+    "authorization_consistency": 62.0,
+    "mid_level_elegance": 71.0
+  },
+  "dimension_notes": {
+    "authorization_consistency": {
+      "evidence": [
+        "Several session mutation endpoints update records directly without any access check (`/update_name`, `/update_access_level`, `/update_dialogue_tag`, `/update_participants`, `/update_allowed_users`) in `backend/src/api/routes/voicebot/sessions.ts` around lines 2396-2759, while neighboring endpoints in the same file use `sessionAccessUtils.resolve` (`/update_project` at lines 2446-2452).",
+        "`/public_attachment/:session_id/:file_unique_id` in `backend/src/api/routes/voicebot/uploads.ts` (lines 910-965) is unauthenticated and does not call `checkSessionAccess`, unlike `/message_attachment/:message_id/:attachment_index` (lines 842-875) which enforces permission + session access."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Authorization seam logic is duplicated with drift: `sessionAccessUtils.resolve` in `sessions.ts` (lines 1088-1121) and `checkSessionAccess` in `uploads.ts` (lines 327-385) reimplement nearly identical ownership/public/restricted checks independently.",
+        "Within `sessions.ts`, some handlers use the shared resolver while others reimplement ad-hoc checks or skip checks entirely (e.g., `/save_create_tasks` custom logic at lines 2621-2633 vs `/update_project` shared resolver at lines 2446-2452), producing inconsistent boundary behavior."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "voicebot_session_mutations_missing_acl",
+      "summary": "Multiple session mutation endpoints bypass per-session authorization entirely.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` updates session records in `/update_name` (2396-2421), `/update_access_level` (2536-2555), `/update_dialogue_tag` (2565-2588), `/update_participants` (2665-2716), and `/update_allowed_users` (2726-2759) without calling `sessionAccessUtils.resolve` or checking permissions against the target session.",
+        "A sibling endpoint in the same file (`/update_project`, 2446-2452) correctly performs session-level access validation, proving this is inconsistent rather than intentional.",
+        "`uploads.ts` contains an explicit reusable access gate (`checkSessionAccess`, 327-385), further highlighting missing gate usage in the listed session handlers."
+      ],
+      "suggestion": "Require a single session-level authorization guard for all session mutations: validate `session_id`, resolve session via shared helper, enforce required permission tier (`UPDATE`/`DELETE` as applicable), and only then execute writes. Apply this uniformly to all mutation routes in `sessions.ts`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "authz_gate_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "public_attachment_acl_bypass",
+      "summary": "Public attachment endpoint allows file retrieval without session authorization checks.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` exposes `router.get('/public_attachment/:session_id/:file_unique_id', publicAttachmentHandler)` (965) with no `PermissionManager.requirePermission` middleware.",
+        "`publicAttachmentHandler` (910-963) fetches and serves files by `(session_id, file_unique_id)` without `checkSessionAccess`.",
+        "By contrast, `message_attachment` route (842-875) requires `VOICEBOT_SESSIONS.READ_OWN` and explicitly calls `checkSessionAccess`, showing a stricter model exists but is bypassed by the public path."
+      ],
+      "suggestion": "Either protect `public_attachment` with the same auth + `checkSessionAccess` flow as `message_attachment`, or issue short-lived signed URLs scoped to actor/session instead of direct stable IDs.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "authz_gate_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "duplicated_access_resolution_seam",
+      "summary": "Authorization seam is duplicated across route modules, causing behavioral drift and uneven hardening.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` defines `sessionAccessUtils.resolve` (1088-1121) while `uploads.ts` defines `checkSessionAccess` (327-385); both encode similar ownership/public/restricted logic separately.",
+        "Handler integration is inconsistent: some routes compose through shared resolver (`sessions.ts` `/update_project`), others embed custom logic (`/save_create_tasks`, `/delete`, `/send_to_crm`) or no logic at all (`/update_name`, `/update_access_level`, `/update_dialogue_tag`, `/update_participants`, `/update_allowed_users`).",
+        "This seam fragmentation directly enabled missed checks and route-by-route policy divergence."
+      ],
+      "suggestion": "Extract one canonical `resolveVoicebotSessionAccess` service (permission + session visibility + reason code) and require all session/attachment handlers to call it through a thin middleware or helper wrapper; remove ad-hoc authorization branches from individual handlers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "authz_gate_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Authorization policy is embedded in route handlers instead of centralized at one enforced seam.",
+      "Legacy/alias route accumulation kept functional behavior but not uniform authorization contracts."
+    ],
+    "likely_symptoms": [
+      "voicebot_session_mutations_missing_acl",
+      "public_attachment_acl_bypass"
+    ],
+    "possible_false_positives": []
+  }
+}

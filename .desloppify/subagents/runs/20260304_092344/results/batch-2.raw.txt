@@ -1,0 +1,112 @@
+{
+  "batch": "Conventions & Errors",
+  "batch_index": 2,
+  "assessments": {
+    "convention_outlier": 88.0,
+    "error_consistency": 74.0,
+    "mid_level_elegance": 81.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "`backend/src/services/reports/googleDrive.ts` keeps credential/auth shapes local (`ServiceAccountCredentials`) while report-domain contracts are centralized in `backend/src/services/reports/types.ts`.",
+        "`backend/src/services/reports/types.ts` consistently exports report-facing DTOs, but `googleDrive.ts` mixes report helper responsibilities with local contract definitions and raw external-client helpers."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Type/interface placement is inconsistent across sibling report modules: domain contracts are centralized, but Google report contract pieces remain file-local, which increases style drift risk as the module grows."
+    },
+    "error_consistency": {
+      "evidence": [
+        "`parseCredentials` logs and throws a wrapped domain error, but `getCredentials` allows `readFileSync` failures to bubble as raw filesystem errors without the same contextual wrapping.",
+        "`createSpreadsheet` throws a generic `Failed to create spreadsheet` when `response.data.id` is absent, but does not preserve response context while other paths include structured logging.",
+        "Error handling strategy is mixed inside one module: contextual log+wrap in one boundary, implicit throw-through in another boundary, and generic throw in a third boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "`backend/src/services/reports/types.ts` defines a report seam (`ReportResult` with `url`, `documentId`, `sheetId`), but `backend/src/services/reports/googleDrive.ts` exports low-level primitives (`createSpreadsheet` returns only string ID, URL built separately).",
+        "Boundary translation is split across helpers instead of one explicit report-level adapter, which pushes assembly logic to callers and invites ad-hoc integration patterns."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "error_consistency",
+      "identifier": "google_drive_mixed_error_boundary_policy",
+      "summary": "Google Drive helpers use three different failure behaviors, producing unpredictable error surfaces for callers.",
+      "related_files": [
+        "backend/src/services/reports/googleDrive.ts",
+        "backend/src/services/reports/types.ts"
+      ],
+      "evidence": [
+        "`parseCredentials` catches parse/validation failures, logs source+reason, then throws a wrapped domain message.",
+        "`getCredentials` performs `readFileSync` without local catch/wrap, so I/O failures leak raw Node errors.",
+        "`createSpreadsheet` throws a generic message when ID is missing, without carrying upstream API diagnostics."
+      ],
+      "suggestion": "Introduce a single report-layer error contract (for example a `ReportIntegrationError` with `stage`, `source`, and optional `cause`) and apply it consistently at all I/O boundaries in `googleDrive.ts`, so callers receive uniform actionable errors.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "report_error_contract_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "report_result_seam_not_enforced",
+      "summary": "The report integration seam is fragmented: typed report result exists, but Google helpers expose lower-level pieces instead of the contract.",
+      "related_files": [
+        "backend/src/services/reports/googleDrive.ts",
+        "backend/src/services/reports/types.ts"
+      ],
+      "evidence": [
+        "`ReportResult` expects `url`, `documentId`, and `sheetId` as a cohesive boundary object.",
+        "`createSpreadsheet` returns only spreadsheet ID and `buildSpreadsheetUrl` is separate, so callers must compose result shape externally.",
+        "No module-local function in `googleDrive.ts` returns `ReportResult`, despite `types.ts` defining it as the report-level output contract."
+      ],
+      "suggestion": "Add a single adapter in `googleDrive.ts` that returns `ReportResult` (or a Google-specific subtype extending it) and make callers consume that seam directly to centralize boundary translation.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "report_boundary_translation_scattered"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "report_contract_definition_split_style",
+      "summary": "Contract-definition conventions drift between sibling report files, with some contracts centralized and others local-only.",
+      "related_files": [
+        "backend/src/services/reports/googleDrive.ts",
+        "backend/src/services/reports/types.ts"
+      ],
+      "evidence": [
+        "`types.ts` is the canonical exported contract file for report DTOs.",
+        "`googleDrive.ts` defines `ServiceAccountCredentials` internally rather than aligning with the shared contract-placement approach in `types.ts`.",
+        "This split creates a style island inside the same report subsystem and weakens discoverability of report-related contracts."
+      ],
+      "suggestion": "Define and document a convention: keep report-domain and integration contracts in `types.ts` (or a dedicated `googleDrive.types.ts`) and keep `googleDrive.ts` focused on behavior.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "contract_placement_inconsistency"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No explicit subsystem-level contract for report integration errors.",
+      "Boundary translation responsibilities are not centralized at one seam.",
+      "Type placement conventions inside `services/reports` are implicit rather than enforced."
+    ],
+    "likely_symptoms": [
+      "google_drive_mixed_error_boundary_policy",
+      "report_result_seam_not_enforced",
+      "report_contract_definition_split_style"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -299,17 +299,28 @@ export const handleCreateTasksFromChunksJob = async (
     );
 
     const socketId = String(payload.socket_id || '').trim();
-    if (socketId && tasks.length > 0) {
+    if (tasks.length > 0) {
       const queues = getVoicebotQueues();
       const eventsQueue = queues?.[VOICEBOT_QUEUES.EVENTS];
       if (eventsQueue) {
+        const eventPayload: {
+          session_id: string;
+          event: string;
+          payload: NormalizedTask[];
+          socket_id?: string;
+        } = {
+          session_id,
+          event: 'tickets_prepared',
+          payload: tasks,
+        };
+
+        if (socketId) {
+          eventPayload.socket_id = socketId;
+        }
+
         await eventsQueue.add(
           VOICEBOT_JOBS.events.SEND_TO_SOCKET,
-          {
-            event: 'tickets_prepared',
-            socket_id: socketId,
-            payload: tasks,
-          },
+          eventPayload,
           {
             attempts: 1,
           }
@@ -317,7 +328,8 @@ export const handleCreateTasksFromChunksJob = async (
       } else {
         logger.warn('[voicebot-worker] create_tasks_from_chunks events queue unavailable', {
           session_id,
-          socket_id: socketId,
+          socket_id: socketId || null,
+          delivery_target: socketId ? 'socket' : 'session_room',
         });
       }
     }

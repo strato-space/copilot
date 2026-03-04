@@ -1,0 +1,165 @@
+{
+  "batch": "Conventions & Errors",
+  "batch_index": 2,
+  "assessments": {
+    "convention_outlier": 71.0,
+    "error_consistency": 74.0,
+    "mid_level_elegance": 69.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "CRM route slugs mix kebab-case (`/bot-commands`, `/performers-payments`), camelCase (`/taskTypes`), and snake_case (`/project_groups`, `/project_tree`) in the same router.",
+        "Voicebot route hub exposes uppercase path `/LLMGate` while sibling endpoints are lowercase (`/sessions`, `/uploads`, `/transcription`, `/persons`, `/permissions`).",
+        "`sessionUrlUtils.ts` and `sessionsSharedUtils.ts` use 4-space indentation and object-method style patterns that differ from surrounding backend route/middleware modules."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "`errorMiddleware` returns raw `err.message` for unknown errors with no sanitization strategy and no server-side logging in this boundary.",
+        "`sendError` in `response.ts` defaults to HTTP 400, while middleware paths explicitly send 413/400/500; this encourages mixed implicit vs explicit status behavior across callers.",
+        "`sendError` payload shape supports `details`, but unknown-error branch omits structured context entirely, creating inconsistent client error contracts."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Voicebot compatibility logic is split across routing aliases (`/sessions`, `/uploads`, `/LLMGate`) and URL canonicalization logic (`sessionUrlUtils.active` host replacement + `canonical` hardcoded base), producing multiple boundary rules for one API surface.",
+        "FinOps hub mounts many routers on `'/'`, while CRM/Voicebot hubs mount mostly namespaced routes; seam contracts differ by module and are not self-describing from the hub.",
+        "`routes/index.ts` mounts some routers bare and others namespaced (`/finops`, `/voicebot`), increasing implicit path composition knowledge required to reason about endpoint ownership."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "convention_outlier",
+      "identifier": "crm_route_slug_style_drift",
+      "summary": "CRM route index mixes multiple URL naming conventions in one module, creating convention drift and harder endpoint predictability.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/index.ts"
+      ],
+      "evidence": [
+        "`crm/index.ts` includes `/taskTypes` (camelCase), `/project_groups` and `/project_tree` (snake_case), and `/bot-commands` (kebab-case).",
+        "Sibling route hubs (`voicebot/index.ts`, `routes/index.ts`) mostly follow lowercase path segments, so CRM appears as a style island."
+      ],
+      "suggestion": "Define and enforce a single route-segment convention (prefer lowercase kebab-case), then add explicit compatibility redirects/aliases only where required and tracked.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "migration_shim_sprawl"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "voicebot_uppercase_endpoint_outlier",
+      "summary": "Uppercase `/LLMGate` endpoint is a naming outlier in the Voicebot surface and diverges from sibling lowercase routes.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/crm/index.ts"
+      ],
+      "evidence": [
+        "`voicebot/index.ts` mounts `router.use('/LLMGate', llmgateRouter);` while other voicebot segments are lowercase.",
+        "No comparable uppercase segment exists in the assigned route hubs."
+      ],
+      "suggestion": "Add canonical lowercase `/llmgate` route and treat `/LLMGate` as a deprecated alias with explicit deprecation tracking and eventual removal.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "migration_shim_sprawl"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "error_boundary_observability_gap",
+      "summary": "Global error middleware does not log unexpected errors and inconsistently exposes raw messages, weakening operational diagnostics and client contract consistency.",
+      "related_files": [
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "Unknown-error branch uses `sendError(res, { message }, 500)` where `message` is raw `err.message` when `err instanceof Error`.",
+        "No logging call exists in `errorMiddleware` for `AppError` or unexpected errors, so stack/context can be lost at this boundary."
+      ],
+      "suggestion": "Centralize error serialization: log full error context server-side, emit stable client-safe messages for 5xx responses, and include consistent structured fields (`code`, correlation/request id) across all branches.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "implicit_status_default_in_response_helper",
+      "summary": "Default 400 in `sendError` introduces implicit behavior that competes with explicit status handling in middleware.",
+      "related_files": [
+        "backend/src/api/middleware/response.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`sendError` signature defaults `status = 400`.",
+        "`errorMiddleware` uses explicit status mapping (413/400/500), creating a mixed pattern where other callers can silently rely on 400."
+      ],
+      "suggestion": "Remove the default status from `sendError` (or constrain with wrappers like `sendBadRequest`, `sendInternalError`) so call sites must declare intended failure semantics.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "voice_url_contract_split_brain",
+      "summary": "Session URL generation has split contract semantics (`active` env-aware vs `canonical` hardcoded), causing boundary ambiguity for integrations.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionUrlUtils.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts"
+      ],
+      "evidence": [
+        "`active()` uses `VOICE_WEB_INTERFACE_URL` with legacy host replacement logic; `canonical()` always returns `https://copilot.stratospace.fun/voice/session/...`.",
+        "Route hub still carries multiple legacy aliases, indicating migration-era compatibility logic is distributed instead of centralized."
+      ],
+      "suggestion": "Introduce a single URL policy module with explicit modes (`public`, `canonical`, `legacyAlias`) and one source of truth consumed by route handlers and integration helpers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_shim_sprawl"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "router_mounting_protocol_inconsistency",
+      "summary": "Route hubs use different mounting protocols (bare, namespaced, and root fan-in), making integration seams harder to reason about and evolve safely.",
+      "related_files": [
+        "backend/src/api/routes/index.ts",
+        "backend/src/api/routes/finops/index.ts",
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/voicebot/index.ts"
+      ],
+      "evidence": [
+        "`routes/index.ts` mixes bare mounts (`authRouter`, `fundRouter`, `planFactRouter`, `uploadsRouter`) with namespaced mounts (`/finops`, `/voicebot`).",
+        "`finops/index.ts` mounts multiple feature routers on `'/'`, while `crm/index.ts` and `voicebot/index.ts` mostly mount explicit prefixes."
+      ],
+      "suggestion": "Standardize hub composition with explicit module prefixes and an agreed pattern for internal sub-route mounting to reduce implicit path coupling.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "migration_shim_sprawl"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Migration compatibility concerns are implemented as scattered aliases and conditional logic instead of centralized policy.",
+      "No enforced routing/error conventions at module boundaries, so local patterns diverged by team or era."
+    ],
+    "likely_symptoms": [
+      "crm_route_slug_style_drift",
+      "voicebot_uppercase_endpoint_outlier",
+      "router_mounting_protocol_inconsistency"
+    ],
+    "possible_false_positives": []
+  }
+}

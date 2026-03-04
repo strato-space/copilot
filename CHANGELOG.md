@@ -2,6 +2,9 @@
 
 ## 2026-03-04
 ### PROBLEM SOLVED
+- **12:22** `CREATE_TASKS` realtime delivery still depended on `socket_id`-targeted emission, so session-room clients without explicit socket binding did not receive `tickets_prepared` updates.
+- **12:22** Socket events worker treated payload as object-only data, which made array payload contracts (for `tickets_prepared`) brittle and caused silent delivery gaps.
+- **12:22** Transcription fallback rows with quota errors lacked the metadata signature line (`mm:ss - mm:ss, file.webm, HH:mm:ss`), so operators could not map placeholders to source chunks while waiting for retries.
 - **11:34** Voice runtime still depended on `runtime_tag` in core query/filter/write paths and queue/lock naming, which blocked the migration goal of environment isolation through separate DB/instance boundaries and kept transitional tag logic in operational flow.
 - **11:34** Runtime-tag assumptions persisted in backend voice tests, so post-migration fail-fast/tag-agnostic behavior could regress without deterministic coverage.
 - **11:34** Runtime-tag deprecation guidance was partially implicit across docs, leaving operators without one canonical statement that `runtime_tag` is transitional metadata and not a routing/isolation contract.
@@ -11,6 +14,7 @@
 - **08:55** Codex relationship rendering in OperOps details card did not fully normalize `waits-for/blocks/dependents` semantics into explicit dependency groups.
 
 ### FEATURE IMPLEMENTED
+- **12:22** Closed quota-recovery realtime fix wave `copilot-w8l0` (`.1`/`.2`/`.3`): `tickets_prepared` is now emitted for session-room delivery (with optional socket targeting), socket dispatch supports array payloads, and fallback quota rows render metadata signature while being replaceable in-place by realtime transcript updates.
 - **11:34** Completed runtime-tag deprecation epic `copilot-f75b` (`T0..T8`) with swarm execution: runtime-tag behavior is neutralized in runtime scope/data-access, write paths stop emitting `runtime_tag`, queue/poller naming no longer relies on runtime tags, docs/env contract is updated, and final voice QA gate is green.
 - **11:34** Added migration support for historical CREATE_TASKS payload normalization with a dedicated script and runbook (`backend/scripts/voicebot-migrate-create-tasks-schema.ts`, `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md`) while keeping runtime strict canonical key contract.
 - **11:34** Standardized agents runtime bootstrap to `uv run --directory ... fast-agent serve ... --model codex` and removed card-level model hardcoding for `create_tasks`.
@@ -20,6 +24,16 @@
 - **08:55** Updated OperOps Codex relationship grouping to explicit `Parent`, `Children`, `Depends On (blocks/waits-for)`, `Blocks (dependents)` with shared issue-id token rendering.
 
 ### CHANGES
+- **12:22** Voice realtime/taskflow and UI fallback updates:
+  - updated worker/socket runtime contracts in `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts` and `backend/src/services/voicebot/voicebotSocketEventsWorker.ts` (session-room `tickets_prepared` + array payload support);
+  - updated fallback-row rendering in `app/src/components/voice/TranscriptionTableRow.tsx` (error signature footer via shared metadata formatter);
+  - added regression suites `backend/__tests__/voicebot/workers/workerCreateTasksPostprocessingRealtime.test.ts` and `app/__tests__/voice/transcriptionFallbackErrorSignatureContract.test.ts`, plus extended existing worker/socket tests.
+- **12:22** Added manual/automated verification checklist `docs/voicebot-plan-sync/quota-recovery-realtime-qa-checklist.md` for session `69a7cb2002566a3e76d2dc11` quota-recovery flow.
+- **12:22** Validation:
+  - `cd backend && npm run test -- __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/workers/workerCreateTasksPostprocessingRealtime.test.ts __tests__/voicebot/socket/voicebotSocketEventsWorker.test.ts` passed (`98/98` suites from parallel-safe + `5/5` suites from serialized scope).
+  - `cd app && npm run test:serial -- __tests__/voice/transcriptionFallbackErrorSignatureContract.test.ts` passed.
+  - `cd backend && npm run build` passed.
+  - `cd app && npm run build` passed.
 - **11:43** Finalized post-deploy scanner snapshot artifacts after background `desloppify review` completion/interruption, including refreshed `.desloppify/state-typescript*.json`, new holistic packets/run summaries, merged findings payloads, and updated `scorecard.png`.
 - **11:36** Refreshed local `desloppify` review artifacts for the latest scan cycle (`.desloppify/query.json`, `.desloppify/review_packet_blind.json`, `.desloppify/review_packets/*`, `.desloppify/subagents/runs/*`) to keep scanner state synchronized with post-deploy workspace.
 - **11:34** Backend runtime-tag deprecation:

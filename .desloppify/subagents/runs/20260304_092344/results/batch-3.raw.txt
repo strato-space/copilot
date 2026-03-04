@@ -1,0 +1,183 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 3,
+  "assessments": {
+    "abstraction_fitness": 74.0,
+    "mid_level_elegance": 78.0,
+    "low_level_elegance": 82.0
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "runtimeScope.ts exposes configurable runtime-scoping API (`buildRuntimeFilter`, `buildRuntimeFilterExpression`, `mergeWithRuntimeFilter`, `recordMatchesRuntime`) but implementations are effectively no-op (`{}`, `$literal:true`, passthrough query, `Boolean(record)`), so the abstraction advertises behavior it does not perform.",
+        "MCP session layer is split across `mcp/sessionManager.ts`, `mcp/proxyClient.ts`, and `mcp/index.ts`, but `sessionManager` is not used by orchestration, and `initializeSession`/`closeSession` accept underscored unused parameters while returning synthetic IDs.",
+        "redis.ts exports `any`-typed client surfaces (`redisClient`, `connectRedis`, `getRedis`, `getBullMQConnection`), leaking untyped boundaries across callers in `index.ts`, `miniapp/index.ts`, and worker runtimes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 68.0,
+        "indirection_cost": 74.0,
+        "interface_honesty": 62.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Report generation seams are duplicated between `reports/jiraStyleReport.ts` and `reports/performerWeeksReport.ts` (work-hour hydration, day-bucket population, spreadsheet setup, cell/write loops), but helper extraction is partial and inconsistent (`jiraReportUtils` used in one path, reimplemented in the other).",
+        "Error propagation strategy inside integration loops is inconsistent: both report builders catch per-row errors and continue with minimal context (`logger.error(error)`), while surrounding orchestration throws hard errors for setup failures, creating mixed boundary behavior.",
+        "planFactService composes grid data by repeatedly scanning full project arrays per customer/group rather than building a clear indexed handoff boundary, which bloats orchestration logic and makes performance/correctness harder to reason about."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "planFactService `buildPlanFactGrid` uses nested loops (`customers -> groupIds -> projects`) with repeated string coercion for relation resolution instead of pre-indexed maps, increasing control-flow noise and accidental complexity.",
+        "report modules contain large monolithic functions with mixed responsibilities (querying, transformation, spreadsheet formatting, style requests, merge requests) that reduce local readability and increase branch coupling.",
+        "redis.ts low-level implementation relies on repeated `any` casting (`IORedis as any`, `client as any`) and dual export style (named + default object), which increases local ambiguity and weakens internal precision."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "runtime_scope_noop_contract",
+      "summary": "Runtime scoping API is a behavioral no-op while still exposing rich option contracts, creating interface dishonesty across callers.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`buildRuntimeFilter` returns `{}` regardless of options (runtimeScope.ts:121-131).",
+        "`buildRuntimeFilterExpression` resolves to `{ $literal: true }` via `buildRuntimeFilterExpressionForPath` (runtimeScope.ts:133-147).",
+        "`mergeWithRuntimeFilter` returns input query unchanged; `recordMatchesRuntime` only checks object truthiness (runtimeScope.ts:149-167).",
+        "Multiple runtime-sensitive modules still call these helpers expecting scoped behavior (`voicebotWebmDedup.ts:43-55`, `processingLoop.ts` runtime query wrappers)."
+      ],
+      "suggestion": "Replace the current misleading API with an explicit `runtimeScopeDisabled` contract (or remove optional parameters entirely), and migrate call sites to either environment-level DB isolation primitives or a clearly named no-op helper to prevent false assumptions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "stale_runtime_tag_abstraction"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "mcp_session_abstraction_split_brain",
+      "summary": "MCP session abstractions are fragmented and partially unused, adding ceremony without providing coherent lifecycle guarantees.",
+      "related_files": [
+        "backend/src/services/mcp/sessionManager.ts",
+        "backend/src/services/mcp/proxyClient.ts",
+        "backend/src/services/mcp/index.ts"
+      ],
+      "evidence": [
+        "`sessionManager.ts` implements in-memory session registry and cleanup, but request flow in `mcp/index.ts` creates per-call `MCPProxyClient` and never uses `mcpSessionManager`.",
+        "`proxyClient.initializeSession(_agentName?)` and `closeSession(_sessionId)` take unused underscored parameters; returned `sessionId` is synthetic (`session-${Date.now()}`) rather than transport-derived.",
+        "`mcp/index.ts` tracks request/socket maps separately, duplicating lifecycle concerns that session manager appears designed to own."
+      ],
+      "suggestion": "Unify MCP lifecycle around a single session authority: either remove `sessionManager` and simplify to explicit per-request clients, or integrate it as the canonical registry and eliminate synthetic/unused session parameters in `proxyClient`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "mcp_session_abstraction_drift"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "redis_any_boundary_leak",
+      "summary": "Redis service exports `any`-typed boundaries, forcing downstream modules to operate without type contracts.",
+      "related_files": [
+        "backend/src/services/redis.ts",
+        "backend/src/index.ts",
+        "backend/src/workers/voicebot/runner.ts"
+      ],
+      "evidence": [
+        "`redisClient` and major exported functions are typed as `any` (`redis.ts:5,40,69,81`).",
+        "Constructor resolution and connect call use `as any`, suppressing SDK shape checks (`redis.ts:49`).",
+        "Core startup/worker modules consume these untyped exports for queue setup and lifecycle (`index.ts`, `runner.ts`)."
+      ],
+      "suggestion": "Type the client as `Redis` from `ioredis`, expose a narrow typed factory for BullMQ (`RedisOptions | Redis`), and remove default object export to keep one consistent typed import pattern.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "weak_service_contract_typing"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "report_pipeline_duplication",
+      "summary": "Two report generators duplicate the same orchestration seams with divergent helper usage, increasing drift risk and integration entropy.",
+      "related_files": [
+        "backend/src/services/reports/jiraStyleReport.ts",
+        "backend/src/services/reports/performerWeeksReport.ts",
+        "backend/src/services/reports/jiraReportUtils.ts",
+        "backend/src/services/reports/googleDrive.ts"
+      ],
+      "evidence": [
+        "Both files repeat similar flows: fetch works/tickets, normalize ticket IDs, populate `hours_data`, build rows, write spreadsheet, then run style/batch operations.",
+        "`jiraStyleReport` uses extracted helpers (`buildDayKeys`, `ensureDayBuckets`, `indexesToA1`, `setWeekStartMonday`) while `performerWeeksReport` keeps local equivalents (`setWeekStart`, local `indexesToA1`, local day-bucket construction).",
+        "The duplicated logic is long and mutable (especially in `performerWeeksReport`), making cross-report behavior changes non-atomic."
+      ],
+      "suggestion": "Extract a shared report-core pipeline (data hydration + day-bucket accumulation + sheet write primitives) and keep only report-specific row/schema formatting in each module.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "reporting_seam_duplication"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "report_error_handoff_ambiguity",
+      "summary": "Per-row report processing swallows transformation failures while setup failures throw, producing inconsistent seam-level failure semantics.",
+      "related_files": [
+        "backend/src/services/reports/jiraStyleReport.ts",
+        "backend/src/services/reports/performerWeeksReport.ts"
+      ],
+      "evidence": [
+        "Row hydration loops catch errors and continue with only `logger.error(error)` (`jiraStyleReport.ts:143-155`, `performerWeeksReport.ts:144-161`).",
+        "The same functions throw hard on parameter/data/source setup issues (`Missing required parameters`, `Customer not found`, `Spreadsheet has no sheets`).",
+        "This creates mixed behavior where partial corruption can silently propagate to output while other failures terminate immediately."
+      ],
+      "suggestion": "Introduce explicit row-failure accounting (e.g., failed row counters + structured context: ticket/work IDs) and a configurable fail-threshold to make partial-failure behavior deterministic and observable.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "reporting_seam_duplication"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "plan_fact_nested_scan_complexity",
+      "summary": "Plan/fact grid assembly uses repeated nested scans over projects per customer/group, making local logic heavier and less intention-revealing than necessary.",
+      "related_files": [
+        "backend/src/services/planFactService.ts",
+        "backend/src/models/types.ts"
+      ],
+      "evidence": [
+        "`buildPlanFactGrid` iterates `groupIds` and for each group re-iterates full `projects` array to match `project_group` (`planFactService.ts:154-164`).",
+        "The function already builds maps (`projectsById`, `projectGroupsById`) but does not build/use a direct `projectsByGroup` index, leaving redundant scans in hot path.",
+        "Same function mixes relationship resolution, monthly aggregation, and response shaping in one large block, making edge-case flow harder to audit."
+      ],
+      "suggestion": "Precompute `projectsByGroupId` once, then resolve customer projects via index lookups before month aggregation; split relationship resolution from month-cell aggregation helpers to flatten local control flow.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "planfact_data_assembly_overcoupling"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Legacy migration residue left compatibility-shaped APIs that now act as pass-through/no-op contracts.",
+      "Feature implementations favored local completion over reusable seam extraction, causing duplicated orchestration logic in reporting and MCP lifecycle handling.",
+      "Type discipline is inconsistent at subsystem boundaries (especially service clients), reducing abstraction honesty."
+    ],
+    "likely_symptoms": [
+      "mcp_session_abstraction_split_brain",
+      "report_pipeline_duplication",
+      "report_error_handoff_ambiguity"
+    ],
+    "possible_false_positives": [
+      "runtime_scope_noop_contract may be partially intentional due to runtime_tag deprecation policy, but current contract shape still misleads callers."
+    ]
+  }
+}

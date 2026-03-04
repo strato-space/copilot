@@ -1,0 +1,147 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 8,
+  "assessments": {
+    "ai_generated_debt": 74.0,
+    "incomplete_migration": 66.0
+  },
+  "dimension_notes": {
+    "ai_generated_debt": {
+      "evidence": [
+        "backend/src/services/db.ts keeps multiple runtime-scope abstraction functions (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`) that are pure pass-throughs and add indirection without behavior.",
+        "backend/src/api/routes/voicebot/uploads.ts repeats nearly identical multipart error-handling logic in `uploadAnyWithErrorHandling` and `uploadImageWithErrorHandling`.",
+        "app/src/components/voice/AddParticipantModal.tsx and app/src/components/voice/AccessUsersModal.tsx duplicate modal lifecycle/search/select/save patterns with only entity labels changed."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Legacy route aliases are still active in parallel to canonical endpoints: backend/src/api/routes/voicebot/index.ts mounts both flat and legacy routers; backend/src/api/routes/voicebot/sessions.ts aliases `/close_session`; backend/src/api/routes/voicebot/uploads.ts still implements a standalone `/close_session` handler.",
+        "Legacy data-model fallbacks remain in active UI and backend paths (`transcription_chunks`, `transcription_text`) across app/src/components/voice/SessionLog.tsx, app/src/components/voice/TranscriptionTableRow.tsx, backend/src/services/voicebot/voicebotWebmDedup.ts, and backend/src/api/routes/voicebot/messageHelpers.ts.",
+        "Deprecated `runtime_tag` still drives filters/indexes in active runtime code (`backend/src/constants.ts`, `backend/src/workers/voicebot/handlers/processingLoop.ts`, `backend/src/workers/voicebot/handlers/transcribeHandler.ts`, `backend/src/voicebot_tgbot/ingressHandlers.ts`)."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_deprecation_not_completed",
+      "summary": "Deprecated runtime_tag isolation is still embedded in active filters and indexes.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "constants.ts still defines runtime_tag index keys (`TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG`, `WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG`) and startup indexes including `runtime_tag`.",
+        "processingLoop.ts, transcribeHandler.ts, ingressHandlers.ts and voicebotWebmDedup.ts continue calling `mergeWithRuntimeFilter(..., { field: 'runtime_tag', ... })`.",
+        "sessions.ts still writes and filters by `runtime_tag` in multiple query/update paths."
+      ],
+      "suggestion": "Execute a full runtime_tag retirement pass: remove runtime_tag-based indexes/filters from active read/write paths, migrate remaining records if needed, and rely only on deployment/database-level isolation with one compatibility boundary during cutover.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_isolation_transition_stall"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "voice_session_close_dual_path",
+      "summary": "Session close behavior is split across alias rewrites and a separate legacy handler.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "sessions.ts registers POST alias `/close_session` -> `/session_done` via `registerPostAlias`.",
+        "uploads.ts still defines an independent `router.post('/close_session', ...)` mutating session state directly.",
+        "index.ts mounts both flat and legacy routers (`router.use('/', sessionsRouter)`, `router.use('/', uploadsRouter)`, plus `/sessions` and `/uploads` aliases), preserving multiple active close-entry paths."
+      ],
+      "suggestion": "Keep one close implementation (`/session_done`) and make any compatibility alias a thin forwarder to that code path only; remove the independent uploads close handler to avoid semantic drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_route_surface_retention"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "transcription_schema_dual_stack",
+      "summary": "Legacy transcription schema is still first-class alongside canonical schema.",
+      "related_files": [
+        "app/src/components/voice/SessionLog.tsx",
+        "app/src/components/voice/TranscriptionTableRow.tsx",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/transcription.ts"
+      ],
+      "evidence": [
+        "SessionLog.tsx and TranscriptionTableRow.tsx parse both `transcription.segments` and legacy `transcription_chunks`/`transcription_text` with fallback reconstruction logic.",
+        "voicebotWebmDedup.ts and messageHelpers.ts still treat `transcription_chunks` and plain `text` as active transcription sources.",
+        "transcription.ts includes fallback text extraction from message text when transcription payload is absent."
+      ],
+      "suggestion": "Define and enforce one canonical transcription payload contract, run a bounded migration/backfill for historical rows, then remove `transcription_chunks`/plain-text fallback branches from UI and backend message-processing code.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voice_payload_migration_overlap"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "no_op_runtime_scope_abstractions",
+      "summary": "Runtime-scope helper layer contains no-op wrappers that add ceremony without behavior.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "db.ts exports pass-through wrappers (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`) returning inputs unchanged.",
+        "uploads.ts defines `runtimeSessionQuery` and `runtimeMessageQuery` as identity functions despite being used as if they enforce scoping."
+      ],
+      "suggestion": "Either implement real scoping semantics in one shared utility and use it consistently, or remove these wrappers and call raw queries directly to reduce misleading abstraction layers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "placeholder_abstraction_residue"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "copy_paste_modal_workflows",
+      "summary": "Participant and access-user modals duplicate control flow/UI structure instead of sharing one picker abstraction.",
+      "related_files": [
+        "app/src/components/voice/AddParticipantModal.tsx",
+        "app/src/components/voice/AccessUsersModal.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "Both modals replicate near-identical patterns for visibility-driven fetching, search filtering, selected-item chips with remove actions, and save/cancel handlers.",
+        "Both rely on parallel state slices in sessionsUIStore with nearly identical fields (`visible`, `loading`, `selected*Ids`, `searchValue`, `sessionId`, `current*`)."
+      ],
+      "suggestion": "Extract a shared session-member-picker modal component and a generic modal state helper in sessionsUIStore, then parameterize label/getter/save action differences.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "ui_workflow_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Compatibility layers were retained beyond the migration window and became active parallel paths.",
+      "Interim scaffolding (runtime scoping and legacy payload fallbacks) was left in place without a final removal phase.",
+      "Feature iteration favored local copy-and-modify over shared abstractions for repeated UI workflows."
+    ],
+    "likely_symptoms": [
+      "voice_session_close_dual_path",
+      "transcription_schema_dual_stack",
+      "no_op_runtime_scope_abstractions"
+    ],
+    "possible_false_positives": []
+  }
+}

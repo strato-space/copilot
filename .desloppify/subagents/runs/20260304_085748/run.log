@@ -1,0 +1,25 @@
+2026-03-04T08:57:48+00:00 run-start runner=codex parallel=True max_parallel=3 timeout=1200s heartbeat=15.0s stall_warning=0s stall_kill=120s retries=1 retry_backoff=2.0s upper_bound=20m selected=[1, 2]
+2026-03-04T08:57:48+00:00 run-path /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085748
+2026-03-04T08:57:48+00:00 packet /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085748.json
+2026-03-04T08:57:48+00:00 blind-packet /home/strato-space/copilot/.desloppify/review_packet_blind.json
+2026-03-04T08:57:48+00:00 batch-queued batch=1 position=1/2
+2026-03-04T08:57:48+00:00 batch-queued batch=2 position=2/2
+2026-03-04T08:57:48+00:00 batch-start batch=1 position=1/2
+2026-03-04T08:57:48+00:00 batch-start batch=2 position=2/2
+2026-03-04T08:58:03+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:15, 2:15}
+2026-03-04T08:58:18+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:30, 2:30}
+2026-03-04T08:58:33+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:45, 2:45}
+2026-03-04T08:58:48+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:60, 2:60}
+2026-03-04T08:59:03+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:75, 2:75}
+2026-03-04T08:59:18+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:90, 2:90}
+2026-03-04T08:59:33+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:105, 2:105}
+2026-03-04T08:59:48+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:120, 2:120}
+2026-03-04T09:00:03+00:00 heartbeat active=[1, 2] queued=[] elapsed={1:135, 2:135}
+2026-03-04T09:00:09+00:00 batch-done batch=1 position=1/2 code=0 elapsed=141
+2026-03-04T09:00:24+00:00 heartbeat active=[2] queued=[] elapsed={2:156}
+2026-03-04T09:00:39+00:00 heartbeat active=[2] queued=[] elapsed={2:171}
+2026-03-04T09:00:54+00:00 heartbeat active=[2] queued=[] elapsed={2:186}
+2026-03-04T09:01:09+00:00 heartbeat active=[2] queued=[] elapsed={2:201}
+2026-03-04T09:01:11+00:00 batch-done batch=2 position=2/2 code=0 elapsed=203
+2026-03-04T09:01:11+00:00 run-summary /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085748/run_summary.json
+2026-03-04T09:01:11+00:00 run-finished failures=[2] mode=exit

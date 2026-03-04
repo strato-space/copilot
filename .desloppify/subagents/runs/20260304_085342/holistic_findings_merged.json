@@ -1,0 +1,839 @@
+{
+  "assessments": {
+    "abstraction_fitness": {
+      "score": 67.7,
+      "components": [
+        "Abstraction Leverage",
+        "Indirection Cost",
+        "Interface Honesty"
+      ],
+      "component_scores": {
+        "Abstraction Leverage": 73.0,
+        "Indirection Cost": 78.5,
+        "Interface Honesty": 76.0
+      }
+    },
+    "ai_generated_debt": 88.1,
+    "api_surface_coherence": 60.7,
+    "authorization_consistency": 63.6,
+    "convention_outlier": 71.8,
+    "cross_module_architecture": 73.7,
+    "design_coherence": 50.1,
+    "error_consistency": 63.5,
+    "high_level_elegance": 72.7,
+    "incomplete_migration": 65.1,
+    "low_level_elegance": 75.0,
+    "mid_level_elegance": 68.3,
+    "package_organization": 77.9
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "backend/src/api/middleware/roleGuard.ts:17 defines RoleGuardRequest with its own user/db shape, while backend/src/api/middleware/auth.ts:25 and backend/src/permissions/permission-manager.ts:165 define parallel auth request contracts.",
+        "roleGuard.ts:57-58 force-casts performer role fields (`as RoleKey`, `as RoleKey[]`) instead of using a shared typed performer/auth context from existing middleware contracts."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "",
+      "sub_axes": {
+        "abstraction_leverage": 68.0,
+        "indirection_cost": 74.0,
+        "interface_honesty": 71.0
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "roleGuard.ts:46-50 re-queries the performer from DB even though auth middleware already resolves and attaches performer (`auth.ts:117-126`), creating duplicated seam choreography on every guarded route.",
+        "permission-manager middleware has the same repeated 'user/db checks + performer lookup' pattern (`permission-manager.ts:194-206`), indicating boundary logic is spread instead of centralized."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "roleGuard.ts:47 constructs `new ObjectId(user.userId)` without `ObjectId.isValid`, so malformed IDs throw and drop into generic 500 handler (`roleGuard.ts:86-88`) instead of deterministic auth rejection.",
+        "auth middleware already uses a precise guard (`auth.ts:90`) before `new ObjectId`, showing a safer local pattern is available but not applied here."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "package_organization": {
+      "evidence": [
+        "`backend/src/api/middleware/metrics.ts` is placed under `middleware/` but also owns Prometheus registry bootstrap, metric definitions, health state mutation (`setHealthStatus`), and a full `/metrics` route handler export (`metricsHandler`), mixing transport middleware with observability module responsibilities.",
+        "`backend/src/api/middleware/auth.ts` pulls directly from persistence and permission layers (`../../services/db.js`, `../../permissions/permission-manager.js`, `COLLECTIONS.PERFORMERS`) rather than staying a thin transport boundary.",
+        "Holistic structure shows `backend/src/api/middleware/` importing across multiple non-API directories (`backend/src/services/`, `backend/src/permissions/`, `backend/src/utils/`, `backend/src/`), indicating the folder is serving as a mixed concern bucket rather than a focused HTTP middleware package."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`auth.ts` combines token parsing/verification, DB performer resolution, permission computation, and request context hydration in one file-level role, so ownership is not crisply domain-aligned.",
+        "`metrics.ts` combines instrumentation composition (register/counters/histograms), middleware runtime behavior, endpoint delivery, and health control API, creating a top-level module with multiple reasons to change.",
+        "Within the same middleware package, module roles differ sharply (`error.ts` is a focused adapter, while `auth.ts` and `metrics.ts` are orchestration-heavy), which weakens predictability of package boundaries for new changes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "design_coherence": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/sessions.ts` remains a 6001-line mixed-responsibility route file: session listing aggregation (`1545-1653`), summary persistence (`4319-4388`), project-file operations (`4390-4475`), and transcript/categorization mutation workflows with event-log side effects (`4724+`) are implemented together.",
+        "`app/src/pages/voice/SessionsListPage.tsx` combines URL state migration/persistence (`389-447`), data fetching coordination (`627-650`), FAB global polling/events (`723-750`), and bulk destructive actions (`830-908`) in one page component.",
+        "`app/src/store/voiceBotStore.ts` and `app/src/store/sessionsUIStore.ts` both hold UI state plus orchestration/business workflows: socket lifecycle (`969-1107`), HTTP CRUD and uploads (`1438-1710`), ticket mutation logic (`1749+`), and MCP-based title generation with UI notifications (`537-625`).",
+        "Voice worker handlers duplicate near-identical fetch/validate/process/update flows across multiple files (`customPrompt.ts`, `questionsHandler.ts`, `oneCustomPrompt.ts`, `createTasksFromChunks.ts`), with divergent processor state shape (`questionsHandler.ts` writes `questioning_error*` root fields while others use `processors_data.<processor>.error*`).",
+        "FinOps table components repeat the same month-pin/header/filter-table structural pattern in parallel implementations: `PlanFactGrid.tsx` (`231-352`), `ExpensesGrid.tsx` (`126-260`), and `BonusesGrid.tsx` (`297-409`)."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "cross_module_architecture": {
+      "evidence": [
+        "HTTP transport logic is re-implemented in multiple stores/services (`app/src/store/requestStore.ts`, `app/src/store/permissionsStore.ts`, `app/src/store/voicebotHttp.ts`) with separate base-url/proxy/header behavior.",
+        "Runtime-scoping entry points are spread across worker/service/tgbot modules (`processingLoop.ts`, `transcribeHandler.ts`, `voicebotWebmDedup.ts`, `ingressHandlers.ts`) instead of one canonical boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "convention_outlier": {
+      "evidence": [
+        "CRM/OperOps surfaces still mix legacy snake_case payload fields and newer camelCase conventions (e.g. `app/src/store/projectsStore.ts`, `app/src/store/kanbanStore.ts`, `backend/src/api/routes/crm/tickets.ts`).",
+        "Backend route keeps typo-compatible input (`statuses ?? satuses`) in `backend/src/api/routes/crm/tickets.ts`, signaling unstable contract conventions."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "error_consistency": {
+      "evidence": [
+        "Some store actions swallow failures and continue (`projectsStore` fetch methods log+return, `permissionsStore` mutators log+toast without throw, `voiceBotStore` mutators log-only), while sibling actions in the same stores throw.",
+        "This creates mixed caller contracts (sometimes rejected Promise, sometimes silent UI toast, sometimes empty fallback)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "`usePermissionsStore.updateUserPermissions` posts to `voicebot/permissions/users/permissions`, but backend defines this endpoint as read-only permission retrieval (`backend/src/api/routes/voicebot/permissions.ts`).",
+        "`usePermissionsStore.getUserPermissions` calls `permissions/users/permissions` (missing `voicebot/` prefix unlike sibling calls), and store also uses route names not present server-side (`users/access_level`, projects write via `/users/projects` instead of `/users/projects/set`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Core auth middleware is fail-fast on missing `APP_ENCRYPTION_KEY` (`backend/src/api/middleware/auth.ts`), but miniapp login/auth silently falls back to empty secret (`backend/src/miniapp/routes/index.ts`).",
+        "Miniapp `IS_MINIAPP_DEBUG_MODE` path bypasses token verification and injects `testData` as user identity in request pipeline (`backend/src/miniapp/routes/index.ts`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Repetitive boilerplate request wrappers and near-duplicate proxy/header code appear in multiple files instead of a single shared client.",
+        "Many catch blocks are formulaic log/toast blocks with minimal context enrichment in UI stores."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Request and error boilerplate is still copy-pasted across stores instead of centralized abstractions with consistent behavior."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Runtime-tag migration remains half-removed: runtime scoping helpers currently no-op (`backend/src/services/runtimeScope.ts`), while many runtime paths still call `mergeWithRuntimeFilter` and scripts still backfill `runtime_tag` (`backend/scripts/runtime-tag-backfill.ts`).",
+        "Voice upload/session APIs still expose legacy compatibility paths and naming (`/close_session`, `/uploads/*` aliases in `backend/src/api/routes/voicebot/uploads.ts`) while new canonical flows are also present.",
+        "Frontend voice log still carries legacy transcript schema fallback (`transcription_chunks`) in `app/src/components/voice/SessionLog.tsx`."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated-auth-request-contracts",
+      "summary": "Role guard defines a parallel request/auth contract instead of reusing the canonical authenticated request type.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "roleGuard.ts:17-26 introduces `RoleGuardRequest` with optional `user`/`db` fields that overlap with `AuthenticatedRequest` in auth.ts:25-43 and permission-manager.ts:165-178.",
+        "roleGuard.ts:57-58 uses casts (`as RoleKey`, `as RoleKey[]`) because the local type is weaker than the already-established performer/auth types."
+      ],
+      "suggestion": "Unify middleware contracts around a single exported authenticated request/performer type and remove per-middleware request redefinitions; eliminate force-casts by validating role fields at the auth boundary.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_context_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "repeated-performer-lookup-seam",
+      "summary": "Role guard repeats performer lookup that upstream auth middleware already performs, creating noisy and expensive integration seams.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "roleGuard.ts:46-50 performs a DB read for performer each call, despite auth.ts:117-126 already attaching `performer` and `db` onto request.",
+        "permission-manager.ts:202-207 repeats the same lookup sequence, reinforcing seam duplication across authorization middlewares."
+      ],
+      "suggestion": "Introduce a shared authorization context resolver (or trust the `req.performer` populated by auth middleware) so role/permission guards consume one resolved identity object instead of reloading it.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_context_fragmentation"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "invalid-objectid-path-returns-500",
+      "summary": "Role guard turns malformed user IDs into internal errors instead of explicit authentication failures.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts"
+      ],
+      "evidence": [
+        "roleGuard.ts:47 directly calls `new ObjectId(user.userId)`; invalid IDs throw and are caught only by the broad catch block returning 500 (roleGuard.ts:86-88).",
+        "auth.ts:90 demonstrates the intended local defensive pattern with `ObjectId.isValid(payload.userId)` before constructing ObjectId."
+      ],
+      "suggestion": "Validate `user.userId` with `ObjectId.isValid` and return 401/400 before DB query; reserve catch-path 500 for true unexpected runtime failures.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "auth_context_fragmentation"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "middleware_folder_mixed_observability_auth_ownership",
+      "summary": "The `api/middleware` package is carrying unrelated ownership domains (auth policy+data access and observability runtime), obscuring directory boundaries.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/metrics.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`metrics.ts` exports `register`, multiple metric primitives, `setHealthStatus`, `metricsMiddleware`, and `metricsHandler`, indicating a full observability module living inside middleware.",
+        "`auth.ts` imports DB and permission services and queries performer collection directly, making middleware depend on lower-layer implementation details.",
+        "`error.ts` remains a thin transport adapter, highlighting that sibling files in the same folder do not share a coherent package purpose."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/observability/httpMetrics.ts` and move Prometheus registry/metric definitions plus `setHealthStatus` there; keep temporary re-exports in `api/middleware/metrics.ts`. 2) Create `backend/src/api/routes/system/metrics.ts` (or existing system routes area) and move `metricsHandler` there; keep middleware-only logic in `api/middleware/metrics.ts`. 3) Extract auth data/policy work from `auth.ts` into `backend/src/services/auth/sessionResolver.ts` (token->performer->permissions), leaving middleware as adapter. 4) Update imports with `rg \"api/middleware/(metrics|auth)\" backend/src -n` and adjust call sites. 5) Validate with `cd backend && npm run build && npm run test`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_boundary_blur"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "transport_layer_over_orchestrates_domain_logic",
+      "summary": "Transport middleware modules are acting as domain orchestrators, reducing ownership clarity and increasing ripple effects for unrelated changes.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/metrics.ts"
+      ],
+      "evidence": [
+        "`auth.ts` handles cryptographic verification, persistence lookup, permission derivation, and request model shaping in one module, so auth policy/storage changes force middleware edits.",
+        "`metrics.ts` centralizes both HTTP lifecycle interception and global metric/health control concerns, so metric model changes and route exposure changes collide in one file."
+      ],
+      "suggestion": "Staged reorg plan: 1) Introduce clear top-level ownership split: `api/middleware/*` for pure request/response adapters, `services/auth/*` for auth resolution, `observability/*` for metric state/model, and `api/routes/system/*` for endpoint exposure. 2) Move logic in this order: auth resolver extraction first, observability extraction second, route handler move third, then delete compatibility re-exports. 3) Run import and boundary checks: `rg \"from '../../(services|permissions|utils|constants)\" backend/src/api/middleware -n` should shrink to adapter-only dependencies. 4) Validate with `cd backend && npm run build` and smoke route checks for `/api/metrics` plus authenticated endpoints.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "middleware_boundary_blur"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_sessions_route_god_module",
+      "summary": "Voice sessions route file is a god-module that mixes unrelated HTTP domains and heavy domain workflows in one surface.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` is 6001 LOC and declares dozens of route handlers in one file (`router.post` entries from `1659` through `5937`).",
+        "The same module handles list/read CRUD (`1545+`), summary save (`4319+`), project file catalog/upload (`4390+`), and transcript/categorization edit/delete flows with event-log orchestration (`4724+`, `5092+`, `5263+`).",
+        "Message-specific logic is partially extracted to `messageHelpers.ts`, but high-churn mutation orchestration still lives inline in `sessions.ts`, keeping boundary split incomplete."
+      ],
+      "suggestion": "Split `sessions.ts` by bounded responsibility (e.g., `sessions.list.ts`, `sessions.mutations.ts`, `sessions.project-files.ts`, `sessions.logs.ts`) and move transcript/categorization mutation orchestration into service modules so route handlers become thin transport adapters.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_orchestration_concentration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "sessions_list_page_overloaded_orchestrator",
+      "summary": "Sessions list page is overloaded with persistence, realtime polling glue, filtering, and mutation workflows beyond page composition responsibility.",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "The page holds many unrelated state domains simultaneously (`335-351` local UI action state, query parsing/filtering `371-387`, saved-tags and localStorage migration `389-447`).",
+        "It runs global FAB synchronization via interval polling + custom event listeners (`723-750`) while also handling bulk merge/delete orchestration (`830-908`).",
+        "It delegates title generation to a store action that itself is workflow-heavy (`sessionsUIStore.ts:537-625`), indicating missing dedicated hook/controller boundaries."
+      ],
+      "suggestion": "Extract focused hooks/controllers: `useSessionsListFilters`, `useSessionsBulkActions`, and `useVoiceFabSync`; keep `SessionsListPage` as composition/render only. Move interval/event sync out of page and into a single reusable voice session activity source.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_orchestration_concentration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_store_boundary_blur",
+      "summary": "Voice stores combine transport, domain mutation, UI feedback, and cross-store coupling, creating mixed responsibilities and high-change blast radius.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/pages/voice/SessionPage.tsx"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` owns socket setup/rehydration (`969-1107`), REST fetching (`1438+`), upload transport (`1574+`), optimistic in-store domain edits (`1776+`, `1849+`), and UI notifications (`message.*` calls throughout).",
+        "`sessionsUIStore.ts` (nominally UI state) contains MCP network workflow and session title generation logic with backend URL resolution (`537-625`).",
+        "Cross-store imperative coupling (`useSessionsUIStore.getState()` inside `voiceBotStore.ts:1091-1093`, `1751`, `1814`) tightens runtime dependencies between state containers."
+      ],
+      "suggestion": "Introduce a service layer (`voiceSessionService`, `voiceTaskflowService`, `voiceSocketController`) and keep stores limited to state transitions. Centralize user notifications in a thin UI feedback adapter so stores stop owning transport+UX policy simultaneously.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_orchestration_concentration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "worker_processor_state_pattern_drift",
+      "summary": "Worker handlers duplicate the same orchestration skeleton but persist processor state in inconsistent shapes, signaling missing shared processing abstraction.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts"
+      ],
+      "evidence": [
+        "`customPrompt.ts` and `questionsHandler.ts` repeat the same steps: validate IDs, load message/session, check categorization, call OpenAI, write success/error flags (`customPrompt.ts:41-203`, `questionsHandler.ts:52-186`).",
+        "`oneCustomPrompt.ts` and `createTasksFromChunks.ts` repeat similar queue/processor state transitions (`oneCustomPrompt.ts:89-150`, `createTasksFromChunks.ts:177-299`).",
+        "State schema diverges: `questionsHandler.ts` writes `questioning_error*` top-level fields (`103-106`, `142-145`, `167-170`) while sibling handlers use nested `processors_data.<processor>.error*` fields (`customPrompt.ts:101-104`, `155-158`, `182-185`)."
+      ],
+      "suggestion": "Build a shared `runProcessorJob` abstraction that standardizes load/validate/skip/execute/persist/error transitions and enforces one canonical processor-state envelope (`processors_data.<processor>`), then migrate prompt/question/task handlers onto it.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "worker_pipeline_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_grid_structure_duplication",
+      "summary": "FinOps grids reimplement the same month-pin column architecture in parallel, creating structural duplication and inconsistent evolution risk.",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/pages/PlanFactPage.tsx"
+      ],
+      "evidence": [
+        "All three components independently build `pinnedSet + orderedMonths + month header with focus/pin buttons` patterns (`PlanFactGrid.tsx:231-352`, `ExpensesGrid.tsx:126-260`, `BonusesGrid.tsx:297-409`).",
+        "Each grid separately implements near-identical left-fixed base columns and month-focused class logic (`PlanFactGrid.tsx:236-324`, `ExpensesGrid.tsx:132-234`, `BonusesGrid.tsx:303-383`).",
+        "PlanFact page composes all three grids (`PlanFactPage.tsx:369-409`), so cross-grid UI changes require coordinated manual edits in multiple implementations."
+      ],
+      "suggestion": "Extract a shared FinOps table framework (`buildPinnedMonthColumns`, `MonthHeaderCell`, shared pin/focus state hook, shared filter dropdown primitives) and let each grid provide only domain-specific cell renderers/aggregation logic.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "finops_table_pattern_duplication"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "permissions_store_calls_read_endpoint_as_write",
+      "summary": "Permissions UI writes against endpoints whose server contracts are read-only or mismatched, producing unreliable admin updates.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`updateUserPermissions` posts to `voicebot/permissions/users/permissions` (`permissionsStore.ts:165`) but server route `/users/permissions` returns computed permissions and does not persist updates (`permissions.ts:263-291`).",
+        "`getUserPermissions` uses `permissions/users/permissions` without `voicebot/` prefix (`permissionsStore.ts:200`) unlike sibling calls in the same store (`permissionsStore.ts:93,111,124,142`).",
+        "`updateUserAccessLevel` calls `voicebot/permissions/users/access_level` (`permissionsStore.ts:213`) but no matching backend route exists in `permissions.ts`."
+      ],
+      "suggestion": "Define a single typed contract for permissions endpoints (read vs mutate), align client paths to it, and add compile-time route constants plus integration tests that verify each store action hits an existing backend route with expected response shape.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "permissions_api_contract_drift"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "miniapp_jwt_secret_fail_open",
+      "summary": "Miniapp auth path accepts empty JWT secret fallback while core API auth requires explicit secret, creating inconsistent trust boundaries.",
+      "related_files": [
+        "backend/src/miniapp/routes/index.ts",
+        "backend/src/api/middleware/auth.ts"
+      ],
+      "evidence": [
+        "Core middleware throws if `APP_ENCRYPTION_KEY` is missing via `getEncryptionKey()` (`auth.ts:45-50`) and rejects auth.",
+        "Miniapp login signs token with `process.env.APP_ENCRYPTION_KEY ?? ''` (`index.ts:135-137`) and auth verifies with same fallback (`index.ts:168-170`), allowing operation with empty secret.",
+        "Miniapp debug path bypasses token verification and injects `testData` identity (`index.ts:152-159`)."
+      ],
+      "suggestion": "Use the same fail-fast secret resolution utility in miniapp and core auth, disallow empty secrets in all environments, and gate debug bypass behind explicit non-production + additional hard guard (e.g. allowlist or signed debug header).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_boundary_split"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "store_error_contracts_are_mixed",
+      "summary": "State stores mix throw-on-error and log-and-continue behavior, so callers cannot reliably handle failures.",
+      "related_files": [
+        "app/src/store/projectsStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`projectsStore` fetch methods catch and only log/set loading (`projectsStore.ts:74-77`, `95-98`, `116-119`) while CRUD methods rethrow (`187-189`, `203-205`, etc.).",
+        "`permissionsStore` mutators mostly swallow errors after toast (`permissionsStore.ts:154-159`, `171-176`, `190-195`, `223-227`, `239-244`), while `loadPermissionsLog` rethrows (`135`).",
+        "`voiceBotStore` has mutators with log-only catches (`voiceBotStore.ts:1356-1358`, `1410-1412`) but other flows surface explicit UI error messaging."
+      ],
+      "suggestion": "Adopt one store-level error policy (either always throw and let UI decide, or always return typed Result) and enforce it with shared helper wrappers plus lint rule/tests for swallowed catches.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_error_handling_fragmentation"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "http_transport_logic_fragmented_across_stores",
+      "summary": "Multiple independent HTTP wrappers duplicate transport logic and diverge on headers, prefixes, and failure semantics.",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voicebotHttp.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "`requestStore` defines its own backend/proxy resolver and POST wrapper (`requestStore.ts:22-45`, `49-92`).",
+        "`permissionsStore` re-implements similar backend/proxy logic (`permissionsStore.ts:35-79`) instead of reusing shared client.",
+        "`voicebotHttp` adds a third implementation with separate logging/retry checks (`voicebotHttp.ts:42-84`).",
+        "A canonical axios client already exists (`api.ts:6-14`) but is bypassed by these wrappers."
+      ],
+      "suggestion": "Consolidate transport into one typed HTTP layer with domain-specific adapters (CRM, voicebot, permissions) and remove per-store URL/proxy logic to prevent drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "http_client_fragmentation"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_deprecation_left_partial_scaffolding",
+      "summary": "Runtime-tag routing was neutralized but call sites, scripts, and model fields still carry the old mechanism, leaving migration residue in active paths.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/scripts/runtime-tag-backfill.ts",
+        "backend/src/voicebot_tgbot/activeSessionMapping.ts"
+      ],
+      "evidence": [
+        "Runtime filter helpers are now effectively no-op (`runtimeScope.ts:129-154`, `156-167`), but multiple runtime paths still call `mergeWithRuntimeFilter(..., { field: 'runtime_tag' })` (`processingLoop.ts:87-92`, `transcribeHandler.ts:137-142`, `voicebotWebmDedup.ts:43-55`, `ingressHandlers.ts:193-194`).",
+        "A dedicated backfill script still writes `runtime_tag: 'prod'` (`runtime-tag-backfill.ts:29-34`, `51-54`).",
+        "Active mapping type still carries `runtime_tag` as first-class field (`activeSessionMapping.ts:9`)."
+      ],
+      "suggestion": "Complete the migration by removing runtime_tag from active domain types/scripts and deleting runtime-filter call sites after introducing explicit environment/DB isolation at composition boundaries.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_tag_migration_residue"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "legacy_naming_and_typos_persist_in_public_contracts",
+      "summary": "Public request contracts mix legacy naming and typo compatibility, which keeps conventions unstable across modules.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "app/src/store/projectsStore.ts",
+        "app/src/store/kanbanStore.ts"
+      ],
+      "evidence": [
+        "Tickets route accepts both `statuses` and misspelled `satuses` (`tickets.ts:208`).",
+        "Frontend CRM stores keep snake_case API fields (`project_groups`, `project_group`, `source_project_group`, `dest_project_group`) while other app modules use camelCase typed client style.",
+        "The same domain (projects/tickets) therefore presents two naming dialects depending on call path."
+      ],
+      "suggestion": "Freeze a canonical request vocabulary (camelCase or strict backend snake_case with DTO mappers), remove typo aliases, and add validation that rejects unknown keys to prevent further drift.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "contract_naming_drift"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "response_envelope_protocol_drift",
+      "summary": "Auth/role middleware bypass shared API envelope, producing incompatible error shapes",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`auth.ts` and `roleGuard.ts` return `{ error: string }` directly from middleware.",
+        "`error.ts` centralizes errors through `sendError`, which returns `{ data: null, error: { message, ... } }`."
+      ],
+      "suggestion": "Route all middleware-originated errors through `sendError` (or a shared auth error helper wrapping it) so all API failures follow one envelope and message/code schema.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "auth_db_failure_masked_as_unauthorized",
+      "summary": "Performer lookup DB errors are downgraded into 401 user-not-found responses",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`authMiddleware` catches DB query exceptions in performer fetch and only logs (`Error fetching performer`) before continuing.",
+        "Subsequent `!performer` branch returns 401 `User not found in system`, conflating infra failure with auth failure."
+      ],
+      "suggestion": "On DB access failure, return a 500 via `sendError` with stable code (for example `auth_backend_unavailable`) and reserve 401 strictly for verified credential/identity failures.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "roleguard_objectid_validation_gap",
+      "summary": "Role guard lacks ObjectId validity guard and can emit 500 for malformed user IDs",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts"
+      ],
+      "evidence": [
+        "`roleGuard.ts` calls `new ObjectId(user.userId)` directly.",
+        "`auth.ts` checks `ObjectId.isValid(payload.userId)` before conversion; guard is not mirrored in role guard."
+      ],
+      "suggestion": "Validate `user.userId` with `ObjectId.isValid` in `requireRole`; return 401/403 for invalid identity inputs instead of falling into catch-all 500.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_auth_request_contracts",
+      "summary": "Auth request context is duplicated across middleware with drifting optional fields",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "`AuthenticatedRequest` and `RoleGuardRequest` both define `user` structures manually.",
+        "One interface treats user/db as required while the other marks them optional, forcing downstream defensive checks and drift."
+      ],
+      "suggestion": "Extract shared auth context types into a single module (e.g. `middleware/contracts/authContext.ts`) and compose narrower middleware-specific types from that source.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "middleware_export_style_island",
+      "summary": "Sibling middleware uses inconsistent export conventions without clear policy",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`auth.ts` and `roleGuard.ts` expose both named and default exports for middleware functions.",
+        "`error.ts` uses named exports only and also introduces the only class type in this folder (`AppError`)."
+      ],
+      "suggestion": "Adopt one middleware export convention (named-only recommended for tree-shaking and refactor safety), remove default exports, and keep error type declarations in a dedicated shared error-contract file.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "metrics_active_connection_not_balanced_on_abort",
+      "summary": "Active-connection gauge can drift because decrement only happens on `finish`",
+      "related_files": [
+        "backend/src/api/middleware/metrics.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`metrics.ts` increments `activeConnections` per request and decrements only in `res.on('finish')`.",
+        "No `close`/once-guarded fallback path exists for aborted or prematurely closed responses."
+      ],
+      "suggestion": "Track completion with a once-guarded finalize handler bound to both `finish` and `close` so gauge decrement is balanced for all termination paths.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "middleware_auth_error_contract_fragmented",
+      "summary": "Shared middleware concerns are implemented as parallel ad-hoc patterns",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "Auth and role middleware duplicate actor typing and partially duplicate identity loading/validation responsibilities.",
+        "Error protocol diverges between middleware, with no single enforced contract despite existing response helpers."
+      ],
+      "suggestion": "Introduce a unified middleware contract layer: shared `AuthContext` type, shared auth error helper (backed by `sendError`), and a single rule for whether role checks trust `req.performer` vs re-querying DB.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "auth_to_role_handoff_redundant_roundtrip",
+      "summary": "Role guard ignores authenticated performer handoff and performs extra DB orchestration",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "Auth middleware already resolves performer and attaches it to request.",
+        "Role guard performs another performer fetch by userId rather than consuming handoff context, adding extra seam complexity and failure modes."
+      ],
+      "suggestion": "Refactor role guard to consume `req.performer` populated by auth middleware (with explicit fallback policy), and centralize refresh logic in one helper only when strict revalidation is needed.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    }
+  ],
+  "review_quality": {
+    "batch_count": 5,
+    "dimension_coverage": 0.4,
+    "evidence_density": 2.375,
+    "high_score_missing_issue_note": 0,
+    "finding_pressure": 58.69,
+    "dimensions_with_findings": 12
+  },
+  "review_scope": {
+    "reviewed_files_count": 83,
+    "successful_batch_count": 5,
+    "full_sweep_included": true,
+    "total_files": 5,
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ]
+  },
+  "reviewed_files": [
+    "backend/src/api/middleware/roleGuard.ts",
+    "backend/src/api/middleware/auth.ts",
+    "backend/src/api/middleware/error.ts",
+    "backend/src/api/middleware/metrics.ts",
+    "app/e2e/voice-fab-lifecycle.spec.ts",
+    "app/src/components/NotificationsDrawer.tsx",
+    "app/src/components/PlanFactGrid.tsx",
+    "app/src/components/crm/CRMKanban.tsx",
+    "app/src/components/crm/projects/EditProject.tsx",
+    "app/src/components/voice/AudioUploader.tsx",
+    "app/src/components/voice/Categorization.tsx",
+    "app/src/components/voice/MeetingCard.tsx",
+    "app/src/components/voice/PossibleTasks.tsx",
+    "app/src/components/voice/SessionLog.tsx",
+    "app/src/components/voice/TranscriptionTableRow.tsx",
+    "app/src/pages/AnalyticsPage.tsx",
+    "app/src/pages/PlanFactPage.tsx",
+    "app/src/pages/operops/CRMPage.tsx",
+    "app/src/pages/operops/FinancesPerformersPage.tsx",
+    "app/src/pages/operops/ProjectsTree.tsx",
+    "app/src/pages/voice/SessionPage.tsx",
+    "app/src/pages/voice/SessionsListPage.tsx",
+    "app/src/services/guideDirectoryConfig.tsx",
+    "app/src/store/permissionsStore.ts",
+    "app/src/store/projectsStore.ts",
+    "app/src/store/sessionsUIStore.ts",
+    "backend/scripts/voicebot-close-inactive-sessions.ts",
+    "backend/src/api/routes/crm/tickets.ts",
+    "backend/src/api/routes/finops/fxRates.ts",
+    "backend/src/api/routes/voicebot/messageHelpers.ts",
+    "backend/src/api/routes/voicebot/permissions.ts",
+    "backend/src/api/routes/voicebot/uploads.ts",
+    "backend/src/miniapp/routes/index.ts",
+    "backend/src/services/voicebot/voicebotWebmDedup.ts",
+    "backend/src/voicebot_tgbot/ingressHandlers.ts",
+    "backend/src/workers/voicebot/handlers/processingLoop.ts",
+    "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+    "miniapp/src/components/ASTrackTime.tsx",
+    "app/src/components/BonusesGrid.tsx",
+    "app/src/components/crm/CRMCreateEpic.tsx",
+    "app/src/components/crm/CRMCreateTicket.tsx",
+    "app/src/components/crm/WorkHoursSidebar.tsx",
+    "app/src/components/crm/finances/PaymentForm.tsx",
+    "app/src/components/crm/projects/EditCustomer.tsx",
+    "app/src/components/voice/AccessUsersModal.tsx",
+    "app/src/components/voice/AddParticipantModal.tsx",
+    "app/src/components/voice/CategorizationStatusColumn.tsx",
+    "app/src/constants/crm.ts",
+    "app/src/pages/DirectoriesPage.tsx",
+    "app/src/pages/directories/AgentsPage.tsx",
+    "app/src/pages/directories/EmployeesSalariesPage.tsx",
+    "app/src/pages/operops/taskPageUtils.ts",
+    "app/src/services/types.ts",
+    "app/src/utils/voiceTimeline.ts",
+    "backend/scripts/backfill-work-hours-ticket-db-id.ts",
+    "backend/scripts/runtime-tag-backfill.ts",
+    "backend/scripts/summarize-mcp-watchdog.ts",
+    "backend/src/services/bdClient.ts",
+    "backend/src/services/finopsFxRates.ts",
+    "backend/src/services/google/sheets.ts",
+    "backend/src/services/reports/jiraStyleReport.ts",
+    "backend/src/services/voicebot/voicebotDoneNotify.ts",
+    "backend/src/voicebot_tgbot/activeSessionMapping.ts",
+    "backend/src/voicebot_tgbot/codexReviewCallbacks.ts",
+    "backend/src/workers/voicebot/handlers/allCustomPrompts.ts",
+    "backend/src/workers/voicebot/handlers/categorizeHandler.ts",
+    "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+    "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+    "backend/src/workers/voicebot/handlers/customPrompt.ts",
+    "backend/src/workers/voicebot/handlers/finalizationHandler.ts",
+    "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+    "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+    "miniapp/src/components/ASChangeStatus.tsx",
+    "miniapp/src/components/OneTicket.tsx",
+    "app/src/components/ExpensesGrid.tsx",
+    "app/src/components/codex/CodexIssueDetailsCard.tsx",
+    "app/src/pages/directories/ClientsProjectsRatesPage.tsx",
+    "app/src/pages/operops/TaskPage.tsx",
+    "app/src/store/kanbanStore.ts",
+    "app/src/store/voiceBotStore.ts",
+    "backend/src/api/routes/voicebot/sessions.ts",
+    "backend/src/workers/voicebot/handlers/codexDeferredReview.ts",
+    "backend/src/api/middleware/response.ts"
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "codex",
+    "run_stamp": "20260304_085342",
+    "created_at": "2026-03-04T08:57:35+00:00",
+    "batch_count": 5,
+    "batch_indexes": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "packet_path": "/home/strato-space/copilot/.desloppify/review_packet_blind.json",
+    "packet_sha256": "9dfe21842952fec2bbd63a6adae27c470804660ff200b8ba79eb6c27d0ecf874"
+  },
+  "assessment_coverage": {
+    "scored_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "selected_dimensions": [
+      "cross_module_architecture",
+      "convention_outlier",
+      "error_consistency",
+      "abstraction_fitness",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "ai_generated_debt",
+      "incomplete_migration",
+      "package_organization",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "design_coherence"
+    ],
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ],
+    "missing_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "initialization_coupling",
+      "dependency_health",
+      "test_strategy"
+    ]
+  }
+}

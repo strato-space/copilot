@@ -1,0 +1,217 @@
+  → query.json updated
+  → query.json updated
+  Zones: production: 48
+  [1/14] Logs...
+         0 instances → 0 findings
+  [2/14] Unused (tsc)...
+         0 instances -> 0 findings
+  [3/14] Dead exports...
+         0 instances → 0 findings
+  [4/14] Deprecated...
+         0 instances → 0 findings (properties suppressed)
+  [5/14] Structural analysis...
+         -> 7 structural findings
+  [6/14] Coupling + single-use + patterns + naming...
+         single-use: 34 found, 34 suppressed (50-200 LOC, 12 co-located)
+         orphaned: 2 files with zero importers
+         → 2 coupling/structural findings total
+  [7/14] Responsibility cohesion...
+         low-cohesion files: 1
+  [8/14] Signature analysis...
+         signature variance: 1
+  [9/14] Test coverage...
+         test coverage: 48 findings (659 production files)
+  [10/14] Code smells...
+         -> 14 smell findings
+         signature variance: 1 functions with inconsistent signatures
+  [11/14] Security...
+         security: clean (48 files scanned)
+  [12/14] Subjective review...
+         subjective review: clean (43 reviewable files)
+  [13/14] Boilerplate duplication...
+         zones: 11 boilerplate clusters excluded
+  [14/14] Duplicates...
+         5 clusters, 5 suppressed (<10 LOC)
+
+  Total: 74 findings
+  → query.json updated
+
+Desloppify Scan (typescript)
+
+  Scan complete
+  ──────────────────────────────────────────────────
+  +3 new · -4 resolved
+  ⚠ Skipped auto-resolve for: review (returned 0 — likely transient)
+  Scores: overall 58.3/100 (+24.7)  objective 74.6/100 (+61.7)  strict 58.3/100 (+24.7)  verified 74.6/100 (+61.7)  |  open (in-scope): 130 · open (out-of-scope carried): 606 · open (global): 736 / 469 in-scope total
+  * Noise budget: 10/detector (89 findings hidden in show output: review: +46, test_coverage: +38, smells: +5)
+  Scorecard dimensions (matches scorecard.png):
+  File health        █████████████░░  89.8%  (strict  89.8%)
+  AI generated debt  ██████████░░░░░  68.3%  (strict  68.3%)
+  API coherence      ██████░░░░░░░░░  41.8%  (strict  41.8%)
+  Abstraction fit    ████████░░░░░░░  54.5%  (strict  54.5%)
+  Auth consistency   █████░░░░░░░░░░  33.7%  (strict  33.7%)
+  Code quality       ███████████████  97.4%  (strict  97.4%)
+  Convention drift   █████████░░░░░░  56.9%  (strict  56.9%)
+  Cross-module arch  ███████░░░░░░░░  46.3%  (strict  46.3%)
+  Design coherence   ███████░░░░░░░░  44.6%  (strict  44.6%)
+  Duplication        ███████████████ 100.0%  (strict 100.0%)
+  Elegance           ███████░░░░░░░░  49.0%  (strict  49.0%)
+  Error consistency  ███████░░░░░░░░  45.6%  (strict  45.6%)
+  Security           ███████████████ 100.0%  (strict 100.0%)
+  Stale migration    ██████░░░░░░░░░  38.1%  (strict  38.1%)
+  Structure nav      ██████░░░░░░░░░  39.8%  (strict  39.8%)
+  Test health        █░░░░░░░░░░░░░░   6.1%  (strict   6.1%)
+
+  Score recipe:
+    overall = 40% mechanical + 60% subjective
+    Pool averages: mechanical 74.6% · subjective 47.4%
+    Biggest weighted drags:
+      - Test health: -9.40 pts (score 6.1%, 25.0% of mechanical pool)
+      - High elegance: -8.49 pts (score 43.4%, 25.0% of subjective pool)
+      - Mid elegance: -7.96 pts (score 46.9%, 25.0% of subjective pool)
+      - Design coherence: -3.78 pts (score 44.6%, 11.4% of subjective pool)
+      - Low elegance: -3.53 pts (score 56.8%, 13.6% of subjective pool)
+
+  Moved:
+    Test health            0.0% → 6.1%  (+6.1%)  strict: 0.0→6.1% (+6.1%)
+    Duplication            75.0% → 100.0%  (+25.0%)  strict: 75.0→100.0% (+25.0%)
+    Security               66.7% → 100.0%  (+33.3%)  strict: 66.7→100.0% (+33.3%)
+    File health            0.0% → 89.8%  (+89.8%)  strict: 0.0→89.8% (+89.8%)
+    Code quality           0.0% → 97.4%  (+97.4%)  strict: 0.0→97.4% (+97.4%)
+
+  Needs attention:
+    Test health (6%) — add tests for uncovered files: `desloppify show test_coverage`
+    Auth consistency (34%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    Stale migration (38%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    Structure nav (40%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    API coherence (42%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    High elegance (43%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    Design coherence (45%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    Error consistency (46%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    Cross-module arch (46%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+    Mid elegance (47%) — run `desloppify review --run-batches --runner codex --parallel --scan-after-import` to assess
+
+  Subjective path:
+    Reset baseline from zero: `desloppify scan --path backend/src/api --reset-subjective`
+    North star: strict 58.3/100 → target 95.0 (+36.7 needed)
+    Quality below target (<95%): Auth consistency 33.7%, Stale migration 38.1%, Structure nav 39.8%
+    Next command to improve subjective scores: `desloppify review --run-batches --runner codex --parallel --scan-after-import --dimensions authorization_consistency,incomplete_migration,package_organization`
+    Coverage debt: 0 files need review (stale/unreviewed)
+    Scope split: open (in-scope) 0 · open (out-of-scope carried) 120 · open (global) 120
+    Out-of-scope carried reasons: 120 unreviewed
+    Triage: `desloppify show subjective_review --status open`
+
+  84 potential design concerns (run `show concerns` to view)
+  ⟳ 42 chronic reopeners (reopened 2+ times). These keep bouncing — fix properly or wontfix. Run: `desloppify show --chronic` to see them.
+
+  AGENT PLAN (use `desloppify next --count 20` to inspect more items):
+  Agent focus: `desloppify issues` — 56 review findings need investigation — run `desloppify issues` to see the work queue
+  Strategy: 4 independent workstreams, safe to parallelize. Rescan after each phase to verify. Review: 56 finding(s) — `desloppify issues`.
+
+  Biggest things impacting score:
+    - review: 56 open — `desloppify issues`
+    - test_coverage: 48 open — `desloppify show test_coverage --status open`
+    - smells: 15 open — `desloppify show smells --status open`
+
+  → 130 findings open. Test health (6.1%) needs attention — run `desloppify next` to start. (56 review findings — run `desloppify issues`)
+
+  Narrative Plan:
+    Why now: 4 independent workstreams, safe to parallelize. Rescan after each phase to verify. Review: 56 finding(s) — `desloppify issues`.
+    Next: `desloppify issues` — 56 review findings need investigation — run `desloppify issues` to see the work queue
+    Verify: `desloppify scan` — revalidate after changes
+
+  Subjective scores below 90: Error consistency, Abstraction fit, AI generated debt, +10 more
+  You can rerun the subjective scoring with `desloppify review --run-batches --runner codex --parallel --scan-after-import`.
+  Then review progress in `desloppify status` and investigate blockers via `desloppify issues`.
+
+  Review: 56 findings pending — `desloppify issues`
+
+  Scorecard → scorecard.png
+  💡 Ask the user if they'd like to add it to their README with:
+     <img src="scorecard.png" width="100%">
+     (disable: --no-badge | move: --badge-path <path>)
+  Immutable packet: /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_091220.json
+  Blind packet: /home/strato-space/copilot/.desloppify/review_packet_blind.json
+  WARNING: this run targets 13/20 scored subjective dimensions (language default review dimension set).
+  Missing from this run: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +2 more
+  Rerun missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path backend/src/api --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy`
+  Runtime expectation: 9 batch(es), workers=3, timeout-per-batch=20m, worst-case upper bound ~60m.
+
+  Running holistic batches: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  Run artifacts: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_091220
+  Live run log: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_091220/run.log
+  Parallel runner config: max-workers=3, heartbeat=15.0s
+  Batch 1/9 queued (#1)
+  Batch 1/9 started (#1)
+  Batch 2/9 queued (#2)
+  Batch 2/9 started (#2)
+  Batch 3/9 queued (#3)
+  Batch 3/9 started (#3)
+  Batch 4/9 queued (#4)
+  Batch 5/9 queued (#5)
+  Batch 6/9 queued (#6)
+  Batch 7/9 queued (#7)
+  Batch 8/9 queued (#8)
+  Batch 9/9 queued (#9)
+  Batch heartbeat: 3/9 active, queued 6 (#1:15s, #2:15s, #3:15s)
+  Batch heartbeat: 3/9 active, queued 6 (#1:30s, #2:30s, #3:30s)
+  Batch heartbeat: 3/9 active, queued 6 (#1:45s, #2:45s, #3:45s)
+  Batch heartbeat: 3/9 active, queued 6 (#1:60s, #2:60s, #3:60s)
+  Batch 4/9 started (#4)
+  Batch 2/9 done in 71s (#2)
+  Batch heartbeat: 3/9 active, queued 5 (#1:86s, #3:86s, #4:15s)
+  Batch heartbeat: 3/9 active, queued 5 (#1:101s, #3:101s, #4:30s)
+  Batch 5/9 started (#5)
+  Batch 3/9 done in 113s (#3)
+  Batch 6/9 started (#6)
+  Batch 1/9 done in 123s (#1)
+  Batch heartbeat: 3/9 active, queued 3 (#4:67s, #5:24s, #6:15s)
+  Batch 7/9 started (#7)
+  Batch 4/9 done in 73s (#4)
+  Batch heartbeat: 3/9 active, queued 2 (#5:45s, #6:36s, #7:15s)
+  Batch heartbeat: 3/9 active, queued 2 (#5:60s, #6:51s, #7:30s)
+  Batch heartbeat: 3/9 active, queued 2 (#5:75s, #6:66s, #7:45s)
+  Batch 8/9 started (#8)
+  Batch 5/9 done in 89s (#5)
+  Batch heartbeat: 3/9 active, queued 1 (#6:94s, #7:73s, #8:15s)
+  Batch heartbeat: 3/9 active, queued 1 (#6:109s, #7:88s, #8:30s)
+  Batch heartbeat: 3/9 active, queued 1 (#6:124s, #7:103s, #8:45s)
+  Batch 9/9 started (#9)
+  Batch 6/9 done in 127s (#6)
+  Batch 7/9 done in 117s (#7)
+  Batch heartbeat: 2/9 active (#8:73s, #9:26s)
+  Batch heartbeat: 2/9 active (#8:88s, #9:41s)
+  Batch heartbeat: 2/9 active (#8:103s, #9:56s)
+  Batch heartbeat: 2/9 active (#8:118s, #9:71s)
+  Batch heartbeat: 2/9 active (#8:133s, #9:86s)
+  Batch 8/9 done in 146s (#8)
+  Batch heartbeat: 1/9 active (#9:113s)
+  Batch heartbeat: 1/9 active (#9:128s)
+  Batch heartbeat: 1/9 active (#9:143s)
+  Batch heartbeat: 1/9 active (#9:158s)
+  Batch heartbeat: 1/9 active (#9:173s)
+  Batch heartbeat: 1/9 active (#9:188s)
+  Batch 9/9 done in 193s (#9)
+  Run summary: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_091220/run_summary.json
+  Reviewed files captured for cache refresh: 134
+  Coverage gap: imported assessments for 13/20 scored subjective dimensions.
+  Still missing: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +2 more
+  Run to cover missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path backend/src/api --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy`
+
+  Merged outputs: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_091220/holistic_findings_merged.json
+  Review quality: dimension coverage 0.26, evidence density 1.29, high-score-missing-issue-note 0, finding-pressure 137.24 across 13 dims
+  Assessment import mode: trusted internal (durable scores)
+  Assessment updates applied: 13 dimension(s) (trusted internal run-batches import).
+
+  Holistic review imported:
+  +56 new issues (review findings), 14 resolved, 0 reopened
+
+  Assessments: abstraction fitness 54.5, ai generated debt 68.3, api surface coherence 41.8, authorization consistency 33.7, convention outlier 56.9, cross module architecture 46.3, design coherence 44.6, error consistency 45.6, high level elegance 43.4, incomplete migration 38.1, low level elegance 56.8, mid level elegance 46.9, package organization 39.8
+
+  56 review issues open total (56 review findings open total)
+  Run `desloppify issues` to see the work queue
+
+  Current scores: overall 33.6/100 · objective 12.9/100 · strict 33.6/100
+  Next command to improve subjective scores: `desloppify issues`
+
+  Running follow-up scan...

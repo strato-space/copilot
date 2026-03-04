@@ -1,0 +1,131 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 1,
+  "assessments": {
+    "design_coherence": 71.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "FinOps grid components reimplement the same pinned-month lifecycle and month-column ordering/rendering pattern independently (`PlanFactGrid.tsx`, `BonusesGrid.tsx`, `ExpensesGrid.tsx`) instead of sharing one composable table strategy.",
+        "Voice backend orchestration is split into multiple near-duplicate handler flows for prompt-based processors (`customPrompt.ts`, `questionsHandler.ts`, `oneCustomPrompt.ts`, `finalizationHandler.ts`) with inconsistent processor-state write shape (`questioning_error*` flat fields vs `processors_data.<processor>.*`).",
+        "`voiceBotStore.ts` (2016 LOC) mixes socket lifecycle, API transport, large data normalization/grouping, UI messaging side effects, and CRUD/taskflow logic in one Zustand module, creating a high-change-risk hub.",
+        "`uploads.ts` (967 LOC) combines upload transport, deduplication policy, session authorization logic, queue orchestration, socket emission, Telegram attachment streaming, and legacy alias endpoints in a single route module.",
+        "`sessions.ts` contains a shared `sessionAccessUtils.resolve` but still duplicates inline permission checks in multiple routes (e.g. `save_create_tasks`, `delete`, `send_to_crm`, `clear_agent_results`), indicating unresolved structural consolidation."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_month_grid_pattern_forked",
+      "summary": "Pinned-month table behavior is copy-implemented across three FinOps grids.",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx"
+      ],
+      "evidence": [
+        "All three components keep local `pinnedMonths` state from `localStorage`, normalize via `normalizePinnedMonths`, reorder month columns using pinned/non-pinned split, and render near-identical pin header UX.",
+        "Each file redefines its own month-column composition and sticky offset behavior rather than consuming a shared month-grid abstraction."
+      ],
+      "suggestion": "Extract a shared month-grid composition layer (pin state hook + ordered month descriptors + common header renderer), then keep domain-specific cell renderers only in each grid.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_ui_abstraction_for_finops_grids"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_prompt_processor_pipeline_diverged",
+      "summary": "Prompt-based voice handlers duplicate orchestration with diverging state contracts.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/finalizationHandler.ts"
+      ],
+      "evidence": [
+        "Handlers repeat the same sequence: validate IDs, load DB records, skip on missing input, create OpenAI client, call `responses.create`, normalize output, and write processor status/error fields.",
+        "`questionsHandler.ts` writes flat `questioning_error*` fields while other handlers write `processors_data.<processor>.*`, so structurally similar jobs persist state in incompatible shapes."
+      ],
+      "suggestion": "Create a shared processor-runner utility with pluggable input collector/output normalizer and one canonical status/error persistence schema under `processors_data` for all processors.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "processor_orchestration_without_shared_kernel"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_store_is_multi_boundary_hub",
+      "summary": "A single Zustand store owns transport, realtime, normalization, and UI side effects.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/pages/voice/SessionPage.tsx",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` defines large pure transformation utilities (`transformVoiceBotMessagesToGroups`, attachment normalization), socket event wiring, REST/axios calls, and AntD `message.*` UI effects in one module.",
+        "Session and task UI components consume this hub store for unrelated concerns, increasing coupling and making behavior changes in one area risk regressions in others."
+      ],
+      "suggestion": "Split into bounded slices: `voiceSessionDataStore` (state + reducers), `voiceRealtimeStore` (socket lifecycle), and `voiceApiActions` (transport), moving heavy normalization helpers into standalone domain utilities.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "state_layer_boundary_collapse"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "uploads_route_overloaded",
+      "summary": "Voice uploads route mixes too many concerns and policy decisions.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` includes multipart parsing, file persistence, per-session dedup behavior, queue job enqueueing, socket broadcasting, attachment retrieval/proxying from Telegram, plus legacy create/close session endpoints.",
+        "The module duplicates session-access policy logic that also exists in `sessions.ts` (shared resolver plus repeated route-level checks), increasing drift risk between sibling voice routes."
+      ],
+      "suggestion": "Decompose into focused route/services: `upload-audio`, `upload-attachment`, `attachment-stream`, and move session access + dedup policy into shared voicebot services consumed by both uploads and sessions modules.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "route_module_accumulation_without_service_boundaries"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "sessions_access_logic_still_duplicated",
+      "summary": "Session access checks are partly centralized but repeatedly reimplemented inline.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` defines `sessionAccessUtils.resolve(...)` with project/public/restricted access logic, but routes like `save_create_tasks`, `delete`, `send_to_crm`, and `clear_agent_results` still implement bespoke permission branches.",
+        "`uploads.ts` also defines its own `checkSessionAccess(...)` with overlapping logic instead of reusing one canonical policy implementation."
+      ],
+      "suggestion": "Adopt one session-access policy service and route guard adapter used by both files; remove route-local permission branches and keep per-route differences declarative (required capability + operation).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "duplicated_access_policy_enforcement"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Shared behavior is frequently copied at feature boundaries instead of extracted into domain services/hooks.",
+      "Legacy compatibility paths are retained inside active modules instead of isolated behind adapters.",
+      "State and orchestration layers are not strongly bounded, so modules accumulate transport + policy + view concerns together."
+    ],
+    "likely_symptoms": [
+      "finops_month_grid_pattern_forked",
+      "voice_prompt_processor_pipeline_diverged",
+      "sessions_access_logic_still_duplicated"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -1,0 +1,201 @@
+{
+  "batch": "Abstractions & Dependencies",
+  "batch_index": 3,
+  "assessments": {
+    "abstraction_fitness": 72.4,
+    "mid_level_elegance": 68.7,
+    "low_level_elegance": 66.9
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "Identity wrappers are repeated with no behavior (`runtimeSessionQuery`/`runtimeMessageQuery`) in `backend/src/api/routes/voicebot/messageHelpers.ts:51-54`, `backend/src/api/routes/voicebot/transcription.ts:17-21`, `backend/src/api/routes/voicebot/uploads.ts:38-40`, and `backend/src/api/routes/voicebot/permissions.ts:17-18`.",
+        "Multiple route-local request interfaces re-declare near-identical auth performer/user shapes instead of using one shared contract (`RoleGuardRequest`, `UploadsRequest`, `VoicebotRequest`, `PermissionsRequest`) across `backend/src/api/middleware/roleGuard.ts`, `backend/src/api/routes/voicebot/uploads.ts`, `backend/src/api/routes/voicebot/transcription.ts`, `backend/src/api/routes/voicebot/permissions.ts`.",
+        "Large route modules own validation + persistence + business orchestration in one place (notably `backend/src/api/routes/voicebot/sessions.ts` and `backend/src/api/routes/crm/legacy/performerspayments.ts`), making interfaces broad and hard to substitute."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 63.1,
+        "indirection_cost": 76.8,
+        "interface_honesty": 77.3
+      }
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Boundary style is inconsistent inside the same API layer: FinOps routes delegate to services (`backend/src/api/routes/finops/expensesOperations.ts`, `backend/src/api/routes/finops/monthClosures.ts`) while sibling CRM/Voice routes embed DB and orchestration directly (`backend/src/api/routes/crm/tickets.ts`, `backend/src/api/routes/voicebot/transcription.ts`, `backend/src/api/routes/voicebot/permissions.ts`).",
+        "Permission/read-access seam logic is duplicated with local variants (`hasSessionReadAccess` in `transcription.ts` vs inline role/access checks in `sessions.ts` and role middleware in `roleGuard.ts`), increasing divergence risk.",
+        "External integration orchestration is embedded directly in route handlers (`backend/src/api/routes/crm/legacy/performerspayments.ts` Google Docs/Drive flow, `backend/src/api/routes/crm/codex.ts` child process orchestration), creating thick HTTP seams."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Multiple handlers use broad catch-and-string patterns (`res.status(500).json({ error: String(error) })`) across `backend/src/api/routes/crm/epics.ts`, `backend/src/api/routes/crm/finances.ts`, `backend/src/api/routes/voicebot/persons.ts`, `backend/src/api/routes/voicebot/transcription.ts`, losing structured failure detail and consistency.",
+        "Silent swallow pattern exists in hot paths (`catch {}` in ticket enrichment loop at `backend/src/api/routes/crm/tickets.ts:244-274`) which obscures data-quality failures.",
+        "Data shaping loops are unnecessarily branchy/heavy (dictionary/customer-project-group reconstruction in `backend/src/api/routes/crm/dictionary.ts:83-173`, finance aggregations and post-processing in `backend/src/api/routes/crm/legacy/performerspayments.ts:108-250`) with mixed responsibilities in single blocks."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "identity_runtime_query_wrappers",
+      "summary": "No-op runtime query wrappers create indirection without enforcing any boundary contract.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`runtimeMessageQuery`/`runtimeSessionQuery` are plain `query => query` in multiple files (e.g. `messageHelpers.ts:51-54`, `transcription.ts:17-21`, `uploads.ts:38-40`, `permissions.ts:17-18`).",
+        "Call sites treat these wrappers as meaningful policy boundaries, but they currently provide no validation, scoping, or transformation."
+      ],
+      "suggestion": "Centralize runtime query policy in one shared utility (or remove wrappers entirely). If runtime scoping is intentionally removed, replace wrapper usage with direct queries to reduce deceptive abstraction.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "pseudo_abstractions_without_behavior"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_auth_request_contracts",
+      "summary": "Auth request contracts are redefined per route, causing parallel interface drift.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/transcription.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`RoleGuardRequest`, `UploadsRequest`, `VoicebotRequest`, and `PermissionsRequest` each restate similar `user`/`performer` structure with slight differences.",
+        "Permission checks then depend on local shape assumptions (`performer.telegram_id`, `user.userId`, etc.), making inter-route seam behavior non-uniform."
+      ],
+      "suggestion": "Create one shared authenticated request type hierarchy in middleware/types and make routes consume that contract instead of local ad-hoc interfaces.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "pseudo_abstractions_without_behavior"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "route_service_boundary_inconsistency",
+      "summary": "Route boundaries mix orchestration styles (service-first vs raw DB/procedural), increasing seam entropy.",
+      "related_files": [
+        "backend/src/api/routes/finops/expensesOperations.ts",
+        "backend/src/api/routes/finops/monthClosures.ts",
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/voicebot/transcription.ts"
+      ],
+      "evidence": [
+        "FinOps routes delegate business logic to service functions (`createExpenseOperation`, `upsertMonthClosure`), while CRM/Voice peers execute aggregation/permission/orchestration directly in handlers.",
+        "This creates uneven integration contracts: some handlers act as thin transport adapters, others are thick application services."
+      ],
+      "suggestion": "Adopt one route-layer contract: keep handlers thin and move orchestration into domain services for CRM/Voice modules, with shared validation and access helpers.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "inconsistent_boundary_ownership"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "external_side_effects_embedded_in_routes",
+      "summary": "External side-effect orchestration lives in HTTP route modules instead of dedicated integration services.",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/crm/codex.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`performerspayments.ts` directly coordinates Drive/Docs API calls, retries (`sleep`), and business computations within route handlers.",
+        "`codex.ts` embeds command execution/retry/sync logic for `bd` directly in route module.",
+        "`sessions.ts` combines protocol contracts, request parsing, and deep orchestration in a single route file."
+      ],
+      "suggestion": "Extract integration adapters (Google, bd CLI, session orchestration) into service modules with explicit return contracts, leaving route handlers as transport/auth wrappers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "inconsistent_boundary_ownership"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "silent_error_swallowing_in_ticket_enrichment",
+      "summary": "Ticket enrichment suppresses per-record exceptions, hiding data-mapping failures.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/crm/dictionary.ts"
+      ],
+      "evidence": [
+        "Inside ticket enrichment loop, `catch {}` silently ignores mapping failures (`tickets.ts:272-274`).",
+        "The same area depends on cross-document linking assumptions (project/group/customer), so silent drop creates nondeterministic output without diagnostics."
+      ],
+      "suggestion": "Replace empty catch with structured warning logs including ticket/project IDs and failure reason; isolate enrichment into a pure function that returns explicit partial-failure metadata.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "implicit_failure_paths"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "stringified_error_contract_sprawl",
+      "summary": "Repeated `String(error)` responses flatten errors and obscure branch-specific failure behavior.",
+      "related_files": [
+        "backend/src/api/routes/crm/epics.ts",
+        "backend/src/api/routes/crm/finances.ts",
+        "backend/src/api/routes/voicebot/persons.ts",
+        "backend/src/api/routes/voicebot/transcription.ts"
+      ],
+      "evidence": [
+        "Handlers commonly return `res.status(500).json({ error: String(error) })` rather than consistent typed payloads.",
+        "This pattern leaks implementation text and prevents callers from distinguishing recoverable/expected failure classes."
+      ],
+      "suggestion": "Standardize route error mapping through shared middleware (`AppError` + response envelope) and avoid raw `String(error)` in handlers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_failure_paths"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "high_complexity_data_shaping_blocks",
+      "summary": "Large in-handler transformation blocks combine unrelated concerns, reducing local clarity and testability.",
+      "related_files": [
+        "backend/src/api/routes/crm/dictionary.ts",
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "`dictionary.ts` composes customer/group/project normalization and tree assembly in nested loops (`83-173`) with repeated scans (`projects.filter` inside loops).",
+        "`performerspayments.ts` combines aggregation math, grouping, normalization, and external-doc prep in a single handler path (`108-250` and beyond).",
+        "`messageHelpers.ts` has broad mutation/canonicalization routines with many branching paths in one function (`ensureMessageCanonicalTranscription`)."
+      ],
+      "suggestion": "Split heavy blocks into small pure transforms (normalize, group, enrich, summarize) and orchestration layer; add focused unit tests for each transform boundary.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "monolithic_handler_logic"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Pseudo-abstractions remained after runtime-tag and migration transitions (wrappers/interfaces retained without active behavior).",
+      "Route modules own too much domain orchestration, so seam quality varies by author/module rather than policy.",
+      "Error handling conventions are not enforced at route boundaries, leading to silent or flattened failures."
+    ],
+    "likely_symptoms": [
+      "identity_runtime_query_wrappers",
+      "duplicated_auth_request_contracts",
+      "stringified_error_contract_sprawl"
+    ],
+    "possible_false_positives": [
+      "Some heavy handlers may be intentionally co-located for migration compatibility, but current shape still harms abstraction and seam consistency."
+    ]
+  }
+}

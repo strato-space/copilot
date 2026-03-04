@@ -86,7 +86,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Upload route now has explicit upstream-failure shaping: Nginx intercepts `502/503/504` for `/api/voicebot/upload_audio` and returns structured JSON `503 backend_unavailable`, while WebRTC client keeps chunk in failed/manual-retry state and shows actionable retry guidance.
 - Session upload flow consumes pending image anchors (`pending_image_anchor_message_id` / `pending_image_anchor_oid`): first uploaded chunk is linked with `image_anchor_message_id`, then pending anchor markers are cleared.
 - Categorization updates are now delivered via websocket `message_update` events (no page refresh required): processor workers push `SEND_TO_SOCKET` jobs, backend consumes them and broadcasts to `voicebot:session:<session_id>`.
+- `CREATE_TASKS` realtime delivery is session-room first: workers always include `session_id` in `tickets_prepared`, optional `socket_id` is used only for targeted emit, and socket events worker preserves array payloads for this event.
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
+- Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - `POST /api/voicebot/sessions/get` follows fail-fast lookup semantics and returns `404 Session not found` when the session cannot be resolved in canonical scope.
@@ -340,6 +342,11 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-04 12:22):
+  - Closed `copilot-w8l0` epic (`copilot-w8l0.1`..`copilot-w8l0.3`) for quota-recovery realtime parity: `tickets_prepared` now reaches session-room subscribers without requiring `socket_id`, and socket dispatch preserves array payloads for this event.
+  - Transcription fallback rows with quota errors now show metadata signature footer and are designed for in-place replacement when retries produce transcript text.
+  - Added QA runbook `docs/voicebot-plan-sync/quota-recovery-realtime-qa-checklist.md`.
+  - Validation passed: `cd backend && npm run test -- __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/workers/workerCreateTasksPostprocessingRealtime.test.ts __tests__/voicebot/socket/voicebotSocketEventsWorker.test.ts`, `cd app && npm run test:serial -- __tests__/voice/transcriptionFallbackErrorSignatureContract.test.ts`, `cd backend && npm run build`, `cd app && npm run build`.
 - Close-session refresh (2026-03-03 20:20):
   - Added `docs/MULTI_AGENT_DISTILLATION_2026-03-03.md` as the canonical session artifact for multi-agent orchestration guidance: isolated worker context, `bd`-native forward-only graph usage, and explicit hierarchy mapping `CJM -> BPMN -> UserFlow -> Screens -> Widgets -> Atoms/Tokens`.
   - Synchronized closeout records in `CHANGELOG.md` / `AGENTS.md` / `README.md` and accepted pending local artifacts in this closeout package: `.agents/product-marketing-context.md`, `output/copilot-marketing-discovery-2026-03-03.pptx`, and `tmp/copilot-marketing-ppt/**`.

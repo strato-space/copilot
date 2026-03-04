@@ -1,0 +1,81 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 2,
+  "assessments": {
+    "package_organization": 79.0,
+    "high_level_elegance": 77.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`backend/src/api/middleware/metrics.ts` is placed under `middleware/` but also owns Prometheus registry bootstrap, metric definitions, health state mutation (`setHealthStatus`), and a full `/metrics` route handler export (`metricsHandler`), mixing transport middleware with observability module responsibilities.",
+        "`backend/src/api/middleware/auth.ts` pulls directly from persistence and permission layers (`../../services/db.js`, `../../permissions/permission-manager.js`, `COLLECTIONS.PERFORMERS`) rather than staying a thin transport boundary.",
+        "Holistic structure shows `backend/src/api/middleware/` importing across multiple non-API directories (`backend/src/services/`, `backend/src/permissions/`, `backend/src/utils/`, `backend/src/`), indicating the folder is serving as a mixed concern bucket rather than a focused HTTP middleware package."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`auth.ts` combines token parsing/verification, DB performer resolution, permission computation, and request context hydration in one file-level role, so ownership is not crisply domain-aligned.",
+        "`metrics.ts` combines instrumentation composition (register/counters/histograms), middleware runtime behavior, endpoint delivery, and health control API, creating a top-level module with multiple reasons to change.",
+        "Within the same middleware package, module roles differ sharply (`error.ts` is a focused adapter, while `auth.ts` and `metrics.ts` are orchestration-heavy), which weakens predictability of package boundaries for new changes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "middleware_folder_mixed_observability_auth_ownership",
+      "summary": "The `api/middleware` package is carrying unrelated ownership domains (auth policy+data access and observability runtime), obscuring directory boundaries.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/metrics.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`metrics.ts` exports `register`, multiple metric primitives, `setHealthStatus`, `metricsMiddleware`, and `metricsHandler`, indicating a full observability module living inside middleware.",
+        "`auth.ts` imports DB and permission services and queries performer collection directly, making middleware depend on lower-layer implementation details.",
+        "`error.ts` remains a thin transport adapter, highlighting that sibling files in the same folder do not share a coherent package purpose."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/observability/httpMetrics.ts` and move Prometheus registry/metric definitions plus `setHealthStatus` there; keep temporary re-exports in `api/middleware/metrics.ts`. 2) Create `backend/src/api/routes/system/metrics.ts` (or existing system routes area) and move `metricsHandler` there; keep middleware-only logic in `api/middleware/metrics.ts`. 3) Extract auth data/policy work from `auth.ts` into `backend/src/services/auth/sessionResolver.ts` (token->performer->permissions), leaving middleware as adapter. 4) Update imports with `rg \"api/middleware/(metrics|auth)\" backend/src -n` and adjust call sites. 5) Validate with `cd backend && npm run build && npm run test`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_boundary_blur"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "transport_layer_over_orchestrates_domain_logic",
+      "summary": "Transport middleware modules are acting as domain orchestrators, reducing ownership clarity and increasing ripple effects for unrelated changes.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/metrics.ts"
+      ],
+      "evidence": [
+        "`auth.ts` handles cryptographic verification, persistence lookup, permission derivation, and request model shaping in one module, so auth policy/storage changes force middleware edits.",
+        "`metrics.ts` centralizes both HTTP lifecycle interception and global metric/health control concerns, so metric model changes and route exposure changes collide in one file."
+      ],
+      "suggestion": "Staged reorg plan: 1) Introduce clear top-level ownership split: `api/middleware/*` for pure request/response adapters, `services/auth/*` for auth resolution, `observability/*` for metric state/model, and `api/routes/system/*` for endpoint exposure. 2) Move logic in this order: auth resolver extraction first, observability extraction second, route handler move third, then delete compatibility re-exports. 3) Run import and boundary checks: `rg \"from '../../(services|permissions|utils|constants)\" backend/src/api/middleware -n` should shrink to adapter-only dependencies. 4) Validate with `cd backend && npm run build` and smoke route checks for `/api/metrics` plus authenticated endpoints.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "middleware_boundary_blur"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Middleware directory evolved into a convenience aggregation point rather than a strict transport layer.",
+      "Cross-cutting concerns (auth, observability) lack dedicated domain packages, causing API-layer files to absorb orchestration logic."
+    ],
+    "likely_symptoms": [
+      "middleware_folder_mixed_observability_auth_ownership",
+      "transport_layer_over_orchestrates_domain_logic"
+    ],
+    "possible_false_positives": []
+  }
+}

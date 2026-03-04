@@ -1,0 +1,120 @@
+{
+  "batch": "Testing & API",
+  "batch_index": 4,
+  "assessments": {
+    "api_surface_coherence": 67.0,
+    "mid_level_elegance": 72.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "Auth middlewares that serve similar API boundaries use different identity validation and failure semantics: `requireRole` and `requirePermission` both call `new ObjectId(user.userId)` without pre-validation, so malformed IDs surface as 500s instead of contract-level 4xx rejections.",
+        "`requireRole` filters `is_banned` while `requirePermission` does not, so users can be denied in one guarded route family and still pass another.",
+        "403 payload shapes differ across sibling auth boundaries (`allowed_roles` + human names vs `required_permissions` + permission keys), making client-side error handling inconsistent."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Boundary ID extraction/validation is duplicated and inconsistent in `permission-manager.ts`: `checkSessionOwnership` validates `session_id` with `ObjectId.isValid`, but `checkProjectAssignment` does not before `new ObjectId(sessionId)`.",
+        "`projecttreeaudit.ts` cannot rely on the authenticated request seam and instead re-casts `Request` to ad-hoc `user/performer` fields, despite `AuthenticatedRequest` already existing in `permission-manager.ts`.",
+        "These seams force each module to re-interpret request identity context, increasing glue code and divergence risk."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "unvalidated_objectid_at_auth_boundary",
+      "summary": "Auth middleware converts user IDs to ObjectId without validating input shape first.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`roleGuard.ts` uses `new ObjectId(user.userId)` at line 47 without `ObjectId.isValid` guard.",
+        "`permission-manager.ts` uses `new ObjectId(user.userId)` at line 204 without prior validation.",
+        "A malformed `userId` from token parsing or legacy rows throws and is caught as 500, producing inconsistent API behavior for authentication failures."
+      ],
+      "suggestion": "Introduce a shared auth ID parser (e.g., `parsePerformerObjectId`) used by both middlewares. Return a deterministic 401/400 response for invalid identifiers instead of allowing constructor exceptions to fall into generic 500 handling.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_identity_boundary_validation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "role_permission_guard_contract_drift",
+      "summary": "Two primary access guards enforce different account-state and error-response contracts.",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`roleGuard.ts` includes `is_banned: { $ne: true }` in performer lookup (line 49).",
+        "`permission-manager.ts` performer lookup omits `is_banned` (lines 203-206).",
+        "403 responses differ in schema and semantics (`allowed_roles` + role names vs `required_permissions`), forcing clients to branch on middleware-specific payloads."
+      ],
+      "suggestion": "Define a single shared performer-loading + denial-response contract for middleware boundaries (common banned/deleted checks and normalized error envelope fields) and reuse it in both guards.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_identity_boundary_validation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "session_id_validation_diverges_between_context_checks",
+      "summary": "Contextual permission checks use inconsistent session ID validation paths.",
+      "related_files": [
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "`checkSessionOwnership` validates `session_id` with `ObjectId.isValid` before DB query (lines 314-320).",
+        "`checkProjectAssignment` uses `new ObjectId(sessionId)` without validity guard (lines 344-348), creating throw-based control flow for malformed IDs.",
+        "The seam handles equivalent request context with two incompatible error paths, which complicates middleware composition and observability."
+      ],
+      "suggestion": "Centralize request ID extraction + validation for `session_id`/`project_id` into one utility that returns typed parse results, then consume it from all contextual checks and role/permission middlewares.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_identity_boundary_validation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "audit_logger_uses_ad_hoc_request_identity_cast",
+      "summary": "Audit logging seam bypasses typed auth context and reinterprets request identity locally.",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/projecttreeaudit.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`projecttreeaudit.ts` accepts plain `Request` and casts it to a local shape with optional `user/performer` (lines 52-56).",
+        "A canonical `AuthenticatedRequest` type already exists in `permission-manager.ts` (lines 165-178), but this logger does not use it.",
+        "Local casting creates weak coupling where actor identity fields can drift silently from middleware-populated request contracts."
+      ],
+      "suggestion": "Use a shared request auth-context type (or a small `resolveRequesterId(req)` utility in a common module) so audit logging and permission middleware consume the same identity seam.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "request_context_contract_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Identity and ObjectId parsing is implemented independently in each boundary module instead of via one validated auth-context contract.",
+      "Middleware and route-level helpers expose inconsistent error/denial envelopes because no shared API error schema is enforced for auth failures."
+    ],
+    "likely_symptoms": [
+      "unvalidated_objectid_at_auth_boundary",
+      "session_id_validation_diverges_between_context_checks",
+      "role_permission_guard_contract_drift"
+    ],
+    "possible_false_positives": []
+  }
+}

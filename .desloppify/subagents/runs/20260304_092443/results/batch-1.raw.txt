@@ -1,0 +1,103 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 1,
+  "assessments": {
+    "package_organization": 78.0,
+    "high_level_elegance": 80.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`backend/src/workers/voicebot/handlers/shared/` contains both generic helpers (`customPromptShared.ts`) and full job handlers (`audioMerging.ts`, `cleanupEmptySessions.ts`), so folder naming does not map to one ownership boundary.",
+        "Import-affinity is mismatched: `customPromptShared.ts` depends on `../../customPromptsDir.js` and `../messageProcessors.js`, meaning this `shared` module is coupled to custom-prompt/message-processing domains rather than being broadly reusable infrastructure.",
+        "Holistic structure data shows very low cohesion signals for this directory (avg_fan_in 0.1, avg_fan_out 1.6) while still emitting edges to multiple domains (`services`, `utils`, worker handler layers), indicating convenience placement rather than stable package boundaries."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`audioMerging.ts` is a postprocessing job entrypoint but is housed under `handlers/shared`, blurring conceptual decomposition between 'job handlers' and 'shared primitives'.",
+        "`cleanupEmptySessions.ts` is also a dedicated job handler wrapper in the same `shared` folder, reinforcing a pattern where top-level roles are mixed in one package.",
+        "`audioMerging.ts` defines its own runtime-scoping helper (`runtimeQuery`) with runtime-tag policy details inside the handler module, while adjacent shared runtime concerns are elsewhere, which weakens clear top-level ownership of environment/query policy."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "shared_folder_role_mixing",
+      "summary": "`handlers/shared` mixes reusable helpers with concrete job handlers, obscuring package boundaries.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts",
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts"
+      ],
+      "evidence": [
+        "`audioMerging.ts` exports `handleAudioMergingJob` (full job handler logic with DB reads/counts).",
+        "`cleanupEmptySessions.ts` exports `handleCleanupEmptySessionsJob` (job entrypoint wrapper to service).",
+        "`customPromptShared.ts` is utility-style (prompt file read + row normalization).",
+        "These three responsibilities coexist under one folder named `shared`, so directory naming no longer indicates a single concern."
+      ],
+      "suggestion": "Staged reorg plan: 1) create `backend/src/workers/voicebot/handlers/postprocessing/` and move `audioMerging.ts` there first; 2) move `cleanupEmptySessions.ts` to `backend/src/workers/voicebot/handlers/common/` (or `maintenance/`) to separate scheduler maintenance jobs from shared helpers; 3) keep `customPromptShared.ts` in a prompt-specific helper folder (`handlers/customPrompt/` or `handlers/shared/customPrompt/`) only if used by multiple custom-prompt handlers; 4) update imports in `backend/src/workers/voicebot/manifest.ts` and affected handlers; 5) validate with `cd backend && npm run build` and `rg -n \"handlers/shared/(audioMerging|cleanupEmptySessions)\" backend/src` to confirm no stale paths.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "shared_namespace_overload"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "custom_prompt_helper_affinity_mismatch",
+      "summary": "`customPromptShared.ts` is placed as global shared code but is tightly coupled to custom-prompt internals.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts"
+      ],
+      "evidence": [
+        "`customPromptShared.ts` imports `resolveCustomPromptsDir` from `../../customPromptsDir.js` and `mapJsonArrayRows` from `../messageProcessors.js`, so it depends on specific upstream handler modules.",
+        "In the same folder, `audioMerging.ts` and `cleanupEmptySessions.ts` are unrelated domains, confirming this is not a cohesive custom-prompt package."
+      ],
+      "suggestion": "Staged reorg plan: 1) create `backend/src/workers/voicebot/handlers/customPrompt/shared.ts` (or `customPrompt/utils.ts`) and move `getCustomPromptText` + `normalizeCustomPromptRows`; 2) update imports in all custom prompt handlers to the new path; 3) leave non-custom-prompt handlers out of this package; 4) run `rg -n \"customPromptShared\" backend/src/workers/voicebot` to update all references; 5) run `cd backend && npm run build` for import/type verification.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "shared_namespace_overload"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "runtime_policy_owned_by_handler_file",
+      "summary": "Runtime scoping policy is embedded in a specific job handler, weakening top-level role clarity.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+        "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts"
+      ],
+      "evidence": [
+        "`audioMerging.ts` defines a local `runtimeQuery` wrapper with runtime-tag policy fields and uses it for all DB reads, combining business action + environment scoping policy in one file.",
+        "Other files in this folder are wrappers/helpers with different concerns, so policy ownership is fragmented and not obvious from package decomposition."
+      ],
+      "suggestion": "Staged reorg plan: 1) move runtime-scope composition into one canonical shared runtime utility (single policy owner) and have handlers call it only; 2) after extracting policy, relocate `audioMerging.ts` out of `handlers/shared` into `handlers/postprocessing/`; 3) keep `handlers/shared` limited to policy-free helper primitives; 4) update imports and run `cd backend && npm run build`; 5) run `rg -n \"mergeWithRuntimeFilter|runtime_tag\" backend/src/workers/voicebot/handlers` to verify policy duplication is removed.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "shared_namespace_overload"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "The `shared` namespace is being used as a convenience bucket rather than a strict boundary, so unrelated responsibilities co-locate.",
+      "Folder topology does not encode job-type ownership (postprocessing/common/custom-prompt), causing policy and orchestration code to drift into utility locations."
+    ],
+    "likely_symptoms": [
+      "shared_folder_role_mixing",
+      "custom_prompt_helper_affinity_mismatch",
+      "runtime_policy_owned_by_handler_file"
+    ],
+    "possible_false_positives": []
+  }
+}

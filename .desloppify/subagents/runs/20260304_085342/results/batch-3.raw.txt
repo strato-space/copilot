@@ -1,0 +1,141 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 3,
+  "assessments": {
+    "design_coherence": 72.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/sessions.ts` remains a 6001-line mixed-responsibility route file: session listing aggregation (`1545-1653`), summary persistence (`4319-4388`), project-file operations (`4390-4475`), and transcript/categorization mutation workflows with event-log side effects (`4724+`) are implemented together.",
+        "`app/src/pages/voice/SessionsListPage.tsx` combines URL state migration/persistence (`389-447`), data fetching coordination (`627-650`), FAB global polling/events (`723-750`), and bulk destructive actions (`830-908`) in one page component.",
+        "`app/src/store/voiceBotStore.ts` and `app/src/store/sessionsUIStore.ts` both hold UI state plus orchestration/business workflows: socket lifecycle (`969-1107`), HTTP CRUD and uploads (`1438-1710`), ticket mutation logic (`1749+`), and MCP-based title generation with UI notifications (`537-625`).",
+        "Voice worker handlers duplicate near-identical fetch/validate/process/update flows across multiple files (`customPrompt.ts`, `questionsHandler.ts`, `oneCustomPrompt.ts`, `createTasksFromChunks.ts`), with divergent processor state shape (`questionsHandler.ts` writes `questioning_error*` root fields while others use `processors_data.<processor>.error*`).",
+        "FinOps table components repeat the same month-pin/header/filter-table structural pattern in parallel implementations: `PlanFactGrid.tsx` (`231-352`), `ExpensesGrid.tsx` (`126-260`), and `BonusesGrid.tsx` (`297-409`)."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_sessions_route_god_module",
+      "summary": "Voice sessions route file is a god-module that mixes unrelated HTTP domains and heavy domain workflows in one surface.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` is 6001 LOC and declares dozens of route handlers in one file (`router.post` entries from `1659` through `5937`).",
+        "The same module handles list/read CRUD (`1545+`), summary save (`4319+`), project file catalog/upload (`4390+`), and transcript/categorization edit/delete flows with event-log orchestration (`4724+`, `5092+`, `5263+`).",
+        "Message-specific logic is partially extracted to `messageHelpers.ts`, but high-churn mutation orchestration still lives inline in `sessions.ts`, keeping boundary split incomplete."
+      ],
+      "suggestion": "Split `sessions.ts` by bounded responsibility (e.g., `sessions.list.ts`, `sessions.mutations.ts`, `sessions.project-files.ts`, `sessions.logs.ts`) and move transcript/categorization mutation orchestration into service modules so route handlers become thin transport adapters.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_orchestration_concentration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "sessions_list_page_overloaded_orchestrator",
+      "summary": "Sessions list page is overloaded with persistence, realtime polling glue, filtering, and mutation workflows beyond page composition responsibility.",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "The page holds many unrelated state domains simultaneously (`335-351` local UI action state, query parsing/filtering `371-387`, saved-tags and localStorage migration `389-447`).",
+        "It runs global FAB synchronization via interval polling + custom event listeners (`723-750`) while also handling bulk merge/delete orchestration (`830-908`).",
+        "It delegates title generation to a store action that itself is workflow-heavy (`sessionsUIStore.ts:537-625`), indicating missing dedicated hook/controller boundaries."
+      ],
+      "suggestion": "Extract focused hooks/controllers: `useSessionsListFilters`, `useSessionsBulkActions`, and `useVoiceFabSync`; keep `SessionsListPage` as composition/render only. Move interval/event sync out of page and into a single reusable voice session activity source.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_orchestration_concentration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_store_boundary_blur",
+      "summary": "Voice stores combine transport, domain mutation, UI feedback, and cross-store coupling, creating mixed responsibilities and high-change blast radius.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/pages/voice/SessionPage.tsx"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` owns socket setup/rehydration (`969-1107`), REST fetching (`1438+`), upload transport (`1574+`), optimistic in-store domain edits (`1776+`, `1849+`), and UI notifications (`message.*` calls throughout).",
+        "`sessionsUIStore.ts` (nominally UI state) contains MCP network workflow and session title generation logic with backend URL resolution (`537-625`).",
+        "Cross-store imperative coupling (`useSessionsUIStore.getState()` inside `voiceBotStore.ts:1091-1093`, `1751`, `1814`) tightens runtime dependencies between state containers."
+      ],
+      "suggestion": "Introduce a service layer (`voiceSessionService`, `voiceTaskflowService`, `voiceSocketController`) and keep stores limited to state transitions. Centralize user notifications in a thin UI feedback adapter so stores stop owning transport+UX policy simultaneously.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_orchestration_concentration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "worker_processor_state_pattern_drift",
+      "summary": "Worker handlers duplicate the same orchestration skeleton but persist processor state in inconsistent shapes, signaling missing shared processing abstraction.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+        "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts"
+      ],
+      "evidence": [
+        "`customPrompt.ts` and `questionsHandler.ts` repeat the same steps: validate IDs, load message/session, check categorization, call OpenAI, write success/error flags (`customPrompt.ts:41-203`, `questionsHandler.ts:52-186`).",
+        "`oneCustomPrompt.ts` and `createTasksFromChunks.ts` repeat similar queue/processor state transitions (`oneCustomPrompt.ts:89-150`, `createTasksFromChunks.ts:177-299`).",
+        "State schema diverges: `questionsHandler.ts` writes `questioning_error*` top-level fields (`103-106`, `142-145`, `167-170`) while sibling handlers use nested `processors_data.<processor>.error*` fields (`customPrompt.ts:101-104`, `155-158`, `182-185`)."
+      ],
+      "suggestion": "Build a shared `runProcessorJob` abstraction that standardizes load/validate/skip/execute/persist/error transitions and enforces one canonical processor-state envelope (`processors_data.<processor>`), then migrate prompt/question/task handlers onto it.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "worker_pipeline_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_grid_structure_duplication",
+      "summary": "FinOps grids reimplement the same month-pin column architecture in parallel, creating structural duplication and inconsistent evolution risk.",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/pages/PlanFactPage.tsx"
+      ],
+      "evidence": [
+        "All three components independently build `pinnedSet + orderedMonths + month header with focus/pin buttons` patterns (`PlanFactGrid.tsx:231-352`, `ExpensesGrid.tsx:126-260`, `BonusesGrid.tsx:297-409`).",
+        "Each grid separately implements near-identical left-fixed base columns and month-focused class logic (`PlanFactGrid.tsx:236-324`, `ExpensesGrid.tsx:132-234`, `BonusesGrid.tsx:303-383`).",
+        "PlanFact page composes all three grids (`PlanFactPage.tsx:369-409`), so cross-grid UI changes require coordinated manual edits in multiple implementations."
+      ],
+      "suggestion": "Extract a shared FinOps table framework (`buildPinnedMonthColumns`, `MonthHeaderCell`, shared pin/focus state hook, shared filter dropdown primitives) and let each grid provide only domain-specific cell renderers/aggregation logic.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "finops_table_pattern_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Feature growth was layered into existing surfaces (routes/pages/stores/handlers) without introducing new ownership boundaries.",
+      "Cross-cutting patterns (processor state transitions, pinned-month table scaffolding) were copied per feature instead of codified as reusable primitives.",
+      "State containers and route files are being used as orchestration endpoints rather than thin adapters over dedicated services."
+    ],
+    "likely_symptoms": [
+      "sessions_list_page_overloaded_orchestrator",
+      "voice_store_boundary_blur",
+      "worker_processor_state_pattern_drift"
+    ],
+    "possible_false_positives": [
+      "Some duplication in FinOps grids may be partially intentional for product-level per-grid UX divergence, but current overlap is high enough to justify a shared base layer."
+    ]
+  }
+}

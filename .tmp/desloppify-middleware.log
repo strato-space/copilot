@@ -1,0 +1,181 @@
+  → query.json updated
+  → query.json updated
+  Zones: production: 5
+  [1/14] Logs...
+         0 instances → 0 findings
+  [2/14] Unused (tsc)...
+         0 instances -> 0 findings
+  [3/14] Dead exports...
+         0 instances → 0 findings
+  [4/14] Deprecated...
+         0 instances → 0 findings (properties suppressed)
+  [5/14] Structural analysis...
+         -> 0 structural findings
+  [6/14] Coupling + single-use + patterns + naming...
+         single-use: 3 found, 3 suppressed (50-200 LOC, 2 co-located)
+         orphaned: 4 files with zero importers
+         → 4 coupling/structural findings total
+  [7/14] Responsibility cohesion...
+  [8/14] Signature analysis...
+  [9/14] Test coverage...
+         test coverage: 5 findings (45 production files)
+  [10/14] Code smells...
+         -> 0 smell findings
+  [11/14] Security...
+         security: clean (5 files scanned)
+  [12/14] Subjective review...
+         subjective review: clean (5 reviewable files)
+  [13/14] Boilerplate duplication...
+  [14/14] Duplicates...
+         0 clusters, 0 suppressed (<10 LOC)
+
+  Total: 9 findings
+  → query.json updated
+
+Desloppify Scan (typescript)
+
+  Scan complete
+  ──────────────────────────────────────────────────
+  +9 new · -3 resolved
+  ⚠ Skipped auto-resolve for: responsibility_cohesion, review, signature (returned 0 — likely transient)
+  Scores: overall 66.0/100 (+1.0)  objective 61.8/100 (+2.5)  strict 66.0/100 (+1.0)  verified 61.8/100 (+2.5)  |  open (in-scope): 33 · open (out-of-scope carried): 673 · open (global): 706 / 173 in-scope total
+  * Noise budget: 10/detector (14 findings hidden in show output: review: +14)
+  Scorecard dimensions (matches scorecard.png):
+  File health        ███████████████ 100.0%  (strict 100.0%)
+  AI generated debt  █████████████░░  88.1%  (strict  88.1%)
+  API coherence      █████████░░░░░░  60.7%  (strict  60.7%)
+  Abstraction fit    ██████████░░░░░  67.7%  (strict  67.7%)
+  Auth consistency   ██████████░░░░░  63.6%  (strict  63.6%)
+  Code quality       ██████████████░  93.2%  (strict  93.2%)
+  Convention drift   ███████████░░░░  71.8%  (strict  71.8%)
+  Cross-module arch  ███████████░░░░  73.7%  (strict  73.7%)
+  Design coherence   ████████░░░░░░░  50.1%  (strict  50.1%)
+  Duplication        ███████████████ 100.0%  (strict 100.0%)
+  Elegance           ███████████░░░░  72.0%  (strict  72.0%)
+  Error consistency  ██████████░░░░░  63.5%  (strict  63.5%)
+  Security           ███████████████ 100.0%  (strict 100.0%)
+  Stale migration    ██████████░░░░░  65.1%  (strict  65.1%)
+  Structure nav      ████████████░░░  77.9%  (strict  77.9%)
+  Test health        ██░░░░░░░░░░░░░  10.9%  (strict  10.9%)
+
+  Score recipe:
+    overall = 40% mechanical + 60% subjective
+    Pool averages: mechanical 61.8% · subjective 68.7%
+    Biggest weighted drags:
+      - Test health: -14.37 pts (score 10.9%, 40.3% of mechanical pool)
+      - Mid elegance: -4.75 pts (score 68.3%, 25.0% of subjective pool)
+      - High elegance: -4.09 pts (score 72.7%, 25.0% of subjective pool)
+      - Design coherence: -3.40 pts (score 50.1%, 11.4% of subjective pool)
+      - Low elegance: -2.05 pts (score 75.0%, 13.6% of subjective pool)
+
+  Moved:
+    Duplication            98.8% → 100.0%  (+1.2%)  strict: 98.8→100.0% (+1.2%)
+    Security               95.7% → 100.0%  (+4.3%)  strict: 95.7→100.0% (+4.3%)
+    Test health            0.0% → 10.9%  (+10.9%)  strict: 0.0→10.9% (+10.9%)
+    Code quality           72.9% → 93.2%  (+20.3%)  strict: 72.9→93.2% (+20.3%)
+    File health            41.7% → 100.0%  (+58.3%)  strict: 41.7→100.0% (+58.3%)
+
+  Needs attention:
+    Test health (11%) — add tests for uncovered files: `desloppify show test_coverage`
+
+  Subjective path:
+    Reset baseline from zero: `desloppify scan --path backend/src/api/middleware --reset-subjective`
+    North star: strict 66.0/100 → target 95.0 (+29.0 needed)
+    Quality below target (<95%): Design coherence 50.1%, API coherence 60.7%, Error consistency 63.5%
+    Next command to improve subjective scores: `desloppify review --run-batches --runner codex --parallel --scan-after-import --dimensions design_coherence,api_surface_coherence,error_consistency`
+    Coverage debt: 0 files need review (stale/unreviewed)
+    Scope split: open (in-scope) 0 · open (out-of-scope carried) 121 · open (global) 121
+    Out-of-scope carried reasons: 121 unreviewed
+    Triage: `desloppify show subjective_review --status open`
+
+  82 potential design concerns (run `show concerns` to view)
+  ⟳ 42 chronic reopeners (reopened 2+ times). These keep bouncing — fix properly or wontfix. Run: `desloppify show --chronic` to see them.
+
+  AGENT PLAN (use `desloppify next --count 20` to inspect more items):
+  Agent focus: `desloppify issues` — 24 review findings need investigation — run `desloppify issues` to see the work queue
+  Strategy: Work through actions in priority order. Rescan after each fix to track progress. Review: 24 finding(s) — `desloppify issues`.
+
+  Biggest things impacting score:
+    - review: 24 open — `desloppify issues`
+    - test_coverage: 5 open — `desloppify show test_coverage --status open`
+    - orphaned: 4 open — `desloppify show orphaned --status open`
+
+  → All T1 and T2 items cleared! (24 review findings — run `desloppify issues`)
+
+  Narrative Plan:
+    Why now: Work through actions in priority order. Rescan after each fix to track progress. Review: 24 finding(s) — `desloppify issues`.
+    Next: `desloppify issues` — 24 review findings need investigation — run `desloppify issues` to see the work queue
+    Verify: `desloppify scan` — revalidate after changes
+
+  Subjective scores below 90: Error consistency, Abstraction fit, High elegance, +9 more
+  You can rerun the subjective scoring with `desloppify review --run-batches --runner codex --parallel --scan-after-import`.
+  Then review progress in `desloppify status` and investigate blockers via `desloppify issues`.
+
+  Review: 24 findings pending — `desloppify issues`
+
+  Scorecard → scorecard.png
+  💡 Ask the user if they'd like to add it to their README with:
+     <img src="scorecard.png" width="100%">
+     (disable: --no-badge | move: --badge-path <path>)
+  Immutable packet: /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085342.json
+  Blind packet: /home/strato-space/copilot/.desloppify/review_packet_blind.json
+  WARNING: this run targets 13/20 scored subjective dimensions (language default review dimension set).
+  Missing from this run: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +2 more
+  Rerun missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path backend/src/api/middleware --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy`
+  Runtime expectation: 5 batch(es), workers=3, timeout-per-batch=20m, worst-case upper bound ~40m.
+
+  Running holistic batches: [1, 2, 3, 4, 5]
+  Run artifacts: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085342
+  Live run log: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085342/run.log
+  Parallel runner config: max-workers=3, heartbeat=15.0s
+  Batch 1/5 queued (#1)
+  Batch 1/5 started (#1)
+  Batch 2/5 queued (#2)
+  Batch 2/5 started (#2)
+  Batch 3/5 queued (#3)
+  Batch 3/5 started (#3)
+  Batch 4/5 queued (#4)
+  Batch 5/5 queued (#5)
+  Batch heartbeat: 3/5 active, queued 2 (#1:15s, #2:15s, #3:15s)
+  Batch heartbeat: 3/5 active, queued 2 (#1:30s, #2:30s, #3:30s)
+  Batch heartbeat: 3/5 active, queued 2 (#1:45s, #2:45s, #3:45s)
+  Batch 4/5 started (#4)
+  Batch 2/5 done in 51s (#2)
+  Batch 5/5 started (#5)
+  Batch 1/5 done in 60s (#1)
+  Batch heartbeat: 3/5 active (#3:75s, #4:24s, #5:15s)
+  Batch heartbeat: 3/5 active (#3:90s, #4:39s, #5:30s)
+  Batch heartbeat: 3/5 active (#3:105s, #4:54s, #5:45s)
+  Batch heartbeat: 3/5 active (#3:120s, #4:69s, #5:60s)
+  Batch heartbeat: 3/5 active (#3:135s, #4:84s, #5:75s)
+  Batch heartbeat: 3/5 active (#3:150s, #4:99s, #5:90s)
+  Batch 3/5 done in 163s (#3)
+  Batch 5/5 done in 103s (#5)
+  Batch heartbeat: 1/5 active (#4:127s)
+  Batch heartbeat: 1/5 active (#4:142s)
+  Batch heartbeat: 1/5 active (#4:157s)
+  Batch heartbeat: 1/5 active (#4:172s)
+  Batch 4/5 done in 182s (#4)
+  Run summary: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085342/run_summary.json
+  Reviewed files captured for cache refresh: 83
+  Coverage gap: imported assessments for 13/20 scored subjective dimensions.
+  Still missing: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +2 more
+  Run to cover missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path backend/src/api/middleware --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy`
+
+  Merged outputs: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085342/holistic_findings_merged.json
+  Review quality: dimension coverage 0.40, evidence density 2.38, high-score-missing-issue-note 0, finding-pressure 58.69 across 12 dims
+  Assessment import mode: trusted internal (durable scores)
+  Assessment updates applied: 13 dimension(s) (trusted internal run-batches import).
+
+  Holistic review imported:
+  +24 new issues (review findings), 53 resolved, 0 reopened
+
+  Assessments: abstraction fitness 67.7, ai generated debt 88.1, api surface coherence 60.7, authorization consistency 63.6, convention outlier 71.8, cross module architecture 73.7, design coherence 50.1, error consistency 63.5, high level elegance 72.7, incomplete migration 65.1, low level elegance 75.0, mid level elegance 68.3, package organization 77.9
+
+  24 review issues open total (24 review findings open total)
+  Run `desloppify issues` to see the work queue
+
+  Current scores: overall 65.0/100 · objective 59.3/100 · strict 65.0/100
+  Next command to improve subjective scores: `desloppify issues`
+
+  Running follow-up scan...

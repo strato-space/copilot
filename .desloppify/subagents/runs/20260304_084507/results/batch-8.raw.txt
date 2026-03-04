@@ -1,0 +1,146 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 8,
+  "assessments": {
+    "ai_generated_debt": 78.0,
+    "incomplete_migration": 62.0
+  },
+  "dimension_notes": {
+    "ai_generated_debt": {
+      "evidence": [
+        "Helper logic is reimplemented in multiple places with near-identical behavior (`toObjectIdOrNull` and `runtimeQuery` clones in `backend/src/api/routes/voicebot/sessionsSharedUtils.ts` and `backend/src/workers/voicebot/handlers/transcribeHandler.ts`, plus a parallel `runtimeQuery` in `processingLoop.ts`).",
+        "Error-response boilerplate is duplicated in `backend/src/api/routes/voicebot/uploads.ts` (`uploadAnyWithErrorHandling` and `uploadImageWithErrorHandling`), repeating nearly identical Multer error branching and payload shaping instead of one shared adapter.",
+        "Legacy-alias forwarding in `backend/src/api/routes/voicebot/sessions.ts` (`registerPostAlias` + many alias registrations) increases mechanical code volume without removing old surface area."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "`runtime_tag` remains in active index definitions and runtime filters (`backend/src/constants.ts`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/workers/voicebot/handlers/processingLoop.ts`, `backend/src/workers/voicebot/handlers/transcribeHandler.ts`) even though runtime-tag routing is marked deprecated.",
+        "VoiceBot still exposes and wires legacy endpoint families in parallel with canonical flat routes (`backend/src/api/routes/voicebot/index.ts` mounts `/sessions`, `/uploads`, `/transcription`, `/persons`, `/permissions`, `/LLMGate`; `sessions.ts` and `uploads.ts` both still serve `/close_session`).",
+        "CRM paths still depend on legacy compatibility layers (`backend/src/api/routes/crm/projects.ts` imports `./legacy/projecttreeaudit.js`; `backend/src/api/routes/crm/tickets.ts` still resolves `ticket_id` fallback path as legacy join input)."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_routing_not_fully_retired",
+      "summary": "Deprecated `runtime_tag` isolation is still part of active query/index logic across routes and workers.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` still defines startup indexes keyed by `runtime_tag` (`TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG`, `WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG`).",
+        "`backend/src/api/routes/voicebot/sessions.ts` repeatedly applies `mergeWithRuntimeFilter(..., { field: 'runtime_tag', ... })` and persists `runtime_tag` in write payloads.",
+        "`processingLoop.ts` and `transcribeHandler.ts` both define `runtimeQuery` wrappers over `mergeWithRuntimeFilter` with `field: 'runtime_tag'`.",
+        "`backend/src/api/routes/voicebot/uploads.ts` still reads and emits `session.runtime_tag` in socket payloads."
+      ],
+      "suggestion": "Complete the runtime isolation cutover by removing `runtime_tag` from active filters/index contracts and replacing remaining selectors with environment/database-level isolation only; keep read-only backward compatibility in dedicated migration scripts rather than hot paths.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_isolation_migration_incomplete"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "voicebot_dual_route_surface_persists",
+      "summary": "Canonical and legacy VoiceBot APIs are still exposed simultaneously, leaving migration in an unfinished steady state.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`backend/src/api/routes/voicebot/index.ts` mounts flat routers (`'/'`) and also mounts legacy prefixed routers (`'/sessions'`, `'/uploads'`, `'/transcription'`, `'/persons'`, `'/permissions'`, `'/LLMGate'`).",
+        "`backend/src/api/routes/voicebot/sessions.ts` still registers multiple POST aliases via `registerPostAlias(...)`, including `'/close_session' -> '/session_done'`.",
+        "`backend/src/api/routes/voicebot/uploads.ts` independently still implements `POST /close_session`, creating duplicate close handlers in different routers."
+      ],
+      "suggestion": "Constrain legacy paths to a single compatibility gateway with explicit sunset controls (feature flag + telemetry + removal date), and route all close-session semantics through one backend handler to avoid split behavior.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_api_migration_half_open"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "crm_legacy_dependencies_still_in_mainline",
+      "summary": "Active CRM routes still depend on legacy modules and legacy identifier fallbacks, indicating unfinished domain normalization.",
+      "related_files": [
+        "backend/src/api/routes/crm/projects.ts",
+        "backend/src/api/routes/crm/legacy/projecttreeaudit.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "`backend/src/api/routes/crm/projects.ts` imports and uses `./legacy/projecttreeaudit.js` from a non-legacy mainline route.",
+        "`backend/src/api/routes/crm/tickets.ts` still performs legacy `ticket_id` reconciliation (`legacyTicketId` fallback lookup by `{ id }` and optional `{ _id }`)."
+      ],
+      "suggestion": "Extract legacy adapters into an explicit migration boundary (single normalization module), and make mainline routes operate only on canonical IDs/types after adapter conversion.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "crm_contract_migration_incomplete"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "duplicated_helper_primitives_across_voicebot",
+      "summary": "Small utility primitives are copied across modules instead of shared, increasing mechanical drift and maintenance cost.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`toObjectIdOrNull` is defined in `sessionsSharedUtils.ts` and redefined with equivalent behavior in `transcribeHandler.ts`.",
+        "`runtimeQuery` wrappers are separately declared in `transcribeHandler.ts` and `processingLoop.ts` with the same `mergeWithRuntimeFilter` configuration."
+      ],
+      "suggestion": "Create a small shared `voicebot/queryUtils` module for ID normalization and runtime query shaping, then delete local clones and import canonical helpers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "mechanical_copy_paste_helpers"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "duplicated_upload_error_adapter_logic",
+      "summary": "Uploads router contains copy-pasted Multer error-to-response adapters with only minor differences.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`uploadAnyWithErrorHandling` and `uploadImageWithErrorHandling` in `uploads.ts` duplicate the same error branching (`MulterError` size check, generic error mapping, default fallback).",
+        "The project already has centralized response/error middleware (`response.ts`, `error.ts`), but this route keeps bespoke in-route mapping logic."
+      ],
+      "suggestion": "Unify file-upload error mapping in one reusable helper/middleware (optionally integrated with `sendError`/`AppError`) and parameterize only size-limit and request-id behavior.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "mechanical_copy_paste_helpers"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Migration compatibility layers were added incrementally but not aggressively sunset, leaving canonical and legacy paths active together.",
+      "Utility and boundary logic tends to be copied into route/worker files rather than extracted into shared primitives."
+    ],
+    "likely_symptoms": [
+      "voicebot_dual_route_surface_persists",
+      "duplicated_helper_primitives_across_voicebot",
+      "duplicated_upload_error_adapter_logic"
+    ],
+    "possible_false_positives": [
+      "Some legacy alias endpoints may still be intentionally retained for external consumers; however, duplicate handler ownership remains a structural risk even if temporary."
+    ]
+  }
+}

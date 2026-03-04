@@ -1,0 +1,33 @@
+2026-03-04T09:23:45+00:00 run-start runner=codex parallel=True max_parallel=3 timeout=1200s heartbeat=15.0s stall_warning=0s stall_kill=120s retries=1 retry_backoff=2.0s upper_bound=60m selected=[1, 2, 3, 4, 5, 6, 7]
+2026-03-04T09:23:45+00:00 run-path /home/strato-space/copilot/.desloppify/subagents/runs/20260304_092344
+2026-03-04T09:23:45+00:00 packet /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_092344.json
+2026-03-04T09:23:45+00:00 blind-packet /home/strato-space/copilot/.desloppify/review_packet_blind.json
+2026-03-04T09:23:45+00:00 batch-queued batch=1 position=1/7
+2026-03-04T09:23:45+00:00 batch-start batch=1 position=1/7
+2026-03-04T09:23:45+00:00 batch-queued batch=2 position=2/7
+2026-03-04T09:23:45+00:00 batch-queued batch=3 position=3/7
+2026-03-04T09:23:45+00:00 batch-start batch=2 position=2/7
+2026-03-04T09:23:45+00:00 batch-start batch=3 position=3/7
+2026-03-04T09:23:45+00:00 batch-queued batch=4 position=4/7
+2026-03-04T09:23:45+00:00 batch-queued batch=5 position=5/7
+2026-03-04T09:23:45+00:00 batch-queued batch=6 position=6/7
+2026-03-04T09:23:45+00:00 batch-queued batch=7 position=7/7
+2026-03-04T09:24:00+00:00 heartbeat active=[1, 2, 3] queued=[4, 5, 6, 7] elapsed={1:15, 2:15, 3:15}
+2026-03-04T09:24:15+00:00 heartbeat active=[1, 2, 3] queued=[4, 5, 6, 7] elapsed={1:30, 2:30, 3:30}
+2026-03-04T09:24:30+00:00 heartbeat active=[1, 2, 3] queued=[4, 5, 6, 7] elapsed={1:45, 2:45, 3:45}
+2026-03-04T09:24:45+00:00 heartbeat active=[1, 2, 3] queued=[4, 5, 6, 7] elapsed={1:60, 2:60, 3:60}
+2026-03-04T09:24:56+00:00 batch-start batch=4 position=4/7
+2026-03-04T09:24:56+00:00 batch-done batch=2 position=2/7 code=0 elapsed=71
+2026-03-04T09:25:07+00:00 batch-start batch=5 position=5/7
+2026-03-04T09:25:07+00:00 batch-done batch=1 position=1/7 code=0 elapsed=82
+2026-03-04T09:25:22+00:00 heartbeat active=[3, 4, 5] queued=[6, 7] elapsed={3:97, 4:25, 5:15}
+2026-03-04T09:25:37+00:00 heartbeat active=[3, 4, 5] queued=[6, 7] elapsed={3:112, 4:40, 5:30}
+2026-03-04T09:25:41+00:00 batch-start batch=6 position=6/7
+2026-03-04T09:25:41+00:00 batch-done batch=3 position=3/7 code=0 elapsed=116
+2026-03-04T09:25:56+00:00 heartbeat active=[4, 5, 6] queued=[7] elapsed={4:60, 5:49, 6:15}
+2026-03-04T09:26:11+00:00 heartbeat active=[4, 5, 6] queued=[7] elapsed={4:75, 5:64, 6:30}
+2026-03-04T09:26:26+00:00 heartbeat active=[4, 5, 6] queued=[7] elapsed={4:90, 5:79, 6:45}
+2026-03-04T09:26:31+00:00 batch-start batch=7 position=7/7
+2026-03-04T09:26:31+00:00 batch-done batch=4 position=4/7 code=0 elapsed=95
+2026-03-04T09:26:46+00:00 heartbeat active=[5, 6, 7] queued=[] elapsed={5:99, 6:65, 7:15}
+2026-03-04T09:27:01+00:00 heartbeat active=[5, 6, 7] queued=[] elapsed={5:114, 6:80, 7:30}

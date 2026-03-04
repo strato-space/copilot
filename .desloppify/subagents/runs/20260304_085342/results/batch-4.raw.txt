@@ -1,0 +1,221 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 4,
+  "assessments": {
+    "cross_module_architecture": 77.0,
+    "convention_outlier": 79.0,
+    "error_consistency": 73.0,
+    "api_surface_coherence": 69.0,
+    "authorization_consistency": 71.0,
+    "ai_generated_debt": 86.0,
+    "incomplete_migration": 68.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "HTTP transport logic is re-implemented in multiple stores/services (`app/src/store/requestStore.ts`, `app/src/store/permissionsStore.ts`, `app/src/store/voicebotHttp.ts`) with separate base-url/proxy/header behavior.",
+        "Runtime-scoping entry points are spread across worker/service/tgbot modules (`processingLoop.ts`, `transcribeHandler.ts`, `voicebotWebmDedup.ts`, `ingressHandlers.ts`) instead of one canonical boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "convention_outlier": {
+      "evidence": [
+        "CRM/OperOps surfaces still mix legacy snake_case payload fields and newer camelCase conventions (e.g. `app/src/store/projectsStore.ts`, `app/src/store/kanbanStore.ts`, `backend/src/api/routes/crm/tickets.ts`).",
+        "Backend route keeps typo-compatible input (`statuses ?? satuses`) in `backend/src/api/routes/crm/tickets.ts`, signaling unstable contract conventions."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "Some store actions swallow failures and continue (`projectsStore` fetch methods log+return, `permissionsStore` mutators log+toast without throw, `voiceBotStore` mutators log-only), while sibling actions in the same stores throw.",
+        "This creates mixed caller contracts (sometimes rejected Promise, sometimes silent UI toast, sometimes empty fallback)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "`usePermissionsStore.updateUserPermissions` posts to `voicebot/permissions/users/permissions`, but backend defines this endpoint as read-only permission retrieval (`backend/src/api/routes/voicebot/permissions.ts`).",
+        "`usePermissionsStore.getUserPermissions` calls `permissions/users/permissions` (missing `voicebot/` prefix unlike sibling calls), and store also uses route names not present server-side (`users/access_level`, projects write via `/users/projects` instead of `/users/projects/set`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Core auth middleware is fail-fast on missing `APP_ENCRYPTION_KEY` (`backend/src/api/middleware/auth.ts`), but miniapp login/auth silently falls back to empty secret (`backend/src/miniapp/routes/index.ts`).",
+        "Miniapp `IS_MINIAPP_DEBUG_MODE` path bypasses token verification and injects `testData` as user identity in request pipeline (`backend/src/miniapp/routes/index.ts`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Repetitive boilerplate request wrappers and near-duplicate proxy/header code appear in multiple files instead of a single shared client.",
+        "Many catch blocks are formulaic log/toast blocks with minimal context enrichment in UI stores."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Request and error boilerplate is still copy-pasted across stores instead of centralized abstractions with consistent behavior."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Runtime-tag migration remains half-removed: runtime scoping helpers currently no-op (`backend/src/services/runtimeScope.ts`), while many runtime paths still call `mergeWithRuntimeFilter` and scripts still backfill `runtime_tag` (`backend/scripts/runtime-tag-backfill.ts`).",
+        "Voice upload/session APIs still expose legacy compatibility paths and naming (`/close_session`, `/uploads/*` aliases in `backend/src/api/routes/voicebot/uploads.ts`) while new canonical flows are also present.",
+        "Frontend voice log still carries legacy transcript schema fallback (`transcription_chunks`) in `app/src/components/voice/SessionLog.tsx`."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "permissions_store_calls_read_endpoint_as_write",
+      "summary": "Permissions UI writes against endpoints whose server contracts are read-only or mismatched, producing unreliable admin updates.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`updateUserPermissions` posts to `voicebot/permissions/users/permissions` (`permissionsStore.ts:165`) but server route `/users/permissions` returns computed permissions and does not persist updates (`permissions.ts:263-291`).",
+        "`getUserPermissions` uses `permissions/users/permissions` without `voicebot/` prefix (`permissionsStore.ts:200`) unlike sibling calls in the same store (`permissionsStore.ts:93,111,124,142`).",
+        "`updateUserAccessLevel` calls `voicebot/permissions/users/access_level` (`permissionsStore.ts:213`) but no matching backend route exists in `permissions.ts`."
+      ],
+      "suggestion": "Define a single typed contract for permissions endpoints (read vs mutate), align client paths to it, and add compile-time route constants plus integration tests that verify each store action hits an existing backend route with expected response shape.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "permissions_api_contract_drift"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "miniapp_jwt_secret_fail_open",
+      "summary": "Miniapp auth path accepts empty JWT secret fallback while core API auth requires explicit secret, creating inconsistent trust boundaries.",
+      "related_files": [
+        "backend/src/miniapp/routes/index.ts",
+        "backend/src/api/middleware/auth.ts"
+      ],
+      "evidence": [
+        "Core middleware throws if `APP_ENCRYPTION_KEY` is missing via `getEncryptionKey()` (`auth.ts:45-50`) and rejects auth.",
+        "Miniapp login signs token with `process.env.APP_ENCRYPTION_KEY ?? ''` (`index.ts:135-137`) and auth verifies with same fallback (`index.ts:168-170`), allowing operation with empty secret.",
+        "Miniapp debug path bypasses token verification and injects `testData` identity (`index.ts:152-159`)."
+      ],
+      "suggestion": "Use the same fail-fast secret resolution utility in miniapp and core auth, disallow empty secrets in all environments, and gate debug bypass behind explicit non-production + additional hard guard (e.g. allowlist or signed debug header).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_boundary_split"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "store_error_contracts_are_mixed",
+      "summary": "State stores mix throw-on-error and log-and-continue behavior, so callers cannot reliably handle failures.",
+      "related_files": [
+        "app/src/store/projectsStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "`projectsStore` fetch methods catch and only log/set loading (`projectsStore.ts:74-77`, `95-98`, `116-119`) while CRUD methods rethrow (`187-189`, `203-205`, etc.).",
+        "`permissionsStore` mutators mostly swallow errors after toast (`permissionsStore.ts:154-159`, `171-176`, `190-195`, `223-227`, `239-244`), while `loadPermissionsLog` rethrows (`135`).",
+        "`voiceBotStore` has mutators with log-only catches (`voiceBotStore.ts:1356-1358`, `1410-1412`) but other flows surface explicit UI error messaging."
+      ],
+      "suggestion": "Adopt one store-level error policy (either always throw and let UI decide, or always return typed Result) and enforce it with shared helper wrappers plus lint rule/tests for swallowed catches.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_error_handling_fragmentation"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "http_transport_logic_fragmented_across_stores",
+      "summary": "Multiple independent HTTP wrappers duplicate transport logic and diverge on headers, prefixes, and failure semantics.",
+      "related_files": [
+        "app/src/store/requestStore.ts",
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voicebotHttp.ts",
+        "app/src/services/api.ts"
+      ],
+      "evidence": [
+        "`requestStore` defines its own backend/proxy resolver and POST wrapper (`requestStore.ts:22-45`, `49-92`).",
+        "`permissionsStore` re-implements similar backend/proxy logic (`permissionsStore.ts:35-79`) instead of reusing shared client.",
+        "`voicebotHttp` adds a third implementation with separate logging/retry checks (`voicebotHttp.ts:42-84`).",
+        "A canonical axios client already exists (`api.ts:6-14`) but is bypassed by these wrappers."
+      ],
+      "suggestion": "Consolidate transport into one typed HTTP layer with domain-specific adapters (CRM, voicebot, permissions) and remove per-store URL/proxy logic to prevent drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "http_client_fragmentation"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_deprecation_left_partial_scaffolding",
+      "summary": "Runtime-tag routing was neutralized but call sites, scripts, and model fields still carry the old mechanism, leaving migration residue in active paths.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/scripts/runtime-tag-backfill.ts",
+        "backend/src/voicebot_tgbot/activeSessionMapping.ts"
+      ],
+      "evidence": [
+        "Runtime filter helpers are now effectively no-op (`runtimeScope.ts:129-154`, `156-167`), but multiple runtime paths still call `mergeWithRuntimeFilter(..., { field: 'runtime_tag' })` (`processingLoop.ts:87-92`, `transcribeHandler.ts:137-142`, `voicebotWebmDedup.ts:43-55`, `ingressHandlers.ts:193-194`).",
+        "A dedicated backfill script still writes `runtime_tag: 'prod'` (`runtime-tag-backfill.ts:29-34`, `51-54`).",
+        "Active mapping type still carries `runtime_tag` as first-class field (`activeSessionMapping.ts:9`)."
+      ],
+      "suggestion": "Complete the migration by removing runtime_tag from active domain types/scripts and deleting runtime-filter call sites after introducing explicit environment/DB isolation at composition boundaries.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_tag_migration_residue"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "legacy_naming_and_typos_persist_in_public_contracts",
+      "summary": "Public request contracts mix legacy naming and typo compatibility, which keeps conventions unstable across modules.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "app/src/store/projectsStore.ts",
+        "app/src/store/kanbanStore.ts"
+      ],
+      "evidence": [
+        "Tickets route accepts both `statuses` and misspelled `satuses` (`tickets.ts:208`).",
+        "Frontend CRM stores keep snake_case API fields (`project_groups`, `project_group`, `source_project_group`, `dest_project_group`) while other app modules use camelCase typed client style.",
+        "The same domain (projects/tickets) therefore presents two naming dialects depending on call path."
+      ],
+      "suggestion": "Freeze a canonical request vocabulary (camelCase or strict backend snake_case with DTO mappers), remove typo aliases, and add validation that rejects unknown keys to prevent further drift.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "contract_naming_drift"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Long-running migration strategy without hard removal gates left compatibility scaffolding alive in production code paths.",
+      "API and transport contracts are not centralized, so frontend stores evolved divergent wrappers and endpoint assumptions.",
+      "Authorization logic split by subsystem (core vs miniapp) without shared security primitives caused policy drift."
+    ],
+    "likely_symptoms": [
+      "permissions_store_calls_read_endpoint_as_write",
+      "store_error_contracts_are_mixed",
+      "legacy_naming_and_typos_persist_in_public_contracts"
+    ],
+    "possible_false_positives": [
+      "Some legacy aliases may be intentionally retained for external backward compatibility, but current code still shows internal callers and active logic depending on legacy shapes."
+    ]
+  }
+}

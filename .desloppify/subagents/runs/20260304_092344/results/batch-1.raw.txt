@@ -1,0 +1,142 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 71.0,
+    "high_level_elegance": 68.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/services/db.ts` initializes `const logger = getLogger()` at module load, and `getLogger()` in `backend/src/utils/logger.ts` auto-initializes Winston + log directory creation when not initialized.",
+        "`backend/src/constants.ts` performs import-time environment-derived computation (`VOICEBOT_ORCHESTRATION_ENV`, queue suffixes, file storage limits), so importing constants also executes runtime configuration logic.",
+        "`backend/src/constants.ts` still defines runtime-tag index contracts, and `backend/src/services/db.ts` enforces them through `MONGO_STARTUP_INDEXES`, coupling DB startup behavior to deprecated runtime-tag-era artifacts."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/constants.ts` is a broad hub that combines socket events, queues, Mongo collections/indexes, Notion mappings, VoiceBot orchestration env logic, and file storage config in one module.",
+        "`backend/src/services/db.ts` mixes connection lifecycle, startup index management, runtime-scope proxy compatibility layer, and project seeding in one service entry point.",
+        "`backend/src/models/types.ts` is FinOps-centric domain typing, while cross-domain constants and data-shape decisions live centrally in `constants.ts`, creating unclear ownership boundaries between domain contracts and platform config."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_logger_bootstrap_side_effect",
+      "summary": "DB module import triggers logger bootstrap and filesystem writes via implicit auto-init path.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/utils/logger.ts"
+      ],
+      "evidence": [
+        "`backend/src/services/db.ts` defines `const logger = getLogger()` at top level.",
+        "`backend/src/utils/logger.ts` `getLogger()` auto-calls `initLogger()` when `loggerInstance` is null.",
+        "`initLogger()` calls `getLogsDir()`, which runs `fs.existsSync`/`fs.mkdirSync` and creates log directories."
+      ],
+      "suggestion": "Remove logger auto-init from import paths: make `getLogger()` throw when uninitialized, initialize logger explicitly in process bootstrap, and in `db.ts` resolve logger lazily inside `connectDb()` (or inject logger as dependency).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_global_initialization"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "runtime_tag_index_coupling_persists",
+      "summary": "Startup index policy remains hard-coupled to deprecated runtime_tag model.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` defines index names `*_RUNTIME_TAG` and keys containing `runtime_tag` in `MONGO_STARTUP_INDEXES`.",
+        "`backend/src/services/db.ts` unconditionally applies `MONGO_STARTUP_INDEXES` during `connectDb()`.",
+        "This keeps runtime-tag assumptions in mandatory startup flow rather than isolating them as legacy migration concerns."
+      ],
+      "suggestion": "Split startup indexes into canonical vs legacy migration sets, apply only canonical indexes in normal startup, and move runtime_tag index maintenance into an explicit migration/compatibility job with a removal deadline.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_runtime_scope_residue"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "constants_module_overloaded_cross_domain",
+      "summary": "Single constants hub owns unrelated platform, product, and runtime concerns.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/models/types.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`backend/src/constants.ts` includes CRM/FinOps/VoiceBot events, collection names, index definitions, Notion mappings, queue names/jobs, and env-derived storage/orchestration settings.",
+        "`backend/src/services/db.ts` depends on this hub for DB startup index policy, tying persistence bootstrapping to a monolithic constants surface.",
+        "`backend/src/models/types.ts` contains domain types separately, but domain ownership is diluted because cross-domain constants are centralized in one god module (21 importers)."
+      ],
+      "suggestion": "Decompose `constants.ts` into bounded modules (e.g., `constants/socket.ts`, `constants/mongo.ts`, `voicebot/constants/{queues,events,storage}.ts`, `crm/notion-mapping.ts`) and have `db.ts` depend only on a narrow `mongo/indexes` contract.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_bounded_constant_modules"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "db_service_multi_responsibility_orchestrator",
+      "summary": "DB service combines connection, indexing, seeding, and legacy scoping shim responsibilities.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/constants.ts",
+        "backend/src/services/projectGitRepoSeed.ts"
+      ],
+      "evidence": [
+        "`connectDb()` creates client, connects DB, ensures indexes, seeds git repo, and returns a scoped proxy.",
+        "Same file also exposes compatibility-like no-op adapters (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`).",
+        "This makes database lifecycle ownership unclear and couples startup behavior changes to a single hotspot."
+      ],
+      "suggestion": "Split `db.ts` into explicit modules: connection manager, startup tasks (indexing/seeding), and optional legacy scope adapter behind a feature toggle; wire them in a small bootstrap orchestrator with explicit order.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "implicit_global_initialization"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "runtime_scope_adapter_is_noop_boundary",
+      "summary": "Runtime-scoped DB adapter API exists but currently behaves as pass-through, masking boundary intent.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/constants.ts"
+      ],
+      "evidence": [
+        "`applyRuntimeScopeToAggregatePipeline` returns shallow copy only; `patchRuntimeTagIntoSetOnInsert` returns input unchanged; `createRuntimeScopedCollectionProxy` returns collection unchanged.",
+        "`createRuntimeScopedDbProxy` still wraps `db.collection()` through these adapters, preserving abstraction layers without active behavior.",
+        "At the same time, constants/startup still carry runtime-tag-era index concerns, creating mixed old/new architectural signals."
+      ],
+      "suggestion": "Either remove the runtime-scope adapter layer entirely and simplify callers, or reintroduce explicit scoped behavior with tests; avoid keeping inert boundary abstractions that imply guarantees they no longer provide.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_runtime_scope_residue"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Global singleton and startup concerns are encoded at import time instead of explicit bootstrap composition.",
+      "Legacy runtime-tag migration residue remains embedded in current architecture contracts.",
+      "Cross-domain constants were centralized faster than ownership boundaries were defined."
+    ],
+    "likely_symptoms": [
+      "import_time_logger_bootstrap_side_effect",
+      "runtime_tag_index_coupling_persists",
+      "runtime_scope_adapter_is_noop_boundary"
+    ],
+    "possible_false_positives": []
+  }
+}

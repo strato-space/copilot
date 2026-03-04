@@ -28,6 +28,34 @@ describe('dispatchVoicebotSocketEvent', () => {
     expect(emit).toHaveBeenCalledWith('message_update', { message_id: 'm1' });
   });
 
+  it('emits tickets_prepared array payload to session room without socket_id', () => {
+    const emit = jest.fn();
+    const to = jest.fn(() => ({ emit }));
+    const namespace = {
+      to,
+      sockets: new Map(),
+      adapter: {
+        rooms: new Map([['voicebot:session:6996ae012835b2811da9b9ca', new Set(['socket-1'])]]),
+      },
+    };
+    const io = {
+      of: jest.fn(() => namespace),
+    } as unknown as Parameters<typeof dispatchVoicebotSocketEvent>[0]['io'];
+
+    const result = dispatchVoicebotSocketEvent({
+      io,
+      data: {
+        session_id: '6996ae012835b2811da9b9ca',
+        event: 'tickets_prepared',
+        payload: [{ id: 'TASK-1', name: 'Ship parity' }],
+      },
+    });
+
+    expect(result).toMatchObject({ ok: true, room_size: 1 });
+    expect(to).toHaveBeenCalledWith('voicebot:session:6996ae012835b2811da9b9ca');
+    expect(emit).toHaveBeenCalledWith('tickets_prepared', [{ id: 'TASK-1', name: 'Ship parity' }]);
+  });
+
   it('emits to a specific socket when socket_id is provided', () => {
     const socketEmit = jest.fn();
     const namespace = {
@@ -75,4 +103,3 @@ describe('dispatchVoicebotSocketEvent', () => {
     expect(result.reason).toBe('invalid_payload');
   });
 });
-

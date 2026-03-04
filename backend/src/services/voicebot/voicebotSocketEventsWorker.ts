@@ -11,7 +11,7 @@ type SocketEventJobData = {
   session_id?: string;
   socket_id?: string;
   event?: string;
-  payload?: Record<string, unknown>;
+  payload?: unknown;
 };
 
 type SocketEventDispatchResult = {
@@ -34,7 +34,7 @@ export const dispatchVoicebotSocketEvent = ({
 }): SocketEventDispatchResult => {
   const sessionId = String(data.session_id || '').trim();
   const event = String(data.event || '').trim();
-  const payload = data.payload && typeof data.payload === 'object' ? data.payload : {};
+  const payload = data.payload === undefined ? {} : data.payload;
 
   if (!sessionId || !event) {
     return { ok: false, skipped: true, reason: 'invalid_payload' };

@@ -1,0 +1,140 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 7,
+  "assessments": {
+    "design_coherence": 68.5
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/sessions.ts` is a 6001-line route module containing schema definitions, normalization helpers, attachment shaping, access checks, realtime emitters, and dozens of handlers in one file.",
+        "Attachment projection/normalization is implemented in parallel in backend (`buildSessionAttachments` in `sessions.ts`) and frontend store (`buildSessionAttachmentsFromMessages` and `normalizeSessionAttachment` in `app/src/store/voiceBotStore.ts`), indicating contract logic duplicated across layers.",
+        "Identity/ID normalization helpers are reimplemented in multiple UI modules (`toLookupValue` in `app/src/components/crm/CRMKanban.tsx` and `app/src/pages/operops/taskPageUtils.ts`) instead of one canonical adapter.",
+        "`app/src/pages/voice/SessionsListPage.tsx` combines URL-state persistence, localStorage migration, FAB synchronization, data fetch orchestration, and large table rendering in one component.",
+        "Runtime-scope query adapters drift across voicebot modules: worker handlers define `runtimeQuery` via `mergeWithRuntimeFilter`, while `backend/src/api/routes/voicebot/uploads.ts` and `backend/src/api/routes/voicebot/messageHelpers.ts` expose pass-through runtime query helpers."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voicebot_sessions_route_monolith",
+      "summary": "Voice sessions route is a monolith mixing unrelated responsibilities in one module.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` defines large sets of helper utilities (taskflow locator logic, categorization mutation helpers, attachment shaping, socket emitters) and many endpoints in a single file.",
+        "Sister modules (`uploads.ts`, `permissions.ts`) already isolate adjacent concerns, but `sessions.ts` still retains cross-cutting behavior that belongs in dedicated services/adapters.",
+        "The same file owns both HTTP boundary parsing and deep domain mutation workflows, making changes in one area high-risk for unrelated API paths."
+      ],
+      "suggestion": "Split `sessions.ts` by concern: move normalization/formatting helpers into `services/voicebot/*`, realtime emitters into a dedicated notifier module, and group routers by capability (`session-read`, `taskflow`, `categorization`, `project-files`). Keep route files thin (validate -> call service -> map response).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_boundary_collapse"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "attachment_contract_logic_duplicated",
+      "summary": "Attachment shaping logic is duplicated between backend API response code and frontend store.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "app/src/store/voiceBotStore.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` builds `session_attachments` from messages (`buildSessionAttachments`) with Telegram-specific URI rules and sorting.",
+        "`voiceBotStore.ts` reimplements nearly the same derivation (`buildSessionAttachmentsFromMessages`) plus URI normalization and fallback generation when explicit attachments are absent.",
+        "Upload/message APIs add fields (`uri`, `url`, `direct_uri`, `file_unique_id`) that are interpreted by duplicated client/server logic, increasing drift risk when one side changes."
+      ],
+      "suggestion": "Define a single canonical attachment DTO at backend boundary and always return `session_attachments` precomputed from server. Move all URI derivation and Telegram path policy to backend service helpers, and make frontend store only consume normalized DTOs without reconstruction.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_boundary_collapse"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "id_normalization_sprawl_in_crm_ui",
+      "summary": "CRM UI reimplements ID lookup/normalization patterns across modules instead of shared adapters.",
+      "related_files": [
+        "app/src/components/crm/CRMKanban.tsx",
+        "app/src/pages/operops/taskPageUtils.ts",
+        "app/src/store/kanbanStore.ts"
+      ],
+      "evidence": [
+        "`CRMKanban.tsx` defines `toLookupValue`, `resolveTicketDbId`, `resolveTicketPublicId`, and route-key fallbacks inline.",
+        "`taskPageUtils.ts` defines another `toLookupValue` plus adjacent `toNonEmptyString` and identity candidate chains.",
+        "Both modules solve the same mixed-id compatibility problem independently, making behavior diverge over time (different fallback precedence and consumer-specific branches)."
+      ],
+      "suggestion": "Introduce a shared CRM identity adapter module (e.g., `app/src/utils/crmIdentity.ts`) with canonical helpers for object-id/public-id normalization, performer identity resolution, and route-id selection; migrate kanban/task utilities to consume it.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "identity_normalization_sprawl"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "page_components_handle_too_many_concerns",
+      "summary": "Major page components combine persistence, orchestration, and rendering logic in single files.",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/components/crm/CRMKanban.tsx",
+        "app/src/pages/voice/SessionPage.tsx"
+      ],
+      "evidence": [
+        "`SessionsListPage.tsx` includes query param parsing, localStorage migration/persistence, websocket/FAB synchronization, batch actions, and table rendering in one component.",
+        "`CRMKanban.tsx` includes data normalization, status statistics orchestration, inline editing, filter state handling, and heavy table behavior in one component.",
+        "`SessionPage.tsx` mixes fetch lifecycle, paste/upload workflow, image compression helpers, and view composition."
+      ],
+      "suggestion": "Extract page-level orchestration hooks (`useSessionsListFilters`, `useVoiceFabSync`, `useKanbanRowIdentity`, `useSessionPasteUpload`) and keep page/components focused on rendering + event wiring. This reduces hidden coupling between state persistence and UI behavior.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "ui_orchestration_bloat"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "runtime_scope_adapter_inconsistency",
+      "summary": "Runtime query scoping is implemented inconsistently across voicebot modules.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "Worker handlers define `runtimeQuery` using `mergeWithRuntimeFilter(...)` with identical options.",
+        "`uploads.ts` and `messageHelpers.ts` expose runtime query functions as pass-through (`query => query`).",
+        "This leaves runtime behavior policy distributed and implicit, making it difficult to reason about what code is intentionally runtime-agnostic versus accidentally bypassing shared scoping conventions."
+      ],
+      "suggestion": "Centralize runtime query policy into one voicebot repository utility (explicitly named for current contract, e.g., `runtimeScopedQuery` and `runtimeAgnosticQuery`) and require modules to import one of these two explicit strategies instead of local ad-hoc wrappers.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_boundary_collapse"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Voicebot backend boundaries collapsed into route-level modules, pushing domain transformation and transport concerns into the same files.",
+      "Compatibility/normalization logic (IDs, attachments, runtime scoping) is copied at multiple layer boundaries instead of being centralized.",
+      "Frontend feature pages accumulated orchestration concerns that should live in dedicated hooks/adapters."
+    ],
+    "likely_symptoms": [
+      "voicebot_sessions_route_monolith",
+      "attachment_contract_logic_duplicated",
+      "id_normalization_sprawl_in_crm_ui",
+      "page_components_handle_too_many_concerns"
+    ],
+    "possible_false_positives": [
+      "Some runtime-scope pass-through helpers may be intentionally temporary due to runtime_tag deprecation; current implementation still reads as design ambiguity."
+    ]
+  }
+}

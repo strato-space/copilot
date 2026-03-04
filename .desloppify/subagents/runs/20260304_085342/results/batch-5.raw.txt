@@ -1,0 +1,316 @@
+{
+  "batch": "Full Codebase Sweep",
+  "batch_index": 5,
+  "assessments": {
+    "cross_module_architecture": 90.0,
+    "convention_outlier": 82.0,
+    "error_consistency": 76.0,
+    "abstraction_fitness": 83.0,
+    "api_surface_coherence": 79.0,
+    "authorization_consistency": 80.0,
+    "ai_generated_debt": 92.0,
+    "incomplete_migration": 91.0,
+    "package_organization": 93.0,
+    "high_level_elegance": 88.0,
+    "mid_level_elegance": 82.0,
+    "low_level_elegance": 84.0,
+    "design_coherence": 83.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "All five files stay within backend middleware boundary and depend outward on constants/logger/db/permissions without reciprocal imports in this batch.",
+        "No cycle evidence in the provided coupling_matrix; edges are one-way from middleware to supporting directories."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Auth and role middleware each define separate request auth contracts instead of a single shared boundary type, increasing boundary drift risk."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Middleware modules mix style patterns: `error.ts` defines `AppError` class and only named exports, while `auth.ts`/`roleGuard.ts` also default-export middleware.",
+        "`auth.ts` and `roleGuard.ts` duplicate near-identical request `user` shapes under different interfaces (`AuthenticatedRequest`, `RoleGuardRequest`)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "`authMiddleware` catches performer DB lookup errors, logs, then returns 401 `User not found`, masking infrastructure failure as authentication failure.",
+        "Error response shapes diverge: direct `res.status(...).json({ error: ... })` in auth/role guard vs `{ data: null, error: { message, ... } }` through `sendError` in error middleware."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Two separate request-auth interfaces encode the same auth/session context with slight optionality drift, creating low-leverage type duplication.",
+        "Role guard re-fetches performer from DB even though auth middleware already resolved performer and permissions, adding repeated indirection at the middleware seam."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 78.0,
+        "indirection_cost": 83.0,
+        "interface_honesty": 81.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Middleware API contract is not uniform: some return bare `{ error: string }`, others use typed `ApiResponse` envelope.",
+        "`metricsMiddleware` accepts `_serviceName` but does not use it, leaving an inert parameter in a public factory API."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "`roleGuard` constructs `new ObjectId(user.userId)` without `ObjectId.isValid` guard, while `authMiddleware` does validate IDs before ObjectId conversion.",
+        "Invalid auth identifier path becomes 500 via catch in role guard instead of deterministic auth failure code path."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Most comments are short and contextual; no large repetitive explain-the-obvious blocks.",
+        "No obvious pass-through helper sprawl beyond necessary middleware wrappers."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "A few header comments are generic restatements of file purpose and add little signal."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "No active legacy/new API dual-path markers in these files.",
+        "No TODO/FIXME migration shims or deprecated-symbol branches observed in assigned scope."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Mixed response contracts suggest partial convergence toward the shared `{data,error}` middleware convention is unfinished."
+    },
+    "package_organization": {
+      "evidence": [
+        "Objective structure signals are cohesive for this slice: single directory `backend/src/api/middleware/` with 5 files and focused concern.",
+        "No root-file stragglers in this batch context; coupling_matrix shows directed outbound edges only (no reciprocal edge shown).",
+        "Directory size is below overload threshold (>10 mixed-concern files), supporting current placement."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Within-folder ownership is still blurred (auth context typing, role checks, and error payload protocol overlap) and would benefit from a staged reorg: (1) create `backend/src/api/middleware/contracts/authContext.ts` and move shared request/user types, (2) keep middleware behavior files in place and update imports, (3) run `cd backend && npm run build && npm run test` to validate import updates."
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Middleware responsibilities are broadly understandable (auth, role, error, metrics, response helpers).",
+        "Role and auth overlap on identity retrieval/validation, reducing crisp ownership at the security boundary."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Authorization ownership is split across two middleware files without a shared contract for source-of-truth actor state."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Boundary handoffs are inconsistent: auth enriches request with performer/db, but role guard independently re-reads performer from DB.",
+        "Error/response handoff differs across middleware (direct JSON vs `sendError` envelope), creating seam friction for callers and clients."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "`metricsMiddleware` decrements `activeConnections` only on `finish`; aborted connections can bypass balanced decrement semantics.",
+        "`authMiddleware` internal catch around performer lookup collapses distinct failure modes into a generic 401 path."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium"
+    },
+    "design_coherence": {
+      "evidence": [
+        "Single concern (request authorization lifecycle) is split into repeated type definitions, duplicate DB lookup logic, and divergent response contracts.",
+        "Cross-cutting middleware patterns are not centralized, so related files evolve with slightly different conventions."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "response_envelope_protocol_drift",
+      "summary": "Auth/role middleware bypass shared API envelope, producing incompatible error shapes",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`auth.ts` and `roleGuard.ts` return `{ error: string }` directly from middleware.",
+        "`error.ts` centralizes errors through `sendError`, which returns `{ data: null, error: { message, ... } }`."
+      ],
+      "suggestion": "Route all middleware-originated errors through `sendError` (or a shared auth error helper wrapping it) so all API failures follow one envelope and message/code schema.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "auth_db_failure_masked_as_unauthorized",
+      "summary": "Performer lookup DB errors are downgraded into 401 user-not-found responses",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`authMiddleware` catches DB query exceptions in performer fetch and only logs (`Error fetching performer`) before continuing.",
+        "Subsequent `!performer` branch returns 401 `User not found in system`, conflating infra failure with auth failure."
+      ],
+      "suggestion": "On DB access failure, return a 500 via `sendError` with stable code (for example `auth_backend_unavailable`) and reserve 401 strictly for verified credential/identity failures.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "roleguard_objectid_validation_gap",
+      "summary": "Role guard lacks ObjectId validity guard and can emit 500 for malformed user IDs",
+      "related_files": [
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/auth.ts"
+      ],
+      "evidence": [
+        "`roleGuard.ts` calls `new ObjectId(user.userId)` directly.",
+        "`auth.ts` checks `ObjectId.isValid(payload.userId)` before conversion; guard is not mirrored in role guard."
+      ],
+      "suggestion": "Validate `user.userId` with `ObjectId.isValid` in `requireRole`; return 401/403 for invalid identity inputs instead of falling into catch-all 500.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_auth_request_contracts",
+      "summary": "Auth request context is duplicated across middleware with drifting optional fields",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "`AuthenticatedRequest` and `RoleGuardRequest` both define `user` structures manually.",
+        "One interface treats user/db as required while the other marks them optional, forcing downstream defensive checks and drift."
+      ],
+      "suggestion": "Extract shared auth context types into a single module (e.g. `middleware/contracts/authContext.ts`) and compose narrower middleware-specific types from that source.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "middleware_export_style_island",
+      "summary": "Sibling middleware uses inconsistent export conventions without clear policy",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`auth.ts` and `roleGuard.ts` expose both named and default exports for middleware functions.",
+        "`error.ts` uses named exports only and also introduces the only class type in this folder (`AppError`)."
+      ],
+      "suggestion": "Adopt one middleware export convention (named-only recommended for tree-shaking and refactor safety), remove default exports, and keep error type declarations in a dedicated shared error-contract file.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "metrics_active_connection_not_balanced_on_abort",
+      "summary": "Active-connection gauge can drift because decrement only happens on `finish`",
+      "related_files": [
+        "backend/src/api/middleware/metrics.ts",
+        "backend/src/api/middleware/error.ts"
+      ],
+      "evidence": [
+        "`metrics.ts` increments `activeConnections` per request and decrements only in `res.on('finish')`.",
+        "No `close`/once-guarded fallback path exists for aborted or prematurely closed responses."
+      ],
+      "suggestion": "Track completion with a once-guarded finalize handler bound to both `finish` and `close` so gauge decrement is balanced for all termination paths.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "middleware_auth_error_contract_fragmented",
+      "summary": "Shared middleware concerns are implemented as parallel ad-hoc patterns",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "Auth and role middleware duplicate actor typing and partially duplicate identity loading/validation responsibilities.",
+        "Error protocol diverges between middleware, with no single enforced contract despite existing response helpers."
+      ],
+      "suggestion": "Introduce a unified middleware contract layer: shared `AuthContext` type, shared auth error helper (backed by `sendError`), and a single rule for whether role checks trust `req.performer` vs re-querying DB.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "auth_to_role_handoff_redundant_roundtrip",
+      "summary": "Role guard ignores authenticated performer handoff and performs extra DB orchestration",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "Auth middleware already resolves performer and attaches it to request.",
+        "Role guard performs another performer fetch by userId rather than consuming handoff context, adding extra seam complexity and failure modes."
+      ],
+      "suggestion": "Refactor role guard to consume `req.performer` populated by auth middleware (with explicit fallback policy), and centralize refresh logic in one helper only when strict revalidation is needed.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "middleware_contract_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No single enforced middleware contract for auth context and error envelope.",
+      "Security boundary responsibilities are split between auth and role layers without a clear handoff policy."
+    ],
+    "likely_symptoms": [
+      "response_envelope_protocol_drift",
+      "auth_db_failure_masked_as_unauthorized",
+      "roleguard_objectid_validation_gap",
+      "auth_to_role_handoff_redundant_roundtrip"
+    ],
+    "possible_false_positives": [
+      "metrics_active_connection_not_balanced_on_abort"
+    ]
+  }
+}

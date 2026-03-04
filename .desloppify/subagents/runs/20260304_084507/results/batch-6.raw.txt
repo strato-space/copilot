@@ -1,0 +1,120 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 6,
+  "assessments": {
+    "package_organization": 68.0,
+    "high_level_elegance": 71.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "holistic_context.structure shows `backend/src/api/routes/crm/` importing `backend/src/api/routes/crm/legacy/` 7 times, so legacy code is not isolated and acts as a live dependency boundary.",
+        "`backend/src/api/routes/crm/customers.ts` imports `./legacy/projecttreeaudit.js`, pulling active CRM behavior from legacy namespace.",
+        "`backend/src/api/routes/voicebot/messageHelpers.ts` is route-adjacent but contains non-HTTP DB/domain normalization helpers (`ensureMessageCanonicalTranscription`, cleanup payload builders), indicating service logic placement drift inside routes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/api/routes/crm/legacy/performerspayments.ts` combines at least two domain capabilities in one route file: performer finance analytics and Google Docs/Drive act generation/upload flow.",
+        "`backend/src/api/routes/crm/dictionary.ts` mixes multiple read models (project tree, performers selector, task type tree, epics joins, income types) in one endpoint module, obscuring ownership boundaries.",
+        "`backend/src/api/routes/voicebot/index.ts` maintains parallel flat and legacy-prefixed mount patterns (including `/LLMGate` casing legacy alias), keeping migration-era decomposition instead of a single clear contract surface."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "legacy_boundary_erosion_crm_routes",
+      "summary": "Active CRM routes depend on `crm/legacy` internals, so legacy is functioning as primary package space.",
+      "related_files": [
+        "backend/src/api/routes/crm/customers.ts",
+        "backend/src/api/routes/crm/legacy/projectgroups.ts",
+        "backend/src/api/routes/crm/legacy/botcommands.ts"
+      ],
+      "evidence": [
+        "`customers.ts` imports `./legacy/projecttreeaudit.js`, coupling current CRUD flows to legacy folder internals.",
+        "Blind packet coupling matrix reports `backend/src/api/routes/crm/ → backend/src/api/routes/crm/legacy/` = 7 edges, which is too high for a supposed migration-only namespace.",
+        "Legacy files (`projectgroups.ts`, `botcommands.ts`) still expose active production endpoints, not compatibility stubs."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/api/routes/crm/project-tree/` and move `projecttreeaudit` there as canonical module. 2) Move active legacy routes into purpose folders (`crm/config/botcommands.ts`, `crm/payments/performersPayments.ts`, `crm/project-groups/projectGroups.ts`) and keep `crm/legacy/*` as thin re-export adapters for one release. 3) Update imports in `customers.ts` and sibling routes to new canonical paths. 4) Validate with `rg -n \"crm/legacy|legacy/projecttreeaudit\" backend/src/api/routes/crm` (should only show adapters), then `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "legacy_boundary_erosion"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "performerspayments_multi_domain_module",
+      "summary": "One route module owns analytics, document generation, and external Drive orchestration at once.",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/performerspayments.ts",
+        "backend/src/api/routes/crm/dictionary.ts"
+      ],
+      "evidence": [
+        "`performerspayments.ts` imports finance/stat libs (`dayjs`, lodash) and document infra (`googleapis`, `number-to-words-ru`) and executes both concerns in route handlers.",
+        "The same file handles DB aggregation (`WORK_HOURS`, `TASKS`) and document side effects (Google Docs/Drive copy, folder operations), signaling mixed ownership.",
+        "`dictionary.ts` repeats the same pattern by acting as an aggregation hub for unrelated dictionaries (tree, performers, task taxonomy, epics, income types) in one route-level module."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/services/crm/payments/` with `financeStats.ts` and `actDocumentService.ts`; keep route file as orchestration-only (`req/res` + validation + service calls). 2) Create `backend/src/services/crm/dictionaries/` and split dictionary loaders by bounded context (`projectTreeLoader`, `taskTypeLoader`, `epicsLoader`, `incomeTypeLoader`). 3) Move code in this order: pure transforms first, then external API calls, then route thin wrappers. 4) Update imports and run `cd backend && npm run build` plus targeted grep checks `rg -n \"google\\.docs|google\\.drive\" backend/src/api/routes` (should no longer match route files).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "route_owns_service_logic"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "voicebot_route_folder_hosts_service_code",
+      "summary": "Voicebot `routes/` folder contains reusable domain/DB helper module, not just transport adapters.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "`messageHelpers.ts` exports DB/domain operations (`ensureMessageCanonicalTranscription`, categorization cleanup builders) with no Express router surface.",
+        "`llmgate.ts` embeds OpenAI client lifecycle and provider mapping directly in a route module, mixing transport and external-service concerns in package placement.",
+        "Directory profile shows `backend/src/api/routes/voicebot/` as a 10-file high-LOC area (9088 LOC) with broad fan-out (avg_fan_out 5.4), consistent with route layer absorbing service responsibilities."
+      ],
+      "suggestion": "Staged reorg plan: 1) Create `backend/src/services/voicebot/messages/` and move `messageHelpers.ts` logic there (`messageCanonicalization.ts`, `categorizationCleanup.ts`). 2) Create `backend/src/services/voicebot/llm/llmGateClient.ts` and keep `llmgate.ts` as request validation + response mapping only. 3) Update route imports to new services. 4) Validate with `rg -n \"ensureMessageCanonicalTranscription|new OpenAI\\(\" backend/src/api/routes/voicebot` (route hits should reduce to wrappers), then `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "route_owns_service_logic"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "voicebot_dual_surface_migration_stall",
+      "summary": "Voicebot hub exposes dual legacy and flat mount surfaces, preserving migration state as permanent architecture.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/voicebot/llmgate.ts"
+      ],
+      "evidence": [
+        "`index.ts` mounts both flat routes and legacy aliases (`/sessions`, `/uploads`, `/LLMGate`), so responsibility is split between canonical and compatibility pathing.",
+        "Alias casing (`/LLMGate`) differs from modern lowercase conventions and keeps legacy naming at primary boundary.",
+        "The same hub mixes compatibility and canonical mounts in one layer instead of isolating compatibility adapters."
+      ],
+      "suggestion": "Staged reorg plan: 1) Introduce explicit `backend/src/api/routes/voicebot/legacy/index.ts` that owns all compatibility aliases. 2) Keep `voicebot/index.ts` canonical-only (`session_done`, upload, persons, permissions, transcription, llmgate under normalized lowercase path). 3) Route compatibility traffic through the legacy router with deprecation logging and expiry date. 4) Update import wiring and validate with `rg -n \"LLMGate|/sessions|/uploads\" backend/src/api/routes/voicebot` and `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "migration_surface_duplication"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Legacy migration boundaries were never converted into strict adapter-only layers, so legacy folders remain part of active architecture.",
+      "Route packages accumulated service/domain logic, weakening transport-vs-domain separation."
+    ],
+    "likely_symptoms": [
+      "legacy_boundary_erosion_crm_routes",
+      "voicebot_route_folder_hosts_service_code"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -245,7 +245,10 @@ Preferred engineering principles for this repo:
 - Voice upload path must broadcast `new_message` and `session_update` into room `voicebot:session:<session_id>` immediately after successful upload.
 - Voice upload API now propagates `request_id` in both success and error payloads (`X-Request-ID` passthrough or generated), and backend logs each upload stage with the same correlation id.
 - Categorization pipeline must emit `message_update` over websocket (through `SEND_TO_SOCKET` events queue) so Categorization tab updates without manual refresh.
+- `CREATE_TASKS` realtime contract is session-room first: workers must emit `tickets_prepared` with canonical `session_id`; `socket_id` is optional and only narrows delivery to one socket when present.
+- Socket events runtime must pass through non-object payloads for `tickets_prepared` (array-of-task contract) without object coercion.
 - TS transcribe worker now emits `message_update` for both success and failure branches (including quota/missing-file retries) so Transcription UI updates live without refresh.
+- Transcription fallback rows with `transcription_error` must render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) when transcript text is absent, and this placeholder must be replaceable in place via realtime `message_update`.
 - Frontend voice socket must connect to `/voicebot` namespace (not `/`) and subscribe via `subscribe_on_session`; otherwise live session updates will be dropped.
 - Frontend voice socket reconnect flow must rehydrate current session and keep deterministic message ordering for `new_message`/`message_update` upserts.
 - Backend API process owns socket event delivery for `voicebot--events-*` queue via dedicated runtime (`startVoicebotSocketEventsWorker`); standalone workers should not consume `EVENTS` queue.
@@ -523,6 +526,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-04 12:22):
+  - Closed `copilot-w8l0` epic (`copilot-w8l0.1`..`copilot-w8l0.3`) for quota-recovery realtime parity: `tickets_prepared` delivery no longer depends on explicit `socket_id` and uses session-room fallback by default.
+  - Updated socket events contract to support array payload pass-through for `tickets_prepared`, so client listeners receive task arrays unchanged.
+  - Added fallback error-signature rendering contract in transcription UI (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and locked replacement semantics via realtime updates.
+  - Added QA runbook `docs/voicebot-plan-sync/quota-recovery-realtime-qa-checklist.md`; validation passed (`backend` targeted tests, `app` contract test, `backend`/`app` builds).
 - Close-session refresh (2026-03-03 20:20):
   - Added `docs/MULTI_AGENT_DISTILLATION_2026-03-03.md` as the canonical multi-agent note for this session (deduplicated summary, `bd`-native forward-only dependency workflow, and explicit hierarchy contract `CJM -> BPMN -> UserFlow -> Screens -> Widgets -> Atoms/Tokens`).
   - Synced closeout documentation (`CHANGELOG.md`, `README.md`, `AGENTS.md`) and explicitly accepted pending local artifacts in this package: `.agents/product-marketing-context.md`, `output/copilot-marketing-discovery-2026-03-03.pptx`, and `tmp/copilot-marketing-ppt/**`.

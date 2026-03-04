@@ -1,0 +1,291 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 2,
+  "assessments": {
+    "cross_module_architecture": 82.0,
+    "convention_outlier": 88.0,
+    "error_consistency": 83.0,
+    "abstraction_fitness": 84.0,
+    "api_surface_coherence": 78.0,
+    "authorization_consistency": 79.0,
+    "ai_generated_debt": 89.0,
+    "incomplete_migration": 72.0,
+    "package_organization": 80.0,
+    "high_level_elegance": 86.0,
+    "mid_level_elegance": 84.0,
+    "low_level_elegance": 87.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Session close flow is implemented in two route modules with different behavior: canonical `/session_done` orchestration in `backend/src/api/routes/voicebot/sessions.ts` and separate legacy close mutation in `backend/src/api/routes/voicebot/uploads.ts`.",
+        "Both modules mutate session lifecycle state (`is_active`, `to_finalize`, `done_at`) creating multiple boundary owners for the same domain transition."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Voicebot permissions endpoints are POST-only even for read/list operations (`/roles`, `/users`, `/users/projects`), while neighboring FinOps routes use method-aligned GET/POST semantics (`backend/src/api/routes/finops/fxRates.ts`).",
+        "Frontend stores mix error contracts for async actions (some methods return/throw, others swallow), creating behavior convention drift between sibling stores."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "HTTP and async-action behavior conventions are not consistently applied across sibling modules."
+    },
+    "error_consistency": {
+      "evidence": [
+        "`app/src/store/permissionsStore.ts` swallows many mutation failures (`updateUserRole`, `updateUserPermissions`, `updateUserProjectIds`) after `message.error`, while sibling stores/actions throw (`app/src/store/projectsStore.ts`, several actions in `app/src/store/voiceBotStore.ts`).",
+        "Callers cannot rely on a predictable failure mode from store actions, which complicates UI rollback and retry behavior."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Multiple query wrappers are pure pass-through (`runtimeMessageQuery`, `runtimeSessionQuery`, `runtimePermissionsLogQuery`) and add naming/indirection cost without behavior.",
+        "These wrappers are spread across route helpers and route modules, so readers must inspect wrappers to discover they do nothing."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 76.0,
+        "indirection_cost": 82.0,
+        "interface_honesty": 86.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "`app/src/store/permissionsStore.ts` calls endpoints that are missing or mismatched in `backend/src/api/routes/voicebot/permissions.ts` (`voicebot/permissions/users/additional_roles`, `voicebot/permissions/users/access_level`, and `permissions/users/permissions` missing `voicebot/` prefix).",
+        "`updateUserPermissions` sends a write payload to `/users/permissions`, but backend route is read-only and ignores `permissions` input."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Frontend project-access update uses `voicebot/permissions/users/projects` in `app/src/store/permissionsStore.ts`, but backend defines that route as read operation guarded by read permissions, while write route is `/users/projects/set` with manage permissions in `backend/src/api/routes/voicebot/permissions.ts`.",
+        "The route mismatch creates authorization drift: UI mutation intent is wired to an endpoint with a different permission contract."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Repeated boilerplate try/catch + `console.error` + generic message patterns appear across multiple UI/store modules instead of shared error utilities.",
+        "No-op wrapper helpers (runtime query pass-throughs) resemble mechanical abstraction residue rather than domain-driven design."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "There are recurring formulaic patterns that increase noise and reduce signal in error and query helper code."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Runtime-tag filtering is still active in live code paths (`backend/src/workers/voicebot/handlers/transcribeHandler.ts`, `processingLoop.ts`, `createTasksPostprocessing.ts`, `backend/src/voicebot_tgbot/ingressHandlers.ts`, `backend/src/voicebot_tgbot/codexReviewCallbacks.ts`).",
+        "Migration helper `backend/scripts/runtime-tag-backfill.ts` is still present and mutates `runtime_tag`, indicating dual-era runtime scoping remains operational.",
+        "Session close migration is incomplete: legacy `/close_session` logic remains as a standalone mutator in uploads routes instead of alias-only behavior."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "package_organization": {
+      "evidence": [
+        "Very large mixed-concern modules indicate flat boundary overload: `backend/src/api/routes/voicebot/sessions.ts` (6001 LOC), `app/src/store/voiceBotStore.ts` (2016 LOC), `app/src/pages/voice/SessionsListPage.tsx` (1725 LOC), `app/src/components/crm/CRMKanban.tsx` (1394 LOC).",
+        "Route and UI files combine orchestration, mapping, validation, transport calls, and presentation in single files, making ownership and change locality weak."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Voicebot domain has clear module intent, but lifecycle ownership is split across multiple route modules and legacy paths.",
+        "Large central files accumulate responsibilities beyond one capability boundary."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Subsystem responsibilities are understandable but not cleanly localized due to oversized and overlapping modules."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Frontend permission store handoffs to backend are inconsistent (write intent mapped to read endpoints), causing seam friction.",
+        "Voice session close seam has duplicate route-level implementations, increasing integration ambiguity."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Several modules keep readable local helpers, but repeated generic error/catch patterns and silent-swallow branches reduce precision of local control flow.",
+        "Some local helper abstractions are inert pass-throughs and add unnecessary inspection hops."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Local function quality is mostly solid but repeatedly diluted by boilerplate catch patterns and low-value helper indirection."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_scoping_still_live",
+      "summary": "Deprecated runtime_tag scoping remains active in production code paths",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts",
+        "backend/src/voicebot_tgbot/codexReviewCallbacks.ts",
+        "backend/scripts/runtime-tag-backfill.ts"
+      ],
+      "evidence": [
+        "Handlers still call `mergeWithRuntimeFilter(..., { field: 'runtime_tag', ... })` for operational reads/writes.",
+        "A dedicated backfill script still sets missing `runtime_tag` to `'prod'`, reinforcing legacy routing semantics."
+      ],
+      "suggestion": "Execute a staged migration: 1) add telemetry to measure remaining runtime_tag-dependent queries, 2) switch these handlers to environment/database isolation without runtime-tag predicates, 3) delete runtime_tag backfill/script usage after parity validation, 4) run regression checks for session list, transcription, categorization, and done-flow on both dev/prod environments.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_tag_transition_debt"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "session_done_dual_owner_routes",
+      "summary": "Session-close lifecycle has two route owners with divergent behavior",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/uploads.ts"
+      ],
+      "evidence": [
+        "`/session_done` in sessions router uses `completeSessionDoneFlow` and emits richer lifecycle semantics.",
+        "`/close_session` in uploads router directly updates session flags and bypasses the canonical done orchestration."
+      ],
+      "suggestion": "Keep `/close_session` as alias only: route all close requests into the canonical `/session_done` handler path (or shared service entrypoint) and remove duplicate state mutation logic from uploads routes.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "session_done_contract_split"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "permissions_store_route_contract_drift",
+      "summary": "Frontend permissions store calls mismatched/missing backend endpoints",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`getUserPermissions` calls `permissions/users/permissions` (missing `voicebot/` prefix used elsewhere).",
+        "`updateUserAdditionalRoles` and `updateUserAccessLevel` call endpoints not defined in backend permissions router.",
+        "`updateUserPermissions` posts `permissions` to `/users/permissions`, but backend route is read-only and returns computed permissions."
+      ],
+      "suggestion": "Create a typed shared endpoint map for permissions APIs and align store methods to real backend contracts (`/users/role`, `/users/permission/add|remove`, `/users/projects/set`, `/users/permissions` read-only). Add contract tests that fail when frontend method-path or method-intent diverges from router definitions.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "permissions_api_contract_drift"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "project_access_write_uses_read_route",
+      "summary": "Project access update is wired to read endpoint with different permission gate",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "Store `updateUserProjectIds` calls `voicebot/permissions/users/projects` for mutation.",
+        "Backend `POST /users/projects` is read/list access, while mutation is `POST /users/projects/set` with manage-role/project-assign permission checks."
+      ],
+      "suggestion": "Switch mutation calls to `/users/projects/set` and keep `/users/projects` strictly for reads; add backend-side request-shape assertions and frontend permission UI checks to ensure write actions are only enabled when manage permissions are present.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "permissions_api_contract_drift"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "store_mutation_error_contract_mismatch",
+      "summary": "Store actions mix swallow-and-toast vs throw-on-error contracts",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/projectsStore.ts",
+        "app/src/store/voiceBotStore.ts"
+      ],
+      "evidence": [
+        "Many permissions mutations catch and suppress errors after `message.error`, returning success-like completion.",
+        "Sibling stores/actions throw on failed mutations, so caller-level error handling behavior is inconsistent across stores."
+      ],
+      "suggestion": "Define a uniform store action error contract (either throw typed errors or return `{ok,error}`) and apply it across stores; centralize toast side-effects in UI layer/hooks rather than inside every store mutation.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_error_contract_fragmentation"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "no_op_runtime_query_wrappers",
+      "summary": "Pass-through query helpers add indirection without behavior",
+      "related_files": [
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`runtimeMessageQuery`, `runtimeSessionQuery`, and `runtimePermissionsLogQuery` each return input query unchanged.",
+        "Call sites still wrap queries through these helpers, implying a contract that does not exist."
+      ],
+      "suggestion": "Either remove these wrappers and inline direct queries, or reintroduce a real shared policy in one place (with tests) if runtime scoping is still required. Avoid inert helper layers that masquerade as policy boundaries.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "runtime_tag_transition_debt"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "oversized_mixed_concern_modules",
+      "summary": "Core voice/crm modules are oversized and mix unrelated responsibilities",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/components/crm/CRMKanban.tsx"
+      ],
+      "evidence": [
+        "Single files exceed 1k-6k LOC and combine transport, permission checks, mapping, orchestration, and UI state logic.",
+        "These files are high-change surfaces, so mixed concerns increase merge conflicts and regression blast radius."
+      ],
+      "suggestion": "Staged reorg plan: 1) split `sessions.ts` into route modules under `backend/src/api/routes/voicebot/sessions/` (`lifecycle.ts`, `taskflow.ts`, `participants.ts`, `listing.ts`) while keeping a thin index router; 2) split `voiceBotStore.ts` into domain slices under `app/src/store/voicebot/` (`sessionSlice.ts`, `messagesSlice.ts`, `taskflowSlice.ts`, `uploadSlice.ts`); 3) split large pages/components into `containers/` + `components/` + `hooks/` subfolders by feature; 4) update imports with `rg` + codemod, then validate with `cd app && npm run build` and `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "module_size_boundary_erosion"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Runtime-tag migration remains partially active in operational paths, so new contracts coexist with legacy scoping.",
+      "Frontend-backend permission API contract is not enforced by shared typed endpoint definitions/tests.",
+      "Large monolithic modules accumulated cross-cutting responsibilities over time."
+    ],
+    "likely_symptoms": [
+      "runtime_tag_scoping_still_live",
+      "permissions_store_route_contract_drift",
+      "store_mutation_error_contract_mismatch",
+      "oversized_mixed_concern_modules"
+    ],
+    "possible_false_positives": [
+      "POST-only read endpoints in permissions API may be intentionally preserved for backward compatibility, but frontend mismatch defects remain regardless."
+    ]
+  }
+}

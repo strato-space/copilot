@@ -1,0 +1,187 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 68.0,
+    "high_level_elegance": 64.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/utils/logger.ts` auto-initializes and creates filesystem state (`fs.mkdirSync`) via `getLogger()`, while multiple modules call `const logger = getLogger()` at import time (`backend/src/services/db.ts`, `backend/src/api/middleware/auth.ts`, `backend/src/api/middleware/roleGuard.ts`, `backend/src/permissions/permission-manager.ts`, `backend/src/api/routes/crm/codex.ts`).",
+        "`backend/src/constants.ts` is a high fan-in hub containing unrelated domains (socket events, queues/jobs, Mongo collections/indexes, runtime/env exports, voicebot storage config), creating broad coupling for modules that only need one concern (`backend/src/services/db.ts`, `backend/src/permissions/permission-manager.ts`).",
+        "`backend/src/services/db.ts` exposes a scoped DB abstraction but key runtime-scope hooks are pass-through (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`) and `getRawDb()` bypass exists, so boundary intent is weak and easy to circumvent."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Authorization ownership is split across overlapping layers: `auth.ts` resolves performer + permissions, `roleGuard.ts` re-queries performer for role checks, and `permission-manager.ts` repeats middleware-level performer loading and permission checks.",
+        "`backend/src/api/routes/crm/codex.ts` combines HTTP handling with subprocess orchestration, retry/sync policy, CLI argument building, timeout policy, and JSON parsing logic, indicating missing service boundary for external tooling integration.",
+        "A standardized API envelope exists in `backend/src/api/middleware/response.ts`, but sibling middleware/routes still emit ad-hoc shapes (`auth.ts` and `roleGuard.ts` return raw `{ error: ... }`, while `error.ts` uses `sendError`), reducing top-level contract clarity."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_logger_side_effects",
+      "summary": "Global logger initialization performs filesystem side effects during module import across core backend layers.",
+      "related_files": [
+        "backend/src/utils/logger.ts",
+        "backend/src/services/db.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/routes/crm/codex.ts"
+      ],
+      "evidence": [
+        "`getLogger()` auto-calls `initLogger()` when no instance exists, and `initLogger()` calls `getLogsDir()` which executes `fs.mkdirSync`.",
+        "Multiple modules instantiate `const logger = getLogger();` at top level, so importing these modules can mutate filesystem state before app bootstrap explicitly controls logging lifecycle."
+      ],
+      "suggestion": "Move logger initialization to explicit application bootstrap, make `getLogger()` throw until initialized (or return a side-effect-free noop logger in tests), and remove top-level eager `getLogger()` calls from leaf modules.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "side_effectful_singletons"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "constants_god_hub",
+      "summary": "A monolithic constants module couples unrelated domains and expands blast radius for small changes.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/db.ts",
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/utils/crmMiniappShared.ts"
+      ],
+      "evidence": [
+        "`constants.ts` co-locates socket/channel names, BullMQ queues/jobs, Mongo collections/indexes, runtime exports, and voicebot storage settings in one file.",
+        "Modules with different responsibilities import from this shared hub (DB startup indexes, permission filters, miniapp/CRM helpers), creating dependency concentration and cross-domain coupling."
+      ],
+      "suggestion": "Split constants into domain modules (`constants/db`, `constants/voicebot`, `constants/socket`, `constants/auth`) and expose narrow facades per subsystem to reduce transitive coupling.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "overcentralized_shared_modules"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "runtime_scope_boundary_is_fail_open",
+      "summary": "Runtime-scoping abstraction in DB layer is largely pass-through, leaving intended isolation boundary unenforced.",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/constants.ts"
+      ],
+      "evidence": [
+        "`applyRuntimeScopeToAggregatePipeline` returns the input pipeline unchanged, `patchRuntimeTagIntoSetOnInsert` returns updates unchanged, and `createRuntimeScopedCollectionProxy` returns raw collection.",
+        "Despite creating a `createRuntimeScopedDbProxy`, the underlying scope-enforcement hooks are no-ops, so architectural intent exists without effective policy."
+      ],
+      "suggestion": "Either implement real scope enforcement in the proxy/hook functions (query/update rewriting + guarded raw access) or remove the pseudo-abstraction and document a single explicit isolation mechanism to avoid false safety assumptions.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "incomplete_boundary_abstractions"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_auth_data_load_path",
+      "summary": "Auth middleware stack duplicates performer resolution across modules, creating redundant DB lookups and diverging trust boundaries.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/permissions/permissions-config.ts"
+      ],
+      "evidence": [
+        "`auth.ts` loads performer and computes permissions into request context.",
+        "`roleGuard.ts` re-queries performer by `userId` and re-evaluates role membership.",
+        "`PermissionManager.requirePermission` again fetches performer and computes permissions, with a separate request interface and context model."
+      ],
+      "suggestion": "Introduce one canonical auth context resolver that loads performer/roles/permissions once per request, then let `requireRole` and `requirePermission` consume that normalized context without additional DB fetches.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fragmented_authz_pipeline"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "authz_ownership_fragmented",
+      "summary": "Authorization model is split between role guards and permission manager without a clear top-level ownership contract.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "Role-based checks (`requireRole`) and permission/context checks (`PermissionManager.requirePermission`) are both active patterns, each with own performer-loading and error response behavior.",
+        "There is no unifying authorization composition point that defines sequencing and authority (identity -> role gate -> permission gate)."
+      ],
+      "suggestion": "Define a single authorization pipeline contract (e.g., identity hydration + policy engine), keep `roleGuard` as a thin policy adapter or deprecate it in favor of permission policies, and standardize middleware composition across routes.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "fragmented_authz_pipeline"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "codex_route_contains_integration_engine",
+      "summary": "CRM Codex route owns process execution and recovery orchestration instead of delegating to an integration service boundary.",
+      "related_files": [
+        "backend/src/api/routes/crm/codex.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`codex.ts` includes command spawning, timeout lifecycle, sync-retry strategy, payload parsing, and response mapping in the route module.",
+        "This route-level orchestration duplicates concerns typically owned by a service/integration layer, making HTTP handlers responsible for infra behavior."
+      ],
+      "suggestion": "Extract a `bdClient`/integration service (run/list/show/sync-retry + parsing + typed error mapping) and keep route handlers focused on validation + response translation.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_service_boundaries"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "api_contract_not_uniform_across_middleware",
+      "summary": "A declared API envelope exists but middleware siblings emit divergent error payload contracts.",
+      "related_files": [
+        "backend/src/api/middleware/response.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/api/routes/crm/codex.ts"
+      ],
+      "evidence": [
+        "`response.ts` defines `{ data, error }` envelope via `sendOk`/`sendError`.",
+        "`error.ts` uses `sendError`, but `auth.ts` and `roleGuard.ts` return raw `{ error: ... }` objects directly; `codex.ts` also bypasses `sendError` in favor of ad-hoc responses."
+      ],
+      "suggestion": "Enforce one response contract at middleware/route boundaries (prefer `sendOk`/`sendError` or an equivalent centralized responder) and migrate auth/codex handlers to it for coherent top-level API behavior.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "inconsistent_boundary_contracts"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Cross-cutting concerns are centralized as global utility singletons/hubs rather than isolated behind explicit subsystem boundaries.",
+      "Authorization evolved through additive middleware patterns instead of one canonical policy pipeline.",
+      "Infrastructure integrations are implemented in route modules, blurring transport and orchestration ownership."
+    ],
+    "likely_symptoms": [
+      "duplicated_auth_data_load_path",
+      "api_contract_not_uniform_across_middleware",
+      "codex_route_contains_integration_engine"
+    ],
+    "possible_false_positives": [
+      "Older packet entries labeling auth/role middleware as orphaned no longer apply; current code imports and uses both."
+    ]
+  }
+}

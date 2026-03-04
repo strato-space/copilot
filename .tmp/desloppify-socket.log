@@ -1,0 +1,40 @@
+  → query.json updated
+
+  Failed batches: [2]
+  Failure categories: runner missing=1
+  Retry command:
+    desloppify review --run-batches --packet /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085748.json --only-batches 2
+    log: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085748/logs/batch-2.log
+  Environment hints:
+    codex CLI not found on PATH. Install Codex CLI and verify `codex --version`.
+  Immutable packet: /home/strato-space/copilot/.desloppify/review_packets/holistic_packet_20260304_085748.json
+  Blind packet: /home/strato-space/copilot/.desloppify/review_packet_blind.json
+  WARNING: this run targets 13/20 scored subjective dimensions (language default review dimension set).
+  Missing from this run: naming_quality, logic_clarity, type_safety, contract_coherence, initialization_coupling, +2 more
+  Rerun missing dimensions: `desloppify review --run-batches --runner codex --parallel --scan-after-import --path backend/src/api/socket.ts --dimensions naming_quality,logic_clarity,type_safety,contract_coherence,initialization_coupling,dependency_health,test_strategy`
+  Runtime expectation: 2 batch(es), workers=2, timeout-per-batch=20m, worst-case upper bound ~20m.
+
+  Running holistic batches: [1, 2]
+  Run artifacts: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085748
+  Live run log: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085748/run.log
+  Parallel runner config: max-workers=2, heartbeat=15.0s
+  Batch 1/2 queued (#1)
+  Batch 1/2 started (#1)
+  Batch 2/2 queued (#2)
+  Batch 2/2 started (#2)
+  Batch heartbeat: 2/2 active (#1:15s, #2:15s)
+  Batch heartbeat: 2/2 active (#1:30s, #2:30s)
+  Batch heartbeat: 2/2 active (#1:45s, #2:45s)
+  Batch heartbeat: 2/2 active (#1:60s, #2:60s)
+  Batch heartbeat: 2/2 active (#1:75s, #2:75s)
+  Batch heartbeat: 2/2 active (#1:90s, #2:90s)
+  Batch heartbeat: 2/2 active (#1:105s, #2:105s)
+  Batch heartbeat: 2/2 active (#1:120s, #2:120s)
+  Batch heartbeat: 2/2 active (#1:135s, #2:135s)
+  Batch 1/2 done in 141s (#1)
+  Batch heartbeat: 1/2 active (#2:156s)
+  Batch heartbeat: 1/2 active (#2:171s)
+  Batch heartbeat: 1/2 active (#2:186s)
+  Batch heartbeat: 1/2 active (#2:201s)
+  Batch 2/2 done in 203s (#2)
+  Run summary: /home/strato-space/copilot/.desloppify/subagents/runs/20260304_085748/run_summary.json

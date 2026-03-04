@@ -1,0 +1,130 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 7,
+  "assessments": {
+    "design_coherence": 74.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Large UI orchestrators combine unrelated concerns in one component: `app/src/pages/voice/SessionsListPage.tsx` (1725 LOC) mixes URL state persistence, localStorage hydration, FAB polling/event sync, bulk-merge/delete workflows, and table render definitions; `app/src/components/crm/CRMKanban.tsx` (1394 LOC) similarly combines filtering, routing, edit flows, and table behavior.",
+        "Voice worker handlers duplicate a near-identical processor execution template instead of using a shared abstraction: `backend/src/workers/voicebot/handlers/customPrompt.ts` and `questionsHandler.ts` both do message/session lookup, categorization gating, OpenAI call, processor state writes, and parallel error plumbing with slightly different field names.",
+        "`backend/src/workers/voicebot/handlers/transcribeHandler.ts` centralizes too many responsibilities in one flow (transport recovery, split/segment transcription, retry policy, codex task side-effect, categorization enqueue, websocket update emission), while `processingLoop.ts` and `ingressHandlers.ts` also coordinate adjacent lifecycle concerns, increasing coupling.",
+        "FinOps table modules reimplement the same structural shell (pinned-month persistence, month-ordering, similar column builder patterns, repeated summary-cell cast workaround) in `app/src/components/PlanFactGrid.tsx`, `BonusesGrid.tsx`, and `ExpensesGrid.tsx`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice_list_god_component",
+      "summary": "Sessions list page mixes routing, persistence, orchestration, and rendering in one monolith",
+      "related_files": [
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/components/voice/MeetingCard.tsx",
+        "app/src/components/voice/PossibleTasks.tsx"
+      ],
+      "evidence": [
+        "`SessionsListPage.tsx` contains URL query schema, localStorage restore/persist, FAB sync interval/event wiring, bulk delete/merge mutations, and full table column/render logic in one component body.",
+        "`MeetingCard.tsx` and `PossibleTasks.tsx` repeat adjacent orchestration concerns (session-side effects, tag persistence, task mutation flows), indicating weak ownership boundaries in the voice UI layer."
+      ],
+      "suggestion": "Split voice session UI into domain hooks/modules: `useSessionListQueryState`, `useFabSessionSync`, `useBulkSessionActions`, and a pure `SessionsTable` view. Keep `MeetingCard`/`PossibleTasks` focused on presentation plus narrow action adapters, moving persistence and polling logic into shared hooks.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voice_ui_orchestration_without_feature_boundaries"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "processor_handler_template_duplication",
+      "summary": "Prompt processor handlers duplicate the same execution skeleton with drift-prone variations",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts"
+      ],
+      "evidence": [
+        "`customPrompt.ts` and `questionsHandler.ts` both implement identical lifecycle phases: validate ids, load message/session, skip on empty categorization, OpenAI request, write processor success state, write processor failure state, log result.",
+        "Field naming and update paths differ (`processors_data.<name>.*` vs mixed `questioning_*` fields), showing copy-and-modify evolution instead of a single processor contract."
+      ],
+      "suggestion": "Introduce a shared processor executor (e.g., `runMessageProcessor`) that standardizes load/guard/update/error flow and accepts strategy callbacks for prompt/instructions + output normalization. Unify persisted processor field layout across custom prompts and questioning.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "copied_worker_orchestration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "transcribe_handler_multi_responsibility",
+      "summary": "Transcribe handler combines transport, DSP, policy, tasking, and realtime side-effects",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/voicebot_tgbot/ingressHandlers.ts"
+      ],
+      "evidence": [
+        "`handleTranscribeJob` performs Telegram file recovery, fallback text path, dedup reuse-by-hash, large-file splitting/transcription, retry/quota policy, session corruption state writes, codex task creation, categorization enqueue, and socket event emission in one long routine.",
+        "Adjacent modules (`processingLoop.ts`, `ingressHandlers.ts`) also contain lifecycle/retry orchestration, making behavior spread across files with overlapping responsibilities."
+      ],
+      "suggestion": "Refactor into a pipeline with explicit stages: `resolveAudioSource`, `transcribeContent`, `persistTranscriptionResult`, `runPostTranscriptionHooks` (codex/categorization/events), and `applyRetryPolicy`. Keep `handleTranscribeJob` as a coordinator over typed stage results.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "copied_worker_orchestration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_grid_scaffold_duplication",
+      "summary": "FinOps grids duplicate month-pinning and table-scaffold mechanics across modules",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/components/ExpensesGrid.tsx"
+      ],
+      "evidence": [
+        "All three grids implement similar pinned-month localStorage handling, ordered month composition, per-month column generation, and summary-cell type casting.",
+        "Each file carries bespoke but structurally equivalent table shell logic, increasing change cost for shared behavior updates (pinning, month header UX, summary formatting)."
+      ],
+      "suggestion": "Extract a shared `FinancialMonthTable` scaffold/hook (`usePinnedMonths`, `buildOrderedMonthColumns`, summary helpers) and keep each grid responsible only for domain row mapping and cell render specifics.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_finops_table_abstraction"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "store_slice_overaggregation",
+      "summary": "UI stores combine multiple modal/workflow domains, creating broad mutable surfaces",
+      "related_files": [
+        "app/src/store/sessionsUIStore.ts",
+        "app/src/store/projectsStore.ts",
+        "app/src/store/permissionsStore.ts"
+      ],
+      "evidence": [
+        "`sessionsUIStore.ts` bundles participant modal, access users modal, categorization selection, two sort preferences, tickets modal editing state, and title-generation workflow in one store.",
+        "`projectsStore.ts` and `permissionsStore.ts` similarly merge fetch lifecycle, cache policy, mutation side-effects, and UI messaging concerns, expanding blast radius of local changes."
+      ],
+      "suggestion": "Split stores into narrower domain slices (`sessionParticipantsUI`, `sessionTicketsUI`, `sessionSortPrefs`, `projectsDataStore`, `permissionsAdminStore`) and move notification side-effects into service/adaptor helpers to reduce cross-feature coupling.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "state_slice_boundary_drift"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Feature boundaries are weak; orchestration and presentation are repeatedly co-located.",
+      "Worker flows grew by copy-modify instead of converging on shared processor/pipeline primitives.",
+      "Shared table/store infrastructure is under-abstracted, causing repeated structural shells."
+    ],
+    "likely_symptoms": [
+      "voice_list_god_component",
+      "processor_handler_template_duplication",
+      "finops_grid_scaffold_duplication"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -137,6 +137,7 @@ describe('handleCreateTasksFromChunksJob', () => {
     expect(eventsAdd).toHaveBeenCalledWith(
       VOICEBOT_JOBS.events.SEND_TO_SOCKET,
       expect.objectContaining({
+        session_id: sessionId.toString(),
         event: 'tickets_prepared',
         socket_id: 'socket-123',
         payload: expect.arrayContaining([
@@ -148,6 +149,70 @@ describe('handleCreateTasksFromChunksJob', () => {
       }),
       expect.objectContaining({ attempts: 1 })
     );
+  });
+
+  it('emits tickets_prepared for session room when socket_id is not provided', async () => {
+    const sessionId = new ObjectId();
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const eventsAdd = jest.fn(async () => ({ id: 'event-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsAdd,
+      },
+    });
+
+    createResponseMock.mockResolvedValue({
+      output_text: JSON.stringify([
+        {
+          id: 'TASK-1',
+          task_id_from_ai: 'TASK-1',
+          name: 'Ship voice parity',
+          description: 'Implement full parity',
+          priority: 'P2',
+        },
+      ]),
+    });
+
+    const result = await handleCreateTasksFromChunksJob({
+      session_id: sessionId.toString(),
+      chunks_to_process: [{ text: 'Need to ship parity this week' }],
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      session_id: sessionId.toString(),
+      tasks_count: 1,
+    });
+
+    expect(eventsAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.events.SEND_TO_SOCKET,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        event: 'tickets_prepared',
+        payload: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'TASK-1',
+            name: 'Ship voice parity',
+          }),
+        ]),
+      }),
+      expect.objectContaining({ attempts: 1 })
+    );
+    expect((eventsAdd.mock.calls[0]?.[1] as Record<string, unknown>)?.socket_id).toBeUndefined();
   });
 
   it('writes openai_api_key_missing when key is not configured', async () => {

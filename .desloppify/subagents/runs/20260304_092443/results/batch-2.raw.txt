@@ -1,0 +1,156 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 2,
+  "assessments": {
+    "design_coherence": 71.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/sessions.ts` remains a 6001-LOC route module that mixes routing, permission checks, request parsing, DB mutation, rollback logic, realtime emission, and taskflow orchestration in one file.",
+        "Near-identical edit/delete flows are duplicated for transcript and categorization mutations in `sessions.ts` (same access-resolution, locator, snapshot/update/log/realtime sequence), while helper extraction in `messageHelpers.ts` is only partial.",
+        "`app/src/store/voiceBotStore.ts` (2016 LOC) combines transport, socket lifecycle, session CRUD, taskflow mutation, and dense message/material transformation logic, and `SessionPage.tsx` still includes non-UI image-processing/upload orchestration.",
+        "FinOps monthly aggregation logic is repeated in multiple UI modules (`PlanFactPage.tsx`, `BonusesGrid.tsx`, `AnalyticsPage.tsx`), increasing risk of silent metric drift.",
+        "CRM state ownership is over-concentrated in `kanbanStore.ts` (1349 LOC with many domain slices and direct API side effects), while `projectsStore.ts` re-implements similar fetch-throttle and tree-shaping mechanics."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "voicebot_sessions_monolith_route",
+      "summary": "Voice session route file centralizes too many responsibilities, making mutation flows brittle and hard to evolve safely.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/socket.ts"
+      ],
+      "evidence": [
+        "`sessions.ts` is 6001 LOC and contains unrelated concerns: schema parsing, auth checks, DB updates, rollback semantics, object-locator maintenance, event-log writes, queue enqueueing, and realtime emits.",
+        "Route handlers like `/edit_transcript_chunk`, `/delete_transcript_chunk`, `/edit_categorization_chunk`, `/delete_categorization_chunk`, and `/rollback_event` implement long imperative pipelines inline instead of composing domain services.",
+        "Helper module `messageHelpers.ts` exists but only partially absorbs shared behavior; major mutation choreography is still duplicated at route level."
+      ],
+      "suggestion": "Split session routes by bounded capability (session lifecycle, transcript mutations, categorization mutations, taskflow, session-log replay) and move mutation pipelines into service-level command handlers returning typed outcomes; keep routes as thin adapters.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "voicebot_mutation_pipeline_fragmentation"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "duplicated_transcript_categorization_mutations",
+      "summary": "Transcript/categorization edit-delete handlers duplicate the same multi-step mutation workflow with minor field-level variation.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "`/edit_transcript_chunk` and `/delete_transcript_chunk` duplicate: session/message resolve, locator validation/upsert, canonical transcription resolution, segment/chunk rewrite, cleanup payload build, message update, log event insert, optional cleanup event insert.",
+        "`/edit_categorization_chunk` and `/delete_categorization_chunk` duplicate: parse/validate row locator, access checks, row matching, row snapshot mutation, update write, log event write, realtime emit.",
+        "The duplicated shape already caused divergence risk (delete_categorization has compensating rollback path and cascade logic that the sibling flow does not share by construction)."
+      ],
+      "suggestion": "Introduce shared mutation primitives (e.g., `mutateTranscriptSegment`, `mutateCategorizationRow`) with pluggable operation strategy (`edit|delete`) and shared audit/realtime hooks; keep route handlers declarative.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voicebot_mutation_pipeline_fragmentation"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "frontend_voice_state_and_ui_blending",
+      "summary": "Voice frontend responsibilities are blurred between store, page, and component layers, producing a large implicit orchestrator instead of clear boundaries.",
+      "related_files": [
+        "app/src/store/voiceBotStore.ts",
+        "app/src/pages/voice/SessionPage.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "`voiceBotStore.ts` (2016 LOC) includes transport calls, websocket synchronization, session/taskflow actions, and heavy message/material normalization (`transformVoiceBotMessagesToGroups`) in one store.",
+        "`SessionPage.tsx` contains image decoding/canvas recompression/clipboard handling (`toOptimizedClipboardImage`, paste lifecycle) alongside page composition, which couples low-level media preprocessing to route UI.",
+        "`sessionsUIStore.ts` is simultaneously modal state manager, row-selection engine, sort preference persistence, and AI-title generation coordinator, increasing cross-layer coupling with `voiceBotStore`."
+      ],
+      "suggestion": "Separate voice frontend into explicit layers: API+socket service, message normalization service, store slices per concern (session data vs UI state), and reusable media ingestion hook/util outside `SessionPage`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "frontend_voice_orchestration_overload"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "finops_metric_logic_repeated_across_views",
+      "summary": "The same month-level income/expense aggregation is reimplemented across pages/components, inviting drift between finance screens.",
+      "related_files": [
+        "app/src/pages/PlanFactPage.tsx",
+        "app/src/components/BonusesGrid.tsx",
+        "app/src/pages/AnalyticsPage.tsx",
+        "app/src/components/ExpensesGrid.tsx"
+      ],
+      "evidence": [
+        "`PlanFactPage.tsx` computes `incomeTotals` and `expenseTotals` via nested month/category/operation loops.",
+        "`BonusesGrid.tsx` contains separate `buildExpenseTotals` with similar employee + category/operation aggregation logic.",
+        "`AnalyticsPage.tsx` also reconstructs overlapping monthly totals and rate conversions, creating multiple unsynchronized calculation sources."
+      ],
+      "suggestion": "Extract a shared FinOps aggregation module (pure functions with typed inputs/outputs) used by PlanFact, Bonuses, Expenses, and Analytics so all tabs derive from one canonical computation path.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "finops_computation_duplication"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "crm_store_as_god_orchestrator",
+      "summary": "CRM store combines too many unrelated domains and action styles, reducing cohesion and making changes risky.",
+      "related_files": [
+        "app/src/store/kanbanStore.ts",
+        "app/src/store/projectsStore.ts",
+        "app/src/components/crm/CRMKanban.tsx"
+      ],
+      "evidence": [
+        "`kanbanStore.ts` (1349 LOC) aggregates ticket CRUD, comments/files, finance widgets, bot commands, warehouse, task types, roadmap, payments, and bonus calculations in one store contract.",
+        "Both `kanbanStore.ts` and `projectsStore.ts` contain local fetch-throttle flags and tree-shaping orchestration, duplicating infra behavior instead of shared data-access primitives.",
+        "Direct API calls mixed with UI-derived local mutations in a single store make transactional boundaries unclear (optimistic updates, background fetches, and structural dictionary refresh all coexist)."
+      ],
+      "suggestion": "Decompose CRM state into domain stores (`tickets`, `projects-tree`, `finance`, `automation/bot`) with shared request/cache utilities and explicit boundaries for optimistic vs server-authoritative state.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "crm_state_overconcentration"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "parallel_modal_flows_duplicated",
+      "summary": "Participant and access-user modal flows are structurally duplicated with minor field differences, increasing maintenance overhead.",
+      "related_files": [
+        "app/src/components/voice/AddParticipantModal.tsx",
+        "app/src/components/voice/AccessUsersModal.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "Both modal components duplicate list filtering, selected-item chips, add/remove handlers, save/cancel lifecycle, and store-loading toggles with slightly different labels and fields.",
+        "`sessionsUIStore.ts` mirrors this duplication with separate but near-identical modal state/action slices (`participantModal` vs `accessUsersModal`)."
+      ],
+      "suggestion": "Introduce a generic selectable-entities modal controller (shared state shape + reusable picker/list UI) and keep participant/access-specific logic as thin adapters.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_voice_orchestration_overload"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Route/store files became integration hubs where new features were appended instead of extracted into domain services.",
+      "Shared mutation/aggregation primitives were introduced partially, but core orchestration stayed duplicated in endpoint/component bodies.",
+      "State management favors large centralized stores over bounded slices, causing mixed responsibilities and repeated control patterns."
+    ],
+    "likely_symptoms": [
+      "voicebot_sessions_monolith_route",
+      "duplicated_transcript_categorization_mutations",
+      "finops_metric_logic_repeated_across_views",
+      "parallel_modal_flows_duplicated"
+    ],
+    "possible_false_positives": []
+  }
+}

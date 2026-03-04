@@ -1,0 +1,166 @@
+{
+  "batch": "Testing & API",
+  "batch_index": 4,
+  "assessments": {
+    "api_surface_coherence": 73.0,
+    "mid_level_elegance": 71.0
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "`response.ts` defines a canonical `{ data, error }` envelope (`sendOk`/`sendError`), but `auth.ts`, `roleGuard.ts`, and `permission-manager.ts` return ad-hoc `{ error: string }` or mixed payload shapes directly.",
+        "`auth.ts` and `permission-manager.ts` each define different `AuthenticatedRequest` contracts (`permissions?: string[]` vs `Permission[]`, required vs optional fields), creating incompatible API expectations at middleware boundaries.",
+        "`permission-manager.ts` validates ObjectId in `checkSessionOwnership`, but `checkProjectAssignment` uses `new ObjectId(sessionId)` without validity checks, so equivalent request inputs follow different failure contracts."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "`authMiddleware` fetches performer and computes permissions, then `requireRole` and `requirePermission` query the performer again instead of consuming normalized auth context, causing duplicated boundary work and drift risk.",
+        "`permission-manager.ts` converts DB failures into plain `Error` strings (`addProjectAccess`/`removeProjectAccess`/`setUserProjectsAccess`), while `error.ts` expects structured `AppError` metadata for coherent propagation.",
+        "`projecttreeaudit.ts` accepts raw `Request` and locally casts user/performer shape, indicating missing shared request-context seam instead of one typed handoff contract."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "api_envelope_fragmentation",
+      "summary": "Canonical API envelope is bypassed by auth/authorization middlewares.",
+      "related_files": [
+        "backend/src/api/middleware/response.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`response.ts` defines `ApiResponse<T>` and `sendError` with `{ data: null, error: { message, ... } }`.",
+        "`auth.ts` returns `res.status(...).json({ error: '...' })` on all failure paths (401/500), not `sendError`.",
+        "`roleGuard.ts` and `permission-manager.ts` also emit direct ad-hoc JSON error objects with inconsistent keys (`error`, `message`, `required_permissions`, `allowed_roles`)."
+      ],
+      "suggestion": "Route all middleware failures through `sendError` (or a single typed error helper) and standardize auxiliary fields under `error.details` to keep one predictable response contract.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "boundary_contract_fragmentation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "request_context_contract_drift",
+      "summary": "Request context is redefined with incompatible types across middleware layers.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "`auth.ts` defines `AuthenticatedRequest.user.permissions?: string[]` and requires `user/performer/db` on the interface.",
+        "`permission-manager.ts` defines a separate `AuthenticatedRequest` where the same fields are optional and `permissions?: Permission[]`.",
+        "`roleGuard.ts` introduces another `RoleGuardRequest` variant and relies on `db?`/`user?`, forcing runtime checks for shape that should be compile-time-guaranteed."
+      ],
+      "suggestion": "Create one shared `RequestContext` type (auth payload + performer + db + permissions enum type) and import it in all middleware/utilities to eliminate seam ambiguity.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "boundary_contract_fragmentation"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "session_id_validation_inconsistency",
+      "summary": "Equivalent session-id flows use different validation rules and failure behavior.",
+      "related_files": [
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`checkSessionOwnership` rejects invalid IDs via `ObjectId.isValid(sessionId)` before constructing ObjectId.",
+        "`checkProjectAssignment` fetches by session using `mongoIdUtils.toObjectId(sessionId)` without `ObjectId.isValid`, so malformed input can throw.",
+        "Thrown conversion errors fall into generic 500 paths in `requirePermission` instead of a stable 4xx validation contract."
+      ],
+      "suggestion": "Centralize session/project id parsing in one validator and return a structured client error (e.g., `invalid_session_id`) via `AppError` + `sendError` rather than letting ObjectId constructor exceptions leak to generic 500s.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "boundary_contract_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "authz_requery_duplication",
+      "summary": "Authorization middleware re-queries performer after auth, duplicating boundary handoff work.",
+      "related_files": [
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/api/middleware/roleGuard.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`authMiddleware` already resolves performer and attaches `authReq.performer` and `authReq.user`.",
+        "`requireRole` ignores `req.performer` and performs another `db.collection(...).findOne` by `userId`.",
+        "`requirePermission` similarly re-fetches performer by `user.userId` instead of consuming canonical auth context."
+      ],
+      "suggestion": "Make auth middleware the single source of performer context and let downstream guards consume `req.performer` (with optional refresh flag only where strict freshness is required).",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "auth_boundary_duplication"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "structured_error_propagation_break",
+      "summary": "Permission-manager mutators collapse DB errors into untyped strings, losing boundary metadata.",
+      "related_files": [
+        "backend/src/permissions/permission-manager.ts",
+        "backend/src/api/middleware/error.ts",
+        "backend/src/api/middleware/response.ts"
+      ],
+      "evidence": [
+        "`addProjectAccess`/`removeProjectAccess`/`setUserProjectsAccess` catch any error and `throw new Error('Failed to ...: ...')`.",
+        "`error.ts` has `AppError(status, code, details)` for preserving structured failure semantics, but these methods do not use it.",
+        "Resulting failures degrade to generic 500 handling paths with reduced client/actionability and weaker cross-layer diagnostics."
+      ],
+      "suggestion": "Throw `AppError` (or a domain error type translated to `AppError`) with stable `code` and `details` from permission mutators so middleware can preserve precise API error contracts.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "error_contract_fragmentation"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "audit_log_context_reinterpretation",
+      "summary": "Audit logging utility reinterprets request auth context instead of consuming typed middleware output.",
+      "related_files": [
+        "backend/src/api/routes/crm/legacy/projecttreeaudit.ts",
+        "backend/src/api/middleware/auth.ts",
+        "backend/src/permissions/permission-manager.ts"
+      ],
+      "evidence": [
+        "`projecttreeaudit.ts` takes plain `Request` and casts to a bespoke shape to extract `user.userId`/`performer._id`.",
+        "Auth and permission layers already define request context interfaces, but audit utility does not reuse any of them.",
+        "This creates silent seam drift risk when auth context fields evolve (field names/type changes are not compiler-checked here)."
+      ],
+      "suggestion": "Accept a shared authenticated request type (or a minimal typed actor-context object) in audit helpers so actor resolution is compile-time-bound to middleware contracts.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "boundary_contract_fragmentation"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No single canonical boundary contract for request/auth/error envelopes across middleware stack.",
+      "Authorization flow duplicates data retrieval instead of composing around one authenticated context object."
+    ],
+    "likely_symptoms": [
+      "api_envelope_fragmentation",
+      "request_context_contract_drift",
+      "authz_requery_duplication",
+      "structured_error_propagation_break"
+    ],
+    "possible_false_positives": []
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "batch": "Package Organization",
+  "batch_index": 4,
+  "assessments": {
+    "package_organization": 72.0,
+    "high_level_elegance": 76.0
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "`backend/src/services/reports/jiraStyleReport.ts` mixes data access, domain shaping, spreadsheet rendering, formatting, and Google API mutation in one package entrypoint.",
+        "`backend/src/services/reports/performerWeeksReport.ts` re-implements helpers already extracted to `backend/src/services/reports/jiraReportUtils.ts` (`setWeekStart*`, `indexesToA1`), showing unclear utility ownership boundaries.",
+        "`backend/src/services/reports/googleDrive.ts` (transport/auth client creation) is colocated with report domain composition files instead of an adapter/integration subpackage.",
+        "Packet structure coupling shows worker shared code importing from `backend/src/services/` and `backend/src/services/voicebot/`, reinforcing `services` as an overloaded dependency sink rather than bounded packages."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "`backend/src/services/db.ts` combines unrelated responsibilities: Mongo connection lifecycle, startup index management, project seeding (`seedCopilotProjectGitRepo`), and runtime-scope proxy API.",
+        "Runtime-scope APIs in `backend/src/services/db.ts` (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`) are pass-through/no-op while still shaping architecture as if enforcement exists.",
+        "`backend/src/services/voicebot/voicebotDoneNotify.ts` is positioned as service-layer orchestration but directly formats Telegram transport payloads via `../../voicebot_tgbot/sessionTelegramMessage.js`, blurring domain vs channel boundaries."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "package_organization",
+      "identifier": "reports_package_mixes_domain_and_adapter_layers",
+      "summary": "Reports package mixes domain generation logic with Google transport/adapters and sheet presentation internals",
+      "related_files": [
+        "backend/src/services/reports/jiraStyleReport.ts",
+        "backend/src/services/reports/googleDrive.ts",
+        "backend/src/services/reports/performerWeeksReport.ts",
+        "backend/src/services/reports/jiraReportUtils.ts"
+      ],
+      "evidence": [
+        "`jiraStyleReport.ts` both queries Mongo collections and performs spreadsheet mutation (`sheet.getCell`, `spreadsheets.batchUpdate`), while also handling report-domain transforms.",
+        "`googleDrive.ts` contains credential parsing/auth/client wiring but lives in the same flat package as report-specific composition.",
+        "`performerWeeksReport.ts` duplicates utility logic despite `jiraReportUtils.ts` existing in the same package, indicating unclear package-level ownership."
+      ],
+      "suggestion": "Staged reorg plan: (1) create `backend/src/services/reports/core/` (data shaping + report models), `backend/src/services/reports/renderers/googleSheets/` (cell writes, formulas, formatting), and `backend/src/integrations/google/` (auth + drive/sheets clients). (2) Move `googleDrive.ts` to `backend/src/integrations/google/sheetsClient.ts`; move reusable date/A1 helpers to `backend/src/services/reports/core/dateGrid.ts`; keep report entrypoints as thin orchestrators under `backend/src/services/reports/`. (3) Update imports with `rg -n \"services/reports/(googleDrive|jiraReportUtils)\" backend/src` and apply path rewrites. (4) Validate with `cd backend && npm run build` and run report route smoke checks via existing report endpoints.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "services_layer_as_catch_all"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "db_service_has_conflicting_ownership_roles",
+      "summary": "Database service acts as a catch-all bootstrap module with misleading runtime-scope abstractions",
+      "related_files": [
+        "backend/src/services/db.ts",
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/projectGitRepoSeed.ts"
+      ],
+      "evidence": [
+        "`db.ts` owns connection lifecycle and index creation, but also startup seeding (`seedCopilotProjectGitRepo`) and runtime-scope proxy primitives.",
+        "Runtime-scope functions in `db.ts` are currently no-op pass-throughs, yet they define architectural touchpoints (`createRuntimeScopedCollectionProxy`, `patchRuntimeTagIntoSetOnInsert`) that imply active policy enforcement.",
+        "This mixes infra bootstrap and policy boundary concerns into one top-level service module, making ownership of runtime scoping and boot side effects non-obvious."
+      ],
+      "suggestion": "Split by architectural role: move startup bootstrap (`ensureStartupIndexes`, seeding) to `backend/src/bootstrap/dbStartup.ts`, keep pure connection API in `backend/src/services/db/connection.ts`, and move runtime-scoping helpers to `backend/src/services/db/runtimeScopeProxy.ts` where they either enforce behavior or are removed. Sequence: extract files first, then switch imports from callers, then remove legacy exports in `db.ts`. Validate using `rg -n \"from '../services/db|from './db\" backend/src` and `cd backend && npm run build`.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "services_layer_as_catch_all"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "voicebot_service_boundary_leaks_transport_logic",
+      "summary": "Voicebot service package leaks socket/telegram transport concerns into core service placement",
+      "related_files": [
+        "backend/src/services/voicebot/session-socket-auth.ts",
+        "backend/src/services/voicebot/voicebotDoneNotify.ts",
+        "backend/src/api/socket/voicebot.ts",
+        "backend/src/voicebot_tgbot/sessionTelegramMessage.js"
+      ],
+      "evidence": [
+        "`session-socket-auth.ts` is only consumed by `api/socket/voicebot.ts`, making it transport-specific policy logic placed under shared service domain.",
+        "`voicebotDoneNotify.ts` imports telegram message formatting from `voicebot_tgbot`, so a service-layer module directly depends on channel-specific transport formatting.",
+        "Current placement obscures whether `services/voicebot` is domain-core orchestration or transport adapter code."
+      ],
+      "suggestion": "Staged reorg plan: (1) create `backend/src/voicebot/core/` for transport-agnostic session/audit helpers and `backend/src/voicebot/transports/{socket,telegram}/` for channel adapters. (2) Move `session-socket-auth.ts` to `voicebot/transports/socket/access.ts`; move telegram preview formatting dependency behind an injected formatter interface in `voicebot/core/doneNotify.ts`. (3) Update imports in `api/socket/voicebot.ts`, `services/voicebotSessionDoneFlow.ts`, and worker handlers. (4) Run `rg -n \"services/voicebot/(session-socket-auth|voicebotDoneNotify)\" backend/src` to verify migration completion, then `cd backend && npm run build`.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "services_layer_as_catch_all"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "The `backend/src/services` layer is used as a broad container for domain logic, transport adapters, and startup infrastructure, weakening package ownership boundaries.",
+      "Utility extraction in reports is partial/inconsistent, which leaves duplicate implementations and unclear canonical helper locations."
+    ],
+    "likely_symptoms": [
+      "reports_package_mixes_domain_and_adapter_layers",
+      "voicebot_service_boundary_leaks_transport_logic"
+    ],
+    "possible_false_positives": []
+  }
+}
