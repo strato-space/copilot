@@ -1,0 +1,106 @@
+{
+  "batch": "Architecture & Coupling",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 72.0,
+    "high_level_elegance": 74.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "`backend/src/constants.ts` is a central dependency hub exporting sockets, queues, Mongo collections, CRM/Notion mappings, voicebot jobs, and file storage settings from one file (`SOCKET_EVENTS`, `COLLECTIONS`, `TASK_STATUSES`, `VOICEBOT_JOBS`, `VOICEBOT_FILE_STORAGE`).",
+        "The same module is imported across unrelated subsystems (API middleware/routes, miniapp backend, workers, voicebot telegram runtime), so unrelated changes to constants force broad rebuild/retest scope.",
+        "`constants.ts` imports `services/runtimeScope.ts` at module load and computes env-derived exports (`IS_BETA`, `VOICEBOT_ORCHESTRATION_ENV`, queue/key suffixes), creating import-time behavior in what should be a static constant boundary."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Top-level ownership is blurred: domain dictionaries (FinOps/CRM/Voicebot/infra) are co-located in one monolithic contract file instead of capability-local modules.",
+        "Collection naming is split between multiple registries in the same file (`COLLECTIONS` and `VOICEBOT_COLLECTIONS`) with overlapping values (e.g., sessions/messages/projects/performers), signaling missing single ownership boundary.",
+        "Runtime-scoping collection inventory in `services/runtimeScope.ts` duplicates persistence metadata already maintained in constants, so architecture relies on parallel lists rather than one authoritative registry."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "constants_hub_module_boundary_collapse",
+      "summary": "A single global constants module acts as a cross-domain hub, coupling unrelated subsystems and increasing blast radius.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/miniapp/index.ts",
+        "backend/src/workers/voicebot/runner.ts",
+        "backend/src/api/routes/voicebot/sessions.ts"
+      ],
+      "evidence": [
+        "`constants.ts` exports contracts for multiple domains (CRM, FinOps, Voicebot, MCP, DB indexes, storage config) in one file.",
+        "Consumers from distinct layers import this same file for small subsets (`miniapp/index.ts` for `QUEUES`, worker runner for voicebot queue/jobs, voice routes for voicebot collections/events).",
+        "This violates capability-local dependency direction: modules depend on a broad shared surface instead of a narrow domain package."
+      ],
+      "suggestion": "Split `constants.ts` into domain modules (`constants/infra.ts`, `constants/crm.ts`, `constants/finops.ts`, `constants/voicebot.ts`) and expose a minimal compatibility barrel during migration; enforce imports from domain-local modules only.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "missing_domain_constant_boundaries"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "import_time_runtime_binding_in_constants",
+      "summary": "Runtime/env-dependent values are bound at import time inside the shared constants hub, making initialization order and process configuration fragile.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/miniapp/index.ts"
+      ],
+      "evidence": [
+        "`constants.ts` imports runtimeScope immediately and exports env-derived values (`IS_BETA`, `VOICEBOT_ORCHESTRATION_ENV`, queue/key suffixes, file storage paths/sizes).",
+        "`miniapp/index.ts` imports `QUEUES` before executing `dotenv.config(...)`; ESM module evaluation means `constants.ts` (and runtimeScope env resolution) runs before local dotenv bootstrap.",
+        "A static constants dependency therefore pulls in runtime evaluation side effects even for consumers that only need static literals."
+      ],
+      "suggestion": "Move env/runtime resolution to explicit config factories (e.g., `getVoicebotRuntimeConfig()`), keep constants modules side-effect-free, and call config initialization after dotenv/bootstrap in each entrypoint.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_domain_constant_boundaries"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "duplicated_collection_authority",
+      "summary": "Mongo collection ownership is split across duplicated registries, creating structural drift risk instead of one authoritative schema boundary.",
+      "related_files": [
+        "backend/src/constants.ts",
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts"
+      ],
+      "evidence": [
+        "`constants.ts` defines `COLLECTIONS` and separately `VOICEBOT_COLLECTIONS` with overlapping string literals (e.g., sessions/messages/projects/performers).",
+        "`runtimeScope.ts` maintains another independent `RUNTIME_SCOPED_COLLECTION_NAMES` list repeating many of the same collection names.",
+        "`db.ts` consumes index definitions from constants, so persistence concerns already have a central registry; parallel lists increase mismatch probability during future schema changes."
+      ],
+      "suggestion": "Introduce a single typed collection registry with per-collection metadata (domain, runtime-scoped, index policy) and generate specialized views (`voicebotCollections`, `runtimeScopedCollections`) from that source.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "split_persistence_metadata_registry"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No domain-scoped constants architecture; one catch-all module became the default integration surface.",
+      "Configuration/runtime evaluation and static constants were mixed into the same import path.",
+      "Persistence metadata evolved through additive lists instead of a canonical typed registry."
+    ],
+    "likely_symptoms": [
+      "constants_hub_module_boundary_collapse",
+      "import_time_runtime_binding_in_constants",
+      "duplicated_collection_authority"
+    ],
+    "possible_false_positives": []
+  }
+}
