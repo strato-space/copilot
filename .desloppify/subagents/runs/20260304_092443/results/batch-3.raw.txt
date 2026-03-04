@@ -1,0 +1,302 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 3,
+  "assessments": {
+    "cross_module_architecture": 75.0,
+    "convention_outlier": 80.0,
+    "error_consistency": 78.0,
+    "abstraction_fitness": 76.0,
+    "api_surface_coherence": 71.0,
+    "authorization_consistency": 79.0,
+    "ai_generated_debt": 86.0,
+    "incomplete_migration": 70.0,
+    "mid_level_elegance": 77.0,
+    "low_level_elegance": 86.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Runtime-scoping boundary is implemented differently across sibling voice modules: `voicebotWebmDedup.ts`, `processingLoop.ts`, and `transcribeHandler.ts` call `mergeWithRuntimeFilter(...)`, while `uploads.ts` defines `runtimeSessionQuery`/`runtimeMessageQuery` as identity pass-through.",
+        "Miniapp route comments acknowledge runtime-tag divergence handling (`miniapp/routes/index.ts` around debug ticket reads), showing environment boundary logic bleeding into feature code."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Request contract naming drift in `crm/tickets.ts`: `req.body.statuses ?? req.body.satuses` keeps a misspelled key alive.",
+        "Route prefix conventions drift in `permissionsStore.ts`: most calls use `voicebot/permissions/...`, but `getUserPermissions` calls `permissions/users/permissions` without the same prefix."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "`permissionsStore.ts` mixes strategies: some actions catch and only toast/log, while `loadPermissionsLog` rethrows and `getUserPermissions` returns `[]` on error.",
+        "`SessionLog.tsx` and `TranscriptionTableRow.tsx` catch mutation failures and emit generic UI messages/console logs, losing backend error codes needed for operator diagnostics."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Custom prompt handlers duplicate near-identical OpenAI-call + persistence + error-writing flows across `customPrompt.ts`, `questionsHandler.ts`, and `oneCustomPrompt.ts` with minor field variations.",
+        "Some abstractions are nominal only: `uploads.ts` defines runtime query helpers that currently do no transformation, while other modules rely on non-trivial runtime filtering."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 74.0,
+        "indirection_cost": 77.0,
+        "interface_honesty": 76.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Frontend permission client calls non-existent or mismatched endpoints: `permissionsStore.ts` uses `/voicebot/permissions/users/additional_roles`, `/voicebot/permissions/users/access_level`, and `/voicebot/permissions/users/projects` for update semantics, but backend exposes `/users/role`, `/users/projects/set`, etc.",
+        "Response shape conventions diverge across assigned routes: `fxRates.ts` uses `sendOk(...)` envelope, while `voicebot/permissions.ts` and `crm/tickets.ts` return raw objects/arrays and ad-hoc `{ error: ... }` payloads."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "`fxRates.ts` explicitly applies `authMiddleware` and `requireAdmin` on mutating routes.",
+        "`crm/tickets.ts` route definitions in the file do not apply comparable route-level auth/role middleware and still process mutating operations (`/create`, `/update`, `/delete`, `/bulk-change-status`, `/add-work-hours`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "`voiceBotStore.ts` contains repeated boilerplate try/catch blocks with near-identical `console.error(...)` handling for many actions.",
+        "Multiple voice UI components (`SessionLog.tsx`, `AccessUsersModal.tsx`, `AddParticipantModal.tsx`, `TranscriptionTableRow.tsx`) duplicate console-first catch blocks instead of shared error normalizers."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Repetitive catch/log scaffolding increases noise and makes failure semantics drift across UI actions."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Runtime-tag transition remains active in operational code paths (`voicebotWebmDedup.ts`, `processingLoop.ts`, `transcribeHandler.ts`) via `mergeWithRuntimeFilter(... runtime_tag ...)`.",
+        "`miniapp/routes/index.ts` includes explicit runtime-tag mismatch fallback commentary/behavior for debug reads, indicating migration residue still influences request paths."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "`allCustomPrompts.ts` marks processor state as queued/processing in DB before queue availability is validated; when queue is absent, it increments `skipped_no_queue` and continues, leaving processing flags set.",
+        "`createTasksPostprocessing.ts` handles missing queues by explicitly marking pending with `isProcessing: false`, so sibling orchestration seams follow different lifecycle semantics."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "`crm/tickets.ts` retains local roughness (`statuses ?? satuses`) and broad handler bodies with mixed data enrichment and transport logic.",
+        "Several UI handlers rely on direct inline catch blocks and ad-hoc mutation payload assembly in component bodies (`SessionLog.tsx`, `TranscriptionTableRow.tsx`), reducing local precision."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Local code quality is mostly serviceable, but typo-tolerant contracts and repeated inline error/mutation handling add avoidable friction."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "runtime_tag_operational_residue",
+      "summary": "Deprecated runtime-tag routing is still part of active voice processing and dedup paths.",
+      "related_files": [
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/miniapp/routes/index.ts"
+      ],
+      "evidence": [
+        "`voicebotWebmDedup.ts`, `processingLoop.ts`, and `transcribeHandler.ts` all wrap operational queries with `mergeWithRuntimeFilter(... field: 'runtime_tag' ...)`.",
+        "`miniapp/routes/index.ts` documents runtime-tag divergence behavior for debug ticket reads, confirming migration logic still leaks into feature execution."
+      ],
+      "suggestion": "Complete DB/runtime isolation cutover by removing runtime-tag-based query branching from operational handlers; keep compatibility only in explicit migration scripts and one audited adapter boundary.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_tag_isolation_debt"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "runtime_query_boundary_drift",
+      "summary": "Runtime-scoping query boundaries are inconsistent across sibling modules, creating unpredictable behavior.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` defines `runtimeSessionQuery`/`runtimeMessageQuery` as identity functions (`query => query`).",
+        "Sibling modules (`voicebotWebmDedup.ts`, `processingLoop.ts`) apply non-trivial runtime filtering wrappers for comparable reads."
+      ],
+      "suggestion": "Centralize runtime-query policy in one shared utility with explicit mode selection (legacy-compatible vs strict isolation) and apply it uniformly across all voicebot read/write boundaries.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_tag_isolation_debt"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "permissions_client_server_contract_mismatch",
+      "summary": "Permissions frontend store calls endpoints and update semantics that do not match the backend route surface.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`permissionsStore.ts` calls `/voicebot/permissions/users/additional_roles` and `/voicebot/permissions/users/access_level`, but `permissions.ts` does not expose these routes.",
+        "`permissionsStore.ts` updates projects via `/voicebot/permissions/users/projects` with `project_ids`, while backend uses `/users/projects` for read and `/users/projects/set` for writes.",
+        "`permissionsStore.ts` `getUserPermissions` uses `permissions/users/permissions` (missing `voicebot/` prefix used elsewhere in the same store)."
+      ],
+      "suggestion": "Generate a typed API client from a single route contract (Zod/OpenAPI) and replace ad-hoc endpoint strings in stores to enforce compile-time path and payload parity.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "permissions_api_contract_drift"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "response_envelope_fragmentation",
+      "summary": "Assigned APIs use incompatible success/error response shapes for similar backend boundaries.",
+      "related_files": [
+        "backend/src/api/routes/finops/fxRates.ts",
+        "backend/src/api/routes/voicebot/permissions.ts",
+        "backend/src/api/routes/crm/tickets.ts"
+      ],
+      "evidence": [
+        "`fxRates.ts` uses centralized `sendOk(...)` response envelope.",
+        "`permissions.ts` and `tickets.ts` return raw arrays/objects and ad-hoc `{ error: ... }` bodies without consistent envelope structure."
+      ],
+      "suggestion": "Adopt one shared route responder/error adapter for CRM and VoiceBot routes to normalize `{ data, error }` semantics and prevent per-route parsing branches in frontend stores.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "backend_response_shape_drift"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "crm_ticket_routes_lack_explicit_guard_pattern",
+      "summary": "CRM ticket mutating endpoints do not follow the explicit auth/role middleware pattern used in other assigned route modules.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "backend/src/api/routes/finops/fxRates.ts",
+        "backend/src/api/routes/voicebot/permissions.ts"
+      ],
+      "evidence": [
+        "`fxRates.ts` and `permissions.ts` show explicit middleware usage (`authMiddleware`, `requireAdmin`, `PermissionManager.requirePermission`).",
+        "`crm/tickets.ts` handlers in-file are declared without analogous route-level guard middleware despite supporting create/update/delete and bulk mutations."
+      ],
+      "suggestion": "Apply explicit auth + permission middleware at CRM router boundaries (or annotate guaranteed upstream guards in code) so authorization posture is auditable and consistent at file level.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "frontend_error_semantics_drift",
+      "summary": "Frontend voice/permissions flows use mixed error outcomes (swallow, toast-only, rethrow, default-return), making caller behavior unpredictable.",
+      "related_files": [
+        "app/src/store/permissionsStore.ts",
+        "app/src/store/voiceBotStore.ts",
+        "app/src/components/voice/SessionLog.tsx"
+      ],
+      "evidence": [
+        "`permissionsStore.ts` returns `[]` in `getUserPermissions` on failure, but `loadPermissionsLog` rethrows and other actions swallow after toast.",
+        "`voiceBotStore.ts` has many catch blocks that log and continue with no unified propagated error contract.",
+        "`SessionLog.tsx` catches action failures and collapses them to generic `Failed`, discarding backend error context."
+      ],
+      "suggestion": "Introduce a shared error adapter (`normalizeApiError`) and enforce per-action policy (`throw` vs typed result) at store boundaries, with UI components consuming normalized codes/messages.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_error_contract_drift"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "prompt_handler_duplication_without_shared_core",
+      "summary": "Prompt-processing handlers duplicate core orchestration logic instead of sharing a typed processor engine.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts"
+      ],
+      "evidence": [
+        "All three handlers repeat the same phases: validate IDs/session, read categorization, create OpenAI client, call `responses.create`, persist processor flags/data/error fields, log result.",
+        "Differences are mainly field names and prompt/model constants, indicating parameterized behavior rather than genuinely separate abstractions."
+      ],
+      "suggestion": "Extract a single typed `runPromptProcessor` core with pluggable prompt/model/schema/persistence keys, and keep each handler as a thin declarative config layer.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "prompt_processor_duplication"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "queue_absence_lifecycle_inconsistency",
+      "summary": "Queue-unavailable path in custom-prompt orchestration can leave processor state in a misleading 'processing' lifecycle state.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/allCustomPrompts.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts"
+      ],
+      "evidence": [
+        "`allCustomPrompts.ts` sets `is_processing=true` and `job_queued_timestamp` before checking `postprocessorsQueue`; when queue is null it increments `skippedNoQueue` and continues without resetting processor state.",
+        "`createTasksPostprocessing.ts` handles analogous no-queue conditions by explicitly setting pending state with `isProcessing: false`, yielding different seam semantics for similar orchestration failures."
+      ],
+      "suggestion": "Standardize queue-failure lifecycle transitions: only set processing state after successful enqueue, or explicitly rollback state on `no_queue` branches across postprocessor handlers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "queue_lifecycle_state_drift"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "contract_name_drift_and_typo_compat",
+      "summary": "API naming conventions include typo-compatible aliases and inconsistent base path usage, increasing long-term contract ambiguity.",
+      "related_files": [
+        "backend/src/api/routes/crm/tickets.ts",
+        "app/src/store/permissionsStore.ts"
+      ],
+      "evidence": [
+        "`crm/tickets.ts` accepts both `statuses` and misspelled `satuses` in the same request path.",
+        "`permissionsStore.ts` uses mixed route-prefix conventions (`voicebot/permissions/...` vs `permissions/users/permissions`) inside one module."
+      ],
+      "suggestion": "Deprecate typo aliases behind explicit migration windows and enforce one route-prefix builder/helper in frontend stores to prevent string-level drift.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Runtime-isolation migration is only partially completed, leaving policy forks in active code paths.",
+      "API contracts are not centrally typed/generated, so frontend and backend evolve independently.",
+      "Worker orchestration patterns were copied per feature without a shared lifecycle/error framework."
+    ],
+    "likely_symptoms": [
+      "permissions_client_server_contract_mismatch",
+      "queue_absence_lifecycle_inconsistency",
+      "frontend_error_semantics_drift",
+      "contract_name_drift_and_typo_compat"
+    ],
+    "possible_false_positives": [
+      "crm_ticket_routes_lack_explicit_guard_pattern may be partially mitigated if upstream router-level middleware wraps the file externally."
+    ]
+  }
+}
