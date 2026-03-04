@@ -35,7 +35,6 @@ import {
     buildRuntimeFilter,
     IS_PROD_RUNTIME,
     mergeWithRuntimeFilter,
-    recordMatchesRuntime,
     RUNTIME_TAG,
 } from '../../../services/runtimeScope.js';
 import { buildPerformerSelectorFilter } from '../../../services/performerLifecycle.js';
@@ -51,7 +50,6 @@ import {
     toIdString,
     toObjectIdArray,
     toObjectIdOrNull,
-    toTaskDependencies,
     toTaskList,
     toTaskReferenceList,
     toTaskText,
@@ -103,15 +101,15 @@ const saveSummaryInputSchema = z.object({
 });
 
 const SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD = 'row_id' as const;
-const SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS = ['id', 'task_id_from_ai', 'Task ID'] as const;
-const SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS = [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS, 'task_id'] as const;
+const SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS = ['id', 'task_id_from_ai'] as const;
+const SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS = [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS] as const;
 
 export const SESSION_TASKFLOW_CONTRACT = {
     version: '2026-03-03',
     row_locator: {
         canonical_field: SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD,
         compatibility_input_aliases: [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS],
-        delete_input_aliases: ['task_id'],
+        delete_input_aliases: [],
         errors: {
             ambiguous_row_locator: 'ambiguous_row_locator',
         },
@@ -187,7 +185,6 @@ const sessionTaskRowLocatorInputSchema = z
         row_id: z.union([z.string(), z.number()]).optional(),
         id: z.union([z.string(), z.number()]).optional(),
         task_id_from_ai: z.union([z.string(), z.number()]).optional(),
-        'Task ID': z.union([z.string(), z.number()]).optional(),
     })
     .passthrough();
 
@@ -218,10 +215,8 @@ const deleteTaskFromSessionInputSchema = z
     .object({
         session_id: z.string().trim().min(1),
         row_id: z.union([z.string(), z.number()]).optional(),
-        task_id: z.union([z.string(), z.number()]).optional(),
         id: z.union([z.string(), z.number()]).optional(),
         task_id_from_ai: z.union([z.string(), z.number()]).optional(),
-        'Task ID': z.union([z.string(), z.number()]).optional(),
     })
     .superRefine((value, ctx) => {
         const hasLocator = [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS].some(
@@ -549,12 +544,12 @@ type SessionTaskRowLocatorResolution =
     };
 
 const resolveSessionTaskRowLocator = (
-    value: unknown,
-    { allowDeleteAlias = false }: { allowDeleteAlias?: boolean } = {}
+    value: unknown
 ): SessionTaskRowLocatorResolution => {
-    const candidateFields = allowDeleteAlias
-        ? [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS]
-        : [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS];
+    const candidateFields = [
+        SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD,
+        ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS,
+    ];
     const values: Array<{ field: string; value: string }> = [];
 
     if (typeof value === 'string' || typeof value === 'number') {
@@ -644,21 +639,23 @@ const normalizeCreateTaskForStorage = (
     index: number,
     defaultProjectId: string
 ): Record<string, unknown> => {
-    const taskIdFromAi = toTaskText(rawTask.task_id_from_ai ?? rawTask['Task ID']);
+    const taskIdFromAi = toTaskText(rawTask.task_id_from_ai);
     const id = toTaskText(rawTask.id) || taskIdFromAi || `task-${index + 1}`;
     return {
         id,
-        name: toTaskText(rawTask.name) || toTaskText(rawTask['Task Title']) || `Задача ${index + 1}`,
-        description: toTaskText(rawTask.description) || toTaskText(rawTask.Description),
-        priority: toTaskText(rawTask.priority) || toTaskText(rawTask.Priority) || 'P3',
-        priority_reason: toTaskText(rawTask.priority_reason) || toTaskText(rawTask['Priority Reason']),
+        name: toTaskText(rawTask.name) || `Задача ${index + 1}`,
+        description: toTaskText(rawTask.description),
+        priority: toTaskText(rawTask.priority) || 'P3',
+        priority_reason: toTaskText(rawTask.priority_reason),
         performer_id: toTaskText(rawTask.performer_id),
         project_id: toTaskText(rawTask.project_id) || defaultProjectId,
         task_type_id: toTaskText(rawTask.task_type_id),
         dialogue_tag: toTaskText(rawTask.dialogue_tag) || 'voice',
         task_id_from_ai: taskIdFromAi,
-        dependencies_from_ai: toTaskDependencies(rawTask.dependencies_from_ai ?? rawTask.Dependencies),
-        dialogue_reference: toTaskText(rawTask.dialogue_reference) || toTaskText(rawTask['Dialogue Reference']),
+        dependencies_from_ai: Array.isArray(rawTask.dependencies_from_ai)
+            ? rawTask.dependencies_from_ai.map((entry) => toTaskText(entry)).filter(Boolean)
+            : [],
+        dialogue_reference: toTaskText(rawTask.dialogue_reference),
     };
 };
 
@@ -1088,27 +1085,11 @@ const sessionAccessUtils = {
             return { session: null, hasAccess: false, runtimeMismatch: false };
         }
         const rawDb = getRawDb();
-        const session = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
-            mergeWithProdAwareRuntimeFilter({
-                _id: new ObjectId(sessionId),
-                is_deleted: { $ne: true },
-            })
-        );
+        const session = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
+            _id: new ObjectId(sessionId),
+            is_deleted: { $ne: true },
+        });
         if (!session) {
-            const rawSession = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
-                _id: new ObjectId(sessionId),
-                is_deleted: { $ne: true },
-            });
-            if (
-                rawSession &&
-                !recordMatchesRuntime(rawSession as Record<string, unknown>, {
-                    field: 'runtime_tag',
-                    familyMatch: IS_PROD_RUNTIME,
-                    includeLegacyInProd: IS_PROD_RUNTIME,
-                })
-            ) {
-                return { session: null, hasAccess: false, runtimeMismatch: true };
-            }
             return { session: null, hasAccess: false, runtimeMismatch: false };
         }
 
@@ -1580,20 +1561,10 @@ const listSessions = async (req: Request, res: Response) => {
         const dataFilter = await PermissionManager.generateDataFilter(performer, db, {
             includeDeleted,
         });
-        const sessionsRuntimeFilter = buildRuntimeFilter({
-            field: 'runtime_tag',
-            familyMatch: IS_PROD_RUNTIME,
-            includeLegacyInProd: IS_PROD_RUNTIME,
-        });
-        const messagesRuntimeFilter = buildRuntimeFilter({
-            field: 'runtime_tag',
-            familyMatch: IS_PROD_RUNTIME,
-            includeLegacyInProd: IS_PROD_RUNTIME,
-        });
 
         const sessions = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).aggregate([
             // Apply access filter
-            { $match: { $and: [dataFilter, sessionsRuntimeFilter] } },
+            { $match: dataFilter },
             {
                 $addFields: {
                     chat_id_str: { $toString: "$chat_id" }
@@ -1647,10 +1618,7 @@ const listSessions = async (req: Request, res: Response) => {
                     pipeline: [
                         {
                             $match: {
-                                $and: [
-                                    { $expr: { $eq: ["$session_id", "$$sessionId"] } },
-                                    messagesRuntimeFilter,
-                                ],
+                                $expr: { $eq: ["$session_id", "$$sessionId"] },
                             },
                         },
                         { $count: "count" }
@@ -1717,15 +1685,12 @@ const getSession = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "session_id is required" });
         }
 
-        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({
+        const { session, hasAccess } = await sessionAccessUtils.resolve({
             db,
             performer,
             sessionId: session_id,
         });
         if (!session) {
-            if (runtimeMismatch) {
-                return res.status(409).json({ error: 'runtime_mismatch' });
-            }
             return res.status(404).json({ error: "Session not found" });
         }
 
@@ -1735,10 +1700,10 @@ const getSession = async (req: Request, res: Response) => {
 
         // Get session messages
         const session_messages = await rawDb.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(
-            mergeWithProdAwareRuntimeFilter({
+            {
                 session_id: new ObjectId(session_id),
                 is_deleted: { $ne: true },
-            })
+            }
         ).toArray();
         const sessionMessagesFiltered = session_messages.filter((message) => {
             const value = (message as Record<string, unknown>)?.is_deleted;
@@ -3524,7 +3489,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         const removeFromPossibleTasks = parsedBody.data.remove_from_possible_tasks ?? true;
         const explicitRemoveRowIds = new Set<string>();
         for (const [removeItemIndex, removeItem] of (parsedBody.data.remove_items ?? []).entries()) {
-            const resolvedRemoveItem = resolveSessionTaskRowLocator(removeItem, { allowDeleteAlias: true });
+            const resolvedRemoveItem = resolveSessionTaskRowLocator(removeItem);
             if (!resolvedRemoveItem.ok) {
                 if (resolvedRemoveItem.error_code === 'ambiguous_row_locator') {
                     return res.status(409).json({
@@ -4054,7 +4019,7 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
         }
 
         const sessionId = parsedBody.data.session_id;
-        const resolvedRowLocator = resolveSessionTaskRowLocator(parsedBody.data, { allowDeleteAlias: true });
+        const resolvedRowLocator = resolveSessionTaskRowLocator(parsedBody.data);
         if (!resolvedRowLocator.ok) {
             if (resolvedRowLocator.error_code === 'ambiguous_row_locator') {
                 return res.status(409).json({

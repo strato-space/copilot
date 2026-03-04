@@ -2,18 +2,38 @@
 
 ## 2026-03-04
 ### PROBLEM SOLVED
+- **11:34** Voice runtime still depended on `runtime_tag` in core query/filter/write paths and queue/lock naming, which blocked the migration goal of environment isolation through separate DB/instance boundaries and kept transitional tag logic in operational flow.
+- **11:34** Runtime-tag assumptions persisted in backend voice tests, so post-migration fail-fast/tag-agnostic behavior could regress without deterministic coverage.
+- **11:34** Runtime-tag deprecation guidance was partially implicit across docs, leaving operators without one canonical statement that `runtime_tag` is transitional metadata and not a routing/isolation contract.
 - **08:55** Voice Categorization still mixed per-row metadata noise and narrow typography, so large sessions became harder to scan and metadata traceability was duplicated across rows.
 - **08:55** Voice sessions had no canonical persisted markdown summary API; summaries could not be saved with deterministic validation, session-log trace, and realtime refresh.
 - **08:55** Done-flow summarize orchestration lacked explicit correlation/idempotency audit trail for downstream summarize notifications, making incident triage harder across retries.
 - **08:55** Codex relationship rendering in OperOps details card did not fully normalize `waits-for/blocks/dependents` semantics into explicit dependency groups.
 
 ### FEATURE IMPLEMENTED
+- **11:34** Completed runtime-tag deprecation epic `copilot-f75b` (`T0..T8`) with swarm execution: runtime-tag behavior is neutralized in runtime scope/data-access, write paths stop emitting `runtime_tag`, queue/poller naming no longer relies on runtime tags, docs/env contract is updated, and final voice QA gate is green.
+- **11:34** Added migration support for historical CREATE_TASKS payload normalization with a dedicated script and runbook (`backend/scripts/voicebot-migrate-create-tasks-schema.ts`, `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md`) while keeping runtime strict canonical key contract.
+- **11:34** Standardized agents runtime bootstrap to `uv run --directory ... fast-agent serve ... --model codex` and removed card-level model hardcoding for `create_tasks`.
 - **08:55** Delivered Voice Categorization UX cleanup wave (`copilot-8gto` scope): metadata signature is rendered once per block footer, row selection remains blue-only, readability typography is increased, and a new `Summary` panel supports edit/save/conflict handling.
 - **08:55** Added `POST /api/voicebot/save_summary` contract with strict payload checks, session persistence (`summary_md_text`, `summary_saved_at`), `summary_save` session-log event, and realtime `session_update.taskflow_refresh.summary` hint.
 - **08:55** Added summarize correlation/idempotency propagation through done-flow (`summary_correlation_id`) and summary audit events (`summary_telegram_send`, `summary_save`) for queue-driven summarize routing.
 - **08:55** Updated OperOps Codex relationship grouping to explicit `Parent`, `Children`, `Depends On (blocks/waits-for)`, `Blocks (dependents)` with shared issue-id token rendering.
 
 ### CHANGES
+- **11:34** Backend runtime-tag deprecation:
+  - neutralized runtime-tag filter/injection helpers in `backend/src/services/{runtimeScope.ts,db.ts}`;
+  - removed runtime-tag-scoped read/write branches in Voice routes/services (`backend/src/api/routes/voicebot/{sessions.ts,uploads.ts,transcription.ts,permissions.ts,messageHelpers.ts}`, `backend/src/api/routes/auth.ts`, `backend/src/services/voicebotObjectLocator.ts`, `backend/src/voicebot_tgbot/{activeSessionMapping.ts,commandHandlers.ts,ingressHandlers.ts}`, `backend/src/workers/voicebot/handlers/transcribeHandler.ts`);
+  - updated queue/poller naming contract in `backend/src/{constants.ts,workers/voicebot/runner.ts,voicebot_tgbot/runtime.ts}` to env-stable suffixes.
+- **11:34** Test contract refactor and QA gate:
+  - refreshed runtime-tag-dependent backend tests across `backend/__tests__/services/*` and `backend/__tests__/voicebot/**/*` to runtime-agnostic query/write expectations;
+  - added `backend/__tests__/voicebot/workers/queueLockNamingContract.test.ts`;
+  - reran voice baseline via `./scripts/run-test-suite.sh voice` and type-safety gates (`cd backend && npm run build`, `cd app && npm run build`) as green.
+- **11:34** Docs/env and migration assets:
+  - updated `AGENTS.md`, `README.md`, `docs/VOICEBOT_API.md` to document fail-fast session resolution and runtime-tag deprecation as operational contract;
+  - added `docs/RUNTIME_TAG_DEPRECATION_PLAN_2026-03-04.md` with contract freeze/addenda and readiness notes;
+  - added CREATE_TASKS migration assets: `backend/scripts/voicebot-migrate-create-tasks-schema.ts`, `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md`.
+- **11:34** Agents runtime/config updates:
+  - updated `agents/{README.md,ecosystem.config.cjs,fastagent.config.yaml,pm2-agents.sh,pyproject.toml}` and cards `agents/agent-cards/{create_tasks.md,codex_deferred_review.md}` to align runtime model/config and deferred-review flow docs.
 - **08:55** Frontend Voice:
   - updated `app/src/components/voice/{Categorization.tsx,CategorizationTableHeader.tsx,CategorizationTableRow.tsx,CategorizationTableSummary.tsx}`.
   - added `app/src/utils/voiceMetadataSignature.ts` block-footer helper path (`buildCategorizationBlockMetadataSignature`).

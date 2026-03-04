@@ -4,6 +4,7 @@ import { Telegraf, type Context } from 'telegraf';
 import {
   IS_PROD_RUNTIME,
   RUNTIME_TAG,
+  VOICEBOT_ENV_REDIS_KEY_SUFFIX,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_QUEUES,
 } from '../constants.js';
@@ -45,7 +46,7 @@ const parsePositiveInt = (value: string | undefined, fallback: number): number =
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const TG_POLLER_LOCK_KEY = `voicebot:tgbot:poller_lock:${RUNTIME_TAG}`;
+const TG_POLLER_LOCK_KEY = `voicebot:tgbot:poller_lock${VOICEBOT_ENV_REDIS_KEY_SUFFIX}`;
 const TG_POLLER_LOCK_TTL_MS = parsePositiveInt(process.env.TG_POLLER_LOCK_TTL_MS, 45_000);
 const TG_POLLER_LOCK_RENEW_MS = Math.max(5_000, Math.floor(TG_POLLER_LOCK_TTL_MS / 3));
 const TG_POLLER_LOCK_RETRY_MS = parsePositiveInt(process.env.TG_POLLER_LOCK_RETRY_MS, 5_000);

@@ -20,13 +20,8 @@ import {
 } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
-import { getDb, getRawDb } from '../../../services/db.js';
-import {
-    IS_PROD_RUNTIME,
-    mergeWithRuntimeFilter,
-    recordMatchesRuntime,
-    RUNTIME_TAG
-} from '../../../services/runtimeScope.js';
+import { getDb } from '../../../services/db.js';
+import { IS_PROD_RUNTIME } from '../../../services/runtimeScope.js';
 import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
 import { getLogger } from '../../../utils/logger.js';
 import { getAudioDurationFromFile, getFileSha256FromPath } from '../../../utils/audioUtils.js';
@@ -40,19 +35,9 @@ const resolveUploadRequestId = (req: Request): string => {
     return `upl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 };
 
-const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> =>
-    mergeWithRuntimeFilter(query, {
-        field: 'runtime_tag',
-        familyMatch: IS_PROD_RUNTIME,
-        includeLegacyInProd: IS_PROD_RUNTIME,
-    });
+const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> => query;
 
-const runtimeMessageQuery = (query: Record<string, unknown>): Record<string, unknown> =>
-    mergeWithRuntimeFilter(query, {
-        field: 'runtime_tag',
-        familyMatch: IS_PROD_RUNTIME,
-        includeLegacyInProd: IS_PROD_RUNTIME,
-    });
+const runtimeMessageQuery = (query: Record<string, unknown>): Record<string, unknown> => query;
 
 const uploadsDir = VOICEBOT_FILE_STORAGE.uploadsDir;
 if (!existsSync(uploadsDir)) {
@@ -332,22 +317,6 @@ const streamTelegramAttachmentByFileId = async ({
     response.status(200).send(binary);
 };
 
-const resolveMessageRuntimeTag = (session: Record<string, unknown>): string => {
-    const sessionRuntimeTag = typeof session.runtime_tag === 'string' ? session.runtime_tag.trim() : '';
-    if (sessionRuntimeTag.length > 0) return sessionRuntimeTag;
-    return RUNTIME_TAG;
-};
-
-const isProdFamilyRuntimeTag = (runtimeTag: string): boolean =>
-    runtimeTag === 'prod' || runtimeTag.startsWith('prod-');
-
-const resolveUploadRuntimeTag = (session: Record<string, unknown>): string => {
-    const sessionRuntimeTag = resolveMessageRuntimeTag(session);
-    if (!IS_PROD_RUNTIME) return sessionRuntimeTag;
-    if (!isProdFamilyRuntimeTag(sessionRuntimeTag)) return sessionRuntimeTag;
-    return RUNTIME_TAG;
-};
-
 const normalizePendingImageAnchorId = (value: unknown): string | null => {
     if (value instanceof ObjectId) return value.toString();
     if (typeof value !== 'string') return null;
@@ -362,7 +331,7 @@ const checkSessionAccess = async ({
     sessionId: string;
     req: UploadsRequest;
 }): Promise<{
-    status: 200 | 403 | 404 | 409;
+    status: 200 | 403 | 404;
     session?: Record<string, unknown>;
     error?: string;
 }> => {
@@ -380,19 +349,6 @@ const checkSessionAccess = async ({
     }) as Record<string, unknown> | null;
 
     if (!session) {
-        // Distinguish 404 from runtime mismatch (required by new contract).
-        const rawDb = getRawDb();
-        const rawSession = await rawDb.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
-            _id: new ObjectId(sessionId),
-            is_deleted: { $ne: true },
-        }) as Record<string, unknown> | null;
-        if (rawSession && !recordMatchesRuntime(rawSession, {
-            field: 'runtime_tag',
-            familyMatch: IS_PROD_RUNTIME,
-            includeLegacyInProd: IS_PROD_RUNTIME,
-        })) {
-            return { status: 409, error: 'runtime_mismatch' };
-        }
         return { status: 404, error: 'Session not found' };
     }
 
@@ -461,7 +417,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         }
         const session = sessionCheck.session as Record<string, unknown>;
         const chatId = Number(session.chat_id);
-        const uploadRuntimeTag = resolveUploadRuntimeTag(session);
+        const sessionRuntimeTag = typeof session.runtime_tag === 'string' ? session.runtime_tag.trim() : '';
         const voiceQueue = (req.app.get('voicebotQueues') as Record<string, VoiceQueueLike> | undefined)?.[VOICEBOT_QUEUES.VOICE];
         const pendingImageAnchorId = normalizePendingImageAnchorId(
             session.pending_image_anchor_message_id ?? session.pending_image_anchor_oid
@@ -511,7 +467,6 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 is_transcribed: false,
                 transcription_text: '',
                 is_deleted: false,
-                runtime_tag: uploadRuntimeTag,
                 created_at: createdAt,
                 updated_at: createdAt,
                 ...(consumePendingImageAnchor
@@ -599,7 +554,9 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 to_transcribe: !voiceQueue,
                 is_transcribed: false,
                 transcription_text: '',
-                runtime_tag: uploadRuntimeTag,
+                ...(sessionRuntimeTag
+                    ? { runtime_tag: sessionRuntimeTag }
+                    : {}),
                 image_anchor_message_id: messageDoc.image_anchor_message_id ?? null,
                 created_at: createdAt.toISOString(),
                 updated_at: createdAt.toISOString(),
@@ -642,7 +599,6 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                     last_voice_timestamp: new Date(),
                     updated_at: new Date(),
                     is_messages_processed: false,
-                    runtime_tag: uploadRuntimeTag,
                 },
                 ...(pendingImageAnchorConsumed
                     ? {
@@ -676,7 +632,9 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 session_id,
                 is_messages_processed: false,
                 updated_at: new Date().toISOString(),
-                runtime_tag: uploadRuntimeTag,
+                ...(sessionRuntimeTag
+                    ? { runtime_tag: sessionRuntimeTag }
+                    : {}),
             });
         }
 
@@ -820,7 +778,6 @@ router.post(
                 is_active: true,
                 is_deleted: false,
                 is_messages_processed: false,
-                runtime_tag: RUNTIME_TAG,
                 created_at: now,
                 updated_at: now,
             };

@@ -6,7 +6,6 @@ import { existsSync, unlinkSync } from 'node:fs';
 
 import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS, VOICEBOT_QUEUES } from '../../../src/constants.js';
 import { PERMISSIONS } from '../../../src/permissions/permissions-config.js';
-import { IS_PROD_RUNTIME } from '../../../src/services/runtimeScope.js';
 
 const getDbMock = jest.fn();
 const getRawDbMock = jest.fn();
@@ -135,14 +134,16 @@ describe('POST /voicebot/upload_audio', () => {
     expect(response.body.file_info.duration).toBe(123.456);
     expect(getAudioDurationFromFileMock).toHaveBeenCalledTimes(1);
     const [sessionQuery] = sessionFindOne.mock.calls[0] as [Record<string, unknown>];
-    expect(sessionQuery).toHaveProperty('$and');
+    expect(sessionQuery).toEqual(expect.objectContaining({ is_deleted: { $ne: true } }));
+    expect((sessionQuery._id as ObjectId).toString()).toBe(sessionId.toString());
+    expect(sessionQuery).not.toHaveProperty('$and');
 
     expect(insertedMessages).toHaveLength(1);
     const persisted = insertedMessages[0] ?? {};
     const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
     if (storedPath) uploadedFilePaths.add(storedPath);
     expect(persisted.duration).toBe(123.456);
-    expect(persisted.runtime_tag).toBeDefined();
+    expect(persisted.runtime_tag).toBeUndefined();
     expect((persisted.file_metadata as Record<string, unknown>)?.duration).toBe(123.456);
   });
   it('enqueues transcribe job when voice queue is available', async () => {

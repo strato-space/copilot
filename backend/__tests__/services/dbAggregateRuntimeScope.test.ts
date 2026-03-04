@@ -1,32 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { IS_PROD_RUNTIME, RUNTIME_FAMILY, RUNTIME_TAG } from '../../src/services/runtimeScope.js';
-import {
-  applyRuntimeScopeToAggregatePipeline,
-  patchRuntimeTagIntoSetOnInsert,
-} from '../../src/services/db.js';
+import { applyRuntimeScopeToAggregatePipeline, patchRuntimeTagIntoSetOnInsert } from '../../src/services/db.js';
 
 describe('db aggregate runtime scope', () => {
-  const expectedRuntimeFilterExpr = {
-    $expr: IS_PROD_RUNTIME
-      ? {
-        $or: [
-          {
-            $regexMatch: {
-              input: '$runtime_tag',
-              regex: new RegExp(`^${RUNTIME_FAMILY}(?:-|$)`),
-            },
-          },
-          { $eq: ['$runtime_tag', null] },
-          { $eq: ['$runtime_tag', ''] },
-        ],
-      }
-      : {
-        $eq: ['$runtime_tag', RUNTIME_TAG],
-      },
-  };
-
-  it('adds runtime filter to lookup stage with explicit pipeline', () => {
+  it('keeps lookup stages unchanged', () => {
     const pipeline = [
       {
         $lookup: {
@@ -36,22 +13,6 @@ describe('db aggregate runtime scope', () => {
           as: 'tasks',
         },
       },
-    ];
-
-    const [scoped] = applyRuntimeScopeToAggregatePipeline(pipeline as Array<Record<string, unknown>>);
-
-    expect((scoped as { $lookup: Record<string, unknown> }).$lookup.from).toBe('automation_tasks_histrory');
-    expect(Array.isArray((scoped as { $lookup: { pipeline: Array<Record<string, unknown>> } }).$lookup.pipeline)).toBe(true);
-
-    const lookupPipeline = (scoped as { $lookup: { pipeline: Array<Record<string, unknown>> } }).$lookup.pipeline;
-
-    expect(lookupPipeline).toHaveLength(2);
-    expect(lookupPipeline[0]).toEqual({ $match: expectedRuntimeFilterExpr });
-    expect(lookupPipeline[1]).toEqual({ $match: { is_deleted: { $ne: true } } });
-  });
-
-  it('converts localField/foreignField lookup to runtime-scoped pipeline form', () => {
-    const pipeline = [
       {
         $lookup: {
           from: 'automation_tasks',
@@ -62,75 +23,30 @@ describe('db aggregate runtime scope', () => {
       },
     ];
 
-    const [scoped] = applyRuntimeScopeToAggregatePipeline(pipeline as Array<Record<string, unknown>>);
-    const lookup = (scoped as { $lookup: Record<string, unknown> }).$lookup;
+    const scoped = applyRuntimeScopeToAggregatePipeline(pipeline as Array<Record<string, unknown>>);
 
-    expect(lookup.from).toBe('automation_tasks');
-    expect(lookup).not.toHaveProperty('localField');
-    expect(lookup).not.toHaveProperty('foreignField');
-
-    const lookupPipeline = (lookup as { pipeline: Array<Record<string, unknown>> }).pipeline;
-    expect(Array.isArray(lookupPipeline)).toBe(true);
-    expect(lookupPipeline).toHaveLength(2);
-
-    expect(lookupPipeline[0]).toEqual({ $match: expectedRuntimeFilterExpr });
-    expect(lookupPipeline[1]).toEqual({
-      $match: {
-        $expr: {
-          $or: [
-            { $eq: ['$$runtime_lookup_local', '$_id'] },
-            {
-              $and: [
-                { $isArray: '$$runtime_lookup_local' },
-                { $in: ['$_id', '$$runtime_lookup_local'] },
-              ],
-            },
-          ],
-        },
-      },
-    });
+    expect(scoped).toEqual(pipeline as Array<Record<string, unknown>>);
   });
 
-
-  it('injects runtime_tag into $setOnInsert for upserts when update does not set runtime_tag', () => {
-    const patched = patchRuntimeTagIntoSetOnInsert({
+  it('keeps update payload unchanged for upsert patch helper', () => {
+    const update = {
       $set: {
         active_session_id: 'abc',
       },
-    });
+    };
+
+    const patched = patchRuntimeTagIntoSetOnInsert(update);
 
     expect(Array.isArray(patched)).toBe(false);
-    expect((patched as { $setOnInsert?: Record<string, unknown> }).$setOnInsert).toEqual({
-      runtime_tag: RUNTIME_TAG,
-    });
+    expect(patched).toEqual(update);
   });
 
-  it('does not inject $setOnInsert runtime_tag when update already sets runtime_tag', () => {
-    const patched = patchRuntimeTagIntoSetOnInsert({
-      $set: {
-        runtime_tag: RUNTIME_TAG,
-        active_session_id: 'abc',
-      },
-    });
-
-    expect(Array.isArray(patched)).toBe(false);
-    expect((patched as { $setOnInsert?: Record<string, unknown> }).$setOnInsert).toBeUndefined();
-  });
-
-  it('does not touch non-runtime lookup stages', () => {
-    const pipeline = [
-      {
-        $lookup: {
-          from: 'automation_performers',
-          localField: 'performer_id',
-          foreignField: '_id',
-          as: 'performer',
-        },
-      },
-    ];
+  it('returns shallow copy for aggregate pipeline arrays', () => {
+    const pipeline = [{ $match: { is_deleted: { $ne: true } } }];
 
     const scoped = applyRuntimeScopeToAggregatePipeline(pipeline as Array<Record<string, unknown>>);
 
     expect(scoped).toEqual(pipeline as Array<Record<string, unknown>>);
+    expect(scoped).not.toBe(pipeline);
   });
 });

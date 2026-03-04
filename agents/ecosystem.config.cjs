@@ -25,15 +25,19 @@ module.exports = {
         // ============================================
         {
             name: 'copilot-agent-services',
-            script: '.venv/bin/fast-agent',
+            script: 'uv',
             cwd: __dirname,
-            interpreter: '.venv/bin/python',
+            interpreter: 'none',
             env_file: '../backend/.env',
             args: [
+                'run',
+                '--directory', __dirname,
+                'fast-agent',
                 'serve',
                 '--config-path', 'fastagent.config.yaml',
                 '--agent-cards', 'agent-cards',
                 '--name', 'copilot-agent-services',
+                '--model', 'codex',
                 '--transport', 'http',
                 '--host', '127.0.0.1',
                 '--port', '8722',

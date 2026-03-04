@@ -61,7 +61,7 @@ describe('voicebot_tgbot command handlers', () => {
       is_used: false,
     });
     expect(payload.token).toMatch(/^[a-f0-9]{64}$/);
-    expect(payload.runtime_tag).toBeDefined();
+    expect(payload.runtime_tag).toBeUndefined();
   });
 
   it('creates session on /start, activates it and enqueues START_MULTIPROMPT', async () => {

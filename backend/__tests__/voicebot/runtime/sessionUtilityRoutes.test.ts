@@ -39,7 +39,7 @@ describe('Voicebot utility routes parity contract', () => {
   it('normalizes save_create_tasks payload into canonical task fields', () => {
     expect(source).toContain('normalizeCreateTaskForStorage');
     expect(source).toContain("'agent_results.create_tasks': normalizedTasks");
-    expect(source).toContain("toTaskText(rawTask['Task Title'])");
+    expect(source).toContain('name: toTaskText(rawTask.name)');
   });
 
   it('publishes canonical session taskflow contract for MCP/client parity', () => {
@@ -48,7 +48,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('const emitSessionTaskflowRefreshHint = ({');
     expect(source).toContain("canonical_field: SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD");
     expect(source).toContain("compatibility_input_aliases: [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS]");
-    expect(source).toContain("delete_input_aliases: ['task_id']");
+    expect(source).toContain('delete_input_aliases: []');
     expect(source).toContain("remove_from_possible_tasks: {");
     expect(source).toContain("operation_status: ['success', 'partial', 'failed']");
     expect(source).toContain("body: { error: 'runtime_mismatch' }");

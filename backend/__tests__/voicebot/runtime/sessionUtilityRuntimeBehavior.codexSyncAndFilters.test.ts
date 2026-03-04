@@ -135,13 +135,9 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(deleteManySpy).toHaveBeenCalledTimes(1);
     expect(deleteManySpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({
-            external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
-            codex_task: true,
-            is_deleted: { $ne: true },
-          }),
-        ]),
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        codex_task: true,
+        is_deleted: { $ne: true },
       })
     );
     expect(createBdIssueMock).toHaveBeenCalledTimes(1);
@@ -272,7 +268,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(deleteManySpy).toHaveBeenCalledTimes(1);
   });
 
-  it('task_types reads execution plans with prod-family runtime filter', async () => {
+  it('task_types reads execution plans without runtime-tag filter', async () => {
     const rootId = new ObjectId();
     const childId = new ObjectId();
     const planId = new ObjectId();
@@ -321,17 +317,10 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body).toHaveLength(1);
 
     const [query] = executionFindSpy.mock.calls[0] as [Record<string, unknown>];
-    expect(query).toEqual({
-      $or: [
-        { runtime_tag: { $regex: '^prod(?:-|$)' } },
-        { runtime_tag: { $exists: false } },
-        { runtime_tag: null },
-        { runtime_tag: '' },
-      ],
-    });
+    expect(query).toEqual({});
   });
 
-  it('topics query applies runtime-family filter', async () => {
+  it('topics query applies project-only filter without runtime clauses', async () => {
     const projectId = new ObjectId();
     const topicsFindSpy = jest.fn(() => ({
       sort: () => ({ toArray: async () => [] }),
@@ -361,20 +350,6 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     const [query] = topicsFindSpy.mock.calls[0] as [Record<string, unknown>];
-    expect(query).toEqual(
-      expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ project_id: projectId }),
-          {
-            $or: [
-              { runtime_tag: { $regex: '^prod(?:-|$)' } },
-              { runtime_tag: { $exists: false } },
-              { runtime_tag: null },
-              { runtime_tag: '' },
-            ],
-          },
-        ]),
-      })
-    );
+    expect(query).toEqual(expect.objectContaining({ project_id: projectId }));
   });
 });

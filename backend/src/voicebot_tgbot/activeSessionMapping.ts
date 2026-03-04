@@ -1,6 +1,5 @@
 import { ObjectId, type Db } from 'mongodb';
-import { VOICEBOT_COLLECTIONS, RUNTIME_TAG } from '../constants.js';
-import { mergeWithRuntimeFilter } from '../services/runtimeScope.js';
+import { VOICEBOT_COLLECTIONS } from '../constants.js';
 
 type ActiveSessionDoc = {
   telegram_user_id?: string | number | null;
@@ -51,7 +50,7 @@ export const setActiveVoiceSession = async ({
   if (!telegramUserId || !sessionObjectId) return null;
 
   return db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).updateOne(
-    mergeWithRuntimeFilter({ telegram_user_id: telegramUserId }, { field: 'runtime_tag' }),
+    { telegram_user_id: telegramUserId },
     {
       $set: {
         telegram_user_id: telegramUserId,
@@ -61,7 +60,6 @@ export const setActiveVoiceSession = async ({
         updated_at: new Date(),
       },
       $setOnInsert: {
-        runtime_tag: RUNTIME_TAG,
         created_at: new Date(),
       },
     },
@@ -80,7 +78,7 @@ export const getActiveVoiceSessionForUser = async ({
   if (!telegramUserId) return null;
 
   return db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).findOne(
-    mergeWithRuntimeFilter({ telegram_user_id: telegramUserId }, { field: 'runtime_tag' })
+    { telegram_user_id: telegramUserId }
   ) as Promise<ActiveSessionDoc | null>;
 };
 
@@ -95,10 +93,10 @@ export const clearActiveVoiceSessionForUser = async ({
   if (!telegramUserId) return null;
 
   return db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).updateMany(
-    mergeWithRuntimeFilter({ telegram_user_id: telegramUserId }, { field: 'runtime_tag' }),
+    { telegram_user_id: telegramUserId },
     {
       $unset: { active_session_id: '' },
-      $set: { updated_at: new Date(), runtime_tag: RUNTIME_TAG },
+      $set: { updated_at: new Date() },
     }
   );
 };
@@ -114,11 +112,10 @@ export const clearActiveVoiceSessionBySessionId = async ({
   if (!sessionObjectId) return null;
 
   return db.collection(VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS).updateMany(
-    mergeWithRuntimeFilter({ active_session_id: sessionObjectId }, { field: 'runtime_tag' }),
+    { active_session_id: sessionObjectId },
     {
       $unset: { active_session_id: '' },
-      $set: { updated_at: new Date(), runtime_tag: RUNTIME_TAG },
+      $set: { updated_at: new Date() },
     }
   );
 };
-

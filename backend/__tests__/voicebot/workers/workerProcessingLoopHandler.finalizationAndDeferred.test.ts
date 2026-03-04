@@ -250,9 +250,7 @@ describe('handleProcessingLoopJob', () => {
 
     expect(sessionsUpdateOne).toHaveBeenCalledWith(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ _id: newReadySessionId }),
-        ]),
+        _id: newReadySessionId,
       }),
       expect.objectContaining({
         $set: expect.objectContaining({
@@ -388,11 +386,9 @@ describe('handleProcessingLoopJob', () => {
     expect(tasksFind).toHaveBeenCalledTimes(1);
 
     const countFilter = tasksCountDocuments.mock.calls[0]?.[0] as Record<string, unknown>;
-    const scopedClauses = Array.isArray(countFilter?.$and) ? (countFilter.$and as Record<string, unknown>[]) : [];
-    const dueFilter = scopedClauses.find((clause) => clause.codex_review_state === 'deferred');
-
-    expect(dueFilter).toBeTruthy();
-    const dueFilterJson = JSON.stringify(dueFilter);
+    const dueFilterJson = JSON.stringify(countFilter);
+    expect(dueFilterJson).toContain('codex_review_state');
+    expect(dueFilterJson).toContain('deferred');
     expect(dueFilterJson).toContain('codex_review_summary_next_attempt_at');
     expect(dueFilterJson).not.toContain('codex_review_summary_last_runner_error');
     expect(dueFilterJson).not.toContain('codex_review_summary_error_code');

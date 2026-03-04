@@ -9,7 +9,6 @@ import {
   VOICEBOT_SESSION_SOURCE,
   VOICEBOT_SESSION_TYPES,
   VOICE_BOT_SESSION_ACCESS,
-  RUNTIME_TAG,
 } from '../constants.js';
 import { mergeWithRuntimeFilter } from '../services/runtimeScope.js';
 import { completeSessionDoneFlow } from '../services/voicebotSessionDoneFlow.js';
@@ -168,7 +167,6 @@ const createTelegramSession = async ({
     chat_id: normalizeChatId(chat_id),
     session_type: VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     session_source: VOICEBOT_SESSION_SOURCE.TELEGRAM,
-    runtime_tag: RUNTIME_TAG,
     user_id: performer._id || null,
     is_active: true,
     is_deleted: false,
@@ -209,7 +207,6 @@ export const handleLoginCommand = async ({
     chat_id: telegramId,
     created_at: new Date(),
     is_used: false,
-    runtime_tag: RUNTIME_TAG,
   });
 
   return {

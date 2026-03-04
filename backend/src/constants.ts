@@ -341,11 +341,29 @@ const baseVoiceBotQueues = {
   NOTIFIES: 'voicebot--notifies',
 } as const;
 
-// Queue suffix always includes runtime tag to isolate shared Redis across instances.
+const normalizeOrchestrationEnv = (value: string | undefined): string => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized;
+};
+
+// BullMQ queues and Redis lock keys use deployment-stable env suffix (APP_ENV),
+// or static names when APP_ENV is not set.
+export const VOICEBOT_ORCHESTRATION_ENV = normalizeOrchestrationEnv(process.env.APP_ENV);
+export const VOICEBOT_ENV_QUEUE_SUFFIX = VOICEBOT_ORCHESTRATION_ENV
+  ? `-${VOICEBOT_ORCHESTRATION_ENV}`
+  : '';
+export const VOICEBOT_ENV_REDIS_KEY_SUFFIX = VOICEBOT_ORCHESTRATION_ENV
+  ? `:${VOICEBOT_ORCHESTRATION_ENV}`
+  : '';
+
 export const VOICEBOT_QUEUES = Object.fromEntries(
   Object.entries(baseVoiceBotQueues).map(([key, value]) => [
     key,
-    `${value}-${RUNTIME_TAG}`,
+    `${value}${VOICEBOT_ENV_QUEUE_SUFFIX}`,
   ])
 ) as Record<keyof typeof baseVoiceBotQueues, string>;
 

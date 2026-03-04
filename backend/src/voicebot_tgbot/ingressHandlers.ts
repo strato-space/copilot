@@ -2,7 +2,6 @@ import { ObjectId, type Db } from 'mongodb';
 import { z } from 'zod';
 import {
   COLLECTIONS,
-  RUNTIME_TAG,
   TASK_STATUSES,
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
@@ -687,7 +686,6 @@ const createCodexTaskFromPayload = async ({
     is_deleted: false,
     created_at: now,
     updated_at: now,
-    runtime_tag: RUNTIME_TAG,
   };
 
   const insert = await deps.db.collection(COLLECTIONS.TASKS).insertOne(taskDoc);
@@ -835,7 +833,6 @@ const createSession = async (
     chat_id: context.chat_id,
     session_type: VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     session_source: VOICEBOT_SESSION_SOURCE.TELEGRAM,
-    runtime_tag: RUNTIME_TAG,
     user_id: performer?._id || null,
     is_active: true,
     is_deleted: false,
@@ -1044,7 +1041,6 @@ export const handleVoiceIngress = async ({
     ...(context.forwarded_context ? { forwarded_context: context.forwarded_context } : {}),
     message_type: 'voice',
     attachments: [],
-    runtime_tag: RUNTIME_TAG,
     session_id: sessionId,
     session_type: session.session_type || VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     is_transcribed: false,
@@ -1130,7 +1126,6 @@ export const handleTextIngress = async ({
     ...(context.forwarded_context ? { forwarded_context: context.forwarded_context } : {}),
     message_type: 'text',
     attachments: [],
-    runtime_tag: RUNTIME_TAG,
     session_id: sessionId,
     session_type: session.session_type || VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     created_at: Date.now(),
@@ -1228,7 +1223,6 @@ export const handleAttachmentIngress = async ({
     ...(context.forwarded_context ? { forwarded_context: context.forwarded_context } : {}),
     message_type: normalizeString(parsed.data.message_type) || 'screenshot',
     attachments,
-    runtime_tag: RUNTIME_TAG,
     session_id: sessionId,
     session_type: session.session_type || VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     created_at: new Date(),

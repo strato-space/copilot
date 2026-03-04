@@ -87,13 +87,13 @@ const getMissingFields = (task: TaskRow): Array<keyof TaskRow> =>
   REQUIRED_FIELDS.filter((field) => !toText(task[field]));
 
 const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string): TaskRow => {
-  const taskIdFromAi = toText(raw['Task ID'] ?? raw.task_id_from_ai);
+  const taskIdFromAi = toText(raw.task_id_from_ai);
   const id = toText(raw.id) || taskIdFromAi || `task-${index + 1}`;
-  const name = toText(raw.name) || toText(raw['Task Title']) || `Задача ${index + 1}`;
-  const description = toText(raw.description) || toText(raw.Description);
-  const priority = toText(raw.priority) || toText(raw.Priority) || 'P3';
-  const priorityReason = toText(raw.priority_reason) || toText(raw['Priority Reason']);
-  const dialogueReference = toText(raw.dialogue_reference) || toText(raw['Dialogue Reference']);
+  const name = toText(raw.name) || `Задача ${index + 1}`;
+  const description = toText(raw.description);
+  const priority = toText(raw.priority) || 'P3';
+  const priorityReason = toText(raw.priority_reason);
+  const dialogueReference = toText(raw.dialogue_reference);
 
   return {
     id,
@@ -104,7 +104,7 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
     performer_id: toText(raw.performer_id),
     project_id: toText(raw.project_id) || defaultProjectId,
     task_id_from_ai: taskIdFromAi,
-    dependencies_from_ai: parseDependencies(raw.dependencies_from_ai ?? raw.Dependencies),
+    dependencies_from_ai: parseDependencies(raw.dependencies_from_ai),
     dialogue_reference: dialogueReference,
   };
 };

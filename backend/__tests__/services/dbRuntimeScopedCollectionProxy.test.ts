@@ -1,27 +1,9 @@
 import { describe, expect, it, jest } from '@jest/globals';
 
-import {
-  createRuntimeScopedCollectionProxy,
-} from '../../src/services/db.js';
-import {
-  buildRuntimeFilter,
-  buildRuntimeFilterExpression,
-  IS_PROD_RUNTIME,
-  RUNTIME_FAMILY,
-  RUNTIME_TAG,
-  mergeWithRuntimeFilter,
-} from '../../src/services/runtimeScope.js';
-
-const expectedRuntimeFilter = buildRuntimeFilter({
-  field: 'runtime_tag',
-  familyMatch: IS_PROD_RUNTIME,
-  includeLegacyInProd: IS_PROD_RUNTIME,
-  runtimeTag: RUNTIME_TAG,
-  prodRuntime: IS_PROD_RUNTIME,
-});
+import { createRuntimeScopedCollectionProxy } from '../../src/services/db.js';
 
 describe('db runtime-scoped collection proxy', () => {
-  it('applies runtime filter for find() on runtime-scoped CRM collections', () => {
+  it('keeps find() query unchanged for runtime-scoped collections', () => {
     const find = jest.fn(() => ({ toArray: async () => [] }));
     const collection = {
       collectionName: 'automation_tasks',
@@ -29,45 +11,16 @@ describe('db runtime-scoped collection proxy', () => {
     };
 
     const proxy = createRuntimeScopedCollectionProxy(collection as never);
+    const query = { is_deleted: { $ne: true } };
 
-    (proxy as unknown as { find: (query: Record<string, unknown>) => unknown }).find({
-      is_deleted: { $ne: true },
-    });
-
-    expect(find).toHaveBeenCalledTimes(1);
-    const [query] = find.mock.calls[0] as [Record<string, unknown>];
-    expect(query).toEqual(
-      mergeWithRuntimeFilter(
-        { is_deleted: { $ne: true } },
-        {
-          field: 'runtime_tag',
-          familyMatch: IS_PROD_RUNTIME,
-          includeLegacyInProd: IS_PROD_RUNTIME,
-          runtimeTag: RUNTIME_TAG,
-          prodRuntime: IS_PROD_RUNTIME,
-        }
-      )
-    );
-  });
-
-  it('does not alter find() query for shared collections', () => {
-    const find = jest.fn(() => ({ toArray: async () => [] }));
-    const collection = {
-      collectionName: 'automation_projects',
-      find,
-    };
-
-    const proxy = createRuntimeScopedCollectionProxy(collection as never);
-    (proxy as unknown as { find: (query: Record<string, unknown>) => unknown }).find({
-      is_deleted: { $ne: true },
-    });
+    (proxy as unknown as { find: (filter: Record<string, unknown>) => unknown }).find(query);
 
     expect(find).toHaveBeenCalledTimes(1);
-    const [query] = find.mock.calls[0] as [Record<string, unknown>];
-    expect(query).toEqual({ is_deleted: { $ne: true } });
+    const [calledQuery] = find.mock.calls[0] as [Record<string, unknown>];
+    expect(calledQuery).toEqual(query);
   });
 
-  it('prepends runtime $match and scopes runtime lookups in aggregate()', () => {
+  it('keeps aggregate() pipeline unchanged for runtime-scoped collections', () => {
     const aggregate = jest.fn(() => ({ toArray: async () => [] }));
     const collection = {
       collectionName: 'automation_tasks',
@@ -94,39 +47,16 @@ describe('db runtime-scoped collection proxy', () => {
       },
     ];
 
-    (proxy as unknown as { aggregate: (p: Array<Record<string, unknown>>) => unknown }).aggregate(
+    (proxy as unknown as { aggregate: (stages: Array<Record<string, unknown>>) => unknown }).aggregate(
       pipeline
     );
 
     expect(aggregate).toHaveBeenCalledTimes(1);
-    const [scopedPipeline] = aggregate.mock.calls[0] as [Array<Record<string, unknown>>];
-    expect(Array.isArray(scopedPipeline)).toBe(true);
-    expect(scopedPipeline[0]).toEqual({ $match: expectedRuntimeFilter });
-
-    const runtimeLookup = scopedPipeline[1]?.$lookup as Record<string, unknown>;
-    expect(runtimeLookup?.from).toBe('automation_work_hours');
-    expect(Array.isArray(runtimeLookup?.pipeline)).toBe(true);
-    expect((runtimeLookup.pipeline as Array<Record<string, unknown>>)[0]).toEqual({
-      $match: {
-        $expr: buildRuntimeFilterExpression({
-          fieldExpr: '$runtime_tag',
-          strict: false,
-          familyMatch: IS_PROD_RUNTIME,
-          includeLegacyInProd: IS_PROD_RUNTIME,
-          runtimeTag: RUNTIME_TAG,
-          runtimeFamily: RUNTIME_FAMILY,
-          prodRuntime: IS_PROD_RUNTIME,
-        }),
-      },
-    });
-
-    const sharedLookup = scopedPipeline[2]?.$lookup as Record<string, unknown>;
-    expect(sharedLookup?.from).toBe('automation_projects');
-    expect(sharedLookup?.localField).toBe('project_id');
-    expect(sharedLookup?.foreignField).toBe('_id');
+    const [calledPipeline] = aggregate.mock.calls[0] as [Array<Record<string, unknown>>];
+    expect(calledPipeline).toEqual(pipeline);
   });
 
-  it('patches upsert update with runtime_tag for runtime-scoped collections', async () => {
+  it('does not patch updateOne() filters or update payloads', async () => {
     const updateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
     const collection = {
       collectionName: 'automation_tasks',
@@ -134,37 +64,46 @@ describe('db runtime-scoped collection proxy', () => {
     };
 
     const proxy = createRuntimeScopedCollectionProxy(collection as never);
+    const filter = { _id: 'task-id' };
+    const update = { $set: { task_status: 'READY_10' } };
+    const options = { upsert: true };
+
     await (
       proxy as unknown as {
         updateOne: (
-          filter: Record<string, unknown>,
-          update: Record<string, unknown>,
-          options: Record<string, unknown>
+          query: Record<string, unknown>,
+          payload: Record<string, unknown>,
+          opts: Record<string, unknown>
         ) => Promise<unknown>;
       }
-    ).updateOne(
-      { _id: 'task-id' },
-      { $set: { task_status: 'READY_10' } },
-      { upsert: true }
-    );
+    ).updateOne(filter, update, options);
 
     expect(updateOne).toHaveBeenCalledTimes(1);
-    const [filter, update] = updateOne.mock.calls[0] as [Record<string, unknown>, Record<string, unknown>];
-    expect(filter).toEqual(
-      mergeWithRuntimeFilter(
-        { _id: 'task-id' },
-        {
-          field: 'runtime_tag',
-          familyMatch: IS_PROD_RUNTIME,
-          includeLegacyInProd: IS_PROD_RUNTIME,
-          runtimeTag: RUNTIME_TAG,
-          prodRuntime: IS_PROD_RUNTIME,
-        }
-      )
-    );
-    expect(update).toEqual({
-      $set: { task_status: 'READY_10' },
-      $setOnInsert: { runtime_tag: RUNTIME_TAG },
-    });
+    const [calledFilter, calledUpdate, calledOptions] = updateOne.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+      Record<string, unknown>
+    ];
+    expect(calledFilter).toEqual(filter);
+    expect(calledUpdate).toEqual(update);
+    expect(calledOptions).toEqual(options);
+  });
+
+  it('does not inject runtime_tag into insertOne()', () => {
+    const insertOne = jest.fn(async () => ({ acknowledged: true }));
+    const collection = {
+      collectionName: 'automation_tasks',
+      insertOne,
+    };
+
+    const proxy = createRuntimeScopedCollectionProxy(collection as never);
+    const doc = { title: 'task without runtime tag' };
+
+    (proxy as unknown as { insertOne: (payload: Record<string, unknown>) => unknown }).insertOne(doc);
+
+    expect(insertOne).toHaveBeenCalledTimes(1);
+    const [calledDoc] = insertOne.mock.calls[0] as [Record<string, unknown>];
+    expect(calledDoc).toEqual(doc);
+    expect(calledDoc).not.toHaveProperty('runtime_tag');
   });
 });

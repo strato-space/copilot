@@ -88,7 +88,7 @@ describe('handleDoneMultipromptJob', () => {
     expect(sessionsFindOne).toHaveBeenCalledTimes(1);
     expect(sessionsUpdateOne).toHaveBeenCalledTimes(1);
     const [updateQuery] = sessionsUpdateOne.mock.calls[0] as [Record<string, unknown>];
-    expect(updateQuery).toHaveProperty('$and');
+    expect(updateQuery).toEqual(expect.objectContaining({ _id: sessionId }));
     expect(tgSessionsUpdateMany).toHaveBeenCalledTimes(1);
 
     expect(postprocessorsAdd).toHaveBeenCalledTimes(3);

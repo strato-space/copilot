@@ -5,7 +5,7 @@ description = "Copilot Fast-Agent application for intelligent dialogue processin
 readme = "README.md"
 requires-python = "<3.14,>=3.13.5"
 dependencies = [
-  "fast-agent-mcp",
+  "fast-agent-mcp==0.5.6",
 ]
 
 [tool.uv]

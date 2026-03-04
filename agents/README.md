@@ -22,7 +22,7 @@ cd agents
 
 # Create virtual environment and install dependencies
 uv venv
-uv pip install -e .
+uv sync
 
 # Copy and configure secrets
 cp fastagent.secrets.yaml.example fastagent.secrets.yaml
@@ -32,14 +32,12 @@ cp fastagent.secrets.yaml.example fastagent.secrets.yaml
 ### Running Locally
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
-
-# Run with fast-agent CLI
-fast-agent serve \
+# Run with fast-agent CLI via uv
+uv run --directory "$(pwd)" fast-agent serve \
   --config-path fastagent.config.yaml \
   --agent-cards agent-cards \
   --name copilot-agent-services \
+  --model codex \
   --transport http \
   --host 127.0.0.1 \
   --port 8722
@@ -80,7 +78,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 Agent cards are located in `agent-cards/` directory:
 
 ### create_tasks.md
-- **Model:** gpt-4.1
+- **Model:** inherited from runtime (`--model` in launch config)
 - **Purpose:** Extract actionable tasks from full transcripts
 - **Output:** JSON array of tasks with priority, assignee, deadline, etc.
 
@@ -126,7 +124,7 @@ Logs are stored in `./logs/`:
 
 ### fast-agent not found
 ```bash
-uv venv && uv pip install -e .
+uv sync
 ```
 
 ### Permission denied on pm2-agents.sh

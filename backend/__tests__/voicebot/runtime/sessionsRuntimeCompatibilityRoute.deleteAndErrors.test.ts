@@ -11,7 +11,7 @@ import {
   resetSessionsRuntimeCompatibilityMocks,
 } from './sessionsRuntimeCompatibilityRoute.test.helpers.js';
 
-describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
+describe('VoiceBot sessions runtime compatibility (runtime-tag agnostic)', () => {
   beforeEach(() => {
     resetSessionsRuntimeCompatibilityMocks();
   });
@@ -156,35 +156,57 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('Session not found');
-    expect(sessionFindOne).toHaveBeenCalledTimes(2);
+    expect(sessionFindOne).toHaveBeenCalledTimes(1);
   });
 
-  it('POST /voicebot/session returns 409 runtime_mismatch when session exists outside runtime scope', async () => {
+  it('POST /voicebot/session ignores runtime_tag and returns matching session', async () => {
     const sessionId = new ObjectId();
-    const sessionFindOne = jest
-      .fn()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        _id: sessionId,
-        runtime_tag: 'dev-p2',
-        is_deleted: false,
-      });
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toString(),
+      session_name: 'Runtime-tag agnostic session',
+      runtime_tag: 'dev-p2',
+      is_active: false,
+      is_deleted: false,
+      participants: [],
+      allowed_users: [],
+    }));
+    const messagesFind = jest.fn(() => ({ toArray: async () => [] }));
 
     const rawDbStub = {
       collection: (name: string) => {
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
           return { findOne: sessionFindOne };
         }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return { find: messagesFind };
+        }
         return {
-          find: jest.fn(() => ({ toArray: async () => [] })),
+          findOne: jest.fn(async () => null),
+          find: jest.fn(() => ({ project: () => ({ toArray: async () => [] }) })),
         };
       },
     };
 
     const dbStub = {
-      collection: (_name: string) => ({
-        find: jest.fn(() => ({ toArray: async () => [] })),
-      }),
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.PERSONS || name === VOICEBOT_COLLECTIONS.PERFORMERS) {
+          return {
+            find: jest.fn(() => ({ project: () => ({ toArray: async () => [] }) })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          };
+        }
+        return {
+          find: jest.fn(() => ({ project: () => ({ toArray: async () => [] }) })),
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+        };
+      },
     };
 
     getRawDbMock.mockReturnValue(rawDbStub);
@@ -195,9 +217,10 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
       .post('/voicebot/session')
       .send({ session_id: sessionId.toHexString() });
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toBe('runtime_mismatch');
-    expect(sessionFindOne).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(200);
+    expect(response.body.voice_bot_session?._id).toBe(sessionId.toHexString());
+    expect(response.body.session_messages).toEqual([]);
+    expect(sessionFindOne).toHaveBeenCalledTimes(1);
   });
 
 });

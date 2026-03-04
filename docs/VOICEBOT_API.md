@@ -5,7 +5,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 
 ## Auth
 - All endpoints require authenticated copilot session (`authMiddleware` + `requireAdmin`).
-- Runtime isolation is enforced via `runtime_tag`.
+- Runtime isolation is deployment-scoped (separate DB/instance per environment); API contracts must not depend on `runtime_tag` filtering semantics.
 
 ## Core session endpoints
 
@@ -37,9 +37,9 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 | `/api/voicebot/projects` | `POST` | List projects available for the performer. |
 | `/api/voicebot/update_*` | `POST` | Session metadata updates (name/project/access/users/dialogue tag). |
 
-## Runtime mismatch contract
-- Read/update for foreign runtime returns `404`.
-- Upload/attach into foreign runtime returns `409` with `error=runtime_mismatch`.
+## Session resolution contract
+- Canonical session APIs use fail-fast lookup semantics and return `404` when a session cannot be resolved in current operational scope.
+- Clients must not rely on `runtime_mismatch` as a stable API contract.
 
 ## Notify delivery + hooks (2026-02-25)
 - `session_ready_to_summarize` and `session_project_assigned` are enqueued from routes (`/update_project`, `/trigger_session_ready_to_summarize`, `/resend_notify_event`) and from done flow (`DONE_MULTIPROMPT` for closed sessions with `project_id`).

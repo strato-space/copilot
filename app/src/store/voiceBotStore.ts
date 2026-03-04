@@ -1792,11 +1792,9 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                                     data: createTasks.data.filter((task) => {
                                         const byId = typeof task.id === 'string' ? task.id : '';
                                         const byAiId = typeof task.task_id_from_ai === 'string' ? task.task_id_from_ai : '';
-                                        const byLegacyAiId = typeof task['Task ID'] === 'string' ? task['Task ID'] : '';
                                         return (
                                             !createdTaskIdSet.has(byId) &&
-                                            !createdTaskIdSet.has(byAiId) &&
-                                            !createdTaskIdSet.has(byLegacyAiId)
+                                            !createdTaskIdSet.has(byAiId)
                                         );
                                     }),
                                 },
@@ -1846,7 +1844,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 return false;
             }
 
-            await voicebotHttp.request('voicebot/delete_task_from_session', { session_id: sessionId, task_id: taskId });
+            await voicebotHttp.request('voicebot/delete_task_from_session', { session_id: sessionId, row_id: taskId });
 
             set((state) => {
                 if (!state.voiceBotSession) {
@@ -1870,8 +1868,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                                 data: createTasks.data.filter((task) => {
                                     const byId = typeof task.id === 'string' ? task.id : '';
                                     const byAiId = typeof task.task_id_from_ai === 'string' ? task.task_id_from_ai : '';
-                                    const byLegacyAiId = typeof task['Task ID'] === 'string' ? task['Task ID'] : '';
-                                    return byId !== taskId && byAiId !== taskId && byLegacyAiId !== taskId;
+                                    return byId !== taskId && byAiId !== taskId;
                                 }),
                             },
                         },

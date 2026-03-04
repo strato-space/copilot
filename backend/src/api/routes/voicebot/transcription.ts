@@ -9,17 +9,16 @@ import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
-import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const router = Router();
 const logger = getLogger();
 
 const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> =>
-    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+    query;
 
 const runtimeMessageQuery = (query: Record<string, unknown>): Record<string, unknown> =>
-    mergeWithRuntimeFilter(query, { field: 'runtime_tag' });
+    query;
 
 /**
  * Extended Express Request with voicebot-specific fields

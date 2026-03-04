@@ -40,7 +40,7 @@ const TASK_CREATION_PROMPT = `
 Правила:
 - Не придумывай лишние задачи: только те, что реально следуют из входа.
 - Убирай дубли (если несколько формулировок одной и той же задачи).
-- Если данных нет, используй пустую строку или "Unassigned" (для Assignee) и [] (для Dependencies).
+- Если данных нет, используй пустую строку и [] (для dependencies_from_ai).
 - Не добавляй никаких дополнительных полей.
 - Ответ должен быть строго JSON, без markdown.
 - Язык значений выбирай по языку входа.
@@ -131,21 +131,21 @@ const toTaskProjectId = (value: ObjectId | string | null | undefined): string =>
 };
 
 const normalizeTask = (task: ParsedTask, index: number, defaultProjectId: string): NormalizedTask => {
-  const taskIdFromAi = toText(task['Task ID'] ?? task.task_id_from_ai);
+  const taskIdFromAi = toText(task.task_id_from_ai);
   const id = toText(task.id) || taskIdFromAi || `task-${index + 1}`;
   return {
     id,
-    name: toText(task.name) || toText(task['Task Title']) || `Задача ${index + 1}`,
-    description: toText(task.description) || toText(task.Description),
-    priority: toText(task.priority) || toText(task.Priority) || 'P3',
-    priority_reason: toText(task.priority_reason) || toText(task['Priority Reason']),
+    name: toText(task.name) || `Задача ${index + 1}`,
+    description: toText(task.description),
+    priority: toText(task.priority) || 'P3',
+    priority_reason: toText(task.priority_reason),
     performer_id: toText(task.performer_id),
     project_id: toText(task.project_id) || defaultProjectId,
     task_type_id: toText(task.task_type_id),
     dialogue_tag: toText(task.dialogue_tag) || 'voice',
     task_id_from_ai: taskIdFromAi,
-    dependencies_from_ai: parseDependencies(task.dependencies_from_ai ?? task.Dependencies),
-    dialogue_reference: toText(task.dialogue_reference) || toText(task['Dialogue Reference']),
+    dependencies_from_ai: parseDependencies(task.dependencies_from_ai),
+    dialogue_reference: toText(task.dialogue_reference),
   };
 };
 

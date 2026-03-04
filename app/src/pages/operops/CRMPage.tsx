@@ -53,19 +53,14 @@ const coerceString = (value: unknown): string | undefined => {
 };
 
 const normalizeVoiceTask = (raw: VoiceTask): VoiceTask => {
-    // Backend may store agent output as objects with human keys like "Task Title", "Task ID", etc.
-    // Normalize it into the fields used by the table columns below.
     const anyTask = raw as VoiceTask & Record<string, unknown>;
 
-    const taskId = coerceString(anyTask.task_id_from_ai) ?? coerceString(anyTask['Task ID']);
-    const name =
-        coerceString(anyTask.name) ??
-        coerceString(anyTask['Task Title']) ??
-        coerceString(anyTask['Title']);
-    const description = coerceString(anyTask.description) ?? coerceString(anyTask['Description']);
-    const priority = coerceString(anyTask.priority) ?? coerceString(anyTask['Priority']);
-    const upload_date = coerceString(anyTask.upload_date) ?? coerceString(anyTask['Deadline']);
-    const dialogue_reference = coerceString(anyTask.dialogue_reference) ?? coerceString(anyTask['Dialogue Reference']);
+    const taskId = coerceString(anyTask.task_id_from_ai);
+    const name = coerceString(anyTask.name);
+    const description = coerceString(anyTask.description);
+    const priority = coerceString(anyTask.priority);
+    const upload_date = coerceString(anyTask.upload_date);
+    const dialogue_reference = coerceString(anyTask.dialogue_reference);
 
     // With `exactOptionalPropertyTypes`, omit optional keys instead of setting them to `undefined`.
     const normalized: VoiceTask = {};

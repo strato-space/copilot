@@ -1,11 +1,11 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { ObjectId, type Db } from 'mongodb';
 
-import { RUNTIME_TAG, VOICEBOT_COLLECTIONS } from '../../../src/constants.js';
+import { VOICEBOT_COLLECTIONS } from '../../../src/constants.js';
 import { setActiveVoiceSession } from '../../../src/voicebot_tgbot/activeSessionMapping.js';
 
 describe('activeSessionMapping', () => {
-  it('stores runtime_tag only in $setOnInsert for upsert mapping', async () => {
+  it('stores mapping without runtime-scoped query wrappers', async () => {
     const updateOne = jest.fn().mockResolvedValue({ acknowledged: true });
     const collection = { updateOne };
     const db = {
@@ -30,8 +30,8 @@ describe('activeSessionMapping', () => {
     ];
 
     expect(options).toEqual({ upsert: true });
-    expect(update.$set.runtime_tag).toBeUndefined();
-    expect(update.$setOnInsert.runtime_tag).toBe(RUNTIME_TAG);
+    expect(_query).toEqual({ telegram_user_id: '3045664' });
+    expect(update.$setOnInsert).toEqual(expect.objectContaining({ created_at: expect.any(Date) }));
     expect(update.$set.active_session_id).toBeInstanceOf(ObjectId);
   });
 

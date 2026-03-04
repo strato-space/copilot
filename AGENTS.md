@@ -17,9 +17,9 @@ These decisions are part of the current platform contract and must be preserved 
 - Voice controls contract is fixed to `New / Rec / Cut / Pause / Done` with unified behavior between page toolbar and FAB.
 - Full-track archive chunks are visible in monitor/runtime metadata but must not auto-upload until diarization rollout is enabled.
 - Runtime isolation is mandatory for operational data:
-  - use `runtime_tag`,
-  - legacy rows without `runtime_tag` are treated as `prod`,
-  - prod runtime accepts `prod` + `prod-*` family tags.
+  - use deployment/database separation (dedicated DB/instance per environment),
+  - `runtime_tag` is deprecated as an isolation mechanism and must not be treated as source-of-truth routing input,
+  - legacy rows may still contain `runtime_tag` during transition, but runtime behavior must remain fail-fast and tag-agnostic.
 - Realtime UX is mandatory for voice:
   - upload must emit `new_message` + `session_update`,
   - processing must emit `message_update` for transcription/categorization progress.
@@ -126,7 +126,7 @@ Preferred engineering principles for this repo:
 - Follow SemVer (`MAJOR.MINOR.PATCH`) for externally visible changes.
 - `MAJOR`: breaking API/contract changes; `MINOR`: backward-compatible features; `PATCH`: fixes/refactors.
 - Keep dependencies aligned with current stable releases; avoid opportunistic downgrades unless explicitly required.
-- For runtime-scoped data paths, treat missing `runtime_tag` as `prod` only.
+- `runtime_tag` may exist in historical records/logs, but new contracts must not rely on tag-family filtering for operational isolation.
 
 ## Technology Stack Constraints
 
@@ -180,6 +180,7 @@ Preferred engineering principles for this repo:
 - View in browser: `https://copilot-dev.stratospace.fun` (nginx serves `app/dist`).
 - `VITE_AGENTS_API_URL` must use plain HTTP for `:8722` (fast-agent runs without TLS); using `https://` can fail with `ERR_SSL_PACKET_LENGTH_TOO_LONG`.
 - Preferred target is loopback `http://127.0.0.1:8722` (bind `copilot-agent-services` to localhost only; do not expose `:8722` publicly).
+- Agents PM2 runtime is canonical via `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex`; `create_tasks` card must not hardcode model override.
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
@@ -224,7 +225,7 @@ Preferred engineering principles for this repo:
 - CRM performer filtering must be identifier-compatible (`_id` and legacy `id`), and project labels must resolve via `project_data`/`project_id`/`project` fallback chain.
 - Ticket create/update diagnostics should log normalized `project/project_id/performer` payload values to speed up CRM incident triage.
 - CRM work-hours joins are canonical on `ticket_db_id` (`automation_tasks._id`) across CRM routes, miniapp routes, and reporting services; `ticket_id` remains migration-only input and must be normalized before writes.
-- Miniapp `/tickets` route in debug mode (`IS_MINIAPP_DEBUG_MODE=true`) reads through raw DB to preserve test-ticket visibility when runtime-tag scope differs from current runtime.
+- Miniapp `/tickets` route in debug mode (`IS_MINIAPP_DEBUG_MODE=true`) reads through raw DB to preserve test-ticket visibility when debug runtime boundaries diverge from default API filters.
 - OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
 - OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
@@ -248,7 +249,7 @@ Preferred engineering principles for this repo:
 - Frontend voice socket must connect to `/voicebot` namespace (not `/`) and subscribe via `subscribe_on_session`; otherwise live session updates will be dropped.
 - Frontend voice socket reconnect flow must rehydrate current session and keep deterministic message ordering for `new_message`/`message_update` upserts.
 - Backend API process owns socket event delivery for `voicebot--events-*` queue via dedicated runtime (`startVoicebotSocketEventsWorker`); standalone workers should not consume `EVENTS` queue.
-- Runtime-scoped aggregate queries now auto-scope nested `$lookup` stages for runtime-tagged collections (`prod` family vs exact non-prod), so cross-runtime joins do not leak records.
+- Runtime-tag aggregate scoping has been removed from operational read paths; nested `$lookup` joins are runtime-tag-agnostic until full environment-level DB cutover is complete.
 - Socket `session_done` authorization is test-covered through `resolveAuthorizedSessionForSocket` export; keep socket handlers bound to backend performer/session auth checks only.
 - `Done` path enforces one-shot auto-upload retry per pending chunk/session and surfaces manual retry for remaining failures.
 - WebRTC REST close warnings must include `session_id` in client logs so 404/403/5xx close incidents can be matched with backend access logs quickly.
@@ -282,7 +283,8 @@ Preferred engineering principles for this repo:
   - backend emits `session_update.taskflow_refresh` with per-list flags `possible_tasks/tasks/codex/summary`
   - frontend consumes the hint without full-page reload
   - refresh tokens must increment additively so repeated hints remain concurrency-safe
-- `CREATE_TASKS` persistence in API/worker paths is canonicalized to `id/name/description/priority/...` shape; legacy keys (`Task ID`, `Task Title`, `Description`, `Priority`) are normalized on write and accepted for delete matching.
+- `CREATE_TASKS` persistence in API/worker paths is strict canonical `id/name/description/priority/...`; runtime fallback for legacy human-title keys is disabled.
+- Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and documented in `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md`.
 - Session summary persistence is canonical:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
   - route emits realtime `session_update.taskflow_refresh.summary`,

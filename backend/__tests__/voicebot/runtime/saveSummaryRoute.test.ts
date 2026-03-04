@@ -238,9 +238,7 @@ describe('POST /voicebot/save_summary', () => {
 
     expect(fixture.sessionUpdateOne).toHaveBeenCalledWith(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ _id: fixture.sessionId }),
-        ]),
+        _id: fixture.sessionId,
       }),
       expect.objectContaining({
         $set: expect.objectContaining({

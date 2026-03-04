@@ -60,7 +60,7 @@ describe('Voicebot project files endpoints runtime isolation', () => {
     generateDataFilterMock.mockResolvedValue({});
   });
 
-  it('POST /voicebot/get_project_files applies prod-family runtime filter', async () => {
+  it('POST /voicebot/get_project_files applies project/deletion filters without runtime clauses', async () => {
     const projectId = new ObjectId();
     const findSpy = jest.fn(() => ({
       sort: () => ({ toArray: async () => [] }),
@@ -88,24 +88,13 @@ describe('Voicebot project files endpoints runtime isolation', () => {
 
     expect(response.status).toBe(200);
     const [query] = findSpy.mock.calls[0] as [Record<string, unknown>];
-    expect(query).toEqual(
-      expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ project_id: projectId }),
-          {
-            $or: [
-              { runtime_tag: { $regex: '^prod(?:-|$)' } },
-              { runtime_tag: { $exists: false } },
-              { runtime_tag: null },
-              { runtime_tag: '' },
-            ],
-          },
-        ]),
-      })
-    );
+    expect(query).toEqual(expect.objectContaining({
+      project_id: projectId,
+      is_deleted: { $ne: true },
+    }));
   });
 
-  it('POST /voicebot/get_file_content scopes lookup by runtime filter', async () => {
+  it('POST /voicebot/get_file_content scopes lookup by file/deletion filters only', async () => {
     const findOneSpy = jest.fn(async () => null);
 
     const dbStub = {
@@ -130,20 +119,9 @@ describe('Voicebot project files endpoints runtime isolation', () => {
 
     expect(response.status).toBe(404);
     const [query] = findOneSpy.mock.calls[0] as [Record<string, unknown>];
-    expect(query).toEqual(
-      expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ file_id: 'file-123' }),
-          {
-            $or: [
-              { runtime_tag: { $regex: '^prod(?:-|$)' } },
-              { runtime_tag: { $exists: false } },
-              { runtime_tag: null },
-              { runtime_tag: '' },
-            ],
-          },
-        ]),
-      })
-    );
+    expect(query).toEqual(expect.objectContaining({
+      file_id: 'file-123',
+      is_deleted: { $ne: true },
+    }));
   });
 });

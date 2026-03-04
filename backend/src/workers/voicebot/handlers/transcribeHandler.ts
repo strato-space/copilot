@@ -5,7 +5,6 @@ import OpenAI from 'openai';
 import { ObjectId } from 'mongodb';
 import {
   COLLECTIONS,
-  RUNTIME_TAG,
   TASK_STATUSES,
   VOICEBOT_FILE_STORAGE,
   VOICEBOT_COLLECTIONS,
@@ -400,7 +399,6 @@ const maybeCreateCodexTaskFromVoiceCommand = async ({
     is_deleted: false,
     created_at: now,
     updated_at: now,
-    runtime_tag: RUNTIME_TAG,
   };
 
   const insert = await db.collection(COLLECTIONS.TASKS).insertOne(taskDoc);

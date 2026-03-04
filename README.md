@@ -10,7 +10,7 @@ Use this as a fast guardrail before implementing anything:
 - Session closing is REST-driven (`POST /api/voicebot/session_done`, alias `/close_session`), with websocket used for server-to-client updates only.
 - Voice control semantics are fixed to `New / Rec / Cut / Pause / Done` and must stay aligned between session page toolbar and FAB.
 - Full-track chunks are intentionally non-uploading until diarization is introduced; do not re-enable implicit uploads.
-- Runtime isolation with `runtime_tag` is required across voice operational data (`prod` family accepts `prod` and `prod-*`; legacy missing tags are treated as `prod`).
+- Runtime isolation for Voice is deployment-scoped (separate DB/instance per environment); `runtime_tag` is transitional metadata and not an operational routing contract.
 - Realtime updates are required: uploads and workers must emit session/message events so Transcription/Categorization update without refresh.
 - Session list contracts are user-facing:
   - quick tabs: `Все`, `Без проекта`, `Активные`, `Мои`,
@@ -78,7 +78,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
 - Voice API source of truth is local: `/api/voicebot/*` (flat contract + legacy aliases during migration).
-- Runtime isolation is enforced via `runtime_tag` for operational collections; legacy records without `runtime_tag` are treated as `prod`.
+- Runtime isolation is enforced by per-environment deployment/database boundaries; `runtime_tag` is not a canonical runtime filter contract.
 - WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
 - Upload route returns structured oversize diagnostics (`413 file_too_large` with max-size metadata), and WebRTC upload client normalizes these payloads into concise UI-safe error messages.
@@ -89,7 +89,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
-- `POST /api/voicebot/sessions/get` now differentiates missing vs runtime-scoped sessions: `404 Session not found` for true absence and `409 runtime_mismatch` when session exists outside current runtime scope.
+- `POST /api/voicebot/sessions/get` follows fail-fast lookup semantics and returns `404 Session not found` when the session cannot be resolved in canonical scope.
 - Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + text + `Materials` with sortable order.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
@@ -142,7 +142,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - CREATE_TASKS payloads are normalized to canonical `id/name/description/priority/...` shape in both worker (`createTasksFromChunks`) and API utility (`save_create_tasks`) write paths.
-- Task deletion from session now matches canonical and legacy identifiers (`id`, `task_id_from_ai`, `Task ID`) to handle mixed historical payloads.
+- Task deletion from session uses canonical locators only (`row_id`, `id`, `task_id_from_ai`) without legacy human-title aliases.
+- Historical CREATE_TASKS legacy payload migration runbook is documented in `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md` (verify/apply/post-check + rollback).
 - Categorization metadata signature is rendered once per message block footer (`source_file_name + HH:mm:ss`) instead of repeating per row; row focus uses blue selection only.
 - Categorization readability contract now uses larger typography in `Time/Audio/Text/Materials` columns for dense session review.
 - Session summary now has a canonical persistence path:
@@ -157,7 +158,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Screenshort cards keep `https://...` links fully visible, while `data:image/...;base64,...` values are displayed in truncated preview form (`data:image/...;base64,...`) and copied in full through the hover Copy action.
 - Voice task creation in Copilot runtime no longer requires `task_type_id`; missing type is no longer a hard blocker in ticket/task generation.
 - `copilot-voicebot-tgbot-prod` runs TypeScript runtime from `backend/dist/voicebot_tgbot/runtime.js` with `backend/.env.production` as the single env source.
-- TS tgbot runtime protects against duplicate pollers using Redis distributed lock `voicebot:tgbot:poller_lock:<runtime_tag>`; lock loss triggers controlled shutdown to prevent split Telegram update consumption.
+- TS tgbot runtime protects against duplicate pollers using env-stable Redis distributed lock key (`voicebot:tgbot:poller_lock` + env suffix); lock loss triggers controlled shutdown to prevent split Telegram update consumption.
 - `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
 - TS transcribe handler never silently skips missing transport now: Telegram messages with `file_id` but without local `file_path` are marked `transcription_error=missing_transport` with diagnostics; text-only chunks without file path are transcribed via `transcription_method=text_fallback` and continue categorization pipeline.
@@ -190,10 +191,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - Copilot backend: `backend/src/api/routes/voicebot/llmgate.ts`.
   - TS workers/tgbot runtime: `backend/src/workers/voicebot/*` and `backend/src/voicebot_tgbot/*`.
 - Runtime/instance settings:
-  - `VOICE_RUNTIME_ENV` (`prod|dev`) — runtime family.
-  - `VOICE_RUNTIME_SERVER_NAME` — host identity (`p2`, etc.).
-  - `VOICE_RUNTIME_TAG` — explicit full tag override.
-  - Runtime family matching in prod accepts `prod` and `prod-*` tags; non-prod remains strict by exact tag.
+  - `APP_ENV` — canonical environment discriminator for env-stable queue/lock suffixing.
+  - `VOICE_RUNTIME_ENV` / `VOICE_RUNTIME_SERVER_NAME` — transitional runtime metadata (not isolation source-of-truth).
   - `DOTENV_CONFIG_PATH`, `DOTENV_CONFIG_OVERRIDE` — explicit env file source for cutover startup.
 - Telegram identity:
   - `TG_VOICE_BOT_TOKEN` (prod family)
@@ -209,6 +208,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 
 ### Voice agents integration (frontend -> agents)
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
+- PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex` for deterministic cwd + runtime model override.
+- `create_tasks` card no longer hardcodes model; model selection is controlled at runtime via launch config.
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.

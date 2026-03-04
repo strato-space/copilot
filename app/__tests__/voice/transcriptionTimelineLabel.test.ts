@@ -13,13 +13,12 @@ describe('Transcription timeline label contract', () => {
     expect(transcriptionSource).toContain('sessionBaseTimestampMs={sessionBaseTimestampMs}');
   });
 
-  it('formats timeline label as HH:mm:ss with range and filename and uses ch_* segment ids for actions', () => {
-    expect(rowSource).toContain("format('HH:mm:ss')");
-    expect(rowSource).toContain('relativeStart');
-    expect(rowSource).toContain('relativeEnd');
-    expect(rowSource).toContain('absoluteLabel');
-    expect(rowSource).toContain('const fileName = extractSourceFileName(row);');
-    expect(rowSource).toContain('const parts = [rangeLabel, fileName, absoluteLabel]');
+  it('formats timeline label via metadata signature helper and uses ch_* segment ids for actions', () => {
+    expect(rowSource).toContain('formatVoiceMetadataSignature({');
+    expect(rowSource).toContain('relativeStartSeconds');
+    expect(rowSource).toContain('relativeEndSeconds');
+    expect(rowSource).toContain('sourceFileName: extractSourceFileName(row)');
+    expect(rowSource).toContain('absoluteTimestampMs: segmentAbsoluteStartMs');
 
     // Segment ids are stable `ch_<oid>` strings (not raw ObjectIds).
     expect(rowSource).toContain("value.startsWith('ch_')");

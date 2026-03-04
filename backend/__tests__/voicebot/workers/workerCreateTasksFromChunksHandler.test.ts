@@ -99,10 +99,11 @@ describe('handleCreateTasksFromChunksJob', () => {
     createResponseMock.mockResolvedValue({
       output_text: JSON.stringify([
         {
-          'Task ID': 'TASK-1',
-          'Task Title': 'Ship voice parity',
-          Description: 'Implement full parity',
-          Priority: 'P2',
+          id: 'TASK-1',
+          task_id_from_ai: 'TASK-1',
+          name: 'Ship voice parity',
+          description: 'Implement full parity',
+          priority: 'P2',
         },
       ]),
     });
@@ -132,7 +133,6 @@ describe('handleCreateTasksFromChunksJob', () => {
       description: 'Implement full parity',
       priority: 'P2',
     });
-    expect(storedTasks[0]).not.toHaveProperty('Task Title');
 
     expect(eventsAdd).toHaveBeenCalledWith(
       VOICEBOT_JOBS.events.SEND_TO_SOCKET,

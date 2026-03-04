@@ -127,28 +127,7 @@ export const buildRuntimeFilter = ({
   runtimeFamily = RUNTIME_FAMILY,
   prodRuntime = IS_PROD_RUNTIME,
 }: RuntimeScopeOptions = {}): Record<string, unknown> => {
-  if (strict) {
-    return { [field]: runtimeTag };
-  }
-
-  if (familyMatch) {
-    const familyFilter: Array<Record<string, unknown>> = [
-      { [field]: { $regex: `^${escapeRegex(runtimeFamily)}(?:-|$)` } },
-    ];
-
-    if (prodRuntime && includeLegacyInProd) {
-      familyFilter.push({ [field]: { $exists: false } });
-      for (const legacyValue of LEGACY_VALUES) {
-        familyFilter.push({ [field]: legacyValue });
-      }
-    }
-
-    return familyFilter.length === 1
-      ? (familyFilter[0] as Record<string, unknown>)
-      : { $or: familyFilter };
-  }
-
-  return { [field]: runtimeTag };
+  return {};
 };
 
 const buildRuntimeFilterExpressionForPath = ({
@@ -160,42 +139,7 @@ const buildRuntimeFilterExpressionForPath = ({
   runtimeFamily = RUNTIME_FAMILY,
   prodRuntime = IS_PROD_RUNTIME,
 }: RuntimeScopeExprOptions = {}): Record<string, unknown> => {
-  if (strict) {
-    return { $eq: [fieldExpr, runtimeTag] };
-  }
-
-  const normalizedFieldExpr = { $ifNull: [fieldExpr, ''] } as const;
-
-  if (familyMatch) {
-    const familyExpr = {
-      $regexMatch: {
-        input: normalizedFieldExpr,
-        regex: new RegExp(`^${escapeRegex(runtimeFamily)}(?:-|$)`),
-      },
-    } as const;
-
-    if (prodRuntime && includeLegacyInProd) {
-      return {
-        $or: [
-          familyExpr,
-          { $eq: [normalizedFieldExpr, ''] },
-        ],
-      };
-    }
-
-    return familyExpr as Record<string, unknown>;
-  }
-
-  if (prodRuntime && includeLegacyInProd) {
-    return {
-      $or: [
-        { $eq: [fieldExpr, runtimeTag] },
-        { $eq: [normalizedFieldExpr, ''] },
-      ],
-    };
-  }
-
-  return { $eq: [fieldExpr, runtimeTag] };
+  return { $literal: true };
 };
 
 export const buildRuntimeFilterExpression = (
@@ -206,11 +150,7 @@ export const mergeWithRuntimeFilter = (
   query: Record<string, unknown> = {},
   options: RuntimeScopeOptions = {}
 ): Record<string, unknown> => {
-  const runtimeFilter = buildRuntimeFilter(options);
-  if (!query || Object.keys(query).length === 0) {
-    return runtimeFilter;
-  }
-  return { $and: [query, runtimeFilter] };
+  return query && typeof query === 'object' ? query : {};
 };
 
 export const recordMatchesRuntime = (
@@ -224,32 +164,4 @@ export const recordMatchesRuntime = (
     runtimeFamily = RUNTIME_FAMILY,
     prodRuntime = IS_PROD_RUNTIME,
   }: RuntimeScopeOptions = {}
-): boolean => {
-  if (!record || typeof record !== 'object') return false;
-
-  const value = record[field];
-  const normalized = typeof value === 'string' ? value.trim() : value;
-
-  if (strict) return normalized === runtimeTag;
-
-  if (familyMatch) {
-    if (typeof normalized !== 'string') {
-      return prodRuntime && includeLegacyInProd && (normalized === undefined || normalized === null || normalized === '');
-    }
-    if (normalized === runtimeFamily || normalized.startsWith(`${runtimeFamily}-`)) {
-      return true;
-    }
-    if (prodRuntime && includeLegacyInProd) {
-      return normalized === '';
-    }
-    return false;
-  }
-
-  if (prodRuntime && includeLegacyInProd) {
-    if (normalized === undefined || normalized === null || normalized === '') {
-      return true;
-    }
-  }
-
-  return normalized === runtimeTag;
-};
+): boolean => Boolean(record && typeof record === 'object');

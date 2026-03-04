@@ -11,12 +11,12 @@ import {
   resetSessionsRuntimeCompatibilityMocks,
 } from './sessionsRuntimeCompatibilityRoute.test.helpers.js';
 
-describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
+describe('VoiceBot sessions runtime compatibility (runtime-tag agnostic)', () => {
   beforeEach(() => {
     resetSessionsRuntimeCompatibilityMocks();
   });
 
-  it('POST /voicebot/list applies prod-family runtime filter (prod + prod-*)', async () => {
+  it('POST /voicebot/list keeps access filter only without runtime_tag clauses', async () => {
     const aggregatePipelineCalls: Array<Array<Record<string, unknown>>> = [];
     const aggregateMock = jest.fn(async () => [
       {
@@ -55,17 +55,7 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
     expect(response.body).toHaveLength(1);
 
     const [pipeline] = aggregatePipelineCalls;
-    const runtimeClause = ((pipeline?.[0]?.$match as Record<string, unknown>)?.$and as Array<Record<string, unknown>>)
-      ?.find((item) => '$or' in item);
-
-    expect(runtimeClause).toEqual({
-      $or: [
-        { runtime_tag: { $regex: '^prod(?:-|$)' } },
-        { runtime_tag: { $exists: false } },
-        { runtime_tag: null },
-        { runtime_tag: '' },
-      ],
-    });
+    expect(pipeline?.[0]).toEqual({ $match: {} });
 
     const lookupStage = pipeline?.find((stage) => {
       const lookup = (stage as { $lookup?: { from?: string } })?.$lookup;
@@ -76,22 +66,13 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
     expect(lookupStage?.$lookup?.from).toBe(VOICEBOT_COLLECTIONS.MESSAGES);
     const lookupMatchStage = lookupStage?.$lookup?.pipeline?.find((stage) =>
       Object.prototype.hasOwnProperty.call(stage, '$match')
-    ) as { $match?: { $and?: Array<Record<string, unknown>> } } | undefined;
-    const lookupRuntimeClause = lookupMatchStage?.$match?.$and?.find((entry) =>
-      Object.prototype.hasOwnProperty.call(entry, '$or')
-    );
-
-    expect(lookupRuntimeClause).toEqual({
-      $or: [
-        { runtime_tag: { $regex: '^prod(?:-|$)' } },
-        { runtime_tag: { $exists: false } },
-        { runtime_tag: null },
-        { runtime_tag: '' },
-      ],
+    ) as { $match?: Record<string, unknown> } | undefined;
+    expect(lookupMatchStage?.$match).toEqual({
+      $expr: { $eq: ['$session_id', '$$sessionId'] },
     });
   });
 
-  it('POST /voicebot/session reads a legacy "prod" session when runtime is "prod-p2"', async () => {
+  it('POST /voicebot/session reads by id without runtime_tag filter wrappers', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -152,36 +133,20 @@ describe('VoiceBot sessions runtime compatibility (prod + prod-*)', () => {
     const [sessionQuery] = sessionFindOne.mock.calls[0] as [Record<string, unknown>];
     expect(sessionQuery).toEqual(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ _id: expect.any(ObjectId) }),
-          {
-            $or: [
-              { runtime_tag: { $regex: '^prod(?:-|$)' } },
-              { runtime_tag: { $exists: false } },
-              { runtime_tag: null },
-              { runtime_tag: '' },
-            ],
-          },
-        ]),
+        _id: expect.any(ObjectId),
+        is_deleted: { $ne: true },
       })
     );
+    expect(sessionQuery).not.toHaveProperty('$and');
 
     const [messagesQuery] = messagesFind.mock.calls[0] as [Record<string, unknown>];
     expect(messagesQuery).toEqual(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ session_id: expect.any(ObjectId) }),
-          {
-            $or: [
-              { runtime_tag: { $regex: '^prod(?:-|$)' } },
-              { runtime_tag: { $exists: false } },
-              { runtime_tag: null },
-              { runtime_tag: '' },
-            ],
-          },
-        ]),
+        session_id: expect.any(ObjectId),
+        is_deleted: { $ne: true },
       })
     );
+    expect(messagesQuery).not.toHaveProperty('$and');
   });
 
 

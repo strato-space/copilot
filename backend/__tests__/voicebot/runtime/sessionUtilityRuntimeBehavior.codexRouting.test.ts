@@ -111,13 +111,9 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(deleteManySpy).toHaveBeenCalledTimes(1);
     expect(deleteManySpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({
-            external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
-            codex_task: true,
-            is_deleted: { $ne: true },
-          }),
-        ]),
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        codex_task: true,
+        is_deleted: { $ne: true },
       })
     );
     expect(insertManySpy).not.toHaveBeenCalled();

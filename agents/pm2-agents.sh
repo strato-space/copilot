@@ -23,10 +23,14 @@ check_pm2() {
     fi
 }
 
-# Проверка окружения
-check_venv() {
-    if [ ! -f ".venv/bin/fast-agent" ]; then
-        print_error "fast-agent не найден в .venv. Создайте окружение: uv venv && uv pip install -e ."
+# Проверка окружения fast-agent через uv
+check_fast_agent_runtime() {
+    if ! command -v uv &> /dev/null; then
+        print_error "uv не найден. Установите uv: https://docs.astral.sh/uv/getting-started/installation/"
+        exit 1
+    fi
+    if ! uv run --directory "$PWD" fast-agent --version >/dev/null 2>&1; then
+        print_error "Не удалось выполнить fast-agent через uv. Выполните: uv sync"
         exit 1
     fi
 }
@@ -52,7 +56,7 @@ create_logs_dir() {
 # Команды управления
 start_services() {
     check_pm2
-    check_venv
+    check_fast_agent_runtime
     check_agent_cards
     create_logs_dir
     

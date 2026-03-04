@@ -14,7 +14,6 @@ describe('PossibleTasks post-create contract', () => {
     expect(storeSource.includes('const createdTaskIdSet = new Set(createdTaskIds)')).toBe(true);
     expect(storeSource.includes('!createdTaskIdSet.has(byId)')).toBe(true);
     expect(storeSource.includes('!createdTaskIdSet.has(byAiId)')).toBe(true);
-    expect(storeSource.includes("!createdTaskIdSet.has(byLegacyAiId)")).toBe(true);
   });
 
   it('keeps only failed rows selected after partial validation errors', () => {

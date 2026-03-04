@@ -16,7 +16,7 @@ describe('runtimeScope helpers', () => {
         expect(resolveBetaTag('gamma')).toBe('gamma');
     });
 
-    it('buildRuntimeFilter includes legacy records for prod runtime family', () => {
+    it('buildRuntimeFilter is runtime-tag agnostic and returns an empty filter', () => {
         const filter = buildRuntimeFilter({
             field: 'runtime_tag',
             runtimeTag: 'prod-p2',
@@ -26,26 +26,20 @@ describe('runtimeScope helpers', () => {
             includeLegacyInProd: true,
         });
 
-        expect(filter).toEqual({
-            $or: [
-                { runtime_tag: { $regex: '^prod(?:-|$)' } },
-                { runtime_tag: { $exists: false } },
-                { runtime_tag: null },
-                { runtime_tag: '' },
-            ],
-        });
+        expect(filter).toEqual({});
     });
 
-    it('buildRuntimeFilter is strict for non-prod runtime', () => {
+    it('buildRuntimeFilter ignores strict runtime mode', () => {
         const filter = buildRuntimeFilter({
             field: 'runtime_tag',
             runtimeTag: 'gamma',
             prodRuntime: false,
+            strict: true,
         });
-        expect(filter).toEqual({ runtime_tag: 'gamma' });
+        expect(filter).toEqual({});
     });
 
-    it('mergeWithRuntimeFilter combines query and runtime scope', () => {
+    it('mergeWithRuntimeFilter keeps original query unchanged', () => {
         const merged = mergeWithRuntimeFilter(
             { is_deleted: { $ne: true } },
             {
@@ -55,15 +49,10 @@ describe('runtimeScope helpers', () => {
             }
         );
 
-        expect(merged).toEqual({
-            $and: [
-                { is_deleted: { $ne: true } },
-                { runtime_tag: 'gamma' },
-            ],
-        });
+        expect(merged).toEqual({ is_deleted: { $ne: true } });
     });
 
-    it('recordMatchesRuntime supports prod family and strict non-prod checks', () => {
+    it('recordMatchesRuntime is runtime-tag agnostic for existing records', () => {
         expect(recordMatchesRuntime({ runtime_tag: 'prod-p2' }, {
             runtimeTag: 'prod-p2',
             runtimeFamily: 'prod',
@@ -88,15 +77,15 @@ describe('runtimeScope helpers', () => {
             includeLegacyInProd: true,
         })).toBe(true);
 
-        expect(recordMatchesRuntime({ runtime_tag: 'prod' }, {
-            runtimeTag: 'gamma',
-            prodRuntime: false,
-        })).toBe(false);
-
         expect(recordMatchesRuntime({ runtime_tag: 'gamma' }, {
             runtimeTag: 'gamma',
             prodRuntime: false,
         })).toBe(true);
+
+        expect(recordMatchesRuntime(null, {
+            runtimeTag: 'gamma',
+            prodRuntime: false,
+        })).toBe(false);
     });
 
     it('marks runtime-scoped collections from migration contract', () => {

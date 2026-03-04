@@ -22,14 +22,14 @@ jest.unstable_mockModule('../../../src/permissions/permission-manager.js', () =>
 
 const { default: permissionsRouter } = await import('../../../src/api/routes/voicebot/permissions.js');
 
-describe('VoiceBot permissions runtime scoping', () => {
+describe('VoiceBot permissions runtime-agnostic behavior', () => {
   beforeEach(() => {
     getDbMock.mockReset();
     requirePermissionMock.mockClear();
     getUserPermissionsMock.mockReset();
   });
 
-  it('scopes /log query with runtime filter', async () => {
+  it('uses plain /log query without runtime filter wrappers', async () => {
     const permissionsLogFind = jest.fn(() => ({
       sort: jest.fn(() => ({
         skip: jest.fn(() => ({
@@ -59,14 +59,10 @@ describe('VoiceBot permissions runtime scoping', () => {
 
     expect(response.status).toBe(200);
     const [query] = permissionsLogFind.mock.calls[0] as [Record<string, unknown>];
-    expect(
-      Object.prototype.hasOwnProperty.call(query, '$and')
-      || Object.prototype.hasOwnProperty.call(query, '$or')
-      || Object.prototype.hasOwnProperty.call(query, 'runtime_tag')
-    ).toBe(true);
+    expect(query).toEqual({});
   });
 
-  it('writes runtime_tag in permission log records', async () => {
+  it('writes permission log records without runtime_tag', async () => {
     const actorId = new ObjectId('507f1f77bcf86cd799439011');
     const targetId = new ObjectId('507f1f77bcf86cd799439012');
     const performersUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
@@ -105,6 +101,6 @@ describe('VoiceBot permissions runtime scoping', () => {
     expect(response.status).toBe(200);
     expect(permissionsLogInsertOne).toHaveBeenCalledTimes(1);
     const [insertDoc] = permissionsLogInsertOne.mock.calls[0] as [Record<string, unknown>];
-    expect(insertDoc.runtime_tag).toBeDefined();
+    expect(insertDoc.runtime_tag).toBeUndefined();
   });
 });

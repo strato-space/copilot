@@ -1,5 +1,10 @@
 import { Queue, Worker, type Job } from 'bullmq';
-import { RUNTIME_TAG, VOICEBOT_JOBS, VOICEBOT_QUEUES } from '../../constants.js';
+import {
+  RUNTIME_TAG,
+  VOICEBOT_ENV_QUEUE_SUFFIX,
+  VOICEBOT_JOBS,
+  VOICEBOT_QUEUES,
+} from '../../constants.js';
 import { connectDb, closeDb } from '../../services/db.js';
 import { connectRedis, closeRedis, getBullMQConnection } from '../../services/redis.js';
 import { closeVoicebotQueues, initVoicebotQueues } from '../../services/voicebotQueues.js';
@@ -172,8 +177,8 @@ export const startVoicebotWorkers = async ({
   });
 
   const processingLoopIntervalMs = resolveProcessingLoopIntervalMs();
-  const processingSchedulerId = `processing-loop-${RUNTIME_TAG}`;
-  const cleanupEmptySessionsSchedulerId = `cleanup-empty-sessions-${RUNTIME_TAG}`;
+  const processingSchedulerId = `processing-loop${VOICEBOT_ENV_QUEUE_SUFFIX}`;
+  const cleanupEmptySessionsSchedulerId = `cleanup-empty-sessions${VOICEBOT_ENV_QUEUE_SUFFIX}`;
   const emptySessionCleanupIntervalMs = resolveEmptySessionCleanupIntervalMs();
   const emptySessionCleanupMaxAgeHours = resolveEmptySessionCleanupMaxAgeHours();
   const emptySessionCleanupBatchLimit = resolveEmptySessionCleanupBatchLimit();

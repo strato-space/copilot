@@ -1,6 +1,5 @@
 import { Db, ObjectId } from 'mongodb';
 import { VOICEBOT_COLLECTIONS } from '../constants.js';
-import { mergeWithRuntimeFilter, RUNTIME_TAG } from './runtimeScope.js';
 
 export type ObjectLocatorDoc = {
   oid: string;
@@ -38,11 +37,10 @@ export const upsertObjectLocator = async ({
 
   const now = new Date();
   await db.collection(VOICEBOT_COLLECTIONS.OBJECT_LOCATOR).updateOne(
-    mergeWithRuntimeFilter({ oid }, { field: 'runtime_tag' }),
+    { oid },
     {
       $set: {
         oid,
-        runtime_tag: RUNTIME_TAG,
         entity_type,
         parent_collection,
         parent_id,
@@ -67,7 +65,5 @@ export const findObjectLocatorByOid = async ({
 }): Promise<ObjectLocatorDoc | null> => {
   if (!db) throw new Error('findObjectLocatorByOid: db is required');
   if (!oid) throw new Error('findObjectLocatorByOid: oid is required');
-  return db.collection(VOICEBOT_COLLECTIONS.OBJECT_LOCATOR).findOne(
-    mergeWithRuntimeFilter({ oid }, { field: 'runtime_tag' })
-  ) as Promise<ObjectLocatorDoc | null>;
+  return db.collection(VOICEBOT_COLLECTIONS.OBJECT_LOCATOR).findOne({ oid }) as Promise<ObjectLocatorDoc | null>;
 };

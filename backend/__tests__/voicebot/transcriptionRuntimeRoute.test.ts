@@ -23,7 +23,7 @@ jest.unstable_mockModule('../../src/permissions/permission-manager.js', () => ({
 
 const { default: transcriptionRouter } = await import('../../src/api/routes/voicebot/transcription.js');
 
-describe('VoiceBot transcription runtime scoping', () => {
+describe('VoiceBot transcription runtime behavior', () => {
   beforeEach(() => {
     getDbMock.mockReset();
     getRawDbMock.mockReset();
@@ -31,7 +31,7 @@ describe('VoiceBot transcription runtime scoping', () => {
     getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
   });
 
-  it('applies runtime-scoped queries for /get', async () => {
+  it('uses plain queries for /get without runtime wrappers', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439011');
     const sessionsFindOne = jest.fn(async () => ({
@@ -79,8 +79,11 @@ describe('VoiceBot transcription runtime scoping', () => {
     expect(response.status).toBe(200);
     const [sessionQuery] = sessionsFindOne.mock.calls[0] as [Record<string, unknown>];
     const [messagesQuery] = messagesFind.mock.calls[0] as [Record<string, unknown>];
-    expect(sessionQuery).toHaveProperty('$and');
-    expect(messagesQuery).toHaveProperty('$and');
+    expect(sessionQuery).toEqual(expect.objectContaining({ is_deleted: { $ne: true } }));
+    expect((sessionQuery._id as ObjectId).toString()).toBe(sessionId.toString());
+    expect(sessionQuery).not.toHaveProperty('$and');
+    expect((messagesQuery.session_id as ObjectId).toString()).toBe(sessionId.toString());
+    expect(messagesQuery).not.toHaveProperty('$and');
   });
 
   it('returns markdown file for /download/:session_id without runtime-scoped queries', async () => {

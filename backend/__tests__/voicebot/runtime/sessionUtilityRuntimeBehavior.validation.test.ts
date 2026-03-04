@@ -306,17 +306,15 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(sessionUpdateOneSpy).toHaveBeenCalledTimes(1);
     expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ _id: sessionId }),
-        ]),
+        _id: sessionId,
       }),
       expect.objectContaining({
         $pull: expect.objectContaining({
           'processors_data.CREATE_TASKS.data': expect.objectContaining({
             $or: expect.arrayContaining([
+              { row_id: { $in: ['valid-task'] } },
               { id: { $in: ['valid-task'] } },
               { task_id_from_ai: { $in: ['valid-task'] } },
-              { 'Task ID': { $in: ['valid-task'] } },
             ]),
           }),
         }),
@@ -779,7 +777,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       .post('/voicebot/create_tickets')
       .send({
         session_id: sessionId.toHexString(),
-        remove_items: [{ row_id: 'row-1' }, { task_id: 'row-1' }],
+        remove_items: [{ row_id: 'row-1' }, { id: 'row-1' }],
         tickets: [
           {
             id: 'row-1',
@@ -807,9 +805,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(insertManySpy).toHaveBeenCalledTimes(1);
     expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ _id: sessionId }),
-        ]),
+        _id: sessionId,
       }),
       expect.objectContaining({
         $pull: expect.objectContaining({
@@ -818,7 +814,6 @@ describe('Voicebot utility routes runtime behavior', () => {
               { row_id: { $in: ['row-1'] } },
               { id: { $in: ['row-1'] } },
               { task_id_from_ai: { $in: ['row-1'] } },
-              { 'Task ID': { $in: ['row-1'] } },
             ]),
           }),
         }),
@@ -826,18 +821,11 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
-  it('create_tickets returns 409 runtime_mismatch when session exists outside current runtime scope', async () => {
+  it('create_tickets returns 404 when session is not found', async () => {
     const sessionId = new ObjectId();
     const projectId = new ObjectId();
     const validPerformerId = new ObjectId();
-    const sessionFindOne = jest
-      .fn()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        _id: sessionId,
-        runtime_tag: 'dev-p2',
-        is_deleted: false,
-      });
+    const sessionFindOne = jest.fn().mockResolvedValue(null);
 
     const rawDbStub = {
       collection: (name: string) => {
@@ -870,11 +858,11 @@ describe('Voicebot utility routes runtime behavior', () => {
         ],
       });
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toBe('runtime_mismatch');
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe('Session not found');
   });
 
-  it('possible_tasks returns canonical row_id values for legacy alias rows', async () => {
+  it('possible_tasks returns canonical row_id values for canonical locator aliases', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -888,7 +876,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           data: [
             { id: 'row-a', name: 'A' },
             { task_id_from_ai: 'row-b', name: 'B' },
-            { 'Task ID': 'row-c', name: 'C' },
+            { row_id: 'row-c', name: 'C' },
           ],
         },
       },
@@ -918,7 +906,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.items).toEqual([
       expect.objectContaining({ row_id: 'row-a', id: 'row-a' }),
       expect.objectContaining({ row_id: 'row-b', task_id_from_ai: 'row-b' }),
-      expect.objectContaining({ row_id: 'row-c', 'Task ID': 'row-c' }),
+      expect.objectContaining({ row_id: 'row-c' }),
     ]);
   });
 
@@ -979,9 +967,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.not_found).toBe(true);
     expect(updateOneSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        $and: expect.arrayContaining([
-          expect.objectContaining({ _id: sessionId }),
-        ]),
+        _id: sessionId,
       }),
       expect.objectContaining({
         $pull: expect.objectContaining({
@@ -990,7 +976,6 @@ describe('Voicebot utility routes runtime behavior', () => {
               { row_id: { $in: ['legacy-row'] } },
               { id: { $in: ['legacy-row'] } },
               { task_id_from_ai: { $in: ['legacy-row'] } },
-              { 'Task ID': { $in: ['legacy-row'] } },
             ]),
           }),
         }),
@@ -1018,7 +1003,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       .send({
         session_id: new ObjectId().toHexString(),
         row_id: 'row-a',
-        task_id: 'row-b',
+        id: 'row-b',
       });
 
     expect(response.status).toBe(409);
