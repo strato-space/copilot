@@ -1,0 +1,241 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 2,
+  "assessments": {
+    "cross_module_architecture": 82.0,
+    "convention_outlier": 90.0,
+    "error_consistency": 90.0,
+    "abstraction_fitness": 89.0,
+    "api_surface_coherence": 83.0,
+    "authorization_consistency": 89.0,
+    "ai_generated_debt": 92.0,
+    "incomplete_migration": 82.0,
+    "package_organization": 90.0,
+    "high_level_elegance": 88.0,
+    "mid_level_elegance": 84.0,
+    "low_level_elegance": 90.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Multiple worker/service modules independently reintroduce runtime_tag-gated `runtimeQuery`/`runtimeSessionQuery` wrappers (`processingLoop.ts`, `transcribeHandler.ts`, `createTasksPostprocessing.ts`, `voicebotWebmDedup.ts`) while migration notes require runtime_tag to stop being operational isolation source.",
+        "Voice close flow is implemented in both `sessions.ts` (canonical session_done path) and `uploads.ts` (legacy close path) with different orchestration semantics.",
+        "The same domain concern (session state lifecycle) is split across route and upload handlers with no shared orchestration helper."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Runtime isolation cleanup and canonical flow consolidation is only partial; boundary logic is duplicated across worker and route modules."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Route modules mix migration-era compatibility comments and aliases (`registerPostAlias`) with modern canonical contract references; this is intentional but shows some legacy drift.",
+        "No consistent naming or structural anomaly was found inside the sampled files beyond that coexistence."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Small residual naming/compatibility islands remain, but they are mostly localized and non-blocking."
+    },
+    "error_consistency": {
+      "evidence": [
+        "Canonical close flow in `sessions.ts` returns normalized errors and emits socket updates; the legacy `/close_session` path in `uploads.ts` writes DB fields directly and returns only raw `{ success: true }` on success.",
+        "Observed discrepancy indicates mixed error contract and side-effect guarantees across two close endpoints."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Error behavior is not catastrophically inconsistent across all paths, but this endpoint pair is materially inconsistent."
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Both task-creation and session routes perform overlapping normalization logic for CREATE_TASKS rows (`normalizeCreateTaskForStorage` in `sessions.ts`, `normalizeTask`/`parseTasksJson` path in `createTasksFromChunks.ts`) with duplicated field mapping behavior.",
+        "This duplication is contained and readable, but adds maintenance coupling as task schema evolves."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "A shared task-row schema mapper across producer/consumer would reduce coupling with limited refactor.",
+      "sub_axes": {
+        "abstraction_leverage": 87.5,
+        "indirection_cost": 86.0,
+        "interface_honesty": 88.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Two close-session API paths behave differently: canonical `/api/voicebot/session_done` does full flow + emit behavior, while `/api/voicebot/close_session` in uploads route performs a direct document update.",
+        "Route metadata in session file marks `/voicebot/close_session` as compatibility-only alias, but active uploads handler keeps a separate close mutation path."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "This is the main cross-cutting surface inconsistency in the batch."
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "`sessions.ts` close-flow path enforces permission + explicit session access checks before state mutation; `uploads.ts` close path relies on permission middleware only, with different access/error handling shape.",
+        "Other listed legacy CRM route files also rely on parent route stack for auth, so this remains a local consistency gap risk when mounting changes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "No systemic auth bypass was confirmed in all listed files, but close-session parity around access checks should be aligned."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Code is mostly domain-specific; no pervasive pass-through wrapper spam or copied boilerplate was observed in sampled files.",
+        "A few duplication patterns exist (legacy compatibility wrappers, task parsing duplication) that are architectural/consistency concerns rather than pure LLM debt."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Remaining debt is mostly structural compatibility debt, not excessive generated-style verbosity."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Workers/services still apply `mergeWithRuntimeFilter(...field:'runtime_tag'...)` for active query paths (`processingLoop.ts`, `transcribeHandler.ts`, `createTasksPostprocessing.ts`, `voicebotWebmDedup.ts`), despite contract notes declaring runtime_tag as deprecated source-of-truth.",
+        "Uploads route exposes `/close_session` despite compatibility guidance that canonical closure should be REST `session_done` and not alias-driven client logic."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": "The migration is actively constrained by legacy compatibility paths and needs explicit removal/retirement."
+    },
+    "package_organization": {
+      "evidence": [
+        "Cross-module references are understandable across `backend/src/api`, `backend/src/workers`, and `backend/src/services`, with no clear evidence of straggler root files in this batch slice.",
+        "No objective `holistic_context.structure` coupling stats are available in this packet, so score cannot be confidently pushed higher than the high 80s/low 90s."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "High-confidence improvement would require structural metrics (fan-in/fan-out and directory coupling) before moving to 95+."
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Voice subsystem still carries legacy compatibility islands (legacy upload close endpoint, runtime_tag filtering duplicates) that blur the boundary between canonical and migration-era flows.",
+        "Despite this, major domain boundaries (API route -> service/worker -> store/UI) remain discoverable."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Eliminating duplicate close/runtime paths would materially improve ownership clarity."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Command execution UI state (`NotificationsDrawer`) and command execution function (`notificationStore`) are disconnected, producing an action that appears disabled in UI state only when toggled locally.",
+        "The close-session behavior seam has duplicated logic between `uploads.ts` and `sessions.ts` instead of a single handoff boundary."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Both issues are integration-seam risks at module boundary level; they should be addressed with explicit boundary contracts."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Most local control flow in inspected files is direct and traceable.",
+        "No deeply tangled one-function implementations were found in the sampled modules."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Local craft is generally clean; remaining quality issues are cross-module seams, not local logic complexity."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "close_session_contract_divergence",
+      "summary": "Legacy upload close endpoint mutates session completion differently from canonical session_done flow.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/services/voicebotSessionDoneFlow.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` defines `POST /close_session` that directly `updateOne` on sessions (`is_active:false`, `to_finalize:true`, `done_count++`) without reuse of `completeSessionDoneFlow`.",
+        "`sessions.ts` exposes canonical `POST /session_done` that performs permission + access checks, passes through `completeSessionDoneFlow`, emits `session_status`/`session_update` and structured errors.",
+        "Session router also registers `registerPostAlias('/close_session', '/session_done')`, indicating `/close_session` is intended as compatibility-only."
+      ],
+      "suggestion": "Delete or hard-disable the direct mutation path in `uploads.ts` and route all session completion through `sessions.ts` `/session_done` (or a shared close-session service) so error payloads, socket events, and completion semantics are identical regardless of caller. Add one regression test hitting both legacy and canonical paths to assert aliasing behavior.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "close_flow_compatibility_divergence"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "runtime_filter_boundary_fragmentation",
+      "summary": "Runtime-tag filtering is still repeated in core worker/service query paths, fragmenting isolation semantics.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts"
+      ],
+      "evidence": [
+        "Each file defines local `runtimeSessionQuery`/`runtimeMessageQuery` wrappers built on `mergeWithRuntimeFilter` with `field: 'runtime_tag'` and `includeLegacyInProd: IS_PROD_RUNTIME`.",
+        "The same filter mechanism exists across multiple modules instead of one shared boundary, creating inconsistent operational behavior during migration.",
+        "This contradicts the contract that runtime_tag should not be the runtime truth source."
+      ],
+      "suggestion": "Introduce one canonical query strategy for voicebot session/message access that is runtime-isolation-safe for this deployment model, then remove `runtime_tag` inclusion from active runtime path filters across these modules. Keep any runtime_tag usage in compatibility/reporting-only utilities with explicit comments and test coverage.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_boundary_debt"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_runtime_tag_persistence_in_workers",
+      "summary": "Migration to runtime-agnostic session access is incomplete across active workers.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+      ],
+      "evidence": [
+        "Multiple active worker modules still import and apply `mergeWithRuntimeFilter`, including legacy fallback via `includeLegacyInProd: IS_PROD_RUNTIME`.",
+        "No central migration gate in these paths indicates old `runtime_tag` logic is still controlling operational reads/writes where fail-fast tag-agnostic routing is expected."
+      ],
+      "suggestion": "Create a migration pass plan and remove active-worker dependency on `runtime_tag` filters; add an integration test that asserts workers process rows across environments based on true environment isolation (DB/runtime config), not `runtime_tag` family match.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_boundary_debt"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "notification_command_state_not_honored",
+      "summary": "Agent command UI toggle state is not enforced during command execution.",
+      "related_files": [
+        "app/src/components/NotificationsDrawer.tsx",
+        "app/src/store/notificationStore.ts"
+      ],
+      "evidence": [
+        "`NotificationsDrawer` keeps a local `commands` array and disables button when `command.enabled` is false, but `runAgentCommand` in store accepts only `commandId` and executes independently of that state.",
+        "There is no shared command registry or persistence for enabled/disabled flags across store and component, so toggle state can become dead/untrusted UI control."
+      ],
+      "suggestion": "Move command definitions and enabled state into the notification store (or a dedicated command config slice), expose `runAgentCommand({ commandId, enabledOnly })`, and ensure disabled commands short-circuit in the store layer before any item mutation.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Runtime-tag-based isolation and close-session compatibility pathways were not retired together with the canonical migration",
+      "Legacy compatibility endpoints were kept active without strict parity with canonical service contracts",
+      "UI command state was split between component-local and store-level execution logic"
+    ],
+    "likely_symptoms": [
+      "close_session called via upload path misses socket update/reconciliation events",
+      "cross-runtime session processing skew when runtime_tag tags are inconsistent",
+      "user-visible command toggles that appear functional but do not affect execution"
+    ],
+    "possible_false_positives": [
+      "authorization gaps in legacy CRM routes were considered but not confirmed in this batch due limited mount-context validation"
+    ]
+  }
+}

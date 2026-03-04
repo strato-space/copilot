@@ -1,0 +1,117 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 5,
+  "assessments": {
+    "design_coherence": 78.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Voice session UI layer mixes orchestration, transport synchronization, side effects, persistence, and presentation in large monolithic components (`MeetingCard.tsx`) instead of delegating to dedicated hooks/services.",
+        "The upload policy is represented in both frontend and backend files, with different hardcoded values and message assumptions (`AudioUploader.tsx` versus `backend/src/constants.ts` + `backend/src/api/routes/voicebot/uploads.ts`).",
+        "Task payload shaping and validation for `CREATE_TASKS` is reimplemented in multiple layers (`PossibleTasks.tsx`, `CRMPage.tsx`, `sessionsSharedUtils.ts`) without a shared canonical contract surface in this batch.",
+        "Multiple modal workflows for entity-selection in sessions (access users and participants) duplicate almost identical control flow in separate components and store slices (`AccessUsersModal.tsx`, `AddParticipantModal.tsx`, `sessionsUIStore.ts`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "meetingcard-orchestrator-bloat",
+      "summary": "`MeetingCard.tsx` aggregates session orchestration, websocket sync, custom-prompt control, local storage sync, and UI rendering, creating a maintenance-heavy mixed-responsibility component.",
+      "related_files": [
+        "app/src/components/voice/MeetingCard.tsx",
+        "app/src/pages/voice/SessionPage.tsx"
+      ],
+      "evidence": [
+        "`MeetingCard.tsx` defines and orchestrates session lifecycle actions such as activation/finish/restart/summarize inside the presentational component rather than through dedicated hooks or services.",
+        "The component registers global socket listeners and polling (`setInterval`) for active session updates and writes state back into shared stores while also rendering rich UI state.",
+        "The same file performs localStorage operations (e.g., tag persistence) and custom prompt dispatch logic in-component instead of centralizing this cross-session state behavior."
+      ],
+      "suggestion": "Split `MeetingCard.tsx` into smaller domain units: a pure presentational card, a dedicated `useVoiceSessionStateSync` hook for socket/interval reconciliation, and a `useVoiceSessionActions` hook for activate/finish/restart/summarize commands; keep display component to rendering only.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "frontend_session_orchestration_fragmentation"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "upload-policy-split",
+      "summary": "Upload constraints are duplicated across frontend and backend, with contradictory limits/messages likely causing client/backend behavior divergence.",
+      "related_files": [
+        "app/src/components/voice/AudioUploader.tsx",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/constants.ts"
+      ],
+      "evidence": [
+        "`AudioUploader.tsx` hardcodes MIME and max-size checks (including user-facing 600MB messaging) while backend upload middleware reads limits from `VOICEBOT_FILE_STORAGE.maxAudioFileSize`.",
+        "Mismatched numeric expectations between upload UI and backend limits can lead to false positives/false negatives in validation UX versus actual server enforcement.",
+        "Transport policy (`allowedTypes`, max size) is therefore represented by at least three duplicated sources instead of a canonical source."
+      ],
+      "suggestion": "Expose upload policy from backend config to clients (endpoint or app bootstrap payload) and remove UI hardcodes; keep only backend as source of truth and use shared typed policy in frontend for accepted types, max size, and error copy.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "policy_duplication_transport_rules"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "task-normalization-fragmentation",
+      "summary": "Task payload normalization is split across backend and frontend with inconsistent defaults and validation paths, increasing divergence risk for `CREATE_TASKS` behavior.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "app/src/components/voice/PossibleTasks.tsx",
+        "app/src/pages/operops/CRMPage.tsx",
+        "app/src/pages/operops/taskPageUtils.ts"
+      ],
+      "evidence": [
+        "Backend utilities (`sessionsSharedUtils.ts`) and frontend task parsing (`PossibleTasks.parseTask`) each encode their own required-field handling and field coercion.",
+        "`PossibleTasks.tsx` and `CRMPage.tsx` apply different fallback assumptions (`task_type_id`, performer and project references), while backend utilities trend toward canonical fields.",
+        "Similar task-shape checks are reimplemented instead of being centralized, making invariant drift difficult to detect when contracts evolve."
+      ],
+      "suggestion": "Define a shared task DTO/schema module (Zod + inferred TypeScript types) in a common package and reuse it both for API boundary validation and UI normalization layers.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "voice_task_contract_inconsistency"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "duplicate-modal-selection-pattern",
+      "summary": "Session permission/user selection modals duplicate nearly identical list/filter/select/save patterns, increasing the chance of divergent behavior and validation gaps.",
+      "related_files": [
+        "app/src/components/voice/AccessUsersModal.tsx",
+        "app/src/components/voice/AddParticipantModal.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "Both modals duplicate search/query filtering, selected-ID management, fetch orchestration, and submit/cancel state reset semantics.",
+        "The two components rely on separate but structurally similar state slices in `sessionsUIStore`, rather than consuming a shared selection/visibility workflow.",
+        "Any future changes (e.g., debounced search, selection limits, error handling) require mirrored edits in multiple files."
+      ],
+      "suggestion": "Introduce a reusable configurable modal selection primitive (hook + component) for entity assignment workflows and reuse it for both users/participants paths.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Cross-layer policy and DTO duplication (no single source of truth across frontend/backend boundaries).",
+      "Large feature-level coupling in voice session UI, where transport orchestration is not separated from rendering.",
+      "Repeated domain interaction patterns (list selection modals) implemented ad hoc in isolated components."
+    ],
+    "likely_symptoms": [
+      "upload-policy-fragmentation",
+      "voice_task_contract_inconsistency",
+      "meetingcard-orchestrator-bloat",
+      "duplicate-modal-selection-pattern"
+    ],
+    "possible_false_positives": [
+      "Allowed MIME list and size hints in `AudioUploader.tsx` may intentionally support broader client-side preview constraints than backend hard limits; verify any explicit product decision before hard-consolidation."
+    ]
+  }
+}

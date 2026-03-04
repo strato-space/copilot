@@ -1,0 +1,179 @@
+{
+  "batch": "Cross-cutting Sweep",
+  "batch_index": 6,
+  "assessments": {
+    "convention_outlier": 76.0,
+    "error_consistency": 83.0,
+    "authorization_consistency": 78.0,
+    "ai_generated_debt": 74.0,
+    "incomplete_migration": 67.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "Multiple runtime-scope helper functions are defined as pass-through no-ops despite being used as policy gates: `buildRuntimeFilter` and `mergeWithRuntimeFilter` return permissive values in `backend/src/services/runtimeScope.ts`.",
+        "The db facade also returns unchanged pipeline/update proxies in `backend/src/services/db.ts` (`applyRuntimeScopeToAggregatePipeline`, `patchRuntimeTagIntoSetOnInsert`, `createRuntimeScopedCollectionProxy`).",
+        "Call-sites then add local wrapper aliases that again return identity (`runtimeSessionQuery`/`runtimeMessageQuery`) in `backend/src/api/routes/voicebot/uploads.ts` and `backend/src/api/routes/voicebot/messageHelpers.ts`."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "`uploadAudioHandler` paths in `backend/src/api/routes/voicebot/uploads.ts` consistently attach `request_id` on failures, but `uploadImageWithErrorHandling` and `uploadAttachmentHandler` error paths often omit it, including 400/500 responses.",
+        "The same route module therefore produces different diagnostic contracts between sibling upload endpoints (`/audio` vs `/upload_attachment`), which complicates backend->frontend correlation."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Miniapp login and verify flow in `backend/src/miniapp/routes/index.ts` signs/verifies JWTs with `process.env.APP_ENCRYPTION_KEY ?? ''`, meaning an empty string becomes the effective secret.",
+        "This bypasses a hard secret boundary and is materially weaker than permission/role enforcement patterns used in API paths that rely on DB-validated auth middleware (`backend/src/api/middleware/roleGuard.ts`, `backend/src/api/routes/voicebot/*`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Same-file and cross-file runtime helpers are repeatedly rewrapped into no-op aliases (`runtimeMessageQuery`, `runtimeSessionQuery`) in `backend/src/api/routes/voicebot/messageHelpers.ts`, `backend/src/api/routes/voicebot/transcription.ts`, `backend/src/api/routes/voicebot/uploads.ts`, and `backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts`.",
+        "These wrappers add extra layers without semantic transformation in the current implementation; the indirection appears to be placeholder/compatibility scaffolding rather than enforceable abstraction.",
+        "Several helper names are still present (`runtimePermissionsLogQuery` in `backend/src/api/routes/voicebot/permissions.ts`) despite never adding behavior, reinforcing wrapper entropy."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Runtime-tag runtime isolation behavior appears disabled at implementation level while migration-era interfaces remain in active paths (`buildRuntimeFilter`/`recordMatchesRuntime` permissive in `backend/src/services/runtimeScope.ts`).",
+        "`backend/src/services/db.ts` proxies are inert and do not enforce collection/runtime filtering.",
+        "Legacy operational migration script still attempts to backfill `runtime_tag` to `'prod'` across scoped collections in `backend/scripts/runtime-tag-backfill.ts`, while actual runtime filtering logic is effectively bypassed."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "convention_outlier",
+      "identifier": "RUNTIME_SCOPE_HELPER_DIVERGENCE",
+      "summary": "Runtime filtering abstractions behave as identity, so policy naming no longer matches runtime behavior.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts"
+      ],
+      "evidence": [
+        "`buildRuntimeFilter` in `runtimeScope.ts` returns `{}` and `buildRuntimeFilterExpressionForPath` returns `{ $literal: true }`.",
+        "`mergeWithRuntimeFilter` returns input query unchanged.",
+        "`applyRuntimeScopeToAggregatePipeline` and `patchRuntimeTagIntoSetOnInsert` in `db.ts` are pass-through wrappers.",
+        "`sharedRuntime.ts` builds `runtimeQuery` using `mergeWithRuntimeFilter`, inheriting the no-op behavior."
+      ],
+      "suggestion": "Either implement runtime scoping end-to-end (query rewriting + collection/update patching) or remove the abstraction layer and rename callsites to explicit queries; do not keep policy-named wrappers that guarantee no filtering.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_scope_noop_contract"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "MINIAPP_WEAK_JWT_SECRET",
+      "summary": "Miniapp JWT verification allows an empty signing secret via nullish fallback.",
+      "related_files": [
+        "backend/src/miniapp/routes/index.ts",
+        "backend/src/api/middleware/roleGuard.ts"
+      ],
+      "evidence": [
+        "Miniapp `/login` signs with `jwt.sign(userData, process.env.APP_ENCRYPTION_KEY ?? '')`.",
+        "`requireAuth` verifies with the same fallback secret (`jwt.verify(token, jwtSecret)` where `jwtSecret` defaults to empty string).",
+        "API middleware (`roleGuard.ts`) enforces user/role checks against DB-backed permissions, indicating stronger auth assumptions than this miniapp path."
+      ],
+      "suggestion": "Reject startup when `APP_ENCRYPTION_KEY` is unset/empty and fail closed in miniapp routes; validate token format/claims and rotate auth to the same shared verification contract used by the main API.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "UPLOAD_ATTACHMENT_REQ_ID_GAP",
+      "summary": "Upload attachment endpoints return heterogeneous error payloads lacking `request_id` in failure paths.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "app/src/components/voice/AudioUploader.tsx"
+      ],
+      "evidence": [
+        "`uploadImageWithErrorHandling` returns `{ error, message, code }` for Multer errors and no `request_id` in some branches.",
+        "`uploadAttachmentHandler` catch and several early returns return `{ error: ... }` without request id, while upload-audio errors consistently include `request_id`.",
+        "Frontend uploader groups upload outcomes by generic success/fail messages and cannot rely on a stable correlation identifier when attachment uploads fail."
+      ],
+      "suggestion": "Introduce a single upload error responder used by both audio and attachment handlers that always includes `request_id` and normalized error fields (`code`, `message`, and user-facing hint).",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "runtime_scope_noop_contract"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "PASS_THROUGH_RUNTIME_WRAPPERS",
+      "summary": "Voicebot routes contain repeated pass-through runtime wrapper scaffolding with no real behavior.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/messageHelpers.ts",
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts"
+      ],
+      "evidence": [
+        "`runtimeSessionQuery`/`runtimeMessageQuery` are defined as pure identity functions in multiple files.",
+        "Several modules reintroduce aliases around `mergeWithRuntimeFilter` that currently has no runtime-filter effect.",
+        "This produces repeated boilerplate and makes intent difficult to infer across file-level call chains."
+      ],
+      "suggestion": "Consolidate runtime query behavior to a single utility and delete redundant identity wrappers; if runtime scoping is truly inactive, remove the wrappers and rename variables so callsites reflect raw queries.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_scope_noop_contract"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "RUNTIME_TAG_MIGRATION_DIVERGENCE",
+      "summary": "Runtime migration artifacts and index assumptions remain active while runtime isolation is effectively disabled.",
+      "related_files": [
+        "backend/src/services/runtimeScope.ts",
+        "backend/src/services/db.ts",
+        "backend/scripts/runtime-tag-backfill.ts"
+      ],
+      "evidence": [
+        "`runtimeScope.ts` and `db.ts` implement no-op runtime isolation primitives.",
+        "Migration/backfill script still writes defaults (`runtime_tag: 'prod'`) across runtime-scoped collections.",
+        "Schema/index bootstrap still implies runtime-aware indexes in constants (`runtime_tag`-based keys) despite effective runtime scope no-op.",
+        "Result: mixed operational expectation: data is migrated for runtime separation while runtime checks do not enforce it."
+      ],
+      "suggestion": "Choose one architecture and complete it: either fully enable runtime scoping in query/update/index paths, or remove runtime-tag migration/index dependence and document a single operational isolation contract.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "runtime_scope_noop_contract"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Runtime-scoping migration was partially suspended, leaving helper names and migration scripts inconsistent with behavior.",
+      "Security assumptions diverged between main API and miniapp surfaces through copied auth patterns with weaker defaults.",
+      "Error-contract normalization was partially applied to one upload path and not its sibling path."
+    ],
+    "likely_symptoms": [
+      "Runtime_scope_noop_contract",
+      "cross-environment data bleed risk",
+      "hard-to-correlate attachment upload incidents"
+    ],
+    "possible_false_positives": [
+      "Some wrapper no-op functions could be temporary intentional placeholders during staged rollout; verify migration plan before removing.",
+      "`request_id` consistency could be intentionally limited to certain endpoints, so confirm expected API contract before enforcing globally."
+    ]
+  }
+}

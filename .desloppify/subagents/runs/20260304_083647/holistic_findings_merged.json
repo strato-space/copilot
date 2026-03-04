@@ -1,0 +1,514 @@
+{
+  "assessments": {
+    "abstraction_fitness": {
+      "score": 89.0,
+      "components": [
+        "Abstraction Leverage",
+        "Indirection Cost",
+        "Interface Honesty"
+      ],
+      "component_scores": {
+        "Abstraction Leverage": 87.5,
+        "Indirection Cost": 86.0,
+        "Interface Honesty": 88.0
+      }
+    },
+    "ai_generated_debt": 92.0,
+    "api_surface_coherence": 77.5,
+    "authorization_consistency": 89.0,
+    "convention_outlier": 90.0,
+    "cross_module_architecture": 74.8,
+    "design_coherence": 38.0,
+    "error_consistency": 90.0,
+    "high_level_elegance": 88.0,
+    "incomplete_migration": 74.8,
+    "low_level_elegance": 90.0,
+    "mid_level_elegance": 80.3,
+    "package_organization": 90.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Core voice flow logic is concentrated in route/worker/component files with repeated orchestration patterns instead of shared abstractions (for example upload/session handling in a single route file and duplicated socket/event-update helpers across transcribe/categorization handlers).",
+        "Voice UI state and behavior is split across oversized pages and stores that each hold both orchestration and presentation concerns (e.g., clipboard/paste/image parsing logic in `SessionPage`, filter/persistence/table orchestration in `SessionsListPage`, async session-title generation and MCP calls in `sessionsUIStore`).",
+        "Grid/page modules repeatedly mix data normalization, transformation, and rendering inside one file (`PlanFactGrid`, `CRMKanban`), increasing coupling and making invariant changes hard to propagate safely."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "cross_module_architecture": {
+      "evidence": [
+        "Multiple worker/service modules independently reintroduce runtime_tag-gated `runtimeQuery`/`runtimeSessionQuery` wrappers (`processingLoop.ts`, `transcribeHandler.ts`, `createTasksPostprocessing.ts`, `voicebotWebmDedup.ts`) while migration notes require runtime_tag to stop being operational isolation source.",
+        "Voice close flow is implemented in both `sessions.ts` (canonical session_done path) and `uploads.ts` (legacy close path) with different orchestration semantics.",
+        "The same domain concern (session state lifecycle) is split across route and upload handlers with no shared orchestration helper."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Runtime isolation cleanup and canonical flow consolidation is only partial; boundary logic is duplicated across worker and route modules."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Route modules mix migration-era compatibility comments and aliases (`registerPostAlias`) with modern canonical contract references; this is intentional but shows some legacy drift.",
+        "No consistent naming or structural anomaly was found inside the sampled files beyond that coexistence."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Small residual naming/compatibility islands remain, but they are mostly localized and non-blocking."
+    },
+    "error_consistency": {
+      "evidence": [
+        "Canonical close flow in `sessions.ts` returns normalized errors and emits socket updates; the legacy `/close_session` path in `uploads.ts` writes DB fields directly and returns only raw `{ success: true }` on success.",
+        "Observed discrepancy indicates mixed error contract and side-effect guarantees across two close endpoints."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Error behavior is not catastrophically inconsistent across all paths, but this endpoint pair is materially inconsistent."
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Both task-creation and session routes perform overlapping normalization logic for CREATE_TASKS rows (`normalizeCreateTaskForStorage` in `sessions.ts`, `normalizeTask`/`parseTasksJson` path in `createTasksFromChunks.ts`) with duplicated field mapping behavior.",
+        "This duplication is contained and readable, but adds maintenance coupling as task schema evolves."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "A shared task-row schema mapper across producer/consumer would reduce coupling with limited refactor.",
+      "sub_axes": {
+        "abstraction_leverage": 87.5,
+        "indirection_cost": 86.0,
+        "interface_honesty": 88.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Two close-session API paths behave differently: canonical `/api/voicebot/session_done` does full flow + emit behavior, while `/api/voicebot/close_session` in uploads route performs a direct document update.",
+        "Route metadata in session file marks `/voicebot/close_session` as compatibility-only alias, but active uploads handler keeps a separate close mutation path."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "This is the main cross-cutting surface inconsistency in the batch."
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "`sessions.ts` close-flow path enforces permission + explicit session access checks before state mutation; `uploads.ts` close path relies on permission middleware only, with different access/error handling shape.",
+        "Other listed legacy CRM route files also rely on parent route stack for auth, so this remains a local consistency gap risk when mounting changes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "No systemic auth bypass was confirmed in all listed files, but close-session parity around access checks should be aligned."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Code is mostly domain-specific; no pervasive pass-through wrapper spam or copied boilerplate was observed in sampled files.",
+        "A few duplication patterns exist (legacy compatibility wrappers, task parsing duplication) that are architectural/consistency concerns rather than pure LLM debt."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Remaining debt is mostly structural compatibility debt, not excessive generated-style verbosity."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Workers/services still apply `mergeWithRuntimeFilter(...field:'runtime_tag'...)` for active query paths (`processingLoop.ts`, `transcribeHandler.ts`, `createTasksPostprocessing.ts`, `voicebotWebmDedup.ts`), despite contract notes declaring runtime_tag as deprecated source-of-truth.",
+        "Uploads route exposes `/close_session` despite compatibility guidance that canonical closure should be REST `session_done` and not alias-driven client logic."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": "The migration is actively constrained by legacy compatibility paths and needs explicit removal/retirement."
+    },
+    "package_organization": {
+      "evidence": [
+        "Cross-module references are understandable across `backend/src/api`, `backend/src/workers`, and `backend/src/services`, with no clear evidence of straggler root files in this batch slice.",
+        "No objective `holistic_context.structure` coupling stats are available in this packet, so score cannot be confidently pushed higher than the high 80s/low 90s."
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "High-confidence improvement would require structural metrics (fan-in/fan-out and directory coupling) before moving to 95+."
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Voice subsystem still carries legacy compatibility islands (legacy upload close endpoint, runtime_tag filtering duplicates) that blur the boundary between canonical and migration-era flows.",
+        "Despite this, major domain boundaries (API route -> service/worker -> store/UI) remain discoverable."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Eliminating duplicate close/runtime paths would materially improve ownership clarity."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Command execution UI state (`NotificationsDrawer`) and command execution function (`notificationStore`) are disconnected, producing an action that appears disabled in UI state only when toggled locally.",
+        "The close-session behavior seam has duplicated logic between `uploads.ts` and `sessions.ts` instead of a single handoff boundary."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Both issues are integration-seam risks at module boundary level; they should be addressed with explicit boundary contracts."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Most local control flow in inspected files is direct and traceable.",
+        "No deeply tangled one-function implementations were found in the sampled modules."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Local craft is generally clean; remaining quality issues are cross-module seams, not local logic complexity."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "dup-worker-socket-update-abstractions",
+      "summary": "Voice worker handlers duplicate message-update/event-emission plumbing instead of sharing a single orchestration utility.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/categorizeHandler.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`transcribeHandler.ts` defines `queueMessageUpdateEvent` and `emitMessageUpdateById` utilities, and `categorizeHandler.ts` defines its own helpers with similar responsibilities and same event contract shape.",
+        "`processingLoop.ts` relies on those event/update paths externally, so divergence in any helper implementation creates inconsistent `message_update` emission behavior across processors."
+      ],
+      "suggestion": "Extract a shared `voicebotWorkerRealtime.ts` (or equivalent) with a single `emitSessionMessageUpdate` and `queueSessionUpdateEvent` API, then call it from all handlers to ensure uniform event semantics and reduce drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice-page-overload-mixed-concerns",
+      "summary": "`SessionPage` and `SessionsListPage` mix transport/state orchestration and business parsing with view rendering, hurting readability and reuse.",
+      "related_files": [
+        "app/src/pages/voice/SessionPage.tsx",
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "`SessionPage.tsx` includes paste/drop image ingestion, FileReader/canvas resizing/conversion, regex parsing (`parseTimeFromMessage`, `parseMetadataFromText`-style helpers), and socket lifecycle setup inside the page component.",
+        "`SessionsListPage.tsx` contains URL/search param parsing, localStorage/sessionStorage hydration, complex filtering/sorting derivations, and table action orchestration in one component.",
+        "`sessionsUIStore.ts` also embeds unrelated concerns (UI modal flags, title-generation async MCP workflow, storage migrations/dedupe, and role/selection state)."
+      ],
+      "suggestion": "Split into domain service hooks (`useVoiceTransport`, `useVoiceFilters`, `useClipboardImageAttachment`) and keep page components declarative; move parsing and persistence helpers into dedicated utility modules plus store slices for domain-specific state.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice-upload-route-contains-orthogonal-layers",
+      "summary": "Voice upload route mixes validation, DB query shaping, dedupe semantics, queueing, and socket emission in one endpoint implementation, and uses no-op runtime wrappers that blur abstraction intent.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` includes request validation/mapping, session/message DB queries, duplicate/no-op access helpers (`runtimeSessionQuery`, `runtimeMessageQuery`), persistence, worker enqueue, socket events, and response shaping in the same module.",
+        "No-op query helpers suggest abstraction debt and make it difficult to reason about contract boundaries between request-layer helpers and data-layer access.",
+        "Multiple upload outcomes depend on side-effect sequencing inside the route file rather than a dedicated service orchestrator."
+      ],
+      "suggestion": "Refactor route into request/validation layer + a `voicebotUploadService` orchestrator + repository/query layer; make query wrappers explicit (non-no-op), and centralize response/error envelope handling for consistent `request_id` + error payload shape.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "fat-components-join-domain-calculation-with-rendering",
+      "summary": "Major feature components combine data shaping, business rules, persistence state, and render logic, leading to low cohesion and hard-to-test logic.",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/crm/CRMKanban.tsx",
+        "app/src/components/BonusesGrid.tsx"
+      ],
+      "evidence": [
+        "`PlanFactGrid.tsx` performs normalization/parsing (`toNumber`, month normalization), aggregation, pinning persistence, totals computation, column generation, and table rendering in one file.",
+        "`CRMKanban.tsx` handles multiple domain concerns (project/perfomer normalization, status transitions, modal/edit orchestration, inline actions, and filtering) directly in the component file.",
+        "`BonusesGrid.tsx` is another grid component likely following similar inline normalization + render coupling, reinforcing a broader pattern."
+      ],
+      "suggestion": "Introduce composable hooks/services: `useNormalizedPlanFactRows`, `useSummaryComputation`, `useKanbanBoardState`, with pure, testable functions outside JSX so UI components stay declarative and easier to maintain.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "close_session_contract_divergence",
+      "summary": "Legacy upload close endpoint mutates session completion differently from canonical session_done flow.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessions.ts",
+        "backend/src/services/voicebotSessionDoneFlow.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` defines `POST /close_session` that directly `updateOne` on sessions (`is_active:false`, `to_finalize:true`, `done_count++`) without reuse of `completeSessionDoneFlow`.",
+        "`sessions.ts` exposes canonical `POST /session_done` that performs permission + access checks, passes through `completeSessionDoneFlow`, emits `session_status`/`session_update` and structured errors.",
+        "Session router also registers `registerPostAlias('/close_session', '/session_done')`, indicating `/close_session` is intended as compatibility-only."
+      ],
+      "suggestion": "Delete or hard-disable the direct mutation path in `uploads.ts` and route all session completion through `sessions.ts` `/session_done` (or a shared close-session service) so error payloads, socket events, and completion semantics are identical regardless of caller. Add one regression test hitting both legacy and canonical paths to assert aliasing behavior.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "close_flow_compatibility_divergence"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "runtime_filter_boundary_fragmentation",
+      "summary": "Runtime-tag filtering is still repeated in core worker/service query paths, fragmenting isolation semantics.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts"
+      ],
+      "evidence": [
+        "Each file defines local `runtimeSessionQuery`/`runtimeMessageQuery` wrappers built on `mergeWithRuntimeFilter` with `field: 'runtime_tag'` and `includeLegacyInProd: IS_PROD_RUNTIME`.",
+        "The same filter mechanism exists across multiple modules instead of one shared boundary, creating inconsistent operational behavior during migration.",
+        "This contradicts the contract that runtime_tag should not be the runtime truth source."
+      ],
+      "suggestion": "Introduce one canonical query strategy for voicebot session/message access that is runtime-isolation-safe for this deployment model, then remove `runtime_tag` inclusion from active runtime path filters across these modules. Keep any runtime_tag usage in compatibility/reporting-only utilities with explicit comments and test coverage.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_boundary_debt"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_runtime_tag_persistence_in_workers",
+      "summary": "Migration to runtime-agnostic session access is incomplete across active workers.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+        "backend/src/services/voicebot/voicebotWebmDedup.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+      ],
+      "evidence": [
+        "Multiple active worker modules still import and apply `mergeWithRuntimeFilter`, including legacy fallback via `includeLegacyInProd: IS_PROD_RUNTIME`.",
+        "No central migration gate in these paths indicates old `runtime_tag` logic is still controlling operational reads/writes where fail-fast tag-agnostic routing is expected."
+      ],
+      "suggestion": "Create a migration pass plan and remove active-worker dependency on `runtime_tag` filters; add an integration test that asserts workers process rows across environments based on true environment isolation (DB/runtime config), not `runtime_tag` family match.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_boundary_debt"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "notification_command_state_not_honored",
+      "summary": "Agent command UI toggle state is not enforced during command execution.",
+      "related_files": [
+        "app/src/components/NotificationsDrawer.tsx",
+        "app/src/store/notificationStore.ts"
+      ],
+      "evidence": [
+        "`NotificationsDrawer` keeps a local `commands` array and disables button when `command.enabled` is false, but `runAgentCommand` in store accepts only `commandId` and executes independently of that state.",
+        "There is no shared command registry or persistence for enabled/disabled flags across store and component, so toggle state can become dead/untrusted UI control."
+      ],
+      "suggestion": "Move command definitions and enabled state into the notification store (or a dedicated command config slice), expose `runAgentCommand({ commandId, enabledOnly })`, and ensure disabled commands short-circuit in the store layer before any item mutation.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    }
+  ],
+  "review_quality": {
+    "batch_count": 2,
+    "dimension_coverage": 0.5,
+    "evidence_density": 3.5,
+    "high_score_missing_issue_note": 0,
+    "finding_pressure": 20.66,
+    "dimensions_with_findings": 5
+  },
+  "review_scope": {
+    "reviewed_files_count": 80,
+    "successful_batch_count": 2,
+    "full_sweep_included": false,
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ]
+  },
+  "reviewed_files": [
+    "app/e2e/voice-fab-lifecycle.spec.ts",
+    "app/src/components/NotificationsDrawer.tsx",
+    "app/src/components/PlanFactGrid.tsx",
+    "app/src/components/crm/CRMKanban.tsx",
+    "app/src/components/crm/projects/EditProject.tsx",
+    "app/src/components/voice/AudioUploader.tsx",
+    "app/src/components/voice/Categorization.tsx",
+    "app/src/components/voice/MeetingCard.tsx",
+    "app/src/components/voice/PossibleTasks.tsx",
+    "app/src/components/voice/SessionLog.tsx",
+    "app/src/components/voice/TranscriptionTableRow.tsx",
+    "app/src/pages/AnalyticsPage.tsx",
+    "app/src/pages/PlanFactPage.tsx",
+    "app/src/pages/operops/CRMPage.tsx",
+    "app/src/pages/operops/FinancesPerformersPage.tsx",
+    "app/src/pages/operops/ProjectsTree.tsx",
+    "app/src/pages/voice/SessionPage.tsx",
+    "app/src/pages/voice/SessionsListPage.tsx",
+    "app/src/services/guideDirectoryConfig.tsx",
+    "app/src/store/permissionsStore.ts",
+    "app/src/store/projectsStore.ts",
+    "app/src/store/sessionsUIStore.ts",
+    "backend/scripts/voicebot-close-inactive-sessions.ts",
+    "backend/src/api/routes/voicebot/messageHelpers.ts",
+    "backend/src/api/routes/voicebot/permissions.ts",
+    "backend/src/api/routes/voicebot/uploads.ts",
+    "backend/src/miniapp/routes/index.ts",
+    "backend/src/services/voicebot/voicebotWebmDedup.ts",
+    "backend/src/voicebot_tgbot/ingressHandlers.ts",
+    "backend/src/workers/voicebot/handlers/processingLoop.ts",
+    "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+    "miniapp/src/components/ASTrackTime.tsx",
+    "app/src/components/BonusesGrid.tsx",
+    "app/src/components/crm/CRMCreateEpic.tsx",
+    "app/src/components/crm/CRMCreateTicket.tsx",
+    "app/src/components/crm/WorkHoursSidebar.tsx",
+    "app/src/components/crm/finances/PaymentForm.tsx",
+    "app/src/components/crm/projects/EditCustomer.tsx",
+    "app/src/components/voice/AccessUsersModal.tsx",
+    "app/src/components/voice/AddParticipantModal.tsx",
+    "app/src/components/voice/CategorizationStatusColumn.tsx",
+    "app/src/constants/crm.ts",
+    "app/src/pages/DirectoriesPage.tsx",
+    "app/src/pages/directories/AgentsPage.tsx",
+    "app/src/pages/directories/EmployeesSalariesPage.tsx",
+    "app/src/pages/operops/taskPageUtils.ts",
+    "app/src/services/types.ts",
+    "app/src/utils/voiceTimeline.ts",
+    "backend/scripts/backfill-work-hours-ticket-db-id.ts",
+    "backend/scripts/runtime-tag-backfill.ts",
+    "backend/scripts/summarize-mcp-watchdog.ts",
+    "backend/src/api/middleware/roleGuard.ts",
+    "backend/src/api/routes/crm/customers.ts",
+    "backend/src/api/routes/crm/legacy/botcommands.ts",
+    "backend/src/api/routes/crm/legacy/performerspayments.ts",
+    "backend/src/api/routes/crm/legacy/projectgroups.ts",
+    "backend/src/api/routes/crm/legacy/projecttree.ts",
+    "backend/src/api/routes/crm/uploads.ts",
+    "backend/src/api/routes/finops/employees.ts",
+    "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+    "backend/src/services/bdClient.ts",
+    "backend/src/services/finopsFxRates.ts",
+    "backend/src/services/google/sheets.ts",
+    "backend/src/services/reports/jiraStyleReport.ts",
+    "backend/src/services/voicebot/voicebotDoneNotify.ts",
+    "backend/src/voicebot_tgbot/activeSessionMapping.ts",
+    "backend/src/voicebot_tgbot/codexReviewCallbacks.ts",
+    "backend/src/workers/voicebot/handlers/allCustomPrompts.ts",
+    "backend/src/workers/voicebot/handlers/categorizeHandler.ts",
+    "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts",
+    "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+    "backend/src/workers/voicebot/handlers/customPrompt.ts",
+    "backend/src/workers/voicebot/handlers/finalizationHandler.ts",
+    "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts",
+    "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+    "miniapp/src/components/ASChangeStatus.tsx",
+    "miniapp/src/components/OneTicket.tsx",
+    "app/src/components/ExpensesGrid.tsx",
+    "app/src/components/codex/CodexIssueDetailsCard.tsx",
+    "app/src/pages/directories/ClientsProjectsRatesPage.tsx"
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "codex",
+    "run_stamp": "20260304_083647",
+    "created_at": "2026-03-04T08:40:23+00:00",
+    "batch_count": 2,
+    "batch_indexes": [
+      1,
+      2
+    ],
+    "packet_path": "/home/strato-space/copilot/.desloppify/review_packet_blind.json",
+    "packet_sha256": "9810bb15be88b854fa4dc10b0261808a10f9fe20af53dde8daa1cf957754c11e"
+  },
+  "assessment_coverage": {
+    "scored_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "selected_dimensions": [
+      "cross_module_architecture",
+      "convention_outlier",
+      "error_consistency",
+      "abstraction_fitness",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "ai_generated_debt",
+      "incomplete_migration",
+      "package_organization",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "design_coherence"
+    ],
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ],
+    "missing_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "initialization_coupling",
+      "dependency_health",
+      "test_strategy"
+    ]
+  }
+}

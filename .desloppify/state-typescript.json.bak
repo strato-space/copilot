@@ -1,45 +1,31 @@
 {
   "version": 1,
   "created": "2026-02-28T08:24:41+00:00",
-  "last_scan": "2026-02-28T15:44:42+00:00",
-  "scan_count": 30,
-  "overall_score": 64.0,
-  "objective_score": 58.1,
-  "strict_score": 64.0,
-  "verified_strict_score": 58.1,
+  "last_scan": "2026-03-04T08:40:28+00:00",
+  "scan_count": 32,
+  "overall_score": 61.7,
+  "objective_score": 33.4,
+  "strict_score": 61.7,
+  "verified_strict_score": 33.4,
   "stats": {
-    "total": 170,
-    "open": 78,
+    "total": 68,
+    "open": 8,
     "fixed": 0,
-    "auto_resolved": 92,
+    "auto_resolved": 60,
     "wontfix": 0,
     "false_positive": 0,
     "by_tier": {
-      "1": {
-        "open": 0,
-        "fixed": 0,
-        "auto_resolved": 1,
-        "wontfix": 0,
-        "false_positive": 0
-      },
-      "2": {
-        "open": 1,
-        "fixed": 0,
-        "auto_resolved": 5,
-        "wontfix": 0,
-        "false_positive": 0
-      },
       "3": {
-        "open": 76,
+        "open": 8,
         "fixed": 0,
-        "auto_resolved": 62,
+        "auto_resolved": 57,
         "wontfix": 0,
         "false_positive": 0
       },
       "4": {
-        "open": 1,
+        "open": 0,
         "fixed": 0,
-        "auto_resolved": 24,
+        "auto_resolved": 3,
         "wontfix": 0,
         "false_positive": 0
       }
@@ -5288,17 +5274,23 @@
         "importer_count": 4,
         "loc_weight": 20.73644135332772
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "Disappeared from scan \u2014 likely fixed",
       "first_seen": "2026-02-28T08:24:54+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:28+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "scan_verified",
+        "text": "Disappeared from detector output",
+        "attested_at": "2026-03-04T08:40:28+00:00",
+        "scan_verified": true
+      }
     },
     "test_coverage::app/src/components/crm/CRMKanban.tsx::untested_module": {
       "id": "test_coverage::app/src/components/crm/CRMKanban.tsx::untested_module",
@@ -19889,17 +19881,23 @@
         "reason": "unreviewed",
         "loc": 430
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "Disappeared from scan \u2014 likely fixed",
       "first_seen": "2026-02-28T08:25:00+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:28+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "scan_verified",
+        "text": "Disappeared from detector output",
+        "attested_at": "2026-03-04T08:40:28+00:00",
+        "scan_verified": true
+      }
     },
     "subjective_review::backend/src/permissions/permission-manager.ts::unreviewed": {
       "id": "subjective_review::backend/src/permissions/permission-manager.ts::unreviewed",
@@ -44203,11 +44201,11 @@
         "suggestion": "Staged reorg plan: (1) create target folders `app/src/types/crm/`, `app/src/types/voice/`, `app/src/types/finops/`, `app/src/types/integrations/figma/`; (2) move CRM-only contracts from `crm.ts` into `types/crm/entities.ts` first; (3) move finance/reporting contracts into `types/finops/*.ts`; (4) move Figma and bot-command contracts into integration-specific modules; (5) keep temporary barrel exports in `crm.ts` during transition, then remove; (6) update imports via `rg \"from ['\\\"]@?/?.*types/crm\" -n app/src` and targeted replacement; (7) validate with `cd app && npm run build` and `cd app && npm run test:serial`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44235,11 +44233,11 @@
         "suggestion": "Staged reorg plan: (1) define boundary rule: `types/voice/*` keeps session/message/transcription/socket contracts only; (2) move `CodexTask` and `TicketsModalData` to `app/src/types/crm/tasks.ts` (or `operops/tasks.ts`) and `VoiceBotProject` to shared project contract module; (3) leave deprecated re-exports in `voice.ts` for one migration cycle; (4) migrate imports using `rg \"CodexTask|TicketsModalData|VoiceBotProject\" -n app/src`; (5) remove re-exports after all callsites are migrated; (6) validate with `cd app && npm run build`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44267,11 +44265,11 @@
         "suggestion": "Staged reorg plan: (1) establish explicit top-level contract map (`crm`, `voice`, `finops`, `integrations`) and document in `app/src/types/README.md`; (2) split each current file into capability modules with one authoritative owner per contract family; (3) add index barrels per domain only; (4) enforce import boundaries with ESLint `no-restricted-imports` rules between domain folders; (5) run import updates and validation: `cd app && npm run build && npm run test:serial`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44301,11 +44299,11 @@
         "suggestion": "Split each page into a container + feature hooks + presentational table modules. Extract URL/localStorage filter synchronization into a reusable hook, and isolate action handlers (delete/merge/send/restart) from column rendering.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44335,11 +44333,11 @@
         "suggestion": "Introduce a shared `codexTaskFactory`/`codexTaskOrchestrator` module used by both ingress and transcribe handlers. Keep source-specific parsing separate, but centralize project resolution, performer resolution, document shape, and dedup checks.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44370,11 +44368,11 @@
         "suggestion": "Extract shared month-pinning state + month-column builder into reusable hooks/utilities (e.g., `usePinnedMonths`, `buildPinnedMonthColumns`) and keep only domain-specific cell renderers per grid.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44405,11 +44403,11 @@
         "suggestion": "Decompose into focused route handlers (`audioUpload`, `attachmentUpload`, `publicAttachment`) and shared services (`extensionPolicy`, `attachmentFetch`, `uploadRealtimePublisher`, `sessionAccessGuard`). Ensure one canonical extension-resolution utility is reused by API and workers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44439,11 +44437,11 @@
         "suggestion": "Split into: `directoryRegistry.ts` (pure metadata), `directoryViewModels.ts` (data joins/shape), and per-directory UI column builders in page/component layer. Keep `services/` free of JSX rendering concerns.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44475,11 +44473,11 @@
         "suggestion": "Define one canonical transcription contract (segments + metadata), add a backend read-repair/write-repair migration step, and remove legacy chunk branching from UI components after backfill completion.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44508,11 +44506,11 @@
         "suggestion": "Make `session_done` the sole mutation path, keep aliases as thin delegating adapters only, and centralize close-side effects/logging in one shared close service.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44543,11 +44541,11 @@
         "suggestion": "Adopt a shared error normalization helper for UI/test layers that preserves error code/context, and forbid empty catch/fallback masks in e2e except explicitly documented retries.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44577,11 +44575,11 @@
         "suggestion": "Standardize auth at router boundary (either mandatory parent middleware plus explicit module contract, or explicit per-route guards), and convert malformed auth identifiers to deterministic 401/403 responses before DB access.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44612,11 +44610,11 @@
         "suggestion": "Introduce zod-backed boundary schemas for message/task payloads and generate typed normalized DTOs consumed by UI, replacing local cast-based parsers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44646,11 +44644,11 @@
         "suggestion": "Split seam modules by responsibility: route handler orchestration only, dedicated service layer for session lifecycle/file retrieval, and shared frontend normalizers outside render components.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44679,11 +44677,11 @@
         "suggestion": "Introduce explicit raw API DTO types (snake_case) and mapped app-domain types (camelCase), then enforce naming by layer via lint/type aliases. Rename `VoicebotPerson` to `VoiceBotPerson` and provide a compatibility alias during migration.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44712,11 +44710,11 @@
         "suggestion": "Define discriminated unions for known payload variants (`source_kind`, attachment kind/type, processor payload types) and replace broad unknown fields with versioned typed envelopes plus explicit `extra?: Record<string, unknown>` escape hatches only where required.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44745,11 +44743,11 @@
         "suggestion": "Standardize on canonical primitives (`IsoDateString` and `EntityId`) with explicit legacy adapters. Keep legacy fields in `Legacy*` DTOs only, and convert once at API boundary.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44778,11 +44776,11 @@
         "suggestion": "Run a staged migration: (1) add normalized domain types and mapping functions, (2) switch consumers to normalized types, (3) deprecate dual identifiers behind compatibility adapters, (4) remove legacy fields after usage audit and contract test pass.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44811,11 +44809,11 @@
         "suggestion": "Staged reorg plan: 1) create `app/src/types/crm/{entities.ts,tree.ts,figma.ts,finance.ts,reports.ts,bot.ts}` and `app/src/types/voice/{api.ts,events.ts,view-models.ts}`; 2) move type blocks without semantic changes; 3) add temporary barrel exports in old paths; 4) update imports with `rg \"from ['\\\"]@?/?.*types/(crm|voice)\" -n app/src` + codemod; 5) validate with `cd app && npm run build` and `cd app && npm run test` before removing compatibility barrels.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44843,11 +44841,11 @@
         "suggestion": "Define ownership by capability and layer: domain entities, transport DTOs, and UI projections in separate modules with explicit import direction (`ui -> domain <- transport`). Enforce via lint rule banning UI modules from importing transport DTO files directly.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44875,11 +44873,11 @@
         "suggestion": "Introduce one-way normalization boundaries per subsystem: raw DTOs -> mappers -> strict domain models -> view models. Add contract tests for mapper completeness and prohibit direct raw DTO usage in UI rendering code.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-02-28T15:44:32+00:00",
       "last_seen": "2026-02-28T15:44:32+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -44898,14 +44896,290 @@
         "old_files": 2,
         "new_files": 20
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by holistic review import",
       "first_seen": "2026-02-28T15:44:39+00:00",
       "last_seen": "2026-02-28T15:44:39+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T08:40:23+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Holistic review refreshed; coverage marker superseded",
+        "attested_at": "2026-03-04T08:40:23+00:00",
+        "scan_verified": false
+      }
+    },
+    "review::.::holistic::design_coherence::dup-worker-socket-update-abstractions::d7de319c": {
+      "id": "review::.::holistic::design_coherence::dup-worker-socket-update-abstractions::d7de319c",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Voice worker handlers duplicate message-update/event-emission plumbing instead of sharing a single orchestration utility.",
+      "detail": {
+        "holistic": true,
+        "dimension": "design_coherence",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+          "backend/src/workers/voicebot/handlers/categorizeHandler.ts",
+          "backend/src/workers/voicebot/handlers/processingLoop.ts"
+        ],
+        "evidence": [
+          "`transcribeHandler.ts` defines `queueMessageUpdateEvent` and `emitMessageUpdateById` utilities, and `categorizeHandler.ts` defines its own helpers with similar responsibilities and same event contract shape.",
+          "`processingLoop.ts` relies on those event/update paths externally, so divergence in any helper implementation creates inconsistent `message_update` emission behavior across processors."
+        ],
+        "suggestion": "Extract a shared `voicebotWorkerRealtime.ts` (or equivalent) with a single `emitSessionMessageUpdate` and `queueSessionUpdateEvent` API, then call it from all handlers to ensure uniform event semantics and reduce drift.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::design_coherence::voice-page-overload-mixed-concerns::b88e4808": {
+      "id": "review::.::holistic::design_coherence::voice-page-overload-mixed-concerns::b88e4808",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "`SessionPage` and `SessionsListPage` mix transport/state orchestration and business parsing with view rendering, hurting readability and reuse.",
+      "detail": {
+        "holistic": true,
+        "dimension": "design_coherence",
+        "related_files": [
+          "app/src/pages/voice/SessionPage.tsx",
+          "app/src/pages/voice/SessionsListPage.tsx",
+          "app/src/store/sessionsUIStore.ts"
+        ],
+        "evidence": [
+          "`SessionPage.tsx` includes paste/drop image ingestion, FileReader/canvas resizing/conversion, regex parsing (`parseTimeFromMessage`, `parseMetadataFromText`-style helpers), and socket lifecycle setup inside the page component.",
+          "`SessionsListPage.tsx` contains URL/search param parsing, localStorage/sessionStorage hydration, complex filtering/sorting derivations, and table action orchestration in one component.",
+          "`sessionsUIStore.ts` also embeds unrelated concerns (UI modal flags, title-generation async MCP workflow, storage migrations/dedupe, and role/selection state)."
+        ],
+        "suggestion": "Split into domain service hooks (`useVoiceTransport`, `useVoiceFilters`, `useClipboardImageAttachment`) and keep page components declarative; move parsing and persistence helpers into dedicated utility modules plus store slices for domain-specific state.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::design_coherence::voice-upload-route-contains-orthogonal-layers::f22eea95": {
+      "id": "review::.::holistic::design_coherence::voice-upload-route-contains-orthogonal-layers::f22eea95",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Voice upload route mixes validation, DB query shaping, dedupe semantics, queueing, and socket emission in one endpoint implementation, and uses no-op runtime wrappers that blur abstraction intent.",
+      "detail": {
+        "holistic": true,
+        "dimension": "design_coherence",
+        "related_files": [
+          "backend/src/api/routes/voicebot/uploads.ts",
+          "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+          "backend/src/api/routes/voicebot/messageHelpers.ts"
+        ],
+        "evidence": [
+          "`uploads.ts` includes request validation/mapping, session/message DB queries, duplicate/no-op access helpers (`runtimeSessionQuery`, `runtimeMessageQuery`), persistence, worker enqueue, socket events, and response shaping in the same module.",
+          "No-op query helpers suggest abstraction debt and make it difficult to reason about contract boundaries between request-layer helpers and data-layer access.",
+          "Multiple upload outcomes depend on side-effect sequencing inside the route file rather than a dedicated service orchestrator."
+        ],
+        "suggestion": "Refactor route into request/validation layer + a `voicebotUploadService` orchestrator + repository/query layer; make query wrappers explicit (non-no-op), and centralize response/error envelope handling for consistent `request_id` + error payload shape.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::design_coherence::fat-components-join-domain-calculation-with-rendering::1468d2f7": {
+      "id": "review::.::holistic::design_coherence::fat-components-join-domain-calculation-with-rendering::1468d2f7",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "medium",
+      "summary": "Major feature components combine data shaping, business rules, persistence state, and render logic, leading to low cohesion and hard-to-test logic.",
+      "detail": {
+        "holistic": true,
+        "dimension": "design_coherence",
+        "related_files": [
+          "app/src/components/PlanFactGrid.tsx",
+          "app/src/components/crm/CRMKanban.tsx",
+          "app/src/components/BonusesGrid.tsx"
+        ],
+        "evidence": [
+          "`PlanFactGrid.tsx` performs normalization/parsing (`toNumber`, month normalization), aggregation, pinning persistence, totals computation, column generation, and table rendering in one file.",
+          "`CRMKanban.tsx` handles multiple domain concerns (project/perfomer normalization, status transitions, modal/edit orchestration, inline actions, and filtering) directly in the component file.",
+          "`BonusesGrid.tsx` is another grid component likely following similar inline normalization + render coupling, reinforcing a broader pattern."
+        ],
+        "suggestion": "Introduce composable hooks/services: `useNormalizedPlanFactRows`, `useSummaryComputation`, `useKanbanBoardState`, with pure, testable functions outside JSX so UI components stay declarative and easier to maintain.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::api_surface_coherence::close_session_contract_divergence::b5cef7a7": {
+      "id": "review::.::holistic::api_surface_coherence::close_session_contract_divergence::b5cef7a7",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Legacy upload close endpoint mutates session completion differently from canonical session_done flow.",
+      "detail": {
+        "holistic": true,
+        "dimension": "api_surface_coherence",
+        "related_files": [
+          "backend/src/api/routes/voicebot/uploads.ts",
+          "backend/src/api/routes/voicebot/sessions.ts",
+          "backend/src/services/voicebotSessionDoneFlow.ts"
+        ],
+        "evidence": [
+          "`uploads.ts` defines `POST /close_session` that directly `updateOne` on sessions (`is_active:false`, `to_finalize:true`, `done_count++`) without reuse of `completeSessionDoneFlow`.",
+          "`sessions.ts` exposes canonical `POST /session_done` that performs permission + access checks, passes through `completeSessionDoneFlow`, emits `session_status`/`session_update` and structured errors.",
+          "Session router also registers `registerPostAlias('/close_session', '/session_done')`, indicating `/close_session` is intended as compatibility-only."
+        ],
+        "suggestion": "Delete or hard-disable the direct mutation path in `uploads.ts` and route all session completion through `sessions.ts` `/session_done` (or a shared close-session service) so error payloads, socket events, and completion semantics are identical regardless of caller. Add one regression test hitting both legacy and canonical paths to assert aliasing behavior.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::cross_module_architecture::runtime_filter_boundary_fragmentation::bd2d22de": {
+      "id": "review::.::holistic::cross_module_architecture::runtime_filter_boundary_fragmentation::bd2d22de",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Runtime-tag filtering is still repeated in core worker/service query paths, fragmenting isolation semantics.",
+      "detail": {
+        "holistic": true,
+        "dimension": "cross_module_architecture",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/processingLoop.ts",
+          "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+          "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+          "backend/src/services/voicebot/voicebotWebmDedup.ts"
+        ],
+        "evidence": [
+          "Each file defines local `runtimeSessionQuery`/`runtimeMessageQuery` wrappers built on `mergeWithRuntimeFilter` with `field: 'runtime_tag'` and `includeLegacyInProd: IS_PROD_RUNTIME`.",
+          "The same filter mechanism exists across multiple modules instead of one shared boundary, creating inconsistent operational behavior during migration.",
+          "This contradicts the contract that runtime_tag should not be the runtime truth source."
+        ],
+        "suggestion": "Introduce one canonical query strategy for voicebot session/message access that is runtime-isolation-safe for this deployment model, then remove `runtime_tag` inclusion from active runtime path filters across these modules. Keep any runtime_tag usage in compatibility/reporting-only utilities with explicit comments and test coverage.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::incomplete_migration::legacy_runtime_tag_persistence_in_workers::2c51e1a1": {
+      "id": "review::.::holistic::incomplete_migration::legacy_runtime_tag_persistence_in_workers::2c51e1a1",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Migration to runtime-agnostic session access is incomplete across active workers.",
+      "detail": {
+        "holistic": true,
+        "dimension": "incomplete_migration",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/processingLoop.ts",
+          "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts",
+          "backend/src/services/voicebot/voicebotWebmDedup.ts",
+          "backend/src/workers/voicebot/handlers/transcribeHandler.ts"
+        ],
+        "evidence": [
+          "Multiple active worker modules still import and apply `mergeWithRuntimeFilter`, including legacy fallback via `includeLegacyInProd: IS_PROD_RUNTIME`.",
+          "No central migration gate in these paths indicates old `runtime_tag` logic is still controlling operational reads/writes where fail-fast tag-agnostic routing is expected."
+        ],
+        "suggestion": "Create a migration pass plan and remove active-worker dependency on `runtime_tag` filters; add an integration test that asserts workers process rows across environments based on true environment isolation (DB/runtime config), not `runtime_tag` family match.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::mid_level_elegance::notification_command_state_not_honored::ff270acc": {
+      "id": "review::.::holistic::mid_level_elegance::notification_command_state_not_honored::ff270acc",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "medium",
+      "summary": "Agent command UI toggle state is not enforced during command execution.",
+      "detail": {
+        "holistic": true,
+        "dimension": "mid_level_elegance",
+        "related_files": [
+          "app/src/components/NotificationsDrawer.tsx",
+          "app/src/store/notificationStore.ts"
+        ],
+        "evidence": [
+          "`NotificationsDrawer` keeps a local `commands` array and disables button when `command.enabled` is false, but `runAgentCommand` in store accepts only `commandId` and executes independently of that state.",
+          "There is no shared command registry or persistence for enabled/disabled flags across store and component, so toggle state can become dead/untrusted UI control."
+        ],
+        "suggestion": "Move command definitions and enabled state into the notification store (or a dedicated command config slice), expose `runAgentCommand({ commandId, enabledOnly })`, and ensure disabled commands short-circuit in the store layer before any item mutation.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T08:40:23+00:00",
+      "last_seen": "2026-03-04T08:40:23+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
       "suppressed": false,
       "suppressed_at": null,
       "suppression_pattern": null
@@ -44928,7 +45202,7 @@
         }
       },
       "warnings": [],
-      "updated_at": "2026-02-28T15:44:42+00:00"
+      "updated_at": "2026-03-04T08:40:28+00:00"
     }
   },
   "score_confidence": {
@@ -44946,79 +45220,79 @@
   },
   "subjective_assessments": {
     "abstraction_fitness": {
-      "score": 60.7,
+      "score": 89.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00",
+      "assessed_at": "2026-03-04T08:40:23+00:00",
       "components": [
         "Abstraction Leverage",
         "Indirection Cost",
         "Interface Honesty"
       ],
       "component_scores": {
-        "Abstraction Leverage": 70.4,
-        "Indirection Cost": 80.7,
-        "Interface Honesty": 66.3
+        "Abstraction Leverage": 87.5,
+        "Indirection Cost": 86.0,
+        "Interface Honesty": 88.0
       }
     },
     "ai_generated_debt": {
-      "score": 89.4,
+      "score": 92.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "api_surface_coherence": {
-      "score": 58.4,
+      "score": 77.5,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "authorization_consistency": {
-      "score": 75.7,
+      "score": 89.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "convention_outlier": {
-      "score": 75.9,
+      "score": 90.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "cross_module_architecture": {
-      "score": 87.3,
+      "score": 74.8,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "design_coherence": {
-      "score": 49.4,
+      "score": 38.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "error_consistency": {
-      "score": 76.4,
+      "score": 90.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "high_level_elegance": {
-      "score": 61.0,
+      "score": 88.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "incomplete_migration": {
-      "score": 54.1,
+      "score": 74.8,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "low_level_elegance": {
-      "score": 87.4,
+      "score": 90.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "mid_level_elegance": {
-      "score": 76.0,
+      "score": 80.3,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     },
     "package_organization": {
-      "score": 52.9,
+      "score": 90.0,
       "source": "holistic",
-      "assessed_at": "2026-02-28T15:44:32+00:00"
+      "assessed_at": "2026-03-04T08:40:23+00:00"
     }
   },
   "lang_capabilities": {
@@ -45034,212 +45308,8 @@
       "typecheck_cmd": "npx tsc --noEmit"
     }
   },
-  "zone_distribution": {
-    "production": 20
-  },
+  "zone_distribution": {},
   "scan_history": [
-    {
-      "timestamp": "2026-02-28T11:31:03+00:00",
-      "lang": "typescript",
-      "strict_score": 33.1,
-      "verified_strict_score": 82.6,
-      "objective_score": 82.6,
-      "overall_score": 33.1,
-      "open": 806,
-      "diff_new": 4,
-      "diff_resolved": 41,
-      "ignored": 0,
-      "raw_findings": 806,
-      "suppressed_pct": 0.0,
-      "ignore_patterns": 0,
-      "subjective_integrity": {
-        "status": "pass",
-        "matched_count": 0,
-        "reset_count": 0,
-        "target_score": 95.0
-      },
-      "score_confidence": {
-        "status": "full",
-        "confidence": 1.0,
-        "detector_count": 0,
-        "dimension_count": 0
-      },
-      "dimension_scores": {
-        "File health": {
-          "score": 91.5,
-          "strict": 91.5
-        },
-        "Code quality": {
-          "score": 95.1,
-          "strict": 95.1
-        },
-        "Duplication": {
-          "score": 93.2,
-          "strict": 93.2
-        },
-        "Test health": {
-          "score": 25.5,
-          "strict": 25.5
-        },
-        "Security": {
-          "score": 99.1,
-          "strict": 99.1
-        },
-        "Error consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Abstraction fit": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "AI generated debt": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "High elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Mid elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Low elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Cross-module arch": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Convention drift": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "API coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Auth consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Stale migration": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Structure nav": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Design coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        }
-      }
-    },
-    {
-      "timestamp": "2026-02-28T11:35:15+00:00",
-      "lang": "typescript",
-      "strict_score": 33.0,
-      "verified_strict_score": 82.6,
-      "objective_score": 82.6,
-      "overall_score": 33.0,
-      "open": 806,
-      "diff_new": 0,
-      "diff_resolved": 1,
-      "ignored": 0,
-      "raw_findings": 806,
-      "suppressed_pct": 0.0,
-      "ignore_patterns": 0,
-      "subjective_integrity": {
-        "status": "pass",
-        "matched_count": 0,
-        "reset_count": 0,
-        "target_score": 95.0
-      },
-      "score_confidence": {
-        "status": "full",
-        "confidence": 1.0,
-        "detector_count": 0,
-        "dimension_count": 0
-      },
-      "dimension_scores": {
-        "File health": {
-          "score": 91.5,
-          "strict": 91.5
-        },
-        "Code quality": {
-          "score": 95.1,
-          "strict": 95.1
-        },
-        "Duplication": {
-          "score": 93.1,
-          "strict": 93.1
-        },
-        "Test health": {
-          "score": 25.2,
-          "strict": 25.2
-        },
-        "Security": {
-          "score": 99.1,
-          "strict": 99.1
-        },
-        "Error consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Abstraction fit": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "AI generated debt": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "High elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Mid elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Low elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Cross-module arch": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Convention drift": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "API coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Auth consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Stale migration": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Structure nav": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Design coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        }
-      }
-    },
     {
       "timestamp": "2026-02-28T11:39:22+00:00",
       "lang": "typescript",
@@ -47057,70 +47127,568 @@
           "strict": 49.4
         }
       }
+    },
+    {
+      "timestamp": "2026-03-04T08:40:23+00:00",
+      "lang": "typescript",
+      "strict_score": 61.7,
+      "verified_strict_score": 33.4,
+      "objective_score": 33.4,
+      "overall_score": 61.7,
+      "open": 749,
+      "diff_new": 8,
+      "diff_resolved": 0,
+      "ignored": 0,
+      "raw_findings": 8,
+      "suppressed_pct": 0.0,
+      "ignore_patterns": 0,
+      "subjective_integrity": {
+        "status": "disabled",
+        "matched_count": 0,
+        "reset_count": 0,
+        "target_score": null
+      },
+      "score_confidence": {
+        "status": "full",
+        "confidence": 1.0,
+        "detector_count": 0,
+        "dimension_count": 0
+      },
+      "dimension_scores": {
+        "File health": {
+          "score": 0.0,
+          "strict": 0.0
+        },
+        "Code quality": {
+          "score": 44.6,
+          "strict": 44.6
+        },
+        "Duplication": {
+          "score": 96.0,
+          "strict": 96.0
+        },
+        "Test health": {
+          "score": 0.0,
+          "strict": 0.0
+        },
+        "Security": {
+          "score": 90.7,
+          "strict": 90.7
+        },
+        "Error consistency": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "Abstraction fit": {
+          "score": 89.0,
+          "strict": 89.0
+        },
+        "AI generated debt": {
+          "score": 92.0,
+          "strict": 92.0
+        },
+        "High elegance": {
+          "score": 88.0,
+          "strict": 88.0
+        },
+        "Mid elegance": {
+          "score": 80.3,
+          "strict": 80.3
+        },
+        "Low elegance": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "Cross-module arch": {
+          "score": 74.8,
+          "strict": 74.8
+        },
+        "Convention drift": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "API coherence": {
+          "score": 77.5,
+          "strict": 77.5
+        },
+        "Auth consistency": {
+          "score": 89.0,
+          "strict": 89.0
+        },
+        "Stale migration": {
+          "score": 74.8,
+          "strict": 74.8
+        },
+        "Structure nav": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "Design coherence": {
+          "score": 38.0,
+          "strict": 38.0
+        }
+      }
+    },
+    {
+      "timestamp": "2026-03-04T08:40:28+00:00",
+      "lang": "typescript",
+      "strict_score": 61.7,
+      "verified_strict_score": 33.4,
+      "objective_score": 33.4,
+      "overall_score": 61.7,
+      "open": 8,
+      "diff_new": 0,
+      "diff_resolved": 2,
+      "ignored": 0,
+      "raw_findings": 0,
+      "suppressed_pct": 0.0,
+      "ignore_patterns": 0,
+      "subjective_integrity": {
+        "status": "pass",
+        "matched_count": 0,
+        "reset_count": 0,
+        "target_score": 95.0
+      },
+      "score_confidence": {
+        "status": "full",
+        "confidence": 1.0,
+        "detector_count": 0,
+        "dimension_count": 0
+      },
+      "dimension_scores": {
+        "Error consistency": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "Abstraction fit": {
+          "score": 89.0,
+          "strict": 89.0
+        },
+        "AI generated debt": {
+          "score": 92.0,
+          "strict": 92.0
+        },
+        "High elegance": {
+          "score": 88.0,
+          "strict": 88.0
+        },
+        "Mid elegance": {
+          "score": 80.3,
+          "strict": 80.3
+        },
+        "Low elegance": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "Cross-module arch": {
+          "score": 74.8,
+          "strict": 74.8
+        },
+        "Convention drift": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "API coherence": {
+          "score": 77.5,
+          "strict": 77.5
+        },
+        "Auth consistency": {
+          "score": 89.0,
+          "strict": 89.0
+        },
+        "Stale migration": {
+          "score": 74.8,
+          "strict": 74.8
+        },
+        "Structure nav": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "Design coherence": {
+          "score": 38.0,
+          "strict": 38.0
+        },
+        "File health": {
+          "score": 0.0,
+          "strict": 0.0
+        },
+        "Code quality": {
+          "score": 44.6,
+          "strict": 44.6
+        },
+        "Duplication": {
+          "score": 96.0,
+          "strict": 96.0
+        },
+        "Test health": {
+          "score": 0.0,
+          "strict": 0.0
+        },
+        "Security": {
+          "score": 90.7,
+          "strict": 90.7
+        }
+      }
     }
   ],
   "tool_hash": "e073c6da67fa",
-  "scan_path": "app/src/store",
+  "scan_path": "backend/src/api/socket/voicebot.ts",
   "scan_completeness": {
     "typescript": "full"
   },
   "potentials": {
     "typescript": {
-      "logs": 20,
-      "unused": 20,
+      "logs": 0,
+      "unused": 0,
       "exports": 0,
       "deprecated": 0,
-      "structural": 20,
-      "flat_dirs": 1,
-      "props": 14,
-      "single_use": 14,
+      "structural": 0,
+      "flat_dirs": 0,
+      "props": 0,
+      "single_use": 0,
       "coupling": 0,
-      "cycles": 34,
-      "orphaned": 34,
-      "patterns": 1,
-      "naming": 1,
-      "facade": 34,
-      "test_coverage": 298,
-      "smells": 20,
+      "cycles": 0,
+      "orphaned": 0,
+      "patterns": 0,
+      "naming": 0,
+      "facade": 0,
+      "test_coverage": 0,
+      "smells": 0,
       "react": 0,
-      "security": 20,
-      "subjective_review": 19,
+      "security": 0,
+      "subjective_review": 0,
       "boilerplate_duplication": 0,
-      "dupes": 50,
+      "dupes": 0,
       "stale_wontfix": 0
     }
   },
   "codebase_metrics": {
     "typescript": {
-      "total_files": 20,
-      "total_loc": 6336,
-      "total_directories": 1
+      "total_files": 0,
+      "total_loc": 0,
+      "total_directories": 0
     }
   },
   "dimension_scores": {
+    "Error consistency": {
+      "score": 90.0,
+      "strict_score": 90.0,
+      "verified_strict_score": 90.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.9,
+          "issues": 0,
+          "weighted_failures": 1.0,
+          "assessment_score": 90.0,
+          "placeholder": false,
+          "dimension_key": "error_consistency",
+          "configured_weight": 3.0,
+          "components": []
+        }
+      },
+      "strict": 90.0
+    },
+    "Abstraction fit": {
+      "score": 89.0,
+      "strict_score": 89.0,
+      "verified_strict_score": 89.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.89,
+          "issues": 0,
+          "weighted_failures": 1.1,
+          "assessment_score": 89.0,
+          "placeholder": false,
+          "dimension_key": "abstraction_fitness",
+          "configured_weight": 8.0,
+          "components": [
+            "Abstraction Leverage",
+            "Indirection Cost",
+            "Interface Honesty"
+          ],
+          "component_scores": {
+            "Abstraction Leverage": 87.5,
+            "Indirection Cost": 86.0,
+            "Interface Honesty": 88.0
+          }
+        }
+      },
+      "strict": 89.0
+    },
+    "AI generated debt": {
+      "score": 92.0,
+      "strict_score": 92.0,
+      "verified_strict_score": 92.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.92,
+          "issues": 0,
+          "weighted_failures": 0.8,
+          "assessment_score": 92.0,
+          "placeholder": false,
+          "dimension_key": "ai_generated_debt",
+          "configured_weight": 1.0,
+          "components": []
+        }
+      },
+      "strict": 92.0
+    },
+    "High elegance": {
+      "score": 88.0,
+      "strict_score": 88.0,
+      "verified_strict_score": 88.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.88,
+          "issues": 0,
+          "weighted_failures": 1.2,
+          "assessment_score": 88.0,
+          "placeholder": false,
+          "dimension_key": "high_level_elegance",
+          "configured_weight": 22.0,
+          "components": []
+        }
+      },
+      "strict": 88.0
+    },
+    "Mid elegance": {
+      "score": 80.3,
+      "strict_score": 80.3,
+      "verified_strict_score": 80.3,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.803,
+          "issues": 1,
+          "weighted_failures": 1.97,
+          "assessment_score": 80.3,
+          "placeholder": false,
+          "dimension_key": "mid_level_elegance",
+          "configured_weight": 22.0,
+          "components": []
+        }
+      },
+      "strict": 80.3
+    },
+    "Low elegance": {
+      "score": 90.0,
+      "strict_score": 90.0,
+      "verified_strict_score": 90.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.9,
+          "issues": 0,
+          "weighted_failures": 1.0,
+          "assessment_score": 90.0,
+          "placeholder": false,
+          "dimension_key": "low_level_elegance",
+          "configured_weight": 12.0,
+          "components": []
+        }
+      },
+      "strict": 90.0
+    },
+    "Cross-module arch": {
+      "score": 74.8,
+      "strict_score": 74.8,
+      "verified_strict_score": 74.8,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.748,
+          "issues": 1,
+          "weighted_failures": 2.52,
+          "assessment_score": 74.8,
+          "placeholder": false,
+          "dimension_key": "cross_module_architecture",
+          "configured_weight": 1.0,
+          "components": []
+        }
+      },
+      "strict": 74.8
+    },
+    "Convention drift": {
+      "score": 90.0,
+      "strict_score": 90.0,
+      "verified_strict_score": 90.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.9,
+          "issues": 0,
+          "weighted_failures": 1.0,
+          "assessment_score": 90.0,
+          "placeholder": false,
+          "dimension_key": "convention_outlier",
+          "configured_weight": 1.0,
+          "components": []
+        }
+      },
+      "strict": 90.0
+    },
+    "API coherence": {
+      "score": 77.5,
+      "strict_score": 77.5,
+      "verified_strict_score": 77.5,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.775,
+          "issues": 1,
+          "weighted_failures": 2.25,
+          "assessment_score": 77.5,
+          "placeholder": false,
+          "dimension_key": "api_surface_coherence",
+          "configured_weight": 1.0,
+          "components": []
+        }
+      },
+      "strict": 77.5
+    },
+    "Auth consistency": {
+      "score": 89.0,
+      "strict_score": 89.0,
+      "verified_strict_score": 89.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.89,
+          "issues": 0,
+          "weighted_failures": 1.1,
+          "assessment_score": 89.0,
+          "placeholder": false,
+          "dimension_key": "authorization_consistency",
+          "configured_weight": 1.0,
+          "components": []
+        }
+      },
+      "strict": 89.0
+    },
+    "Stale migration": {
+      "score": 74.8,
+      "strict_score": 74.8,
+      "verified_strict_score": 74.8,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.748,
+          "issues": 1,
+          "weighted_failures": 2.52,
+          "assessment_score": 74.8,
+          "placeholder": false,
+          "dimension_key": "incomplete_migration",
+          "configured_weight": 1.0,
+          "components": []
+        }
+      },
+      "strict": 74.8
+    },
+    "Structure nav": {
+      "score": 90.0,
+      "strict_score": 90.0,
+      "verified_strict_score": 90.0,
+      "checks": 10,
+      "issues": 0,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.9,
+          "issues": 0,
+          "weighted_failures": 1.0,
+          "assessment_score": 90.0,
+          "placeholder": false,
+          "dimension_key": "package_organization",
+          "configured_weight": 5.0,
+          "components": []
+        }
+      },
+      "strict": 90.0
+    },
+    "Design coherence": {
+      "score": 38.0,
+      "strict_score": 38.0,
+      "verified_strict_score": 38.0,
+      "checks": 10,
+      "issues": 4,
+      "tier": 4,
+      "detectors": {
+        "subjective_assessment": {
+          "potential": 10,
+          "pass_rate": 0.38,
+          "issues": 4,
+          "weighted_failures": 6.2,
+          "assessment_score": 38.0,
+          "placeholder": false,
+          "dimension_key": "design_coherence",
+          "configured_weight": 10.0,
+          "components": []
+        }
+      },
+      "strict": 38.0
+    },
     "File health": {
-      "score": 89.5,
-      "strict_score": 89.5,
-      "verified_strict_score": 89.5,
+      "score": 0.0,
+      "strict_score": 0.0,
+      "verified_strict_score": 0.0,
       "checks": 20,
-      "issues": 3,
+      "issues": 33,
       "tier": 3,
       "detectors": {
         "structural": {
           "potential": 20,
-          "pass_rate": 0.8949999999999999,
-          "issues": 3,
-          "weighted_failures": 2.0999999999999996
+          "pass_rate": 0.0,
+          "issues": 33,
+          "weighted_failures": 23.899999999999984
         }
       },
-      "strict": 89.5
+      "strict": 0.0,
+      "carried_forward": true
     },
     "Code quality": {
-      "score": 88.2,
-      "strict_score": 88.2,
-      "verified_strict_score": 88.2,
+      "score": 44.6,
+      "strict_score": 44.6,
+      "verified_strict_score": 44.6,
       "checks": 159,
-      "issues": 33,
+      "issues": 157,
       "tier": 3,
       "detectors": {
         "unused": {
@@ -47143,21 +47711,21 @@
         },
         "smells": {
           "potential": 20,
-          "pass_rate": 0.52,
-          "issues": 20,
-          "weighted_failures": 9.6
+          "pass_rate": 0.0,
+          "issues": 141,
+          "weighted_failures": 76.89999999999999
         },
         "orphaned": {
           "potential": 34,
-          "pass_rate": 0.7529411764705882,
-          "issues": 12,
-          "weighted_failures": 8.4
+          "pass_rate": 0.7323529411764705,
+          "issues": 13,
+          "weighted_failures": 9.1
         },
         "flat_dirs": {
           "potential": 1,
-          "pass_rate": 0.30000000000000004,
-          "issues": 1,
-          "weighted_failures": 0.7
+          "pass_rate": 0.0,
+          "issues": 3,
+          "weighted_failures": 2.0999999999999996
         },
         "naming": {
           "potential": 1,
@@ -47184,61 +47752,64 @@
           "weighted_failures": 0.0
         }
       },
-      "strict": 88.2
+      "strict": 44.6,
+      "carried_forward": true
     },
     "Duplication": {
-      "score": 100.0,
-      "strict_score": 100.0,
-      "verified_strict_score": 100.0,
+      "score": 96.0,
+      "strict_score": 96.0,
+      "verified_strict_score": 96.0,
       "checks": 50,
-      "issues": 0,
+      "issues": 2,
       "tier": 3,
       "detectors": {
         "dupes": {
           "potential": 50,
-          "pass_rate": 1.0,
-          "issues": 0,
-          "weighted_failures": 0.0
+          "pass_rate": 0.96,
+          "issues": 2,
+          "weighted_failures": 2.0
         }
       },
-      "strict": 100.0
+      "strict": 96.0,
+      "carried_forward": true
     },
     "Test health": {
-      "score": 6.0,
-      "strict_score": 6.0,
-      "verified_strict_score": 6.0,
+      "score": 0.0,
+      "strict_score": 0.0,
+      "verified_strict_score": 0.0,
       "checks": 317,
-      "issues": 21,
+      "issues": 372,
       "tier": 4,
       "detectors": {
         "test_coverage": {
           "potential": 298,
-          "pass_rate": 0.0012273388858257755,
-          "issues": 20,
-          "weighted_failures": 297.6342530120239
+          "pass_rate": 0.0,
+          "issues": 214,
+          "weighted_failures": 2803.3524571341545
         },
         "subjective_review": {
           "potential": 19,
-          "pass_rate": 0.9842105263157894,
-          "issues": 1,
-          "weighted_failures": 0.3
+          "pass_rate": 0.0,
+          "issues": 158,
+          "weighted_failures": 47.4
         }
       },
-      "strict": 6.0
+      "strict": 0.0,
+      "carried_forward": true
     },
     "Security": {
-      "score": 100.0,
-      "strict_score": 100.0,
-      "verified_strict_score": 100.0,
+      "score": 90.7,
+      "strict_score": 90.7,
+      "verified_strict_score": 90.7,
       "checks": 54,
-      "issues": 0,
+      "issues": 6,
       "tier": 4,
       "detectors": {
         "security": {
           "potential": 20,
-          "pass_rate": 1.0,
-          "issues": 0,
-          "weighted_failures": 0.0
+          "pass_rate": 0.75,
+          "issues": 6,
+          "weighted_failures": 5.0
         },
         "cycles": {
           "potential": 34,
@@ -47247,312 +47818,18 @@
           "weighted_failures": 0.0
         }
       },
-      "strict": 100.0
-    },
-    "Error consistency": {
-      "score": 76.4,
-      "strict_score": 76.4,
-      "verified_strict_score": 76.4,
-      "checks": 10,
-      "issues": 1,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.764,
-          "issues": 1,
-          "weighted_failures": 2.36,
-          "assessment_score": 76.4,
-          "placeholder": false,
-          "dimension_key": "error_consistency",
-          "configured_weight": 3.0,
-          "components": []
-        }
-      },
-      "strict": 76.4
-    },
-    "Abstraction fit": {
-      "score": 60.7,
-      "strict_score": 60.7,
-      "verified_strict_score": 60.7,
-      "checks": 10,
-      "issues": 2,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.607,
-          "issues": 2,
-          "weighted_failures": 3.93,
-          "assessment_score": 60.7,
-          "placeholder": false,
-          "dimension_key": "abstraction_fitness",
-          "configured_weight": 8.0,
-          "components": [
-            "Abstraction Leverage",
-            "Indirection Cost",
-            "Interface Honesty"
-          ],
-          "component_scores": {
-            "Abstraction Leverage": 70.4,
-            "Indirection Cost": 80.7,
-            "Interface Honesty": 66.3
-          }
-        }
-      },
-      "strict": 60.7
-    },
-    "AI generated debt": {
-      "score": 89.4,
-      "strict_score": 89.4,
-      "verified_strict_score": 89.4,
-      "checks": 10,
-      "issues": 0,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.894,
-          "issues": 0,
-          "weighted_failures": 1.06,
-          "assessment_score": 89.4,
-          "placeholder": false,
-          "dimension_key": "ai_generated_debt",
-          "configured_weight": 1.0,
-          "components": []
-        }
-      },
-      "strict": 89.4
-    },
-    "High elegance": {
-      "score": 61.0,
-      "strict_score": 61.0,
-      "verified_strict_score": 61.0,
-      "checks": 10,
-      "issues": 2,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.61,
-          "issues": 2,
-          "weighted_failures": 3.9,
-          "assessment_score": 61.0,
-          "placeholder": false,
-          "dimension_key": "high_level_elegance",
-          "configured_weight": 22.0,
-          "components": []
-        }
-      },
-      "strict": 61.0
-    },
-    "Mid elegance": {
-      "score": 76.0,
-      "strict_score": 76.0,
-      "verified_strict_score": 76.0,
-      "checks": 10,
-      "issues": 1,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.76,
-          "issues": 1,
-          "weighted_failures": 2.4,
-          "assessment_score": 76.0,
-          "placeholder": false,
-          "dimension_key": "mid_level_elegance",
-          "configured_weight": 22.0,
-          "components": []
-        }
-      },
-      "strict": 76.0
-    },
-    "Low elegance": {
-      "score": 87.4,
-      "strict_score": 87.4,
-      "verified_strict_score": 87.4,
-      "checks": 10,
-      "issues": 0,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.874,
-          "issues": 0,
-          "weighted_failures": 1.26,
-          "assessment_score": 87.4,
-          "placeholder": false,
-          "dimension_key": "low_level_elegance",
-          "configured_weight": 12.0,
-          "components": []
-        }
-      },
-      "strict": 87.4
-    },
-    "Cross-module arch": {
-      "score": 87.3,
-      "strict_score": 87.3,
-      "verified_strict_score": 87.3,
-      "checks": 10,
-      "issues": 0,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.873,
-          "issues": 0,
-          "weighted_failures": 1.27,
-          "assessment_score": 87.3,
-          "placeholder": false,
-          "dimension_key": "cross_module_architecture",
-          "configured_weight": 1.0,
-          "components": []
-        }
-      },
-      "strict": 87.3
-    },
-    "Convention drift": {
-      "score": 75.9,
-      "strict_score": 75.9,
-      "verified_strict_score": 75.9,
-      "checks": 10,
-      "issues": 1,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.759,
-          "issues": 1,
-          "weighted_failures": 2.41,
-          "assessment_score": 75.9,
-          "placeholder": false,
-          "dimension_key": "convention_outlier",
-          "configured_weight": 1.0,
-          "components": []
-        }
-      },
-      "strict": 75.9
-    },
-    "API coherence": {
-      "score": 58.4,
-      "strict_score": 58.4,
-      "verified_strict_score": 58.4,
-      "checks": 10,
-      "issues": 2,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.584,
-          "issues": 2,
-          "weighted_failures": 4.16,
-          "assessment_score": 58.4,
-          "placeholder": false,
-          "dimension_key": "api_surface_coherence",
-          "configured_weight": 1.0,
-          "components": []
-        }
-      },
-      "strict": 58.4
-    },
-    "Auth consistency": {
-      "score": 75.7,
-      "strict_score": 75.7,
-      "verified_strict_score": 75.7,
-      "checks": 10,
-      "issues": 1,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.757,
-          "issues": 1,
-          "weighted_failures": 2.43,
-          "assessment_score": 75.7,
-          "placeholder": false,
-          "dimension_key": "authorization_consistency",
-          "configured_weight": 1.0,
-          "components": []
-        }
-      },
-      "strict": 75.7
-    },
-    "Stale migration": {
-      "score": 54.1,
-      "strict_score": 54.1,
-      "verified_strict_score": 54.1,
-      "checks": 10,
-      "issues": 2,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.541,
-          "issues": 2,
-          "weighted_failures": 4.59,
-          "assessment_score": 54.1,
-          "placeholder": false,
-          "dimension_key": "incomplete_migration",
-          "configured_weight": 1.0,
-          "components": []
-        }
-      },
-      "strict": 54.1
-    },
-    "Structure nav": {
-      "score": 52.9,
-      "strict_score": 52.9,
-      "verified_strict_score": 52.9,
-      "checks": 10,
-      "issues": 3,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.529,
-          "issues": 3,
-          "weighted_failures": 4.71,
-          "assessment_score": 52.9,
-          "placeholder": false,
-          "dimension_key": "package_organization",
-          "configured_weight": 5.0,
-          "components": []
-        }
-      },
-      "strict": 52.9
-    },
-    "Design coherence": {
-      "score": 49.4,
-      "strict_score": 49.4,
-      "verified_strict_score": 49.4,
-      "checks": 10,
-      "issues": 6,
-      "tier": 4,
-      "detectors": {
-        "subjective_assessment": {
-          "potential": 10,
-          "pass_rate": 0.494,
-          "issues": 6,
-          "weighted_failures": 5.06,
-          "assessment_score": 49.4,
-          "placeholder": false,
-          "dimension_key": "design_coherence",
-          "configured_weight": 10.0,
-          "components": []
-        }
-      },
-      "strict": 49.4
+      "strict": 90.7,
+      "carried_forward": true
     }
   },
   "reminder_history": {
     "auto_fixers_available": 2,
     "zone_classification": 3,
     "dry_run_first": 2,
-    "report_scores": 27,
+    "report_scores": 28,
     "feedback_nudge": 3,
     "stagnant_nudge": 14,
-    "review_findings_pending": 1
+    "review_findings_pending": 2
   },
   "review_cache": {
     "files": {
@@ -47562,13 +47839,13 @@
         "finding_count": 0
       },
       "app/src/store/sessionsUIStore.ts": {
-        "content_hash": "0f176fb3c8251248",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "b388c4e365616228",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/store/permissionsStore.ts": {
         "content_hash": "eaf76a8c51025685",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/store/kanbanStore.ts": {
@@ -47608,382 +47885,382 @@
       },
       "app/e2e/voice-fab-lifecycle.spec.ts": {
         "content_hash": "5e114ace4e855438",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/NotificationsDrawer.tsx": {
         "content_hash": "a122d7e409da7959",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/PlanFactGrid.tsx": {
-        "content_hash": "a99eb9aaca153fc3",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "2719bd68ac14c1b2",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/crm/CRMKanban.tsx": {
-        "content_hash": "644619351a7656ea",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "1498f0bd49687d65",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/crm/projects/EditProject.tsx": {
         "content_hash": "9b667ab207a462bb",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/AudioUploader.tsx": {
         "content_hash": "1ba4e7b3db0bbfbb",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/Categorization.tsx": {
-        "content_hash": "dd7bfc88fa273bc9",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "bf3b92cc37b41eed",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/MeetingCard.tsx": {
         "content_hash": "863609f11858ed63",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/PossibleTasks.tsx": {
-        "content_hash": "17163dd809e47864",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "42bd73633e88251c",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/SessionLog.tsx": {
         "content_hash": "2cb7a9c9f0ac4cdd",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/TranscriptionTableRow.tsx": {
-        "content_hash": "7218c9be022ca43d",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "2d637f3254ea83b9",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/AnalyticsPage.tsx": {
         "content_hash": "064ee09ba6e44993",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/PlanFactPage.tsx": {
         "content_hash": "0bca0f5e2bf25eaf",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/operops/CRMPage.tsx": {
-        "content_hash": "7a08f84d55998ffa",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "d1e9d3bc7cd07ed3",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/operops/FinancesPerformersPage.tsx": {
         "content_hash": "c6eba03d474cb867",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/operops/ProjectsTree.tsx": {
         "content_hash": "369f3245deaf40aa",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/voice/SessionPage.tsx": {
-        "content_hash": "f66cd73b43e9dbd9",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "2ad5f8fba220acfd",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/voice/SessionsListPage.tsx": {
-        "content_hash": "830bc4df0b4973df",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "f07b1d9d970a35de",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/services/guideDirectoryConfig.tsx": {
-        "content_hash": "4f94d4f0649eb951",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "24cf7e422fae34a2",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/scripts/voicebot-close-inactive-sessions.ts": {
         "content_hash": "3b1b998b2087aeee",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/voicebot/messageHelpers.ts": {
-        "content_hash": "8a7006598c10b923",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "426a387ec3d79ccd",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/voicebot/permissions.ts": {
-        "content_hash": "b0fed77c730bc600",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "e2129753b70456e3",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/voicebot/uploads.ts": {
-        "content_hash": "34e37c9511652118",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "8d3ab76a99f396fc",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/miniapp/routes/index.ts": {
-        "content_hash": "88013a3e11ff10d0",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "36e808e79f6c8b31",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/services/voicebot/voicebotWebmDedup.ts": {
         "content_hash": "b3627eb160febb17",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/voicebot_tgbot/ingressHandlers.ts": {
-        "content_hash": "0a1ba015c1f27da9",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "6276c49cf2c04f20",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/processingLoop.ts": {
         "content_hash": "f006358c31c3eb43",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/transcribeHandler.ts": {
-        "content_hash": "6756632e268e11ee",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "f3d2020ecc84f109",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "miniapp/src/components/ASTrackTime.tsx": {
         "content_hash": "86a949fb4328dc3a",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/BonusesGrid.tsx": {
         "content_hash": "629c05b530e896ed",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/crm/CRMCreateEpic.tsx": {
         "content_hash": "096a088fa7a1c3d6",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/crm/CRMCreateTicket.tsx": {
         "content_hash": "82850a3e49f34408",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/crm/WorkHoursSidebar.tsx": {
         "content_hash": "b7fdac9806dfc895",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/crm/finances/PaymentForm.tsx": {
         "content_hash": "c9c1ebb21c3e451b",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/crm/projects/EditCustomer.tsx": {
         "content_hash": "c070ae0a004d7805",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/AccessUsersModal.tsx": {
         "content_hash": "26925124e2ec065a",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/AddParticipantModal.tsx": {
         "content_hash": "17f8b8ccd9d1418c",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/voice/CategorizationStatusColumn.tsx": {
-        "content_hash": "1c8d6b708fd3c93a",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/constants/crm.ts": {
         "content_hash": "25b7944450c4f873",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/DirectoriesPage.tsx": {
         "content_hash": "68272505c26f4c38",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/directories/AgentsPage.tsx": {
         "content_hash": "76051a9eb15e845d",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/directories/EmployeesSalariesPage.tsx": {
         "content_hash": "9879506f639e56f2",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/pages/operops/taskPageUtils.ts": {
         "content_hash": "62a260eaa39fd541",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/services/types.ts": {
         "content_hash": "fbab678e81941f26",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/utils/voiceTimeline.ts": {
         "content_hash": "27732d9f7d1361d2",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/scripts/backfill-work-hours-ticket-db-id.ts": {
         "content_hash": "2803592dd46ef581",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/scripts/runtime-tag-backfill.ts": {
         "content_hash": "d94fc592fce46e2b",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/scripts/summarize-mcp-watchdog.ts": {
         "content_hash": "31c00e1473ebac5e",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/middleware/roleGuard.ts": {
         "content_hash": "929aa9fec0fd0efc",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/crm/customers.ts": {
         "content_hash": "f53a4654a1ffca28",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/crm/legacy/botcommands.ts": {
         "content_hash": "7327645e07a78cef",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/crm/legacy/performerspayments.ts": {
         "content_hash": "24649a0aeb629cab",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/crm/legacy/projectgroups.ts": {
-        "content_hash": "b92dde2dbbaab887",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "3f8127c92b590499",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/crm/legacy/projecttree.ts": {
         "content_hash": "98379cc4df48e7e9",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/crm/uploads.ts": {
         "content_hash": "f25e33c56752326e",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/finops/employees.ts": {
         "content_hash": "488fdb8d889c1cbc",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/api/routes/voicebot/sessionsSharedUtils.ts": {
         "content_hash": "41e1bdd6c664a70c",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/services/bdClient.ts": {
         "content_hash": "1fbacbeffea2983d",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/services/finopsFxRates.ts": {
         "content_hash": "7d1b12775bf82291",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/services/google/sheets.ts": {
         "content_hash": "1d5f386ae820fa5c",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/services/reports/jiraStyleReport.ts": {
         "content_hash": "c295dfeded42df7e",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/services/voicebot/voicebotDoneNotify.ts": {
-        "content_hash": "54ca4f2e35652a55",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "d6b957de2afa3b1a",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/voicebot_tgbot/activeSessionMapping.ts": {
-        "content_hash": "f4ca684f6d3d4ac1",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "004d83520633e75a",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/voicebot_tgbot/codexReviewCallbacks.ts": {
         "content_hash": "e70935e4f7d47e05",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/allCustomPrompts.ts": {
         "content_hash": "d65e24e27bd2620c",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/categorizeHandler.ts": {
         "content_hash": "2ea5bdcce449e24f",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/createTasksFromChunks.ts": {
-        "content_hash": "11ca1cd06fd8a615",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "c95906e2eba18956",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts": {
         "content_hash": "eb823cd776473c15",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/customPrompt.ts": {
         "content_hash": "e8288c71ecc0ace6",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/finalizationHandler.ts": {
         "content_hash": "7b048c36b66afbb9",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/oneCustomPrompt.ts": {
         "content_hash": "7fe63587e07fd208",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "backend/src/workers/voicebot/handlers/questionsHandler.ts": {
         "content_hash": "34b791973efc8432",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "miniapp/src/components/ASChangeStatus.tsx": {
         "content_hash": "47039ccd13e9c4bd",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "miniapp/src/components/OneTicket.tsx": {
         "content_hash": "f4fd50b77ae55bc9",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/ExpensesGrid.tsx": {
         "content_hash": "0686c0db8c46efa7",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/components/codex/CodexIssueDetailsCard.tsx": {
-        "content_hash": "247fdc3e952217e3",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "bc6c2ca761b3dab8",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/store/employeeStore.ts": {
@@ -48033,7 +48310,7 @@
       },
       "app/src/store/projectsStore.ts": {
         "content_hash": "2d3a457ff331a028",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       },
       "app/src/store/voicebotHttp.ts": {
@@ -48052,17 +48329,17 @@
         "finding_count": 0
       },
       "app/src/pages/directories/ClientsProjectsRatesPage.tsx": {
-        "content_hash": "dd92c5b896541cf1",
-        "reviewed_at": "2026-02-28T15:44:32+00:00",
+        "content_hash": "a1664443f9b79bae",
+        "reviewed_at": "2026-03-04T08:40:23+00:00",
         "finding_count": 0
       }
     },
     "holistic": {
-      "reviewed_at": "2026-02-28T15:44:32+00:00",
-      "file_count_at_review": 2,
-      "finding_count": 21,
-      "reviewed_files_count": 82,
-      "full_sweep_included": true
+      "reviewed_at": "2026-03-04T08:40:23+00:00",
+      "file_count_at_review": 20,
+      "finding_count": 8,
+      "reviewed_files_count": 80,
+      "full_sweep_included": false
     }
   },
   "assessment_import_audit": [
@@ -48089,6 +48366,18 @@
       "provisional_count": 0,
       "attest": "",
       "import_file": "/home/strato-space/copilot/.desloppify/subagents/runs/20260228_153613/holistic_findings_merged.json"
+    },
+    {
+      "timestamp": "2026-03-04T08:40:23+00:00",
+      "mode": "trusted_internal",
+      "trusted": true,
+      "reason": "trusted internal run-batches import",
+      "override_used": false,
+      "attested_external": false,
+      "provisional": false,
+      "provisional_count": 0,
+      "attest": "",
+      "import_file": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_083647/holistic_findings_merged.json"
     }
   ]
 }

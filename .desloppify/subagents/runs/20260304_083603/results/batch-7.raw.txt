@@ -1,0 +1,275 @@
+{
+  "batch": "Full Codebase Sweep",
+  "batch_index": 7,
+  "assessments": {
+    "cross_module_architecture": 78.0,
+    "convention_outlier": 86.0,
+    "error_consistency": 74.0,
+    "abstraction_fitness": 79.0,
+    "api_surface_coherence": 76.0,
+    "authorization_consistency": 82.0,
+    "ai_generated_debt": 89.0,
+    "incomplete_migration": 88.0,
+    "package_organization": 90.0,
+    "high_level_elegance": 79.0,
+    "mid_level_elegance": 81.0,
+    "low_level_elegance": 84.0,
+    "design_coherence": 77.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "processingLoop mixes voice session/message recovery with Codex deferred review task scanning and enqueueing in one handler, crossing subsystem boundaries (VOICEBOT_COLLECTIONS + COLLECTIONS.TASKS).",
+        "codexDeferredReview introduces shell command orchestration (bd/codex CLI) directly in the voice worker processing path, tightening coupling between voice runtime and issue-management tooling."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Job payload keys vary across sibling handlers for similar identity fields (`_id`, `session_id`, `message_id`, `message_db_id`), creating naming drift.",
+        "Some handlers use shared helpers (`runtimeQuery`, `createOpenAiClient`) while others redeclare near-identical helpers locally (e.g., summarizeHandler)."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Sibling worker handlers follow inconsistent naming and helper-sharing conventions, which increases onboarding and integration friction."
+    },
+    "error_consistency": {
+      "evidence": [
+        "Multiple bare catches suppress context (`customPromptsDir`, `customPromptShared`, `messageProcessors`, `codexDeferredReview`) and downgrade hard failures to empty/no-op outcomes.",
+        "notifyHandler catches all hook-runtime failures and returns `hooks_started: 0` while continuing HTTP path, so invalid local hook config can be operationally invisible to callers."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Summarize/questions/custom prompt/finalization handlers replicate the same read-session/read-message/OpenAI-call/update-processor lifecycle with only prompt/model differences.",
+        "Three ingress handlers (`handleVoice`, `handleText`, `handleAttachment`) are near-identical pass-through wrappers, adding indirection without behavior."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 73.0,
+        "indirection_cost": 79.0,
+        "interface_honesty": 85.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "manifest dispatch casts `unknown` payload into handler-specific types without schema validation, making runtime contracts implicit and brittle.",
+        "Payload contracts for equivalent concepts differ by handler (`message_id` vs `message_db_id`, `_id` vs `session_id`), forcing adapters and defensive parsing in downstream handlers."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Most worker DB access paths use runtime-scoped filtering (`runtimeQuery`/`mergeWithRuntimeFilter`), but `startMultiprompt` updates sessions without it.",
+        "Some files use centralized runtime scoping helper while others inline custom runtime filter variants, increasing trust-boundary inconsistency."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Several wrappers are formulaic and pass-through (`handleVoice`, `handleText`, `handleAttachment`) with no added policy or translation.",
+        "Repeated parsing boilerplate patterns (`JSON candidates` with fenced-code stripping) appear across handlers instead of one hardened utility."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "There are small but recurring boilerplate islands that look mechanically duplicated rather than intentionally consolidated."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "Runtime-tag based routing/filtering remains pervasive in worker queries (`runtimeQuery` built on `runtime_tag`) despite broader platform direction toward runtime-tag deprecation.",
+        "Transport placeholders (`sendToSocket`, `audioMerging`) are still represented as active worker jobs but intentionally skip execution, indicating transitional state in runtime ownership."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Legacy runtime-tag-era query and transport shims remain active in production worker flow instead of being fully replaced or isolated."
+    },
+    "package_organization": {
+      "evidence": [
+        "The `handlers` folder contains mixed concerns: ingress adapters, queue orchestration, OpenAI processing, notification transport, and codex task tooling in one flat area.",
+        "`notify` has partial subfolder extraction (`notify/hooksRuntime.ts`) while other similarly complex domains remain unsplit, creating uneven navigability."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Directory shape is serviceable but concern boundaries are still relatively flat for the amount of orchestration logic.",
+      "sub_axes": {
+        "abstraction_leverage": 0.0,
+        "indirection_cost": 0.0,
+        "interface_honesty": 0.0
+      }
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "processingLoop acts as a multi-domain control tower (transcription retry, categorization retry, finalization marking, codex deferred review scheduling).",
+        "codexDeferredReview includes CLI execution, issue loading, Telegram card sending, and DB state machine transitions in one module."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Boundary handoffs (job payloads, DB updates, queue enqueue, socket hints) are repeated manually across handlers with subtle differences in key names and error behavior.",
+        "Failure propagation differs by seam: some paths throw, some return `{ok:false}`, some swallow and continue (`runNotifyHooks`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Large handlers (`transcribeHandler`, `processingLoop`, `codexDeferredReview`) carry extensive branch-heavy flow and multiple local helper concerns in one file.",
+        "Some catch branches perform state mutation + logging + retry scheduling with repeated inline literals, reducing local readability and change safety."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium"
+    },
+    "design_coherence": {
+      "evidence": [
+        "Repeated processor lifecycle state-machine logic (set queued/processing/processed/error fields) is duplicated across summarize/questions/custom/finalization/create_tasks/categorize/transcribe.",
+        "Single handlers own unrelated responsibilities (business decisions, transport mechanics, and persistence details) instead of composing specialized collaborators."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "mixed_orchestrator_responsibilities",
+      "summary": "Core orchestrators combine unrelated domains (voice lifecycle, codex review automation, and transport side effects) in single handlers.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/processingLoop.ts",
+        "backend/src/workers/voicebot/handlers/codexDeferredReview.ts",
+        "backend/src/workers/voicebot/handlers/doneMultiprompt.ts"
+      ],
+      "evidence": [
+        "processingLoop scans voice sessions/messages, resets categorization locks, requeues transcriptions, finalizes sessions, and also scans/enqueues Codex deferred review tasks from `COLLECTIONS.TASKS`.",
+        "codexDeferredReview performs CLI orchestration, issue retrieval, Telegram approval card delivery, and DB retry-state management in one handler."
+      ],
+      "suggestion": "Split orchestration by bounded context: move Codex deferred-review scheduling out of `processingLoop` into a dedicated scheduler/worker, then isolate transport side effects (Telegram/hook calls) behind dedicated service interfaces invoked by thin job handlers.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "orchestration_boundary_blur"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_catch_fallbacks_hide_operational_failures",
+      "summary": "Several parsing/filesystem/runtime failures are silently swallowed and converted into empty outputs, masking actionable failures.",
+      "related_files": [
+        "backend/src/workers/voicebot/customPromptsDir.ts",
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+        "backend/src/workers/voicebot/handlers/messageProcessors.ts",
+        "backend/src/workers/voicebot/handlers/codexDeferredReview.ts",
+        "backend/src/workers/voicebot/handlers/notifyHandler.ts"
+      ],
+      "evidence": [
+        "Bare catches in prompt discovery/loading and JSON parsing return `[]`/`null` without logging structured context (`listCustomPromptProcessorNames`, `getCustomPromptText`, `parseJsonArray`, `extractSummaryFromAgentOutput`).",
+        "notify hook execution catches global errors and returns `{hooks_started:0}` while the job may still report success through HTTP path, obscuring hook-config breakage."
+      ],
+      "suggestion": "Standardize error handling at these I/O and parse boundaries: log structured error codes plus file/path/context in every catch, and classify failures as hard/soft explicitly (for example `parse_failed_soft` vs `hooks_config_invalid_hard`) so callers can react deterministically.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "implicit_failure_policy"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "runtime_scope_filter_usage_is_inconsistent",
+      "summary": "Session/task data access uses runtime-scope filtering inconsistently across sibling handlers.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/startMultiprompt.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+        "backend/src/workers/voicebot/handlers/summarizeHandler.ts",
+        "backend/src/workers/voicebot/handlers/doneMultiprompt.ts"
+      ],
+      "evidence": [
+        "`startMultiprompt` updates sessions with plain query (no `runtimeQuery`/`mergeWithRuntimeFilter`), unlike most worker handlers.",
+        "Other handlers use mixed runtime-filter styles (centralized `runtimeQuery` vs ad-hoc `mergeWithRuntimeFilter` calls), creating inconsistent trust-boundary enforcement."
+      ],
+      "suggestion": "Introduce one canonical runtime-scoped query helper for all worker handlers and enforce it via lintable wrapper usage; then migrate `startMultiprompt` and ad-hoc calls to that helper and add regression tests proving cross-runtime rows are never mutated.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "runtime_scope_contract_drift"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "processor_lifecycle_logic_is_duplicated_not_composed",
+      "summary": "Multiple processor handlers duplicate the same lifecycle flow instead of sharing a focused execution template.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/summarizeHandler.ts",
+        "backend/src/workers/voicebot/handlers/questionsHandler.ts",
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/finalizationHandler.ts",
+        "backend/src/workers/voicebot/handlers/handleVoice.ts",
+        "backend/src/workers/voicebot/handlers/handleText.ts",
+        "backend/src/workers/voicebot/handlers/handleAttachment.ts"
+      ],
+      "evidence": [
+        "Summarize/questions/custom/finalization each repeat: validate IDs, fetch message/session, OpenAI call, parse JSON-ish output, update `processors_data.*` flags, return `{ok,...}`.",
+        "Voice/text/attachment handlers are near-identical pass-through wrappers around ingress handlers."
+      ],
+      "suggestion": "Create a reusable processor execution scaffold (`runProcessorJob`) with pluggable prompt/model/normalizer/update targets, and replace the three ingress pass-through handlers with a single generic ingress job adapter parameterized by ingress type.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_shared_processor_kernel"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "manifest_dispatch_uses_unvalidated_unknown_payloads",
+      "summary": "Worker manifest dispatch relies on unchecked type assertions, leaving job API contracts implicit and fragile.",
+      "related_files": [
+        "backend/src/workers/voicebot/manifest.ts",
+        "backend/src/workers/voicebot/handlers/startMultiprompt.ts",
+        "backend/src/workers/voicebot/handlers/customPrompt.ts",
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/createTasksPostprocessing.ts"
+      ],
+      "evidence": [
+        "Manifest maps every job with `payload as <JobData>` from `unknown` without schema guards.",
+        "Handlers then defensively reinterpret IDs from multiple aliases (`_id`, `session_id`, `message_id`, `message_db_id`), indicating unstable surface contracts."
+      ],
+      "suggestion": "Add per-job zod schemas at manifest boundary and normalize payloads once (canonical IDs and field names), then pass strongly typed normalized payloads to handlers; reject malformed jobs early with structured error codes.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "untyped_job_contract_boundary"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No single canonical worker job contract boundary (validation + normalization) before handler dispatch.",
+      "Processor lifecycle state transitions are implemented repeatedly in each handler rather than via shared state-machine utilities.",
+      "Subsystem boundaries are blurred by central orchestrators that absorb cross-domain responsibilities over time."
+    ],
+    "likely_symptoms": [
+      "mixed_orchestrator_responsibilities",
+      "silent_catch_fallbacks_hide_operational_failures",
+      "runtime_scope_filter_usage_is_inconsistent",
+      "processor_lifecycle_logic_is_duplicated_not_composed",
+      "manifest_dispatch_uses_unvalidated_unknown_payloads"
+    ],
+    "possible_false_positives": [
+      "Some transport-skip paths (`sendToSocket`, `audioMerging`) may be intentionally transitional, but they still add active maintenance overhead and should be explicitly bounded."
+    ]
+  }
+}

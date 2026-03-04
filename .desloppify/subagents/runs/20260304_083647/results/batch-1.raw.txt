@@ -1,0 +1,121 @@
+{
+  "batch": "Design coherence — Mechanical Concern Signals",
+  "batch_index": 1,
+  "assessments": {
+    "design_coherence": 62.0
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Core voice flow logic is concentrated in route/worker/component files with repeated orchestration patterns instead of shared abstractions (for example upload/session handling in a single route file and duplicated socket/event-update helpers across transcribe/categorization handlers).",
+        "Voice UI state and behavior is split across oversized pages and stores that each hold both orchestration and presentation concerns (e.g., clipboard/paste/image parsing logic in `SessionPage`, filter/persistence/table orchestration in `SessionsListPage`, async session-title generation and MCP calls in `sessionsUIStore`).",
+        "Grid/page modules repeatedly mix data normalization, transformation, and rendering inside one file (`PlanFactGrid`, `CRMKanban`), increasing coupling and making invariant changes hard to propagate safely."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "sub_axes": {
+        "abstraction_leverage": 28.5,
+        "indirection_cost": 41.0,
+        "interface_honesty": 35.0
+      }
+    }
+  },
+  "findings": [
+    {
+      "dimension": "design_coherence",
+      "identifier": "dup-worker-socket-update-abstractions",
+      "summary": "Voice worker handlers duplicate message-update/event-emission plumbing instead of sharing a single orchestration utility.",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/transcribeHandler.ts",
+        "backend/src/workers/voicebot/handlers/categorizeHandler.ts",
+        "backend/src/workers/voicebot/handlers/processingLoop.ts"
+      ],
+      "evidence": [
+        "`transcribeHandler.ts` defines `queueMessageUpdateEvent` and `emitMessageUpdateById` utilities, and `categorizeHandler.ts` defines its own helpers with similar responsibilities and same event contract shape.",
+        "`processingLoop.ts` relies on those event/update paths externally, so divergence in any helper implementation creates inconsistent `message_update` emission behavior across processors."
+      ],
+      "suggestion": "Extract a shared `voicebotWorkerRealtime.ts` (or equivalent) with a single `emitSessionMessageUpdate` and `queueSessionUpdateEvent` API, then call it from all handlers to ensure uniform event semantics and reduce drift.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice-page-overload-mixed-concerns",
+      "summary": "`SessionPage` and `SessionsListPage` mix transport/state orchestration and business parsing with view rendering, hurting readability and reuse.",
+      "related_files": [
+        "app/src/pages/voice/SessionPage.tsx",
+        "app/src/pages/voice/SessionsListPage.tsx",
+        "app/src/store/sessionsUIStore.ts"
+      ],
+      "evidence": [
+        "`SessionPage.tsx` includes paste/drop image ingestion, FileReader/canvas resizing/conversion, regex parsing (`parseTimeFromMessage`, `parseMetadataFromText`-style helpers), and socket lifecycle setup inside the page component.",
+        "`SessionsListPage.tsx` contains URL/search param parsing, localStorage/sessionStorage hydration, complex filtering/sorting derivations, and table action orchestration in one component.",
+        "`sessionsUIStore.ts` also embeds unrelated concerns (UI modal flags, title-generation async MCP workflow, storage migrations/dedupe, and role/selection state)."
+      ],
+      "suggestion": "Split into domain service hooks (`useVoiceTransport`, `useVoiceFilters`, `useClipboardImageAttachment`) and keep page components declarative; move parsing and persistence helpers into dedicated utility modules plus store slices for domain-specific state.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "voice-upload-route-contains-orthogonal-layers",
+      "summary": "Voice upload route mixes validation, DB query shaping, dedupe semantics, queueing, and socket emission in one endpoint implementation, and uses no-op runtime wrappers that blur abstraction intent.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/uploads.ts",
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/messageHelpers.ts"
+      ],
+      "evidence": [
+        "`uploads.ts` includes request validation/mapping, session/message DB queries, duplicate/no-op access helpers (`runtimeSessionQuery`, `runtimeMessageQuery`), persistence, worker enqueue, socket events, and response shaping in the same module.",
+        "No-op query helpers suggest abstraction debt and make it difficult to reason about contract boundaries between request-layer helpers and data-layer access.",
+        "Multiple upload outcomes depend on side-effect sequencing inside the route file rather than a dedicated service orchestrator."
+      ],
+      "suggestion": "Refactor route into request/validation layer + a `voicebotUploadService` orchestrator + repository/query layer; make query wrappers explicit (non-no-op), and centralize response/error envelope handling for consistent `request_id` + error payload shape.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "fat-components-join-domain-calculation-with-rendering",
+      "summary": "Major feature components combine data shaping, business rules, persistence state, and render logic, leading to low cohesion and hard-to-test logic.",
+      "related_files": [
+        "app/src/components/PlanFactGrid.tsx",
+        "app/src/components/crm/CRMKanban.tsx",
+        "app/src/components/BonusesGrid.tsx"
+      ],
+      "evidence": [
+        "`PlanFactGrid.tsx` performs normalization/parsing (`toNumber`, month normalization), aggregation, pinning persistence, totals computation, column generation, and table rendering in one file.",
+        "`CRMKanban.tsx` handles multiple domain concerns (project/perfomer normalization, status transitions, modal/edit orchestration, inline actions, and filtering) directly in the component file.",
+        "`BonusesGrid.tsx` is another grid component likely following similar inline normalization + render coupling, reinforcing a broader pattern."
+      ],
+      "suggestion": "Introduce composable hooks/services: `useNormalizedPlanFactRows`, `useSummaryComputation`, `useKanbanBoardState`, with pure, testable functions outside JSX so UI components stay declarative and easier to maintain.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "monolithic_modules_missing_shared_layers"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Lack of enforced layer boundaries across frontend voice/CRM modules and backend voicebot workers/route code.",
+      "Mechanical duplication of cross-cutting orchestration (event propagation, filtering/storage orchestration, state derivation) across files without shared abstractions.",
+      "Component- and route-level accumulation of unrelated concerns over multiple sprints without periodic modularization."
+    ],
+    "likely_symptoms": [
+      "dup-worker-socket-update-abstractions",
+      "voice-page-overload-mixed-concerns",
+      "voice-upload-route-contains-orthogonal-layers",
+      "fat-components-join-domain-calculation-with-rendering"
+    ],
+    "possible_false_positives": [
+      "Some monolithic files may be intentionally temporary to prioritize migration deadlines; however, repeated patterns in multiple listed files suggest architectural debt rather than one-off expedience."
+    ]
+  }
+}

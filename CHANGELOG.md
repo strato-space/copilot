@@ -20,6 +20,7 @@
 - **08:55** Updated OperOps Codex relationship grouping to explicit `Parent`, `Children`, `Depends On (blocks/waits-for)`, `Blocks (dependents)` with shared issue-id token rendering.
 
 ### CHANGES
+- **11:43** Finalized post-deploy scanner snapshot artifacts after background `desloppify review` completion/interruption, including refreshed `.desloppify/state-typescript*.json`, new holistic packets/run summaries, merged findings payloads, and updated `scorecard.png`.
 - **11:36** Refreshed local `desloppify` review artifacts for the latest scan cycle (`.desloppify/query.json`, `.desloppify/review_packet_blind.json`, `.desloppify/review_packets/*`, `.desloppify/subagents/runs/*`) to keep scanner state synchronized with post-deploy workspace.
 - **11:34** Backend runtime-tag deprecation:
   - neutralized runtime-tag filter/injection helpers in `backend/src/services/{runtimeScope.ts,db.ts}`;

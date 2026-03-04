@@ -1,0 +1,133 @@
+{
+  "batch": "Conventions & Errors",
+  "batch_index": 2,
+  "assessments": {
+    "convention_outlier": 74.0,
+    "error_consistency": 71.0,
+    "mid_level_elegance": 76.0
+  },
+  "dimension_notes": {
+    "convention_outlier": {
+      "evidence": [
+        "`backend/src/api/routes/crm/index.ts` mixes route naming styles in one surface (`/bot-commands`, `/taskTypes`, `/project_groups`, `/project_tree`).",
+        "`backend/src/api/routes/voicebot/index.ts` introduces case-variant endpoint `/LLMGate` while sibling routes are lowercase.",
+        "`backend/src/api/routes/finops/index.ts` mounts multiple routers at `/` while CRM uses explicit resource prefixes, producing inconsistent hub conventions."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "error_consistency": {
+      "evidence": [
+        "`backend/src/api/routes/voicebot/sessionsSharedUtils.ts` uses mixed sentinel outputs for invalid input (`null`, `''`, `[]`, and pass-through invalid date strings), so callers cannot rely on one failure contract.",
+        "`backend/src/api/routes/voicebot/sessionUrlUtils.ts` silently rewrites `VOICE_WEB_INTERFACE_URL` containing `176.124.201.53` to default host without surfacing config error.",
+        "Both utility files normalize bad input by dropping or mutating it without structured error signaling or diagnostics."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Route hubs expose different seam patterns: CRM is resource-scoped, FinOps is mostly flat `/`, VoiceBot is hybrid (flat + legacy aliases).",
+        "In `backend/src/api/routes/voicebot/index.ts`, comments state a flat source-of-truth contract, but only sessions/uploads are mounted flat while transcription/persons/permissions/llmgate remain alias-scoped.",
+        "Integration boundaries require endpoint-specific tribal knowledge instead of one predictable composition model."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high"
+    }
+  },
+  "findings": [
+    {
+      "dimension": "convention_outlier",
+      "identifier": "route_style_mixed_naming",
+      "summary": "API path naming conventions drift inside and across route hubs, creating style islands in public endpoints.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/voicebot/index.ts",
+        "backend/src/api/routes/finops/index.ts"
+      ],
+      "evidence": [
+        "CRM hub mounts camelCase (`/taskTypes`), snake_case (`/project_groups`, `/project_tree`), and kebab-case (`/bot-commands`) in one router.",
+        "VoiceBot hub mounts `/LLMGate` with uppercase segment while sibling endpoints are lowercase.",
+        "FinOps hub uses root-mounted routers (`router.use('/', ...)`) unlike CRM explicit-prefixed resources."
+      ],
+      "suggestion": "Define one route-segment convention (recommended lowercase kebab-case) and migrate hubs to it with explicit compatibility aliases plus deprecation deadlines.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "route_contract_drift"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "hub_composition_protocol_drift",
+      "summary": "Router composition contracts differ by module, so integration seams are non-uniform and harder to reason about.",
+      "related_files": [
+        "backend/src/api/routes/crm/index.ts",
+        "backend/src/api/routes/finops/index.ts",
+        "backend/src/api/routes/voicebot/index.ts"
+      ],
+      "evidence": [
+        "CRM uses explicit domain prefixes per child router.",
+        "FinOps composes multiple unrelated routers all at `/`, relying on internals for endpoint identity.",
+        "VoiceBot mixes flat and prefixed mounts and labels some as legacy aliases without a unified policy."
+      ],
+      "suggestion": "Introduce a shared hub composition rule (e.g., all routers mounted under explicit resource prefixes; aliases isolated in a compatibility layer) and apply it to all three index hubs.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "route_contract_drift"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_normalization_without_error_contract",
+      "summary": "Utility normalization paths silently coerce invalid inputs instead of exposing a consistent error contract.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/sessionUrlUtils.ts"
+      ],
+      "evidence": [
+        "`toObjectIdOrNull` returns `null`, `toTaskText` returns empty string, `toTaskReferenceList` silently drops unsupported items, and `normalizeDateField` may return raw unparseable strings.",
+        "`voiceSessionUrlUtils.active` rewrites certain configured hosts to default without warning or error.",
+        "No structured diagnostics are emitted for dropped/rewritten values."
+      ],
+      "suggestion": "Standardize helper failure behavior via a typed result pattern (e.g., `{ok,value}` or thrown `AppError` at boundaries) and add explicit logging/metrics for config rewrite and value drops.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fail_open_normalization"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "mixed_invalid_value_sentinels",
+      "summary": "The same utility module uses multiple incompatible sentinel values for invalid data, increasing caller ambiguity.",
+      "related_files": [
+        "backend/src/api/routes/voicebot/sessionsSharedUtils.ts",
+        "backend/src/api/routes/voicebot/index.ts"
+      ],
+      "evidence": [
+        "Invalid conversions in `sessionsSharedUtils` return a mix of `null`, `''`, `[]`, and sometimes untouched strings.",
+        "Route hub code in `voicebot/index.ts` does not enforce one normalization boundary before request handling, so downstream code can receive mixed invalid sentinels."
+      ],
+      "suggestion": "Adopt one invalid-data contract per helper family (e.g., `null` only for scalars, empty arrays only for collections, never empty-string-as-error) and validate/normalize once at route entry.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "fail_open_normalization"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "No enforced cross-module standard for route-hub composition and URL naming.",
+      "Fail-open normalization strategy evolved without a single typed error contract."
+    ],
+    "likely_symptoms": [
+      "route_style_mixed_naming",
+      "hub_composition_protocol_drift",
+      "silent_normalization_without_error_contract",
+      "mixed_invalid_value_sentinels"
+    ],
+    "possible_false_positives": []
+  }
+}
