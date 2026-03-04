@@ -1,0 +1,343 @@
+{
+  "assessments": {
+    "abstraction_fitness": {
+      "score": 79.5,
+      "components": [
+        "Abstraction Leverage",
+        "Indirection Cost",
+        "Interface Honesty"
+      ],
+      "component_scores": {
+        "Abstraction Leverage": 78.0,
+        "Indirection Cost": 83.0,
+        "Interface Honesty": 86.0
+      }
+    },
+    "ai_generated_debt": 89.0,
+    "api_surface_coherence": 86.0,
+    "authorization_consistency": 93.0,
+    "convention_outlier": 87.0,
+    "cross_module_architecture": 88.0,
+    "design_coherence": 86.0,
+    "error_consistency": 75.5,
+    "high_level_elegance": 86.0,
+    "incomplete_migration": 70.8,
+    "low_level_elegance": 87.0,
+    "mid_level_elegance": 86.0,
+    "package_organization": 90.0
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Shared handlers stay mostly one-way toward services/utils; no cycles observed in assigned scope.",
+        "A boundary leak remains: worker manifest still routes events/postprocessing jobs to shared handlers that are known no-op stubs (`AUDIO_MERGING`, `SEND_TO_SOCKET`)."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Manifest-to-handler wiring still includes inactive transports, which blurs runtime ownership boundaries."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Most shared files use concise pure helpers, but `sendToSocket.ts` exports an `async` handler with no await while sibling handlers mix true async I/O and sync-only logic.",
+        "Error helper conventions diverge between files (`getErrorMessage`, `resolveUnknownErrorMessage`, quota parsing split), creating style/protocol drift inside one shared folder."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Shared folder conventions are not fully standardized for async signatures and error helper shape."
+    },
+    "error_consistency": {
+      "evidence": [
+        "`customPromptShared.ts` catches prompt read failures and returns `null` without logging or preserving failure context.",
+        "`sharedRuntime.ts` and `errorMessage.ts` implement different error-message extraction depth; callers can receive different messages for the same nested error object.",
+        "`openAiErrors.ts` requires external `messageText` while also introspecting the error object, splitting one error decision across multiple call sites."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "`sharedRuntime.ts` already exports `runtimeQuery`, but `audioMerging.ts` redefines equivalent `mergeWithRuntimeFilter` logic locally.",
+        "Shared error helpers are fragmented across `sharedRuntime.ts`, `errorMessage.ts`, and `openAiErrors.ts` instead of one cohesive contract, increasing indirection and drift risk."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "",
+      "sub_axes": {
+        "abstraction_leverage": 78.0,
+        "indirection_cost": 83.0,
+        "interface_honesty": 86.0
+      }
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Job handlers mostly return `{ ok, skipped/reason/error }` style payloads.",
+        "However, inactive handlers return success-skipped for transport-unavailable conditions, while some validation errors return `ok: false`, creating mixed semantics for operational failures."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Failure/skip signaling is not fully coherent across stubbed vs active job handlers."
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Assigned files are worker-internal helpers and do not introduce route-level auth bypasses.",
+        "No direct permission literal drift or trust-boundary branching was found in these files."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "No explicit authorization assertions exist at these worker boundaries, so consistency depends on upstream queue producers."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "Code is generally compact with limited boilerplate.",
+        "A few formulaic wrappers remain (no-op handlers, repeated runtime filter helper), indicating minor ceremony that does not add behavior."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Some pass-through/no-op structures remain and should be consolidated with explicit capability gating."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "`audioMerging.ts` intentionally reports `telegram_merge_transport_unavailable` after checking session/message state.",
+        "`sendToSocket.ts` intentionally reports `socket_runtime_not_available` and does not deliver events.",
+        "Both handlers remain registered in `manifest.ts`, so legacy queue pathways are still active while implementation ownership moved elsewhere."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "package_organization": {
+      "evidence": [
+        "Holistic structure shows `backend/src/workers/voicebot/handlers/shared/` has 7 files, 277 LOC, avg fan-in 0.1 and avg fan-out 1.6, indicating small focused scope.",
+        "Coupling is mostly outward to `services/` and `utils/` with no reciprocal matrix edges reported for this scoped directory."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Folder mixes true shared normalization helpers with migration-era operational stubs, reducing semantic cohesion."
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Shared helpers are separated from heavy handlers, preserving broad decomposition.",
+        "But inactive transport handlers living in the same shared surface as active utilities weakens ownership clarity."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Runtime ownership for socket/audio-merge is not cleanly encoded in module boundaries."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Most handoffs are simple value-in/value-out helper calls.",
+        "Error handoff remains split across three helper modules, so boundary behavior depends on which helper a caller selected."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Integration seam for error parsing/classification is duplicated rather than centralized."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Functions are small and generally direct.",
+        "Silent catch blocks in prompt/file parsing paths reduce local precision by hiding actionable failure details."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Local error handling in file I/O/parser helpers still favors silent fallback over explicit diagnostics."
+    },
+    "design_coherence": {
+      "evidence": [
+        "Most files have focused responsibilities.",
+        "A coherence gap remains where migration stubs and reusable utility logic coexist under one `shared` umbrella."
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "medium",
+      "issues_preventing_higher_score": "Design intent of the shared package is mixed (utility layer plus lifecycle/migration shims)."
+    }
+  },
+  "findings": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "stubbed_jobs_still_manifested",
+      "summary": "Queue jobs remain wired to handlers that are hardcoded transport-unavailable stubs",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts",
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+        "backend/src/workers/voicebot/manifest.ts"
+      ],
+      "evidence": [
+        "`handleSendToSocketJob` always returns `{ ok: true, skipped: true, reason: 'socket_runtime_not_available' }` after validating event.",
+        "`handleAudioMergingJob` returns skipped with `telegram_merge_transport_unavailable` and logs that merge transport is unavailable in TS runtime.",
+        "Both are still bound in `VOICEBOT_WORKER_MANIFEST` under `VOICEBOT_JOBS.events.SEND_TO_SOCKET` and `VOICEBOT_JOBS.postprocessing.AUDIO_MERGING`."
+      ],
+      "suggestion": "Complete the migration by choosing one path and removing the other: either (1) unbind these jobs from `manifest.ts` and prevent enqueue at source, or (2) implement real transport handlers in worker runtime with capability checks. Add a startup-time capability assertion that fails fast if a required transport job is registered but unsupported.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "architectural_change",
+      "root_cause_cluster": "migration_stub_residue"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "shared_runtime_helper_drift",
+      "summary": "Shared helper abstractions are bypassed by local reimplementations in the same layer",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+        "backend/src/workers/voicebot/handlers/shared/audioMerging.ts"
+      ],
+      "evidence": [
+        "`sharedRuntime.ts` exports `runtimeQuery` using `mergeWithRuntimeFilter` with the same runtime_tag options.",
+        "`audioMerging.ts` defines its own `runtimeQuery` with equivalent implementation instead of importing the shared one."
+      ],
+      "suggestion": "Refactor to a single runtime query helper contract in `sharedRuntime.ts` and import it everywhere in worker handlers. Add a lint/search guard in CI (for example `rg \"const runtimeQuery = \\(query\" backend/src/workers/voicebot/handlers`) to prevent future local redefinitions.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "shared_helper_fragmentation"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "error_extraction_and_io_failures_inconsistent",
+      "summary": "Error normalization is split across helpers and some failures are silently swallowed",
+      "related_files": [
+        "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+        "backend/src/workers/voicebot/handlers/shared/errorMessage.ts",
+        "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+        "backend/src/workers/voicebot/handlers/shared/openAiErrors.ts"
+      ],
+      "evidence": [
+        "`getCustomPromptText` catches read failures and returns `null` without logging errno/path context.",
+        "`sharedRuntime.getErrorMessage` is shallow (`Error|string|String(value)`), while `resolveUnknownErrorMessage` traverses `response.data.error.message`, producing divergent outputs for similar errors.",
+        "`isQuotaError` relies on externally supplied `messageText` plus internal parsing, so classification behavior depends on caller-preprocessing choices."
+      ],
+      "suggestion": "Unify on one shared error normalization API that returns `{ message, code, status }` and use it for both message rendering and quota classification. In prompt/file helpers, log read/parse exceptions with file path and reason before returning fallback so operators retain diagnostics.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "shared_helper_fragmentation"
+    }
+  ],
+  "review_quality": {
+    "batch_count": 1,
+    "dimension_coverage": 1.0,
+    "evidence_density": 9.333,
+    "high_score_missing_issue_note": 0,
+    "finding_pressure": 7.788,
+    "dimensions_with_findings": 3
+  },
+  "review_scope": {
+    "reviewed_files_count": 7,
+    "successful_batch_count": 1,
+    "full_sweep_included": true,
+    "total_files": 7,
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ]
+  },
+  "reviewed_files": [
+    "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+    "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts",
+    "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+    "backend/src/workers/voicebot/handlers/shared/errorMessage.ts",
+    "backend/src/workers/voicebot/handlers/shared/openAiErrors.ts",
+    "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts",
+    "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts"
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "codex",
+    "run_stamp": "20260304_092844",
+    "created_at": "2026-03-04T09:30:27+00:00",
+    "batch_count": 1,
+    "batch_indexes": [
+      4
+    ],
+    "packet_path": "/home/strato-space/copilot/.desloppify/review_packet_blind.json",
+    "packet_sha256": "0a8fe76f641d3d222852417dd5eacd7dead70b327c8296731760d006ddedc997"
+  },
+  "assessment_coverage": {
+    "scored_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "selected_dimensions": [
+      "cross_module_architecture",
+      "convention_outlier",
+      "error_consistency",
+      "abstraction_fitness",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "ai_generated_debt",
+      "incomplete_migration",
+      "package_organization",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "design_coherence"
+    ],
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "convention_outlier",
+      "cross_module_architecture",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "package_organization"
+    ],
+    "missing_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "initialization_coupling",
+      "dependency_health",
+      "test_strategy"
+    ]
+  }
+}

@@ -1,38 +1,45 @@
 {
   "version": 1,
   "created": "2026-02-28T08:24:41+00:00",
-  "last_scan": "2026-03-04T09:19:56+00:00",
-  "scan_count": 39,
-  "overall_score": 58.3,
-  "objective_score": 74.6,
-  "strict_score": 58.3,
-  "verified_strict_score": 74.6,
+  "last_scan": "2026-03-04T09:30:27+00:00",
+  "scan_count": 41,
+  "overall_score": 76.0,
+  "objective_score": 61.9,
+  "strict_score": 76.0,
+  "verified_strict_score": 61.9,
   "stats": {
-    "total": 469,
-    "open": 130,
+    "total": 1662,
+    "open": 676,
     "fixed": 0,
-    "auto_resolved": 339,
+    "auto_resolved": 986,
     "wontfix": 0,
     "false_positive": 0,
     "by_tier": {
-      "2": {
-        "open": 3,
+      "1": {
+        "open": 0,
         "fixed": 0,
-        "auto_resolved": 26,
+        "auto_resolved": 9,
+        "wontfix": 0,
+        "false_positive": 0
+      },
+      "2": {
+        "open": 36,
+        "fixed": 0,
+        "auto_resolved": 184,
         "wontfix": 0,
         "false_positive": 0
       },
       "3": {
-        "open": 127,
+        "open": 523,
         "fixed": 0,
-        "auto_resolved": 256,
+        "auto_resolved": 610,
         "wontfix": 0,
         "false_positive": 0
       },
       "4": {
-        "open": 0,
+        "open": 117,
         "fixed": 0,
-        "auto_resolved": 57,
+        "auto_resolved": 183,
         "wontfix": 0,
         "false_positive": 0
       }
@@ -38831,17 +38838,23 @@
         "reason": "unreviewed",
         "loc": 82
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by reviewed_files cache refresh",
       "first_seen": "2026-02-28T11:27:20+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Per-file review cache refreshed for this file",
+        "attested_at": "2026-03-04T09:30:24+00:00",
+        "scan_verified": false
+      }
     },
     "subjective_review::backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts::unreviewed": {
       "id": "subjective_review::backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts::unreviewed",
@@ -38854,17 +38867,23 @@
         "reason": "unreviewed",
         "loc": 25
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by reviewed_files cache refresh",
       "first_seen": "2026-02-28T11:27:20+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Per-file review cache refreshed for this file",
+        "attested_at": "2026-03-04T09:30:24+00:00",
+        "scan_verified": false
+      }
     },
     "subjective_review::backend/src/workers/voicebot/handlers/shared/errorMessage.ts::unreviewed": {
       "id": "subjective_review::backend/src/workers/voicebot/handlers/shared/errorMessage.ts::unreviewed",
@@ -38877,17 +38896,23 @@
         "reason": "unreviewed",
         "loc": 36
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by reviewed_files cache refresh",
       "first_seen": "2026-02-28T11:27:20+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Per-file review cache refreshed for this file",
+        "attested_at": "2026-03-04T09:30:24+00:00",
+        "scan_verified": false
+      }
     },
     "subjective_review::backend/src/workers/voicebot/handlers/shared/openAiErrors.ts::unreviewed": {
       "id": "subjective_review::backend/src/workers/voicebot/handlers/shared/openAiErrors.ts::unreviewed",
@@ -38900,17 +38925,23 @@
         "reason": "unreviewed",
         "loc": 46
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by reviewed_files cache refresh",
       "first_seen": "2026-02-28T11:27:20+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Per-file review cache refreshed for this file",
+        "attested_at": "2026-03-04T09:30:24+00:00",
+        "scan_verified": false
+      }
     },
     "subjective_review::backend/src/workers/voicebot/handlers/shared/sendToSocket.ts::unreviewed": {
       "id": "subjective_review::backend/src/workers/voicebot/handlers/shared/sendToSocket.ts::unreviewed",
@@ -38923,17 +38954,23 @@
         "reason": "unreviewed",
         "loc": 34
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by reviewed_files cache refresh",
       "first_seen": "2026-02-28T11:27:20+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Per-file review cache refreshed for this file",
+        "attested_at": "2026-03-04T09:30:24+00:00",
+        "scan_verified": false
+      }
     },
     "boilerplate_duplication::backend/src/workers/voicebot/handlers/customPrompt.ts::52b6f9eea2dae747": {
       "id": "boilerplate_duplication::backend/src/workers/voicebot/handlers/customPrompt.ts::52b6f9eea2dae747",
@@ -40661,17 +40698,23 @@
         "reason": "unreviewed",
         "loc": 24
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by reviewed_files cache refresh",
       "first_seen": "2026-02-28T11:30:41+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Per-file review cache refreshed for this file",
+        "attested_at": "2026-03-04T09:30:24+00:00",
+        "scan_verified": false
+      }
     },
     "subjective_review::backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts::unreviewed": {
       "id": "subjective_review::backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts::unreviewed",
@@ -40684,17 +40727,23 @@
         "reason": "unreviewed",
         "loc": 30
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "resolved by reviewed_files cache refresh",
       "first_seen": "2026-02-28T11:30:41+00:00",
       "last_seen": "2026-02-28T13:45:34+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "zone": "production",
       "suppressed": false,
       "suppressed_at": null,
-      "suppression_pattern": null
+      "suppression_pattern": null,
+      "resolution_attestation": {
+        "kind": "agent_import",
+        "text": "Per-file review cache refreshed for this file",
+        "attested_at": "2026-03-04T09:30:24+00:00",
+        "scan_verified": false
+      }
     },
     "structural::backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.test.ts": {
       "id": "structural::backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.test.ts",
@@ -49734,11 +49783,11 @@
         "suggestion": "Move logger initialization to explicit application bootstrap, make `getLogger()` throw until initialized (or return a side-effect-free noop logger in tests), and remove top-level eager `getLogger()` calls from leaf modules.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -49768,11 +49817,11 @@
         "suggestion": "Split constants into domain modules (`constants/db`, `constants/voicebot`, `constants/socket`, `constants/auth`) and expose narrow facades per subsystem to reduce transitive coupling.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -49800,11 +49849,11 @@
         "suggestion": "Either implement real scope enforcement in the proxy/hook functions (query/update rewriting + guarded raw access) or remove the pseudo-abstraction and document a single explicit isolation mechanism to avoid false safety assumptions.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -49835,11 +49884,11 @@
         "suggestion": "Introduce one canonical auth context resolver that loads performer/roles/permissions once per request, then let `requireRole` and `requirePermission` consume that normalized context without additional DB fetches.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -49868,11 +49917,11 @@
         "suggestion": "Define a single authorization pipeline contract (e.g., identity hydration + policy engine), keep `roleGuard` as a thin policy adapter or deprecate it in favor of permission policies, and standardize middleware composition across routes.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -49901,11 +49950,11 @@
         "suggestion": "Extract a `bdClient`/integration service (run/list/show/sync-retry + parsing + typed error mapping) and keep route handlers focused on validation + response translation.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -49936,11 +49985,11 @@
         "suggestion": "Enforce one response contract at middleware/route boundaries (prefer `sendOk`/`sendError` or an equivalent centralized responder) and migrate auth/codex handlers to it for coherent top-level API behavior.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -49969,11 +50018,11 @@
         "suggestion": "Define and enforce a single route-segment convention (prefer lowercase kebab-case), then add explicit compatibility redirects/aliases only where required and tracked.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50001,11 +50050,11 @@
         "suggestion": "Add canonical lowercase `/llmgate` route and treat `/LLMGate` as a deprecated alias with explicit deprecation tracking and eventual removal.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50033,11 +50082,11 @@
         "suggestion": "Centralize error serialization: log full error context server-side, emit stable client-safe messages for 5xx responses, and include consistent structured fields (`code`, correlation/request id) across all branches.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50065,11 +50114,11 @@
         "suggestion": "Remove the default status from `sendError` (or constrain with wrappers like `sendBadRequest`, `sendInternalError`) so call sites must declare intended failure semantics.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50098,11 +50147,11 @@
         "suggestion": "Introduce a single URL policy module with explicit modes (`public`, `canonical`, `legacyAlias`) and one source of truth consumed by route handlers and integration helpers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50132,11 +50181,11 @@
         "suggestion": "Standardize hub composition with explicit module prefixes and an agreed pattern for internal sub-route mounting to reduce implicit path coupling.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50166,11 +50215,11 @@
         "suggestion": "Centralize runtime query policy in one shared utility (or remove wrappers entirely). If runtime scoping is intentionally removed, replace wrapper usage with direct queries to reduce deceptive abstraction.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50200,11 +50249,11 @@
         "suggestion": "Create one shared authenticated request type hierarchy in middleware/types and make routes consume that contract instead of local ad-hoc interfaces.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50234,11 +50283,11 @@
         "suggestion": "Adopt one route-layer contract: keep handlers thin and move orchestration into domain services for CRM/Voice modules, with shared validation and access helpers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50268,11 +50317,11 @@
         "suggestion": "Extract integration adapters (Google, bd CLI, session orchestration) into service modules with explicit return contracts, leaving route handlers as transport/auth wrappers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50300,11 +50349,11 @@
         "suggestion": "Replace empty catch with structured warning logs including ticket/project IDs and failure reason; isolate enrichment into a pure function that returns explicit partial-failure metadata.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50334,11 +50383,11 @@
         "suggestion": "Standardize route error mapping through shared middleware (`AppError` + response envelope) and avoid raw `String(error)` in handlers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50368,11 +50417,11 @@
         "suggestion": "Split heavy blocks into small pure transforms (normalize, group, enrich, summarize) and orchestration layer; add focused unit tests for each transform boundary.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50403,11 +50452,11 @@
         "suggestion": "Route all middleware failures through `sendError` (or a single typed error helper) and standardize auxiliary fields under `error.details` to keep one predictable response contract.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50437,11 +50486,11 @@
         "suggestion": "Create one shared `RequestContext` type (auth payload + performer + db + permissions enum type) and import it in all middleware/utilities to eliminate seam ambiguity.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50471,11 +50520,11 @@
         "suggestion": "Centralize session/project id parsing in one validator and return a structured client error (e.g., `invalid_session_id`) via `AppError` + `sendError` rather than letting ObjectId constructor exceptions leak to generic 500s.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50505,11 +50554,11 @@
         "suggestion": "Make auth middleware the single source of performer context and let downstream guards consume `req.performer` (with optional refresh flag only where strict freshness is required).",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50539,11 +50588,11 @@
         "suggestion": "Throw `AppError` (or a domain error type translated to `AppError`) with stable `code` and `details` from permission mutators so middleware can preserve precise API error contracts.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50573,11 +50622,11 @@
         "suggestion": "Accept a shared authenticated request type (or a minimal typed actor-context object) in audit helpers so actor resolution is compile-time-bound to middleware contracts.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50605,11 +50654,11 @@
         "suggestion": "Add an explicit router-level guard or per-route permission wrappers in `sessions.ts` (matching the module\u2019s required capability per endpoint), so authorization is enforced locally and cannot be bypassed by mount-time mistakes.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50637,11 +50686,11 @@
         "suggestion": "Require a specific permission for directory enumeration (for example `VOICEBOT_SESSIONS.UPDATE` or a dedicated `VOICEBOT_USERS.READ`) and reject unauthorized callers before DB query.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50669,11 +50718,11 @@
         "suggestion": "Either enforce the same ACL as `message_attachment` (preferred) or protect `public_attachment` with signed short-lived tokens tied to session/user scope; avoid raw identifier-based public access.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50702,11 +50751,11 @@
         "suggestion": "Extract one canonical `authorizeSessionAccess({ performer, session, action })` service used by both files and all routes; make action-level requirements explicit (`read`, `update`, `finalize`, `share`) to prevent policy drift.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50736,11 +50785,11 @@
         "suggestion": "Stage 1: create `backend/src/services/crm/audit/projectTreeAudit.ts` and move `writeProjectTreeAuditLog` there. Stage 2: update imports in `customers.ts` and `legacy/projectgroups.ts` to the new service location. Stage 3: keep `legacy/projecttreeaudit.ts` as a thin re-export temporarily, then delete it after callers are migrated. Stage 4 validation: run `cd backend && rg \"projecttreeaudit|writeProjectTreeAuditLog\" src/api/routes src/services`, `cd backend && npm run build`, and route smoke checks for `/api/crm/customers/update` and `/api/crm/project_groups/update`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50770,11 +50819,11 @@
         "suggestion": "Stage 1: define target packages by domain: `routes/crm/payments/`, `routes/crm/project-structure/`, `routes/crm/bot-admin/`. Stage 2 move order: move `performerspayments.ts` first (highest blast radius), then `projectgroups.ts`, then `botcommands.ts`; keep compatibility re-export stubs in `legacy/` during transition. Stage 3: update route mounts to new paths while preserving external URLs. Stage 4 validation: run `cd backend && rg \"./legacy/(performerspayments|projectgroups|botcommands)\" src/api/routes`, `cd backend && npm run build`, and endpoint smoke checks for `/api/crm/performers-payments/*`, `/api/crm/project_groups/*`, `/api/crm/bot-commands/*`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50804,11 +50853,11 @@
         "suggestion": "Stage 1: introduce service modules `services/codex/bdClient.ts` and `services/voicebot/llmGateService.ts` with typed request/response contracts. Stage 2: reduce route files to validation + auth + service call + response mapping. Stage 3: keep legacy route aliasing in index, but map both canonical and legacy paths to the same thin handler. Stage 4 validation: run `cd backend && rg \"spawn\\(|new OpenAI\\(\" src/api/routes`, `cd backend && npm run build`, and API smoke checks for `/api/crm/codex/issues`, `/api/crm/codex/issue`, `/api/voicebot/LLMGate/run_prompt`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50838,11 +50887,11 @@
         "suggestion": "Stage 1: move non-HTTP helpers to `backend/src/services/voicebot/messageCanonicalization.ts` (or `domain/voicebot/messages/`). Stage 2: update all imports to service path and leave a temporary compatibility export in `routes/voicebot/messageHelpers.ts`. Stage 3: remove no-op runtime query shims or relocate them to a clearly named migration-compat module. Stage 4 validation: run `cd backend && rg \"messageHelpers\" src`, `cd backend && npm run build`, and replay message-edit/categorization flows that touch canonicalization logic.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50871,11 +50920,11 @@
         "suggestion": "Stage 1: define canonical mount `/llmgate` in `voicebot/index.ts` while retaining `/LLMGate` as explicit temporary alias. Stage 2: document deprecation window and add request logging tag when legacy alias is used. Stage 3: update internal consumers to canonical path, then remove alias after cutover. Stage 4 validation: run `cd backend && rg \"LLMGate|llmgate\" src/api/routes/voicebot`, `cd backend && npm run build`, and call both endpoints to confirm identical behavior before deprecation.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50905,11 +50954,11 @@
         "suggestion": "Split `sessions.ts` by concern: move normalization/formatting helpers into `services/voicebot/*`, realtime emitters into a dedicated notifier module, and group routers by capability (`session-read`, `taskflow`, `categorization`, `project-files`). Keep route files thin (validate -> call service -> map response).",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50939,11 +50988,11 @@
         "suggestion": "Define a single canonical attachment DTO at backend boundary and always return `session_attachments` precomputed from server. Move all URI derivation and Telegram path policy to backend service helpers, and make frontend store only consume normalized DTOs without reconstruction.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -50973,11 +51022,11 @@
         "suggestion": "Introduce a shared CRM identity adapter module (e.g., `app/src/utils/crmIdentity.ts`) with canonical helpers for object-id/public-id normalization, performer identity resolution, and route-id selection; migrate kanban/task utilities to consume it.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51007,11 +51056,11 @@
         "suggestion": "Extract page-level orchestration hooks (`useSessionsListFilters`, `useVoiceFabSync`, `useKanbanRowIdentity`, `useSessionPasteUpload`) and keep page/components focused on rendering + event wiring. This reduces hidden coupling between state persistence and UI behavior.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51042,11 +51091,11 @@
         "suggestion": "Centralize runtime query policy into one voicebot repository utility (explicitly named for current contract, e.g., `runtimeScopedQuery` and `runtimeAgnosticQuery`) and require modules to import one of these two explicit strategies instead of local ad-hoc wrappers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51079,11 +51128,11 @@
         "suggestion": "Execute a full runtime_tag retirement pass: remove runtime_tag-based indexes/filters from active read/write paths, migrate remaining records if needed, and rely only on deployment/database-level isolation with one compatibility boundary during cutover.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51113,11 +51162,11 @@
         "suggestion": "Keep one close implementation (`/session_done`) and make any compatibility alias a thin forwarder to that code path only; remove the independent uploads close handler to avoid semantic drift.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51149,11 +51198,11 @@
         "suggestion": "Define and enforce one canonical transcription payload contract, run a bounded migration/backfill for historical rows, then remove `transcription_chunks`/plain-text fallback branches from UI and backend message-processing code.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51181,11 +51230,11 @@
         "suggestion": "Either implement real scoping semantics in one shared utility and use it consistently, or remove these wrappers and call raw queries directly to reduce misleading abstraction layers.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51214,11 +51263,11 @@
         "suggestion": "Extract a shared session-member-picker modal component and a generic modal state helper in sessionsUIStore, then parameterize label/getter/save action differences.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51249,11 +51298,11 @@
         "suggestion": "Apply a uniform FinOps guard policy: mount `authMiddleware` at `finops/index.ts` and explicitly declare exceptions (if any) as opt-out routes with comments/tests. Add integration tests for unauthorized access on `/fund/comments`, `/plan-fact`, and `/plan-fact/project`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51284,11 +51333,11 @@
         "suggestion": "Introduce a CRM router-level auth baseline in `crm/index.ts` (or documented per-subrouter policy object) and require explicit opt-out for public endpoints. For `codex.ts`, enforce admin permission middleware before command execution.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51320,11 +51369,11 @@
         "suggestion": "Create a migration wrapper (`ok/error` responder adapters) and migrate by router: 1) codemod simple success/error responses to helper calls, 2) add compatibility transform for legacy clients, 3) enforce via lint rule in `backend/src/api/routes/**`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51355,11 +51404,11 @@
         "suggestion": "Standardize on internal logging + stable external error codes/messages. Replace `String(error)` payloads with normalized `{ code, message }`, preserving diagnostics only in logs and optional trace IDs.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51390,11 +51439,11 @@
         "suggestion": "Publish a canonical route map and migrate clients in phases: Phase 1 add deprecation headers on alias paths, Phase 2 update clients to canonical endpoints, Phase 3 remove deprecated aliases behind a version gate.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51425,11 +51474,11 @@
         "suggestion": "Track a sunset matrix per alias/module (`owner`, `client usage`, `kill date`) and enforce with runtime metrics. Disable unused legacy routes first, then progressively remove legacy mounts from `crm/index.ts` and alias paths from `voicebot/index.ts`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51459,11 +51508,11 @@
         "suggestion": "Staged reorg plan: 1) create `backend/src/api/routes/voicebot/sessions/{list,get,mutate,taskflow,transcript}.ts` and `uploads/{audio,attachment,public,legacy}.ts`; 2) move pure validators/parsers to `voicebot/contracts/`; 3) move access checks to `voicebot/access/`; 4) keep `index.ts` as composition only. Move order: extract read-only handlers first, then mutation handlers, then alias wrappers. Import update/validation commands: `cd backend && rg \"from './sessions|from './uploads\" src/api/routes/voicebot -n`, `cd backend && npm run build`, `cd backend && npm run test -- --runInBand`.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51492,11 +51541,11 @@
         "suggestion": "Extract shared audit functionality from `crm/legacy` into a neutral `crm/shared/audit/` package, then update both modern and legacy routers to consume that shared module and remove modern->legacy imports.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51527,11 +51576,11 @@
         "suggestion": "Create one shared boundary utility module (for example `api/routes/crm/shared/idParsers.ts`) with strict typed semantics and replace local helpers incrementally, starting with `projects/customers/tickets` then legacy modules.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51561,11 +51610,11 @@
         "suggestion": "Define and enforce one CRM API convention spec: route naming style, response envelope, and auth declaration. Add a lightweight route-lint check that fails on non-conforming path patterns and direct raw JSON responses in new CRM endpoints.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51595,11 +51644,11 @@
         "suggestion": "Split by use-case boundaries (session lifecycle, taskflow, transcript editing, summary, project files) and keep each module under a single responsibility with explicit imported collaborators.",
         "reasoning": ""
       },
-      "status": "open",
-      "note": null,
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
       "first_seen": "2026-03-04T09:19:44+00:00",
       "last_seen": "2026-03-04T09:19:44+00:00",
-      "resolved_at": null,
+      "resolved_at": "2026-03-04T09:30:24+00:00",
       "reopen_count": 0,
       "lang": "typescript",
       "suppressed": false,
@@ -51677,6 +51726,301 @@
       "suppressed": false,
       "suppressed_at": null,
       "suppression_pattern": null
+    },
+    "review::.::holistic::incomplete_migration::runtime_tag_filter_still_core_path::f600104f": {
+      "id": "review::.::holistic::incomplete_migration::runtime_tag_filter_still_core_path::f600104f",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Deprecated runtime_tag filtering remains embedded in active shared worker query paths.",
+      "detail": {
+        "holistic": true,
+        "dimension": "incomplete_migration",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+          "backend/src/workers/voicebot/handlers/shared/audioMerging.ts"
+        ],
+        "evidence": [
+          "sharedRuntime.runtimeQuery applies mergeWithRuntimeFilter using field runtime_tag (sharedRuntime.ts:4-9).",
+          "audioMerging defines a second runtime_tag-based runtimeQuery copy (audioMerging.ts:26-31), keeping tag-dependent routing in production handler logic."
+        ],
+        "suggestion": "Replace both local runtime_tag query wrappers with an environment-isolated DB access contract (no tag-family filters in handler code). Stage migration by: 1) introduce a single scope utility that rejects mixed-runtime collections instead of filtering, 2) switch both files to that utility, 3) remove runtime_tag filter usage from shared handlers, 4) validate with `cd backend && npm run build && npm run test -- handlers`.",
+        "reasoning": ""
+      },
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
+      "first_seen": "2026-03-04T09:30:24+00:00",
+      "last_seen": "2026-03-04T09:30:24+00:00",
+      "resolved_at": "2026-03-04T09:30:27+00:00",
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::api_surface_coherence::noop_handlers_report_success::260cb123": {
+      "id": "review::.::holistic::api_surface_coherence::noop_handlers_report_success::260cb123",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Queue handlers return success for unsupported runtime capabilities, producing misleading API outcomes.",
+      "detail": {
+        "holistic": true,
+        "dimension": "api_surface_coherence",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts",
+          "backend/src/workers/voicebot/handlers/shared/audioMerging.ts"
+        ],
+        "evidence": [
+          "sendToSocket returns `{ ok: true, skipped: true }` for `socket_runtime_not_available` (sendToSocket.ts:29-33).",
+          "audioMerging returns `{ ok: true, skipped: true }` for `telegram_merge_transport_unavailable` (audioMerging.ts:75-81)."
+        ],
+        "suggestion": "Define a shared handler result envelope that distinguishes `unsupported` from `success` and make queue dispatcher treat unsupported as actionable failure/route-mismatch. Add an explicit error code set and update both handlers to return `ok:false` with typed reason when capability is absent.",
+        "reasoning": ""
+      },
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
+      "first_seen": "2026-03-04T09:30:24+00:00",
+      "last_seen": "2026-03-04T09:30:24+00:00",
+      "resolved_at": "2026-03-04T09:30:27+00:00",
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::error_consistency::silent_prompt_read_failure::b00f37e2": {
+      "id": "review::.::holistic::error_consistency::silent_prompt_read_failure::b00f37e2",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Prompt file I/O failures are swallowed silently, erasing operational diagnostics.",
+      "detail": {
+        "holistic": true,
+        "dimension": "error_consistency",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+          "backend/src/workers/voicebot/handlers/shared/errorMessage.ts"
+        ],
+        "evidence": [
+          "customPromptShared catches readFileSync errors and returns null with no logging or error propagation (customPromptShared.ts:13-17).",
+          "The codebase provides explicit unknown-error message extraction utility (errorMessage.ts:18-35), but it is not used for this boundary."
+        ],
+        "suggestion": "Log read failures with processorName and promptFilePath using a shared error formatter (resolveUnknownErrorMessage), and return a typed failure state distinct from 'file not found' to preserve diagnostics.",
+        "reasoning": ""
+      },
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
+      "first_seen": "2026-03-04T09:30:24+00:00",
+      "last_seen": "2026-03-04T09:30:24+00:00",
+      "resolved_at": "2026-03-04T09:30:27+00:00",
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::mid_level_elegance::seam_contract_inconsistent_across_handlers::9259918a": {
+      "id": "review::.::holistic::mid_level_elegance::seam_contract_inconsistent_across_handlers::9259918a",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Sibling shared handlers expose inconsistent execution semantics across the same queue-processing seam.",
+      "detail": {
+        "holistic": true,
+        "dimension": "mid_level_elegance",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts",
+          "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts"
+        ],
+        "evidence": [
+          "cleanupEmptySessions performs real side effects and returns service output (cleanupEmptySessions.ts:20-24).",
+          "sendToSocket validates event then short-circuits to skip with success semantics (sendToSocket.ts:15-33), making sibling handler behavior non-uniform for orchestrators."
+        ],
+        "suggestion": "Introduce a common `WorkerHandlerResult` contract with explicit states (`completed|failed|unsupported|skipped`) and enforce it for all shared handlers; update dispatcher metrics/alerts per state to keep seam behavior predictable.",
+        "reasoning": ""
+      },
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
+      "first_seen": "2026-03-04T09:30:24+00:00",
+      "last_seen": "2026-03-04T09:30:24+00:00",
+      "resolved_at": "2026-03-04T09:30:27+00:00",
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::design_coherence::fragmented_error_utility_design::af32ddec": {
+      "id": "review::.::holistic::design_coherence::fragmented_error_utility_design::af32ddec",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Error parsing and normalization are split into overlapping helpers with no single authoritative contract.",
+      "detail": {
+        "holistic": true,
+        "dimension": "design_coherence",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/errorMessage.ts",
+          "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+          "backend/src/workers/voicebot/handlers/shared/openAiErrors.ts"
+        ],
+        "evidence": [
+          "sharedRuntime.getErrorMessage uses shallow extraction and stringify fallback (sharedRuntime.ts:20-24).",
+          "errorMessage.resolveUnknownErrorMessage performs deeper nested extraction with explicit fallback argument (errorMessage.ts:18-35).",
+          "openAiErrors independently parses status/code/type chains (openAiErrors.ts:29-40), creating parallel parsing rules."
+        ],
+        "suggestion": "Consolidate these into one error contract module (`normalizeError(error) => {message, code, status, category}`) and make all shared handlers depend on that normalized shape to remove divergent parsing paths.",
+        "reasoning": ""
+      },
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
+      "first_seen": "2026-03-04T09:30:24+00:00",
+      "last_seen": "2026-03-04T09:30:24+00:00",
+      "resolved_at": "2026-03-04T09:30:27+00:00",
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::cross_module_architecture::duplicated_runtime_scope_adapter::abd26d72": {
+      "id": "review::.::holistic::cross_module_architecture::duplicated_runtime_scope_adapter::abd26d72",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Runtime scoping logic is duplicated across modules, increasing boundary drift risk.",
+      "detail": {
+        "holistic": true,
+        "dimension": "cross_module_architecture",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+          "backend/src/workers/voicebot/handlers/shared/audioMerging.ts"
+        ],
+        "evidence": [
+          "Both files implement near-identical runtimeQuery wrappers with the same mergeWithRuntimeFilter config (sharedRuntime.ts:4-9, audioMerging.ts:26-31).",
+          "Only one wrapper is shared-exported; the other is local, enabling future divergence in a critical cross-module boundary."
+        ],
+        "suggestion": "Remove the local wrapper in audioMerging and import a single canonical query-scope adapter; add a unit test that asserts one runtime-scope configuration source for shared handlers.",
+        "reasoning": ""
+      },
+      "status": "auto_resolved",
+      "note": "not reported in latest holistic re-import",
+      "first_seen": "2026-03-04T09:30:24+00:00",
+      "last_seen": "2026-03-04T09:30:24+00:00",
+      "resolved_at": "2026-03-04T09:30:27+00:00",
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::incomplete_migration::stubbed_jobs_still_manifested::ad4c5d79": {
+      "id": "review::.::holistic::incomplete_migration::stubbed_jobs_still_manifested::ad4c5d79",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Queue jobs remain wired to handlers that are hardcoded transport-unavailable stubs",
+      "detail": {
+        "holistic": true,
+        "dimension": "incomplete_migration",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts",
+          "backend/src/workers/voicebot/handlers/shared/audioMerging.ts",
+          "backend/src/workers/voicebot/manifest.ts"
+        ],
+        "evidence": [
+          "`handleSendToSocketJob` always returns `{ ok: true, skipped: true, reason: 'socket_runtime_not_available' }` after validating event.",
+          "`handleAudioMergingJob` returns skipped with `telegram_merge_transport_unavailable` and logs that merge transport is unavailable in TS runtime.",
+          "Both are still bound in `VOICEBOT_WORKER_MANIFEST` under `VOICEBOT_JOBS.events.SEND_TO_SOCKET` and `VOICEBOT_JOBS.postprocessing.AUDIO_MERGING`."
+        ],
+        "suggestion": "Complete the migration by choosing one path and removing the other: either (1) unbind these jobs from `manifest.ts` and prevent enqueue at source, or (2) implement real transport handlers in worker runtime with capability checks. Add a startup-time capability assertion that fails fast if a required transport job is registered but unsupported.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T09:30:27+00:00",
+      "last_seen": "2026-03-04T09:30:27+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::abstraction_fitness::shared_runtime_helper_drift::d19bc22b": {
+      "id": "review::.::holistic::abstraction_fitness::shared_runtime_helper_drift::d19bc22b",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Shared helper abstractions are bypassed by local reimplementations in the same layer",
+      "detail": {
+        "holistic": true,
+        "dimension": "abstraction_fitness",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+          "backend/src/workers/voicebot/handlers/shared/audioMerging.ts"
+        ],
+        "evidence": [
+          "`sharedRuntime.ts` exports `runtimeQuery` using `mergeWithRuntimeFilter` with the same runtime_tag options.",
+          "`audioMerging.ts` defines its own `runtimeQuery` with equivalent implementation instead of importing the shared one."
+        ],
+        "suggestion": "Refactor to a single runtime query helper contract in `sharedRuntime.ts` and import it everywhere in worker handlers. Add a lint/search guard in CI (for example `rg \"const runtimeQuery = \\(query\" backend/src/workers/voicebot/handlers`) to prevent future local redefinitions.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T09:30:27+00:00",
+      "last_seen": "2026-03-04T09:30:27+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
+    },
+    "review::.::holistic::error_consistency::error_extraction_and_io_failures_inconsistent::49c65d63": {
+      "id": "review::.::holistic::error_consistency::error_extraction_and_io_failures_inconsistent::49c65d63",
+      "detector": "review",
+      "file": ".",
+      "tier": 3,
+      "confidence": "high",
+      "summary": "Error normalization is split across helpers and some failures are silently swallowed",
+      "detail": {
+        "holistic": true,
+        "dimension": "error_consistency",
+        "related_files": [
+          "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts",
+          "backend/src/workers/voicebot/handlers/shared/errorMessage.ts",
+          "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts",
+          "backend/src/workers/voicebot/handlers/shared/openAiErrors.ts"
+        ],
+        "evidence": [
+          "`getCustomPromptText` catches read failures and returns `null` without logging errno/path context.",
+          "`sharedRuntime.getErrorMessage` is shallow (`Error|string|String(value)`), while `resolveUnknownErrorMessage` traverses `response.data.error.message`, producing divergent outputs for similar errors.",
+          "`isQuotaError` relies on externally supplied `messageText` plus internal parsing, so classification behavior depends on caller-preprocessing choices."
+        ],
+        "suggestion": "Unify on one shared error normalization API that returns `{ message, code, status }` and use it for both message rendering and quota classification. In prompt/file helpers, log read/parse exceptions with file path and reason before returning fallback so operators retain diagnostics.",
+        "reasoning": ""
+      },
+      "status": "open",
+      "note": null,
+      "first_seen": "2026-03-04T09:30:27+00:00",
+      "last_seen": "2026-03-04T09:30:27+00:00",
+      "resolved_at": null,
+      "reopen_count": 0,
+      "lang": "typescript",
+      "suppressed": false,
+      "suppressed_at": null,
+      "suppression_pattern": null
     }
   },
   "scan_coverage": {
@@ -51706,87 +52050,87 @@
     "dimensions": []
   },
   "subjective_integrity": {
-    "status": "pass",
-    "target_score": 95.0,
+    "status": "disabled",
+    "target_score": null,
     "matched_count": 0,
     "matched_dimensions": [],
     "reset_dimensions": []
   },
   "subjective_assessments": {
     "abstraction_fitness": {
-      "score": 54.5,
+      "score": 79.5,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00",
+      "assessed_at": "2026-03-04T09:30:27+00:00",
       "components": [
         "Abstraction Leverage",
         "Indirection Cost",
         "Interface Honesty"
       ],
       "component_scores": {
-        "Abstraction Leverage": 63.5,
-        "Indirection Cost": 74.9,
-        "Interface Honesty": 77.2
+        "Abstraction Leverage": 78.0,
+        "Indirection Cost": 83.0,
+        "Interface Honesty": 86.0
       }
     },
     "ai_generated_debt": {
-      "score": 68.3,
+      "score": 89.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "api_surface_coherence": {
-      "score": 41.8,
+      "score": 86.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "authorization_consistency": {
-      "score": 33.7,
+      "score": 93.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "convention_outlier": {
-      "score": 56.9,
+      "score": 87.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "cross_module_architecture": {
-      "score": 46.3,
+      "score": 88.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "design_coherence": {
-      "score": 44.6,
+      "score": 86.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "error_consistency": {
-      "score": 45.6,
+      "score": 75.5,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "high_level_elegance": {
-      "score": 43.4,
+      "score": 86.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "incomplete_migration": {
-      "score": 38.1,
+      "score": 70.8,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "low_level_elegance": {
-      "score": 56.8,
+      "score": 87.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "mid_level_elegance": {
-      "score": 46.9,
+      "score": 86.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     },
     "package_organization": {
-      "score": 39.8,
+      "score": 90.0,
       "source": "holistic",
-      "assessed_at": "2026-03-04T09:19:44+00:00"
+      "assessed_at": "2026-03-04T09:30:27+00:00"
     }
   },
   "lang_capabilities": {
@@ -51806,208 +52150,6 @@
     "production": 48
   },
   "scan_history": [
-    {
-      "timestamp": "2026-02-28T12:00:32+00:00",
-      "lang": "typescript",
-      "strict_score": 33.2,
-      "verified_strict_score": 83.0,
-      "objective_score": 83.0,
-      "overall_score": 33.2,
-      "open": 785,
-      "diff_new": 10,
-      "diff_resolved": 6,
-      "ignored": 0,
-      "raw_findings": 785,
-      "suppressed_pct": 0.0,
-      "ignore_patterns": 0,
-      "subjective_integrity": {
-        "status": "pass",
-        "matched_count": 0,
-        "reset_count": 0,
-        "target_score": 95.0
-      },
-      "score_confidence": {
-        "status": "full",
-        "confidence": 1.0,
-        "detector_count": 0,
-        "dimension_count": 0
-      },
-      "dimension_scores": {
-        "File health": {
-          "score": 91.6,
-          "strict": 91.6
-        },
-        "Code quality": {
-          "score": 95.3,
-          "strict": 95.3
-        },
-        "Duplication": {
-          "score": 93.1,
-          "strict": 93.1
-        },
-        "Test health": {
-          "score": 27.5,
-          "strict": 27.5
-        },
-        "Security": {
-          "score": 99.1,
-          "strict": 99.1
-        },
-        "Error consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Abstraction fit": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "AI generated debt": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "High elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Mid elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Low elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Cross-module arch": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Convention drift": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "API coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Auth consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Stale migration": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Structure nav": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Design coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        }
-      }
-    },
-    {
-      "timestamp": "2026-02-28T12:13:01+00:00",
-      "lang": "typescript",
-      "strict_score": 33.2,
-      "verified_strict_score": 83.1,
-      "objective_score": 83.1,
-      "overall_score": 33.2,
-      "open": 785,
-      "diff_new": 0,
-      "diff_resolved": 1,
-      "ignored": 0,
-      "raw_findings": 785,
-      "suppressed_pct": 0.0,
-      "ignore_patterns": 0,
-      "subjective_integrity": {
-        "status": "pass",
-        "matched_count": 0,
-        "reset_count": 0,
-        "target_score": 95.0
-      },
-      "score_confidence": {
-        "status": "full",
-        "confidence": 1.0,
-        "detector_count": 0,
-        "dimension_count": 0
-      },
-      "dimension_scores": {
-        "File health": {
-          "score": 91.6,
-          "strict": 91.6
-        },
-        "Code quality": {
-          "score": 95.3,
-          "strict": 95.3
-        },
-        "Duplication": {
-          "score": 93.1,
-          "strict": 93.1
-        },
-        "Test health": {
-          "score": 27.7,
-          "strict": 27.7
-        },
-        "Security": {
-          "score": 99.1,
-          "strict": 99.1
-        },
-        "Error consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Abstraction fit": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "AI generated debt": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "High elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Mid elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Low elegance": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Cross-module arch": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Convention drift": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "API coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Auth consistency": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Stale migration": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Structure nav": {
-          "score": 0.0,
-          "strict": 0.0
-        },
-        "Design coherence": {
-          "score": 0.0,
-          "strict": 0.0
-        }
-      }
-    },
     {
       "timestamp": "2026-02-28T13:12:46+00:00",
       "lang": "typescript",
@@ -53825,10 +53967,212 @@
           "strict": 44.6
         }
       }
+    },
+    {
+      "timestamp": "2026-03-04T09:30:24+00:00",
+      "lang": "typescript",
+      "strict_score": 73.4,
+      "verified_strict_score": 61.9,
+      "objective_score": 61.9,
+      "overall_score": 73.4,
+      "open": 742,
+      "diff_new": 6,
+      "diff_resolved": 0,
+      "ignored": 0,
+      "raw_findings": 6,
+      "suppressed_pct": 0.0,
+      "ignore_patterns": 0,
+      "subjective_integrity": {
+        "status": "disabled",
+        "matched_count": 0,
+        "reset_count": 0,
+        "target_score": null
+      },
+      "score_confidence": {
+        "status": "full",
+        "confidence": 1.0,
+        "detector_count": 0,
+        "dimension_count": 0
+      },
+      "dimension_scores": {
+        "File health": {
+          "score": 50.2,
+          "strict": 50.2
+        },
+        "Code quality": {
+          "score": 75.1,
+          "strict": 75.1
+        },
+        "Duplication": {
+          "score": 98.9,
+          "strict": 98.9
+        },
+        "Test health": {
+          "score": 0.0,
+          "strict": 0.0
+        },
+        "Security": {
+          "score": 96.0,
+          "strict": 96.0
+        },
+        "Error consistency": {
+          "score": 71.1,
+          "strict": 71.1
+        },
+        "Abstraction fit": {
+          "score": 87.0,
+          "strict": 87.0
+        },
+        "AI generated debt": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "High elegance": {
+          "score": 86.5,
+          "strict": 86.5
+        },
+        "Mid elegance": {
+          "score": 73.5,
+          "strict": 73.5
+        },
+        "Low elegance": {
+          "score": 85.5,
+          "strict": 85.5
+        },
+        "Cross-module arch": {
+          "score": 75.1,
+          "strict": 75.1
+        },
+        "Convention drift": {
+          "score": 89.0,
+          "strict": 89.0
+        },
+        "API coherence": {
+          "score": 70.5,
+          "strict": 70.5
+        },
+        "Auth consistency": {
+          "score": 93.0,
+          "strict": 93.0
+        },
+        "Stale migration": {
+          "score": 64.3,
+          "strict": 64.3
+        },
+        "Structure nav": {
+          "score": 88.0,
+          "strict": 88.0
+        },
+        "Design coherence": {
+          "score": 75.5,
+          "strict": 75.5
+        }
+      }
+    },
+    {
+      "timestamp": "2026-03-04T09:30:27+00:00",
+      "lang": "typescript",
+      "strict_score": 76.0,
+      "verified_strict_score": 61.9,
+      "objective_score": 61.9,
+      "overall_score": 76.0,
+      "open": 682,
+      "diff_new": 3,
+      "diff_resolved": 0,
+      "ignored": 0,
+      "raw_findings": 3,
+      "suppressed_pct": 0.0,
+      "ignore_patterns": 0,
+      "subjective_integrity": {
+        "status": "disabled",
+        "matched_count": 0,
+        "reset_count": 0,
+        "target_score": null
+      },
+      "score_confidence": {
+        "status": "full",
+        "confidence": 1.0,
+        "detector_count": 0,
+        "dimension_count": 0
+      },
+      "dimension_scores": {
+        "File health": {
+          "score": 50.2,
+          "strict": 50.2
+        },
+        "Code quality": {
+          "score": 75.1,
+          "strict": 75.1
+        },
+        "Duplication": {
+          "score": 98.9,
+          "strict": 98.9
+        },
+        "Test health": {
+          "score": 0.0,
+          "strict": 0.0
+        },
+        "Security": {
+          "score": 96.0,
+          "strict": 96.0
+        },
+        "Error consistency": {
+          "score": 75.5,
+          "strict": 75.5
+        },
+        "Abstraction fit": {
+          "score": 79.5,
+          "strict": 79.5
+        },
+        "AI generated debt": {
+          "score": 89.0,
+          "strict": 89.0
+        },
+        "High elegance": {
+          "score": 86.0,
+          "strict": 86.0
+        },
+        "Mid elegance": {
+          "score": 86.0,
+          "strict": 86.0
+        },
+        "Low elegance": {
+          "score": 87.0,
+          "strict": 87.0
+        },
+        "Cross-module arch": {
+          "score": 88.0,
+          "strict": 88.0
+        },
+        "Convention drift": {
+          "score": 87.0,
+          "strict": 87.0
+        },
+        "API coherence": {
+          "score": 86.0,
+          "strict": 86.0
+        },
+        "Auth consistency": {
+          "score": 93.0,
+          "strict": 93.0
+        },
+        "Stale migration": {
+          "score": 70.8,
+          "strict": 70.8
+        },
+        "Structure nav": {
+          "score": 90.0,
+          "strict": 90.0
+        },
+        "Design coherence": {
+          "score": 86.0,
+          "strict": 86.0
+        }
+      }
     }
   ],
   "tool_hash": "e073c6da67fa",
-  "scan_path": "backend/src/api",
+  "scan_path": null,
   "scan_completeness": {
     "typescript": "full"
   },
@@ -53857,7 +54201,8 @@
       "subjective_review": 43,
       "boilerplate_duplication": 0,
       "dupes": 177,
-      "stale_wontfix": 0
+      "stale_wontfix": 0,
+      "review": 10
     }
   },
   "codebase_metrics": {
@@ -53869,28 +54214,28 @@
   },
   "dimension_scores": {
     "File health": {
-      "score": 89.8,
-      "strict_score": 89.8,
-      "verified_strict_score": 89.8,
+      "score": 50.2,
+      "strict_score": 50.2,
+      "verified_strict_score": 50.2,
       "checks": 48,
-      "issues": 7,
+      "issues": 33,
       "tier": 3,
       "detectors": {
         "structural": {
           "potential": 48,
-          "pass_rate": 0.8979166666666667,
-          "issues": 7,
-          "weighted_failures": 4.9
+          "pass_rate": 0.5020833333333337,
+          "issues": 33,
+          "weighted_failures": 23.899999999999984
         }
       },
-      "strict": 89.8
+      "strict": 50.2
     },
     "Code quality": {
-      "score": 97.4,
-      "strict_score": 97.4,
-      "verified_strict_score": 97.4,
+      "score": 75.1,
+      "strict_score": 75.1,
+      "verified_strict_score": 75.1,
       "checks": 367,
-      "issues": 18,
+      "issues": 163,
       "tier": 3,
       "detectors": {
         "unused": {
@@ -53913,21 +54258,21 @@
         },
         "smells": {
           "potential": 48,
-          "pass_rate": 0.8479166666666668,
-          "issues": 15,
-          "weighted_failures": 7.3
+          "pass_rate": 0.0,
+          "issues": 144,
+          "weighted_failures": 78.2
         },
         "orphaned": {
           "potential": 78,
-          "pass_rate": 0.982051282051282,
-          "issues": 2,
-          "weighted_failures": 1.4
+          "pass_rate": 0.8653846153846154,
+          "issues": 15,
+          "weighted_failures": 10.499999999999998
         },
         "flat_dirs": {
           "potential": 8,
-          "pass_rate": 1.0,
-          "issues": 0,
-          "weighted_failures": 0.0
+          "pass_rate": 0.7375,
+          "issues": 3,
+          "weighted_failures": 2.0999999999999996
         },
         "naming": {
           "potential": 8,
@@ -53954,61 +54299,61 @@
           "weighted_failures": 0.7
         }
       },
-      "strict": 97.4
+      "strict": 75.1
     },
     "Duplication": {
-      "score": 100.0,
-      "strict_score": 100.0,
-      "verified_strict_score": 100.0,
+      "score": 98.9,
+      "strict_score": 98.9,
+      "verified_strict_score": 98.9,
       "checks": 177,
-      "issues": 0,
+      "issues": 2,
       "tier": 3,
       "detectors": {
         "dupes": {
           "potential": 177,
-          "pass_rate": 1.0,
-          "issues": 0,
-          "weighted_failures": 0.0
+          "pass_rate": 0.9887005649717514,
+          "issues": 2,
+          "weighted_failures": 2.0
         }
       },
-      "strict": 100.0
+      "strict": 98.9
     },
     "Test health": {
-      "score": 6.1,
-      "strict_score": 6.1,
-      "verified_strict_score": 6.1,
+      "score": 0.0,
+      "strict_score": 0.0,
+      "verified_strict_score": 0.0,
       "checks": 702,
-      "issues": 48,
+      "issues": 336,
       "tier": 4,
       "detectors": {
         "test_coverage": {
           "potential": 659,
           "pass_rate": 0.0,
-          "issues": 48,
-          "weighted_failures": 659.351200049384
+          "issues": 223,
+          "weighted_failures": 2969.653245055196
         },
         "subjective_review": {
           "potential": 43,
-          "pass_rate": 1.0,
-          "issues": 0,
-          "weighted_failures": 0.0
+          "pass_rate": 0.21162790697674422,
+          "issues": 113,
+          "weighted_failures": 33.9
         }
       },
-      "strict": 6.1
+      "strict": 0.0
     },
     "Security": {
-      "score": 100.0,
-      "strict_score": 100.0,
-      "verified_strict_score": 100.0,
+      "score": 96.0,
+      "strict_score": 96.0,
+      "verified_strict_score": 96.0,
       "checks": 126,
-      "issues": 0,
+      "issues": 6,
       "tier": 4,
       "detectors": {
         "security": {
           "potential": 48,
-          "pass_rate": 1.0,
-          "issues": 0,
-          "weighted_failures": 0.0
+          "pass_rate": 0.8958333333333334,
+          "issues": 6,
+          "weighted_failures": 5.0
         },
         "cycles": {
           "potential": 78,
@@ -54017,44 +54362,44 @@
           "weighted_failures": 0.0
         }
       },
-      "strict": 100.0
+      "strict": 96.0
     },
     "Error consistency": {
-      "score": 45.6,
-      "strict_score": 45.6,
-      "verified_strict_score": 45.6,
+      "score": 75.5,
+      "strict_score": 75.5,
+      "verified_strict_score": 75.5,
       "checks": 10,
-      "issues": 4,
+      "issues": 1,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.456,
-          "issues": 4,
-          "weighted_failures": 5.44,
-          "assessment_score": 45.6,
+          "pass_rate": 0.755,
+          "issues": 1,
+          "weighted_failures": 2.45,
+          "assessment_score": 75.5,
           "placeholder": false,
           "dimension_key": "error_consistency",
           "configured_weight": 3.0,
           "components": []
         }
       },
-      "strict": 45.6
+      "strict": 75.5
     },
     "Abstraction fit": {
-      "score": 54.5,
-      "strict_score": 54.5,
-      "verified_strict_score": 54.5,
+      "score": 79.5,
+      "strict_score": 79.5,
+      "verified_strict_score": 79.5,
       "checks": 10,
-      "issues": 3,
+      "issues": 1,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.545,
-          "issues": 3,
-          "weighted_failures": 4.55,
-          "assessment_score": 54.5,
+          "pass_rate": 0.795,
+          "issues": 1,
+          "weighted_failures": 2.05,
+          "assessment_score": 79.5,
           "placeholder": false,
           "dimension_key": "abstraction_fitness",
           "configured_weight": 8.0,
@@ -54064,255 +54409,255 @@
             "Interface Honesty"
           ],
           "component_scores": {
-            "Abstraction Leverage": 63.5,
-            "Indirection Cost": 74.9,
-            "Interface Honesty": 77.2
+            "Abstraction Leverage": 78.0,
+            "Indirection Cost": 83.0,
+            "Interface Honesty": 86.0
           }
         }
       },
-      "strict": 54.5
+      "strict": 79.5
     },
     "AI generated debt": {
-      "score": 68.3,
-      "strict_score": 68.3,
-      "verified_strict_score": 68.3,
+      "score": 89.0,
+      "strict_score": 89.0,
+      "verified_strict_score": 89.0,
       "checks": 10,
-      "issues": 2,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.683,
-          "issues": 2,
-          "weighted_failures": 3.17,
-          "assessment_score": 68.3,
+          "pass_rate": 0.89,
+          "issues": 0,
+          "weighted_failures": 1.1,
+          "assessment_score": 89.0,
           "placeholder": false,
           "dimension_key": "ai_generated_debt",
           "configured_weight": 1.0,
           "components": []
         }
       },
-      "strict": 68.3
+      "strict": 89.0
     },
     "High elegance": {
-      "score": 43.4,
-      "strict_score": 43.4,
-      "verified_strict_score": 43.4,
+      "score": 86.0,
+      "strict_score": 86.0,
+      "verified_strict_score": 86.0,
       "checks": 10,
-      "issues": 5,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.434,
-          "issues": 5,
-          "weighted_failures": 5.66,
-          "assessment_score": 43.4,
+          "pass_rate": 0.86,
+          "issues": 0,
+          "weighted_failures": 1.4,
+          "assessment_score": 86.0,
           "placeholder": false,
           "dimension_key": "high_level_elegance",
           "configured_weight": 22.0,
           "components": []
         }
       },
-      "strict": 43.4
+      "strict": 86.0
     },
     "Mid elegance": {
-      "score": 46.9,
-      "strict_score": 46.9,
-      "verified_strict_score": 46.9,
+      "score": 86.0,
+      "strict_score": 86.0,
+      "verified_strict_score": 86.0,
       "checks": 10,
-      "issues": 8,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.469,
-          "issues": 8,
-          "weighted_failures": 5.31,
-          "assessment_score": 46.9,
+          "pass_rate": 0.86,
+          "issues": 0,
+          "weighted_failures": 1.4,
+          "assessment_score": 86.0,
           "placeholder": false,
           "dimension_key": "mid_level_elegance",
           "configured_weight": 22.0,
           "components": []
         }
       },
-      "strict": 46.9
+      "strict": 86.0
     },
     "Low elegance": {
-      "score": 56.8,
-      "strict_score": 56.8,
-      "verified_strict_score": 56.8,
+      "score": 87.0,
+      "strict_score": 87.0,
+      "verified_strict_score": 87.0,
       "checks": 10,
-      "issues": 3,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.568,
-          "issues": 3,
-          "weighted_failures": 4.32,
-          "assessment_score": 56.8,
+          "pass_rate": 0.87,
+          "issues": 0,
+          "weighted_failures": 1.3,
+          "assessment_score": 87.0,
           "placeholder": false,
           "dimension_key": "low_level_elegance",
           "configured_weight": 12.0,
           "components": []
         }
       },
-      "strict": 56.8
+      "strict": 87.0
     },
     "Cross-module arch": {
-      "score": 46.3,
-      "strict_score": 46.3,
-      "verified_strict_score": 46.3,
+      "score": 88.0,
+      "strict_score": 88.0,
+      "verified_strict_score": 88.0,
       "checks": 10,
-      "issues": 5,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.463,
-          "issues": 5,
-          "weighted_failures": 5.37,
-          "assessment_score": 46.3,
+          "pass_rate": 0.88,
+          "issues": 0,
+          "weighted_failures": 1.2,
+          "assessment_score": 88.0,
           "placeholder": false,
           "dimension_key": "cross_module_architecture",
           "configured_weight": 1.0,
           "components": []
         }
       },
-      "strict": 46.3
+      "strict": 88.0
     },
     "Convention drift": {
-      "score": 56.9,
-      "strict_score": 56.9,
-      "verified_strict_score": 56.9,
+      "score": 87.0,
+      "strict_score": 87.0,
+      "verified_strict_score": 87.0,
       "checks": 10,
-      "issues": 3,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.569,
-          "issues": 3,
-          "weighted_failures": 4.31,
-          "assessment_score": 56.9,
+          "pass_rate": 0.87,
+          "issues": 0,
+          "weighted_failures": 1.3,
+          "assessment_score": 87.0,
           "placeholder": false,
           "dimension_key": "convention_outlier",
           "configured_weight": 1.0,
           "components": []
         }
       },
-      "strict": 56.9
+      "strict": 87.0
     },
     "API coherence": {
-      "score": 41.8,
-      "strict_score": 41.8,
-      "verified_strict_score": 41.8,
+      "score": 86.0,
+      "strict_score": 86.0,
+      "verified_strict_score": 86.0,
       "checks": 10,
-      "issues": 4,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.418,
-          "issues": 4,
-          "weighted_failures": 5.82,
-          "assessment_score": 41.8,
+          "pass_rate": 0.86,
+          "issues": 0,
+          "weighted_failures": 1.4,
+          "assessment_score": 86.0,
           "placeholder": false,
           "dimension_key": "api_surface_coherence",
           "configured_weight": 1.0,
           "components": []
         }
       },
-      "strict": 41.8
+      "strict": 86.0
     },
     "Auth consistency": {
-      "score": 33.7,
-      "strict_score": 33.7,
-      "verified_strict_score": 33.7,
+      "score": 93.0,
+      "strict_score": 93.0,
+      "verified_strict_score": 93.0,
       "checks": 10,
-      "issues": 5,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.337,
-          "issues": 5,
-          "weighted_failures": 6.63,
-          "assessment_score": 33.7,
+          "pass_rate": 0.93,
+          "issues": 0,
+          "weighted_failures": 0.7,
+          "assessment_score": 93.0,
           "placeholder": false,
           "dimension_key": "authorization_consistency",
           "configured_weight": 1.0,
           "components": []
         }
       },
-      "strict": 33.7
+      "strict": 93.0
     },
     "Stale migration": {
-      "score": 38.1,
-      "strict_score": 38.1,
-      "verified_strict_score": 38.1,
+      "score": 70.8,
+      "strict_score": 70.8,
+      "verified_strict_score": 70.8,
       "checks": 10,
-      "issues": 4,
+      "issues": 1,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.381,
-          "issues": 4,
-          "weighted_failures": 6.19,
-          "assessment_score": 38.1,
+          "pass_rate": 0.708,
+          "issues": 1,
+          "weighted_failures": 2.92,
+          "assessment_score": 70.8,
           "placeholder": false,
           "dimension_key": "incomplete_migration",
           "configured_weight": 1.0,
           "components": []
         }
       },
-      "strict": 38.1
+      "strict": 70.8
     },
     "Structure nav": {
-      "score": 39.8,
-      "strict_score": 39.8,
-      "verified_strict_score": 39.8,
+      "score": 90.0,
+      "strict_score": 90.0,
+      "verified_strict_score": 90.0,
       "checks": 10,
-      "issues": 4,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.398,
-          "issues": 4,
-          "weighted_failures": 6.02,
-          "assessment_score": 39.8,
+          "pass_rate": 0.9,
+          "issues": 0,
+          "weighted_failures": 1.0,
+          "assessment_score": 90.0,
           "placeholder": false,
           "dimension_key": "package_organization",
           "configured_weight": 5.0,
           "components": []
         }
       },
-      "strict": 39.8
+      "strict": 90.0
     },
     "Design coherence": {
-      "score": 44.6,
-      "strict_score": 44.6,
-      "verified_strict_score": 44.6,
+      "score": 86.0,
+      "strict_score": 86.0,
+      "verified_strict_score": 86.0,
       "checks": 10,
-      "issues": 6,
+      "issues": 0,
       "tier": 4,
       "detectors": {
         "subjective_assessment": {
           "potential": 10,
-          "pass_rate": 0.446,
-          "issues": 6,
-          "weighted_failures": 5.54,
-          "assessment_score": 44.6,
+          "pass_rate": 0.86,
+          "issues": 0,
+          "weighted_failures": 1.4,
+          "assessment_score": 86.0,
           "placeholder": false,
           "dimension_key": "design_coherence",
           "configured_weight": 10.0,
           "components": []
         }
       },
-      "strict": 44.6
+      "strict": 86.0
     }
   },
   "reminder_history": {
@@ -55110,13 +55455,48 @@
         "content_hash": "170e4e4a338a90d1",
         "reviewed_at": "2026-03-04T09:19:45+00:00",
         "finding_count": 0
+      },
+      "backend/src/workers/voicebot/handlers/shared/audioMerging.ts": {
+        "content_hash": "c6ac6fe3bbf06aff",
+        "reviewed_at": "2026-03-04T09:30:27+00:00",
+        "finding_count": 0
+      },
+      "backend/src/workers/voicebot/handlers/shared/cleanupEmptySessions.ts": {
+        "content_hash": "b77ceb00615a927b",
+        "reviewed_at": "2026-03-04T09:30:27+00:00",
+        "finding_count": 0
+      },
+      "backend/src/workers/voicebot/handlers/shared/customPromptShared.ts": {
+        "content_hash": "489f4e394aba4ada",
+        "reviewed_at": "2026-03-04T09:30:27+00:00",
+        "finding_count": 0
+      },
+      "backend/src/workers/voicebot/handlers/shared/errorMessage.ts": {
+        "content_hash": "972f627cfa919ac2",
+        "reviewed_at": "2026-03-04T09:30:27+00:00",
+        "finding_count": 0
+      },
+      "backend/src/workers/voicebot/handlers/shared/openAiErrors.ts": {
+        "content_hash": "f9f3011a833ce327",
+        "reviewed_at": "2026-03-04T09:30:27+00:00",
+        "finding_count": 0
+      },
+      "backend/src/workers/voicebot/handlers/shared/sendToSocket.ts": {
+        "content_hash": "02e38fc2646d4214",
+        "reviewed_at": "2026-03-04T09:30:27+00:00",
+        "finding_count": 0
+      },
+      "backend/src/workers/voicebot/handlers/shared/sharedRuntime.ts": {
+        "content_hash": "cf9eefa3fe364430",
+        "reviewed_at": "2026-03-04T09:30:27+00:00",
+        "finding_count": 0
       }
     },
     "holistic": {
-      "reviewed_at": "2026-03-04T09:19:45+00:00",
-      "file_count_at_review": 48,
-      "finding_count": 56,
-      "reviewed_files_count": 134,
+      "reviewed_at": "2026-03-04T09:30:27+00:00",
+      "file_count_at_review": 7,
+      "finding_count": 3,
+      "reviewed_files_count": 7,
       "full_sweep_included": true
     }
   },
@@ -55204,6 +55584,30 @@
       "provisional_count": 0,
       "attest": "",
       "import_file": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_091220/holistic_findings_merged.json"
+    },
+    {
+      "timestamp": "2026-03-04T09:30:24+00:00",
+      "mode": "trusted_internal",
+      "trusted": true,
+      "reason": "trusted internal run-batches import",
+      "override_used": false,
+      "attested_external": false,
+      "provisional": false,
+      "provisional_count": 0,
+      "attest": "",
+      "import_file": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_092838/holistic_findings_merged.json"
+    },
+    {
+      "timestamp": "2026-03-04T09:30:27+00:00",
+      "mode": "trusted_internal",
+      "trusted": true,
+      "reason": "trusted internal run-batches import",
+      "override_used": false,
+      "attested_external": false,
+      "provisional": false,
+      "provisional_count": 0,
+      "attest": "",
+      "import_file": "/home/strato-space/copilot/.desloppify/subagents/runs/20260304_092844/holistic_findings_merged.json"
     }
   ]
 }
