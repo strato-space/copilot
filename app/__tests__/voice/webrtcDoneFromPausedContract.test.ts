@@ -10,5 +10,10 @@ describe('webrtc fab done double-click contract', () => {
     expect(source).toContain('if (!isRecording && !isPaused) return;');
     expect(source).toContain("dispatchControlAction('done');");
   });
+
+  it('keeps page Done enabled in Paused when active/session context exists', () => {
+    expect(source).toContain("const canPageDone = hasToken && !finalUploading && (hasPageSession || hasActiveSession || hasSession);");
+  });
+
 });
 

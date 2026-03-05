@@ -64,6 +64,12 @@
         function isCableLabel(label) {
             return /(cable output|virtual cable)/i.test(String(label || ''));
         }
+        function isLifeCamLabel(label) {
+            return /(lifecam|life\s*cam|настольный\s+микрофон)/i.test(String(label || ''));
+        }
+        function isMicLabel(label) {
+            return /(microphone|микрофон)/i.test(String(label || ''));
+        }
         function notifyParentSettingsChange(action, payload = {}) {
             if (!IS_EMBEDDED) return;
             try {
@@ -112,6 +118,7 @@
         let fabMenu = null;
         let fabToast = null;
         let fabStatus = null;
+        let fabMic1Alert = null;
         let fabOrbit = null;
         let fabOrbitCanvas = null;
         let sidePanel = null;
@@ -161,6 +168,7 @@
             fabMenu = document.getElementById('fab-menu');
             fabToast = document.getElementById('fab-toast');
             fabStatus = document.getElementById('fab-status');
+            fabMic1Alert = document.getElementById('fab-mic1-alert');
             fabOrbit = fabWrap ? fabWrap.querySelector('.fab-orbit') : null;
             fabOrbitCanvas = fabWrap ? fabWrap.querySelector('.fab-orbit-canvas') : null;
             sidePanel = document.getElementById('side-panel');
@@ -286,6 +294,35 @@
             if (!fabStatus) return;
             const label = getFabStateLabel(state || fabWrap?.dataset?.state || 'idle');
             fabStatus.textContent = `State: ${label}`;
+        }
+        function isMicSlotOff(slotIndex) {
+            try {
+                const idx = Number(slotIndex || 0);
+                if (!Number.isFinite(idx) || idx < 1) return true;
+                if (micDeviceIds?.[idx]) return false;
+                const sel = document.getElementById(`mic-${idx}-select`);
+                if (!sel) return true;
+                const raw = String(sel.value || '').trim();
+                if (!raw) return true;
+                return raw === '__off__' || raw.toUpperCase() === 'OFF';
+            } catch {
+                return true;
+            }
+        }
+        function updateMic1CriticalState() {
+            if (!fabWrap) return;
+            const state = String(fabWrap?.dataset?.state || 'idle');
+            const activeCaptureState = state === 'recording' || state === 'paused' || state === 'cutting';
+            const mic1Off = isMicSlotOff(1);
+            const critical = activeCaptureState && mic1Off;
+            fabWrap.classList.toggle('mic1-critical', critical);
+            if (fabMic1Alert) {
+                fabMic1Alert.hidden = !critical;
+                fabMic1Alert.textContent = 'Mic 1 OFF';
+                fabMic1Alert.title = critical
+                    ? 'Critical: Mic 1 is OFF. Recording runs without primary microphone.'
+                    : '';
+            }
         }
         function syncFabAuthState() {
             if (!fabWrap) return;
@@ -602,7 +639,9 @@
             const canPause = hasToken && !finalUploading && rec;
             const canCut = hasToken && !finalUploading && (rec || paused);
             const canFabDone = hasToken && !finalUploading && hasActiveSession;
-            const canPageDone = hasToken && !finalUploading && hasPageSession;
+            // Settings/Monitoring iframe does not have pageSession in URL; Done must stay enabled
+            // as long as there is an active/session context, including Paused state.
+            const canPageDone = hasToken && !finalUploading && (hasPageSession || hasActiveSession || hasSession);
             const canReset = !finalUploading;
             const canLogout = hasToken && !finalUploading;
             const canUploadAll = hasToken && !finalUploading && hasSession;
@@ -629,6 +668,7 @@
                 if (mPause) mPause.disabled = !canPause;
                 if (mDone) mDone.disabled = !canFabDone;
             }
+            try { updateMic1CriticalState(); } catch {}
         }
 
 	        // Small inline toast near element
@@ -4977,26 +5017,41 @@
         });
 
         // Devices: populate microphones
+        function pickMic1FallbackId(mics, excludedIds = null) {
+            try {
+                const blocked = excludedIds instanceof Set ? excludedIds : new Set();
+                const candidates = Array.isArray(mics)
+                    ? mics.filter((d) => {
+                        const id = String(d?.deviceId || '').trim();
+                        return id && !blocked.has(id) && id !== '__off__' && id !== 'OFF';
+                    })
+                    : [];
+                const lifeCam = candidates.find((d) => isLifeCamLabel(d?.label));
+                if (lifeCam?.deviceId) return lifeCam.deviceId;
+                const genericMic = candidates.find((d) => isMicLabel(d?.label));
+                if (genericMic?.deviceId) return genericMic.deviceId;
+                return '';
+            } catch {
+                return '';
+            }
+        }
         function pickResetDefaults(mics, outs) {
             const hasMics = Array.isArray(mics) && mics.length > 0;
             const hasOuts = Array.isArray(outs) && outs.length > 0;
             const isDefaultLabel = (label) => /(default|по умолчанию)/i.test(String(label || ''));
-            const isMicLabel = (label) => /(microphone|микрофон)/i.test(String(label || ''));
-            const isCableLabel = (label) => /(cable output|virtual cable)/i.test(String(label || ''));
             const cable = hasMics ? (mics.find(d => isCableLabel(d.label))?.deviceId || '') : '';
             const defaultMic = hasMics ? (mics.find(d => d.deviceId === 'default' || isDefaultLabel(d.label)) || null) : null;
             const defaultMicId = defaultMic?.deviceId || '';
-            const mic1Preferred = defaultMicId
-                ? defaultMicId
-                : (hasMics ? (mics.find(d => isMicLabel(d.label) && (!cable || d.deviceId !== cable))?.deviceId || '') : '');
+
+            const blockedForMic1 = new Set();
+            if (cable) blockedForMic1.add(cable);
+            const fallbackMic1 = pickMic1FallbackId(mics, blockedForMic1);
 
             let mic1Id = '';
-            if (mic1Preferred) {
-                mic1Id = mic1Preferred;
-            } else if (cable && mics.length > 1) {
-                mic1Id = mics.find(d => d.deviceId !== cable)?.deviceId || cable;
-            } else {
-                mic1Id = hasMics ? (mics[0]?.deviceId || '') : '';
+            if (defaultMicId && (!cable || defaultMicId !== cable)) {
+                mic1Id = defaultMicId;
+            } else if (fallbackMic1) {
+                mic1Id = fallbackMic1;
             }
 
             let mic2Id = '';
@@ -5074,18 +5129,33 @@
                 }
 
                     let preferred = null;
+                    const savedValue = String(saved || '').trim();
+                    const savedMissingMic1 = mi === 1
+                        && !!savedValue
+                        && savedValue !== '__off__'
+                        && savedValue !== 'OFF'
+                        && !hasOption(sel, savedValue);
                     if (afterReset && resetDefaults) {
                         if (mi === 1 && resetDefaults.mic1Id && hasOption(sel, resetDefaults.mic1Id)) preferred = resetDefaults.mic1Id;
                         else if (mi === 2 && resetDefaults.mic2Id && hasOption(sel, resetDefaults.mic2Id)) preferred = resetDefaults.mic2Id;
                     } else {
-                        if (saved && saved !== '__off__' && hasOption(sel, saved)) preferred = saved;
+                        if (savedValue && savedValue !== '__off__' && hasOption(sel, savedValue)) preferred = savedValue;
                         else if (micDeviceIds[mi] && hasOption(sel, micDeviceIds[mi])) preferred = micDeviceIds[mi];
                         else if (sel.value && sel.value !== '__off__' && hasOption(sel, sel.value)) preferred = sel.value;
-                        else if (allowAutoDefaults && mi === 1 && sel.options.length > 1) preferred = sel.options[1].value;
+                        else if (allowAutoDefaults && mi === 1 && sel.options.length > 1 && !savedMissingMic1) preferred = sel.options[1].value;
+                    }
+
+                    // Strict Mic 1 downgrade when configured device disappeared: LifeCam -> Microphone -> OFF.
+                    if (!preferred && savedMissingMic1) {
+                        const blocked = new Set(chosenMicIds);
+                        const cableId = String(resetDefaults?.cableId || '').trim();
+                        if (cableId) blocked.add(cableId);
+                        preferred = pickMic1FallbackId(mics, blocked) || null;
                     }
 
                     // Fallback: pick the first available mic not already used by another slot.
-                    if (!preferred && allowAutoDefaults) {
+                    // For missing saved Mic 1 we do not use generic fallback — only strict downgrade chain above.
+                    if (!preferred && allowAutoDefaults && !savedMissingMic1) {
                         const candidates = Array.from(sel.options)
                             .map(o => String(o.value || '').trim())
                             .filter(v => v && v !== '__off__' && v !== 'OFF');
@@ -5324,15 +5394,7 @@
                 }
             }
 
-            const norm = (v) => String(v || '').toLowerCase();
             const isDefaultLabel = (label) => /(default|по умолчанию)/i.test(String(label || ''));
-            const findMicIdByIncludes = (subs) => {
-                try {
-                    const s = (subs || []).map(x => String(x || '').toLowerCase()).filter(Boolean);
-                    const hit = mics.find(d => s.some(needle => norm(d.label).includes(needle)));
-                    return hit?.deviceId || '';
-                } catch { return ''; }
-            };
             const defaultMicId = (() => {
                 try {
                     const hit = mics.find(d => d.deviceId === 'default' || isDefaultLabel(d.label));
@@ -5377,21 +5439,42 @@
             }
 
             // Apply stored selections if they exist and are still available.
+            let missingStoredMic1 = false;
             if (stored1.value && exists(stored1.value)) micDeviceIds[1] = stored1.value;
             if (stored2.value && exists(stored2.value)) micDeviceIds[2] = stored2.value;
-            if (stored1.value && !exists(stored1.value)) { stored1.hasKey = false; stored1.value = ''; }
+            if (stored1.value && !exists(stored1.value)) {
+                missingStoredMic1 = true;
+                stored1.hasKey = false;
+                stored1.value = '';
+            }
             if (stored2.value && !exists(stored2.value)) { stored2.hasKey = false; stored2.value = ''; }
 
-            // If any slot is OFF/empty, pick defaults (best-effort).
+            // If configured Mic 1 disappeared, do strict downgrade even when slot 2 has a valid remembered device.
             let autoPicked = false;
+            if (!micDeviceIds[1] && missingStoredMic1) {
+                const blocked = new Set();
+                for (let i = 2; i <= micCount; i++) {
+                    if (micDeviceIds[i]) blocked.add(String(micDeviceIds[i]));
+                }
+                const fallbackMic1 = pickMic1FallbackId(mics, blocked);
+                if (fallbackMic1 && exists(fallbackMic1)) {
+                    micDeviceIds[1] = fallbackMic1;
+                    autoPicked = true;
+                }
+            }
+
+            // If any slot is OFF/empty, pick defaults (best-effort).
             if (autoSelectionAllowed) {
                 const chosen = new Set();
                 for (let i = 1; i <= micCount; i++) if (micDeviceIds[i]) chosen.add(micDeviceIds[i]);
                 if (!micDeviceIds[1] && mics.length && !stored1.hasKey) {
-                    const hinted = defaultMicId || findMicIdByIncludes(['microphone', 'микрофон']);
-                    micDeviceIds[1] = exists(hinted) ? hinted : (mics[0]?.deviceId || null);
-                    if (micDeviceIds[1]) chosen.add(micDeviceIds[1]);
-                    autoPicked = true;
+                    const blocked = new Set(chosen);
+                    const hinted = defaultMicId || pickMic1FallbackId(mics, blocked);
+                    micDeviceIds[1] = exists(hinted) ? hinted : null;
+                    if (micDeviceIds[1]) {
+                        chosen.add(micDeviceIds[1]);
+                        autoPicked = true;
+                    }
                 }
                 if (micCount >= 2 && !micDeviceIds[2] && !stored2.hasKey) {
                     const hinted = mics.find(d => isCableLabel(d.label))?.deviceId || '';
@@ -5403,8 +5486,10 @@
 
                 // If nothing was explicitly stored, prefer Mic 1 = Microphone, Mic 2 = Cable Output (when both exist).
                 if (!stored1.hasKey && !stored2.hasKey && micCount >= 2) {
-                    const preferredMic = findMicIdByIncludes(['microphone', 'микрофон']);
                     const preferredCable = mics.find(d => isCableLabel(d.label))?.deviceId || '';
+                    const blocked = new Set();
+                    if (preferredCable) blocked.add(preferredCable);
+                    const preferredMic = pickMic1FallbackId(mics, blocked);
                     if (preferredMic && preferredCable && preferredMic !== preferredCable) {
                         micDeviceIds[1] = preferredMic;
                         micDeviceIds[2] = preferredCable;

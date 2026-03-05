@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-03-05
+### PROBLEM SOLVED
+- **16:02** OperOps project create/edit only worked through inline tree modals, so deep links, browser navigation, and larger edit flows were cramped and hard to resume directly.
+- **16:21** CRM and Miniapp tasks had no shared attachment contract, so operators and performers could not exchange the same task files across both surfaces with one storage and validation model.
+- **22:01** Embedded WebRTC Settings/Monitor sessions could keep page `Done` disabled while paused, Mic 1 failures stayed implicit during active capture, and some browsers uploaded audio-only chunks as `video/webm`, creating avoidable backend rejection risk.
+
+### FEATURE IMPLEMENTED
+- **16:02** Added dedicated OperOps project management routes (`/operops/projects-tree/new`, `/operops/projects-tree/:projectId`) with a full-page editor and explicit back/cancel flow.
+- **16:21** Added a shared CRM↔Miniapp task attachment flow with upload/download/delete support, normalized metadata, centralized storage rules, and performer-safe miniapp access checks.
+- **22:01** Hardened WebRTC capture and upload compatibility: paused embedded sessions keep `Done` available, FAB raises a red `Mic 1 OFF` alert with deterministic fallback selection, and backend normalizes audio-only `video/webm` uploads to `audio/webm`.
+
+### CHANGES
+- **16:02** Frontend OperOps routing/page changes:
+  - added `app/src/pages/operops/ProjectManagementPage.tsx` and routed `/operops/projects-tree/new` plus `/operops/projects-tree/:projectId` from `app/src/App.tsx`,
+  - removed inline project create/edit modal flow from `app/src/pages/operops/ProjectsTree.tsx`,
+  - extended `app/src/components/crm/projects/EditProject.tsx` with explicit cancel/back handling.
+- **16:21** Attachment contract:
+  - added shared backend attachment service `backend/src/services/taskAttachments.ts` with allowlist (`pdf/docx/xlsx/png/jpg/jpeg/txt/zip`), `100MB` limit, normalized metadata, and storage under `uploads/task-attachments` (`TASK_ATTACHMENTS_DIR` override),
+  - added CRM endpoints `POST /api/crm/tickets/upload-attachment`, `GET /api/crm/tickets/attachment/:ticket_id/:attachment_id`, `POST /api/crm/tickets/delete-attachment`,
+  - added Miniapp endpoints `POST /tickets/upload-attachment` and `GET /tickets/attachment/:ticket_id/:attachment_id` with performer access checks,
+  - surfaced attachments in CRM ticket create/edit, OperOps TaskPage, Miniapp ticket view/store/types, and added backend regression suites `backend/__tests__/api/{miniappTaskAttachments.contract,taskAttachments.service}.test.ts`.
+- **22:01** Voice WebRTC/upload hardening:
+  - updated `app/public/webrtc/webrtc-voicebot-lib.js` plus FAB assets to keep page `Done` enabled from paused embedded contexts, show `Mic 1 OFF` critical state, and apply strict missing-Mic-1 fallback `LifeCam -> Microphone -> OFF`,
+  - updated `backend/src/api/routes/voicebot/uploads.ts` to accept audio-only MediaRecorder blobs sent as `video/webm` and persist normalized `audio/webm`,
+  - extended regression coverage in `app/__tests__/voice/{webrtcDoneFromPausedContract,webrtcMic1CriticalContract}.test.ts` and `backend/__tests__/voicebot/runtime/uploadAudioRoute.test.ts`.
+- **22:01** Validation:
+  - `cd app && npm run test:serial -- __tests__/voice/webrtcDoneFromPausedContract.test.ts __tests__/voice/webrtcMic1CriticalContract.test.ts`
+  - `cd backend && npm run test -- __tests__/voicebot/runtime/uploadAudioRoute.test.ts __tests__/api/miniappTaskAttachments.contract.test.ts __tests__/api/taskAttachments.service.test.ts`
+  - `cd app && npm run build`
+  - `cd miniapp && npm run build`
+  - `cd backend && npm run build`
+
 ## 2026-03-04
 ### PROBLEM SOLVED
 - **22:00** Miniapp backend had no dedicated Telegram entrypoint for opening the WebApp from chat commands, so users needed manual links and operators lacked a fast in-chat diagnostics command for target chat metadata.

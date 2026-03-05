@@ -146,6 +146,79 @@ describe('POST /voicebot/upload_audio', () => {
     expect(persisted.runtime_tag).toBeUndefined();
     expect((persisted.file_metadata as Record<string, unknown>)?.duration).toBe(123.456);
   });
+
+  it('accepts video/webm uploads and normalizes mime type to audio/webm', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439015');
+    const insertedMessages: Array<Record<string, unknown>> = [];
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toString(),
+      access_level: 'private',
+      is_deleted: false,
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionFindOne,
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return createMessagesCollection(insertedMessages);
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '123456',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'video/webm',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.file_info.mime_type).toBe('audio/webm');
+
+    expect(insertedMessages).toHaveLength(1);
+    const persisted = insertedMessages[0] ?? {};
+    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
+    if (storedPath) uploadedFilePaths.add(storedPath);
+
+    expect(persisted.mime_type).toBe('audio/webm');
+    expect((persisted.file_metadata as Record<string, unknown>)?.mime_type).toBe('audio/webm');
+  });
+
   it('enqueues transcribe job when voice queue is available', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439019');

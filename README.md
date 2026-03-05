@@ -62,8 +62,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Socket.IO events: TICKET_CREATED, TICKET_UPDATED, TICKET_DELETED, EPIC_UPDATED, COMMENT_ADDED, WORK_HOURS_UPDATED.
 - Routes accessible at `/operops/*` with OperOpsNav horizontal navigation.
 - CRM Kanban task details link must resolve by `id || _id` to prevent `/operops/task/undefined` navigation for records without public `id`.
+- OperOps project create/edit flow now uses dedicated routes `/operops/projects-tree/new` and `/operops/projects-tree/:projectId`; `ProjectsTree` navigates there instead of reopening inline project modals.
 - CRM project display/filtering should resolve project name from `project_data`/`project_id`/`project`; performer filter must handle mixed `_id` and legacy `id` values.
 - CRM work-hours linkage is canonical by `ticket_db_id` (`automation_tasks._id`) across CRM API, Miniapp routes, and reporting services; legacy `ticket_id` is tolerated only as migration input.
+- Task attachments are shared between CRM and Miniapp tickets:
+  - CRM endpoints: `POST /api/crm/tickets/upload-attachment`, `GET /api/crm/tickets/attachment/:ticket_id/:attachment_id`, `POST /api/crm/tickets/delete-attachment`.
+  - Miniapp endpoints: `POST /tickets/upload-attachment`, `GET /tickets/attachment/:ticket_id/:attachment_id`.
+  - Storage/validation is centralized in `backend/src/services/taskAttachments.ts` under `uploads/task-attachments` (override `TASK_ATTACHMENTS_DIR`), allowlist `pdf/docx/xlsx/png/jpg/jpeg/txt/zip`, max `100MB`.
 - Added backfill utility for historical work-hours rows missing `ticket_db_id`: `cd backend && npx tsx scripts/backfill-work-hours-ticket-db-id.ts --apply` (use without `--apply` for dry-run).
 - Short-link generation/collision/route-resolution contract is documented in `docs/OPEROPS_TASK_SHORT_LINKS.md`.
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
@@ -83,6 +88,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
 - Upload route returns structured oversize diagnostics (`413 file_too_large` with max-size metadata), and WebRTC upload client normalizes these payloads into concise UI-safe error messages.
 - Upload route propagates `request_id` in success/error payloads and logs (`X-Request-ID` passthrough or generated fallback), and WebRTC surfaces this id in upload diagnostics.
+- Upload route accepts audio-only recorder blobs mislabeled as `video/webm` and normalizes persisted/session-response MIME to `audio/webm`.
 - Upload route now has explicit upstream-failure shaping: Nginx intercepts `502/503/504` for `/api/voicebot/upload_audio` and returns structured JSON `503 backend_unavailable`, while WebRTC client keeps chunk in failed/manual-retry state and shows actionable retry guidance.
 - Session upload flow consumes pending image anchors (`pending_image_anchor_message_id` / `pending_image_anchor_oid`): first uploaded chunk is linked with `image_anchor_message_id`, then pending anchor markers are cleared.
 - Categorization updates are now delivered via websocket `message_update` events (no page refresh required): processor workers push `SEND_TO_SOCKET` jobs, backend consumes them and broadcasts to `voicebot:session:<session_id>`.
@@ -96,6 +102,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
+- WebRTC page `Done` stays enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, even without `pageSession` in the iframe URL.
+- WebRTC FAB now surfaces a red `Mic 1 OFF` critical state during `recording` / `paused` / `cutting`, and missing saved Mic 1 devices downgrade deterministically `LifeCam -> Microphone -> OFF`.
 - WebRTC close path no longer emits `session_done` from browser Socket.IO; FAB/page/yesterday close flows use the same REST close endpoint for deterministic behavior across host/path variants.
 - WebRTC unload persistence now stores any non-recording state as `paused` to avoid stale auto-resume after refresh/unload races.
 - Full-track recording segments are represented as `full_track` in Monitor/UI with duration and timestamp metadata, but upload to backend is intentionally disabled until diarization workflow is enabled.

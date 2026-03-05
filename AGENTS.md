@@ -222,9 +222,15 @@ Preferred engineering principles for this repo:
 - Socket.IO events for CRM: TICKET_CREATED, TICKET_UPDATED, TICKET_DELETED, EPIC_UPDATED, COMMENT_ADDED, WORK_HOURS_UPDATED.
 - CRM routes accessible at `/operops/*` with OperOpsNav horizontal navigation.
 - CRM Kanban task-detail links must use `id || _id`; records created without public `id` should still open `/operops/task/:taskId` correctly.
+- OperOps project create/edit flow is canonical on dedicated routes `/operops/projects-tree/new` and `/operops/projects-tree/:projectId`; `ProjectsTree` should route project rows there instead of reopening inline create/edit modals.
 - CRM performer filtering must be identifier-compatible (`_id` and legacy `id`), and project labels must resolve via `project_data`/`project_id`/`project` fallback chain.
 - Ticket create/update diagnostics should log normalized `project/project_id/performer` payload values to speed up CRM incident triage.
 - CRM work-hours joins are canonical on `ticket_db_id` (`automation_tasks._id`) across CRM routes, miniapp routes, and reporting services; `ticket_id` remains migration-only input and must be normalized before writes.
+- Task attachments are canonical across CRM and Miniapp tickets:
+  - CRM routes: `POST /api/crm/tickets/upload-attachment`, `GET /api/crm/tickets/attachment/:ticket_id/:attachment_id`, `POST /api/crm/tickets/delete-attachment`,
+  - Miniapp routes: `POST /tickets/upload-attachment`, `GET /tickets/attachment/:ticket_id/:attachment_id`,
+  - storage is normalized through `backend/src/services/taskAttachments.ts` under `uploads/task-attachments` (override `TASK_ATTACHMENTS_DIR`),
+  - allowed extensions are `pdf/docx/xlsx/png/jpg/jpeg/txt/zip`, max file size is `100MB`.
 - Miniapp `/tickets` route in debug mode (`IS_MINIAPP_DEBUG_MODE=true`) reads through raw DB to preserve test-ticket visibility when debug runtime boundaries diverge from default API filters.
 - Miniapp backend can optionally launch a dedicated Telegram bot when `TG_MINIAPP_BOT_TOKEN` is configured: `/start` and `/miniapp` return an inline WebApp button, `/get_info` returns chat diagnostics, and runtime shutdown stops the bot explicitly.
 - OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
@@ -245,6 +251,7 @@ Preferred engineering principles for this repo:
 - Socket.IO namespace: `/voicebot` for real-time session updates.
 - Voice upload path must broadcast `new_message` and `session_update` into room `voicebot:session:<session_id>` immediately after successful upload.
 - Voice upload API now propagates `request_id` in both success and error payloads (`X-Request-ID` passthrough or generated), and backend logs each upload stage with the same correlation id.
+- Voice upload must accept audio-only recorder blobs mislabeled as `video/webm` and normalize persisted/session-response MIME to `audio/webm`.
 - Categorization pipeline must emit `message_update` over websocket (through `SEND_TO_SOCKET` events queue) so Categorization tab updates without manual refresh.
 - `CREATE_TASKS` realtime contract is session-room first: workers must emit `tickets_prepared` with canonical `session_id`; `socket_id` is optional and only narrows delivery to one socket when present.
 - Socket events runtime must pass through non-object payloads for `tickets_prepared` (array-of-task contract) without object coercion.
@@ -256,6 +263,8 @@ Preferred engineering principles for this repo:
 - Runtime-tag aggregate scoping has been removed from operational read paths; nested `$lookup` joins are runtime-tag-agnostic until full environment-level DB cutover is complete.
 - Socket `session_done` authorization is test-covered through `resolveAuthorizedSessionForSocket` export; keep socket handlers bound to backend performer/session auth checks only.
 - `Done` path enforces one-shot auto-upload retry per pending chunk/session and surfaces manual retry for remaining failures.
+- WebRTC page `Done` must stay enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, not only when the page URL carries `pageSession`.
+- WebRTC FAB must surface a red `Mic 1 OFF` critical state during `recording` / `paused` / `cutting`, and missing saved Mic 1 devices must downgrade deterministically `LifeCam -> Microphone -> OFF`.
 - WebRTC REST close warnings must include `session_id` in client logs so 404/403/5xx close incidents can be matched with backend access logs quickly.
 - Inactive open sessions can be auto-closed by cron via `backend/scripts/voicebot-close-inactive-sessions.ts` (uses latest session/message/session-log activity timestamps and runs `DONE_MULTIPROMPT` flow for sessions idle above threshold).
 - Summarize MCP dependency watchdog script (`backend/scripts/summarize-mcp-watchdog.ts`) is canonical for `session_ready_to_summarize` prerequisites: it probes required endpoint/service pairs (`fs`, `tg-ro`, `call`, `seq`, `tm`, `tgbot`) and in apply mode auto-heals only failed units (`start` inactive, `restart` active with endpoint `502`/unreachable diagnostics).

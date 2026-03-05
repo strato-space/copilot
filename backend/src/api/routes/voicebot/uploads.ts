@@ -53,13 +53,29 @@ const storage = multer.diskStorage({
     }
 });
 
+const normalizeMimeType = (value: unknown): string => String(value || '').trim().toLowerCase();
+
+const isAllowedAudioUploadMimeType = (value: unknown): boolean => {
+    const mimeType = normalizeMimeType(value);
+    if (!mimeType) return false;
+    if (mimeType.startsWith('audio/')) return true;
+    // Some browsers tag audio-only MediaRecorder blobs as video/webm.
+    return mimeType === 'video/webm';
+};
+
+const resolvePersistedAudioMimeType = (value: unknown): string => {
+    const mimeType = normalizeMimeType(value);
+    if (mimeType === 'video/webm') return 'audio/webm';
+    return mimeType || 'application/octet-stream';
+};
+
 const upload = multer({
     storage,
     limits: {
         fileSize: VOICEBOT_FILE_STORAGE.maxAudioFileSize,
     },
     fileFilter: (_req, file, cb) => {
-        if (file.mimetype.startsWith('audio/')) {
+        if (isAllowedAudioUploadMimeType(file.mimetype)) {
             cb(null, true);
             return;
         }
@@ -431,6 +447,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             const createdAt = new Date();
             const absoluteFilePath = resolve(file.path);
             const fileHash = await getFileSha256FromPath(absoluteFilePath);
+            const persistedMimeType = resolvePersistedAudioMimeType(file.mimetype);
             let duration = 0;
             try {
                 duration = await getAudioDurationFromFile(absoluteFilePath);
@@ -447,13 +464,13 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 file_path: absoluteFilePath,
                 file_name: file.originalname,
                 file_size: file.size,
-                mime_type: file.mimetype,
+                mime_type: persistedMimeType,
                 duration,
                 file_metadata: {
                     file_hash: fileHash,
                     original_filename: file.originalname,
                     file_size: file.size,
-                    mime_type: file.mimetype,
+                    mime_type: persistedMimeType,
                     duration,
                     upload_timestamp: createdAt,
                 },
@@ -568,7 +585,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 file_info: {
                     duration,
                     file_size: file.size,
-                    mime_type: file.mimetype,
+                    mime_type: persistedMimeType,
                     original_filename: file.originalname,
                     file_hash: fileHash,
                 },
@@ -581,7 +598,7 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 message_id: String(op.insertedId),
                 file_name: file.originalname,
                 file_size: file.size,
-                mime_type: file.mimetype,
+                mime_type: persistedMimeType,
                 deduplicated_previous_count: deduplicatedCount,
             });
 
