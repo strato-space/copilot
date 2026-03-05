@@ -3,14 +3,27 @@ import { ObjectId, type Db } from 'mongodb';
 import sanitizeHtml from 'sanitize-html';
 import _ from 'lodash';
 import dayjs from 'dayjs';
+import { existsSync, unlinkSync } from 'fs';
+import multer from 'multer';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter.js';
 import weekOfYear from 'dayjs/plugin/weekOfYear.js';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
+import { AppError } from '../../middleware/error.js';
 import { normalizeTicketDbId } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
+import {
+    buildTaskAttachmentDownloadUrl,
+    createTaskAttachmentFromUpload,
+    findTaskAttachmentById,
+    getTaskAttachmentMaxFileSizeBytes,
+    getTaskAttachmentsTempDir,
+    normalizeTaskAttachments,
+    removeTaskAttachmentFile,
+    resolveTaskAttachmentAbsolutePath,
+} from '../../../services/taskAttachments.js';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(isSameOrAfter);
@@ -18,6 +31,12 @@ dayjs.extend(weekOfYear);
 
 const router = Router();
 const logger = getLogger();
+const crmAttachmentUpload = multer({
+    dest: getTaskAttachmentsTempDir(),
+    limits: {
+        fileSize: getTaskAttachmentMaxFileSizeBytes(),
+    },
+});
 
 const toLogString = (value: unknown): string | null => {
     if (value === null || value === undefined) return null;
@@ -85,6 +104,58 @@ const resolveRequestActor = (req: Request): { id?: string; name?: string } => {
         ...(name ? { name } : {}),
     };
 };
+
+const safeUnlink = (filePath: unknown): void => {
+    if (typeof filePath !== 'string' || filePath.trim().length === 0) return;
+    try {
+        if (existsSync(filePath)) {
+            unlinkSync(filePath);
+        }
+    } catch (error) {
+        logger.warn('[crm.tickets] failed to cleanup temp attachment file', {
+            file_path: filePath,
+            error: String(error),
+        });
+    }
+};
+
+const resolveTicketObjectId = (ticket: Record<string, unknown>): ObjectId | null => {
+    const rawId = ticket._id;
+    if (rawId instanceof ObjectId) return rawId;
+    if (typeof rawId === 'string' && ObjectId.isValid(rawId)) {
+        return new ObjectId(rawId);
+    }
+    if (rawId && typeof rawId === 'object') {
+        const record = rawId as Record<string, unknown>;
+        if (typeof record.$oid === 'string' && ObjectId.isValid(record.$oid)) {
+            return new ObjectId(record.$oid);
+        }
+    }
+    return null;
+};
+
+const findTicketByAnyIdentifier = async (
+    db: Db,
+    ticketId: string
+): Promise<Record<string, unknown> | null> => {
+    const trimmed = ticketId.trim();
+    if (trimmed.length === 0) return null;
+
+    if (ObjectId.isValid(trimmed)) {
+        const byObjectId = await db.collection(COLLECTIONS.TASKS).findOne({ _id: new ObjectId(trimmed) });
+        if (byObjectId) {
+            return byObjectId as Record<string, unknown>;
+        }
+    }
+
+    const byPublicId = await db.collection(COLLECTIONS.TASKS).findOne({ id: trimmed });
+    return (byPublicId as Record<string, unknown> | null) ?? null;
+};
+
+const buildCrmAttachmentViews = (ticketId: string, rawAttachments: unknown) =>
+    normalizeTaskAttachments(rawAttachments).map((attachment) =>
+        buildTaskAttachmentDownloadUrl(attachment, '/api/crm/tickets/attachment', ticketId)
+    );
 
 const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
     $lookup: {
@@ -275,13 +346,19 @@ router.post('/', async (req: Request, res: Response) => {
         }
 
         // Calculate total hours
-        data = data.map((t) => ({
-            ...t,
-            total_hours: t.work_data?.reduce(
-                (total: number, wh: { work_hours: number }) => total + wh.work_hours,
-                0
-            ),
-        }));
+        data = data.map((t) => {
+            const ticketObjectId = resolveTicketObjectId(t as Record<string, unknown>);
+            const ticketId = ticketObjectId?.toHexString() ?? toLogString((t as Record<string, unknown>).id) ?? '';
+
+            return {
+                ...t,
+                total_hours: t.work_data?.reduce(
+                    (total: number, wh: { work_hours: number }) => total + wh.work_hours,
+                    0
+                ),
+                attachments: ticketId ? buildCrmAttachmentViews(ticketId, (t as Record<string, unknown>).attachments) : [],
+            };
+        });
 
         res.status(200).json(data);
     } catch (error) {
@@ -339,6 +416,9 @@ router.post('/get-by-id', async (req: Request, res: Response) => {
             const workHours = (entry as { work_hours?: unknown }).work_hours;
             return total + (typeof workHours === 'number' ? workHours : 0);
         }, 0);
+        const ticketObjectId = resolveTicketObjectId(ticket);
+        const resolvedTicketId = ticketObjectId?.toHexString() ?? ticketId;
+        ticket.attachments = buildCrmAttachmentViews(resolvedTicketId, ticket.attachments);
 
         res.status(200).json({ ticket });
     } catch (error) {
@@ -395,6 +475,9 @@ router.post('/update', async (req: Request, res: Response) => {
                 updateProps.performer = normalizedPerformer;
             }
         }
+        if (Object.prototype.hasOwnProperty.call(updateProps, 'attachments')) {
+            updateProps.attachments = normalizeTaskAttachments(updateProps.attachments);
+        }
 
         logger.info('[crm.tickets.update] normalized ticket update payload', {
             ticket: ticketId,
@@ -402,6 +485,7 @@ router.post('/update', async (req: Request, res: Response) => {
             project_id_before: rawProjectId,
             project_id_after: toLogString(updateProps.project_id),
             performer: toLogString(updateProps.performer),
+            attachments_count: Array.isArray(updateProps.attachments) ? updateProps.attachments.length : undefined,
         });
 
         updateProps.updated_at = Date.now();
@@ -476,6 +560,11 @@ router.post('/create', async (req: Request, res: Response) => {
                 newTicket.performer = normalizedPerformer;
             }
         }
+        if (Object.prototype.hasOwnProperty.call(newTicket, 'attachments')) {
+            newTicket.attachments = normalizeTaskAttachments(newTicket.attachments);
+        } else {
+            newTicket.attachments = [];
+        }
 
         const createdByExisting = toLogString(newTicket.created_by);
         if (!createdByExisting && actor.id) {
@@ -497,20 +586,200 @@ router.post('/create', async (req: Request, res: Response) => {
             project_id_before: rawProjectId,
             project_id_after: toLogString(newTicket.project_id),
             performer: toLogString(newTicket.performer),
+            attachments_count: Array.isArray(newTicket.attachments) ? newTicket.attachments.length : 0,
             public_id: toLogString(newTicket.id),
             created_by: toLogString(newTicket.created_by),
             created_by_name: toNonEmptyString(newTicket.created_by_name),
         });
 
         const dbRes = await db.collection(COLLECTIONS.TASKS).insertOne(newTicket);
+        const ticketDbId = dbRes.insertedId.toHexString();
+        const ticketWithViews = {
+            ...newTicket,
+            _id: dbRes.insertedId,
+            attachments: buildCrmAttachmentViews(ticketDbId, newTicket.attachments),
+        };
 
         res.status(200).json({
             db_op_result: dbRes,
-            ticket: { ...newTicket, _id: dbRes.insertedId },
-            ticket_db: { ...newTicket, _id: dbRes.insertedId },
+            ticket: ticketWithViews,
+            ticket_db: ticketWithViews,
         });
     } catch (error) {
         logger.error('Error creating ticket:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Upload task attachment (supports orphan upload before ticket creation)
+ * POST /api/crm/tickets/upload-attachment
+ */
+router.post(
+    '/upload-attachment',
+    crmAttachmentUpload.single('attachment'),
+    async (req: Request, res: Response) => {
+        try {
+            const db = getDb();
+            const actor = resolveRequestActor(req);
+            if (!req.file) {
+                res.status(400).json({ error: 'attachment file is required' });
+                return;
+            }
+
+            const ticketId = toNonEmptyString(req.body?.ticket_id);
+            const attachment = createTaskAttachmentFromUpload({
+                file: req.file,
+                uploadedVia: 'crm',
+                ...(actor.id ? { uploadedBy: actor.id } : {}),
+            });
+
+            if (!ticketId) {
+                res.status(200).json({ attachment });
+                return;
+            }
+
+            const ticket = await findTicketByAnyIdentifier(db, ticketId);
+            if (!ticket) {
+                removeTaskAttachmentFile(attachment);
+                res.status(404).json({ error: 'Ticket not found' });
+                return;
+            }
+
+            const ticketObjectId = resolveTicketObjectId(ticket);
+            if (!ticketObjectId) {
+                removeTaskAttachmentFile(attachment);
+                res.status(400).json({ error: 'Ticket has invalid _id' });
+                return;
+            }
+
+            const normalizedAttachments = normalizeTaskAttachments(ticket.attachments);
+            const nextAttachments = [...normalizedAttachments, attachment];
+            await db.collection(COLLECTIONS.TASKS).updateOne(
+                { _id: ticketObjectId },
+                { $set: { attachments: nextAttachments, updated_at: Date.now() } }
+            );
+
+            res.status(200).json({
+                attachment: buildTaskAttachmentDownloadUrl(
+                    attachment,
+                    '/api/crm/tickets/attachment',
+                    ticketObjectId.toHexString()
+                ),
+            });
+        } catch (error) {
+            safeUnlink(req.file?.path);
+            logger.error('Error uploading ticket attachment:', error);
+            if (error instanceof AppError) {
+                res.status(error.status).json({ error: error.message, code: error.code });
+                return;
+            }
+            res.status(500).json({ error: String(error) });
+        }
+    }
+);
+
+/**
+ * Download task attachment
+ * GET /api/crm/tickets/attachment/:ticket_id/:attachment_id
+ */
+router.get('/attachment/:ticket_id/:attachment_id', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticketId = toNonEmptyString(req.params.ticket_id);
+        const attachmentId = toNonEmptyString(req.params.attachment_id);
+        if (!ticketId || !attachmentId) {
+            res.status(400).json({ error: 'ticket_id and attachment_id are required' });
+            return;
+        }
+
+        const ticket = await findTicketByAnyIdentifier(db, ticketId);
+        if (!ticket) {
+            res.status(404).json({ error: 'Ticket not found' });
+            return;
+        }
+        const ticketObjectId = resolveTicketObjectId(ticket);
+        if (!ticketObjectId) {
+            res.status(400).json({ error: 'Ticket has invalid _id' });
+            return;
+        }
+
+        const attachment = findTaskAttachmentById(
+            normalizeTaskAttachments(ticket.attachments),
+            attachmentId
+        );
+        if (!attachment) {
+            res.status(404).json({ error: 'Attachment not found' });
+            return;
+        }
+
+        const absolutePath = resolveTaskAttachmentAbsolutePath(attachment);
+        if (!existsSync(absolutePath)) {
+            res.status(404).json({ error: 'Attachment file is missing' });
+            return;
+        }
+
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename*=UTF-8''${encodeURIComponent(attachment.file_name)}`
+        );
+        res.setHeader('X-Ticket-Id', ticketObjectId.toHexString());
+        res.type(attachment.mime_type);
+        res.sendFile(absolutePath);
+    } catch (error) {
+        logger.error('Error downloading ticket attachment:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+/**
+ * Delete task attachment (CRM-only operation)
+ * POST /api/crm/tickets/delete-attachment
+ */
+router.post('/delete-attachment', async (req: Request, res: Response) => {
+    try {
+        const db = getDb();
+        const ticketId = toNonEmptyString(req.body?.ticket_id);
+        const attachmentId = toNonEmptyString(req.body?.attachment_id);
+        if (!ticketId || !attachmentId) {
+            res.status(400).json({ error: 'ticket_id and attachment_id are required' });
+            return;
+        }
+
+        const ticket = await findTicketByAnyIdentifier(db, ticketId);
+        if (!ticket) {
+            res.status(404).json({ error: 'Ticket not found' });
+            return;
+        }
+        const ticketObjectId = resolveTicketObjectId(ticket);
+        if (!ticketObjectId) {
+            res.status(400).json({ error: 'Ticket has invalid _id' });
+            return;
+        }
+
+        const attachments = normalizeTaskAttachments(ticket.attachments);
+        const target = findTaskAttachmentById(attachments, attachmentId);
+        if (!target) {
+            res.status(404).json({ error: 'Attachment not found' });
+            return;
+        }
+
+        const nextAttachments = attachments.filter(
+            (item) => item.attachment_id !== target.attachment_id
+        );
+        await db.collection(COLLECTIONS.TASKS).updateOne(
+            { _id: ticketObjectId },
+            { $set: { attachments: nextAttachments, updated_at: Date.now() } }
+        );
+        removeTaskAttachmentFile(target);
+
+        res.status(200).json({
+            result: 'ok',
+            attachment_id: target.attachment_id,
+            attachments_count: nextAttachments.length,
+        });
+    } catch (error) {
+        logger.error('Error deleting ticket attachment:', error);
         res.status(500).json({ error: String(error) });
     }
 });

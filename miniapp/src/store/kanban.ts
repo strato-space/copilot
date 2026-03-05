@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import update from 'immutability-helper';
 import _ from 'lodash';
+import axios from 'axios';
 import type { MessageInstance } from 'antd/es/message/interface';
 
 import constants from '../constants';
 import { useRequest } from './request';
-import type { Ticket, TrackTimePayload } from '../types/kanban';
+import type { TaskAttachment, Ticket, TrackTimePayload } from '../types/kanban';
 
 interface MiniappKanbanDataSlice {
     messageApi: MessageInstance | null;
@@ -37,6 +38,7 @@ interface MiniappKanbanTicketActionsSlice {
     changeTicketStatus: (ticket: Ticket, newStatus: string) => Promise<void>;
     trackTicketTime: (formData: TrackTimePayload) => Promise<void>;
     rejectTicket: (values: { ticket_id: string; comment: string }) => Promise<void>;
+    uploadTicketAttachment: (ticketId: string, file: File) => Promise<void>;
 }
 
 type MiniappKanbanStoreShape = MiniappKanbanDataSlice &
@@ -67,6 +69,7 @@ export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
             const handleData = response.tickets.map((item) => ({
                 ...item,
                 status: item.status ?? constants.notion_ticket_statuses.NONE,
+                attachments: Array.isArray(item.attachments) ? item.attachments : [],
             }));
 
             const boards = handleData.map((ticket) => ticket.board ?? '').filter(Boolean);
@@ -182,6 +185,40 @@ export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
             });
 
             await api_request('tickets/comment', values);
+        },
+        uploadTicketAttachment: async (ticketId, file) => {
+            const formData = new FormData();
+            formData.append('ticket_id', ticketId);
+            formData.append('attachment', file);
+
+            const response = await axios.post<{ attachment?: TaskAttachment }>(
+                `${window.backend_url}/tickets/upload-attachment`,
+                formData,
+                {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    withCredentials: true,
+                }
+            );
+
+            const attachment = response.data?.attachment;
+            if (!attachment) {
+                throw new Error('Upload response missing attachment payload');
+            }
+
+            const ticketIndex = _.findIndex(get().tickets, (ticket) => ticket._id === ticketId);
+            if (ticketIndex >= 0) {
+                const existing = get().tickets[ticketIndex]?.attachments ?? [];
+                const updated = [...existing, attachment];
+                set((state) => ({
+                    tickets: update(state.tickets, {
+                        [ticketIndex]: { attachments: { $set: updated } },
+                    }),
+                    selectedTicket:
+                        state.selectedTicket?._id === ticketId
+                            ? ({ ...state.selectedTicket, attachments: updated } as Ticket)
+                            : state.selectedTicket,
+                }));
+            }
         },
     };
 });

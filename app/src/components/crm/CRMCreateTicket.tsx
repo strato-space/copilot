@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react';
-import { Form, Input, Button, Select, DatePicker, InputNumber, Divider, Space } from 'antd';
-import { ArrowLeftOutlined, CheckOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Form, Input, Button, Select, DatePicker, InputNumber, Divider, message } from 'antd';
+import { ArrowLeftOutlined, CheckOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import _ from 'lodash';
@@ -11,7 +11,7 @@ import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { TASK_STATUSES, NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
-import type { Project, TaskType } from '../../types/crm';
+import type { TaskAttachment, TaskType } from '../../types/crm';
 
 interface TicketFormValues {
     _id?: string | null;
@@ -26,6 +26,7 @@ interface TicketFormValues {
     epic?: string;
     notifications?: string[];
     description?: string;
+    attachments?: TaskAttachment[];
 }
 
 const toIdString = (value: unknown): string | undefined => {
@@ -54,13 +55,14 @@ const CRMCreateTicket = () => {
         createTicket,
         editTicketData,
         task_types,
-        uploadFile,
+        uploadTicketAttachment,
+        deleteTicketAttachment,
         deleteTicket,
         getProjectEpics,
-        createEpic,
-        getProjectByName,
     } = useKanbanStore();
     const { customers, projectGroups, projects: projectsFromStore } = useProjectsStore();
+    const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+    const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
     // Функция для группировки проектов по project groups
     const getGroupedProjects = () => {
@@ -119,6 +121,7 @@ const CRMCreateTicket = () => {
         if (editingTicket?.project) {
             setEditTiketProject(editingTicket.project);
         }
+        setAttachments(Array.isArray(editingTicket?.attachments) ? editingTicket.attachments : []);
     }, [projects.length, fetchTickets, editingTicket, form, setEditTiketProject]);
 
     const projectEpics = useMemo(
@@ -183,6 +186,51 @@ const CRMCreateTicket = () => {
 
     if (!editingTicket) return null;
 
+    const resolveAttachmentDownloadUrl = (attachment: TaskAttachment): string | null => {
+        if (attachment.download_url) return attachment.download_url;
+        if (!editingTicket._id) return null;
+        return `/api/crm/tickets/attachment/${encodeURIComponent(editingTicket._id)}/${encodeURIComponent(attachment.attachment_id)}`;
+    };
+
+    const formatFileSize = (size: number): string => {
+        if (!Number.isFinite(size) || size <= 0) return '0 B';
+        if (size < 1024) return `${size} B`;
+        if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+        return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const handleAttachmentUpload = async (file: File): Promise<void> => {
+        try {
+            setIsUploadingAttachment(true);
+            const uploaded = await uploadTicketAttachment(file, editingTicket._id ?? undefined);
+            setAttachments((prev) => [...prev, uploaded]);
+            message.success(`Файл "${uploaded.file_name}" загружен`);
+        } catch (error) {
+            const errorText =
+                error instanceof Error && error.message ? error.message : 'Не удалось загрузить файл';
+            message.error(errorText);
+        } finally {
+            setIsUploadingAttachment(false);
+        }
+    };
+
+    const handleAttachmentRemove = async (attachment: TaskAttachment): Promise<void> => {
+        if (!editingTicket._id) {
+            setAttachments((prev) => prev.filter((item) => item.attachment_id !== attachment.attachment_id));
+            return;
+        }
+
+        try {
+            await deleteTicketAttachment(editingTicket._id, attachment.attachment_id);
+            setAttachments((prev) => prev.filter((item) => item.attachment_id !== attachment.attachment_id));
+            message.success('Вложение удалено');
+        } catch (error) {
+            const errorText =
+                error instanceof Error && error.message ? error.message : 'Не удалось удалить вложение';
+            message.error(errorText);
+        }
+    };
+
     return (
         <div className="text-black flex flex-col pt-3">
             <div className="flex justify-between items-center gap-3">
@@ -228,12 +276,14 @@ const CRMCreateTicket = () => {
                                     typeof value === 'string' && value.trim() === '' ? null : value,
                                 ];
                             })
-                        );
+                        ) as Record<string, unknown>;
+
+                        cleanedValues.attachments = attachments;
 
                         if (!editingTicket._id) {
                             createTicket(cleanedValues as Parameters<typeof createTicket>[0]);
                         } else {
-                            editTicketData(cleanedValues as Parameters<typeof editTicketData>[0]);
+                            editTicketData(cleanedValues as unknown as Parameters<typeof editTicketData>[0]);
                         }
                         setEditingTicket(null);
                     }}
@@ -373,6 +423,78 @@ const CRMCreateTicket = () => {
                                             mode="multiple"
                                         />
                                     </Form.Item>
+                                </div>
+                            </div>
+
+                            <Divider className="!my-2" />
+                            <div className="flex flex-col gap-3">
+                                <div className="text-sm font-medium">Вложения</div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm hover:border-sky-500 hover:text-sky-600">
+                                        <UploadOutlined />
+                                        {isUploadingAttachment ? 'Загрузка...' : 'Добавить файл'}
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            disabled={isUploadingAttachment}
+                                            onChange={(event) => {
+                                                const file = event.target.files?.[0];
+                                                event.target.value = '';
+                                                if (!file) return;
+                                                void handleAttachmentUpload(file);
+                                            }}
+                                        />
+                                    </label>
+                                    <div className="text-xs text-slate-500">
+                                        Поддерживаемые форматы: pdf, docx, xlsx, png, jpg, txt, zip. До 100MB.
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    {attachments.length === 0 ? (
+                                        <div className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500">
+                                            Пока нет вложений
+                                        </div>
+                                    ) : (
+                                        attachments.map((attachment) => {
+                                            const downloadUrl = resolveAttachmentDownloadUrl(attachment);
+                                            return (
+                                                <div
+                                                    key={attachment.attachment_id}
+                                                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 p-3"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <div className="truncate text-sm">{attachment.file_name}</div>
+                                                        <div className="text-xs text-slate-500">
+                                                            {formatFileSize(attachment.file_size)}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {downloadUrl ? (
+                                                            <a
+                                                                href={downloadUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-sky-500 hover:text-sky-600"
+                                                            >
+                                                                <DownloadOutlined />
+                                                                Скачать
+                                                            </a>
+                                                        ) : null}
+                                                        <Button
+                                                            danger
+                                                            size="small"
+                                                            type="text"
+                                                            onClick={() => {
+                                                                void handleAttachmentRemove(attachment);
+                                                            }}
+                                                        >
+                                                            Удалить
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
                                 </div>
                             </div>
                         </div>

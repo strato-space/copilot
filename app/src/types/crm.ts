@@ -81,6 +81,18 @@ export interface WorkData {
     result_link?: string;
 }
 
+export interface TaskAttachment {
+    attachment_id: string;
+    file_name: string;
+    mime_type: string;
+    file_size: number;
+    storage_key: string;
+    uploaded_at: string;
+    uploaded_by?: string;
+    uploaded_via?: 'crm' | 'miniapp';
+    download_url?: string;
+}
+
 export interface Ticket {
     _id: string;
     id: string;
@@ -100,6 +112,7 @@ export interface Ticket {
     epic_name?: string;
     comments_list?: Comment[];
     work_data?: WorkData[];
+    attachments?: TaskAttachment[];
     total_hours?: number;
     notifications?: unknown;
     created_at?: string;

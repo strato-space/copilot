@@ -19,6 +19,18 @@ export interface TaskTypeSummary {
     execution_plan?: Array<{ id?: string; _id?: string; title?: string }>;
 }
 
+export interface TaskAttachment {
+    attachment_id: string;
+    file_name: string;
+    mime_type: string;
+    file_size: number;
+    storage_key: string;
+    uploaded_at: string;
+    uploaded_by?: string;
+    uploaded_via?: 'crm' | 'miniapp';
+    download_url?: string;
+}
+
 export interface Ticket {
     _id: string;
     id?: string;
@@ -30,6 +42,7 @@ export interface Ticket {
     updated_at?: string;
     task_type?: TaskTypeSummary | null;
     description?: string;
+    attachments?: TaskAttachment[];
     epic?: string;
     total_hours?: number;
     performer?: PerformerSummary | null;

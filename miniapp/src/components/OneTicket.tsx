@@ -1,7 +1,14 @@
-import { createElement, useEffect, type ReactNode } from 'react';
+import { createElement, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import { Collapse, ConfigProvider } from 'antd';
-import { ArrowLeftOutlined, ClockCircleOutlined, StopOutlined } from '@ant-design/icons';
+import {
+    ArrowLeftOutlined,
+    ClockCircleOutlined,
+    StopOutlined,
+    DownloadOutlined,
+    UploadOutlined,
+    PaperClipOutlined,
+} from '@ant-design/icons';
 import _ from 'lodash';
 import sanitizeHtml from 'sanitize-html';
 
@@ -104,7 +111,9 @@ const renderSanitizedHtml = (sanitizedHtml: string): ReactNode[] => {
 };
 
 const OneTicket = () => {
-    const { selectedTicket, setSelectedTicket, setActiveActionSheet } = useKanban();
+    const { selectedTicket, setSelectedTicket, setActiveActionSheet, uploadTicketAttachment } = useKanban();
+    const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (!selectedTicket) return;
@@ -117,6 +126,7 @@ const OneTicket = () => {
     const ticket: Ticket = selectedTicket;
     const safeTicketDescription = sanitizeTicketDescriptionHtml(ticket.description);
     const safeTicketDescriptionNodes = renderSanitizedHtml(safeTicketDescription);
+    const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
 
     const taskType = ticket.task_type;
     const executionPlanItems = Array.isArray(taskType?.execution_plan) ? taskType.execution_plan : [];
@@ -163,6 +173,37 @@ const OneTicket = () => {
             });
         }
     }
+
+    const resolveAttachmentDownloadUrl = (attachment: {
+        download_url?: string;
+        attachment_id: string;
+    }): string => attachment.download_url ?? `${window.backend_url}/tickets/attachment/${ticket._id}/${attachment.attachment_id}`;
+
+    const formatFileSize = (size: number): string => {
+        if (!Number.isFinite(size) || size <= 0) return '0 B';
+        if (size < 1024) return `${size} B`;
+        if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+        return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const openFileDialog = (): void => {
+        fileInputRef.current?.click();
+    };
+
+    const handleAttachmentFileSelected = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        try {
+            setIsUploadingAttachment(true);
+            await uploadTicketAttachment(ticket._id, file);
+        } catch (error) {
+            console.error('Failed to upload miniapp attachment', error);
+        } finally {
+            setIsUploadingAttachment(false);
+        }
+    };
 
     return (
         <>
@@ -217,6 +258,60 @@ const OneTicket = () => {
                 <div className="one-ticket-description break-all pb-20">
                     <div className="font-bold">Описание задачи:</div>
                     <div>{safeTicketDescriptionNodes}</div>
+                </div>
+
+                <div className="w-full pb-20">
+                    <div className="mb-2 flex items-center justify-between">
+                        <div className="font-bold">Вложения</div>
+                        <button
+                            type="button"
+                            className="flex items-center gap-2 rounded-md border border-[#3086ff] bg-[#3086ff] px-3 py-1 text-sm text-white disabled:opacity-60"
+                            onClick={openFileDialog}
+                            disabled={isUploadingAttachment}
+                        >
+                            <UploadOutlined />
+                            {isUploadingAttachment ? 'Загрузка...' : 'Добавить'}
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            className="hidden"
+                            onChange={(event) => {
+                                void handleAttachmentFileSelected(event);
+                            }}
+                        />
+                    </div>
+                    {attachments.length < 1 ? (
+                        <div className="rounded-md border border-dashed border-[#2b2b2b] p-3 text-xs text-[#b3b3b3]">
+                            Пока нет вложений
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-2">
+                            {attachments.map((attachment) => (
+                                <div
+                                    key={attachment.attachment_id}
+                                    className="flex items-center justify-between gap-2 rounded-md border border-[#2b2b2b] bg-[#111] px-3 py-2"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 text-sm text-white">
+                                            <PaperClipOutlined />
+                                            <span className="truncate">{attachment.file_name}</span>
+                                        </div>
+                                        <div className="text-[11px] text-[#b3b3b3]">{formatFileSize(attachment.file_size)}</div>
+                                    </div>
+                                    <a
+                                        href={resolveAttachmentDownloadUrl(attachment)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 rounded-md border border-[#2b2b2b] bg-[#1a1a1a] px-2 py-1 text-xs text-white"
+                                    >
+                                        <DownloadOutlined />
+                                        Скачать
+                                    </a>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
             <div className="fixed bottom-0 left-0 z-30 w-full">

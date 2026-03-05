@@ -1,6 +1,8 @@
 import express, { type NextFunction, type Request, type Response, type Router } from 'express';
 import crypto from 'crypto';
 import dayjs from 'dayjs';
+import multer from 'multer';
+import { existsSync, unlinkSync } from 'fs';
 import customParseFormat from 'dayjs/plugin/customParseFormat.js';
 import _ from 'lodash';
 import jwt from 'jsonwebtoken';
@@ -10,10 +12,20 @@ import type { Logger } from 'winston';
 
 import { COLLECTIONS, NOTIFICATIONS, TASK_CLASSES, TASK_STATUSES } from '../../constants.js';
 import { getRawDb } from '../../services/db.js';
+import { AppError } from '../../api/middleware/error.js';
 import {
     buildWorkHoursLookupByTicketDbId,
     normalizeTicketDbId,
 } from '../../utils/crmMiniappShared.js';
+import {
+    buildTaskAttachmentDownloadUrl,
+    createTaskAttachmentFromUpload,
+    findTaskAttachmentById,
+    getTaskAttachmentMaxFileSizeBytes,
+    getTaskAttachmentsTempDir,
+    normalizeTaskAttachments,
+    resolveTaskAttachmentAbsolutePath,
+} from '../../services/taskAttachments.js';
 
 dayjs.extend(customParseFormat);
 
@@ -57,6 +69,63 @@ const isTelegramUserData = (value: unknown): value is TelegramUserData =>
         && typeof value === 'object'
         && typeof (value as { id?: unknown }).id === 'number'
         && Number.isFinite((value as { id: number }).id)
+    );
+
+const miniappAttachmentUpload = multer({
+    dest: getTaskAttachmentsTempDir(),
+    limits: {
+        fileSize: getTaskAttachmentMaxFileSizeBytes(),
+    },
+});
+
+const toNonEmptyString = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+};
+
+const resolveMiniappUserIds = (req: MiniappRequest): string[] => {
+    const values = [
+        toNonEmptyString(req.user?.id),
+        toNonEmptyString(req.user?._id),
+        toNonEmptyString(req.user?.telegram_id),
+    ];
+    if (req.user?._id instanceof ObjectId) {
+        values.push(req.user._id.toHexString());
+    }
+    return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
+};
+
+const resolveTicketPerformerIds = (ticket: Record<string, unknown>): string[] => {
+    const performer = ticket.performer;
+    const ids: string[] = [];
+    if (typeof performer === 'string') {
+        const normalized = toNonEmptyString(performer);
+        if (normalized) ids.push(normalized);
+    } else if (performer && typeof performer === 'object') {
+        const record = performer as Record<string, unknown>;
+        const fromId = toNonEmptyString(record.id);
+        const fromDbId = toNonEmptyString(record._id);
+        if (fromId) ids.push(fromId);
+        if (fromDbId) ids.push(fromDbId);
+        if (record._id instanceof ObjectId) {
+            ids.push(record._id.toHexString());
+        }
+    }
+    return Array.from(new Set(ids));
+};
+
+const canMiniappAccessTicket = (ticket: Record<string, unknown>, req: MiniappRequest): boolean => {
+    const userIds = new Set(resolveMiniappUserIds(req));
+    if (userIds.size === 0) return false;
+
+    const performerIds = resolveTicketPerformerIds(ticket);
+    return performerIds.some((id) => userIds.has(id));
+};
+
+const buildMiniappAttachmentViews = (ticketId: string, rawAttachments: unknown) =>
+    normalizeTaskAttachments(rawAttachments).map((attachment) =>
+        buildTaskAttachmentDownloadUrl(attachment, '/tickets/attachment', ticketId)
     );
 
 export interface MiniappDeps {
@@ -305,6 +374,10 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                     ),
                     task_type: (taskTypesDict as Record<string, unknown>)[ticket.task_type as string] ?? null,
                     project: ticket?.project_data?.name ?? '',
+                    attachments: buildMiniappAttachmentViews(
+                        String(ticket._id ?? ''),
+                        (ticket as { attachments?: unknown }).attachments
+                    ),
                 })
             );
 
@@ -321,12 +394,147 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                     'task_type',
                     'description',
                     'epic',
+                    'attachments',
                 ])
             );
 
             res.status(200).json({ tickets: data });
         } catch (error) {
             logger.error('Tickets error', { error: toSafeErrorMessage(error) });
+            res.status(500).json({ error: `${error}` });
+        }
+    });
+
+    router.post(
+        '/tickets/upload-attachment',
+        requireAuth,
+        miniappAttachmentUpload.single('attachment'),
+        async (req: MiniappRequest, res: Response) => {
+            try {
+                const cleanupTempFile = (): void => {
+                    const tempFilePath = req.file?.path;
+                    if (typeof tempFilePath === 'string' && tempFilePath.length > 0) {
+                        try {
+                            unlinkSync(tempFilePath);
+                        } catch {
+                            // best effort temp cleanup
+                        }
+                    }
+                };
+                const ticketIdRaw = toNonEmptyString(req.body?.ticket_id);
+                if (!ticketIdRaw || !ObjectId.isValid(ticketIdRaw)) {
+                    cleanupTempFile();
+                    res.status(400).json({ error: 'ticket_id is required' });
+                    return;
+                }
+                if (!req.file) {
+                    res.status(400).json({ error: 'attachment file is required' });
+                    return;
+                }
+
+                const ticketObjectId = new ObjectId(ticketIdRaw);
+                const ticket = await db.collection(COLLECTIONS.TASKS).findOne({ _id: ticketObjectId, is_deleted: { $ne: true } });
+                if (!ticket) {
+                    cleanupTempFile();
+                    res.status(404).json({ error: 'Ticket not found' });
+                    return;
+                }
+                if (!canMiniappAccessTicket(ticket as Record<string, unknown>, req)) {
+                    cleanupTempFile();
+                    res.status(403).json({ error: 'Access denied' });
+                    return;
+                }
+
+                const uploadedBy = resolveMiniappUserIds(req)[0];
+                const attachment = createTaskAttachmentFromUpload({
+                    file: req.file,
+                    uploadedVia: 'miniapp',
+                    ...(uploadedBy ? { uploadedBy } : {}),
+                });
+                const currentAttachments = normalizeTaskAttachments((ticket as { attachments?: unknown }).attachments);
+                const nextAttachments = [...currentAttachments, attachment];
+
+                await db.collection(COLLECTIONS.TASKS).updateOne(
+                    { _id: ticketObjectId },
+                    {
+                        $set: {
+                            attachments: nextAttachments,
+                            updated_at: Date.now(),
+                        },
+                    }
+                );
+
+                res.status(200).json({
+                    result: 'ok',
+                    attachment: buildTaskAttachmentDownloadUrl(
+                        attachment,
+                        '/tickets/attachment',
+                        ticketObjectId.toHexString()
+                    ),
+                    attachments_count: nextAttachments.length,
+                });
+            } catch (error) {
+                logger.error('Miniapp upload attachment error', { error: toSafeErrorMessage(error) });
+                const tempFilePath = req.file?.path;
+                if (typeof tempFilePath === 'string' && tempFilePath.length > 0) {
+                    try {
+                        unlinkSync(tempFilePath);
+                    } catch {
+                        // best effort temp cleanup
+                    }
+                }
+                if (error instanceof AppError) {
+                    res.status(error.status).json({ error: error.message, code: error.code });
+                    return;
+                }
+                res.status(500).json({ error: `${error}` });
+            }
+        }
+    );
+
+    router.get('/tickets/attachment/:ticket_id/:attachment_id', requireAuth, async (req: MiniappRequest, res: Response) => {
+        try {
+            const ticketId = toNonEmptyString(req.params?.ticket_id);
+            const attachmentId = toNonEmptyString(req.params?.attachment_id);
+            if (!ticketId || !attachmentId || !ObjectId.isValid(ticketId)) {
+                res.status(400).json({ error: 'Invalid ticket_id/attachment_id' });
+                return;
+            }
+
+            const ticketObjectId = new ObjectId(ticketId);
+            const ticket = await db.collection(COLLECTIONS.TASKS).findOne({ _id: ticketObjectId, is_deleted: { $ne: true } });
+            if (!ticket) {
+                res.status(404).json({ error: 'Ticket not found' });
+                return;
+            }
+            if (!canMiniappAccessTicket(ticket as Record<string, unknown>, req)) {
+                res.status(403).json({ error: 'Access denied' });
+                return;
+            }
+
+            const attachment = findTaskAttachmentById(
+                normalizeTaskAttachments((ticket as { attachments?: unknown }).attachments),
+                attachmentId
+            );
+            if (!attachment) {
+                res.status(404).json({ error: 'Attachment not found' });
+                return;
+            }
+
+            const absolutePath = resolveTaskAttachmentAbsolutePath(attachment);
+            if (!existsSync(absolutePath)) {
+                res.status(404).json({ error: 'Attachment file is missing' });
+                return;
+            }
+
+            res.setHeader(
+                'Content-Disposition',
+                `attachment; filename*=UTF-8''${encodeURIComponent(attachment.file_name)}`
+            );
+            res.type(attachment.mime_type);
+            res.sendFile(absolutePath);
+        } catch (error) {
+            logger.error('Miniapp download attachment error', { error: toSafeErrorMessage(error) });
             res.status(500).json({ error: `${error}` });
         }
     });

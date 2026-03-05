@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import update from 'immutability-helper';
 import _ from 'lodash';
 import sanitizeHtml from 'sanitize-html';
+import axios from 'axios';
 import type { Dayjs } from 'dayjs';
 
 import { useRequestStore } from './requestStore';
@@ -15,6 +16,7 @@ import { TASK_STATUSES, TASK_CLASSES } from '../constants/crm';
 import { ensureCodexPerformerForKanban } from '../utils/codexPerformer';
 import type {
     Ticket,
+    TaskAttachment,
     Performer,
     Project,
     Customer,
@@ -140,7 +142,8 @@ interface KanbanCrudSlice {
 
 interface KanbanCommentUploadSlice {
     saveComment: (ticket: Ticket, comment_text: string) => Promise<void>;
-    uploadFile: (file: File) => Promise<string>;
+    uploadTicketAttachment: (file: File, ticketId?: string) => Promise<TaskAttachment>;
+    deleteTicketAttachment: (ticketId: string, attachmentId: string) => Promise<void>;
     massiveChangeStatus: (tickets: string[], new_status: string) => Promise<void>;
 }
 
@@ -598,14 +601,53 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             await api_request('tickets/add-comment', { ticket: ticket._id, comment_text }, { silent: true });
         },
 
-        uploadFile: async (file) => {
-            const relative_url = await useRequestStore.getState().sendFile(file, { silent: true });
+        uploadTicketAttachment: async (file, ticketId) => {
             const backendUrl =
                 import.meta.env.VITE_CRM_API_URL ||
                 import.meta.env.VITE_API_URL ||
                 import.meta.env.VITE_API_BASE_URL ||
                 '/api/crm';
-            return backendUrl + relative_url;
+            const formData = new FormData();
+            formData.append('attachment', file);
+            if (ticketId) {
+                formData.append('ticket_id', ticketId);
+            }
+
+            const response = await axios.post<{ attachment?: TaskAttachment }>(
+                `${backendUrl}/tickets/upload-attachment`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                    withCredentials: true,
+                }
+            );
+
+            if (!response.data?.attachment) {
+                throw new Error('Upload response is missing attachment payload');
+            }
+            return response.data.attachment;
+        },
+
+        deleteTicketAttachment: async (ticketId, attachmentId) => {
+            await api_request(
+                'tickets/delete-attachment',
+                { ticket_id: ticketId, attachment_id: attachmentId },
+                { silent: true }
+            );
+
+            const recordIndex = _.findIndex(get().tickets, (item) => item._id === ticketId);
+            if (recordIndex < 0) return;
+
+            const ticket = get().tickets[recordIndex];
+            const current = Array.isArray(ticket?.attachments) ? ticket.attachments : [];
+            const next = current.filter((attachment) => attachment.attachment_id !== attachmentId);
+            set((state) => ({
+                tickets: update(state.tickets, {
+                    [recordIndex]: { attachments: { $set: next } },
+                }),
+            }));
         },
 
         massiveChangeStatus: async (tickets, new_status) => {

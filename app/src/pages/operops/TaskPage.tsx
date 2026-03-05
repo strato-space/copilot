@@ -22,6 +22,9 @@ import {
     CommentOutlined,
     EditOutlined,
     CheckCircleOutlined,
+    DownloadOutlined,
+    PaperClipOutlined,
+    DeleteOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -31,7 +34,7 @@ import _ from 'lodash';
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useAuthStore } from '../../store/authStore';
-import type { Ticket, Performer } from '../../types/crm';
+import type { TaskAttachment, Ticket, Performer } from '../../types/crm';
 import {
     resolveCanonicalTaskId,
     resolveTaskCreator,
@@ -146,11 +149,12 @@ interface TaskTypeInfo {
 
 const TaskPage = () => {
     const { taskId } = useParams<{ taskId: string }>();
-    const { performers, fetchTicketById, fetchDictionary, epics, projectsData } = useKanbanStore();
+    const { performers, fetchTicketById, fetchDictionary, epics, projectsData, deleteTicketAttachment } = useKanbanStore();
     const { setEditingTicket } = useCRMStore();
     const { isAuth, loading: authLoading } = useAuthStore();
     const [loading, setLoading] = useState(true);
     const [task, setTask] = useState<Ticket | null>(null);
+    const [removingAttachmentId, setRemovingAttachmentId] = useState<string | null>(null);
 
     useEffect(() => {
         if (isAuth && taskId) {
@@ -250,6 +254,36 @@ const TaskPage = () => {
     const sourceInfo = resolveTaskSourceInfo(task);
     const safeTaskDescription = sanitizeTaskDescriptionHtml(task.description);
     const safeTaskDescriptionNodes = renderSanitizedHtml(safeTaskDescription);
+    const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+
+    const formatFileSize = (size: number): string => {
+        if (!Number.isFinite(size) || size <= 0) return '0 B';
+        if (size < 1024) return `${size} B`;
+        if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+        return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const resolveAttachmentDownloadUrl = (attachment: TaskAttachment): string =>
+        attachment.download_url ??
+        `/api/crm/tickets/attachment/${encodeURIComponent(task._id)}/${encodeURIComponent(attachment.attachment_id)}`;
+
+    const handleRemoveAttachment = async (attachmentId: string): Promise<void> => {
+        try {
+            setRemovingAttachmentId(attachmentId);
+            await deleteTicketAttachment(task._id, attachmentId);
+            setTask((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    attachments: (prev.attachments ?? []).filter(
+                        (attachment) => attachment.attachment_id !== attachmentId
+                    ),
+                };
+            });
+        } finally {
+            setRemovingAttachmentId(null);
+        }
+    };
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -403,6 +437,53 @@ const TaskPage = () => {
                             <div className="prose max-w-none">{safeTaskDescriptionNodes}</div>
                         ) : (
                             <Text type="secondary">No description provided</Text>
+                        )}
+                    </Card>
+
+                    <Card title="Attachments" bordered={false}>
+                        {attachments.length === 0 ? (
+                            <Text type="secondary">No attachments</Text>
+                        ) : (
+                            <div className="space-y-2">
+                                {attachments.map((attachment) => (
+                                    <div
+                                        key={attachment.attachment_id}
+                                        className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 truncate text-sm">
+                                                <PaperClipOutlined />
+                                                <span className="truncate">{attachment.file_name}</span>
+                                            </div>
+                                            <div className="text-xs text-slate-500">
+                                                {formatFileSize(attachment.file_size)}
+                                            </div>
+                                        </div>
+                                        <Space size="small">
+                                            <a
+                                                href={resolveAttachmentDownloadUrl(attachment)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <Button size="small" icon={<DownloadOutlined />}>
+                                                    Download
+                                                </Button>
+                                            </a>
+                                            <Button
+                                                size="small"
+                                                danger
+                                                loading={removingAttachmentId === attachment.attachment_id}
+                                                icon={<DeleteOutlined />}
+                                                onClick={() => {
+                                                    void handleRemoveAttachment(attachment.attachment_id);
+                                                }}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </Space>
+                                    </div>
+                                ))}
+                            </div>
                         )}
                     </Card>
 
