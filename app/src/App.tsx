@@ -37,6 +37,7 @@ import {
   TaskPage,
   CodexTaskPage,
   ProjectsTree,
+  ProjectManagementPage,
   FinancesPerformersPage,
 } from './pages/operops';
 import ChatopsPage from './pages/ChatopsPage';
@@ -228,6 +229,8 @@ export default function App(): ReactElement {
             <Route path="performers" element={<PerformersPage />} />
             <Route path="finances-performers" element={<FinancesPerformersPage />} />
             <Route path="projects-tree" element={<ProjectsTree />} />
+            <Route path="projects-tree/new" element={<ProjectManagementPage />} />
+            <Route path="projects-tree/:projectId" element={<ProjectManagementPage />} />
             <Route path="task/:taskId" element={<TaskPage />} />
             <Route path="codex/task/:issueId" element={<CodexTaskPage />} />
           </Route>

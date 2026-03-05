@@ -27,6 +27,7 @@ interface EditProjectProps {
     projectGroups: ProjectGroup[];
     customers: Customer[];
     onSave?: () => void;
+    onCancel?: () => void;
 }
 
 interface ProjectFormValues {
@@ -46,6 +47,7 @@ const EditProject: React.FC<EditProjectProps> = ({
     projectGroups,
     customers: _customers,
     onSave,
+    onCancel,
 }) => {
     const [form] = Form.useForm<ProjectFormValues>();
     const [loading, setLoading] = useState(false);
@@ -117,6 +119,14 @@ const EditProject: React.FC<EditProjectProps> = ({
             console.error(e);
         }
         setLoading(false);
+    };
+
+    const handleCancel = (): void => {
+        if (onCancel) {
+            onCancel();
+            return;
+        }
+        onSave?.();
     };
 
     return (
@@ -209,7 +219,7 @@ const EditProject: React.FC<EditProjectProps> = ({
                         <Button type="primary" htmlType="submit" loading={loading}>
                             {project ? 'Сохранить' : 'Создать'}
                         </Button>
-                        {onSave && <Button onClick={() => onSave()}>Отмена</Button>}
+                        {(onCancel || onSave) && <Button onClick={handleCancel}>Отмена</Button>}
                     </Space>
                 </Form.Item>
             </Form>

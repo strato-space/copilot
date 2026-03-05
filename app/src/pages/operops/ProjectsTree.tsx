@@ -29,9 +29,10 @@ import {
     EyeInvisibleOutlined,
     SwapOutlined,
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useRequestStore } from '../../store/requestStore';
-import { EditCustomer, EditProjectGroup, EditProject } from '../../components/crm/projects';
+import { EditCustomer, EditProjectGroup } from '../../components/crm/projects';
 import type { Customer, ProjectGroup, ProjectWithGroup, TreeNode } from '../../types/crm';
 import type { TableProps } from 'antd';
 
@@ -96,7 +97,6 @@ interface MergeDialogState {
 interface ProjectsTreeUiState {
     createCustomerOpen: boolean;
     createGroupOpen: boolean;
-    createProjectOpen: boolean;
     editModalOpen: boolean;
     showInactive: boolean;
 }
@@ -144,6 +144,7 @@ const toTreeNodeFromRow = (row: TableRow): TreeNode | null => {
 };
 
 const ProjectsTree: React.FC = () => {
+    const navigate = useNavigate();
     const {
         customers,
         projectGroups,
@@ -158,7 +159,6 @@ const ProjectsTree: React.FC = () => {
     const [uiState, setUiState] = useState<ProjectsTreeUiState>({
         createCustomerOpen: false,
         createGroupOpen: false,
-        createProjectOpen: false,
         editModalOpen: false,
         showInactive: false,
     });
@@ -305,6 +305,11 @@ const ProjectsTree: React.FC = () => {
     };
 
     const openEditPanel = (row: TableRow): void => {
+        if (row.type === 'project') {
+            void navigate(`/operops/projects-tree/${encodeURIComponent(row.id)}`);
+            return;
+        }
+
         const node = toTreeNodeFromRow(row);
         if (node) {
             setSelectedNode(node);
@@ -706,7 +711,7 @@ const ProjectsTree: React.FC = () => {
                         <Button
                             type="default"
                             icon={<PlusOutlined />}
-                            onClick={() => setUiState((prev) => ({ ...prev, createProjectOpen: true }))}
+                            onClick={() => void navigate('/operops/projects-tree/new')}
                             size="large"
                         >
                             Новый проект
@@ -801,31 +806,6 @@ const ProjectsTree: React.FC = () => {
                 </Modal>
 
                 <Modal
-                    open={uiState.createProjectOpen}
-                    title={
-                        <div className="flex items-center gap-2">
-                            <ProjectOutlined className="text-green-500" />
-                            Создать новый проект
-                        </div>
-                    }
-                    footer={null}
-                    onCancel={() =>
-                        setUiState((prev) => ({ ...prev, createProjectOpen: false }))
-                    }
-                    width={760}
-                >
-                    <Divider />
-                    <EditProject
-                        customers={customers}
-                        projectGroups={projectGroups}
-                        onSave={() => {
-                            handleSaveAndRefresh();
-                            setUiState((prev) => ({ ...prev, createProjectOpen: false }));
-                        }}
-                    />
-                </Modal>
-
-                <Modal
                     open={uiState.editModalOpen}
                     title={selectedNode ? `Редактирование: ${selectedNode.title}` : 'Редактирование'}
                     footer={null}
@@ -849,15 +829,7 @@ const ProjectsTree: React.FC = () => {
                             },
                         }}
                     >
-                        {selectedNode?.type === 'project' ? (
-                            <EditProject
-                                key={selectedNode.data?._id}
-                                project={selectedNode.data as ProjectWithGroup}
-                                projectGroups={projectGroups}
-                                customers={customers}
-                                onSave={handleEditSave}
-                            />
-                        ) : selectedNode?.type === 'group' ? (
+                        {selectedNode?.type === 'group' ? (
                             <EditProjectGroup
                                 key={selectedNode.data?._id}
                                 group={selectedNode.data as ProjectGroup}

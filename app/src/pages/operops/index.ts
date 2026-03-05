@@ -7,4 +7,5 @@ export { default as PerformersPage } from './PerformersPage';
 export { default as TaskPage } from './TaskPage';
 export { default as CodexTaskPage } from './CodexTaskPage';
 export { default as ProjectsTree } from './ProjectsTree';
+export { default as ProjectManagementPage } from './ProjectManagementPage';
 export { default as FinancesPerformersPage } from './FinancesPerformersPage';
