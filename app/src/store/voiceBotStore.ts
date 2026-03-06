@@ -1345,7 +1345,6 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         const args = buildCreateTasksRequestArgs({
             session: sessionData.voice_bot_session,
             messages: sessionData.session_messages,
-            attachments: sessionData.session_attachments ?? [],
         });
 
         if (!args.message.trim()) {

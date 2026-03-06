@@ -2,11 +2,6 @@ import type {
   VoiceBotMessage,
   VoiceBotSession,
   VoicePossibleTask,
-  VoiceSessionAttachment,
-  VoiceTaskMessageEnvelope,
-  VoiceTaskMessageEnvelopeAttachmentBlock,
-  VoiceTaskMessageEnvelopeCategorizationBlock,
-  VoiceTaskMessageEnvelopeTranscriptBlock,
 } from '../types/voice';
 import { CANONICAL_VOICE_SESSION_URL_BASE } from './voiceSessionTaskSource';
 
@@ -14,12 +9,6 @@ type UnknownRecord = Record<string, unknown>;
 
 const toText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  return '';
-};
-
-const toTimestamp = (value: unknown): string => {
-  if (typeof value === 'string') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return '';
 };
@@ -156,136 +145,36 @@ export const filterPossibleTasksByLocators = (
   });
 };
 
-const buildTranscriptBlock = (message: VoiceBotMessage): VoiceTaskMessageEnvelopeTranscriptBlock | null => {
-  const text = typeof message.transcription_text === 'string' ? message.transcription_text.trim() : '';
-  if (!text) return null;
-  const messageId = toText(message.message_id) || toText(message._id);
-  return {
-    type: 'transcript',
-    ...(messageId ? { message_id: messageId } : {}),
-    ...(message.message_timestamp != null ? { timestamp: toTimestamp(message.message_timestamp) } : {}),
-    text,
-  };
-};
-
-const buildCategorizationBlock = (message: VoiceBotMessage): VoiceTaskMessageEnvelopeCategorizationBlock | null => {
-  if (!Array.isArray(message.categorization) || message.categorization.length === 0) return null;
-
-  const rows = message.categorization
-    .map((row) => {
-      const text = typeof row.text === 'string' ? row.text.trim() : '';
-      if (!text) return null;
-      return {
-        ...(row.start != null ? { start: row.start } : {}),
-        ...(row.end != null ? { end: row.end } : {}),
-        ...(typeof row.speaker === 'string' && row.speaker.trim() ? { speaker: row.speaker.trim() } : {}),
-        text,
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null);
-
-  if (rows.length === 0) return null;
-  const messageId = toText(message.message_id) || toText(message._id);
-
-  return {
-    type: 'categorization',
-    ...(messageId ? { message_id: messageId } : {}),
-    ...(message.message_timestamp != null ? { timestamp: toTimestamp(message.message_timestamp) } : {}),
-    rows,
-  };
-};
-
-const buildAttachmentBlock = (
-  attachment: VoiceSessionAttachment
-): VoiceTaskMessageEnvelopeAttachmentBlock | null => {
-  const url = toText(attachment.direct_uri) || toText(attachment.url) || toText(attachment.uri);
-  if (!url) return null;
-  const messageId = toText(attachment.message_id) || toText(attachment.message_oid);
-  const kind = toText(attachment.kind) || (toText(attachment.mimeType).startsWith('image/') ? 'image' : 'file');
-
-  return {
-    type: 'attachment',
-    kind,
-    ...(messageId ? { message_id: messageId } : {}),
-    ...(attachment.message_timestamp != null ? { timestamp: toTimestamp(attachment.message_timestamp) } : {}),
-    ...(toText(attachment.name) ? { name: toText(attachment.name) } : {}),
-    ...(toText(attachment.mimeType) ? { mime_type: toText(attachment.mimeType) } : {}),
-    url,
-  };
-};
-
-export const buildCreateTasksMessageEnvelope = ({
-  session,
-  messages,
-  attachments,
-}: {
-  session: VoiceBotSession | null | undefined;
-  messages: VoiceBotMessage[];
-  attachments: VoiceSessionAttachment[];
-}): VoiceTaskMessageEnvelope => {
-  const sessionId = toText(session?._id) || toText(session?.session_id);
-  const transcriptText = buildTranscriptionText(messages);
-  const blocks = [
-    ...messages
-      .flatMap((message) => [buildTranscriptBlock(message), buildCategorizationBlock(message)])
-      .filter((block): block is NonNullable<typeof block> => block !== null),
-    ...attachments
-      .map((attachment) => buildAttachmentBlock(attachment))
-      .filter((block): block is VoiceTaskMessageEnvelopeAttachmentBlock => block !== null),
-  ];
-
-  return {
-    version: '2026-03-06',
-    kind: 'voice_possible_tasks',
-    session: {
-      ...(sessionId ? { session_id: sessionId } : {}),
-      ...(toText(session?.session_name) ? { session_name: toText(session?.session_name) } : {}),
-      ...(toText(session?.project_id) ? { project_id: toText(session?.project_id) } : {}),
-      ...(toText(session?.dialogue_tag) ? { dialogue_tag: toText(session?.dialogue_tag) } : {}),
-      ...(sessionId ? { canonical_url: canonicalSessionUrl(sessionId) } : {}),
-    },
-    transcript_text: transcriptText,
-    blocks,
-  };
-};
-
 export const buildCreateTasksRequestArgs = ({
   session,
   messages,
-  attachments,
 }: {
   session: VoiceBotSession | null | undefined;
   messages: VoiceBotMessage[];
-  attachments: VoiceSessionAttachment[];
 }): {
   message: string;
   session_id?: string;
-  message_envelope: VoiceTaskMessageEnvelope;
 } => {
   const sessionId = toText(session?._id) || toText(session?.session_id);
-  const message_envelope = buildCreateTasksMessageEnvelope({ session, messages, attachments });
+  const transcriptText = buildTranscriptionText(messages);
   const payload =
     sessionId
       ? {
         mode: 'session_id',
         session_id: sessionId,
-        session_url: message_envelope.session.canonical_url,
-        raw_text: message_envelope.transcript_text,
+        session_url: canonicalSessionUrl(sessionId),
         project_id: toText(session?.project_id),
-        message_envelope,
       }
       : {
         mode: 'raw_text',
-        raw_text: message_envelope.transcript_text,
-        session_url: message_envelope.session.canonical_url,
+        raw_text: transcriptText,
+        session_url: sessionId ? canonicalSessionUrl(sessionId) : '',
         project_id: toText(session?.project_id),
-        message_envelope,
       };
 
   return {
     message: JSON.stringify(payload),
     ...(sessionId ? { session_id: sessionId } : {}),
-    message_envelope,
   };
 };
 

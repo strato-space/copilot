@@ -74,53 +74,6 @@ export interface VoicePossibleTask {
     source_data?: Record<string, unknown>;
 }
 
-export type VoiceTaskMessageEnvelopeTranscriptBlock = {
-    type: 'transcript';
-    message_id?: string;
-    timestamp?: string;
-    text: string;
-};
-
-export type VoiceTaskMessageEnvelopeCategorizationBlock = {
-    type: 'categorization';
-    message_id?: string;
-    timestamp?: string;
-    rows: Array<{
-        start?: number;
-        end?: number;
-        speaker?: string;
-        text: string;
-    }>;
-};
-
-export type VoiceTaskMessageEnvelopeAttachmentBlock = {
-    type: 'attachment';
-    kind: string;
-    message_id?: string;
-    timestamp?: string;
-    name?: string;
-    mime_type?: string;
-    url: string;
-};
-
-export interface VoiceTaskMessageEnvelope {
-    version: string;
-    kind: 'voice_possible_tasks';
-    session: {
-        session_id?: string;
-        session_name?: string;
-        project_id?: string;
-        dialogue_tag?: string;
-        canonical_url?: string;
-    };
-    transcript_text: string;
-    blocks: Array<
-        | VoiceTaskMessageEnvelopeTranscriptBlock
-        | VoiceTaskMessageEnvelopeCategorizationBlock
-        | VoiceTaskMessageEnvelopeAttachmentBlock
-    >;
-}
-
 export interface VoiceBotMessage {
     _id?: string;
     message_id?: string;

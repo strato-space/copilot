@@ -19,13 +19,12 @@ describe('MeetingCard tasks button contract', () => {
     expect(componentSource).toContain("content: tasksCount > 0 ? `Возможные задачи обновлены: ${tasksCount}` : 'Возможные задачи не найдены'");
   });
 
-  it('builds MCP create_tasks args with a structured message envelope', () => {
-    expect(utilSource).toContain("kind: 'voice_possible_tasks'");
-    expect(utilSource).toContain('message_envelope');
-    expect(utilSource).toContain('blocks,');
-    expect(utilSource).toContain("type: 'attachment'");
-    expect(utilSource).toContain("type: 'categorization'");
-    expect(utilSource).toContain("type: 'transcript'");
+  it('builds MCP create_tasks args with a compact session envelope and avoids giant transcript blocks', () => {
+    expect(utilSource).toContain("mode: 'session_id'");
+    expect(utilSource).toContain("session_url: canonicalSessionUrl(sessionId)");
+    expect(utilSource).toContain("mode: 'raw_text'");
+    expect(utilSource).not.toContain('message_envelope');
+    expect(utilSource).not.toContain('blocks,');
   });
 
   it('logs and surfaces invalid create_tasks payloads instead of hanging in loading state', () => {
