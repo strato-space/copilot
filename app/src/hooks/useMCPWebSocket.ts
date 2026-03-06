@@ -1,11 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMCPRequestStore, setSocketInstance } from '../store/mcpRequestStore';
 import { useAuthStore } from '../store/authStore';
 import { getSocket, SOCKET_EVENTS } from '../services/socket';
 
+const MCP_DISCONNECT_GRACE_MS = 5000;
+
 export const useMCPWebSocket = (): void => {
     const { setConnectionState, handleMCPChunk, handleMCPComplete, handleError } = useMCPRequestStore();
     const { isAuth, ready } = useAuthStore();
+    const disconnectTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (!ready || !isAuth) {
@@ -17,18 +20,30 @@ export const useMCPWebSocket = (): void => {
         setSocketInstance(socket);
         setConnectionState('connecting');
 
+        const clearDisconnectTimer = () => {
+            if (disconnectTimerRef.current !== null) {
+                window.clearTimeout(disconnectTimerRef.current);
+                disconnectTimerRef.current = null;
+            }
+        };
+
         const handleConnect = () => {
+            clearDisconnectTimer();
             setConnectionState('connected');
         };
 
         const handleDisconnect = () => {
             setConnectionState('disconnected');
-            const { requests } = useMCPRequestStore.getState();
-            requests.forEach((request, requestId) => {
-                if (request.status === 'pending' || request.status === 'streaming') {
-                    handleError(requestId, 'Connection lost during request');
-                }
-            });
+            clearDisconnectTimer();
+            disconnectTimerRef.current = window.setTimeout(() => {
+                const state = useMCPRequestStore.getState();
+                if (state.connectionState === 'connected') return;
+                state.requests.forEach((request, requestId) => {
+                    if (request.status === 'pending' || request.status === 'streaming') {
+                        handleError(requestId, 'Connection lost during request');
+                    }
+                });
+            }, MCP_DISCONNECT_GRACE_MS);
         };
 
         const handleConnectError = (error?: Error) => {
@@ -69,6 +84,7 @@ export const useMCPWebSocket = (): void => {
         });
 
         return () => {
+            clearDisconnectTimer();
             socket.off('connect', handleConnect);
             socket.off('disconnect', handleDisconnect);
             socket.off('connect_error', handleConnectError);
