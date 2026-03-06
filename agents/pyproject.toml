@@ -11,6 +11,9 @@ dependencies = [
 [tool.uv]
 package = true
 
+[tool.uv.sources]
+fast-agent-mcp = { git = "https://github.com/evalstate/fast-agent.git", rev = "e6c6b89a3991bbe6176dcd554fd14eb2ba216eae" }
+
 # Optional convenience entry point if you later package this app:
 [project.scripts]
 copilot-agents = "agent:main"
