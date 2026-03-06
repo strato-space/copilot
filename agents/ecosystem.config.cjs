@@ -37,7 +37,7 @@ module.exports = {
                 '--config-path', 'fastagent.config.yaml',
                 '--agent-cards', 'agent-cards',
                 '--name', 'copilot-agent-services',
-                '--model', 'codex',
+                '--model', 'codexplan',
                 '--transport', 'http',
                 '--host', '127.0.0.1',
                 '--port', '8722',

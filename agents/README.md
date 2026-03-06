@@ -37,7 +37,7 @@ uv run --directory "$(pwd)" fast-agent serve \
   --config-path fastagent.config.yaml \
   --agent-cards agent-cards \
   --name copilot-agent-services \
-  --model codex \
+  --model codexplan \
   --transport http \
   --host 127.0.0.1 \
   --port 8722
@@ -47,7 +47,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 
 ## Runtime Notes
 
-- `create_tasks` inherits the runtime model from the process launch args (`--model codex` in local run and PM2). Do not pin a per-card model unless you intentionally want to change runtime behavior.
+- `create_tasks` inherits the runtime model from the process launch args (`--model codexplan` in local run and PM2). Do not pin a per-card model unless you intentionally want to change runtime behavior.
 - Preferred `create_tasks` input is a compact structured envelope with modes `raw_text`, `session_id`, or `session_url`.
 - A plain string is still treated as legacy `raw_text` input for backward compatibility.
 - Session-backed task extraction enriches context directly through MCP `voice`.
