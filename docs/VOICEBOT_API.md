@@ -37,9 +37,19 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 | `/api/voicebot/projects` | `POST` | List projects available for the performer. |
 | `/api/voicebot/update_*` | `POST` | Session metadata updates (name/project/access/users/dialogue tag). |
 
+## Possible Tasks / taskflow endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/voicebot/possible_tasks` | `POST` | Canonical read path for current session Possible Tasks. Prefers `automation_tasks` master rows in status `NEW_0`, falls back to compatibility projection only when master rows are absent. |
+| `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session Possible Tasks into `automation_tasks`, rewrite mutable `NEW_0` rows in place, sync compatibility projection, and return canonical saved `items`. |
+| `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected Possible Tasks into regular tasks by transitioning master rows from `NEW_0` to `READY_10`. |
+| `/api/voicebot/delete_task_from_session` | `POST` | Remove a Possible Task from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
+| `/api/voicebot/codex_tasks` | `POST` | Return Codex/BD tasks linked to the current voice session. |
+
 ## Session resolution contract
 - Canonical session APIs use fail-fast lookup semantics and return `404` when a session cannot be resolved in current operational scope.
-- Clients must not rely on `runtime_mismatch` as a stable API contract.
+- `runtime_mismatch` is a stable taskflow/runtime contract where explicitly documented (for example session taskflow and voice-session utility routes) and is returned as `409 { "error": "runtime_mismatch" }`.
 
 ## Notify delivery + hooks (2026-02-25)
 - `session_ready_to_summarize` and `session_project_assigned` are enqueued from routes (`/update_project`, `/trigger_session_ready_to_summarize`, `/resend_notify_event`) and from done flow (`DONE_MULTIPROMPT` for closed sessions with `project_id`).
@@ -68,6 +78,19 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - Categorization/transcription workers enqueue socket fan-out jobs to `VOICEBOT_QUEUES.EVENTS` (`SEND_TO_SOCKET`).
 - Backend API process runs `startVoicebotSocketEventsWorker` and is the owner of websocket delivery.
 - Standalone worker runtime MUST NOT consume `EVENTS` queue directly.
+
+## Current create_tasks path
+
+- The interactive `Tasks` button uses MCP `create_tasks` through the local fast-agent service.
+- The frontend now sends a compact session envelope (`session_id`, `session_url`, `project_id`) instead of a giant transcript/categorization/material payload over Socket.IO.
+- The prompt rehydrates context through MCP `voice`:
+  - `voice.fetch(..., mode="transcript")`
+  - `voice.search(session_id=..., limit=1)`
+  - `voice.session_possible_tasks(...)`
+  - `voice.crm_tickets(...)`
+- `NEW_0` Possible Tasks are mutable:
+  - same-scope rows are rewritten in place by canonical `row_id/id`
+  - duplicate suppression applies to materialized task space, not to mutable `NEW_0` baseline rows
 
 ### Multi-process delivery
 - Socket.IO Redis adapter is enabled in backend bootstrap (`backend/src/index.ts`), so events are delivered correctly across PM2 processes.

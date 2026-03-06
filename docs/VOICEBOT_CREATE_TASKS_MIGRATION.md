@@ -5,6 +5,7 @@ from legacy human-title keys to canonical schema fields.
 
 ## Canonical schema
 
+- `row_id`
 - `id`
 - `name`
 - `description`
@@ -27,6 +28,12 @@ from legacy human-title keys to canonical schema fields.
 - `Priority Reason`
 - `Dependencies`
 - `Dialogue Reference`
+
+## Current identity contract
+
+- Canonical mutation locator is `row_id`, with `id` as compatibility alias.
+- `task_id_from_ai` is metadata only and must not be used as the primary row locator when `row_id/id` exist.
+- Current Possible Tasks master store is `automation_tasks` with `task_status=NEW_0`; `processors_data.CREATE_TASKS.data` is only a synchronized compatibility projection.
 
 ## Script
 

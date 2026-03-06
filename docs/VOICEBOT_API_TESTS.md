@@ -1,86 +1,96 @@
-# Copilot VoiceBot API Test Matrix
+# Copilot VoiceBot Test Matrix
 
-Date: 2026-02-19
+Date: 2026-03-06
 
-## Backend test command
+This file is a Voice-focused shortcut over the canonical repository test workflow in [TESTING_PROCEDURE.md](/home/strato-space/copilot/docs/TESTING_PROCEDURE.md).
 
-```bash
-cd /home/strato-space/copilot/backend
-npm test -- --runInBand
-```
+## Backend
 
-Latest local result:
-- `25` suites passed
-- `170` tests passed
-- Includes route-level coverage for:
-  - `POST /voicebot/trigger_session_ready_to_summarize`
-  - `POST /voicebot/upload_audio` duration persistence contract
-
-## Focused parity suites
+Canonical commands:
 
 ```bash
 cd /home/strato-space/copilot/backend
-npm test -- --runInBand __tests__/voicebot/triggerSummarizeRoute.test.ts
-npm test -- --runInBand __tests__/voicebot/uploadAudioRoute.test.ts
-npm test -- --runInBand __tests__/voicebot/audioUtils.test.ts
-npm test -- --runInBand __tests__/voicebot/authListUsersRoute.test.ts
-npm test -- --runInBand __tests__/smoke/voicebotApiSmoke.test.ts
-npm test -- --runInBand __tests__/voicebot/objectLocatorRuntime.test.ts
-npm test -- --runInBand __tests__/voicebot/transcriptionRuntimeRoute.test.ts
-npm test -- --runInBand __tests__/voicebot/permissionsRuntimeRoute.test.ts
-npm test -- --runInBand __tests__/voicebot/sessionTelegramMessage.test.ts
-npm test -- --runInBand __tests__/voicebot/doneNotifyService.test.ts
-npm test -- --runInBand __tests__/voicebot/workerDoneMultipromptHandler.test.ts
-npm test -- --runInBand __tests__/voicebot/notifyWorkerHooks.test.ts
-npm test -- --runInBand __tests__/voicebot/notifyWorkerEventLog.test.ts
-npm test -- --runInBand __tests__/voicebot/workerScaffoldHandlers.test.ts
-npm test -- --runInBand __tests__/voicebot/tgSessionRef.test.ts
-npm test -- --runInBand __tests__/voicebot/tgCommandHandlers.test.ts
-npm test -- --runInBand __tests__/voicebot/voicebotSocketEventsWorker.test.ts
-npm test -- --runInBand __tests__/voicebot/workerCategorizeHandler.test.ts
-npm test -- --runInBand __tests__/services/dbRuntimeScopedCollectionProxy.test.ts
+npm run test:parallel-safe
+npm run test:serialized
+npm run build
 ```
 
-## Frontend smoke (voice routes)
+Or run the whole backend gate:
+
+```bash
+cd /home/strato-space/copilot/backend
+npm test
+```
+
+Voice-heavy focused suites usually live under:
+- `__tests__/voicebot/runtime`
+- `__tests__/voicebot/access`
+- `__tests__/voicebot/socket`
+- `__tests__/voicebot/notify`
+- `__tests__/voicebot/workers`
+- `__tests__/voicebot/tg`
+- `__tests__/voicebot/session`
+
+## Frontend
+
+Canonical commands:
+
+```bash
+cd /home/strato-space/copilot/app
+npm test
+npm run build
+```
+
+Focused voice/UI contract suites usually live under:
+- `app/__tests__/voice`
+- `app/__tests__/operops`
+
+## Playwright
+
+Install once:
 
 ```bash
 cd /home/strato-space/copilot/app
 npm run e2e:install
-PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts --project=chromium-unauth
 ```
 
-Latest local result:
-- `6` tests passed (route resolve, runtime mismatch screen, list/table load, session open).
-
-Additional FAB lifecycle coverage:
+Run the full app e2e gate:
 
 ```bash
 cd /home/strato-space/copilot/app
-npm run e2e:install
-PLAYWRIGHT_BASE_URL=https://copilot.stratospace.fun npm run test:e2e -- e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts --project=chromium-unauth
+npm run test:e2e
 ```
 
-Latest local result:
-- `11` tests passed (`voice.spec.ts` + `voice-fab-lifecycle.spec.ts`).
-
-## Realtime websocket verification
-
-Backend (automated):
-- `__tests__/voicebot/voicebotSocketEventsWorker.test.ts` validates `SEND_TO_SOCKET` -> namespace room emit (`message_update`).
-- `__tests__/voicebot/workerCategorizeHandler.test.ts` validates categorization handler enqueues socket events on success/error paths.
-
-Latest targeted run:
-- `2` suites passed
-- `6` tests passed
-
-Command:
+Useful Voice-focused shards:
 
 ```bash
-cd /home/strato-space/copilot/backend
-npm test -- --runInBand __tests__/voicebot/voicebotSocketEventsWorker.test.ts __tests__/voicebot/workerCategorizeHandler.test.ts
+cd /home/strato-space/copilot/app
+npm run test:e2e:voice:shard:1of2
+npm run test:e2e:voice:shard:2of2
 ```
 
-MCP Chrome smoke (manual):
-- Open `/voice/session/:id`, verify console shows socket connected to `/voicebot`.
-- Ensure `subscribe_on_session` happens for current `session_id`.
-- During categorization, rows in Categorization tab must update without page refresh (`message_update` fan-out).
+Useful non-voice shards:
+
+```bash
+cd /home/strato-space/copilot/app
+npm run test:e2e:shard:1of2
+npm run test:e2e:shard:2of2
+```
+
+## Current Voice taskflow coverage
+
+The current Possible Tasks / `create_tasks` path is covered by:
+- backend runtime route/behavior suites around:
+  - `/api/voicebot/possible_tasks`
+  - `/api/voicebot/save_possible_tasks`
+  - `/api/voicebot/process_possible_tasks`
+  - `/api/voicebot/delete_task_from_session`
+- frontend contract suites around:
+  - `MeetingCard` Tasks button
+  - canonical `save_possible_tasks` response handling
+  - MCP reconnect / request-failure handling
+
+## Notes
+
+- Do not use old one-off path examples that assume `npm test -- --runInBand` as the canonical backend command. Backend execution is intentionally split into `parallel-safe` and `serialized` groups.
+- For repository-wide orchestration, prefer [scripts/run-test-suite.sh](/home/strato-space/copilot/scripts/run-test-suite.sh) and [platforms.json](/home/strato-space/copilot/platforms.json).

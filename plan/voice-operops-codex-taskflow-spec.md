@@ -80,28 +80,28 @@ Draft for согласование.
 ### 1) `processors_data.CREATE_TASKS.data` (canonical only)
 ```json
 {
+  "row_id": "voice-task-<stable-row-id>",
   "id": "voice-task-<uuid>",
   "task_id_from_ai": "T2",
   "name": "Короткое название",
   "description": "Описание",
   "priority": "P2",
-  "performer_id": "<performer-id-or-null>",
+  "priority_reason": "Причина приоритета",
+  "performer_id": "<performer-id-or-empty>",
+  "project_id": "<project-id-or-empty>",
   "task_type_id": "<task-type-id-or-null>",
-  "tags": ["voice"],
-  "source": {
-    "kind": "voice_session",
-    "voice_session_id": "<session-id>",
-    "voice_chunk_id": "<message-id-or-null>",
-    "telegram": {
-      "chat_id": "<optional>",
-      "thread_id": "<optional>",
-      "message_id": "<optional>"
-    }
-  }
+  "dialogue_tag": "voice",
+  "dependencies_from_ai": [],
+  "dialogue_reference": "<quote-or-context>",
+  "relations": []
 }
 ```
 
 Legacy поля (`Task ID`, `Task Title`, `Description`, `Priority`) читаем только как input compatibility; при записи в БД сохраняем только canonical.
+
+Runtime note:
+- current session-page `Tasks` button no longer sends full transcript/categorization/material blocks through Socket.IO;
+- prompt context is rehydrated by MCP `voice` from `session_id/session_url`, and `processors_data.CREATE_TASKS.data` remains only a compatibility mirror of master `automation_tasks` rows.
 
 ### 2) OperOps task source fields
 Добавляем в задачу:
