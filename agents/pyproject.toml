@@ -6,13 +6,14 @@ readme = "README.md"
 requires-python = "<3.14,>=3.13.5"
 dependencies = [
   "fast-agent-mcp==0.5.6",
+  "socksio>=1.0.0",
 ]
 
 [tool.uv]
 package = true
 
 [tool.uv.sources]
-fast-agent-mcp = { git = "https://github.com/evalstate/fast-agent.git", rev = "e6c6b89a3991bbe6176dcd554fd14eb2ba216eae" }
+fast-agent-mcp = { git = "https://github.com/strato-space/fast-agent.git", rev = "4f5a3be60c6bedf84815af8204d687bc931c808e" }
 
 # Optional convenience entry point if you later package this app:
 [project.scripts]
