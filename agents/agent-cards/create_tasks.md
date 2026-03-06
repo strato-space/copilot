@@ -33,8 +33,8 @@ oneOf:
   - если такая ссылка найдена, извлеки `session_id` и трактуй ввод как `mode: session_url` (или `mode: session_id`, если URL удалось нормализовать до ID);
   - только если structured envelope и voice session URL не найдены, трактуй строку как `mode: raw_text`.
 - Если `mode: raw_text`, основным источником является `raw_text`; `session_url` может быть передан как дополнительный контекст.
-- Если `mode: session_id`, получи транскрипт, название сессии, проектный контекст и доступные материалы через MCP `voice`.
-- Если `mode: session_url`, извлеки `session_id` из URL или прочитай сессию через MCP `voice` напрямую по ссылке.
+- Если `mode: session_id`, первым действием ОБЯЗАТЕЛЬНО вызови MCP `voice.fetch(id=session_id, mode="transcript")`.
+- Если `mode: session_url`, извлеки `session_id` из URL и первым действием ОБЯЗАТЕЛЬНО вызови MCP `voice.fetch(id=session_id, mode="transcript")`.
 - `session_url` опционален, но если он есть, используй канонический URL `https://copilot.stratospace.fun/voice/session/:session_id` как reference-контекст.
 
 Использование MCP:
@@ -47,22 +47,26 @@ oneOf:
   - уже созданных задач по этой же сессии,
   - уже существующих активных задач проекта,
   - материалов, если они влияют на постановку задачи.
+- Если `session_id` известен, не рассуждай о том, вызывать ли `voice`; вызывай `voice.fetch(id=session_id, mode="transcript")` сразу.
+- После `voice.fetch(...)` используй `voice.crm_tickets(session_id=session_id, include_archived=false)` для чтения уже созданных задач этой сессии.
+- Если после `voice.fetch(...)` известен `project_id`, используй `voice.crm_tickets(project_id=project_id, include_archived=false)` и отфильтруй из результата закрытые/архивные статусы.
 - MCP `gsh` используй только если из `voice`-контекста или входа явно доступны roadmap/backlog ссылки или координаты Google Sheets (`spreadsheet_id`, `sheet`, `range`).
 - MCP `gsh` в этой роли только для чтения и дедупликации/уточнения контекста. Никаких записей в Sheets.
 - Если `gsh`/`voice` не дают данных, продолжай по доступному контексту без догадок.
 
 Порядок работы:
 1. Нормализуй envelope.
-2. Собери основной контекст из `raw_text` или MCP `voice`.
-3. Если известен `session_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice` уже созданные задачи по этой сессии.
-4. Если известен `project_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice` все активные задачи проекта:
+2. Если известен `session_id`, первым MCP-вызовом всегда сделай `voice.fetch(id=session_id, mode="transcript")`.
+3. Собери основной контекст из `raw_text` или результата `voice.fetch(...)`.
+4. Если известен `session_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(session_id=session_id, include_archived=false)` уже созданные задачи по этой сессии.
+5. Если известен `project_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(project_id=project_id, include_archived=false)` все активные задачи проекта:
    - исключай закрытые/архивные статусы,
    - ориентируйся на активный пул работ (`Backlog`, `New / *`, `Plan / *`, `Ready`, `Progress *`, `Review / *`, `Upload / *`),
    - не считай активными `Done`, `Complete`, `PostWork`, `Archive`.
-5. Если есть roadmap/backlog в Google Sheets, дочитай только релевантные диапазоны через MCP `gsh`.
-6. Выдели только executor-ready задачи.
-7. Удали дубли и почти-дубли.
-8. Верни только канонический JSON-массив.
+6. Если есть roadmap/backlog в Google Sheets, дочитай только релевантные диапазоны через MCP `gsh`.
+7. Выдели только executor-ready задачи.
+8. Удали дубли и почти-дубли.
+9. Верни только канонический JSON-массив.
 
 Формат ответа:
 - Только валидный JSON-массив объектов.
