@@ -57,6 +57,7 @@ oneOf:
 - После metadata-fetch ОБЯЗАТЕЛЬНО используй `voice.session_possible_tasks(session_id=session_id)` для чтения уже существующих Possible Tasks этой сессии.
 - После metadata-fetch ОБЯЗАТЕЛЬНО используй `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")` для чтения уже созданных задач этой сессии.
 - Если после metadata-fetch известен `project_id`, используй `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table")` и отфильтруй из результата закрытые/архивные статусы.
+- Если любой MCP-источник всё же вернул rows/tasks с `is_deleted=true` или непустым `deleted_at`, считай такие rows/tasks удалёнными и полностью исключай их из duplicate suppression, mutable-baseline reasoning и relation context.
 - Если session ref пришёл как URL и нужно надёжно нормализовать его до канонического вида, используй `voice.resolve_session_ref(session=<url-or-id>)`, но не вместо `voice.fetch(...)`.
 - MCP `gsh` используй только если из `voice`-контекста или входа явно доступны roadmap/backlog ссылки или координаты Google Sheets (`spreadsheet_id`, `sheet`, `range`).
 - MCP `gsh` в этой роли только для чтения и дедупликации/уточнения контекста. Никаких записей в Sheets.
@@ -71,6 +72,7 @@ oneOf:
 6. Если известен `session_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")` уже созданные задачи по этой сессии.
 7. Если известен `project_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table")` все активные задачи проекта:
    - исключай закрытые/архивные статусы,
+   - исключай удалённые rows/tasks (`is_deleted=true` или непустой `deleted_at`),
    - ориентируйся на активный пул работ (`Backlog`, `New / *`, `Plan / *`, `Ready`, `Progress *`, `Review / *`, `Upload / *`),
    - не считай активными `Done`, `Complete`, `PostWork`, `Archive`.
 8. Если есть roadmap/backlog в Google Sheets, дочитай только релевантные диапазоны через MCP `gsh`.
@@ -109,6 +111,8 @@ oneOf:
   - дедлайн/срок только если он прямо прозвучал.
 - Убирай дубли и почти-дубли:
   - если одна и та же работа повторяется в диалоге разными словами, верни одну задачу;
+  - удалённые rows/tasks никогда не считаются основанием подавлять новую Possible Task: если похожая задача была удалена, её можно вернуть снова;
+  - ручное удаление `Possible Task` не является permanent veto: если та же работа всё ещё явно присутствует в текущем transcript/input и нет активной non-deleted materialized задачи с тем же смыслом, верни её снова как `Possible Task`;
   - `voice.session_possible_tasks(session_id=...)` — это НЕ immutable duplicates, а mutable baseline. Если задача там уже есть и scope тот же, верни её повторно с тем же `row_id/id`, но с обновлёнными `name/description/priority/dialogue_reference`, если формулировка улучшилась;
   - если scope тот же, но задача уже выведена из `NEW_0` в обычную task space, не возвращай её как новую `Possible Task`;
   - если project_id известен и в проекте уже есть активная non-`NEW_0` задача с тем же смыслом, не возвращай дубликат;
@@ -120,6 +124,9 @@ oneOf:
   - ожидаемый результат в `description`,
   - объект работы,
   - явные ссылки/ID/артефакты из контекста (`copilot-*`, `T*`, server inventory, hostnames, filenames, notebook/user names и т.п.).
+- Если работа явно и предметно названа в текущем transcript/input (`надо сделать`, `нужно реализовать`, `хочу сделать`, `поставить`, `настроить`, `внедрить` и т.п.), а единственный похожий historical row/task удалён, считай такую работу снова актуальной для генерации.
+- Перед финальным JSON сделай self-check: просмотри transcript/input ещё раз и проверь, что ни один явно названный unfinished work item не был отброшен только потому, что похожая historical row/task была удалена.
+- Типовой пример: если в transcript явно звучит работа вроде `деоризация/диаризация пока нет, надо сделать`, а active non-deleted task с таким scope отсутствует, задача должна снова появиться в итоговом JSON даже после её предыдущего удаления из `Possible Tasks`.
 - При наличии transcript + search-row metadata считай `project_id`, `routing_item`, session URL и existing task rows частью дедупликационного контекста, а не просто metadata.
 - Для текущей session snapshot semantics:
   - если старая `NEW_0` row должна остаться, включи её в итоговый JSON даже без изменений;
