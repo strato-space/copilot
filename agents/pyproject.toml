@@ -13,7 +13,7 @@ dependencies = [
 package = true
 
 [tool.uv.sources]
-fast-agent-mcp = { git = "https://github.com/strato-space/fast-agent.git", rev = "4f5a3be60c6bedf84815af8204d687bc931c808e" }
+fast-agent-mcp = { git = "https://github.com/strato-space/fast-agent.git", rev = "c7d1e17ace178580e91551cb11e1dbefd53eb8d2" }
 
 # Optional convenience entry point if you later package this app:
 [project.scripts]
