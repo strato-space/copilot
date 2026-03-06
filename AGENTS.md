@@ -232,7 +232,8 @@ Preferred engineering principles for this repo:
   - CRM routes: `POST /api/crm/tickets/upload-attachment`, `GET /api/crm/tickets/attachment/:ticket_id/:attachment_id`, `POST /api/crm/tickets/delete-attachment`,
   - Miniapp routes: `POST /tickets/upload-attachment`, `GET /tickets/attachment/:ticket_id/:attachment_id`,
   - storage is normalized through `backend/src/services/taskAttachments.ts` under `uploads/task-attachments` (override `TASK_ATTACHMENTS_DIR`),
-  - allowed extensions are `pdf/docx/xlsx/png/jpg/jpeg/txt/zip`, max file size is `100MB`.
+  - allowed extensions are `pdf/docx/xlsx/png/jpg/jpeg/txt/zip`, max file size is `100MB`,
+  - multipart uploads with mojibake UTF-8 filenames must be normalized back to readable UTF-8 before persistence/response payloads.
 - Miniapp `/tickets` route in debug mode (`IS_MINIAPP_DEBUG_MODE=true`) reads through raw DB to preserve test-ticket visibility when debug runtime boundaries diverge from default API filters.
 - Miniapp backend can optionally launch a dedicated Telegram bot when `TG_MINIAPP_BOT_TOKEN` is configured: `/start` and `/miniapp` return an inline WebApp button, `/get_info` returns chat diagnostics, and runtime shutdown stops the bot explicitly.
 - OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
@@ -298,6 +299,7 @@ Preferred engineering principles for this repo:
   - `rejected_rows`: machine-readable row errors
   - `removed_row_ids`: only rows actually removed from `CREATE_TASKS`
   - `codex_issue_sync_errors`: present only when Codex/BD sync fails after create
+- Canonical taskflow row locator priority is `row_id -> id -> task_id_from_ai`; `task_id_from_ai` is legacy fallback metadata, not the primary mutation identity.
 - Realtime refresh contract is fixed:
   - backend emits `session_update.taskflow_refresh` with per-list flags `possible_tasks/tasks/codex/summary`
   - frontend consumes the hint without full-page reload

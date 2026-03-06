@@ -1130,6 +1130,100 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
+  it('save_possible_tasks treats task_id_from_ai as metadata when canonical row locator is present', async () => {
+    const sessionId = new ObjectId();
+    const performerMongoId = new ObjectId();
+    const projectId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      project_id: projectId,
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [],
+      }),
+    }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+            insertMany: insertManySpy,
+            updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/save_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        tasks: [
+          {
+            id: 'stable-row',
+            name: 'Saved row',
+            description: 'Persist me',
+            performer_id: performerMongoId.toHexString(),
+            project_id: projectId.toHexString(),
+            task_id_from_ai: 'T1',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(insertManySpy).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'stable-row',
+          id: 'stable-row',
+          task_id_from_ai: 'T1',
+        }),
+      ]),
+    );
+    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': [
+            expect.objectContaining({
+              row_id: 'stable-row',
+              id: 'stable-row',
+              task_id_from_ai: 'T1',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
   it('process_possible_tasks materializes saved master rows into regular tasks', async () => {
     const sessionId = new ObjectId();
     const projectId = new ObjectId();
@@ -1241,6 +1335,113 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       })
     );
+  });
+
+  it('process_possible_tasks accepts ticket payloads where task_id_from_ai differs from row_id', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+    const masterTaskId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+    const taskUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: masterTaskId,
+            row_id: 'stored-row',
+            id: 'stored-row',
+            task_id_from_ai: 'T1',
+            name: 'Stored row',
+            description: 'Stored description',
+            performer_id: validPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Stored project',
+            task_status: TASK_STATUSES.NEW_0,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_possible_task',
+            source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: {
+              session_id: sessionId.toHexString(),
+              session_name: 'Runtime test session',
+              voice_sessions: [
+                {
+                  session_id: sessionId.toHexString(),
+                  session_name: 'Runtime test session',
+                  project_id: projectId.toHexString(),
+                  created_at: '2026-03-06T00:00:00.000Z',
+                  role: 'primary',
+                },
+              ],
+              row_id: 'stored-row',
+            },
+          },
+        ],
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({ _id: validPerformerId, name: 'Assignee' })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+            findOne: jest.fn(async () => null),
+            insertMany: jest.fn(async () => ({ insertedCount: 0 })),
+            updateOne: taskUpdateOneSpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/process_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [
+          {
+            row_id: 'stored-row',
+            id: 'stored-row',
+            task_id_from_ai: 'T9',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.created_task_ids).toEqual(['stored-row']);
+    expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
   });
 
   it('delete_task_from_session supports alias locators and returns idempotent counters', async () => {

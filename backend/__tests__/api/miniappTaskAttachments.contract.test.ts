@@ -184,4 +184,28 @@ describe('miniapp task attachments contract', () => {
     expect(nextAttachments).toHaveLength(2);
     expect(nextAttachments[1]?.uploaded_via).toBe('miniapp');
   });
+
+  test('POST /tickets/upload-attachment returns normalized utf8 filename for mojibake uploads', async () => {
+    const { app, tasksUpdateOne } = buildApp({
+      ticketPerformerId: 'performer-1',
+      ticketAttachments: [],
+    });
+
+    const response = await request(app)
+      .post('/tickets/upload-attachment')
+      .set('Cookie', buildAuthCookie({ id: 'performer-1', _id: '507f1f77bcf86cd799439011' }))
+      .field('ticket_id', taskId.toHexString())
+      .attach('attachment', Buffer.from('prompt-body'), {
+        filename: 'ÐÑÐ¾Ð¼Ð¿Ñ Ð°Ð³ÐµÐ½Ñ.txt',
+        contentType: 'text/plain',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.attachment?.file_name).toBe('Промпт агент.txt');
+
+    const updateSet = (tasksUpdateOne.mock.calls[0]?.[1] as { $set?: Record<string, unknown> })?.$set;
+    const nextAttachments = (updateSet?.attachments as Array<Record<string, unknown>>) ?? [];
+    expect(nextAttachments).toHaveLength(1);
+    expect(nextAttachments[0]?.file_name).toBe('Промпт агент.txt');
+  });
 });

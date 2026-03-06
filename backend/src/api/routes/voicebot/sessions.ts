@@ -59,7 +59,6 @@ import {
     buildSessionCompatiblePossibleTaskRow,
     buildVoicePossibleTaskMasterDoc,
     buildVoicePossibleTaskMasterQuery,
-    collectVoicePossibleTaskLocatorKeys,
     normalizeVoicePossibleTaskDocForApi,
     normalizeVoicePossibleTaskRelations,
 } from './possibleTasksMasterModel.js';
@@ -110,8 +109,12 @@ const saveSummaryInputSchema = z.object({
 });
 
 const SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD = 'row_id' as const;
-const SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS = ['id', 'task_id_from_ai'] as const;
-const SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS = [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS] as const;
+const SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS = ['id'] as const;
+const SESSION_TASKFLOW_LEGACY_ROW_ID_FALLBACK_FIELDS = ['task_id_from_ai'] as const;
+const SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS = [
+    ...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS,
+    ...SESSION_TASKFLOW_LEGACY_ROW_ID_FALLBACK_FIELDS,
+] as const;
 
 export const SESSION_TASKFLOW_CONTRACT = {
     version: '2026-03-03',
@@ -572,12 +575,6 @@ type SessionTaskRowLocatorResolution =
 const resolveSessionTaskRowLocator = (
     value: unknown
 ): SessionTaskRowLocatorResolution => {
-    const candidateFields = [
-        SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD,
-        ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS,
-    ];
-    const values: Array<{ field: string; value: string }> = [];
-
     if (typeof value === 'string' || typeof value === 'number') {
         const scalarValue = toTaskText(value);
         if (!scalarValue) {
@@ -595,38 +592,73 @@ const resolveSessionTaskRowLocator = (
     }
 
     const record = value as Record<string, unknown>;
-    for (const field of candidateFields) {
+    const canonicalValues: Array<{ field: string; value: string }> = [];
+    for (const field of [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS]) {
         const fieldValue = toTaskText(record[field]);
         if (!fieldValue) continue;
-        values.push({ field, value: fieldValue });
+        canonicalValues.push({ field, value: fieldValue });
     }
 
-    if (values.length === 0) {
-        return { ok: false, error_code: 'missing_row_id', source_fields: [] };
-    }
-
-    const uniqueValues = Array.from(new Set(values.map((entry) => entry.value)));
-    if (uniqueValues.length > 1) {
+    const uniqueCanonicalValues = Array.from(new Set(canonicalValues.map((entry) => entry.value)));
+    if (uniqueCanonicalValues.length > 1) {
         return {
             ok: false,
             error_code: 'ambiguous_row_locator',
-            source_fields: values.map((entry) => entry.field),
-            values,
+            source_fields: canonicalValues.map((entry) => entry.field),
+            values: canonicalValues,
         };
+    }
+
+    if (uniqueCanonicalValues.length === 1) {
+        return {
+            ok: true,
+            row_id: uniqueCanonicalValues[0]!,
+            source_fields: canonicalValues.map((entry) => entry.field),
+        };
+    }
+
+    const legacyFallbackValues: Array<{ field: string; value: string }> = [];
+    for (const field of SESSION_TASKFLOW_LEGACY_ROW_ID_FALLBACK_FIELDS) {
+        const fieldValue = toTaskText(record[field]);
+        if (!fieldValue) continue;
+        legacyFallbackValues.push({ field, value: fieldValue });
+    }
+
+    const uniqueLegacyValues = Array.from(new Set(legacyFallbackValues.map((entry) => entry.value)));
+    if (uniqueLegacyValues.length === 0) {
+        return { ok: false, error_code: 'missing_row_id', source_fields: [] };
     }
 
     return {
         ok: true,
-        row_id: uniqueValues[0]!,
-        source_fields: values.map((entry) => entry.field),
+        row_id: uniqueLegacyValues[0]!,
+        source_fields: legacyFallbackValues.map((entry) => entry.field),
     };
 };
 
 const buildSessionTaskRowPullFilter = (rowIds: string[]): Record<string, unknown> => ({
-    $or: [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS].map((field) => ({
+    $or: [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS].map((field) => ({
         [field]: { $in: rowIds },
     })),
 });
+
+const collectSessionTaskMutationLocatorKeys = (value: unknown): string[] => {
+    if (!value || typeof value !== 'object') return [];
+
+    const record = value as Record<string, unknown>;
+    const canonicalKeys = [
+        toTaskText(record.row_id),
+        toTaskText(record.id),
+        toTaskText((record.source_data as Record<string, unknown> | undefined)?.row_id),
+    ].filter(Boolean);
+
+    if (canonicalKeys.length > 0) {
+        return Array.from(new Set(canonicalKeys));
+    }
+
+    const legacyKey = toTaskText(record.task_id_from_ai);
+    return legacyKey ? [legacyKey] : [];
+};
 
 const normalizeSessionPossibleTaskForApi = (value: unknown): Record<string, unknown> | null => {
     if (!value || typeof value !== 'object') return null;
@@ -747,7 +779,7 @@ const buildPossibleTaskMasterAliasMap = (
 ): Map<string, Record<string, unknown>> => {
     const aliasMap = new Map<string, Record<string, unknown>>();
     docs.forEach((doc) => {
-        collectVoicePossibleTaskLocatorKeys(doc).forEach((key) => {
+        collectSessionTaskMutationLocatorKeys(doc).forEach((key) => {
             if (!aliasMap.has(key)) {
                 aliasMap.set(key, doc);
             }
@@ -4387,7 +4419,7 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
             }
 
             const canonicalRowId = resolvedRowLocator.ok ? resolvedRowLocator.row_id : toTaskText(task.id);
-            const candidateKeys = new Set<string>(collectVoicePossibleTaskLocatorKeys(task));
+            const candidateKeys = new Set<string>(collectSessionTaskMutationLocatorKeys(task));
             if (resolvedRowLocator.ok) {
                 candidateKeys.add(resolvedRowLocator.row_id);
             }
@@ -4476,7 +4508,7 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
                 const docId = doc._id instanceof ObjectId ? doc._id.toHexString() : '';
                 return !docId || !keptExistingIds.has(docId);
             })
-            .flatMap((doc) => collectVoicePossibleTaskLocatorKeys(doc));
+            .flatMap((doc) => collectSessionTaskMutationLocatorKeys(doc));
         await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
         await syncSessionPossibleTaskCompatibilityData({ db, sessionId, rows: masterRows });
 

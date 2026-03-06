@@ -5,11 +5,14 @@
 - **12:03** Possible tasks still depended on session-local `CREATE_TASKS` payloads and legacy CRM restart flow, so tasks discussed during an active meeting could not become first-class Mongo task records with stable links, dedupe, or status transitions.
 - **12:03** Voice session UI had no direct `Tasks` action during the meeting, forcing operators to wait for later CRM-side processing instead of drafting possible tasks from the live transcript.
 - **12:03** OperOps `Voice` tab was still session-centric and could not review `NEW_0` possible tasks as one backlog, nor distinguish orphan backlog rows from session-linked voice work.
+- **12:03** CRM/Miniapp task attachments could preserve mojibake UTF-8 filenames from multipart uploads, so uploaded files lost readable Russian names in shared task flows.
+- **12:03** Session taskflow mutations still treated `task_id_from_ai` as a first-class row locator in all write paths, which made canonical `row_id` migration brittle when both values diverged.
 
 ### FEATURE IMPLEMENTED
 - **12:03** Added live possible-task generation during meetings: Voice session header now exposes `Tasks` before `Summarize`, the frontend calls MCP `create_tasks` with a structured envelope, and canonical persistence goes through Mongo-backed possible-task routes.
 - **12:03** Promoted possible tasks to master records in `automation_tasks` with status `NEW_0`, voice session backlinks, and structured relation support (`parent-child`, `waits-for`, `blocks`, `relates_to`, `discovered-from`).
 - **12:03** Redesigned OperOps `Voice` around possible-task review: orphan `NEW_0` tasks are grouped first, then newest session groups, with expanded possible-task tables and collapsed processed-task reference tables.
+- **12:03** Added attachment filename normalization for mojibake UTF-8 multipart uploads and tightened taskflow row-locator fallback so `task_id_from_ai` remains metadata-first.
 
 ### CHANGES
 - **12:03** Agents/runtime:
@@ -27,6 +30,10 @@
 - **12:03** Planning/docs:
   - added `plan/live-possible-tasks-during-meeting-plan.md`,
   - updated `docs/RUNTIME_TAG_DEPRECATION_PLAN_2026-03-04.md` with BD status/traceability formatting.
+- **12:03** Attachment/taskflow robustness:
+  - updated `backend/src/services/taskAttachments.ts` to decode UTF-8 filenames exposed as latin1 mojibake by multipart parsing,
+  - expanded backend coverage in `backend/__tests__/api/{miniappTaskAttachments.contract,taskAttachments.service}.test.ts`,
+  - refined canonical row-locator handling in `backend/src/api/routes/voicebot/sessions.ts` and `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts` so `task_id_from_ai` is treated as a legacy fallback after canonical row-id fields.
 - **12:03** Validation:
   - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/voicebot/runtime/sessionUtilityRoutes.test.ts __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts __tests__/voicebot/runtime/sessionUtilityValidationRoutes.test.ts`
   - `cd backend && npm run build`

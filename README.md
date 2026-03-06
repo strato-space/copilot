@@ -71,6 +71,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - CRM endpoints: `POST /api/crm/tickets/upload-attachment`, `GET /api/crm/tickets/attachment/:ticket_id/:attachment_id`, `POST /api/crm/tickets/delete-attachment`.
   - Miniapp endpoints: `POST /tickets/upload-attachment`, `GET /tickets/attachment/:ticket_id/:attachment_id`.
   - Storage/validation is centralized in `backend/src/services/taskAttachments.ts` under `uploads/task-attachments` (override `TASK_ATTACHMENTS_DIR`), allowlist `pdf/docx/xlsx/png/jpg/jpeg/txt/zip`, max `100MB`.
+  - Multipart uploads with mojibake UTF-8 filenames are normalized back to readable UTF-8 before task metadata is stored or returned.
 - Added backfill utility for historical work-hours rows missing `ticket_db_id`: `cd backend && npx tsx scripts/backfill-work-hours-ticket-db-id.ts --apply` (use without `--apply` for dry-run).
 - Short-link generation/collision/route-resolution contract is documented in `docs/OPEROPS_TASK_SHORT_LINKS.md`.
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
@@ -161,7 +162,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - CREATE_TASKS payloads are normalized to canonical `id/name/description/priority/...` shape in both worker (`createTasksFromChunks`) and API utility (`save_create_tasks`) write paths.
-- Task deletion from session uses canonical locators only (`row_id`, `id`, `task_id_from_ai`) without legacy human-title aliases.
+- Taskflow row-locator priority is canonical `row_id -> id -> task_id_from_ai`; `task_id_from_ai` remains a legacy fallback for mutation compatibility, not the primary row identity.
 - Historical CREATE_TASKS legacy payload migration runbook is documented in `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md` (verify/apply/post-check + rollback).
 - Categorization metadata signature is rendered once per message block footer (`source_file_name + HH:mm:ss`) instead of repeating per row; row focus uses blue selection only.
 - Categorization readability contract now uses larger typography in `Time/Audio/Text/Materials` columns for dense session review.

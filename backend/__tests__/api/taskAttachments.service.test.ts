@@ -49,6 +49,24 @@ describe('taskAttachments service', () => {
     expect(existsSync(tempPath)).toBe(false);
   });
 
+  test('decodes utf8 filenames that busboy exposed as latin1 mojibake', () => {
+    const tempPath = join(getTaskAttachmentsTempDir(), 'prompt-file.txt');
+    writeFileSync(tempPath, 'prompt-content');
+
+    const attachment = createTaskAttachmentFromUpload({
+      file: {
+        path: tempPath,
+        originalname: 'ÐÑÐ¾Ð¼Ð¿Ñ Ð°Ð³ÐµÐ½Ñ.txt',
+        mimetype: 'text/plain',
+        size: 14,
+      } as Express.Multer.File,
+      uploadedVia: 'crm',
+    });
+
+    expect(attachment.file_name).toBe('Промпт агент.txt');
+    expect(attachment.storage_key).toMatch(/^files\/\d{4}\/\d{2}\/\d{2}\/.+\.txt$/);
+  });
+
   test('rejects unsupported file extension/mime', () => {
     const tempPath = join(getTaskAttachmentsTempDir(), 'forbidden.exe');
     writeFileSync(tempPath, 'binary-content');
@@ -70,6 +88,14 @@ describe('taskAttachments service', () => {
     const result = normalizeTaskAttachments([
       {
         attachment_id: 'a1',
+        file_name: 'ÐÑÐ¾Ð¼Ð¿Ñ Ð°Ð³ÐµÐ½Ñ.txt',
+        mime_type: 'text/plain',
+        file_size: 12,
+        storage_key: 'files/2026/03/05/a1-prompt.txt',
+        uploaded_at: new Date('2026-03-05T12:00:00.000Z').toISOString(),
+      },
+      {
+        attachment_id: 'a1-legacy',
         file_name: 'first.pdf',
         mime_type: 'application/pdf',
         file_size: 12,
@@ -86,7 +112,9 @@ describe('taskAttachments service', () => {
       },
     ]);
 
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0]?.attachment_id).toBe('a1');
+    expect(result[0]?.file_name).toBe('Промпт агент.txt');
+    expect(result[1]?.attachment_id).toBe('a1-legacy');
   });
 });

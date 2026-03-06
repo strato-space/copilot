@@ -44,10 +44,42 @@ const ALLOWED_MIME_BY_EXTENSION: Record<string, Set<string>> = {
 const sanitizeRelativeStorageKey = (raw: string): string =>
     raw.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.\.+/g, '.');
 
+const UTF8_AS_LATIN1_FILENAME_RE = /(?:Ã|Â|Ð|Ñ|â|ð)|[\u0080-\u009f]/u;
+
 const toOptionalTrimmedString = (value: unknown): string | undefined => {
     if (typeof value !== 'string') return undefined;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const hasDisallowedControlChars = (value: string): boolean => /[\u0000-\u001f\u007f-\u009f]/u.test(value);
+
+const normalizeAttachmentFileName = (value: unknown): string | undefined => {
+    const trimmed = toOptionalTrimmedString(value);
+    if (!trimmed || !UTF8_AS_LATIN1_FILENAME_RE.test(trimmed)) {
+        return trimmed;
+    }
+
+    let current = trimmed;
+    let normalized = trimmed;
+    for (let attempt = 0; attempt < 3 && UTF8_AS_LATIN1_FILENAME_RE.test(current); attempt += 1) {
+        const decoded = Buffer.from(current, 'latin1').toString('utf8').trim();
+        if (!decoded || decoded.includes('\uFFFD')) {
+            break;
+        }
+
+        const roundTrip = Buffer.from(decoded, 'utf8').toString('latin1');
+        if (roundTrip !== current) {
+            break;
+        }
+
+        current = decoded;
+        if (!hasDisallowedControlChars(current)) {
+            normalized = current;
+        }
+    }
+
+    return hasDisallowedControlChars(current) ? normalized : current;
 };
 
 const toSafeAttachmentFilename = (raw: string): string => {
@@ -104,7 +136,7 @@ const moveFileSafe = (fromAbsolutePath: string, toAbsolutePath: string): void =>
 export const getTaskAttachmentMaxFileSizeBytes = (): number => MAX_TASK_ATTACHMENT_SIZE_BYTES;
 
 export const assertTaskAttachmentUploadFile = (file: Express.Multer.File): void => {
-    const fileName = toOptionalTrimmedString(file?.originalname) ?? '';
+    const fileName = normalizeAttachmentFileName(file?.originalname) ?? '';
     const extension = resolveAttachmentExtension(fileName);
     const mimeType = toOptionalTrimmedString(file?.mimetype)?.toLowerCase() ?? '';
 
@@ -136,9 +168,10 @@ export const createTaskAttachmentFromUpload = ({
 }): TaskAttachment => {
     assertTaskAttachmentUploadFile(file);
 
+    const originalName = normalizeAttachmentFileName(file.originalname) ?? 'attachment';
     const attachmentId = crypto.randomUUID();
-    const extension = resolveAttachmentExtension(file.originalname);
-    const safeFileName = toSafeAttachmentFilename(file.originalname);
+    const extension = resolveAttachmentExtension(originalName);
+    const safeFileName = toSafeAttachmentFilename(originalName);
     const today = new Date();
     const dateFolder = `${today.getUTCFullYear()}/${String(today.getUTCMonth() + 1).padStart(2, '0')}/${String(today.getUTCDate()).padStart(2, '0')}`;
     const storageKey = sanitizeRelativeStorageKey(`files/${dateFolder}/${attachmentId}-${safeFileName}`);
@@ -148,7 +181,7 @@ export const createTaskAttachmentFromUpload = ({
 
     return {
         attachment_id: attachmentId,
-        file_name: file.originalname,
+        file_name: originalName,
         mime_type: (toOptionalTrimmedString(file.mimetype) ?? '').toLowerCase() || resolveMimeFromExtension(extension),
         file_size: file.size,
         storage_key: storageKey,
@@ -182,9 +215,9 @@ export const normalizeTaskAttachment = (value: unknown): TaskAttachment | null =
         toOptionalTrimmedString(record.id) ??
         toOptionalTrimmedString(record.attachmentId);
     const fileName =
-        toOptionalTrimmedString(record.file_name) ??
-        toOptionalTrimmedString(record.filename) ??
-        toOptionalTrimmedString(record.name);
+        normalizeAttachmentFileName(record.file_name) ??
+        normalizeAttachmentFileName(record.filename) ??
+        normalizeAttachmentFileName(record.name);
     const mimeType =
         toOptionalTrimmedString(record.mime_type)?.toLowerCase() ??
         toOptionalTrimmedString(record.mimeType)?.toLowerCase();
