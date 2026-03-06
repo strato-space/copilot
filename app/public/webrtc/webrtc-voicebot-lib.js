@@ -7624,12 +7624,16 @@
 
             fabButton.addEventListener('click', (e) => {
                 if (e && e.pointerType && e.pointerType !== 'mouse') return;
-                if (isRecording) {
+                if (isRecording || isPaused) {
                     if (clickTimer) clearTimeout(clickTimer);
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
-                        flashFabCut();
-                        dispatchControlAction('cut');
+                        if (isRecording) {
+                            flashFabCut();
+                            dispatchControlAction('cut');
+                            return;
+                        }
+                        handleFabToggle();
                     }, clickDelayMs);
                     return;
                 }

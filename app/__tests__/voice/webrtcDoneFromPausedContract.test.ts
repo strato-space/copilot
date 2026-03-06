@@ -11,9 +11,15 @@ describe('webrtc fab done double-click contract', () => {
     expect(source).toContain("dispatchControlAction('done');");
   });
 
+  it('delays paused single-click resume so double-click can still resolve to Done', () => {
+    expect(source).toContain('if (isRecording || isPaused) {');
+    expect(source).toContain('if (isRecording) {');
+    expect(source).toContain('handleFabToggle();');
+    expect(source).toContain('}, clickDelayMs);');
+  });
+
   it('keeps page Done enabled in Paused when active/session context exists', () => {
     expect(source).toContain("const canPageDone = hasToken && !finalUploading && (hasPageSession || hasActiveSession || hasSession);");
   });
 
 });
-
