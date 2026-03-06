@@ -12,6 +12,7 @@ describe('PossibleTasks backend validation contract', () => {
     expect(source).toContain('} else if (rowError.field === \'project_id\') {');
     expect(source).toContain('setRowCreationErrors(rowErrorsByTaskId);');
     expect(source).toContain('Выберите проект с заполненным git_repo.');
-    expect(source).toContain('rowCreationErrors[record.id]?.project_id');
+    expect(source).toContain('const rowKey = rowsById.get(rowError.ticketId)?.row_id || rowError.ticketId;');
+    expect(source).toContain('rowCreationErrors[record.row_id]?.project_id');
   });
 });

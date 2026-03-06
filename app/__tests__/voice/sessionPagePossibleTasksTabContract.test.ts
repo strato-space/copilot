@@ -5,9 +5,11 @@ describe('SessionPage possible tasks tab contract', () => {
   const pagePath = path.resolve(process.cwd(), 'src/pages/voice/SessionPage.tsx');
   const source = fs.readFileSync(pagePath, 'utf8');
 
-  it("renders 'Возможные задачи' tab when CREATE_TASKS data exists and user can update projects", () => {
+  it("renders 'Возможные задачи' tab when possibleTasks state exists and user can update projects", () => {
     expect(source.includes("key: 'tasks'")).toBe(true);
     expect(source.includes("label: 'Возможные задачи'")).toBe(true);
+    expect(source.includes('possibleTasks,')).toBe(true);
+    expect(source.includes('const hasPossibleTasks = possibleTasks.length > 0;')).toBe(true);
     expect(source.includes('hasPossibleTasks && canUpdateProjects')).toBe(true);
   });
 
@@ -21,4 +23,3 @@ describe('SessionPage possible tasks tab contract', () => {
     expect(idxLog).toBeGreaterThan(idxScreenshort);
   });
 });
-

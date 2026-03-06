@@ -10,6 +10,7 @@ export interface VoiceSessionTaskflowRefreshHint {
 export interface VoiceBotSession {
     _id: string;
     session_id?: string;
+    session_db_id?: string;
     session_name?: string;
     dialogue_tag?: string;
     created_at?: string;
@@ -28,7 +29,13 @@ export interface VoiceBotSession {
     access_level?: string;
     participants?: Array<string | VoicebotPerson>;
     allowed_users?: string[];
+    source_ref?: string;
+    external_ref?: string;
+    source_data?: Record<string, unknown>;
     processors_data?: Record<string, unknown>;
+    agent_results?: {
+        create_tasks?: VoicePossibleTask[];
+    } | null;
     custom_prompt_run?: {
         result?: unknown;
     } | null;
@@ -43,6 +50,75 @@ export interface VoicebotPerson {
     full_name?: string;
     project_id?: string;
     role?: string;
+}
+
+export interface VoicePossibleTask {
+    _id?: string;
+    row_id: string;
+    id: string;
+    name: string;
+    description: string;
+    priority: string;
+    priority_reason: string;
+    performer_id: string;
+    project_id: string;
+    task_type_id: string;
+    dialogue_tag: string;
+    task_id_from_ai: string;
+    dependencies_from_ai: string[];
+    dialogue_reference: string;
+    task_status?: string;
+    relations?: Array<Record<string, unknown>>;
+    source_ref?: string;
+    external_ref?: string;
+    source_data?: Record<string, unknown>;
+}
+
+export type VoiceTaskMessageEnvelopeTranscriptBlock = {
+    type: 'transcript';
+    message_id?: string;
+    timestamp?: string;
+    text: string;
+};
+
+export type VoiceTaskMessageEnvelopeCategorizationBlock = {
+    type: 'categorization';
+    message_id?: string;
+    timestamp?: string;
+    rows: Array<{
+        start?: number;
+        end?: number;
+        speaker?: string;
+        text: string;
+    }>;
+};
+
+export type VoiceTaskMessageEnvelopeAttachmentBlock = {
+    type: 'attachment';
+    kind: string;
+    message_id?: string;
+    timestamp?: string;
+    name?: string;
+    mime_type?: string;
+    url: string;
+};
+
+export interface VoiceTaskMessageEnvelope {
+    version: string;
+    kind: 'voice_possible_tasks';
+    session: {
+        session_id?: string;
+        session_name?: string;
+        project_id?: string;
+        dialogue_tag?: string;
+        canonical_url?: string;
+    };
+    transcript_text: string;
+    blocks: Array<
+        | VoiceTaskMessageEnvelopeTranscriptBlock
+        | VoiceTaskMessageEnvelopeCategorizationBlock
+        | VoiceTaskMessageEnvelopeAttachmentBlock
+    >;
 }
 
 export interface VoiceBotMessage {

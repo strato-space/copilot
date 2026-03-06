@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import {
   COLLECTIONS,
+  TASK_STATUSES,
   VOICEBOT_COLLECTIONS,
-  RUNTIME_TAG,
   codexPerformerObjectId,
   performerId,
   createBdIssueMock,
@@ -21,7 +21,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     resetRuntimeBehaviorMocks();
   });
 
-  it('create_tickets writes tasks with runtime_tag', async () => {
+  it('create_tickets writes canonical ready tasks with voice source linkage', async () => {
     const sessionId = new ObjectId();
     const projectId = new ObjectId();
     const taskPerformerId = new ObjectId();
@@ -95,8 +95,9 @@ describe('Voicebot utility routes runtime behavior', () => {
     const [insertedDocs] = insertManySpy.mock.calls[0] as [Array<Record<string, unknown>>];
     expect(Array.isArray(insertedDocs)).toBe(true);
     expect(insertedDocs).toHaveLength(1);
-    expect(insertedDocs[0]?.runtime_tag).toBe(RUNTIME_TAG);
-    expect((insertedDocs[0]?.source_data as Record<string, unknown>)?.session_id).toBeInstanceOf(ObjectId);
+    expect(insertedDocs[0]?.task_status).toBe(TASK_STATUSES.READY_10);
+    expect(insertedDocs[0]?.source_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
+    expect((insertedDocs[0]?.source_data as Record<string, unknown>)?.session_id).toBe(sessionId.toHexString());
   });
 
   it('create_tickets keeps valid rows and reports rejected invalid performer ids', async () => {
@@ -910,6 +911,338 @@ describe('Voicebot utility routes runtime behavior', () => {
     ]);
   });
 
+  it('possible_tasks prefers automation_tasks master rows linked to the voice session', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      processors_data: {
+        CREATE_TASKS: {
+          data: [{ id: 'legacy-row', name: 'Legacy row' }],
+        },
+      },
+    }));
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: new ObjectId(),
+            row_id: 'master-row',
+            id: 'master-row',
+            name: 'Master row',
+            project: 'Master project',
+            project_id: new ObjectId().toHexString(),
+            performer_id: new ObjectId().toHexString(),
+            task_status: TASK_STATUSES.NEW_0,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_session',
+            source_ref: sessionId.toHexString(),
+            external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: { session_id: sessionId, row_id: 'master-row' },
+          },
+        ],
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/possible_tasks')
+      .send({ session_id: sessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        row_id: 'master-row',
+        id: 'master-row',
+        name: 'Master row',
+        project: 'Master project',
+        task_status: TASK_STATUSES.NEW_0,
+      }),
+    ]);
+    expect(response.body.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'legacy-row' })])
+    );
+  });
+
+  it('save_possible_tasks stores master rows in automation_tasks and syncs session compatibility data', async () => {
+    const sessionId = new ObjectId();
+    const existingMasterId = new ObjectId();
+    const performerMongoId = new ObjectId();
+    const projectId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      project_id: projectId,
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: existingMasterId,
+            row_id: 'stale-row',
+            id: 'stale-row',
+            task_status: TASK_STATUSES.NEW_0,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_session',
+            source_ref: sessionId.toHexString(),
+            external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: { session_id: sessionId, row_id: 'stale-row' },
+          },
+        ],
+      }),
+    }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const updateManySpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+            insertMany: insertManySpy,
+            updateMany: updateManySpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const emitSpy = jest.fn();
+    app.set('io', {
+      of: jest.fn(() => ({
+        to: jest.fn(() => ({
+          emit: emitSpy,
+        })),
+      })),
+    });
+    const response = await request(app)
+      .post('/voicebot/save_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        tasks: [
+          {
+            row_id: 'new-row',
+            id: 'new-row',
+            name: 'Saved row',
+            description: 'Persist me',
+            performer_id: performerMongoId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Saved project',
+            relations: [{ type: 'blocks', id: 'dep-1' }],
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.saved_count).toBe(1);
+    expect(response.body.removed_row_ids).toEqual(['stale-row']);
+    expect(insertManySpy).toHaveBeenCalledTimes(1);
+    expect(insertManySpy.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'new-row',
+          id: 'new-row',
+          name: 'Saved row',
+          project: 'Saved project',
+          task_status: TASK_STATUSES.NEW_0,
+          relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
+          source_kind: 'voice_possible_task',
+          source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        }),
+      ])
+    );
+    expect(updateManySpy).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': [
+            expect.objectContaining({
+              row_id: 'new-row',
+              id: 'new-row',
+              project: 'Saved project',
+              relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
+            }),
+          ],
+        }),
+      })
+    );
+    expect(emitSpy).toHaveBeenCalledWith(
+      'session_update',
+      expect.objectContaining({
+        _id: sessionId.toHexString(),
+        session_id: sessionId.toHexString(),
+        taskflow_refresh: expect.objectContaining({
+          reason: 'save_possible_tasks',
+          possible_tasks: true,
+        }),
+      }),
+    );
+  });
+
+  it('process_possible_tasks materializes saved master rows into regular tasks', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+    const masterTaskId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const taskUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+        {
+          _id: masterTaskId,
+          row_id: 'stored-row',
+          id: 'stored-row',
+          name: 'Stored row',
+          description: 'Stored description',
+          performer_id: validPerformerId.toHexString(),
+          project_id: projectId.toHexString(),
+          project: 'Stored project',
+          task_status: TASK_STATUSES.NEW_0,
+          source: 'VOICE_BOT',
+          source_kind: 'voice_possible_task',
+          source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+          external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+          source_data: {
+            session_id: sessionId.toHexString(),
+            session_name: 'Runtime test session',
+            voice_sessions: [
+              {
+                session_id: sessionId.toHexString(),
+                session_name: 'Runtime test session',
+                project_id: projectId.toHexString(),
+                created_at: '2026-03-06T00:00:00.000Z',
+                role: 'primary',
+              },
+            ],
+            row_id: 'stored-row',
+          },
+        },
+      ],
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({ _id: validPerformerId, name: 'Assignee' })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+            findOne: jest.fn(async () => null),
+            insertMany: insertManySpy,
+            updateOne: taskUpdateOneSpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/process_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [{ row_id: 'stored-row' }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.created_task_ids).toEqual(['stored-row']);
+    expect(response.body.removed_row_ids).toEqual(['stored-row']);
+    expect(insertManySpy).not.toHaveBeenCalled();
+    expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
+    expect(taskUpdateOneSpy).toHaveBeenCalledWith(
+      { _id: masterTaskId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          name: 'Stored row',
+          description: 'Stored description',
+          task_status: TASK_STATUSES.READY_10,
+        }),
+      })
+    );
+  });
+
   it('delete_task_from_session supports alias locators and returns idempotent counters', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
@@ -922,8 +1255,24 @@ describe('Voicebot utility routes runtime behavior', () => {
     }));
     const updateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 0 }));
 
+    const masterFind = jest.fn(() => ({
+      toArray: async () => [
+        {
+          _id: new ObjectId(),
+          row_id: 'legacy-row',
+          id: 'legacy-row',
+          source_data: {
+            session_id: sessionId.toHexString(),
+          },
+        },
+      ],
+    }));
+    const masterUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
     const dbStub = {
       collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return { find: masterFind, updateOne: masterUpdateOneSpy };
+        }
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
           return { updateOne: updateOneSpy };
         }
@@ -981,6 +1330,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       }),
     );
+    expect(masterUpdateOneSpy).toHaveBeenCalledTimes(1);
     expect(emitSpy).toHaveBeenCalledWith(
       'session_update',
       expect.objectContaining({

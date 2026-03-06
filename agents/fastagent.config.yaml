@@ -68,6 +68,11 @@ mcp:
       url: "https://fs-mcp.stratospace.fun"
       auth:
         oauth: false
+    gsh:
+      transport: "http"
+      url: "https://gsh-mcp.stratospace.fun"
+      auth:
+        oauth: false
     seq:
       transport: "http"
       url: "https://seq-mcp.stratospace.fun"

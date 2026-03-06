@@ -15,12 +15,13 @@ describe('MeetingCard summarize + circle icon alignment contract', () => {
 
   it('uses centered icon wrappers for circle session-header action buttons', () => {
     const shapeMatches = source.match(/shape=\"circle\"/g) ?? [];
-    expect(shapeMatches.length).toBeGreaterThanOrEqual(3);
+    expect(shapeMatches.length).toBeGreaterThanOrEqual(4);
 
     expect(source).toContain('const circleIconWrapperStyle: CSSProperties = {');
     expect(source).toContain('const circleIconButtonStyle: CSSProperties = {');
     expect(source).toContain('icon={<span style={circleIconWrapperStyle}><EditOutlined');
     expect(source).toContain('icon={<span style={circleIconWrapperStyle}><RobotOutlined');
+    expect(source).toContain('icon={<span style={circleIconWrapperStyle}><ProfileOutlined');
     expect(source).toContain("icon={<span style={circleIconWrapperStyle}><span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span></span>}");
   });
 });

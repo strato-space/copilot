@@ -18,6 +18,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import {
     COLLECTIONS,
     TASK_CLASSES,
+    TASK_STATUSES,
     VOICEBOT_FILE_STORAGE,
     VOICEBOT_COLLECTIONS,
     VOICE_BOT_SESSION_ACCESS,
@@ -54,6 +55,14 @@ import {
     toTaskReferenceList,
     toTaskText,
 } from './sessionsSharedUtils.js';
+import {
+    buildSessionCompatiblePossibleTaskRow,
+    buildVoicePossibleTaskMasterDoc,
+    buildVoicePossibleTaskMasterQuery,
+    collectVoicePossibleTaskLocatorKeys,
+    normalizeVoicePossibleTaskDocForApi,
+    normalizeVoicePossibleTaskRelations,
+} from './possibleTasksMasterModel.js';
 import {
   buildActorFromPerformer,
   buildCategorizationCleanupPayload,
@@ -210,6 +219,23 @@ const sessionCodexTasksInputSchema = z.object({
 const sessionPossibleTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
 });
+
+const savePossibleTasksInputSchema = z
+    .object({
+        session_id: z.string().trim().min(1),
+        tasks: z.array(z.object({}).passthrough()).optional(),
+        items: z.array(z.object({}).passthrough()).optional(),
+    })
+    .superRefine((value, ctx) => {
+        const tasks = Array.isArray(value.tasks) ? value.tasks : (Array.isArray(value.items) ? value.items : []);
+        if (tasks.length === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'tasks or items must be a non-empty array',
+                path: ['tasks'],
+            });
+        }
+    });
 
 const deleteTaskFromSessionInputSchema = z
     .object({
@@ -641,7 +667,9 @@ const normalizeCreateTaskForStorage = (
 ): Record<string, unknown> => {
     const taskIdFromAi = toTaskText(rawTask.task_id_from_ai);
     const id = toTaskText(rawTask.id) || taskIdFromAi || `task-${index + 1}`;
+    const relations = normalizeVoicePossibleTaskRelations(rawTask);
     return {
+        row_id: id,
         id,
         name: toTaskText(rawTask.name) || `Задача ${index + 1}`,
         description: toTaskText(rawTask.description),
@@ -656,6 +684,303 @@ const normalizeCreateTaskForStorage = (
             ? rawTask.dependencies_from_ai.map((entry) => toTaskText(entry)).filter(Boolean)
             : [],
         dialogue_reference: toTaskText(rawTask.dialogue_reference),
+        ...(relations.length > 0 ? { relations } : {}),
+    };
+};
+
+const buildPossibleTaskMasterRuntimeQuery = (sessionId: string): Record<string, unknown> => {
+    const sessionObjectId = new ObjectId(sessionId);
+    return mergeWithRuntimeFilter(
+        buildVoicePossibleTaskMasterQuery({
+            sessionId,
+            sessionObjectId,
+            externalRef: voiceSessionUrlUtils.canonical(sessionId),
+        }),
+        {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        }
+    );
+};
+
+const listPossibleTaskMasterDocs = async ({
+    db,
+    sessionId,
+}: {
+    db: Db;
+    sessionId: string;
+}): Promise<Array<Record<string, unknown>>> =>
+    db.collection(COLLECTIONS.TASKS)
+        .find(buildPossibleTaskMasterRuntimeQuery(sessionId), {
+            projection: {
+                _id: 1,
+                row_id: 1,
+                id: 1,
+                name: 1,
+                description: 1,
+                priority: 1,
+                priority_reason: 1,
+                performer_id: 1,
+                project_id: 1,
+                task_type_id: 1,
+                dialogue_tag: 1,
+                task_id_from_ai: 1,
+                dependencies_from_ai: 1,
+                dialogue_reference: 1,
+                relations: 1,
+                dependencies: 1,
+                parent: 1,
+                parent_id: 1,
+                children: 1,
+                task_status: 1,
+                created_at: 1,
+                updated_at: 1,
+                source_data: 1,
+            },
+        })
+        .sort({ created_at: 1, _id: 1 })
+        .toArray() as Promise<Array<Record<string, unknown>>>;
+
+const buildPossibleTaskMasterAliasMap = (
+    docs: Array<Record<string, unknown>>
+): Map<string, Record<string, unknown>> => {
+    const aliasMap = new Map<string, Record<string, unknown>>();
+    docs.forEach((doc) => {
+        collectVoicePossibleTaskLocatorKeys(doc).forEach((key) => {
+            if (!aliasMap.has(key)) {
+                aliasMap.set(key, doc);
+            }
+        });
+    });
+    return aliasMap;
+};
+
+const syncSessionPossibleTaskCompatibilityData = async ({
+    db,
+    sessionId,
+    rows,
+}: {
+    db: Db;
+    sessionId: string;
+    rows: Array<Record<string, unknown>>;
+}): Promise<void> => {
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+        runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+        {
+            $set: {
+                'processors_data.CREATE_TASKS.data': rows,
+                'processors_data.CREATE_TASKS.task_ids': rows
+                    .map((row) => resolveSessionTaskRowLocator(row))
+                    .filter((item): item is { ok: true; row_id: string; source_fields: string[] } => item.ok)
+                    .map((item) => item.row_id),
+                'processors_data.CREATE_TASKS.last_generator': 'create_tasks',
+                'processors_data.CREATE_TASKS.last_generated_at': new Date().toISOString(),
+                updated_at: new Date(),
+            },
+        }
+    );
+};
+
+const softDeletePossibleTaskMasterRows = async ({
+    db,
+    sessionId,
+    rowIds,
+}: {
+    db: Db;
+    sessionId: string;
+    rowIds: string[];
+}): Promise<void> => {
+    const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
+    if (normalizedRowIds.length === 0) return;
+    const tasksCollection = db.collection(COLLECTIONS.TASKS) as {
+        find?: (
+            filter: Record<string, unknown>,
+            options?: Record<string, unknown>
+        ) => { toArray?: () => Promise<Array<Record<string, unknown>>> };
+        updateMany?: (
+            filter: Record<string, unknown>,
+            update: Record<string, unknown>
+        ) => Promise<unknown>;
+        updateOne?: (
+            filter: Record<string, unknown>,
+            update: Record<string, unknown>
+        ) => Promise<unknown>;
+    };
+    if (typeof tasksCollection.find !== 'function') {
+        if (typeof tasksCollection.updateMany !== 'function') return;
+        await tasksCollection.updateMany(
+            {
+                $and: [
+                    buildPossibleTaskMasterRuntimeQuery(sessionId),
+                    {
+                        $or: [
+                            { row_id: { $in: normalizedRowIds } },
+                            { id: { $in: normalizedRowIds } },
+                            { task_id_from_ai: { $in: normalizedRowIds } },
+                            { 'source_data.row_id': { $in: normalizedRowIds } },
+                        ],
+                    },
+                ],
+            },
+            {
+                $set: {
+                    is_deleted: true,
+                    deleted_at: new Date(),
+                    updated_at: new Date(),
+                },
+            }
+        );
+        return;
+    }
+
+    const cursor = tasksCollection.find(
+            {
+                $and: [
+                    buildPossibleTaskMasterRuntimeQuery(sessionId),
+                    {
+                        $or: [
+                            { row_id: { $in: normalizedRowIds } },
+                            { id: { $in: normalizedRowIds } },
+                            { task_id_from_ai: { $in: normalizedRowIds } },
+                            { 'source_data.row_id': { $in: normalizedRowIds } },
+                        ],
+                    },
+                ],
+            },
+            {
+                projection: {
+                    _id: 1,
+                    source_ref: 1,
+                    external_ref: 1,
+                    source_data: 1,
+                },
+            }
+        );
+    if (!cursor || typeof cursor.toArray !== 'function') {
+        if (typeof tasksCollection.updateMany !== 'function') return;
+        await tasksCollection.updateMany(
+            {
+                $and: [
+                    buildPossibleTaskMasterRuntimeQuery(sessionId),
+                    {
+                        $or: [
+                            { row_id: { $in: normalizedRowIds } },
+                            { id: { $in: normalizedRowIds } },
+                            { task_id_from_ai: { $in: normalizedRowIds } },
+                            { 'source_data.row_id': { $in: normalizedRowIds } },
+                        ],
+                    },
+                ],
+            },
+            {
+                $set: {
+                    is_deleted: true,
+                    deleted_at: new Date(),
+                    updated_at: new Date(),
+                },
+            }
+        );
+        return;
+    }
+    const docs = await cursor.toArray() as Array<Record<string, unknown>>;
+
+    for (const doc of docs) {
+        const docObjectId = toObjectIdOrNull(doc._id);
+        if (!docObjectId) continue;
+        const sourceData = doc.source_data && typeof doc.source_data === 'object'
+            ? doc.source_data as Record<string, unknown>
+            : {};
+        const voiceSessions = Array.isArray(sourceData.voice_sessions)
+            ? sourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+            : [];
+        const remainingVoiceSessions = voiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId);
+
+        if (remainingVoiceSessions.length > 0) {
+            const nextPrimary = remainingVoiceSessions[0]!;
+            if (typeof tasksCollection.updateOne !== 'function') continue;
+            await tasksCollection.updateOne(
+                { _id: docObjectId },
+                {
+                    $set: {
+                        source_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
+                        external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
+                        'source_data.session_id': toTaskText(nextPrimary.session_id),
+                        'source_data.session_name': toTaskText(nextPrimary.session_name),
+                        'source_data.voice_sessions': remainingVoiceSessions,
+                        updated_at: new Date(),
+                    },
+                }
+            );
+            continue;
+        }
+
+        if (typeof tasksCollection.updateOne !== 'function') continue;
+        await tasksCollection.updateOne(
+            { _id: docObjectId },
+            {
+                $set: {
+                    is_deleted: true,
+                    deleted_at: new Date(),
+                    updated_at: new Date(),
+                },
+            }
+        );
+    }
+};
+
+const hydrateSessionPossibleTasksFromMaster = async ({
+    db,
+    sessionId,
+    sessionRecord,
+}: {
+    db: Db;
+    sessionId: string;
+    sessionRecord: VoiceSessionRecord;
+}): Promise<VoiceSessionRecord> => {
+    const masterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+    if (masterDocs.length === 0) {
+        return sessionRecord;
+    }
+
+    const masterRows = masterDocs
+        .map((doc) => buildSessionCompatiblePossibleTaskRow(doc))
+        .filter((row): row is Record<string, unknown> => row !== null);
+
+    const processorsData = sessionRecord.processors_data && typeof sessionRecord.processors_data === 'object'
+        ? { ...(sessionRecord.processors_data as Record<string, unknown>) }
+        : {};
+    const createTasksProcessor = processorsData.CREATE_TASKS && typeof processorsData.CREATE_TASKS === 'object'
+        ? { ...(processorsData.CREATE_TASKS as Record<string, unknown>) }
+        : {};
+
+    return {
+        ...sessionRecord,
+        processors_data: {
+            ...processorsData,
+            CREATE_TASKS: {
+                ...createTasksProcessor,
+                data: masterRows,
+            },
+        },
+    };
+};
+
+const buildProcessPossibleTasksPayload = ({
+    storedDoc,
+    rawTicket,
+}: {
+    storedDoc: Record<string, unknown>;
+    rawTicket: Record<string, unknown>;
+}): Record<string, unknown> => {
+    const storedTask = normalizeVoicePossibleTaskDocForApi(storedDoc) || {};
+    return {
+        ...storedTask,
+        ...rawTicket,
+        row_id: toTaskText(rawTicket.row_id) || toTaskText(storedTask.row_id),
+        id: toTaskText(rawTicket.id) || toTaskText(storedTask.id),
+        task_id_from_ai: toTaskText(rawTicket.task_id_from_ai) || toTaskText(storedTask.task_id_from_ai),
+        relations: Array.isArray(rawTicket.relations) ? rawTicket.relations : storedTask.relations,
     };
 };
 
@@ -1400,7 +1725,7 @@ const emitSessionTaskflowRefreshHint = ({
 }: {
     req: Request;
     sessionId: string;
-    reason: 'create_tickets' | 'delete_task_from_session';
+    reason: 'create_tickets' | 'delete_task_from_session' | 'save_possible_tasks' | 'process_possible_tasks';
     possibleTasks?: boolean;
     tasks?: boolean;
     codex?: boolean;
@@ -1740,7 +2065,11 @@ const getSession = async (req: Request, res: Response) => {
 
         // Get participants info
         let participants: VoiceSessionParticipant[] = [];
-        const sessionRecord = session as VoiceSessionRecord;
+        const sessionRecord = await hydrateSessionPossibleTasksFromMaster({
+            db,
+            sessionId: session_id,
+            sessionRecord: session as VoiceSessionRecord,
+        });
         const participantIds = toObjectIdArray(sessionRecord.participants);
         if (participantIds.length > 0) {
             participants = await db.collection(VOICEBOT_COLLECTIONS.PERSONS).find({
@@ -3473,6 +3802,492 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
     }
 });
 
+const parseExplicitRemoveRowIds = (
+    removeItems: Array<string | number | Record<string, unknown>>
+):
+    | { ok: true; rowIds: Set<string> }
+    | {
+        ok: false;
+        status: number;
+        body: Record<string, unknown>;
+    } => {
+    const rowIds = new Set<string>();
+    for (const [removeItemIndex, removeItem] of removeItems.entries()) {
+        const resolvedRemoveItem = resolveSessionTaskRowLocator(removeItem);
+        if (!resolvedRemoveItem.ok) {
+            if (resolvedRemoveItem.error_code === 'ambiguous_row_locator') {
+                return {
+                    ok: false,
+                    status: 409,
+                    body: {
+                        error: 'ambiguous_row_locator',
+                        error_code: 'ambiguous_row_locator',
+                        item_index: removeItemIndex,
+                        values: resolvedRemoveItem.values ?? [],
+                    },
+                };
+            }
+            return {
+                ok: false,
+                status: 400,
+                body: {
+                    error: 'remove_items[].row_id is required',
+                    error_code: 'missing_row_id',
+                    item_index: removeItemIndex,
+                },
+            };
+        }
+        rowIds.add(resolvedRemoveItem.row_id);
+    }
+
+    return { ok: true, rowIds };
+};
+
+const materializeSessionTickets = async ({
+    req,
+    db,
+    performer,
+    actorEmail,
+    session,
+    sessionId,
+    tickets,
+    removeFromPossibleTasks,
+    explicitRemoveRowIds,
+    refreshReason,
+}: {
+    req: Request;
+    db: Db;
+    performer: VoicebotRequest['performer'];
+    actorEmail: string;
+    session: Record<string, unknown>;
+    sessionId: string;
+    tickets: Array<Record<string, unknown>>;
+    removeFromPossibleTasks: boolean;
+    explicitRemoveRowIds: Set<string>;
+    refreshReason: 'create_tickets' | 'process_possible_tasks';
+}): Promise<Record<string, unknown>> => {
+    const now = new Date();
+    const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
+    const tasksToSave: Array<{ sourceTaskId: string; task: Record<string, unknown>; existingTaskId?: ObjectId | null }> = [];
+    const codexTasksToSync: Array<CodexIssueSyncInput> = [];
+    const rejectedRows: CreateTicketsRejectedRow[] = [];
+    const performerCache = new Map<string, Record<string, unknown> | null>();
+    const projectCache = new Map<string, Record<string, unknown> | null>();
+    const reservedPublicTaskIds = new Set<string>();
+    const creatorId = performer?._id?.toHexString?.() ?? '';
+    const creatorName = String(performer?.real_name || performer?.name || '').trim();
+    const creatorEmail = String(actorEmail || '').trim();
+
+    for (const [ticketIndex, rawTicket] of tickets.entries()) {
+        if (!rawTicket || typeof rawTicket !== 'object') continue;
+        const ticket = rawTicket as Record<string, unknown>;
+        const relationPayload = normalizeVoicePossibleTaskRelations(ticket);
+        const parentRelation = relationPayload.find((relation) => relation.type === 'parent-child' && relation.role === 'parent');
+        const childRelations = relationPayload
+            .filter((relation) => relation.type === 'parent-child' && relation.role === 'child')
+            .map((relation) => ({
+                id: relation.id,
+                type: relation.type,
+                ...(relation.title ? { title: relation.title } : {}),
+                ...(relation.status ? { status: relation.status } : {}),
+            }));
+        const dependencyRelations = relationPayload
+            .filter((relation) => relation.type !== 'parent-child')
+            .map((relation) => ({
+                depends_on_id: relation.id,
+                type: relation.type,
+                ...(relation.title ? { title: relation.title } : {}),
+                ...(relation.status ? { status: relation.status } : {}),
+            }));
+
+        const ticketId = toTaskText(ticket.row_id) || toTaskText(ticket.id) || toTaskText(ticket.task_id_from_ai) || `task-${ticketIndex + 1}`;
+        const existingTaskId = toObjectIdOrNull(ticket._id);
+        const name = String(ticket.name || '').trim();
+        const description = String(ticket.description || '').trim();
+        const rawPerformerId = toTaskText(ticket.performer_id);
+        const performerId = toObjectIdOrNull(rawPerformerId);
+        const isCodexPerformerByInput = codexPerformerUtils.isIdOrAlias(rawPerformerId);
+        const projectId = toObjectIdOrNull(ticket.project_id);
+        const projectName = String(ticket.project || '').trim();
+        const incomingSourceData = ticket.source_data && typeof ticket.source_data === 'object'
+            ? ticket.source_data as Record<string, unknown>
+            : {};
+        const incomingVoiceSessions = Array.isArray(incomingSourceData.voice_sessions)
+            ? incomingSourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+            : [];
+        const mergedVoiceSessions = incomingVoiceSessions.length > 0
+            ? incomingVoiceSessions
+            : [
+                {
+                    session_id: sessionId,
+                    session_name: String((session as Record<string, unknown>).session_name || ''),
+                    project_id: projectId ? projectId.toHexString() : '',
+                    created_at: now.toISOString(),
+                    role: 'primary',
+                },
+            ];
+
+        const pushRejectedRow = (
+            field: CreateTicketsRejectedField,
+            reason: CreateTicketsRowRejectionReason,
+            message: string,
+            details?: {
+                performer_id?: string;
+                project_id?: string;
+            }
+        ): void => {
+            rejectedRows.push({
+                index: ticketIndex,
+                ticket_id: ticketId,
+                field,
+                reason,
+                message,
+                ...(details ?? {}),
+            });
+        };
+
+        if (!rawPerformerId) {
+            pushRejectedRow(
+                'performer_id',
+                'missing_performer_id',
+                'Исполнитель не выбран',
+                { performer_id: rawPerformerId }
+            );
+            continue;
+        }
+        if (!isCodexPerformerByInput && !performerId) {
+            pushRejectedRow(
+                'performer_id',
+                'invalid_performer_id',
+                'Некорректный performer_id: ожидается Mongo ObjectId',
+                { performer_id: rawPerformerId }
+            );
+            continue;
+        }
+        if (!name || !description || !projectId || !projectName) continue;
+
+        const canAccess = await canAccessProject({ db, performer, projectId });
+        if (!canAccess) continue;
+
+        let performerCacheKey = performerId?.toHexString() ?? rawPerformerId;
+        let taskPerformer: Record<string, unknown> | null = null;
+        if (!isCodexPerformerByInput) {
+            if (!performerId) {
+                pushRejectedRow(
+                    'performer_id',
+                    'invalid_performer_id',
+                    'Некорректный performer_id: ожидается Mongo ObjectId',
+                    { performer_id: rawPerformerId }
+                );
+                continue;
+            }
+            performerCacheKey = performerId.toHexString();
+            const cachedPerformer = performerCache.get(performerCacheKey);
+            if (cachedPerformer === undefined) {
+                taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId }) as Record<string, unknown> | null;
+                performerCache.set(performerCacheKey, taskPerformer);
+            } else {
+                taskPerformer = cachedPerformer;
+            }
+            if (!taskPerformer) {
+                pushRejectedRow(
+                    'performer_id',
+                    'performer_not_found',
+                    'Исполнитель не найден в automation_performers',
+                    { performer_id: rawPerformerId }
+                );
+                continue;
+            }
+        }
+
+        const publicTaskId = await ensureUniqueTaskPublicId({
+            db,
+            preferredId: ticket.id,
+            fallbackText: name,
+            reservedIds: reservedPublicTaskIds,
+        });
+
+        const isCodexTask = isCodexPerformerByInput ||
+            codexPerformerUtils.isIdOrAlias(performerId) ||
+            codexPerformerUtils.isPerformer(taskPerformer);
+        logger.info('[voicebot.create_tickets] routing decision', {
+            ticket_id: ticketId,
+            performer_id: performerCacheKey,
+            is_codex_task: isCodexTask,
+        });
+        if (isCodexTask) {
+            const projectCacheKey = projectId.toHexString();
+            let projectDoc = projectCache.get(projectCacheKey);
+            if (projectDoc === undefined) {
+                projectDoc = await db
+                    .collection(COLLECTIONS.PROJECTS)
+                    .findOne(
+                        { _id: projectId },
+                        { projection: { _id: 1, git_repo: 1 } }
+                    ) as Record<string, unknown> | null;
+                projectCache.set(projectCacheKey, projectDoc);
+            }
+            if (!projectDoc || !normalizeGitRepo(projectDoc.git_repo)) {
+                pushRejectedRow(
+                    'project_id',
+                    'codex_project_git_repo_required',
+                    'Для задач Codex у проекта должен быть git_repo',
+                    {
+                        performer_id: rawPerformerId,
+                        project_id: projectCacheKey,
+                    }
+                );
+                continue;
+            }
+            codexTasksToSync.push({
+                index: ticketIndex,
+                sourceTaskId: ticketId,
+                taskId: publicTaskId,
+                name,
+                description,
+                assignee: toTaskText(creatorName || creatorEmail),
+                externalRef: canonicalExternalRef,
+                performerId: rawPerformerId,
+                projectId: projectCacheKey,
+            });
+            continue;
+        }
+
+        if (!performerId || !taskPerformer) {
+            logger.warn('[voicebot.create_tickets] skipped non-codex task due unresolved performer payload', {
+                ticket_id: ticketId,
+                performer_id: rawPerformerId,
+            });
+            continue;
+        }
+
+            tasksToSave.push({
+                sourceTaskId: ticketId,
+                existingTaskId,
+                task: {
+                    id: publicTaskId,
+                    name,
+                project_id: projectId,
+                project: projectName,
+                description,
+                task_type_id: toObjectIdOrNull(ticket.task_type_id),
+                priority: String(ticket.priority || 'P3'),
+                priority_reason: String(ticket.priority_reason || 'No reason provided'),
+                performer_id: performerId,
+                performer: taskPerformer,
+                created_at: now,
+                updated_at: now,
+                    task_status: TASK_STATUSES.READY_10,
+                    task_status_history: [],
+                    last_status_update: now,
+                    status_update_checked: false,
+                task_id_from_ai: ticket.task_id_from_ai || null,
+                dependencies_from_ai: Array.isArray(ticket.dependencies_from_ai) ? ticket.dependencies_from_ai : [],
+                dialogue_reference: ticket.dialogue_reference || null,
+                dialogue_tag: ticket.dialogue_tag || null,
+                ...(relationPayload.length > 0 ? { relations: relationPayload } : {}),
+                ...(dependencyRelations.length > 0 ? { dependencies: dependencyRelations } : {}),
+                ...(parentRelation ? { parent: { id: parentRelation.id, type: parentRelation.type }, parent_id: parentRelation.id } : {}),
+                ...(childRelations.length > 0 ? { children: childRelations } : {}),
+                source: 'VOICE_BOT',
+                source_kind: 'voice_session',
+                source_ref: canonicalExternalRef,
+                external_ref: canonicalExternalRef,
+                    source_data: {
+                        ...incomingSourceData,
+                        session_name: toTaskText(incomingSourceData.session_name) || String((session as Record<string, unknown>).session_name || ''),
+                        session_id: toTaskText(incomingSourceData.session_id) || sessionId,
+                        voice_sessions: mergedVoiceSessions,
+                    },
+                    ...(creatorId ? { created_by: creatorId } : {}),
+                    ...(creatorName ? { created_by_name: creatorName } : {}),
+                    ...(parentRelation ? { parent: parentRelation, parent_id: parentRelation.id } : {}),
+                    ...(childRelations.length > 0 ? { children: childRelations } : {}),
+                    ...(dependencyRelations.length > 0 ? { dependencies: dependencyRelations } : {}),
+                },
+            });
+        }
+
+    if (tasksToSave.length === 0 && codexTasksToSync.length === 0) {
+        if (rejectedRows.length > 0) {
+            return {
+                status: 400,
+                body: {
+                    error: 'No valid tasks to create tickets',
+                    operation_status: 'failed',
+                    created_task_ids: [],
+                    rejected_rows: rejectedRows,
+                    invalid_rows: rejectedRows,
+                },
+            };
+        }
+        return {
+            status: 400,
+            body: {
+                error: 'No valid tasks to create tickets',
+                operation_status: 'failed',
+                created_task_ids: [],
+            },
+        };
+    }
+
+    if (codexTasksToSync.length > 0) {
+        await db.collection(COLLECTIONS.TASKS).deleteMany(
+            mergeWithRuntimeFilter(
+                {
+                    external_ref: canonicalExternalRef,
+                    codex_task: true,
+                    is_deleted: { $ne: true },
+                },
+                {
+                    field: 'runtime_tag',
+                    familyMatch: IS_PROD_RUNTIME,
+                    includeLegacyInProd: IS_PROD_RUNTIME,
+                }
+            )
+        );
+    }
+
+    let insertedCount = 0;
+    const createdTaskIds = new Set<string>();
+    const filteredTasksToSave = tasksToSave.filter(({ task }) => {
+        const isCodexTask = codexPerformerUtils.isTaskDocument(task);
+        if (!isCodexTask) return true;
+
+        const taskRecord = task as Record<string, unknown>;
+        logger.warn('[voicebot.create_tickets] dropped codex task before insertMany', {
+            ticket_id: toTaskText(taskRecord.id),
+            performer_id: toIdString(taskRecord.performer_id) ?? toTaskText(taskRecord.performer_id),
+            is_codex_task: true,
+        });
+        return false;
+    });
+    const existingTasksToUpdate = filteredTasksToSave.filter(({ existingTaskId }) => existingTaskId instanceof ObjectId);
+    const newTasksToInsert = filteredTasksToSave.filter(({ existingTaskId }) => !(existingTaskId instanceof ObjectId));
+
+    for (const { sourceTaskId, existingTaskId, task } of existingTasksToUpdate) {
+        await db.collection(COLLECTIONS.TASKS).updateOne(
+            { _id: existingTaskId as ObjectId },
+            {
+                $set: {
+                    ...task,
+                    updated_at: now,
+                    is_deleted: false,
+                    deleted_at: null,
+                },
+            }
+        );
+        insertedCount += 1;
+        if (sourceTaskId) createdTaskIds.add(sourceTaskId);
+    }
+
+    if (newTasksToInsert.length > 0) {
+        const insertResult = await db.collection(COLLECTIONS.TASKS).insertMany(
+            newTasksToInsert.map(({ task }) => task)
+        );
+        insertedCount += insertResult.insertedCount;
+        for (const { sourceTaskId } of newTasksToInsert) {
+            if (sourceTaskId) createdTaskIds.add(sourceTaskId);
+        }
+    }
+    const codexSyncErrors: Array<{ task_id: string; error: string }> = [];
+
+    if (codexTasksToSync.length > 0) {
+        for (const codexTask of codexTasksToSync) {
+            try {
+                const createIssuePayload: Parameters<typeof createBdIssue>[0] = {
+                    title: codexTask.name,
+                    description: buildCodexIssueDescription({
+                        name: codexTask.name,
+                        description: codexTask.description,
+                        sessionId: codexTask.externalRef,
+                        creatorName: String(creatorName || ''),
+                    }),
+                    externalRef: codexTask.externalRef,
+                    ...(codexTask.assignee ? { assignee: codexTask.assignee } : {}),
+                };
+                const issueId = await createBdIssue({
+                    ...createIssuePayload,
+                });
+                logger.info('[voicebot.create_tickets] created bd issue for codex task', {
+                    task_id: codexTask.taskId,
+                    issue_id: issueId,
+                });
+                if (codexTask.sourceTaskId) createdTaskIds.add(codexTask.sourceTaskId);
+            } catch (error) {
+                const syncError = error instanceof Error ? error.message : String(error);
+                logger.error('[voicebot.create_tickets] failed to create bd issue for codex task', {
+                    task_id: codexTask.taskId,
+                    error: syncError,
+                });
+                codexSyncErrors.push({
+                    task_id: codexTask.taskId,
+                    error: syncError,
+                });
+                const codexRejectedRow: CreateTicketsRejectedRow = {
+                    index: codexTask.index,
+                    ticket_id: codexTask.sourceTaskId || codexTask.taskId,
+                    field: 'general',
+                    reason: 'codex_issue_sync_failed',
+                    message: `Не удалось создать Codex задачу в bd: ${syncError}`,
+                    ...(codexTask.performerId ? { performer_id: codexTask.performerId } : {}),
+                    ...(codexTask.projectId ? { project_id: codexTask.projectId } : {}),
+                };
+                rejectedRows.push(codexRejectedRow);
+            }
+        }
+    }
+
+    const createdTaskIdList = Array.from(createdTaskIds).filter(Boolean);
+    const removableRowIds = !removeFromPossibleTasks
+        ? []
+        : (
+            explicitRemoveRowIds.size > 0
+                ? createdTaskIdList.filter((rowId) => explicitRemoveRowIds.has(rowId))
+                : createdTaskIdList
+        );
+    if (removableRowIds.length > 0) {
+        await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+            runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+            {
+                $pull: {
+                    'processors_data.CREATE_TASKS.data': buildSessionTaskRowPullFilter(removableRowIds),
+                },
+                $set: { updated_at: new Date() },
+            } as Record<string, unknown>
+        );
+        await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: removableRowIds });
+    }
+
+    const operationStatus =
+        createdTaskIdList.length === 0
+            ? 'failed'
+            : (rejectedRows.length > 0 || codexSyncErrors.length > 0 ? 'partial' : 'success');
+
+    emitSessionTaskflowRefreshHint({
+        req,
+        sessionId,
+        reason: refreshReason,
+        possibleTasks: removableRowIds.length > 0,
+        tasks: insertedCount > 0,
+        codex: codexTasksToSync.length > 0,
+    });
+
+    return {
+        status: 200,
+        body: {
+            success: true,
+            operation_status: operationStatus,
+            insertedCount,
+            created_task_ids: createdTaskIdList,
+            remove_from_possible_tasks: removeFromPossibleTasks,
+            ...(removableRowIds.length > 0 ? { removed_row_ids: removableRowIds } : {}),
+            ...(codexSyncErrors.length > 0 ? { codex_issue_sync_errors: codexSyncErrors } : {}),
+            ...(rejectedRows.length > 0 ? { rejected_rows: rejectedRows } : {}),
+        },
+    };
+};
+
 router.post('/create_tickets', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
@@ -3485,27 +4300,221 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         }
 
         const sessionId = parsedBody.data.session_id;
-        const tickets = parsedBody.data.tickets;
         const removeFromPossibleTasks = parsedBody.data.remove_from_possible_tasks ?? true;
-        const explicitRemoveRowIds = new Set<string>();
-        for (const [removeItemIndex, removeItem] of (parsedBody.data.remove_items ?? []).entries()) {
-            const resolvedRemoveItem = resolveSessionTaskRowLocator(removeItem);
-            if (!resolvedRemoveItem.ok) {
-                if (resolvedRemoveItem.error_code === 'ambiguous_row_locator') {
-                    return res.status(409).json({
-                        error: 'ambiguous_row_locator',
-                        error_code: 'ambiguous_row_locator',
-                        item_index: removeItemIndex,
-                        values: resolvedRemoveItem.values ?? [],
-                    });
-                }
-                return res.status(400).json({
-                    error: 'remove_items[].row_id is required',
-                    error_code: 'missing_row_id',
-                    item_index: removeItemIndex,
+        const explicitRemoveRowIdsResult = parseExplicitRemoveRowIds(parsedBody.data.remove_items ?? []);
+        if (!explicitRemoveRowIdsResult.ok) {
+            return res.status(explicitRemoveRowIdsResult.status).json(explicitRemoveRowIdsResult.body);
+        }
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({ db, performer, sessionId });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+        const materializeResult = await materializeSessionTickets({
+            req,
+            db,
+            performer,
+            actorEmail: String(vreq.user?.email || ''),
+            session,
+            sessionId,
+            tickets: parsedBody.data.tickets as Array<Record<string, unknown>>,
+            removeFromPossibleTasks,
+            explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
+            refreshReason: 'create_tickets',
+        });
+        return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
+    } catch (error) {
+        logger.error('Error in create_tickets:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/save_possible_tasks', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = savePossibleTasksInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id and tasks are required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({ db, performer, sessionId });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const taskItems = Array.isArray(parsedBody.data.tasks) ? parsedBody.data.tasks : (parsedBody.data.items ?? []);
+        const existingDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+        const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
+        const keptExistingIds = new Set<string>();
+        const masterRows: Array<Record<string, unknown>> = [];
+        const newDocs: Array<Record<string, unknown>> = [];
+        const now = new Date();
+        const defaultProjectId = session.project_id ? String(session.project_id) : '';
+        const sessionObjectId = new ObjectId(sessionId);
+        const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
+        const creatorId = performer?._id?.toHexString?.() ?? '';
+        const creatorName = String(performer?.real_name || performer?.name || '').trim();
+
+        for (const [taskIndex, rawTask] of taskItems.entries()) {
+            const task = rawTask as Record<string, unknown>;
+            const resolvedRowLocator = resolveSessionTaskRowLocator(task);
+            if (!resolvedRowLocator.ok && resolvedRowLocator.error_code === 'ambiguous_row_locator') {
+                return res.status(409).json({
+                    error: 'ambiguous_row_locator',
+                    error_code: 'ambiguous_row_locator',
+                    item_index: taskIndex,
+                    values: resolvedRowLocator.values ?? [],
                 });
             }
-            explicitRemoveRowIds.add(resolvedRemoveItem.row_id);
+
+            const canonicalRowId = resolvedRowLocator.ok ? resolvedRowLocator.row_id : toTaskText(task.id);
+            const candidateKeys = new Set<string>(collectVoicePossibleTaskLocatorKeys(task));
+            if (resolvedRowLocator.ok) {
+                candidateKeys.add(resolvedRowLocator.row_id);
+            }
+            let existingDoc: Record<string, unknown> | undefined;
+            for (const key of candidateKeys) {
+                existingDoc = existingAliasMap.get(key);
+                if (existingDoc) break;
+            }
+
+            const currentSessionLink = {
+                session_id: sessionId,
+                session_name: String((session as Record<string, unknown>).session_name || ''),
+                ...(defaultProjectId ? { project_id: defaultProjectId } : {}),
+                created_at: now.toISOString(),
+                role: 'primary',
+            };
+            const existingSourceData = existingDoc?.source_data && typeof existingDoc.source_data === 'object'
+                ? existingDoc.source_data as Record<string, unknown>
+                : {};
+            const existingVoiceSessions = Array.isArray(existingSourceData.voice_sessions)
+                ? existingSourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+                : [];
+            const mergedVoiceSessions = [
+                currentSessionLink,
+                ...existingVoiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId),
+            ];
+
+            const nextDoc = {
+                ...buildVoicePossibleTaskMasterDoc({
+                    rawTask: task,
+                    index: taskIndex,
+                    defaultProjectId,
+                    sessionId,
+                    sessionObjectId,
+                    externalRef: canonicalExternalRef,
+                    now,
+                    createdBy: {
+                        ...(creatorId ? { id: creatorId } : {}),
+                        ...(creatorName ? { name: creatorName } : {}),
+                    },
+                    existingCreatedAt: existingDoc?.created_at,
+                }),
+                source_ref: canonicalExternalRef,
+                external_ref: canonicalExternalRef,
+                source_data: {
+                    ...existingSourceData,
+                    session_id: sessionId,
+                    session_name: String((session as Record<string, unknown>).session_name || ''),
+                    voice_task_kind: 'possible_task',
+                    row_id: canonicalRowId,
+                    voice_sessions: mergedVoiceSessions,
+                },
+            };
+
+            if (existingDoc?._id instanceof ObjectId) {
+                keptExistingIds.add(existingDoc._id.toHexString());
+                await db.collection(COLLECTIONS.TASKS).updateOne(
+                    { _id: existingDoc._id },
+                    {
+                        $set: {
+                            ...nextDoc,
+                            updated_at: now,
+                            is_deleted: false,
+                        },
+                        $unset: {
+                            deleted_at: 1,
+                        },
+                    }
+                );
+            } else {
+                newDocs.push(nextDoc);
+            }
+
+            const sessionCompatibleRow = buildSessionCompatiblePossibleTaskRow(nextDoc);
+            if (sessionCompatibleRow) {
+                masterRows.push(sessionCompatibleRow);
+            }
+        }
+
+        if (newDocs.length > 0) {
+            await db.collection(COLLECTIONS.TASKS).insertMany(newDocs);
+        }
+
+        const staleRowIds = existingDocs
+            .filter((doc) => {
+                const docId = doc._id instanceof ObjectId ? doc._id.toHexString() : '';
+                return !docId || !keptExistingIds.has(docId);
+            })
+            .flatMap((doc) => collectVoicePossibleTaskLocatorKeys(doc));
+        await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
+        await syncSessionPossibleTaskCompatibilityData({ db, sessionId, rows: masterRows });
+
+        emitSessionTaskflowRefreshHint({
+            req,
+            sessionId,
+            reason: 'save_possible_tasks',
+            possibleTasks: true,
+        });
+
+        return res.status(200).json({
+            success: true,
+            session_id: sessionId,
+            saved_count: masterRows.length,
+            ...(staleRowIds.length > 0 ? { removed_row_ids: Array.from(new Set(staleRowIds)) } : {}),
+        });
+    } catch (error) {
+        logger.error('Error in save_possible_tasks:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/process_possible_tasks', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = createTicketsInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id and tickets are required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        const removeFromPossibleTasks = parsedBody.data.remove_from_possible_tasks ?? true;
+        const explicitRemoveRowIdsResult = parseExplicitRemoveRowIds(parsedBody.data.remove_items ?? []);
+        if (!explicitRemoveRowIdsResult.ok) {
+            return res.status(explicitRemoveRowIdsResult.status).json(explicitRemoveRowIdsResult.body);
         }
         if (!ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'Invalid session_id' });
@@ -3520,358 +4529,35 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const now = new Date();
-        const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
-        const tasksToSave: Array<{ sourceTaskId: string; task: Record<string, unknown> }> = [];
-        const codexTasksToSync: Array<CodexIssueSyncInput> = [];
-        const rejectedRows: CreateTicketsRejectedRow[] = [];
-        const performerCache = new Map<string, Record<string, unknown> | null>();
-        const projectCache = new Map<string, Record<string, unknown> | null>();
-        const reservedPublicTaskIds = new Set<string>();
-        const creatorId = performer?._id?.toHexString?.() ?? '';
-        const creatorName = String(performer?.real_name || performer?.name || '').trim();
-        const creatorEmail = String(vreq.user?.email || '').trim();
-        for (const [ticketIndex, rawTicket] of tickets.entries()) {
-            if (!rawTicket || typeof rawTicket !== 'object') continue;
+        const existingDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+        const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
+        const tickets = parsedBody.data.tickets.map((rawTicket) => {
             const ticket = rawTicket as Record<string, unknown>;
-            const ticketId = toTaskText(ticket.id) || toTaskText(ticket.task_id_from_ai) || `task-${ticketIndex + 1}`;
-            const name = String(ticket.name || '').trim();
-            const description = String(ticket.description || '').trim();
-            const rawPerformerId = toTaskText(ticket.performer_id);
-            const performerId = toObjectIdOrNull(rawPerformerId);
-            const isCodexPerformerByInput = codexPerformerUtils.isIdOrAlias(rawPerformerId);
-            const projectId = toObjectIdOrNull(ticket.project_id);
-            const projectName = String(ticket.project || '').trim();
-
-            const pushRejectedRow = (
-                field: CreateTicketsRejectedField,
-                reason: CreateTicketsRowRejectionReason,
-                message: string,
-                details?: {
-                    performer_id?: string;
-                    project_id?: string;
-                }
-            ): void => {
-                rejectedRows.push({
-                    index: ticketIndex,
-                    ticket_id: ticketId,
-                    field,
-                    reason,
-                    message,
-                    ...(details ?? {}),
-                });
-            };
-
-            if (!rawPerformerId) {
-                pushRejectedRow(
-                    'performer_id',
-                    'missing_performer_id',
-                    'Исполнитель не выбран',
-                    {
-                        performer_id: rawPerformerId,
-                    }
-                );
-                continue;
-            }
-            if (!isCodexPerformerByInput && !performerId) {
-                pushRejectedRow(
-                    'performer_id',
-                    'invalid_performer_id',
-                    'Некорректный performer_id: ожидается Mongo ObjectId',
-                    {
-                        performer_id: rawPerformerId,
-                    }
-                );
-                continue;
-            }
-            if (!name || !description || !projectId || !projectName) continue;
-
-            const canAccess = await canAccessProject({ db, performer, projectId });
-            if (!canAccess) continue;
-
-            let performerCacheKey = performerId?.toHexString() ?? rawPerformerId;
-            let taskPerformer: Record<string, unknown> | null = null;
-            if (!isCodexPerformerByInput) {
-                if (!performerId) {
-                    pushRejectedRow(
-                        'performer_id',
-                        'invalid_performer_id',
-                        'Некорректный performer_id: ожидается Mongo ObjectId',
-                        {
-                            performer_id: rawPerformerId,
-                        }
-                    );
-                    continue;
-                }
-                performerCacheKey = performerId.toHexString();
-                const cachedPerformer = performerCache.get(performerCacheKey);
-                if (cachedPerformer === undefined) {
-                    taskPerformer = await db.collection(COLLECTIONS.PERFORMERS).findOne({ _id: performerId }) as Record<string, unknown> | null;
-                    performerCache.set(performerCacheKey, taskPerformer);
-                } else {
-                    taskPerformer = cachedPerformer;
-                }
-                if (!taskPerformer) {
-                    pushRejectedRow(
-                        'performer_id',
-                        'performer_not_found',
-                        'Исполнитель не найден в automation_performers',
-                        {
-                            performer_id: rawPerformerId,
-                        }
-                    );
-                    continue;
-                }
-            }
-
-            const publicTaskId = await ensureUniqueTaskPublicId({
-                db,
-                preferredId: ticket.id,
-                fallbackText: name,
-                reservedIds: reservedPublicTaskIds,
+            const resolvedRowLocator = resolveSessionTaskRowLocator(ticket);
+            if (!resolvedRowLocator.ok) return ticket;
+            const matchedDoc = existingAliasMap.get(resolvedRowLocator.row_id);
+            if (!matchedDoc) return ticket;
+            return buildProcessPossibleTasksPayload({
+                storedDoc: matchedDoc,
+                rawTicket: ticket,
             });
-
-            const isCodexTask = isCodexPerformerByInput ||
-                codexPerformerUtils.isIdOrAlias(performerId) ||
-                codexPerformerUtils.isPerformer(taskPerformer);
-            logger.info('[voicebot.create_tickets] routing decision', {
-                ticket_id: ticketId,
-                performer_id: performerCacheKey,
-                is_codex_task: isCodexTask,
-            });
-            if (isCodexTask) {
-                const projectCacheKey = projectId.toHexString();
-                let projectDoc = projectCache.get(projectCacheKey);
-                if (projectDoc === undefined) {
-                    projectDoc = await db
-                        .collection(COLLECTIONS.PROJECTS)
-                        .findOne(
-                            { _id: projectId },
-                            { projection: { _id: 1, git_repo: 1 } }
-                        ) as Record<string, unknown> | null;
-                    projectCache.set(projectCacheKey, projectDoc);
-                }
-                if (!projectDoc || !normalizeGitRepo(projectDoc.git_repo)) {
-                    pushRejectedRow(
-                        'project_id',
-                        'codex_project_git_repo_required',
-                        'Для задач Codex у проекта должен быть git_repo',
-                        {
-                            performer_id: rawPerformerId,
-                            project_id: projectCacheKey,
-                        }
-                    );
-                    continue;
-                }
-                codexTasksToSync.push({
-                    index: ticketIndex,
-                    sourceTaskId: ticketId,
-                    taskId: publicTaskId,
-                    name,
-                    description,
-                    assignee: toTaskText(creatorName || creatorEmail),
-                    externalRef: canonicalExternalRef,
-                    performerId: rawPerformerId,
-                    projectId: projectCacheKey,
-                });
-                continue;
-            }
-
-            if (!performerId || !taskPerformer) {
-                logger.warn('[voicebot.create_tickets] skipped non-codex task due unresolved performer payload', {
-                    ticket_id: ticketId,
-                    performer_id: rawPerformerId,
-                });
-                continue;
-            }
-
-            tasksToSave.push({
-                sourceTaskId: ticketId,
-                task: {
-                    id: publicTaskId,
-                    name,
-                    project_id: projectId,
-                    project: projectName,
-                    description,
-                    task_type_id: toObjectIdOrNull(ticket.task_type_id),
-                    priority: String(ticket.priority || 'P3'),
-                    priority_reason: String(ticket.priority_reason || 'No reason provided'),
-                    performer_id: performerId,
-                    performer: taskPerformer,
-                    created_at: now,
-                    updated_at: now,
-                    task_status: 'Ready',
-                    task_status_history: [],
-                    last_status_update: now,
-                    status_update_checked: false,
-                    task_id_from_ai: ticket.task_id_from_ai || null,
-                    dependencies_from_ai: Array.isArray(ticket.dependencies_from_ai) ? ticket.dependencies_from_ai : [],
-                    dialogue_reference: ticket.dialogue_reference || null,
-                    dialogue_tag: ticket.dialogue_tag || null,
-                    source: 'VOICE_BOT',
-                    source_data: {
-                        session_name: String((session as Record<string, unknown>).session_name || ''),
-                        session_id: new ObjectId(sessionId),
-                    },
-                    ...(creatorId ? { created_by: creatorId } : {}),
-                    ...(creatorName ? { created_by_name: creatorName } : {}),
-                    runtime_tag: RUNTIME_TAG,
-                },
-            });
-        }
-
-        if (tasksToSave.length === 0 && codexTasksToSync.length === 0) {
-            if (rejectedRows.length > 0) {
-                return res.status(400).json({
-                    error: 'No valid tasks to create tickets',
-                    operation_status: 'failed',
-                    created_task_ids: [],
-                    rejected_rows: rejectedRows,
-                    invalid_rows: rejectedRows,
-                });
-            }
-            return res.status(400).json({
-                error: 'No valid tasks to create tickets',
-                operation_status: 'failed',
-                created_task_ids: [],
-            });
-        }
-
-        if (codexTasksToSync.length > 0) {
-            await db.collection(COLLECTIONS.TASKS).deleteMany(
-                mergeWithRuntimeFilter(
-                    {
-                        external_ref: canonicalExternalRef,
-                        codex_task: true,
-                        is_deleted: { $ne: true },
-                    },
-                    {
-                        field: 'runtime_tag',
-                        familyMatch: IS_PROD_RUNTIME,
-                        includeLegacyInProd: IS_PROD_RUNTIME,
-                    }
-                )
-            );
-        }
-
-        let insertedCount = 0;
-        const createdTaskIds = new Set<string>();
-        const filteredTasksToSave = tasksToSave.filter(({ task }) => {
-            const isCodexTask = codexPerformerUtils.isTaskDocument(task);
-            if (!isCodexTask) return true;
-
-            const taskRecord = task as Record<string, unknown>;
-            logger.warn('[voicebot.create_tickets] dropped codex task before insertMany', {
-                ticket_id: toTaskText(taskRecord.id),
-                performer_id: toIdString(taskRecord.performer_id) ?? toTaskText(taskRecord.performer_id),
-                is_codex_task: true,
-            });
-            return false;
         });
-        if (filteredTasksToSave.length > 0) {
-            const insertResult = await db.collection(COLLECTIONS.TASKS).insertMany(
-                filteredTasksToSave.map(({ task }) => task)
-            );
-            insertedCount = insertResult.insertedCount;
-            for (const { sourceTaskId } of filteredTasksToSave) {
-                if (sourceTaskId) createdTaskIds.add(sourceTaskId);
-            }
-        }
-        const codexSyncErrors: Array<{ task_id: string; error: string }> = [];
 
-        if (codexTasksToSync.length > 0) {
-            for (const codexTask of codexTasksToSync) {
-                try {
-                    const createIssuePayload: Parameters<typeof createBdIssue>[0] = {
-                        title: codexTask.name,
-                        description: buildCodexIssueDescription({
-                            name: codexTask.name,
-                            description: codexTask.description,
-                            sessionId: codexTask.externalRef,
-                            creatorName: String(creatorName || ''),
-                        }),
-                        externalRef: codexTask.externalRef,
-                        ...(codexTask.assignee ? { assignee: codexTask.assignee } : {}),
-                    };
-                    const issueId = await createBdIssue({
-                        ...createIssuePayload,
-                    });
-                    logger.info('[voicebot.create_tickets] created bd issue for codex task', {
-                        task_id: codexTask.taskId,
-                        issue_id: issueId,
-                    });
-                    if (codexTask.sourceTaskId) createdTaskIds.add(codexTask.sourceTaskId);
-                } catch (error) {
-                    const syncError = error instanceof Error ? error.message : String(error);
-                    logger.error('[voicebot.create_tickets] failed to create bd issue for codex task', {
-                        task_id: codexTask.taskId,
-                        error: syncError,
-                    });
-                    codexSyncErrors.push({
-                        task_id: codexTask.taskId,
-                        error: syncError,
-                    });
-                    const codexRejectedRow: CreateTicketsRejectedRow = {
-                        index: codexTask.index,
-                        ticket_id: codexTask.sourceTaskId || codexTask.taskId,
-                        field: 'general',
-                        reason: 'codex_issue_sync_failed',
-                        message: `Не удалось создать Codex задачу в bd: ${syncError}`,
-                        ...(codexTask.performerId ? { performer_id: codexTask.performerId } : {}),
-                        ...(codexTask.projectId ? { project_id: codexTask.projectId } : {}),
-                    };
-                    rejectedRows.push(codexRejectedRow);
-                }
-            }
-        }
-
-        const createdTaskIdList = Array.from(createdTaskIds).filter(Boolean);
-        const removableRowIds = !removeFromPossibleTasks
-            ? []
-            : (
-                explicitRemoveRowIds.size > 0
-                    ? createdTaskIdList.filter((rowId) => explicitRemoveRowIds.has(rowId))
-                    : createdTaskIdList
-            );
-        if (removableRowIds.length > 0) {
-            const updatePayload: Record<string, unknown> = {
-                $pull: {
-                    'processors_data.CREATE_TASKS.data': buildSessionTaskRowPullFilter(removableRowIds),
-                },
-                $set: { updated_at: new Date() },
-            };
-            await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-                runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-                updatePayload
-            );
-        }
-
-        const operationStatus =
-            createdTaskIdList.length === 0
-                ? 'failed'
-                : (rejectedRows.length > 0 || codexSyncErrors.length > 0 ? 'partial' : 'success');
-
-        emitSessionTaskflowRefreshHint({
+        const materializeResult = await materializeSessionTickets({
             req,
+            db,
+            performer,
+            actorEmail: String(vreq.user?.email || ''),
+            session,
             sessionId,
-            reason: 'create_tickets',
-            possibleTasks: removableRowIds.length > 0,
-            tasks: insertedCount > 0,
-            codex: codexTasksToSync.length > 0,
+            tickets,
+            removeFromPossibleTasks,
+            explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
+            refreshReason: 'process_possible_tasks',
         });
-
-        return res.status(200).json({
-            success: true,
-            operation_status: operationStatus,
-            insertedCount,
-            created_task_ids: createdTaskIdList,
-            remove_from_possible_tasks: removeFromPossibleTasks,
-            ...(removableRowIds.length > 0 ? { removed_row_ids: removableRowIds } : {}),
-            ...(codexSyncErrors.length > 0 ? { codex_issue_sync_errors: codexSyncErrors } : {}),
-            ...(rejectedRows.length > 0 ? { rejected_rows: rejectedRows } : {}),
-        });
+        return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
-        logger.error('Error in create_tickets:', error);
+        logger.error('Error in process_possible_tasks:', error);
         return res.status(500).json({ error: String(error) });
     }
 });
@@ -3983,18 +4669,26 @@ router.post('/possible_tasks', async (req: Request, res: Response) => {
         }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const sessionRecord = session as Record<string, unknown>;
-        const processorsData = sessionRecord.processors_data && typeof sessionRecord.processors_data === 'object'
-            ? sessionRecord.processors_data as Record<string, unknown>
-            : null;
-        const createTasksData = processorsData?.CREATE_TASKS && typeof processorsData.CREATE_TASKS === 'object'
-            ? processorsData.CREATE_TASKS as { data?: unknown[] }
-            : null;
-        const items = Array.isArray(createTasksData?.data)
-            ? createTasksData.data
+        const masterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+        const masterItems = masterDocs
+            .map((item) => normalizeVoicePossibleTaskDocForApi(item))
+            .filter((item): item is Record<string, unknown> => item !== null);
+        const items = masterItems.length > 0
+            ? masterItems
+            : (() => {
+                const sessionRecord = session as Record<string, unknown>;
+                const processorsData = sessionRecord.processors_data && typeof sessionRecord.processors_data === 'object'
+                    ? sessionRecord.processors_data as Record<string, unknown>
+                    : null;
+                const createTasksData = processorsData?.CREATE_TASKS && typeof processorsData.CREATE_TASKS === 'object'
+                    ? processorsData.CREATE_TASKS as { data?: unknown[] }
+                    : null;
+                return Array.isArray(createTasksData?.data)
+                    ? createTasksData.data
                 .map((item) => normalizeSessionPossibleTaskForApi(item))
                 .filter((item): item is Record<string, unknown> => item !== null)
-            : [];
+                    : [];
+            })();
 
         return res.status(200).json({
             success: true,
@@ -4055,6 +4749,7 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
             runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
             updatePayload
         );
+        await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: [rowId] });
 
         if (result.matchedCount === 0) {
             return res.status(404).json({ error: 'Session not found' });

@@ -28,11 +28,14 @@ describe('Voice socket realtime contract', () => {
   it('consumes taskflow_refresh hints to refresh possible-tasks data and bump tab refresh tokens', () => {
     expect(source).toContain("socket.on('session_update'");
     expect(source).toContain('const refreshHint = data?.taskflow_refresh');
-    expect(source).toContain('const shouldRefreshSessionData = Boolean(refreshHint?.possible_tasks || refreshHint?.summary);');
+    expect(source).toContain('const shouldRefreshPossibleTasks = Boolean(refreshHint?.possible_tasks);');
+    expect(source).toContain('const shouldRefreshSummary = Boolean(refreshHint?.summary);');
     expect(source).toContain('nextState.sessionTasksRefreshToken = state.sessionTasksRefreshToken + 1;');
     expect(source).toContain('nextState.sessionCodexRefreshToken = state.sessionCodexRefreshToken + 1;');
+    expect(source).toContain('get().fetchSessionPossibleTasks(activeSessionId, { silent: true })');
     expect(source).toContain('get().getSessionData(activeSessionId)');
-    expect(source).toContain('Failed to refresh voice session ${refreshType} after realtime hint');
+    expect(source).toContain('Failed to refresh voice session possible tasks after realtime hint');
+    expect(source).toContain('Failed to refresh voice session summary after realtime hint');
   });
 
   it('uses additive refresh token increments so repeated taskflow hints stay concurrency-safe', () => {

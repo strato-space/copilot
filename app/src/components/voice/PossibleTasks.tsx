@@ -24,6 +24,7 @@ import { isVoiceTaskCreateValidationError } from '../../utils/voiceTaskCreation'
 type RawTaskRecord = Record<string, unknown>;
 
 type TaskRow = {
+  row_id: string;
   id: string;
   name: string;
   description: string;
@@ -31,6 +32,8 @@ type TaskRow = {
   priority_reason: string;
   performer_id: string;
   project_id: string;
+  task_type_id: string;
+  dialogue_tag: string;
   task_id_from_ai: string;
   dependencies_from_ai: string[];
   dialogue_reference: string;
@@ -71,6 +74,7 @@ const REQUIRED_FIELDS: Array<keyof TaskRow> = [
 ];
 
 const REQUIRED_FIELD_LABELS: Record<keyof TaskRow, string> = {
+  row_id: 'row_id',
   id: 'id',
   name: 'название',
   description: 'описание',
@@ -78,6 +82,8 @@ const REQUIRED_FIELD_LABELS: Record<keyof TaskRow, string> = {
   priority_reason: 'обоснование приоритета',
   performer_id: 'исполнитель',
   project_id: 'проект',
+  task_type_id: 'тип задачи',
+  dialogue_tag: 'тип диалога',
   task_id_from_ai: 'task_id',
   dependencies_from_ai: 'зависимости',
   dialogue_reference: 'референс',
@@ -87,6 +93,7 @@ const getMissingFields = (task: TaskRow): Array<keyof TaskRow> =>
   REQUIRED_FIELDS.filter((field) => !toText(task[field]));
 
 const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string): TaskRow => {
+  const rowId = toText(raw.row_id) || toText(raw.id) || toText(raw.task_id_from_ai) || `task-${index + 1}`;
   const taskIdFromAi = toText(raw.task_id_from_ai);
   const id = toText(raw.id) || taskIdFromAi || `task-${index + 1}`;
   const name = toText(raw.name) || `Задача ${index + 1}`;
@@ -96,6 +103,7 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
   const dialogueReference = toText(raw.dialogue_reference);
 
   return {
+    row_id: rowId,
     id,
     name,
     description,
@@ -103,6 +111,8 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
     priority_reason: priorityReason,
     performer_id: toText(raw.performer_id),
     project_id: toText(raw.project_id) || defaultProjectId,
+    task_type_id: toText(raw.task_type_id),
+    dialogue_tag: toText(raw.dialogue_tag) || 'voice',
     task_id_from_ai: taskIdFromAi,
     dependencies_from_ai: parseDependencies(raw.dependencies_from_ai),
     dialogue_reference: dialogueReference,
@@ -114,6 +124,7 @@ function PossibleTasksSessionScope() {
   const { hasPermission } = useCurrentUserPermissions();
   const {
     voiceBotSession,
+    possibleTasks,
     performers_for_tasks_list,
     fetchPerformersForTasksList,
     confirmSelectedTickets,
@@ -138,11 +149,8 @@ function PossibleTasksSessionScope() {
   const hasSessionProject = Boolean(defaultProjectId);
 
   const sourceTasks = useMemo(() => {
-    const processorsData = (voiceBotSession?.processors_data || {}) as Record<string, unknown>;
-    const createTasks = processorsData.CREATE_TASKS as { data?: unknown } | undefined;
-    const rawTasks = Array.isArray(createTasks?.data) ? (createTasks?.data as RawTaskRecord[]) : [];
-    return rawTasks.map((task, index) => parseTask(task, index, defaultProjectId));
-  }, [voiceBotSession?.processors_data, defaultProjectId]);
+    return possibleTasks.map((task, index) => parseTask(task as unknown as RawTaskRecord, index, defaultProjectId));
+  }, [possibleTasks, defaultProjectId]);
 
   const historicalPerformerIds = useMemo(
     () =>
@@ -183,7 +191,7 @@ function PossibleTasksSessionScope() {
     () =>
       sourceTasks.map((row) => ({
         ...row,
-        ...(drafts[row.id] || {}),
+        ...(drafts[row.row_id] || {}),
       })),
     [sourceTasks, drafts]
   );
@@ -191,7 +199,10 @@ function PossibleTasksSessionScope() {
   const rowsById = useMemo(() => {
     const map = new Map<string, TaskRow>();
     for (const row of rows) {
-      map.set(row.id, row);
+      [row.row_id, row.id, row.task_id_from_ai]
+        .map((value) => toText(value))
+        .filter(Boolean)
+        .forEach((value) => map.set(value, row));
     }
     return map;
   }, [rows]);
@@ -247,7 +258,7 @@ function PossibleTasksSessionScope() {
     const query = searchQuery.trim().toLowerCase();
     return rowsWithMeta.filter((row) => {
       if (priorityFilter !== 'all' && row.priority !== priorityFilter) return false;
-      if (onlySelected && !selectedRowKeys.includes(row.id)) return false;
+      if (onlySelected && !selectedRowKeys.includes(row.row_id)) return false;
 
       if (!query) return true;
 
@@ -270,39 +281,39 @@ function PossibleTasksSessionScope() {
   const totalCount = rowsWithMeta.length;
   const readyCount = rowsWithMeta.filter((row) => row.__isReady).length;
   const missingCount = totalCount - readyCount;
-  const visibleSelectedCount = filteredRows.filter((row) => selectedRowKeys.includes(row.id)).length;
+  const visibleSelectedCount = filteredRows.filter((row) => selectedRowKeys.includes(row.row_id)).length;
 
-  const setDraftValue = (taskId: string, field: keyof TaskRow, value: string) => {
+  const setDraftValue = (rowId: string, field: keyof TaskRow, value: string) => {
     setDrafts((prev) => ({
       ...prev,
-      [taskId]: {
-        ...(prev[taskId] || {}),
+      [rowId]: {
+        ...(prev[rowId] || {}),
         [field]: value,
       },
     }));
     setRowCreationErrors((prev) => {
-      if (!prev[taskId]) return prev;
+      if (!prev[rowId]) return prev;
       const next = { ...prev };
-      delete next[taskId];
+      delete next[rowId];
       return next;
     });
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    setDeletingTaskId(taskId);
+  const handleDeleteTask = async (rowId: string) => {
+    setDeletingTaskId(rowId);
     try {
-      const success = await deleteTaskFromSession(taskId);
+      const success = await deleteTaskFromSession(rowId);
       if (!success) return;
-      setSelectedRowKeys((prev) => prev.filter((id) => id !== taskId));
+      setSelectedRowKeys((prev) => prev.filter((id) => id !== rowId));
       setDrafts((prev) => {
         const next = { ...prev };
-        delete next[taskId];
+        delete next[rowId];
         return next;
       });
       setRowCreationErrors((prev) => {
-        if (!prev[taskId]) return prev;
+        if (!prev[rowId]) return prev;
         const next = { ...prev };
-        delete next[taskId];
+        delete next[rowId];
         return next;
       });
     } finally {
@@ -342,6 +353,7 @@ function PossibleTasksSessionScope() {
     }
 
     const payload = selectedTasks.map((task) => ({
+      row_id: task.row_id,
       id: task.id,
       name: toText(task.name),
       description: toText(task.description),
@@ -349,6 +361,8 @@ function PossibleTasksSessionScope() {
       project_id: defaultProjectId,
       priority: toText(task.priority),
       priority_reason: toText(task.priority_reason),
+      task_type_id: toText(task.task_type_id) || null,
+      dialogue_tag: toText(task.dialogue_tag) || null,
       task_id_from_ai: toText(task.task_id_from_ai) || null,
       dependencies_from_ai: task.dependencies_from_ai,
       dialogue_reference: toText(task.dialogue_reference) || null,
@@ -358,13 +372,13 @@ function PossibleTasksSessionScope() {
     setRowCreationErrors({});
     try {
       const result = await confirmSelectedTickets(selectedRowKeys, payload);
-      const createdTaskIdSet = new Set(result.createdTaskIds);
-      if (createdTaskIdSet.size > 0) {
-        setSelectedRowKeys((prev) => prev.filter((id) => !createdTaskIdSet.has(id)));
+      const removedRowIdSet = new Set(result.removedRowIds);
+      if (removedRowIdSet.size > 0) {
+        setSelectedRowKeys((prev) => prev.filter((id) => !removedRowIdSet.has(id)));
         setDrafts((prev) => {
           if (Object.keys(prev).length === 0) return prev;
           const next = { ...prev };
-          for (const id of createdTaskIdSet) {
+          for (const id of removedRowIdSet) {
             delete next[id];
           }
           return next;
@@ -372,7 +386,7 @@ function PossibleTasksSessionScope() {
         setRowCreationErrors((prev) => {
           if (Object.keys(prev).length === 0) return prev;
           const next = { ...prev };
-          for (const id of createdTaskIdSet) {
+          for (const id of removedRowIdSet) {
             delete next[id];
           }
           return next;
@@ -382,8 +396,9 @@ function PossibleTasksSessionScope() {
       if (isVoiceTaskCreateValidationError(error)) {
         const rowErrorsByTaskId: Record<string, TaskRowCreationErrors> = {};
         for (const rowError of error.rowErrors) {
-          if (!rowError.ticketId) continue;
-          const current = rowErrorsByTaskId[rowError.ticketId] || {};
+          const rowKey = rowsById.get(rowError.ticketId)?.row_id || rowError.ticketId;
+          if (!rowKey) continue;
+          const current = rowErrorsByTaskId[rowKey] || {};
           if (rowError.field === 'performer_id') {
             if (!current.performer_id) current.performer_id = rowError.message;
           } else if (rowError.field === 'project_id') {
@@ -391,7 +406,7 @@ function PossibleTasksSessionScope() {
           } else if (!current.general) {
             current.general = rowError.message;
           }
-          rowErrorsByTaskId[rowError.ticketId] = current;
+          rowErrorsByTaskId[rowKey] = current;
         }
 
         if (Object.keys(rowErrorsByTaskId).length > 0) {
@@ -467,7 +482,7 @@ function PossibleTasksSessionScope() {
           {onlySelected ? <Tag color="processing">Показаны только выбранные</Tag> : null}
         </Space>
         <Space size={8} wrap>
-          <Button size="small" onClick={() => setSelectedRowKeys(filteredRows.map((row) => row.id))}>
+          <Button size="small" onClick={() => setSelectedRowKeys(filteredRows.map((row) => row.row_id))}>
             Выбрать видимые
           </Button>
           <Button size="small" onClick={() => setSelectedRowKeys([])}>
@@ -512,7 +527,7 @@ function PossibleTasksSessionScope() {
       </div>
 
       <Table<TaskRowView>
-        rowKey="id"
+        rowKey="row_id"
         size="small"
         tableLayout="fixed"
         sticky
@@ -546,10 +561,10 @@ function PossibleTasksSessionScope() {
               ) : null}
               {record.dependencies_from_ai.length > 0 ? (
                 <div>
-                  <Typography.Text type="secondary">Зависимости:</Typography.Text>
+                    <Typography.Text type="secondary">Зависимости:</Typography.Text>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {record.dependencies_from_ai.map((dependency) => (
-                      <Tag key={`${record.id}-${dependency}`}>{dependency}</Tag>
+                      <Tag key={`${record.row_id}-${dependency}`}>{dependency}</Tag>
                     ))}
                   </div>
                 </div>
@@ -567,16 +582,16 @@ function PossibleTasksSessionScope() {
             width: 320,
             render: (_value, record) => (
               <div className="flex flex-col gap-1">
-                {rowCreationErrors[record.id]?.project_id ? (
-                  <Typography.Text type="danger">{rowCreationErrors[record.id]?.project_id}</Typography.Text>
+                {rowCreationErrors[record.row_id]?.project_id ? (
+                  <Typography.Text type="danger">{rowCreationErrors[record.row_id]?.project_id}</Typography.Text>
                 ) : null}
-                {rowCreationErrors[record.id]?.general ? (
-                  <Typography.Text type="danger">{rowCreationErrors[record.id]?.general}</Typography.Text>
+                {rowCreationErrors[record.row_id]?.general ? (
+                  <Typography.Text type="danger">{rowCreationErrors[record.row_id]?.general}</Typography.Text>
                 ) : null}
                 <Input
                   status={record.__missing.includes('name') ? 'error' : ''}
                   value={record.name}
-                  onChange={(event) => setDraftValue(record.id, 'name', event.target.value)}
+                  onChange={(event) => setDraftValue(record.row_id, 'name', event.target.value)}
                 />
               </div>
             ),
@@ -590,7 +605,7 @@ function PossibleTasksSessionScope() {
                   status={record.__missing.includes('description') ? 'error' : ''}
                   autoSize={{ minRows: 1, maxRows: 5 }}
                   value={record.description}
-                  onChange={(event) => setDraftValue(record.id, 'description', event.target.value)}
+                  onChange={(event) => setDraftValue(record.row_id, 'description', event.target.value)}
                 />
               </div>
             ),
@@ -603,7 +618,7 @@ function PossibleTasksSessionScope() {
               <Select
                 status={record.__missing.includes('priority') ? 'error' : ''}
                 value={record.priority || undefined}
-                onChange={(value) => setDraftValue(record.id, 'priority', toText(value))}
+                onChange={(value) => setDraftValue(record.row_id, 'priority', toText(value))}
                 options={PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: priority }))}
                 style={{ width: '100%' }}
               />
@@ -614,14 +629,14 @@ function PossibleTasksSessionScope() {
             dataIndex: 'performer_id',
             width: 220,
             render: (_value, record) => {
-              const performerErrorText = rowCreationErrors[record.id]?.performer_id || '';
+              const performerErrorText = rowCreationErrors[record.row_id]?.performer_id || '';
               return (
                 <div className="flex flex-col gap-1">
                   <Select
                     status={record.__missing.includes('performer_id') || Boolean(performerErrorText) ? 'error' : ''}
                     allowClear
                     value={record.performer_id || undefined}
-                    onChange={(value) => setDraftValue(record.id, 'performer_id', toText(value))}
+                    onChange={(value) => setDraftValue(record.row_id, 'performer_id', toText(value))}
                     options={performerOptions}
                     showSearch
                     optionFilterProp="label"
@@ -644,7 +659,7 @@ function PossibleTasksSessionScope() {
               <Popconfirm
                 title="Удалить задачу?"
                 description="Это действие нельзя отменить"
-                onConfirm={() => void handleDeleteTask(record.id)}
+                onConfirm={() => void handleDeleteTask(record.row_id)}
                 okText="Удалить"
                 cancelText="Отмена"
                 okButtonProps={{ danger: true }}
@@ -653,7 +668,7 @@ function PossibleTasksSessionScope() {
                   type="text"
                   danger
                   icon={<DeleteOutlined />}
-                  loading={deletingTaskId === record.id}
+                  loading={deletingTaskId === record.row_id}
                   size="small"
                 />
               </Popconfirm>

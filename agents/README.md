@@ -5,7 +5,7 @@ Fast-Agent based AI agents for intelligent dialogue processing.
 ## Overview
 
 This directory contains the Fast-Agent configuration and AgentCards for Copilot's AI-powered features:
-- **create_tasks** - Extract actionable tasks from transcripts
+- **create_tasks** - Extract actionable tasks from structured transcript/session envelopes
 - **generate_session_title** - Generate concise session titles from transcript segments
 
 ## Quick Start
@@ -45,6 +45,15 @@ uv run --directory "$(pwd)" fast-agent serve \
 
 Security note: keep the agent service bound to loopback (`127.0.0.1`) and access it through backend proxy/SSH tunnel when needed.
 
+## Runtime Notes
+
+- `create_tasks` inherits the runtime model from the process launch args (`--model codex` in local run and PM2). Do not pin a per-card model unless you intentionally want to change runtime behavior.
+- Preferred `create_tasks` input is a structured envelope with modes `raw_text`, `session_id`, or `session_url`.
+- A plain string is still treated as legacy `raw_text` input for backward compatibility.
+- Session-backed task extraction enriches context directly through MCP `voice`.
+- If the session/project context exposes roadmap or backlog Google Sheets references, `create_tasks` may read them through MCP `gsh` for context and deduplication only.
+- `create_tasks` must not route through StratoProject execution; enrichment is direct MCP `voice` + `gsh`.
+
 ### Production Deployment (PM2)
 
 ```bash
@@ -79,8 +88,11 @@ Agent cards are located in `agent-cards/` directory:
 
 ### create_tasks.md
 - **Model:** inherited from runtime (`--model` in launch config)
-- **Purpose:** Extract actionable tasks from full transcripts
-- **Output:** JSON array of tasks with priority, assignee, deadline, etc.
+- **Purpose:** Extract actionable tasks from structured transcript/session envelopes
+- **Input modes:** `raw_text`, `session_id`, `session_url` (plain string remains a legacy alias for `raw_text`)
+- **Enrichment:** direct MCP `voice` reads, optional MCP `gsh` reads for roadmap/backlog dedupe
+- **Output:** canonical JSON array with `id/name/description/priority/performer_id/project_id/task_type_id/dialogue_tag/task_id_from_ai/dependencies_from_ai/dialogue_reference`
+- **Guardrails:** executor-ready descriptions, no finance/evaluative noise, no StratoProject execution hop
 
 ### generate_session_title.md
 - **Model:** gpt-4.1-mini
@@ -92,6 +104,7 @@ Agent cards are located in `agent-cards/` directory:
 The agents connect to StratoSpace MCP servers:
 - `images-mcp.stratospace.fun` - Image processing
 - `fs-mcp.stratospace.fun` - File system
+- `gsh-mcp.stratospace.fun` - Google Sheets access
 - `seq-mcp.stratospace.fun` - Sequence operations
 - `tm-mcp.stratospace.fun` - Task management
 - `tg-ro-mcp.stratospace.fun` - Telegram read-only

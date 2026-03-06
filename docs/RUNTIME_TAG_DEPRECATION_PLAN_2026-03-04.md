@@ -1,14 +1,37 @@
 # Runtime Tag Usage Map And Deprecation Plan (2026-03-04)
 
+## Status
+- Document status: ✅Closed
+- Status Notes: completed, historical, and traceable to closed implementation work.
+- Ticket line: ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0 ✅Closed 11
+- Research source: ✅ `copilot-9iic`.
+- Implementation epic: ✅ `copilot-f75b`.
+- Execution status: all code-only preparation tasks from this plan were completed and closed on 2026-03-04 across ✅ `copilot-f75b.1` .. ✅ `copilot-f75b.9`.
+- Current role of this document: preserve the original baseline, risks, and rollout logic, plus show which closed `bd` tickets implemented each part of the plan.
+
 ## Scope
 - Repository: `/home/strato-space/copilot`
-- Task: `copilot-9iic` (research-only)
+- Research task: ✅ `copilot-9iic`
+- Implementation follow-up: epic ✅ `copilot-f75b` and child tasks ✅ `copilot-f75b.1` .. ✅ `copilot-f75b.9`
 - Goal: map all `runtime_tag` usage and propose deprecation plan for moving to separate MongoDB databases (`prod`, `stage`, `dev`) without runtime-tagged entities.
 
-## T0 Contract Freeze Addendum (`copilot-f75b.1`)
+## Closed BD Traceability
+- ✅ `copilot-9iic` — baseline research artifact and original usage map.
+- ✅ `copilot-f75b.1` — contract freeze, inventory, and "no DB mutations" guardrail.
+- ✅ `copilot-f75b.2` — core runtime-scope neutralization in `runtimeScope` and DB proxy.
+- ✅ `copilot-f75b.3` — Voice sessions API cleanup and removal of runtime-aware mismatch behavior in active code paths.
+- ✅ `copilot-f75b.4` — other API/service/runtime paths cleanup outside the main sessions route.
+- ✅ `copilot-f75b.5` — write-path cleanup so new records stop writing `runtime_tag`.
+- ✅ `copilot-f75b.6` — queue and poller lock decoupling from `runtime_tag`.
+- ✅ `copilot-f75b.7` — test refactor from runtime-tag assumptions to no-tag runtime behavior.
+- ✅ `copilot-f75b.8` — docs and env contract cleanup.
+- ✅ `copilot-f75b.9` — final smoke/QA verification before migration window.
+- ✅ `copilot-f75b` — end-to-end implementation closure for the code-only prep phase.
+
+## T0 Contract Freeze Addendum (✅ `copilot-f75b.1`)
 
 ### Frozen Contract And Guardrail (Epic Phase)
-- Target contract for epic `copilot-f75b`:
+- Target contract for epic ✅ `copilot-f75b`:
   - read-path behavior moves to `runtime_tag` ignore mode,
   - new writes must stop introducing `runtime_tag`,
   - implementation is code-path only (no datastore rewrites in this phase).
@@ -49,7 +72,7 @@
      - `./scripts/run-test-suite.sh voice`
   5. Re-confirm guardrail: no Mongo/Redis mutation operations executed.
 
-## T7 Docs/Env Contract Cleanup (`copilot-f75b.8`)
+## T7 Docs/Env Contract Cleanup (✅ `copilot-f75b.8`)
 
 ### Canonical Documentation Contract (post-T7)
 - Runtime isolation is now documented as deployment/database separation (separate DB/instance per environment).
@@ -67,6 +90,10 @@
 - Treat those sections as migration context/history, not as current operational contract.
 
 ## Executive Summary
+- Closed-ticket binding:
+  - baseline and plan source: ✅ `copilot-9iic`,
+  - implemented by epic ✅ `copilot-f75b`,
+  - verified by final gate ✅ `copilot-f75b.9`.
 - `runtime_tag` is currently a **core isolation primitive** in backend runtime logic, data access proxying, queue naming, and API compatibility behavior.
 - In source code (`backend/src`) there are **200 direct runtime-scope hits** (`runtime_tag`, `RUNTIME_TAG`, `mergeWithRuntimeFilter`, `buildRuntimeFilter`).
 - Runtime scoping is centralized in:
@@ -171,6 +198,12 @@
 - Strategy must define whether queue isolation remains tag-based or moves to per-env Redis plus simplified naming.
 
 ## Deprecation Strategy (No Code Changes In This Task)
+
+### Closed-Ticket Mapping For This Strategy
+- Phase 0 (decision record + guardrails): implemented as ✅ `copilot-f75b.1`.
+- Phase 1/2 core runtime-behavior removal in code paths: implemented as ✅ `copilot-f75b.2`, ✅ `copilot-f75b.3`, ✅ `copilot-f75b.4`, ✅ `copilot-f75b.5`, ✅ `copilot-f75b.6`.
+- Phase 4 contract/test/docs cleanup: implemented as ✅ `copilot-f75b.7`, ✅ `copilot-f75b.8`, ✅ `copilot-f75b.9`.
+- DB split and live datastore migration itself were intentionally not executed in this epic and remain outside the completed code-only scope of ✅ `copilot-f75b`.
 
 ### Phase 0: Preconditions and decision record
 - Approve target topology:

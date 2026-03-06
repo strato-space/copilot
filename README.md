@@ -18,7 +18,9 @@ Use this as a fast guardrail before implementing anything:
   - filter state persistence across navigation/reload.
 - Possible Tasks contract:
   - canonical payload shape `id/name/description/priority/...`,
-  - `task_type_id` stays optional.
+  - `task_type_id` stays optional,
+  - master store is `automation_tasks` with status `NEW_0`,
+  - session `processors_data.CREATE_TASKS` is compatibility projection only, not the source of truth.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 
@@ -79,6 +81,11 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Codex issue IDs now use one token renderer across `Issue ID` and `Relationships` (blue link + copy action); relationship rows also show status pictograms (`open`, `in_progress`, `blocked`, `deferred`, `closed`, fallback).
 - Codex relationship groups are normalized in details card as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency reading.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
+- OperOps `Voice` tab is possible-task-centric:
+  - primary dataset is `NEW_0` tasks from `automation_tasks`,
+  - first group is orphan possible tasks without voice linkage,
+  - then session-linked groups sorted newest-first,
+  - processed tasks for a session are shown collapsed for reference.
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
@@ -100,6 +107,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `POST /api/voicebot/sessions/get` follows fail-fast lookup semantics and returns `404 Session not found` when the session cannot be resolved in canonical scope.
 - Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + text + `Materials` with sortable order.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
+- Voice session header includes a `Tasks` action before `Summarize`; it generates possible tasks from current meeting context without waiting for session close.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - WebRTC page `Done` stays enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, even without `pageSession` in the iframe URL.
@@ -149,6 +157,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page shows `Возможные задачи` tab when `processors_data.CREATE_TASKS.data` is present and user has `PROJECTS.UPDATE`; the table uses compact design (no standalone status/project/AI columns), keeps `description`, and validates required fields inline.
+- Possible tasks are persisted as master Mongo tasks in `automation_tasks` with `task_status=NEW_0`; session-local taskflow payloads keep only a synchronized projection for compatibility and realtime UI hydration.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - CREATE_TASKS payloads are normalized to canonical `id/name/description/priority/...` shape in both worker (`createTasksFromChunks`) and API utility (`save_create_tasks`) write paths.
@@ -220,6 +229,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
 - PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex` for deterministic cwd + runtime model override.
 - `create_tasks` card no longer hardcodes model; model selection is controlled at runtime via launch config.
+- `create_tasks` now expects a structured JSON envelope inside `message` and can enrich context directly through MCP `voice` and `gsh`; it must not route through `StratoProject` execution.
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.

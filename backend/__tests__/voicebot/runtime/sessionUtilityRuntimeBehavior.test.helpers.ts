@@ -29,7 +29,7 @@ jest.unstable_mockModule('../../../src/permissions/permission-manager.js', () =>
 }));
 
 export const { PERMISSIONS } = await import('../../../src/permissions/permissions-config.js');
-export const { COLLECTIONS, TASK_CLASSES, VOICEBOT_COLLECTIONS } = await import('../../../src/constants.js');
+export const { COLLECTIONS, TASK_CLASSES, TASK_STATUSES, VOICEBOT_COLLECTIONS } = await import('../../../src/constants.js');
 export const { RUNTIME_TAG } = await import('../../../src/services/runtimeScope.js');
 const { default: sessionsRouter } = await import('../../../src/api/routes/voicebot/sessions.js');
 
@@ -65,6 +65,8 @@ export const buildDefaultCollection = () => ({
   })),
   insertMany: jest.fn(async () => ({ insertedCount: 0 })),
   updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+  updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+  insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
   deleteMany: jest.fn(async () => ({ deletedCount: 0 })),
 });
 

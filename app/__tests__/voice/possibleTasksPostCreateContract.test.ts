@@ -7,13 +7,12 @@ describe('PossibleTasks post-create contract', () => {
   const componentSource = fs.readFileSync(componentPath, 'utf8');
   const storeSource = fs.readFileSync(storePath, 'utf8');
 
-  it('removes successfully created rows from CREATE_TASKS using backend created_task_ids', () => {
+  it('removes successfully created rows from possibleTasks using removed_row_ids with created_task_ids fallback', () => {
     expect(storeSource.includes('response?.created_task_ids')).toBe(true);
-    expect(storeSource.includes('CREATE_TASKS: {')).toBe(true);
-    expect(storeSource.includes('data: createTasks.data.filter((task) => {')).toBe(true);
-    expect(storeSource.includes('const createdTaskIdSet = new Set(createdTaskIds)')).toBe(true);
-    expect(storeSource.includes('!createdTaskIdSet.has(byId)')).toBe(true);
-    expect(storeSource.includes('!createdTaskIdSet.has(byAiId)')).toBe(true);
+    expect(storeSource.includes('response?.removed_row_ids')).toBe(true);
+    expect(storeSource.includes('const removedRowIds = removedRowIdsRaw.length > 0 ? removedRowIdsRaw : createdTaskIds;')).toBe(true);
+    expect(storeSource.includes('possibleTasks: filterPossibleTasksByLocators(state.possibleTasks, removedRowIds)')).toBe(true);
+    expect(storeSource.includes('voiceBotSession: removePossibleTasksFromSession(state.voiceBotSession, removedRowIds)')).toBe(true);
   });
 
   it('keeps only failed rows selected after partial validation errors', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button, Select, message, Input, Tooltip } from 'antd';
-import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, RedoOutlined } from '@ant-design/icons';
+import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, ProfileOutlined, RedoOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
@@ -26,6 +26,7 @@ type ControlAction = 'new' | 'rec' | 'cut' | 'pause' | 'done';
 interface MeetingCardUiState {
     isEditingTitle: boolean;
     isGeneratingTitle: boolean;
+    isCreatingTasks: boolean;
     isSummarizing: boolean;
     isRestartingProcessing: boolean;
     busyControlAction: ControlAction | null;
@@ -34,6 +35,7 @@ interface MeetingCardUiState {
 const createInitialUiState = (): MeetingCardUiState => ({
     isEditingTitle: false,
     isGeneratingTitle: false,
+    isCreatingTasks: false,
     isSummarizing: false,
     isRestartingProcessing: false,
     busyControlAction: null,
@@ -84,6 +86,7 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
         activateSession,
         finishSession,
         restartCorruptedSession,
+        createPossibleTasksForSession,
         triggerSessionReadyToSummarize,
     } = useVoiceBotStore();
 
@@ -306,6 +309,39 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
 
         messageApi.destroy('generating-title');
         patchUiState({ isGeneratingTitle: false });
+    };
+
+    const triggerTasks = async (): Promise<void> => {
+        if (!voiceBotSession?._id) return;
+
+        patchUiState({ isCreatingTasks: true });
+        messageApi.open({
+            key: 'create-tasks',
+            type: 'loading',
+            content: 'Выделяю задачи...',
+            duration: 0,
+        });
+
+        try {
+            const result = await createPossibleTasksForSession(voiceBotSession._id);
+            const tasksCount = result.tasks.length;
+            messageApi.open({
+                key: 'create-tasks',
+                type: 'success',
+                content: tasksCount > 0 ? `Возможные задачи обновлены: ${tasksCount}` : 'Возможные задачи не найдены',
+                duration: 4,
+            });
+        } catch (error) {
+            console.error('Ошибка при запуске create_tasks:', error);
+            messageApi.open({
+                key: 'create-tasks',
+                type: 'error',
+                content: `Ошибка запуска create_tasks: ${String(error)}`,
+                duration: 4,
+            });
+        } finally {
+            patchUiState({ isCreatingTasks: false });
+        }
     };
 
     const triggerSummarize = async (): Promise<void> => {
@@ -581,6 +617,18 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                                     loading={uiState.isGeneratingTitle}
                                     onClick={handleGenerateTitle}
                                     disabled={!voiceBotSession?._id}
+                                />
+                            </Tooltip>
+
+                            <Tooltip title="Tasks">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    style={circleIconButtonStyle}
+                                    icon={<span style={circleIconWrapperStyle}><ProfileOutlined style={{ color: '#0f766e', fontSize: 16 }} /></span>}
+                                    loading={uiState.isCreatingTasks}
+                                    onClick={triggerTasks}
+                                    disabled={!voiceBotSession?._id || uiState.isCreatingTasks}
                                 />
                             </Tooltip>
 

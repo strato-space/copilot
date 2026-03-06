@@ -9,6 +9,7 @@ import { useSessionsUIStore } from './sessionsUIStore';
 import { useMCPRequestStore } from './mcpRequestStore';
 import type {
     VoiceBotMessage,
+    VoicePossibleTask,
     VoiceBotSession,
     VoiceMessageGroup,
     VoiceMessageRow,
@@ -38,6 +39,15 @@ import {
     type VoiceTaskCreateRowError,
     VoiceTaskCreateValidationError,
 } from '../utils/voiceTaskCreation';
+import {
+    buildCreateTasksRequestArgs,
+    buildTranscriptionText,
+    collectPossibleTaskLocators,
+    extractPossibleTasksFromSession,
+    filterPossibleTasksByLocators,
+    parseCreateTasksMcpResult,
+    parsePossibleTasksResponse,
+} from '../utils/voicePossibleTasks';
 import { voicebotRuntimeConfig } from './voicebotRuntimeConfig';
 import { voicebotHttp } from './voicebotHttp';
 import { codexTaskTimeline } from './codexTaskTimeline';
@@ -54,6 +64,8 @@ interface VoiceBotSessionDataSlice {
     voiceBotMessages: VoiceBotMessage[];
     voiceMesagesData: VoiceMessageGroup[];
     sessionAttachments: VoiceSessionAttachment[];
+    possibleTasks: VoicePossibleTask[];
+    possibleTasksLoadedAt: number | null;
     sessionLogEvents: VoiceSessionLogEvent[];
     highlightedMessageId: string | null;
     sessionTasksRefreshToken: number;
@@ -95,6 +107,13 @@ interface VoiceBotSessionCrudActionsSlice {
 interface VoiceBotSessionProcessingActionsSlice {
     sendSessionToCrm: (sessionId: string) => Promise<boolean>;
     sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
+    createPossibleTasksForSession: (sessionId: string) => Promise<{ requestId: string; tasks: VoicePossibleTask[] }>;
+    fetchSessionPossibleTasks: (sessionId: string, options?: { silent?: boolean }) => Promise<VoicePossibleTask[]>;
+    saveSessionPossibleTasks: (
+        sessionId: string,
+        tasks: Array<Record<string, unknown>> | VoicePossibleTask[],
+        options?: { silent?: boolean }
+    ) => Promise<VoicePossibleTask[]>;
     triggerSessionReadyToSummarize: (sessionId: string) => Promise<Record<string, unknown>>;
     saveSessionSummary: (
         payload: { session_id: string; md_text: string },
@@ -176,7 +195,7 @@ interface VoiceBotTicketsActionsSlice {
     confirmSelectedTickets: (
         selectedTicketIds: string[],
         updatedTickets?: Array<Record<string, unknown>> | null
-    ) => Promise<{ createdTaskIds: string[]; rowErrors: VoiceTaskCreateRowError[] }>;
+    ) => Promise<{ createdTaskIds: string[]; removedRowIds: string[]; rowErrors: VoiceTaskCreateRowError[] }>;
     rejectAllTickets: () => void;
     deleteTaskFromSession: (taskId: string) => Promise<boolean>;
     deleteSession: (sessionId: string) => Promise<boolean>;
@@ -209,23 +228,6 @@ type VoiceBotStoreShape = VoiceBotSessionDataSlice &
     VoiceBotUploadActionsSlice &
     VoiceBotTicketsActionsSlice &
     VoiceBotToolsActionsSlice;
-
-const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
-    const lines = messages
-        .map((msg) => {
-            const rawText = typeof msg.transcription_text === 'string' ? msg.transcription_text.trim() : '';
-            if (rawText) return rawText;
-            if (Array.isArray(msg.categorization)) {
-                const chunks = msg.categorization
-                    .map((chunk) => (typeof chunk.text === 'string' ? chunk.text.trim() : ''))
-                    .filter(Boolean);
-                if (chunks.length > 0) return chunks.join(' ');
-            }
-            return '';
-        })
-        .filter(Boolean);
-    return lines.join('\n');
-};
 
 const normalizeIdentityMessageRef = (value: unknown): string => {
     if (typeof value === 'string') return value.trim();
@@ -788,12 +790,51 @@ const normalizeSessionResponse = (response: unknown): VoiceBotSessionResponse =>
     };
 };
 
+const applyPossibleTasksToSession = (
+    session: VoiceBotSession | null,
+    tasks: VoicePossibleTask[]
+): VoiceBotSession | null => {
+    if (!session) return session;
+
+    const processorsData = (session.processors_data as Record<string, unknown> | undefined) ?? {};
+    const existingCreateTasks = (processorsData.CREATE_TASKS as Record<string, unknown> | undefined) ?? {};
+    const nextAgentResults = {
+        ...(session.agent_results ?? {}),
+        create_tasks: tasks,
+    };
+
+    return {
+        ...session,
+        agent_results: nextAgentResults,
+        processors_data: {
+            ...processorsData,
+            CREATE_TASKS: {
+                ...existingCreateTasks,
+                data: tasks,
+            },
+        },
+    };
+};
+
+const removePossibleTasksFromSession = (
+    session: VoiceBotSession | null,
+    locators: string[]
+): VoiceBotSession | null => {
+    if (!session) return session;
+    return applyPossibleTasksToSession(
+        session,
+        filterPossibleTasksByLocators(extractPossibleTasksFromSession(session), locators)
+    );
+};
+
 export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
     currentSessionId: null,
     voiceBotSession: null,
     voiceBotMessages: [],
     voiceMesagesData: [],
     sessionAttachments: [],
+    possibleTasks: [],
+    possibleTasksLoadedAt: null,
     sessionLogEvents: [],
     socketToken: null,
     socketPort: null,
@@ -952,12 +993,15 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         const normalized = normalizeSessionResponse(response);
         const sortedMessages = messageListUtils.sort(normalized.session_messages);
         const processed = transformVoiceBotMessagesToGroups(sortedMessages);
+        const fallbackPossibleTasks = extractPossibleTasksFromSession(normalized.voice_bot_session);
 
         set({
             voiceBotSession: normalized.voice_bot_session,
             voiceBotMessages: sortedMessages,
             voiceMesagesData: processed,
             sessionAttachments: normalized.session_attachments ?? buildSessionAttachmentsFromMessages(sortedMessages),
+            possibleTasks: fallbackPossibleTasks,
+            possibleTasksLoadedAt: Date.now(),
             sessionLogEvents: [],
             socketToken: normalized.socket_token ?? null,
             socketPort: normalized.socket_port ?? null,
@@ -1031,23 +1075,35 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                     return nextState;
                 });
 
-                const shouldRefreshSessionData = Boolean(refreshHint?.possible_tasks || refreshHint?.summary);
-                if (shouldRefreshSessionData && activeSessionId && (!eventSessionId || eventSessionId === activeSessionId)) {
-                    void get().getSessionData(activeSessionId)
-                        .then((sessionData) => {
-                            set((state) => {
-                                if (state.currentSessionId !== activeSessionId) {
-                                    return state;
-                                }
-                                return {
-                                    voiceBotSession: sessionData.voice_bot_session,
-                                };
+                const shouldRefreshPossibleTasks = Boolean(refreshHint?.possible_tasks);
+                const shouldRefreshSummary = Boolean(refreshHint?.summary);
+                if (activeSessionId && (!eventSessionId || eventSessionId === activeSessionId)) {
+                    if (shouldRefreshPossibleTasks) {
+                        void get().fetchSessionPossibleTasks(activeSessionId, { silent: true })
+                            .catch((error) => {
+                                console.error('Failed to refresh voice session possible tasks after realtime hint:', error);
                             });
-                        })
-                        .catch((error) => {
-                            const refreshType = refreshHint?.summary ? 'summary' : 'possible tasks';
-                            console.error(`Failed to refresh voice session ${refreshType} after realtime hint:`, error);
-                        });
+                    }
+
+                    if (shouldRefreshSummary) {
+                        void get().getSessionData(activeSessionId)
+                            .then((sessionData) => {
+                                set((state) => {
+                                    if (state.currentSessionId !== activeSessionId) {
+                                        return state;
+                                    }
+                                    return {
+                                        voiceBotSession: applyPossibleTasksToSession(
+                                            sessionData.voice_bot_session,
+                                            state.possibleTasks
+                                        ),
+                                    };
+                                });
+                            })
+                            .catch((error) => {
+                                console.error('Failed to refresh voice session summary after realtime hint:', error);
+                            });
+                    }
                 }
             });
 
@@ -1104,6 +1160,10 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         if (!get().performers_list) {
             void get().fetchPerformersList();
         }
+
+        void get().fetchSessionPossibleTasks(sessionId, { silent: true }).catch((error) => {
+            console.error('Failed to refresh possible tasks after loading session:', error);
+        });
     },
 
     fetchActiveSession: async () => {
@@ -1155,6 +1215,153 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         }
 
         return false;
+    },
+
+    fetchSessionPossibleTasks: async (sessionId, options) => {
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) return [];
+
+        try {
+            const response = await voicebotHttp.request<unknown>(
+                'voicebot/possible_tasks',
+                { session_id: normalizedSessionId },
+                Boolean(options?.silent)
+            );
+            const fallbackProjectId = String(get().voiceBotSession?.project_id || '').trim();
+            const items = parsePossibleTasksResponse(response, fallbackProjectId);
+
+            set((state) => {
+                if (state.currentSessionId !== normalizedSessionId) return state;
+                return {
+                    possibleTasks: items,
+                    possibleTasksLoadedAt: Date.now(),
+                    voiceBotSession: applyPossibleTasksToSession(state.voiceBotSession, items),
+                };
+            });
+
+            return items;
+        } catch (error) {
+            const fallback = extractPossibleTasksFromSession(get().voiceBotSession);
+            set((state) => {
+                if (state.currentSessionId !== normalizedSessionId) return state;
+                return {
+                    possibleTasks: fallback,
+                    possibleTasksLoadedAt: Date.now(),
+                };
+            });
+
+            if (!options?.silent) {
+                console.error('Ошибка при загрузке возможных задач:', error);
+                message.error('Не удалось загрузить возможные задачи');
+            }
+
+            return fallback;
+        }
+    },
+
+    saveSessionPossibleTasks: async (sessionId, tasks, options) => {
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) return [];
+
+        const defaultProjectId = String(get().voiceBotSession?.project_id || '').trim();
+        const normalizedTasks = parsePossibleTasksResponse(tasks, defaultProjectId);
+
+        try {
+            await voicebotHttp.request(
+                'voicebot/save_possible_tasks',
+                { session_id: normalizedSessionId, tasks: normalizedTasks },
+                Boolean(options?.silent)
+            );
+        } catch (error) {
+            const isMissingRoute = axios.isAxiosError(error) && error.response?.status === 404;
+            if (!isMissingRoute) {
+                if (!options?.silent) {
+                    console.error('Ошибка при сохранении возможных задач:', error);
+                    message.error('Не удалось сохранить возможные задачи');
+                }
+                throw error;
+            }
+
+            // Compatibility path for the current repo state until `voicebot/save_possible_tasks` exists server-side.
+            await voicebotHttp.request(
+                'voicebot/sessions/save_create_tasks',
+                { session_id: normalizedSessionId, tasks: normalizedTasks },
+                true
+            );
+        }
+
+        set((state) => {
+            if (state.currentSessionId !== normalizedSessionId) return state;
+            return {
+                possibleTasks: normalizedTasks,
+                possibleTasksLoadedAt: Date.now(),
+                voiceBotSession: applyPossibleTasksToSession(state.voiceBotSession, normalizedTasks),
+            };
+        });
+
+        return normalizedTasks;
+    },
+
+    createPossibleTasksForSession: async (sessionId) => {
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) {
+            throw new Error('session_id is required');
+        }
+
+        const { connectionState, sendMCPCall, waitForCompletion } = useMCPRequestStore.getState();
+        if (connectionState !== 'connected') {
+            throw new Error(
+                connectionState === 'connecting'
+                    ? 'Соединение с MCP устанавливается, попробуйте еще раз'
+                    : 'Нет соединения с MCP'
+            );
+        }
+
+        const agentsMcpServerUrl = voicebotRuntimeConfig.resolveAgentsMcpServerUrl();
+        if (!agentsMcpServerUrl) {
+            throw new Error('Не настроен MCP URL агента');
+        }
+
+        const activeSessionId = String(get().currentSessionId || '').trim();
+        const stateSession = get().voiceBotSession;
+        const sessionData = activeSessionId === normalizedSessionId && stateSession
+            ? {
+                voice_bot_session: stateSession,
+                session_messages: get().voiceBotMessages,
+                session_attachments: get().sessionAttachments,
+                socket_token: get().socketToken,
+                socket_port: get().socketPort,
+            }
+            : await get().getSessionData(normalizedSessionId);
+
+        const args = buildCreateTasksRequestArgs({
+            session: sessionData.voice_bot_session,
+            messages: sessionData.session_messages,
+            attachments: sessionData.session_attachments ?? [],
+        });
+
+        if (!args.message.trim()) {
+            throw new Error('Нет текста для обработки агентом');
+        }
+
+        const requestId = sendMCPCall(agentsMcpServerUrl, 'create_tasks', args, false);
+        const result = await waitForCompletion(requestId, 15 * 60 * 1000);
+        if (!result || result.status !== 'complete') {
+            throw new Error(result?.error ?? 'Не удалось завершить обработку');
+        }
+
+        const final = result.result as { isError?: boolean; content?: Array<{ text?: string }>; error?: string } | undefined;
+        if (final?.isError) {
+            const errorText = final.content?.[0]?.text || final.error || 'Ошибка обработки';
+            throw new Error(errorText);
+        }
+
+        const tasks = parseCreateTasksMcpResult(final, String(sessionData.voice_bot_session?.project_id || '').trim());
+        const savedTasks = await get().saveSessionPossibleTasks(normalizedSessionId, tasks, { silent: true });
+        return {
+            requestId,
+            tasks: savedTasks,
+        };
     },
 
     triggerSessionReadyToSummarize: async (sessionId) => {
@@ -1751,9 +1958,15 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             const { ticketsModal } = useSessionsUIStore.getState();
             const { prepared_projects } = get();
             const ticketsSource = updatedTickets || ticketsModal.tickets;
-            const selectedTickets = ticketsSource ? ticketsSource.filter((ticket) => selectedTicketIds.includes(ticket.id as string)) : [];
+            const selectedTicketIdSet = new Set(selectedTicketIds.map((value) => String(value || '').trim()).filter(Boolean));
+            const selectedTickets = ticketsSource
+                ? ticketsSource.filter((ticket) => {
+                    const locators = collectPossibleTaskLocators(ticket);
+                    return locators.some((locator) => selectedTicketIdSet.has(locator));
+                })
+                : [];
 
-            const preparedTickets = selectedTickets.map((ticket) => ({
+            const preparedTickets: Array<Record<string, unknown>> = selectedTickets.map((ticket) => ({
                 ...ticket,
                 project: (() => {
                     const project = prepared_projects?.find((p) => p._id === ticket.project_id);
@@ -1762,47 +1975,39 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             }));
 
             const response = await voicebotHttp.request<Record<string, unknown>>(
-                'voicebot/create_tickets',
-                { tickets: preparedTickets, session_id: get().currentSessionId }
+                'voicebot/process_possible_tasks',
+                {
+                    tickets: preparedTickets,
+                    session_id: get().currentSessionId,
+                    remove_from_possible_tasks: true,
+                    remove_items: preparedTickets
+                        .map((ticket) => String(ticket.row_id || ticket.id || '').trim())
+                        .filter(Boolean)
+                        .map((rowId) => ({ row_id: rowId })),
+                }
             );
             const createdTaskIds = Array.isArray(response?.created_task_ids)
                 ? response.created_task_ids
                     .map((value) => (typeof value === 'string' ? value.trim() : ''))
                     .filter(Boolean)
                 : [];
-            const createdTaskIdSet = new Set(createdTaskIds);
+            const removedRowIdsRaw = Array.isArray(response?.removed_row_ids)
+                ? response.removed_row_ids
+                    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+                    .filter(Boolean)
+                : [];
+            const removedRowIds = removedRowIdsRaw.length > 0 ? removedRowIdsRaw : createdTaskIds;
 
-            if (createdTaskIdSet.size > 0) {
+            if (createdTaskIds.length > 0) {
                 set((state) => {
-                    if (!state.voiceBotSession) return state;
-                    const processorsData = state.voiceBotSession.processors_data as Record<string, unknown> | undefined;
-                    const createTasks = processorsData?.CREATE_TASKS as
-                        | { data?: Array<Record<string, unknown>> }
-                        | undefined;
-                    if (!createTasks?.data) return state;
-
                     return {
                         ...state,
-                        voiceBotSession: {
-                            ...state.voiceBotSession,
-                            processors_data: {
-                                ...processorsData,
-                                CREATE_TASKS: {
-                                    ...createTasks,
-                                    data: createTasks.data.filter((task) => {
-                                        const byId = typeof task.id === 'string' ? task.id : '';
-                                        const byAiId = typeof task.task_id_from_ai === 'string' ? task.task_id_from_ai : '';
-                                        return (
-                                            !createdTaskIdSet.has(byId) &&
-                                            !createdTaskIdSet.has(byAiId)
-                                        );
-                                    }),
-                                },
-                            },
-                        },
+                        possibleTasks: filterPossibleTasksByLocators(state.possibleTasks, removedRowIds),
+                        possibleTasksLoadedAt: Date.now(),
+                        voiceBotSession: removePossibleTasksFromSession(state.voiceBotSession, removedRowIds),
                     };
                 });
-                message.success(`Создано ${createdTaskIdSet.size} задач`);
+                message.success(`Создано ${createdTaskIds.length} задач`);
             }
 
             const rowErrors = extractVoiceTaskCreateRowErrors(response);
@@ -1812,7 +2017,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             }
 
             useSessionsUIStore.getState().closeTicketsModal();
-            return { createdTaskIds, rowErrors: [] };
+            return { createdTaskIds, removedRowIds, rowErrors: [] };
         } catch (e) {
             if (isVoiceTaskCreateValidationError(e)) {
                 throw e;
@@ -1847,32 +2052,11 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             await voicebotHttp.request('voicebot/delete_task_from_session', { session_id: sessionId, row_id: taskId });
 
             set((state) => {
-                if (!state.voiceBotSession) {
-                    return state;
-                }
-                const processorsData = state.voiceBotSession.processors_data as Record<string, unknown> | undefined;
-                const createTasks = processorsData?.CREATE_TASKS as
-                    | { data?: Array<Record<string, unknown>> }
-                    | undefined;
-                if (!createTasks?.data) {
-                    return state;
-                }
                 return {
                     ...state,
-                    voiceBotSession: {
-                        ...state.voiceBotSession,
-                        processors_data: {
-                            ...processorsData,
-                            CREATE_TASKS: {
-                                ...createTasks,
-                                data: createTasks.data.filter((task) => {
-                                    const byId = typeof task.id === 'string' ? task.id : '';
-                                    const byAiId = typeof task.task_id_from_ai === 'string' ? task.task_id_from_ai : '';
-                                    return byId !== taskId && byAiId !== taskId;
-                                }),
-                            },
-                        },
-                    },
+                    possibleTasks: filterPossibleTasksByLocators(state.possibleTasks, [taskId]),
+                    possibleTasksLoadedAt: Date.now(),
+                    voiceBotSession: removePossibleTasksFromSession(state.voiceBotSession, [taskId]),
                 };
             });
 

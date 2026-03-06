@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-03-06
+### PROBLEM SOLVED
+- **12:03** Possible tasks still depended on session-local `CREATE_TASKS` payloads and legacy CRM restart flow, so tasks discussed during an active meeting could not become first-class Mongo task records with stable links, dedupe, or status transitions.
+- **12:03** Voice session UI had no direct `Tasks` action during the meeting, forcing operators to wait for later CRM-side processing instead of drafting possible tasks from the live transcript.
+- **12:03** OperOps `Voice` tab was still session-centric and could not review `NEW_0` possible tasks as one backlog, nor distinguish orphan backlog rows from session-linked voice work.
+
+### FEATURE IMPLEMENTED
+- **12:03** Added live possible-task generation during meetings: Voice session header now exposes `Tasks` before `Summarize`, the frontend calls MCP `create_tasks` with a structured envelope, and canonical persistence goes through Mongo-backed possible-task routes.
+- **12:03** Promoted possible tasks to master records in `automation_tasks` with status `NEW_0`, voice session backlinks, and structured relation support (`parent-child`, `waits-for`, `blocks`, `relates_to`, `discovered-from`).
+- **12:03** Redesigned OperOps `Voice` around possible-task review: orphan `NEW_0` tasks are grouped first, then newest session groups, with expanded possible-task tables and collapsed processed-task reference tables.
+
+### CHANGES
+- **12:03** Agents/runtime:
+  - updated `agents/agent-cards/create_tasks.md` to accept structured input modes (`raw_text`, `session_id`, optional `session_url`) via JSON envelope carried in `message`,
+  - added `gsh` MCP server to `agents/fastagent.config.yaml`,
+  - updated `agents/README.md` to document direct MCP `voice`/`gsh` enrichment and the no-`StratoProject` execution rule.
+- **12:03** Backend Voice:
+  - added Mongo master-model helper `backend/src/api/routes/voicebot/possibleTasksMasterModel.ts`,
+  - added routes `POST /api/voicebot/save_possible_tasks` and `POST /api/voicebot/process_possible_tasks`,
+  - changed `POST /api/voicebot/possible_tasks` to prefer `automation_tasks` master rows and keep session `processors_data.CREATE_TASKS` as compatibility projection only,
+  - updated `create_tickets` / `delete_task_from_session` to synchronize master possible-task rows with session operations.
+- **12:03** Frontend Voice + OperOps:
+  - updated `app/src/components/voice/MeetingCard.tsx`, `app/src/store/voiceBotStore.ts`, `app/src/utils/voicePossibleTasks.ts`, `app/src/components/voice/PossibleTasks.tsx`, and `app/src/pages/voice/SessionPage.tsx`,
+  - added `app/src/pages/operops/voiceTabGrouping.ts` and redesigned the `Voice` tab in `app/src/pages/operops/CRMPage.tsx` around orphan/session-grouped `NEW_0` tasks.
+- **12:03** Planning/docs:
+  - added `plan/live-possible-tasks-during-meeting-plan.md`,
+  - updated `docs/RUNTIME_TAG_DEPRECATION_PLAN_2026-03-04.md` with BD status/traceability formatting.
+- **12:03** Validation:
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/voicebot/runtime/sessionUtilityRoutes.test.ts __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts __tests__/voicebot/runtime/sessionUtilityValidationRoutes.test.ts`
+  - `cd backend && npm run build`
+  - `cd app && npx jest --runInBand __tests__/voice/meetingCardTasksButtonContract.test.ts __tests__/operops/voiceTabGroupingBehavior.test.ts __tests__/voice/sessionPagePossibleTasksTabContract.test.ts __tests__/voice/possibleTasksPostCreateContract.test.ts __tests__/voice/voiceSocketRealtimeContract.test.ts __tests__/voice/possibleTasksBackendValidationContract.test.ts`
+  - `cd app && npm run build`
+
 ## 2026-03-05
 ### PROBLEM SOLVED
 - **16:02** OperOps project create/edit only worked through inline tree modals, so deep links, browser navigation, and larger edit flows were cramped and hard to resume directly.

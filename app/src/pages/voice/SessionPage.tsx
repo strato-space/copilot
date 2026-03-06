@@ -118,6 +118,7 @@ export default function SessionPage() {
         fetchVoiceBotSession,
         voiceBotSession,
         sessionAttachments,
+        possibleTasks,
         addSessionTextChunk,
         addSessionImageChunk,
         sessionTasksRefreshToken,
@@ -229,12 +230,7 @@ export default function SessionPage() {
         };
     }, [sessionId, addSessionTextChunk, addSessionImageChunk, materialTargetMessageId]);
 
-    const possibleTasks = (
-        (voiceBotSession?.processors_data as Record<string, unknown> | undefined)?.CREATE_TASKS as
-            | { data?: unknown[] }
-            | undefined
-    )?.data;
-    const hasPossibleTasks = Array.isArray(possibleTasks) && possibleTasks.length > 0;
+    const hasPossibleTasks = possibleTasks.length > 0;
     const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
     const activeTasksConfig = VOICE_SESSION_TASK_SUBTAB_CONFIGS[sessionTasksSubTab];
     const sessionTaskSourceRefs = useMemo(

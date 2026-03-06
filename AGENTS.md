@@ -29,7 +29,9 @@ These decisions are part of the current platform contract and must be preserved 
   - filter state is restored after navigation/reload.
 - Voice/OperOps integration remains canonical:
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
-  - `task_type_id` is optional in Possible Tasks UI.
+  - `task_type_id` is optional in Possible Tasks UI,
+  - possible tasks are master records in `automation_tasks` with `task_status=NEW_0`,
+  - session `processors_data.CREATE_TASKS` is compatibility projection only.
 
 ## Critical Interfaces To Preserve
 
@@ -236,6 +238,10 @@ Preferred engineering principles for this repo:
 - OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
 - OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
+- OperOps `Voice` tab is possible-task-centric:
+  - orphan `NEW_0` tasks without voice linkage render first,
+  - session-linked groups follow newest-first,
+  - processed tasks linked to the same session stay collapsed for reference.
 
 ## Product Notes (VoiceBot)
 - VoiceBot backend routes live in `backend/src/api/routes/voicebot/`.
@@ -302,6 +308,12 @@ Preferred engineering principles for this repo:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
   - route emits realtime `session_update.taskflow_refresh.summary`,
   - frontend Summary panel binds to canonical session fields and supports edit/save/conflict states.
+- Live meeting possible-task generation is canonical:
+  - session header exposes `Tasks` before `Summarize`,
+  - frontend calls MCP tool `create_tasks` with a structured JSON envelope serialized into `message`,
+  - the agent may enrich context through MCP `voice` and `gsh`,
+  - backend persists possible tasks into `automation_tasks` through `save_possible_tasks` / `process_possible_tasks`,
+  - the agent must not route execution through `StratoProject`.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.

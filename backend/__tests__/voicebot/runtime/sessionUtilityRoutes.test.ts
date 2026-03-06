@@ -8,6 +8,8 @@ describe('Voicebot utility routes parity contract', () => {
 
   it('keeps utility endpoints required by voicebot parity', () => {
     expect(source).toContain("router.post('/create_tickets'");
+    expect(source).toContain("router.post('/save_possible_tasks'");
+    expect(source).toContain("router.post('/process_possible_tasks'");
     expect(source).toContain("router.post('/codex_tasks'");
     expect(source).toContain("router.post('/possible_tasks'");
     expect(source).toContain("router.post('/delete_task_from_session'");
@@ -65,12 +67,22 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('no_automatic_retry: true');
     expect(source).toContain('taskflow_refresh: {');
     expect(source).toContain("reason: 'create_tickets'");
+    expect(source).toContain("reason: 'save_possible_tasks'");
+    expect(source).toContain("refreshReason: 'process_possible_tasks'");
     expect(source).toContain("reason: 'delete_task_from_session'");
     expect(source).toContain("reason: 'save_summary'");
     expect(source).toContain('summary: true');
     expect(source).toContain("return res.status(200).json({");
     expect(source).toContain('matched_count: result.matchedCount');
     expect(source).toContain('deleted_count: result.modifiedCount > 0 ? 1 : 0');
+  });
+
+  it('reads canonical possible tasks from automation_tasks master rows with session hydration fallback', () => {
+    expect(source).toContain('buildVoicePossibleTaskMasterQuery');
+    expect(source).toContain('normalizeVoicePossibleTaskDocForApi');
+    expect(source).toContain('listPossibleTaskMasterDocs({ db, sessionId })');
+    expect(source).toContain('hydrateSessionPossibleTasksFromMaster');
+    expect(source).toContain("reason: 'save_possible_tasks'");
   });
 
   it('enforces project access checks for project-files endpoints', () => {
