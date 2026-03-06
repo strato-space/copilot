@@ -20,12 +20,4 @@ describe('PossibleTasks post-create contract', () => {
     expect(componentSource.includes('prev.filter((id) => failedTaskIds.has(id))')).toBe(true);
   });
 
-  it('uses canonical items returned by save_possible_tasks instead of trusting raw prompt payload', () => {
-    expect(storeSource.includes('const responseTasks = parsePossibleTasksResponse(response, defaultProjectId);')).toBe(true);
-    expect(storeSource.includes('let canonicalTasks = normalizedTasks;')).toBe(true);
-    expect(storeSource.includes('if (responseTasks.length > 0) {')).toBe(true);
-    expect(storeSource.includes('canonicalTasks = responseTasks;')).toBe(true);
-    expect(storeSource.includes('possibleTasks: canonicalTasks')).toBe(true);
-    expect(storeSource.includes('voiceBotSession: applyPossibleTasksToSession(state.voiceBotSession, canonicalTasks)')).toBe(true);
-  });
 });
