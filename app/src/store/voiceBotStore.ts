@@ -1265,13 +1265,18 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
 
         const defaultProjectId = String(get().voiceBotSession?.project_id || '').trim();
         const normalizedTasks = parsePossibleTasksResponse(tasks, defaultProjectId);
+        let canonicalTasks = normalizedTasks;
 
         try {
-            await voicebotHttp.request(
+            const response = await voicebotHttp.request<unknown>(
                 'voicebot/save_possible_tasks',
                 { session_id: normalizedSessionId, tasks: normalizedTasks },
                 Boolean(options?.silent)
             );
+            const responseTasks = parsePossibleTasksResponse(response, defaultProjectId);
+            if (responseTasks.length > 0) {
+                canonicalTasks = responseTasks;
+            }
         } catch (error) {
             const isMissingRoute = axios.isAxiosError(error) && error.response?.status === 404;
             if (!isMissingRoute) {
@@ -1293,13 +1298,13 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         set((state) => {
             if (state.currentSessionId !== normalizedSessionId) return state;
             return {
-                possibleTasks: normalizedTasks,
+                possibleTasks: canonicalTasks,
                 possibleTasksLoadedAt: Date.now(),
-                voiceBotSession: applyPossibleTasksToSession(state.voiceBotSession, normalizedTasks),
+                voiceBotSession: applyPossibleTasksToSession(state.voiceBotSession, canonicalTasks),
             };
         });
 
-        return normalizedTasks;
+        return canonicalTasks;
     },
 
     createPossibleTasksForSession: async (sessionId) => {

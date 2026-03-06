@@ -736,6 +736,32 @@ const buildPossibleTaskMasterRuntimeQuery = (sessionId: string): Record<string, 
     );
 };
 
+const POSSIBLE_TASK_MASTER_PROJECTION = {
+    _id: 1,
+    row_id: 1,
+    id: 1,
+    name: 1,
+    description: 1,
+    priority: 1,
+    priority_reason: 1,
+    performer_id: 1,
+    project_id: 1,
+    task_type_id: 1,
+    dialogue_tag: 1,
+    task_id_from_ai: 1,
+    dependencies_from_ai: 1,
+    dialogue_reference: 1,
+    relations: 1,
+    dependencies: 1,
+    parent: 1,
+    parent_id: 1,
+    children: 1,
+    task_status: 1,
+    created_at: 1,
+    updated_at: 1,
+    source_data: 1,
+} as const;
+
 const listPossibleTaskMasterDocs = async ({
     db,
     sessionId,
@@ -745,34 +771,81 @@ const listPossibleTaskMasterDocs = async ({
 }): Promise<Array<Record<string, unknown>>> =>
     db.collection(COLLECTIONS.TASKS)
         .find(buildPossibleTaskMasterRuntimeQuery(sessionId), {
-            projection: {
-                _id: 1,
-                row_id: 1,
-                id: 1,
-                name: 1,
-                description: 1,
-                priority: 1,
-                priority_reason: 1,
-                performer_id: 1,
-                project_id: 1,
-                task_type_id: 1,
-                dialogue_tag: 1,
-                task_id_from_ai: 1,
-                dependencies_from_ai: 1,
-                dialogue_reference: 1,
-                relations: 1,
-                dependencies: 1,
-                parent: 1,
-                parent_id: 1,
-                children: 1,
-                task_status: 1,
-                created_at: 1,
-                updated_at: 1,
-                source_data: 1,
-            },
+            projection: POSSIBLE_TASK_MASTER_PROJECTION,
         })
         .sort({ created_at: 1, _id: 1 })
         .toArray() as Promise<Array<Record<string, unknown>>>;
+
+const buildProjectScopedPossibleTaskRuntimeQuery = ({
+    projectId,
+    rowIds,
+}: {
+    projectId: string;
+    rowIds: string[];
+}): Record<string, unknown> =>
+    mergeWithRuntimeFilter(
+        {
+            is_deleted: { $ne: true },
+            codex_task: { $ne: true },
+            task_status: TASK_STATUSES.NEW_0,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_possible_task',
+            project_id: projectId,
+            $or: [
+                { row_id: { $in: rowIds } },
+                { id: { $in: rowIds } },
+                { 'source_data.row_id': { $in: rowIds } },
+            ],
+        },
+        {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        }
+    );
+
+const listPossibleTaskSaveMatchDocs = async ({
+    db,
+    sessionId,
+    projectId,
+    rowIds,
+}: {
+    db: Db;
+    sessionId: string;
+    projectId: string;
+    rowIds: string[];
+}): Promise<{
+    sessionDocs: Array<Record<string, unknown>>;
+    matchDocs: Array<Record<string, unknown>>;
+}> => {
+    const sessionDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+    const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
+    if (!projectId || normalizedRowIds.length === 0) {
+        return { sessionDocs, matchDocs: sessionDocs };
+    }
+
+    const projectDocs = await db.collection(COLLECTIONS.TASKS)
+        .find(buildProjectScopedPossibleTaskRuntimeQuery({ projectId, rowIds: normalizedRowIds }), {
+            projection: POSSIBLE_TASK_MASTER_PROJECTION,
+        })
+        .sort({ created_at: 1, _id: 1 })
+        .toArray() as Array<Record<string, unknown>>;
+
+    const mergedByKey = new Map<string, Record<string, unknown>>();
+    for (const doc of [...sessionDocs, ...projectDocs]) {
+        const docKey = toIdString((doc as Record<string, unknown>)._id)
+            || collectSessionTaskMutationLocatorKeys(doc)[0]
+            || JSON.stringify(doc);
+        if (!mergedByKey.has(docKey)) {
+            mergedByKey.set(docKey, doc);
+        }
+    }
+
+    return {
+        sessionDocs,
+        matchDocs: Array.from(mergedByKey.values()),
+    };
+};
 
 const buildPossibleTaskMasterAliasMap = (
     docs: Array<Record<string, unknown>>
@@ -4394,10 +4467,19 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const taskItems = Array.isArray(parsedBody.data.tasks) ? parsedBody.data.tasks : (parsedBody.data.items ?? []);
-        const existingDocs = await listPossibleTaskMasterDocs({ db, sessionId });
-        const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
-        const keptExistingIds = new Set<string>();
-        const masterRows: Array<Record<string, unknown>> = [];
+        const incomingRowIds = taskItems
+            .map((rawTask) => resolveSessionTaskRowLocator(rawTask as Record<string, unknown>))
+            .filter((item): item is { ok: true; row_id: string; source_fields: string[] } => item.ok)
+            .map((item) => item.row_id);
+        const {
+            sessionDocs: existingSessionDocs,
+            matchDocs: existingDocs,
+        } = await listPossibleTaskSaveMatchDocs({
+            db,
+            sessionId,
+            projectId: session.project_id ? String(session.project_id) : '',
+            rowIds: incomingRowIds,
+        });
         const newDocs: Array<Record<string, unknown>> = [];
         const now = new Date();
         const defaultProjectId = session.project_id ? String(session.project_id) : '';
@@ -4405,6 +4487,7 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
         const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
         const creatorId = performer?._id?.toHexString?.() ?? '';
         const creatorName = String(performer?.real_name || performer?.name || '').trim();
+        const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
 
         for (const [taskIndex, rawTask] of taskItems.entries()) {
             const task = rawTask as Record<string, unknown>;
@@ -4429,19 +4512,21 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
                 if (existingDoc) break;
             }
 
-            const currentSessionLink = {
-                session_id: sessionId,
-                session_name: String((session as Record<string, unknown>).session_name || ''),
-                ...(defaultProjectId ? { project_id: defaultProjectId } : {}),
-                created_at: now.toISOString(),
-                role: 'primary',
-            };
             const existingSourceData = existingDoc?.source_data && typeof existingDoc.source_data === 'object'
                 ? existingDoc.source_data as Record<string, unknown>
                 : {};
             const existingVoiceSessions = Array.isArray(existingSourceData.voice_sessions)
                 ? existingSourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
                 : [];
+            const existingCurrentSessionLink = existingVoiceSessions.find((entry) => toTaskText(entry.session_id) === sessionId);
+            const currentSessionLink = {
+                ...(existingCurrentSessionLink ?? {}),
+                session_id: sessionId,
+                session_name: String((session as Record<string, unknown>).session_name || '') || toTaskText(existingCurrentSessionLink?.session_name),
+                ...(defaultProjectId ? { project_id: defaultProjectId } : (toTaskText(existingCurrentSessionLink?.project_id) ? { project_id: toTaskText(existingCurrentSessionLink?.project_id) } : {})),
+                created_at: toTaskText(existingCurrentSessionLink?.created_at) || now.toISOString(),
+                role: 'primary',
+            };
             const mergedVoiceSessions = [
                 currentSessionLink,
                 ...existingVoiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId),
@@ -4475,7 +4560,6 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
             };
 
             if (existingDoc?._id instanceof ObjectId) {
-                keptExistingIds.add(existingDoc._id.toHexString());
                 await db.collection(COLLECTIONS.TASKS).updateOne(
                     { _id: existingDoc._id },
                     {
@@ -4493,24 +4577,25 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
                 newDocs.push(nextDoc);
             }
 
-            const sessionCompatibleRow = buildSessionCompatiblePossibleTaskRow(nextDoc);
-            if (sessionCompatibleRow) {
-                masterRows.push(sessionCompatibleRow);
-            }
         }
 
         if (newDocs.length > 0) {
             await db.collection(COLLECTIONS.TASKS).insertMany(newDocs);
         }
 
-        const staleRowIds = existingDocs
-            .filter((doc) => {
-                const docId = doc._id instanceof ObjectId ? doc._id.toHexString() : '';
-                return !docId || !keptExistingIds.has(docId);
-            })
+        const nextSessionRowIds = new Set(incomingRowIds);
+        const staleRowIds = existingSessionDocs
+            .filter((doc) => !collectSessionTaskMutationLocatorKeys(doc).some((key) => nextSessionRowIds.has(key)))
             .flatMap((doc) => collectSessionTaskMutationLocatorKeys(doc));
         await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
-        await syncSessionPossibleTaskCompatibilityData({ db, sessionId, rows: masterRows });
+        const refreshedMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+        const refreshedItems = refreshedMasterDocs
+            .map((item) => normalizeVoicePossibleTaskDocForApi(item))
+            .filter((item): item is Record<string, unknown> => item !== null);
+        const refreshedRows = refreshedMasterDocs
+            .map((item) => buildSessionCompatiblePossibleTaskRow(item))
+            .filter((item): item is Record<string, unknown> => item !== null);
+        await syncSessionPossibleTaskCompatibilityData({ db, sessionId, rows: refreshedRows });
 
         emitSessionTaskflowRefreshHint({
             req,
@@ -4522,7 +4607,8 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
         return res.status(200).json({
             success: true,
             session_id: sessionId,
-            saved_count: masterRows.length,
+            saved_count: refreshedItems.length,
+            items: refreshedItems,
             ...(staleRowIds.length > 0 ? { removed_row_ids: Array.from(new Set(staleRowIds)) } : {}),
         });
     } catch (error) {

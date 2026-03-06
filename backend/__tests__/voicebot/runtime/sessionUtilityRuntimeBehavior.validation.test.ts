@@ -1005,24 +1005,38 @@ describe('Voicebot utility routes runtime behavior', () => {
       is_deleted: false,
       runtime_tag: 'prod',
     }));
-    const masterFind = jest.fn(() => ({
+    let persistedDocs: Array<Record<string, unknown>> = [];
+    const masterFind = jest.fn((filter: Record<string, unknown>) => ({
       sort: () => ({
-        toArray: async () => [
-          {
-            _id: existingMasterId,
-            row_id: 'stale-row',
-            id: 'stale-row',
-            task_status: TASK_STATUSES.NEW_0,
-            source: 'VOICE_BOT',
-            source_kind: 'voice_session',
-            source_ref: sessionId.toHexString(),
-            external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
-            source_data: { session_id: sessionId, row_id: 'stale-row' },
-          },
-        ],
+        toArray: async () => {
+          const filterJson = JSON.stringify(filter);
+          if (filterJson.includes(`"project_id":"${projectId.toHexString()}"`) && filterJson.includes('"row_id"')) {
+            return [];
+          }
+          if (filterJson.includes(sessionId.toHexString())) {
+            if (persistedDocs.length > 0) return persistedDocs;
+            return [
+              {
+                _id: existingMasterId,
+                row_id: 'stale-row',
+                id: 'stale-row',
+                task_status: TASK_STATUSES.NEW_0,
+                source: 'VOICE_BOT',
+                source_kind: 'voice_session',
+                source_ref: sessionId.toHexString(),
+                external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+                source_data: { session_id: sessionId, row_id: 'stale-row' },
+              },
+            ];
+          }
+          return [];
+        },
       }),
     }));
-    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => {
+      persistedDocs = docs.map((doc) => ({ ...doc, _id: new ObjectId() }));
+      return { insertedCount: docs.length };
+    });
     const updateManySpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
     const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 
@@ -1032,6 +1046,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           return {
             find: masterFind,
             insertMany: insertManySpy,
+            updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
             updateMany: updateManySpy,
           };
         }
@@ -1086,6 +1101,15 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.success).toBe(true);
     expect(response.body.saved_count).toBe(1);
     expect(response.body.removed_row_ids).toEqual(['stale-row']);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        row_id: 'new-row',
+        id: 'new-row',
+        name: 'Saved row',
+        project: 'Saved project',
+        relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
+      }),
+    ]);
     expect(insertManySpy).toHaveBeenCalledTimes(1);
     expect(insertManySpy.mock.calls[0]?.[0]).toEqual(
       expect.arrayContaining([
@@ -1143,12 +1167,25 @@ describe('Voicebot utility routes runtime behavior', () => {
       is_deleted: false,
       runtime_tag: 'prod',
     }));
-    const masterFind = jest.fn(() => ({
+    let persistedDocs: Array<Record<string, unknown>> = [];
+    const masterFind = jest.fn((filter: Record<string, unknown>) => ({
       sort: () => ({
-        toArray: async () => [],
+        toArray: async () => {
+          const filterJson = JSON.stringify(filter);
+          if (filterJson.includes(`"project_id":"${projectId.toHexString()}"`) && filterJson.includes('"row_id"')) {
+            return [];
+          }
+          if (filterJson.includes(sessionId.toHexString())) {
+            return persistedDocs;
+          }
+          return [];
+        },
       }),
     }));
-    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => {
+      persistedDocs = docs.map((doc) => ({ ...doc, _id: new ObjectId() }));
+      return { insertedCount: docs.length };
+    });
     const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 
     const dbStub = {
@@ -1157,6 +1194,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           return {
             find: masterFind,
             insertMany: insertManySpy,
+            updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
             updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
           };
         }
@@ -1199,6 +1237,13 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        row_id: 'stable-row',
+        id: 'stable-row',
+        task_id_from_ai: 'T1',
+      }),
+    ]);
     expect(insertManySpy).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1217,6 +1262,370 @@ describe('Voicebot utility routes runtime behavior', () => {
               row_id: 'stable-row',
               id: 'stable-row',
               task_id_from_ai: 'T1',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('save_possible_tasks rewrites shared NEW_0 rows from another session in place and returns canonical items', async () => {
+    const sessionId = new ObjectId();
+    const otherSessionId = new ObjectId();
+    const sharedTaskId = new ObjectId();
+    const projectId = new ObjectId();
+    const canonicalRef = `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`;
+    const otherCanonicalRef = `https://copilot.stratospace.fun/voice/session/${otherSessionId.toHexString()}`;
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Current runtime session',
+      project_id: projectId,
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    let sharedDoc: Record<string, unknown> = {
+      _id: sharedTaskId,
+      row_id: 'shared-row',
+      id: 'shared-row',
+      name: 'Old wording',
+      description: 'Old description',
+      priority: 'P3',
+      priority_reason: 'Old reason',
+      project_id: projectId.toHexString(),
+      project: 'Shared project',
+      task_status: TASK_STATUSES.NEW_0,
+      source: 'VOICE_BOT',
+      source_kind: 'voice_possible_task',
+      source_ref: otherCanonicalRef,
+      external_ref: otherCanonicalRef,
+      source_data: {
+        session_id: otherSessionId.toHexString(),
+        session_name: 'Other runtime session',
+        row_id: 'shared-row',
+        voice_sessions: [
+          {
+            session_id: otherSessionId.toHexString(),
+            session_name: 'Other runtime session',
+            project_id: projectId.toHexString(),
+            created_at: '2026-03-06T00:00:00.000Z',
+            role: 'primary',
+          },
+        ],
+      },
+      created_at: new Date('2026-03-06T00:00:00.000Z'),
+      updated_at: new Date('2026-03-06T00:00:00.000Z'),
+    };
+
+    const taskUpdateOneSpy = jest.fn(async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+      if (String(filter._id) === sharedTaskId.toHexString()) {
+        const setRecord = (update.$set ?? {}) as Record<string, unknown>;
+        sharedDoc = {
+          ...sharedDoc,
+          ...setRecord,
+          _id: sharedTaskId,
+        };
+      }
+      return { matchedCount: 1, modifiedCount: 1 };
+    });
+
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const findSpy = jest.fn((filter: Record<string, unknown>) => ({
+      sort: () => ({
+        toArray: async () => {
+          const filterJson = JSON.stringify(filter);
+          if (filterJson.includes(sessionId.toHexString())) {
+            const voiceSessions = (((sharedDoc.source_data as Record<string, unknown> | undefined)?.voice_sessions) ?? []) as Array<Record<string, unknown>>;
+            return voiceSessions.some((entry) => String(entry.session_id || '') === sessionId.toHexString())
+              ? [sharedDoc]
+              : [];
+          }
+          if (filterJson.includes(projectId.toHexString())) {
+            return [sharedDoc];
+          }
+          return [];
+        },
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: findSpy,
+            insertMany: jest.fn(async () => ({ insertedCount: 0 })),
+            updateOne: taskUpdateOneSpy,
+            updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/save_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        tasks: [
+          {
+            row_id: 'shared-row',
+            id: 'shared-row',
+            name: 'Updated wording',
+            description: 'Updated description with more context',
+            priority: 'P2',
+            priority_reason: 'Updated reason',
+            project_id: projectId.toHexString(),
+            project: 'Shared project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.saved_count).toBe(1);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        row_id: 'shared-row',
+        id: 'shared-row',
+        name: 'Updated wording',
+        description: 'Updated description with more context',
+        project_id: projectId.toHexString(),
+        source_ref: canonicalRef,
+        external_ref: canonicalRef,
+        source_data: expect.objectContaining({
+          session_id: sessionId.toHexString(),
+          voice_sessions: expect.arrayContaining([
+            expect.objectContaining({ session_id: sessionId.toHexString(), role: 'primary' }),
+            expect.objectContaining({ session_id: otherSessionId.toHexString() }),
+          ]),
+        }),
+      }),
+    ]);
+    expect(taskUpdateOneSpy).toHaveBeenCalledWith(
+      { _id: sharedTaskId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          row_id: 'shared-row',
+          id: 'shared-row',
+          name: 'Updated wording',
+          description: 'Updated description with more context',
+          source_ref: canonicalRef,
+          external_ref: canonicalRef,
+          source_data: expect.objectContaining({
+            session_id: sessionId.toHexString(),
+            voice_sessions: expect.arrayContaining([
+              expect.objectContaining({ session_id: sessionId.toHexString(), role: 'primary' }),
+            ]),
+          }),
+        }),
+      }),
+    );
+    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': [
+            expect.objectContaining({
+              row_id: 'shared-row',
+              id: 'shared-row',
+              name: 'Updated wording',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('save_possible_tasks rewrites shared NEW_0 rows from another session and reattaches current session', async () => {
+    const sessionId = new ObjectId();
+    const otherSessionId = new ObjectId();
+    const performerMongoId = new ObjectId();
+    const projectId = new ObjectId();
+    const sharedTaskId = new ObjectId();
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Current session',
+      project_id: projectId,
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    let sharedDoc: Record<string, unknown> = {
+      _id: sharedTaskId,
+      row_id: 'shared-row',
+      id: 'shared-row',
+      name: 'Old wording',
+      description: 'Old description',
+      performer_id: performerMongoId.toHexString(),
+      project_id: projectId.toHexString(),
+      project: 'Shared project',
+      task_status: TASK_STATUSES.NEW_0,
+      source: 'VOICE_BOT',
+      source_kind: 'voice_possible_task',
+      source_ref: `https://copilot.stratospace.fun/voice/session/${otherSessionId.toHexString()}`,
+      external_ref: `https://copilot.stratospace.fun/voice/session/${otherSessionId.toHexString()}`,
+      source_data: {
+        session_id: otherSessionId.toHexString(),
+        session_name: 'Other session',
+        row_id: 'shared-row',
+        voice_sessions: [
+          {
+            session_id: otherSessionId.toHexString(),
+            session_name: 'Other session',
+            project_id: projectId.toHexString(),
+            created_at: '2026-03-06T00:00:00.000Z',
+            role: 'primary',
+          },
+        ],
+      },
+    };
+
+    const taskFind = jest.fn((filter: Record<string, unknown>) => ({
+      sort: () => ({
+        toArray: async () => {
+          const serialized = JSON.stringify(filter);
+          if (serialized.includes(`"project_id":"${projectId.toHexString()}"`) && serialized.includes('"row_id"')) {
+            return [sharedDoc];
+          }
+          if (serialized.includes(sessionId.toHexString())) {
+            const sourceData = sharedDoc.source_data as Record<string, unknown>;
+            const voiceSessions = Array.isArray(sourceData.voice_sessions)
+              ? sourceData.voice_sessions as Array<Record<string, unknown>>
+              : [];
+            const linkedToCurrentSession =
+              sourceData.session_id === sessionId.toHexString()
+              || voiceSessions.some((entry) => entry.session_id === sessionId.toHexString());
+            return linkedToCurrentSession ? [sharedDoc] : [];
+          }
+          return [];
+        },
+      }),
+    }));
+
+    const taskUpdateOneSpy = jest.fn(async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+      if (String(filter._id || '') === sharedTaskId.toHexString()) {
+        const setPayload = (update.$set as Record<string, unknown>) || {};
+        const sourceData = setPayload.source_data && typeof setPayload.source_data === 'object'
+          ? setPayload.source_data as Record<string, unknown>
+          : {};
+        sharedDoc = {
+          ...sharedDoc,
+          ...setPayload,
+          source_data: {
+            ...(sharedDoc.source_data as Record<string, unknown>),
+            ...sourceData,
+          },
+        };
+      }
+      return { matchedCount: 1, modifiedCount: 1 };
+    });
+
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: taskFind,
+            updateOne: taskUpdateOneSpy,
+            updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+            insertMany: jest.fn(async () => ({ insertedCount: 0 })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/save_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        tasks: [
+          {
+            row_id: 'shared-row',
+            id: 'shared-row',
+            name: 'Updated wording',
+            description: 'Updated description',
+            performer_id: performerMongoId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Shared project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.items).toEqual([
+      expect.objectContaining({
+        row_id: 'shared-row',
+        id: 'shared-row',
+        name: 'Updated wording',
+        description: 'Updated description',
+        source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+      }),
+    ]);
+    expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
+    expect(response.body.items[0]?.source_data?.voice_sessions).toEqual([
+      expect.objectContaining({
+        session_id: sessionId.toHexString(),
+        session_name: 'Current session',
+        role: 'primary',
+      }),
+      expect.objectContaining({
+        session_id: otherSessionId.toHexString(),
+        session_name: 'Other session',
+      }),
+    ]);
+    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': [
+            expect.objectContaining({
+              row_id: 'shared-row',
+              name: 'Updated wording',
+              description: 'Updated description',
             }),
           ],
         }),
