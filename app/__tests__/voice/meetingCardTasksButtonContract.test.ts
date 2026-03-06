@@ -27,4 +27,13 @@ describe('MeetingCard tasks button contract', () => {
     expect(utilSource).toContain("type: 'categorization'");
     expect(utilSource).toContain("type: 'transcript'");
   });
+
+  it('logs and surfaces invalid create_tasks payloads instead of hanging in loading state', () => {
+    const storePath = path.resolve(process.cwd(), 'src/store/voiceBotStore.ts');
+    const storeSource = fs.readFileSync(storePath, 'utf8');
+    expect(storeSource).toContain("[create_tasks] MCP returned error payload");
+    expect(storeSource).toContain("[create_tasks] invalid MCP result format");
+    expect(storeSource).toContain("Некорректный ответ create_tasks:");
+    expect(storeSource).toContain("Некорректный ответ create_tasks: ожидался JSON-массив задач");
+  });
 });

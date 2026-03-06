@@ -42,6 +42,7 @@ module.exports = {
                 '--host', '127.0.0.1',
                 '--port', '8722',
                 '--instance-scope', 'request',
+                '--watch',
                 '--description', 'Copilot Agent Services for intelligent dialogue processing'
             ],
             instances: 1,

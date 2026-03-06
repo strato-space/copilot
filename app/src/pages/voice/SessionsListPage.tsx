@@ -329,7 +329,7 @@ export default function SessionsListPage() {
         isSessionsListLoading,
         mergeSessions,
     } = useVoiceBotStore();
-    const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
+    const { sendMCPCall, waitForCompletion, waitForConnected, connectionState } = useMCPRequestStore();
     const { generateSessionTitle } = useSessionsUIStore();
 
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -518,6 +518,7 @@ export default function SessionsListPage() {
                 updateSessionName,
                 sendMCPCall,
                 waitForCompletion,
+                waitForConnected,
                 connectionState
             );
         } catch (error) {

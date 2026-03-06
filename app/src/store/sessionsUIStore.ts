@@ -128,6 +128,7 @@ interface TicketsModalEditActionsSlice {
         updateSessionName: (sessionId: string, name: string) => Promise<void>,
         sendMCPCall: (mcpServer: string, tool: string, args: unknown, stream?: boolean) => string,
         waitForCompletion: (requestId: string, timeoutMs?: number) => Promise<{ status: string; result?: unknown } | null>,
+        waitForConnected: (timeoutMs?: number) => Promise<boolean>,
         connectionState: 'connecting' | 'connected' | 'disconnected'
     ) => Promise<void>;
 }
@@ -540,16 +541,20 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
         updateSessionName,
         sendMCPCall,
         waitForCompletion,
+        waitForConnected,
         connectionState
     ) => {
         try {
             if (connectionState !== 'connected') {
-                message.warning(
-                    connectionState === 'connecting'
-                        ? 'Соединение с MCP устанавливается, попробуйте еще раз'
-                        : 'Нет соединения с MCP'
-                );
-                return;
+                const connected = await waitForConnected(5000);
+                if (!connected) {
+                    message.warning(
+                        connectionState === 'connecting'
+                            ? 'Соединение с MCP устанавливается, попробуйте еще раз'
+                            : 'Нет соединения с MCP'
+                    );
+                    return;
+                }
             }
 
             const agentsMcpServerUrl = (() => {

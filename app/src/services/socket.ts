@@ -55,6 +55,11 @@ export const getSocket = (): Socket => {
             withCredentials: true,
             transports: ['websocket', 'polling'],
             autoConnect: true,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 250,
+            reconnectionDelayMax: 1500,
+            timeout: 5000,
         });
 
         socket.on('connect_error', (error) => {
@@ -80,6 +85,11 @@ export const getVoicebotSocket = (authToken?: string | null): Socket => {
             withCredentials: true,
             transports: ['websocket', 'polling'],
             autoConnect: true,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 250,
+            reconnectionDelayMax: 1500,
+            timeout: 5000,
         };
 
         if (authToken) {

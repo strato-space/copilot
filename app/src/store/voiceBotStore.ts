@@ -1308,13 +1308,16 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             throw new Error('session_id is required');
         }
 
-        const { connectionState, sendMCPCall, waitForCompletion } = useMCPRequestStore.getState();
+        const { connectionState, sendMCPCall, waitForCompletion, waitForConnected } = useMCPRequestStore.getState();
         if (connectionState !== 'connected') {
-            throw new Error(
-                connectionState === 'connecting'
-                    ? 'Соединение с MCP устанавливается, попробуйте еще раз'
-                    : 'Нет соединения с MCP'
-            );
+            const connected = await waitForConnected(5000);
+            if (!connected) {
+                throw new Error(
+                    connectionState === 'connecting'
+                        ? 'Соединение с MCP устанавливается, попробуйте еще раз'
+                        : 'Нет соединения с MCP'
+                );
+            }
         }
 
         const agentsMcpServerUrl = voicebotRuntimeConfig.resolveAgentsMcpServerUrl();
@@ -1353,10 +1356,37 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         const final = result.result as { isError?: boolean; content?: Array<{ text?: string }>; error?: string } | undefined;
         if (final?.isError) {
             const errorText = final.content?.[0]?.text || final.error || 'Ошибка обработки';
+            console.error('[create_tasks] MCP returned error payload', {
+                session_id: normalizedSessionId,
+                request_id: requestId,
+                final,
+            });
             throw new Error(errorText);
         }
 
-        const tasks = parseCreateTasksMcpResult(final, String(sessionData.voice_bot_session?.project_id || '').trim());
+        let tasks: VoicePossibleTask[] = [];
+        try {
+            tasks = parseCreateTasksMcpResult(final, String(sessionData.voice_bot_session?.project_id || '').trim());
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[create_tasks] invalid MCP result format', {
+                session_id: normalizedSessionId,
+                request_id: requestId,
+                error: errorMessage,
+                final,
+            });
+            throw new Error(`Некорректный ответ create_tasks: ${errorMessage}`);
+        }
+
+        if (!Array.isArray(tasks)) {
+            console.error('[create_tasks] parsed tasks payload is not an array', {
+                session_id: normalizedSessionId,
+                request_id: requestId,
+                tasks,
+            });
+            throw new Error('Некорректный ответ create_tasks: ожидался JSON-массив задач');
+        }
+
         const savedTasks = await get().saveSessionPossibleTasks(normalizedSessionId, tasks, { silent: true });
         return {
             requestId,

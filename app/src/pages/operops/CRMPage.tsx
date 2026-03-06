@@ -184,7 +184,7 @@ const CRMPage = () => {
     const { tickets, projects, projectsData, performers, fetchDictionary, fetchTickets, tickets_updated_at } = useKanbanStore();
     const { customers, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
-    const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
+    const { sendMCPCall, waitForCompletion, waitForConnected, connectionState } = useMCPRequestStore();
 
     // Socket.IO for real-time CRM updates
     useCRMSocket();
@@ -262,12 +262,15 @@ const CRMPage = () => {
         setRestartCreateTasksId(sessionId);
         try {
             if (connectionState !== 'connected') {
-                message.warning(
-                    connectionState === 'connecting'
-                        ? 'Соединение с MCP устанавливается, попробуйте еще раз'
-                        : 'Нет соединения с MCP'
-                );
-                return;
+                const connected = await waitForConnected(5000);
+                if (!connected) {
+                    message.warning(
+                        connectionState === 'connecting'
+                            ? 'Соединение с MCP устанавливается, попробуйте еще раз'
+                            : 'Нет соединения с MCP'
+                    );
+                    return;
+                }
             }
 
             const agentsMcpServerUrl = (() => {

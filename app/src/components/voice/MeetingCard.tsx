@@ -91,7 +91,7 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
     } = useVoiceBotStore();
 
     const { openParticipantModal, openAccessUsersModal, generateSessionTitle } = useSessionsUIStore();
-    const { sendMCPCall, waitForCompletion, connectionState } = useMCPRequestStore();
+    const { sendMCPCall, waitForCompletion, waitForConnected, connectionState } = useMCPRequestStore();
     const [uiState, setUiState] = useState<MeetingCardUiState>(() => createInitialUiState());
     const [sessionNameDraft, setSessionNameDraft] = useState('');
     const [customPromptModalVisible, setCustomPromptModalVisible] = useState(false);
@@ -304,6 +304,7 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
             updateSessionName,
             sendMCPCall,
             waitForCompletion,
+            waitForConnected,
             connectionState
         );
 

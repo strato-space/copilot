@@ -25,6 +25,7 @@ export interface MCPStoreState {
     handleMCPComplete: (requestId: string, final: unknown) => void;
     handleError: (requestId: string, message: string, details?: unknown) => void;
     waitForCompletion: (requestId: string, timeoutMs?: number) => Promise<MCPRequest | null>;
+    waitForConnected: (timeoutMs?: number) => Promise<boolean>;
 }
 
 // Socket.IO instance will be set from useMCPWebSocket hook
@@ -137,6 +138,24 @@ export const useMCPRequestStore = create<MCPStoreState>((set, get) => ({
                     return;
                 }
                 setTimeout(tick, 250);
+            };
+            tick();
+        });
+    },
+
+    waitForConnected: (timeoutMs = 5000) => {
+        return new Promise((resolve) => {
+            const startedAt = Date.now();
+            const tick = () => {
+                if (get().connectionState === 'connected') {
+                    resolve(true);
+                    return;
+                }
+                if (Date.now() - startedAt > timeoutMs) {
+                    resolve(false);
+                    return;
+                }
+                setTimeout(tick, 100);
             };
             tick();
         });

@@ -20,6 +20,16 @@ export const useMCPWebSocket = (): void => {
         setSocketInstance(socket);
         setConnectionState('connecting');
 
+        const ensureSocketConnected = () => {
+            if (!socket.connected) {
+                try {
+                    socket.connect();
+                } catch (error) {
+                    console.error('[MCP] Socket reconnect failed', error);
+                }
+            }
+        };
+
         const clearDisconnectTimer = () => {
             if (disconnectTimerRef.current !== null) {
                 window.clearTimeout(disconnectTimerRef.current);
@@ -83,8 +93,25 @@ export const useMCPWebSocket = (): void => {
             }
         });
 
+        ensureSocketConnected();
+
+        const handleWindowFocus = () => {
+            ensureSocketConnected();
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                ensureSocketConnected();
+            }
+        };
+
+        window.addEventListener('focus', handleWindowFocus);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         return () => {
             clearDisconnectTimer();
+            window.removeEventListener('focus', handleWindowFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
             socket.off('connect', handleConnect);
             socket.off('disconnect', handleDisconnect);
             socket.off('connect_error', handleConnectError);
