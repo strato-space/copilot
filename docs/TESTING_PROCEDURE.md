@@ -12,7 +12,7 @@ Suite item orchestration metadata (forward-compatible contract):
 - `stage` - execution wave index for planned parallel orchestration.
 - `resource_lock` - shared resource key (for example Playwright target) to prevent unsafe overlap.
 
-Current shell runner ignores unknown fields and remains backward-compatible while metadata is phased in.
+Current shell runner ignores unknown fields and remains backward-compatible while metadata is phased in. This is currently observable in the `full` suite: both `app-voice-e2e` shard jobs declare `resource_lock: "playwright:app"` in `platforms.json`, but the shell runner still launches them in parallel.
 
 ## Test Catalog Mapping
 - `app`
@@ -36,6 +36,7 @@ Current shell runner ignores unknown fields and remains backward-compatible whil
   - runs baseline plus dedicated Voice unauth e2e smoke shards
   - does not duplicate Voice unit/backend subsets already covered by `app-unit`, `backend-unit-parallel`, and `backend-unit-serial`
   - backend unit checks are split into `backend-unit-parallel` and `backend-unit-serial`
+  - current known flake: if the two Voice e2e shard jobs overlap under the shell runner, they may fail with `page.goto: net::ERR_EMPTY_RESPONSE` against `/voice` routes even though each shard passes when run alone
 
 ## How To Run
 From repo root:
@@ -52,6 +53,10 @@ From repo root:
 
 # optional fail-fast mode
 ./scripts/run-test-suite.sh full --fail-fast
+
+# current fallback for Voice e2e if `full` flakes on /voice
+cd app && npm run test:e2e:voice:shard:1of2
+cd app && npm run test:e2e:voice:shard:2of2
 ```
 
 Jest worker knobs for frontend modules:
@@ -67,6 +72,7 @@ Backend split execution contract:
 Playwright sharding contract:
 - `app` non-voice e2e set is split in suites via `test:e2e:shard:1of2` and `test:e2e:shard:2of2`.
 - Voice smoke e2e command is split via `test:e2e:voice:shard:1of2` and `test:e2e:voice:shard:2of2`.
+- Until `scripts/run-test-suite.sh` respects `resource_lock`, treat the two Voice shard commands as sequential validation commands, not safe same-stage parallel work.
 
 ## Stage Benchmark Template
 For test-pipeline optimization stages, record one full-suite benchmark after each stage using:
@@ -108,6 +114,8 @@ Notes:
   - `./scripts/run-test-suite.sh voice`
 - CI/merge gate:
   - `./scripts/run-test-suite.sh full --fail-fast`
+- Current practical note:
+  - if `full` fails only on `app-voice-e2e-shard-1of2` / `app-voice-e2e-shard-2of2` with `/voice` `ERR_EMPTY_RESPONSE`, rerun those two commands sequentially before treating it as an app regression
 - Optional worker tuning:
   - frontend Jest: `JEST_MAX_WORKERS=<value|percent>`
   - backend Jest: `BACKEND_JEST_MAX_WORKERS=<value|percent>`

@@ -334,10 +334,11 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
             });
         } catch (error) {
             console.error('Ошибка при запуске create_tasks:', error);
+            const errorText = error instanceof Error ? error.message : String(error);
             messageApi.open({
                 key: 'create-tasks',
                 type: 'error',
-                content: `Ошибка запуска create_tasks: ${String(error)}`,
+                content: `Ошибка запуска create_tasks: ${errorText}`,
                 duration: 4,
             });
         } finally {

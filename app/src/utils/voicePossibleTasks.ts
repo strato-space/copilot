@@ -26,6 +26,36 @@ const parseDependencies = (value: unknown): string[] => {
 const canonicalSessionUrl = (sessionId: string): string =>
   `${CANONICAL_VOICE_SESSION_URL_BASE}/${encodeURIComponent(sessionId)}`;
 
+const toSingleLine = (value: string): string =>
+  value
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractCreateTasksAgentError = (raw: string): string => {
+  const singleLine = toSingleLine(raw);
+  if (!singleLine) return '';
+
+  const internalErrorMatch = singleLine.match(/I hit an internal error while calling the model:\s*(.+?)(?:\s+Error details:|$)/i);
+  if (internalErrorMatch?.[1]) return internalErrorMatch[1].trim();
+
+  const providerErrorMatch = singleLine.match(/Provider Error:\s*(.+?)(?:\s+⟳ Retrying|\s+Retrying|\s*$)/i);
+  if (providerErrorMatch?.[1]) return providerErrorMatch[1].trim();
+
+  if (
+    /fast-agent-error/i.test(singleLine) ||
+    /responses request failed for model/i.test(singleLine) ||
+    /insufficient_quota/i.test(singleLine)
+  ) {
+    return singleLine;
+  }
+
+  return '';
+};
+
 export const collectPossibleTaskLocators = (value: unknown): string[] => {
   const record = asRecord(value);
   const rawValues = record
@@ -197,6 +227,11 @@ const parseTasksJson = (raw: string): VoicePossibleTask[] => {
     } catch {
       // continue
     }
+  }
+
+  const agentError = extractCreateTasksAgentError(direct);
+  if (agentError) {
+    throw new Error(`Ошибка модели в create_tasks: ${agentError}`);
   }
 
   throw new Error('Не удалось распарсить результат агента');

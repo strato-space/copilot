@@ -1373,6 +1373,9 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             tasks = parseCreateTasksMcpResult(final, String(sessionData.voice_bot_session?.project_id || '').trim());
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            if (errorMessage.startsWith('Ошибка модели в create_tasks:')) {
+                throw new Error(errorMessage);
+            }
             console.error('[create_tasks] invalid MCP result format', {
                 session_id: normalizedSessionId,
                 request_id: requestId,

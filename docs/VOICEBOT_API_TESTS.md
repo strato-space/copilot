@@ -94,3 +94,4 @@ The current Possible Tasks / `create_tasks` path is covered by:
 
 - Do not use old one-off path examples that assume `npm test -- --runInBand` as the canonical backend command. Backend execution is intentionally split into `parallel-safe` and `serialized` groups.
 - For repository-wide orchestration, prefer [scripts/run-test-suite.sh](/home/strato-space/copilot/scripts/run-test-suite.sh) and [platforms.json](/home/strato-space/copilot/platforms.json).
+- Current runner caveat: the shell runner does not yet honor `resource_lock`, so `app-voice-e2e-shard-1of2` and `app-voice-e2e-shard-2of2` can interfere when launched in parallel inside `full`. If `full` fails only with `/voice` `ERR_EMPTY_RESPONSE`, rerun these two shard commands sequentially; they currently pass in isolation.

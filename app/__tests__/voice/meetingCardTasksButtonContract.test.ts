@@ -30,8 +30,10 @@ describe('MeetingCard tasks button contract', () => {
   it('logs and surfaces invalid create_tasks payloads instead of hanging in loading state', () => {
     const storePath = path.resolve(process.cwd(), 'src/store/voiceBotStore.ts');
     const storeSource = fs.readFileSync(storePath, 'utf8');
+    expect(componentSource).toContain("const errorText = error instanceof Error ? error.message : String(error);");
     expect(storeSource).toContain("[create_tasks] MCP returned error payload");
     expect(storeSource).toContain("[create_tasks] invalid MCP result format");
+    expect(storeSource).toContain("Ошибка модели в create_tasks:");
     expect(storeSource).toContain("Некорректный ответ create_tasks:");
     expect(storeSource).toContain("Некорректный ответ create_tasks: ожидался JSON-массив задач");
   });

@@ -329,6 +329,7 @@ The Finance Ops SPA is served by Nginx, and `/api` is proxied to the backend. Fo
   - `app`/`miniapp` unit tests use `--maxWorkers=${JEST_MAX_WORKERS:-50%}`
   - `backend` unit tests are split into parallel-safe + serialized groups (`BACKEND_JEST_MAX_WORKERS` controls parallel-safe group)
 - `full` suite now executes app e2e and voice e2e as explicit shard jobs declared in `platforms.json`.
+- Current caveat: `scripts/run-test-suite.sh` does not yet honor `resource_lock`, so the two `app-voice-e2e` shard jobs may conflict when `full` runs them in parallel. If `full` fails with `ERR_EMPTY_RESPONSE` on `/voice`, rerun `npm run test:e2e:voice:shard:1of2` and `npm run test:e2e:voice:shard:2of2` separately; both currently pass in isolation.
 - `app` E2E requires explicit target URL via `PLAYWRIGHT_BASE_URL` (default config uses `http://127.0.0.1:3002`).
 - Useful `app` E2E scopes:
   - `npm run test:e2e:ui`

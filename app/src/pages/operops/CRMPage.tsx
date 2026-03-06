@@ -17,6 +17,7 @@ import { useMCPRequestStore } from '../../store/mcpRequestStore';
 import { TASK_STATUSES } from '../../constants/crm';
 import { useCRMSocket } from '../../hooks/useCRMSocket';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
+import { parseCreateTasksMcpResult } from '../../utils/voicePossibleTasks';
 import type { Performer, Ticket } from '../../types/crm';
 import { resolveTaskProjectName, resolveTaskSourceInfo } from './taskPageUtils';
 import { buildVoiceBacklogGroups } from './voiceTabGrouping';
@@ -316,17 +317,7 @@ const CRMPage = () => {
                 throw new Error(errorText);
             }
 
-            const tasksText = final?.content?.[0]?.text || '';
-            let tasks: Array<Record<string, unknown>> = [];
-            if (typeof tasksText === 'string' && tasksText.trim() !== '') {
-                const parsed = JSON.parse(tasksText);
-                if (!Array.isArray(parsed)) {
-                    throw new Error('create_tasks result is not an array');
-                }
-                tasks = parsed as Array<Record<string, unknown>>;
-            } else {
-                throw new Error('Пустой результат агента');
-            }
+            const tasks = parseCreateTasksMcpResult(final);
 
             await api_request(
                 'voicebot/sessions/save_create_tasks',
