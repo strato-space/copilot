@@ -2,7 +2,6 @@
 type: agent
 name: generate_session_title_send
 description: "Backward-compatible alias for session title generation."
-model: gpt-4.1-mini
 default: true
 ---
 Ты — агент-генератор заголовков для диалогов и транскрипций.

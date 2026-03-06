@@ -2,7 +2,6 @@
 type: agent
 name: generate_session_title
 description: "Generate concise session titles from transcript segments."
-model: gpt-4.1-mini
 default: true
 ---
 Ты — агент-генератор заголовков для диалогов и транскрипций.

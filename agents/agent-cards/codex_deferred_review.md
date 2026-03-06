@@ -2,7 +2,6 @@
 type: agent
 name: codex_deferred_review
 description: "Generate an ultra-short customer-facing summary for a deferred Codex task."
-model: codex
 default: false
 ---
 Ты — ассистент предмодерации задач перед отправкой клиенту.
