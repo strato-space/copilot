@@ -762,19 +762,58 @@ const POSSIBLE_TASK_MASTER_PROJECTION = {
     source_data: 1,
 } as const;
 
+const toSortedTaskCursor = (
+    collection: unknown,
+    filter: Record<string, unknown>,
+    options: Record<string, unknown>
+): { toArray: () => Promise<Array<Record<string, unknown>>> } | null => {
+    const maybeCollection = collection as {
+        find?: (
+            filter: Record<string, unknown>,
+            options?: Record<string, unknown>
+        ) => {
+            sort?: (value: Record<string, unknown>) => { toArray?: () => Promise<Array<Record<string, unknown>>> };
+            toArray?: () => Promise<Array<Record<string, unknown>>>;
+        } | null;
+    };
+    if (typeof maybeCollection.find !== 'function') return null;
+    const rawCursor = maybeCollection.find(filter, options);
+    if (!rawCursor) return null;
+    if (typeof rawCursor.sort === 'function') {
+        const sortedCursor = rawCursor.sort({ created_at: 1, _id: 1 });
+        if (sortedCursor && typeof sortedCursor.toArray === 'function') {
+            const sortedToArray = sortedCursor.toArray.bind(sortedCursor);
+            return {
+                toArray: async () => await sortedToArray() as Array<Record<string, unknown>>,
+            };
+        }
+    }
+    if (typeof rawCursor.toArray === 'function') {
+        const rawToArray = rawCursor.toArray.bind(rawCursor);
+        return {
+            toArray: async () => await rawToArray() as Array<Record<string, unknown>>,
+        };
+    }
+    return null;
+};
+
 const listPossibleTaskMasterDocs = async ({
     db,
     sessionId,
 }: {
     db: Db;
     sessionId: string;
-}): Promise<Array<Record<string, unknown>>> =>
-    db.collection(COLLECTIONS.TASKS)
-        .find(buildPossibleTaskMasterRuntimeQuery(sessionId), {
+}): Promise<Array<Record<string, unknown>>> => {
+    const cursor = toSortedTaskCursor(
+        db.collection(COLLECTIONS.TASKS),
+        buildPossibleTaskMasterRuntimeQuery(sessionId),
+        {
             projection: POSSIBLE_TASK_MASTER_PROJECTION,
-        })
-        .sort({ created_at: 1, _id: 1 })
-        .toArray() as Promise<Array<Record<string, unknown>>>;
+        }
+    );
+    if (!cursor) return [];
+    return await cursor.toArray();
+};
 
 const buildProjectScopedPossibleTaskRuntimeQuery = ({
     projectId,
@@ -824,12 +863,14 @@ const listPossibleTaskSaveMatchDocs = async ({
         return { sessionDocs, matchDocs: sessionDocs };
     }
 
-    const projectDocs = await db.collection(COLLECTIONS.TASKS)
-        .find(buildProjectScopedPossibleTaskRuntimeQuery({ projectId, rowIds: normalizedRowIds }), {
+    const projectCursor = toSortedTaskCursor(
+        db.collection(COLLECTIONS.TASKS),
+        buildProjectScopedPossibleTaskRuntimeQuery({ projectId, rowIds: normalizedRowIds }),
+        {
             projection: POSSIBLE_TASK_MASTER_PROJECTION,
-        })
-        .sort({ created_at: 1, _id: 1 })
-        .toArray() as Array<Record<string, unknown>>;
+        }
+    );
+    const projectDocs = projectCursor ? await projectCursor.toArray() : [];
 
     const mergedByKey = new Map<string, Record<string, unknown>>();
     for (const doc of [...sessionDocs, ...projectDocs]) {
