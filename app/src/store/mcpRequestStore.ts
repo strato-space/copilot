@@ -11,6 +11,7 @@ export interface MCPRequest {
     status: 'pending' | 'streaming' | 'complete' | 'error';
     chunks: unknown[];
     createdAt: number;
+    acceptedAt?: number;
     result?: unknown;
     error?: string;
     errorDetails?: unknown;
@@ -21,6 +22,7 @@ export interface MCPStoreState {
     requests: Map<string, MCPRequest>;
     setConnectionState: (state: MCPConnectionState) => void;
     sendMCPCall: (mcpServer: string, tool: string, args: unknown, stream?: boolean) => string;
+    markAccepted: (requestId: string) => void;
     handleMCPChunk: (requestId: string, chunk: unknown) => void;
     handleMCPComplete: (requestId: string, final: unknown) => void;
     handleError: (requestId: string, message: string, details?: unknown) => void;
@@ -29,7 +31,10 @@ export interface MCPStoreState {
 }
 
 // Socket.IO instance will be set from useMCPWebSocket hook
-let socketInstance: { emit: (event: string, payload: unknown) => void; connected?: boolean } | null = null;
+let socketInstance: {
+    emit: (event: string, payload: unknown, ack?: (response?: { ok?: boolean; requestId?: string; message?: string; details?: unknown }) => void) => void;
+    connected?: boolean;
+} | null = null;
 
 export const setSocketInstance = (socket: typeof socketInstance): void => {
     socketInstance = socket;
@@ -66,6 +71,12 @@ export const useMCPRequestStore = create<MCPStoreState>((set, get) => ({
             return { requests: newRequests };
         });
 
+        const ackTimeout = window.setTimeout(() => {
+            const currentRequest = get().requests.get(requestId);
+            if (!currentRequest || currentRequest.status !== 'pending' || currentRequest.acceptedAt) return;
+            get().handleError(requestId, 'MCP request was not accepted by server');
+        }, 3000);
+
         socketInstance.emit('mcp_call', {
             type: 'mcp_call',
             requestId,
@@ -73,9 +84,30 @@ export const useMCPRequestStore = create<MCPStoreState>((set, get) => ({
             tool,
             args,
             options: { stream },
+        }, (ack?: { ok?: boolean; requestId?: string; message?: string; details?: unknown }) => {
+            window.clearTimeout(ackTimeout);
+            if (!ack?.ok) {
+                get().handleError(requestId, ack?.message ?? 'MCP request was rejected by server', ack?.details);
+                return;
+            }
+            get().markAccepted(requestId);
         });
 
         return requestId;
+    },
+
+    markAccepted: (requestId) => {
+        set((state) => {
+            const newRequests = new Map(state.requests);
+            const request = newRequests.get(requestId);
+
+            if (request && !request.acceptedAt) {
+                request.acceptedAt = Date.now();
+                newRequests.set(requestId, request);
+            }
+
+            return { requests: newRequests };
+        });
     },
 
     handleMCPChunk: (requestId, chunk) => {

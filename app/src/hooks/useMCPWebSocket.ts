@@ -45,10 +45,14 @@ export const useMCPWebSocket = (): void => {
         const handleDisconnect = () => {
             setConnectionState('disconnected');
             clearDisconnectTimer();
+            const affectedRequestIds = Array.from(useMCPRequestStore.getState().requests.entries())
+                .filter(([, request]) => request.status === 'pending' || request.status === 'streaming')
+                .map(([requestId]) => requestId);
             disconnectTimerRef.current = window.setTimeout(() => {
                 const state = useMCPRequestStore.getState();
-                if (state.connectionState === 'connected') return;
-                state.requests.forEach((request, requestId) => {
+                affectedRequestIds.forEach((requestId) => {
+                    const request = state.requests.get(requestId);
+                    if (!request) return;
                     if (request.status === 'pending' || request.status === 'streaming') {
                         handleError(requestId, 'Connection lost during request');
                     }

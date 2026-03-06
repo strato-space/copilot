@@ -20,6 +20,8 @@ interface MCPCallMessage {
     options?: { timeout?: number };
 }
 
+type MCPAck = (payload: { ok: boolean; requestId?: string; message?: string; details?: unknown }) => void;
+
 // Connection and request tracking
 const connectionIds = new Map<string, string>(); // socket.id -> connectionId
 const requestMap = new Map<string, string>(); // requestId -> socket.id
@@ -39,8 +41,10 @@ export function setupMCPProxy(io: SocketIOServer): void {
         logger.info(`   Connection ID: ${connectionId}`);
 
         // MCP Call Handler
-        socket.on(MCP_EVENTS.MCP_CALL, async (message: MCPCallMessage) => {
-            logger.info(`📨 MCP call received from ${socket.id}: ${message.tool} to ${message.mcpServer}`);
+        socket.on(MCP_EVENTS.MCP_CALL, async (message: MCPCallMessage, ack?: MCPAck) => {
+            logger.info(`📨 MCP call received from ${socket.id}: ${message.tool} to ${message.mcpServer}`, {
+                requestId: message?.requestId,
+            });
 
             try {
                 // Validate message
@@ -52,6 +56,7 @@ export function setupMCPProxy(io: SocketIOServer): void {
                             'Invalid MCP call message: missing required fields (requestId, mcpServer, tool, args)'
                     };
                     socket.emit(MCP_EVENTS.ERROR, error);
+                    ack?.({ ok: false, requestId: message.requestId, message: error.message });
                     return;
                 }
 
@@ -63,11 +68,13 @@ export function setupMCPProxy(io: SocketIOServer): void {
                         message: 'Connection ID not found'
                     };
                     socket.emit(MCP_EVENTS.ERROR, error);
+                    ack?.({ ok: false, requestId: message.requestId, message: error.message });
                     return;
                 }
 
                 // Track request for routing responses
                 requestMap.set(message.requestId, socket.id);
+                ack?.({ ok: true, requestId: message.requestId });
 
                 // Create MCP proxy client for the specified server
                 const targetMcpClient = new MCPProxyClient(message.mcpServer);
@@ -112,18 +119,33 @@ export function setupMCPProxy(io: SocketIOServer): void {
 
                 // Handle response
                 if (result.success) {
-                    socket.emit(MCP_EVENTS.MCP_COMPLETE, {
-                        type: 'mcp_complete',
-                        requestId: message.requestId,
-                        final: result.data
-                    });
+                    if (!socket.connected) {
+                        logger.warn(`⚠️ MCP result dropped because socket disconnected: ${message.tool}`, {
+                            requestId: message.requestId,
+                            socketId: socket.id,
+                        });
+                    } else {
+                        socket.emit(MCP_EVENTS.MCP_COMPLETE, {
+                            type: 'mcp_complete',
+                            requestId: message.requestId,
+                            final: result.data
+                        });
+                    }
                 } else {
                     const error = {
                         type: 'error',
                         requestId: message.requestId,
                         message: result.error || 'MCP call failed'
                     };
-                    socket.emit(MCP_EVENTS.ERROR, error);
+                    if (!socket.connected) {
+                        logger.warn(`⚠️ MCP error dropped because socket disconnected: ${message.tool}`, {
+                            requestId: message.requestId,
+                            socketId: socket.id,
+                            error: error.message,
+                        });
+                    } else {
+                        socket.emit(MCP_EVENTS.ERROR, error);
+                    }
                 }
 
                 // Clean up request tracking and session
@@ -143,7 +165,10 @@ export function setupMCPProxy(io: SocketIOServer): void {
                     requestId: message.requestId,
                     message: (error as Error).message || 'Internal server error'
                 };
-                socket.emit(MCP_EVENTS.ERROR, errorMsg);
+                if (socket.connected) {
+                    socket.emit(MCP_EVENTS.ERROR, errorMsg);
+                }
+                ack?.({ ok: false, requestId: message.requestId, message: errorMsg.message });
                 requestMap.delete(message.requestId);
             }
         });
