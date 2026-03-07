@@ -10,8 +10,9 @@ describe('SessionPage codex tab contract', () => {
   it('renders Codex tab in voice session tabs', () => {
     expect(source).toContain("import CodexIssuesTable from '../../components/codex/CodexIssuesTable';");
     expect(source).toContain("key: 'codex'");
-    expect(source).toContain("label: 'Codex'");
+    expect(source).toContain("label: renderTabLabel('Codex', sessionCodexCount)");
     expect(source).toContain('children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} refreshToken={sessionCodexRefreshToken} />');
+    expect(source).toContain("'voicebot/session_tab_counts'");
   });
 
   it('keeps Codex tab before Screenshort and Log tabs', () => {

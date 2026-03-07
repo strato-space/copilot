@@ -85,6 +85,7 @@ The current Possible Tasks / `create_tasks` path is covered by:
   - `/api/voicebot/save_possible_tasks`
   - `/api/voicebot/process_possible_tasks`
   - `/api/voicebot/delete_task_from_session`
+  - `/api/voicebot/session_tab_counts`
 - backend worker suites around:
   - `workerCreateTasksFromChunksHandler.test.ts`
   - `workerCreateTasksPostprocessingRealtime.test.ts`
@@ -95,6 +96,7 @@ The current Possible Tasks / `create_tasks` path is covered by:
   - `MeetingCard` Tasks button
   - canonical `save_possible_tasks` response handling
   - MCP reconnect / request-failure handling
+  - voice session tab counters / processing dots
 
 ## Notes
 

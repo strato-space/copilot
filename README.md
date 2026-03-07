@@ -110,6 +110,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + text + `Materials` with sortable order.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - Voice session header includes a `Tasks` action before `Summarize`; it generates possible tasks from current meeting context without waiting for session close.
+- Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Возможные задачи`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
+- `Транскрипция`, `Категоризация`, and `Возможные задачи` tabs now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - WebRTC page `Done` stays enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, even without `pageSession` in the iframe URL.

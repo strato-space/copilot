@@ -46,6 +46,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 | `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected Possible Tasks into regular tasks by transitioning master rows from `NEW_0` to `READY_10`. |
 | `/api/voicebot/delete_task_from_session` | `POST` | Remove a Possible Task from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
 | `/api/voicebot/codex_tasks` | `POST` | Return Codex/BD tasks linked to the current voice session. |
+| `/api/voicebot/session_tab_counts` | `POST` | Return lightweight `Задачи` + `Codex` counts for voice session tab badges. |
 
 ## Session resolution contract
 - Canonical session APIs use fail-fast lookup semantics and return `404` when a session cannot be resolved in current operational scope.
@@ -101,6 +102,22 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - Manual categorization path:
   - socket `create_tasks_from_chunks` now queues the same canonical `COMMON.CREATE_TASKS_FROM_CHUNKS` worker job,
   - it does not emit legacy `tickets_prepared`; viewers refresh through the same Mongo-first `session_update.taskflow_refresh.possible_tasks` path.
+
+## Voice session tab badges
+
+- Voice session tabs render compact numeric badges for:
+  - `Транскрипция`
+  - `Категоризация`
+  - `Возможные задачи`
+  - `Задачи`
+  - `Codex`
+  - `Screenshort`
+- `Log` intentionally has no count badge.
+- `Задачи` and `Codex` counts are loaded through `/api/voicebot/session_tab_counts`.
+- `Транскрипция`, `Категоризация`, and `Возможные задачи` show a subtle green pulse dot while their stage is still pending:
+  - transcription pending = uploaded/new chunk not yet transcribed,
+  - categorization pending = transcript exists but categorization is not complete,
+  - possible tasks pending = transcript advanced beyond the last completed `CREATE_TASKS` run or `CREATE_TASKS` is currently processing.
 
 ### Multi-process delivery
 - Socket.IO Redis adapter is enabled in backend bootstrap (`backend/src/index.ts`), so events are delivered correctly across PM2 processes.

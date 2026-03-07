@@ -7,9 +7,10 @@ describe('SessionPage OperOps tasks tab contract', () => {
 
   it("renders 'Задачи' tab with CRMKanban filtered by current session source refs", () => {
     expect(source).toContain("key: 'operops_tasks'");
-    expect(source).toContain("label: 'Задачи'");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount)");
     expect(source).toContain('<CRMKanban');
     expect(source).toContain('buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession)');
+    expect(source).toContain("'voicebot/session_tab_counts'");
     expect(source).toContain('source_ref: sessionTaskSourceRefs');
     expect(source).toContain('refreshToken={sessionTasksRefreshToken}');
   });

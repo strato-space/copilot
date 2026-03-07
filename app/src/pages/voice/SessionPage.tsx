@@ -5,7 +5,15 @@ import { useParams } from 'react-router-dom';
 
 import { CRMKanban } from '../../components/crm';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
+import { voicebotHttp } from '../../store/voicebotHttp';
 import { buildVoiceSessionTaskSourceRefs } from '../../utils/voiceSessionTaskSource';
+import {
+    countVisibleCategorizationGroups,
+    countVisibleTranscriptionMessages,
+    hasPendingCategorizationMessages,
+    hasPendingPossibleTasksRefresh,
+    hasPendingTranscriptionMessages,
+} from '../../utils/voiceSessionTabs';
 import SessionStatusWidget from '../../components/voice/SessionStatusWidget';
 import MeetingCard from '../../components/voice/MeetingCard';
 import Transcription from '../../components/voice/Transcription';
@@ -117,6 +125,8 @@ export default function SessionPage() {
     const {
         fetchVoiceBotSession,
         voiceBotSession,
+        voiceBotMessages,
+        voiceMesagesData,
         sessionAttachments,
         possibleTasks,
         addSessionTextChunk,
@@ -132,6 +142,8 @@ export default function SessionPage() {
     const [sessionTasksSubTab, setSessionTasksSubTab] = useState<VoiceSessionTaskSubTabKey>('work');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [sessionOperOpsTasksCount, setSessionOperOpsTasksCount] = useState(0);
+    const [sessionCodexCount, setSessionCodexCount] = useState(0);
 
     useEffect(() => {
         let disposed = false;
@@ -230,37 +242,105 @@ export default function SessionPage() {
         };
     }, [sessionId, addSessionTextChunk, addSessionImageChunk, materialTargetMessageId]);
 
-    const hasPossibleTasks = possibleTasks.length > 0;
     const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
     const activeTasksConfig = VOICE_SESSION_TASK_SUBTAB_CONFIGS[sessionTasksSubTab];
     const sessionTaskSourceRefs = useMemo(
         () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
         [sessionId, voiceBotSession]
     );
+    const transcriptionCount = useMemo(
+        () => countVisibleTranscriptionMessages(voiceBotMessages),
+        [voiceBotMessages]
+    );
+    const categorizationCount = useMemo(
+        () => countVisibleCategorizationGroups(voiceMesagesData),
+        [voiceMesagesData]
+    );
+    const possibleTasksCount = possibleTasks.length;
+    const screenshortCount = sessionAttachments.length;
+
+    const hasTranscriptionPending = useMemo(
+        () => hasPendingTranscriptionMessages(voiceBotMessages),
+        [voiceBotMessages]
+    );
+    const hasCategorizationPending = useMemo(
+        () => hasPendingCategorizationMessages(voiceBotMessages),
+        [voiceBotMessages]
+    );
+    const hasPossibleTasksPending = useMemo(
+        () => hasPendingPossibleTasksRefresh(voiceBotSession, voiceBotMessages),
+        [voiceBotSession, voiceBotMessages]
+    );
+
+    useEffect(() => {
+        let disposed = false;
+        if (!sessionId) {
+            setSessionOperOpsTasksCount(0);
+            setSessionCodexCount(0);
+            return;
+        }
+
+        const loadTabCounts = async (): Promise<void> => {
+            try {
+                const response = await voicebotHttp.request<{
+                    success?: boolean;
+                    tasks_count?: unknown;
+                    codex_count?: unknown;
+                }>('voicebot/session_tab_counts', { session_id: sessionId }, true);
+                if (disposed) return;
+                setSessionOperOpsTasksCount(Number(response?.tasks_count) || 0);
+                setSessionCodexCount(Number(response?.codex_count) || 0);
+            } catch (error) {
+                if (disposed) return;
+                console.error('Failed to refresh voice tab counters:', error);
+                setSessionCodexCount(0);
+                setSessionOperOpsTasksCount(0);
+            }
+        };
+
+        void loadTabCounts();
+        return () => {
+            disposed = true;
+        };
+    }, [
+        sessionCodexRefreshToken,
+        sessionId,
+        sessionTasksRefreshToken,
+    ]);
+
+    const renderTabLabel = (label: string, count: number, options?: { processing?: boolean; showCount?: boolean }) => (
+        <span className="inline-flex items-center gap-1.5">
+            {options?.processing ? <span className="voice-tab-processing-dot" aria-hidden /> : null}
+            <span>{label}</span>
+            {options?.showCount === false ? null : (
+                <span className="text-xs text-slate-500">{count}</span>
+            )}
+        </span>
+    );
 
     const tabs = [
         {
             key: '1',
-            label: 'Транскрипция',
+            label: renderTabLabel('Транскрипция', transcriptionCount, { processing: hasTranscriptionPending }),
             children: <Transcription />,
         },
         {
             key: '2',
-            label: 'Категоризация',
+            label: renderTabLabel('Категоризация', categorizationCount, { processing: hasCategorizationPending }),
             children: <Categorization />,
         },
-        ...(hasPossibleTasks && canUpdateProjects
+        ...(canUpdateProjects
             ? [
                 {
                     key: 'tasks',
-                    label: 'Возможные задачи',
+                    label: renderTabLabel('Возможные задачи', possibleTasksCount, { processing: hasPossibleTasksPending }),
                     children: <PossibleTasks />,
                 },
             ]
             : []),
         {
             key: 'operops_tasks',
-            label: 'Задачи',
+            label: renderTabLabel('Задачи', sessionOperOpsTasksCount),
             children: (
                 <div className="flex flex-col gap-3">
                     <Tabs
@@ -287,12 +367,12 @@ export default function SessionPage() {
         },
         {
             key: 'codex',
-            label: 'Codex',
+            label: renderTabLabel('Codex', sessionCodexCount),
             children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} refreshToken={sessionCodexRefreshToken} />,
         },
         {
             key: 'screenshort',
-            label: 'Screenshort',
+            label: renderTabLabel('Screenshort', screenshortCount),
             children: <Screenshort attachments={sessionAttachments} />,
         },
         ...(customPromptResult
@@ -306,7 +386,7 @@ export default function SessionPage() {
             : []),
         {
             key: 'log',
-            label: 'Log',
+            label: renderTabLabel('Log', 0, { showCount: false }),
             children: <SessionLog />,
         },
     ];

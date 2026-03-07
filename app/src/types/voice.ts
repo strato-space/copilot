@@ -79,6 +79,7 @@ export interface VoiceBotMessage {
     message_id?: string;
     message_timestamp?: string | number;
     session_id?: string;
+    is_deleted?: boolean | string;
     image_anchor_message_id?: string | null;
     image_anchor_linked_message_id?: string | null;
     material_row_group_id?: string | null;
@@ -88,6 +89,13 @@ export interface VoiceBotMessage {
     message_type?: string;
     text?: string;
     file_id?: string;
+    file_path?: string;
+    file_name?: string;
+    file_unique_id?: string;
+    file_hash?: string;
+    mime_type?: string;
+    to_transcribe?: boolean;
+    transcription_error?: string;
     transcription_text?: string;
     transcription?: {
         duration_seconds?: number | string;

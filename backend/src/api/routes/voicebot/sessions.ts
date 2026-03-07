@@ -219,6 +219,10 @@ const sessionCodexTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
 });
 
+const sessionTabCountsInputSchema = z.object({
+    session_id: z.string().trim().min(1),
+});
+
 const sessionPossibleTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
 });
@@ -4799,6 +4803,161 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
             );
     } catch (error) {
         logger.error('Error in codex_tasks:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+const VOICE_SESSION_TASK_COUNT_STATUSES = [
+    TASK_STATUSES.READY_10,
+    TASK_STATUSES.PROGRESS_0,
+    TASK_STATUSES.PROGRESS_10,
+    TASK_STATUSES.PROGRESS_20,
+    TASK_STATUSES.PROGRESS_30,
+    TASK_STATUSES.PROGRESS_40,
+    TASK_STATUSES.REVIEW_10,
+    TASK_STATUSES.REVIEW_20,
+] as const;
+
+const normalizeSessionScopedSourceRefs = (values: unknown[]): string[] => {
+    const normalizeValue = (value: unknown): string => toTaskText(value).replace(/\/+$/, '');
+    const extractSessionId = (value: string): string => {
+        const marker = '/voice/session/';
+        const markerIndex = value.toLowerCase().indexOf(marker);
+        if (markerIndex < 0) return '';
+        const tail = value.slice(markerIndex + marker.length);
+        const [sessionScopedId = ''] = tail.split(/[/?#]/, 1);
+        return sessionScopedId.trim();
+    };
+
+    const normalized = new Set<string>();
+    values.forEach((value) => {
+        const raw = normalizeValue(value);
+        if (!raw) return;
+        normalized.add(raw);
+        const extractedSessionId = extractSessionId(raw);
+        if (extractedSessionId) {
+            normalized.add(extractedSessionId);
+            normalized.add(voiceSessionUrlUtils.canonical(extractedSessionId));
+        }
+        if (/^[a-fA-F0-9]{24}$/.test(raw)) {
+            normalized.add(voiceSessionUrlUtils.canonical(raw));
+        }
+    });
+    return Array.from(normalized);
+};
+
+const buildSessionScopedTaskRefs = ({
+    sessionId,
+    session,
+}: {
+    sessionId: string;
+    session: Record<string, unknown>;
+}): string[] =>
+    normalizeSessionScopedSourceRefs([
+        sessionId,
+        session._id,
+        session.session_id,
+        session.session_db_id,
+        session.source_ref,
+        session.external_ref,
+        ((session.source_data as Record<string, unknown> | undefined) ?? {}).session_id,
+        ((session.source_data as Record<string, unknown> | undefined) ?? {}).session_db_id,
+    ]);
+
+const buildSessionScopedTaskMatch = ({
+    sessionId,
+    session,
+}: {
+    sessionId: string;
+    session: Record<string, unknown>;
+}): Record<string, unknown> => {
+    const refs = buildSessionScopedTaskRefs({ sessionId, session });
+    return {
+        $or: [
+            { source_ref: { $in: refs } },
+            { external_ref: { $in: refs } },
+            { session_id: { $in: refs } },
+            { session_db_id: { $in: refs } },
+            { 'source.voice_session_id': { $in: refs } },
+            { 'source.session_id': { $in: refs } },
+            { 'source.session_db_id': { $in: refs } },
+            { 'source_data.voice_session_id': { $in: refs } },
+            { 'source_data.session_id': { $in: refs } },
+            { 'source_data.session_db_id': { $in: refs } },
+            { 'source_data.payload.session_id': { $in: refs } },
+            { 'source_data.payload.session_db_id': { $in: refs } },
+        ],
+    };
+};
+
+router.post('/session_tab_counts', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = sessionTabCountsInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({ db, performer, sessionId });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+
+        const sessionRecord = session as Record<string, unknown>;
+        const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: sessionRecord });
+        const externalRef = voiceSessionUrlUtils.canonical(sessionId);
+
+        const [tasks_count, codex_count] = await Promise.all([
+            db.collection(COLLECTIONS.TASKS).countDocuments(
+                mergeWithRuntimeFilter(
+                    {
+                        is_deleted: { $ne: true },
+                        codex_task: { $ne: true },
+                        task_status: { $in: [...VOICE_SESSION_TASK_COUNT_STATUSES] },
+                        ...sessionScopedTaskMatch,
+                    },
+                    {
+                        field: 'runtime_tag',
+                        familyMatch: IS_PROD_RUNTIME,
+                        includeLegacyInProd: IS_PROD_RUNTIME,
+                    }
+                )
+            ),
+            db.collection(COLLECTIONS.TASKS).countDocuments(
+                mergeWithRuntimeFilter(
+                    {
+                        is_deleted: { $ne: true },
+                        external_ref: externalRef,
+                    },
+                    {
+                        field: 'runtime_tag',
+                        familyMatch: IS_PROD_RUNTIME,
+                        includeLegacyInProd: IS_PROD_RUNTIME,
+                    }
+                )
+            ),
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            session_id: sessionId,
+            tasks_count,
+            codex_count,
+        });
+    } catch (error) {
+        logger.error('Error in session_tab_counts:', error);
         return res.status(500).json({ error: String(error) });
     }
 });

@@ -11,6 +11,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("router.post('/save_possible_tasks'");
     expect(source).toContain("router.post('/process_possible_tasks'");
     expect(source).toContain("router.post('/codex_tasks'");
+    expect(source).toContain("router.post('/session_tab_counts'");
     expect(source).toContain("router.post('/possible_tasks'");
     expect(source).toContain("router.post('/delete_task_from_session'");
     expect(source).toContain("router.post('/task_types'");
