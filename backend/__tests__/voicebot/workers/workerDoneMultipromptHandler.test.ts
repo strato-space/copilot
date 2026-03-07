@@ -91,10 +91,9 @@ describe('handleDoneMultipromptJob', () => {
     expect(updateQuery).toEqual(expect.objectContaining({ _id: sessionId }));
     expect(tgSessionsUpdateMany).toHaveBeenCalledTimes(1);
 
-    expect(postprocessorsAdd).toHaveBeenCalledTimes(3);
+    expect(postprocessorsAdd).toHaveBeenCalledTimes(2);
     expect(postprocessorsAdd.mock.calls[0]?.[0]).toBe(VOICEBOT_JOBS.postprocessing.ALL_CUSTOM_PROMPTS);
     expect(postprocessorsAdd.mock.calls[1]?.[0]).toBe(VOICEBOT_JOBS.postprocessing.AUDIO_MERGING);
-    expect(postprocessorsAdd.mock.calls[2]?.[0]).toBe(VOICEBOT_JOBS.postprocessing.CREATE_TASKS);
 
     expect(notifiesAdd).toHaveBeenCalledWith(
       VOICEBOT_JOBS.notifies.SESSION_DONE,

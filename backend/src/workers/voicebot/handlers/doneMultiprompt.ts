@@ -88,18 +88,6 @@ const queuePostprocessingJobs = async (session_id: string): Promise<void> => {
       delay: POSTPROCESS_DELAY_MS,
     }
   );
-
-  await postprocessorsQueue.add(
-    VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
-    {
-      session_id,
-      job_id: `${session_id}-CREATE_TASKS`,
-    },
-    {
-      deduplication: { id: `${session_id}-CREATE_TASKS` },
-      delay: POSTPROCESS_DELAY_MS,
-    }
-  );
 };
 
 const queueDoneNotify = async (session_id: string): Promise<void> => {
