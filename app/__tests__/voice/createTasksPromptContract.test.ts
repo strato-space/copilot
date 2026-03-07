@@ -15,4 +15,14 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).toContain('Перед финальным JSON сделай self-check');
     expect(promptSource).toContain('деоризация/диаризация пока нет, надо сделать');
   });
+
+  it('uses voice.fetch transcript metadata as the canonical session metadata source', () => {
+    expect(promptSource).toContain('session-id');
+    expect(promptSource).toContain('project-id');
+    expect(promptSource).toContain('project-name');
+    expect(promptSource).toContain('routing-topic');
+    expect(promptSource).not.toContain('voice.search(session_id=session_id, limit=1)');
+    expect(promptSource).not.toContain('MCP `gsh`');
+    expect(promptSource).not.toContain('- gsh');
+  });
 });

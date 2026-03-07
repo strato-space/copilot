@@ -51,9 +51,9 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 - A plain string is still treated as legacy `raw_text` input for backward compatibility.
 - Session-backed task extraction enriches context directly through MCP `voice`.
 - Session-backed `create_tasks` requests do not ship full transcript/categorization/material blocks over Socket.IO anymore; the prompt rehydrates context from MCP `voice` by `session_id/session_url`.
-- If the session/project context exposes roadmap or backlog Google Sheets references, `create_tasks` may read them through MCP `gsh` for context and deduplication only.
-- `create_tasks` must not route through StratoProject execution; enrichment is direct MCP `voice` + `gsh`.
+- `create_tasks` must not route through StratoProject execution; enrichment is direct MCP `voice`.
 - `create_tasks` treats current-session `NEW_0` possible tasks as a mutable baseline: same-scope rows should be returned with the same `row_id/id` and improved wording instead of being suppressed as duplicates.
+- `voice.fetch(..., mode="transcript")` is the canonical metadata source for session-backed task extraction and now carries a frontmatter block with `session-id`, `session-name`, `session-url`, `project-id`, `project-name`, and `routing-topic`.
 
 ### Production Deployment (PM2)
 
@@ -91,8 +91,8 @@ Agent cards are located in `agent-cards/` directory:
 - **Model:** inherited from runtime (`--model` in launch config)
 - **Purpose:** Extract actionable tasks from compact session envelopes
 - **Input modes:** `raw_text`, `session_id`, `session_url` (plain string remains a legacy alias for `raw_text`)
-- **Enrichment:** direct MCP `voice` reads, optional MCP `gsh` reads for roadmap/backlog dedupe
-- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.search(session_id=..., limit=1)` -> `voice.session_possible_tasks(...)` -> `voice.crm_tickets(...)`
+- **Enrichment:** direct MCP `voice` reads
+- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.session_possible_tasks(...)` -> `voice.crm_tickets(...)`
 - **Output:** canonical JSON array with `id/name/description/priority/performer_id/project_id/task_type_id/dialogue_tag/task_id_from_ai/dependencies_from_ai/dialogue_reference`
 - **Guardrails:** executor-ready descriptions, no finance/evaluative noise, no StratoProject execution hop, mutable `NEW_0` rewrite in place for same-scope rows
 
