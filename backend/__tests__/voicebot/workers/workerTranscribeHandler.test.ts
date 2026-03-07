@@ -166,6 +166,75 @@ describe('handleTranscribeJob', () => {
     );
   });
 
+  it('does not enqueue CREATE_TASKS auto refresh when session_processors explicitly exclude it', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-no-create-tasks-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      message_timestamp: 1770489126,
+      duration: 12,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      session_processors: ['FINAL_CUSTOM_PROMPT'],
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValue({ text: 'hello world' });
+    getAudioDurationFromFileMock.mockResolvedValue(12);
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-1' }));
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'postprocessors-job-1' }));
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-1' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+    expect(processorsQueueAdd).toHaveBeenCalledTimes(1);
+    expect(postprocessorsQueueAdd).not.toHaveBeenCalled();
+    expect(eventsQueueAdd).toHaveBeenCalledTimes(1);
+  });
+
   it('creates deferred codex task with canonical external_ref when transcription starts with Кодекс trigger word', async () => {
     const messageId = new ObjectId();
     const sessionId = new ObjectId();

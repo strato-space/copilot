@@ -96,7 +96,8 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - every successful text transcription completion enqueues `POSTPROCESSORS.CREATE_TASKS`,
   - worker delegates to fast-agent `create_tasks`,
   - refreshed possible-task rows are persisted to `automation_tasks` and synced into `processors_data.CREATE_TASKS` compatibility projection,
-  - only after persistence does the worker enqueue websocket refresh via `session_update.taskflow_refresh.possible_tasks`.
+  - only after persistence does the worker enqueue websocket refresh via `session_update.taskflow_refresh.possible_tasks`,
+  - runtime recompute is not gated by session close or categorization completion.
 - Manual categorization path:
   - socket `create_tasks_from_chunks` now queues the same canonical `COMMON.CREATE_TASKS_FROM_CHUNKS` worker job,
   - it does not emit legacy `tickets_prepared`; viewers refresh through the same Mongo-first `session_update.taskflow_refresh.possible_tasks` path.

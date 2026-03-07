@@ -101,6 +101,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session upload flow consumes pending image anchors (`pending_image_anchor_message_id` / `pending_image_anchor_oid`): first uploaded chunk is linked with `image_anchor_message_id`, then pending anchor markers are cleared.
 - Categorization updates are now delivered via websocket `message_update` events (no page refresh required): processor workers push `SEND_TO_SOCKET` jobs, backend consumes them and broadcasts to `voicebot:session:<session_id>`.
 - `CREATE_TASKS` realtime delivery is Mongo-first and session-room based: workers persist refreshed Possible Tasks first, then enqueue `session_update.taskflow_refresh.possible_tasks` so all viewers refresh from canonical backend state.
+- `Possible Tasks` recompute is driven by successful transcript chunks; it is no longer tied to session completion or to categorization completion.
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
