@@ -597,6 +597,10 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
     - reran flaky shard `cd app && npm run test:e2e:voice:shard:1of2` -> pass (`13/13`);
     - canonical gate `./scripts/run-test-suite.sh full --fail-fast` -> `10/10 PASS`.
   - Refreshed `desloppify next` triage anchor: `review::.::holistic::abstraction_fitness::overuse_unknown_in_core_contracts::5ff2ecc1` (Tier 1).
+- Close-session refresh (2026-03-07 22:01):
+  - Refreshed `.desloppify` workspace artifacts: added `.desloppify/plan.json`, regenerated `.desloppify/{query.json,state-typescript.json,state-typescript.json.bak}`, and updated `scorecard.png`.
+  - Current `desloppify next` queue begins with subjective re-review `contract_coherence`, then `dependency_health`, `initialization_coupling`, `logic_clarity`, and `naming_quality`.
+  - Current `desloppify show app/e2e --status open` output is limited to two low-priority items: `subjective_review::app/e2e/auth.setup.ts::unreviewed` and `structural::app/e2e/voice-fab-lifecycle.spec.ts`.
 - Closed testing modernization epic `copilot-2gs1` (stages 1-8): unified test runner now executes by parallel stages with fail-fast abort, backend tests are split into explicit parallel-safe and serialized groups, and app/voice Playwright suites run via shard jobs declared in `platforms.json`.
 - Final full-suite benchmark for this wave: `163.97s -> 80.01s` (`+51.20%` wall-clock improvement).
 - Closed `copilot-sxq1.8` and synced contract coverage with extracted helper modules in voice/frontend (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus TaskPage sanitize rendering contracts.
@@ -608,7 +612,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
   - `make test` target is not defined in this repository,
   - canonical suite passed: `./scripts/run-test-suite.sh full` (`10/10 PASS`),
   - type-safety builds passed: `cd app && npm run build`, `cd backend && npm run build`.
-- Current `desloppify next` top unresolved item is Tier-2 exact duplicate `renderSanitizedHtml` between `app/src/pages/operops/TaskPage.tsx` and `miniapp/src/components/OneTicket.tsx`.
+- Current `desloppify next` top unresolved item is subjective re-review `contract_coherence` (`desloppify review --prepare --dimensions contract_coherence`).
 - Closed `copilot-4o2c` (Voice/OperOps Codex details parity): Voice inline `Подробности Codex задачи` now reuses the same `CodexIssueDetailsCard` as OperOps, preserving Description/Notes paragraph breaks and widening the drawer to `min(1180px, calc(100vw - 48px))`; updated contracts in `app/__tests__/voice/codexTasksInlineDetailsContract.test.ts` and `app/__tests__/operops/codexTaskPageContract.test.ts`.
 - Closed `copilot-y9qy` (Wave 1 `desloppify` debug-logs + exact duplicates) with full swarm execution:
   - completed/closed all child tasks `copilot-y9qy.1`..`.19`,

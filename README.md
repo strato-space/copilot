@@ -425,6 +425,10 @@ Rule for updates:
     - `cd app && npm run test:e2e:voice:shard:1of2` passed (`13/13`) after transient shard failure in one full run;
     - canonical gate passed: `./scripts/run-test-suite.sh full --fail-fast` (`10/10 PASS`).
   - Updated `desloppify` triage pointer for next remediation step: `review::.::holistic::abstraction_fitness::overuse_unknown_in_core_contracts::5ff2ecc1` (`desloppify next`, Tier 1).
+- Close-session refresh (2026-03-07 22:01):
+  - Refreshed `.desloppify` workspace artifacts: added `.desloppify/plan.json`, regenerated `.desloppify/{query.json,state-typescript.json,state-typescript.json.bak}`, and updated `scorecard.png`.
+  - Current `desloppify next` queue now starts with subjective re-review `contract_coherence`, followed by `dependency_health`, `initialization_coupling`, `logic_clarity`, and `naming_quality`.
+  - Current `desloppify show app/e2e --status open` follow-ups are limited to two low-priority items: `subjective_review::app/e2e/auth.setup.ts::unreviewed` and `structural::app/e2e/voice-fab-lifecycle.spec.ts`.
 - Closed testing modernization epic `copilot-2gs1` (stages 1-8): unified runner is stage-parallel with fail-fast stage control, backend tests are split into parallel-safe/serialized groups, app+voice e2e run via shard jobs, and testing docs are synchronized (`README`/`AGENTS`/`docs/TESTING_PROCEDURE.md`) with benchmark history.
 - Final full-suite benchmark for this wave: `163.97s -> 80.01s` (`+51.20%`).
 - Closed `copilot-sxq1.8` and aligned contract tests with extracted voice/frontend helper modules (`voicebotHttp`, `voicebotRuntimeConfig`, `codexTaskTimeline`) plus sanitized TaskPage render contract updates.
@@ -436,7 +440,7 @@ Rule for updates:
   - `make test` target is absent in this repo (`No rule to make target 'test'`);
   - canonical suite passed: `./scripts/run-test-suite.sh full` (`10/10 PASS`);
   - type-safety builds passed: `cd app && npm run build`, `cd backend && npm run build`.
-- Current `desloppify next` top unresolved item: Tier-2 exact duplicate `renderSanitizedHtml` between `app/src/pages/operops/TaskPage.tsx` and `miniapp/src/components/OneTicket.tsx`.
+- Current `desloppify next` top unresolved item: subjective re-review `contract_coherence` (`desloppify review --prepare --dimensions contract_coherence`).
 - Executed swarm waves for `top_open_in_progress_ids_by_priority`: closed `copilot-g0bd` (Codex routing fix) and `copilot-603` (placeholder cleanup), and recorded verification-only audit notes for remaining `copilot-ztlv*`/`copilot-ib30` backlog items.
 - Hardened backend Codex routing in `POST /api/voicebot/create_tickets` (`backend/src/api/routes/voicebot/sessions.ts`) so Codex aliases/labels are resolved before strict ObjectId checks and cannot leak into Mongo task inserts.
 - Added regression coverage for alias/name-based Codex routing and malformed non-Codex performer paths in `backend/__tests__/voicebot/sessionUtilityRuntimeBehavior.test.ts`.

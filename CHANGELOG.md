@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-03-07
+### PROBLEM SOLVED
+- **06:57** `create_tasks` agents still relied on stale runtime defaults and prompt context, so session-derived task generation could miss transcript metadata and explicit invoice-task intent.
+- **08:27** Manual and automatic `create_tasks` flows still diverged in queue/realtime behavior, which produced stale notify symbols, unnecessary recomputation on session close, and delayed possible-task refresh after transcription.
+- **10:27** Voice session tabs lacked reliable counters and activity indicators, and Codex badge counts could drift from the backend route, so operators saw inconsistent workload signals across tabs.
+- **22:01** Local `desloppify` artifacts were stale against the current workspace, leaving the scorecard and next-step queue out of sync with the latest scan state.
+
+### FEATURE IMPLEMENTED
+- **06:57** Standardized `create_tasks` runtime/prompt inputs: the fast-agent default moved to `codexspark`, prompt prep now fetches transcript metadata first, and explicit invoice tasks are preserved in the prompt contract.
+- **08:27** Unified the live `create_tasks` execution path: transcription now triggers possible-task refresh, manual task creation uses the same queue path, stale notify symbols were removed, and session-done no longer recomputes possible tasks.
+- **10:27** Added voice session tab telemetry with per-tab counters, stage activity dots, split task subtabs, and Codex badge counts aligned to the canonical backend counts route.
+- **22:01** Refreshed the `desloppify` workspace snapshot with a new plan queue, updated scanner state files, and a regenerated scorecard image.
+
+### CHANGES
+- **06:57** Updated agents/runtime and prompt contracts in `agents/{README.md,ecosystem.config.cjs,fastagent.config.yaml,agent-cards/create_tasks.md}` plus `backend/src/services/voicebot/createTasksAgent.ts`; refreshed prompt coverage in `app/__tests__/voice/createTasksPromptContract.test.ts`.
+- **08:27** Realtime/taskflow updates landed across `backend/src/workers/voicebot/handlers/{transcribeHandler.ts,createTasksFromChunks.ts,createTasksPostprocessing.ts,doneMultiprompt.ts}`, `backend/src/api/socket/voicebot.ts`, `backend/src/constants.ts`, `app/src/components/voice/Categorization.tsx`, and `app/src/store/voiceBotStore.ts`, with matching docs/test refreshes in `README.md`, `docs/{VOICEBOT_API.md,VOICEBOT_API_TESTS.md,TESTING_PROCEDURE.md}`, and backend/frontend worker/socket suites.
+- **10:27** Session-tab count/UI alignment updated `app/src/pages/voice/SessionPage.tsx`, `app/src/utils/voiceSessionTabs.ts`, `app/src/components/codex/CodexIssuesTable.tsx`, `backend/src/api/routes/voicebot/sessions.ts`, and related contract tests to keep counters and badge sources consistent.
+- **22:01** Added `.desloppify/plan.json`, refreshed `.desloppify/{query.json,state-typescript.json,state-typescript.json.bak}`, and regenerated `scorecard.png`; current `desloppify next` starts with subjective re-review `contract_coherence`, and `desloppify show app/e2e --status open` reports two low-priority follow-ups (`app/e2e/auth.setup.ts` review coverage, `app/e2e/voice-fab-lifecycle.spec.ts` large-file split).
+
 ## 2026-03-06
 ### PROBLEM SOLVED
 - **12:03** Possible tasks still depended on session-local `CREATE_TASKS` payloads and legacy CRM restart flow, so tasks discussed during an active meeting could not become first-class Mongo task records with stable links, dedupe, or status transitions.
@@ -7,12 +26,19 @@
 - **12:03** OperOps `Voice` tab was still session-centric and could not review `NEW_0` possible tasks as one backlog, nor distinguish orphan backlog rows from session-linked voice work.
 - **12:03** CRM/Miniapp task attachments could preserve mojibake UTF-8 filenames from multipart uploads, so uploaded files lost readable Russian names in shared task flows.
 - **12:03** Session taskflow mutations still treated `task_id_from_ai` as a first-class row locator in all write paths, which made canonical `row_id` migration brittle when both values diverged.
+- **16:59** MCP socket requests could fail across transient reconnect windows, so live `create_tasks` runs were prone to disappearing pending state and opaque disconnect errors.
+- **17:08** The paused FAB `Done` path could double-submit close attempts, which made embedded recording flows noisy and error-prone.
+- **17:39** The post-meeting `create_tasks` debug loop still had weak reconnect/error handling and over-large payload contracts, making agent troubleshooting and operator retries harder than necessary.
+- **20:04** Canonical persistence hardening made `NEW_0` rows too rigid: operators could not safely rewrite or re-show deleted possible tasks during a live taskflow iteration.
 
 ### FEATURE IMPLEMENTED
 - **12:03** Added live possible-task generation during meetings: Voice session header now exposes `Tasks` before `Summarize`, the frontend calls MCP `create_tasks` with a structured envelope, and canonical persistence goes through Mongo-backed possible-task routes.
 - **12:03** Promoted possible tasks to master records in `automation_tasks` with status `NEW_0`, voice session backlinks, and structured relation support (`parent-child`, `waits-for`, `blocks`, `relates_to`, `discovered-from`).
 - **12:03** Redesigned OperOps `Voice` around possible-task review: orphan `NEW_0` tasks are grouped first, then newest session groups, with expanded possible-task tables and collapsed processed-task reference tables.
 - **12:03** Added attachment filename normalization for mojibake UTF-8 multipart uploads and tightened taskflow row-locator fallback so `task_id_from_ai` remains metadata-first.
+- **17:39** Hardened `create_tasks` transport/debug behavior with reconnect grace, deterministic disconnect failures, voice-fetch-first prompt guidance, clearer agent-error surfacing, and synchronized MCP server bindings.
+- **20:43** Refined canonical possible-task persistence so `NEW_0` rows remain mutable, deleted rows can reappear when needed, task cursor stubs tolerate unsorted inputs, and the frontend sends a smaller create-tasks payload envelope.
+- **21:22** Standardized agent runtime configuration by tracking the fast-agent upstream/fork state centrally and removing per-card model pins.
 
 ### CHANGES
 - **12:03** Agents/runtime:
@@ -34,6 +60,16 @@
   - updated `backend/src/services/taskAttachments.ts` to decode UTF-8 filenames exposed as latin1 mojibake by multipart parsing,
   - expanded backend coverage in `backend/__tests__/api/{miniappTaskAttachments.contract,taskAttachments.service}.test.ts`,
   - refined canonical row-locator handling in `backend/src/api/routes/voicebot/sessions.ts` and `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts` so `task_id_from_ai` is treated as a legacy fallback after canonical row-id fields.
+- **16:59** MCP reconnect/error handling:
+  - added reconnect grace coverage in `app/src/hooks/useMCPWebSocket.ts` and `app/src/store/mcpRequestStore.ts`,
+  - failed lost tool requests deterministically in `backend/src/services/mcp/index.ts`,
+  - added regression coverage in `app/__tests__/voice/mcpWebSocketReconnectGraceContract.test.ts` and `backend/__tests__/services/mcpProxySocketContract.test.ts`.
+- **17:39** Voice/agent debug flow hardening:
+  - updated `app/src/components/voice/MeetingCard.tsx`, `app/src/pages/operops/CRMPage.tsx`, `app/src/store/voiceBotStore.ts`, `app/src/services/socket.ts`, `app/src/store/sessionsUIStore.ts`, and `app/src/pages/voice/SessionsListPage.tsx` for reconnect-safe request handling and clearer create-tasks errors;
+  - updated `agents/{README.md,agent-cards/create_tasks.md,ecosystem.config.cjs,fastagent.config.yaml,pyproject.toml}` to require `voice.fetch` context first, bind MCP servers explicitly, track upstream/fork revisions, and centralize model/runtime defaults.
+- **20:43** Possible-task contract refinement:
+  - updated `app/src/utils/voicePossibleTasks.ts`, `app/src/store/voiceBotStore.ts`, `app/src/types/voice.ts`, and `backend/src/api/routes/voicebot/sessions.ts` to shrink the payload envelope, allow mutable `NEW_0` rewrites, tolerate unsorted task-cursor stubs, and let deleted possible tasks reappear;
+  - refreshed tests/docs in `app/__tests__/voice/{meetingCardTasksButtonContract.test.ts,possibleTasksPostCreateContract.test.ts,possibleTasksSaveCanonicalItemsContract.test.ts,voicePossibleTasksParser.test.ts}`, `docs/{VOICEBOT_API.md,VOICEBOT_API_TESTS.md,VOICEBOT_CREATE_TASKS_MIGRATION.md,TESTING_PROCEDURE.md}`, and `plan/voice-operops-codex-taskflow-spec.md`.
 - **12:03** Validation:
   - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/voicebot/runtime/sessionUtilityRoutes.test.ts __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts __tests__/voicebot/runtime/sessionUtilityValidationRoutes.test.ts`
   - `cd backend && npm run build`
