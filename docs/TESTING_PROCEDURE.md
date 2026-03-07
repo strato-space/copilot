@@ -42,6 +42,7 @@ Current shell runner ignores unknown fields and remains backward-compatible whil
 From repo root:
 
 ```bash
+# note: repo root does not define `make tests`; use the suite runner below
 # baseline cross-module health check
 ./scripts/run-test-suite.sh baseline
 

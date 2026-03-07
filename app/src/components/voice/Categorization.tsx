@@ -18,7 +18,7 @@ const voiceMessageSources = {
 } as const;
 
 export default function Categorization() {
-    const { voiceBotSession, voiceMesagesData, createTasksFromRows, saveSessionSummary, socket } = useVoiceBotStore();
+    const { voiceBotSession, voiceMesagesData, createTasksFromRows, saveSessionSummary } = useVoiceBotStore();
     const {
         selectedCategorizationRows,
         clearSelectedCategorizationRows,
@@ -33,22 +33,6 @@ export default function Categorization() {
     useEffect(() => {
         initCategorizationSort(voiceBotSession?.is_active);
     }, [voiceBotSession?.is_active, initCategorizationSort]);
-
-    useEffect(() => {
-        if (!socket) return undefined;
-        const handleTicketsPrepared = () => {
-            messageApi.open({
-                key: messageKey,
-                type: 'success',
-                content: 'Готово!',
-                duration: 2,
-            });
-        };
-        socket.on('tickets_prepared', handleTicketsPrepared);
-        return () => {
-            socket.off('tickets_prepared', handleTicketsPrepared);
-        };
-    }, [socket, messageApi, messageKey]);
 
     const groups = useMemo(() => {
         const list = [...(voiceMesagesData || [])];
@@ -89,18 +73,33 @@ export default function Categorization() {
         });
     }, [voiceMesagesData, categorizationSort.ascending]);
 
-    const handleCreateTasks = (): void => {
+    const handleCreateTasks = async (): Promise<void> => {
         if (!voiceBotSession?._id || selectedCategorizationRows.length === 0) return;
 
         messageApi.open({
             key: messageKey,
             type: 'loading',
-            content: 'Подготавливаю задачи...',
-            duration: 0,
+            content: 'Запрашиваю пересчет возможных задач...',
+            duration: 0.8,
         });
 
-        createTasksFromRows(voiceBotSession._id, selectedCategorizationRows as Array<{ text?: string }>);
-        clearSelectedCategorizationRows();
+        try {
+            await createTasksFromRows(voiceBotSession._id, selectedCategorizationRows as Array<{ text?: string }>);
+            messageApi.open({
+                key: messageKey,
+                type: 'success',
+                content: 'Пересчет возможных задач запрошен',
+                duration: 2,
+            });
+            clearSelectedCategorizationRows();
+        } catch (error) {
+            messageApi.open({
+                key: messageKey,
+                type: 'error',
+                content: `Не удалось запросить пересчет задач: ${error instanceof Error ? error.message : String(error)}`,
+                duration: 4,
+            });
+        }
     };
 
     return (

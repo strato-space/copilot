@@ -43,7 +43,7 @@ Target session example: `69a7cb2002566a3e76d2dc11`.
 4. Wait for processing retries (or trigger retry path) until one quota row is transcribed.
 5. Confirm same row is replaced in place with real transcript text (no page reload).
 6. Confirm no stale quota placeholder remains for that row.
-7. Optional create-tasks check: confirm `tickets_prepared` popup/event appears for postprocessing flow as well as direct flow.
+7. Optional create-tasks check: confirm Possible Tasks refresh is delivered through `session_update.taskflow_refresh.possible_tasks` for both postprocessing auto-flow and direct manual flow.
 
 Pass criteria:
 - signature exists for quota fallback rows where metadata is available;
@@ -56,4 +56,3 @@ Pass criteria:
 - Frontend automated gate: `PASS/FAIL`
 - Manual MCP Chrome gate: `PASS/FAIL`
 - Notes (session id, timestamp, anomalies):
-

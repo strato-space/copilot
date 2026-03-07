@@ -90,6 +90,7 @@ The current Possible Tasks / `create_tasks` path is covered by:
   - `workerCreateTasksPostprocessingRealtime.test.ts`
   - `workerPostprocessingCreateTasksAudioMergingHandlers.test.ts`
   - `workerTranscribeHandler.test.ts`
+  - `voicebotSocketCreateTasksFromChunks.test.ts`
 - frontend contract suites around:
   - `MeetingCard` Tasks button
   - canonical `save_possible_tasks` response handling

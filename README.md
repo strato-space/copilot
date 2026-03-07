@@ -220,7 +220,6 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OpenAI/LLM knobs:
   - `OPENAI_BASE_URL` (default `https://api.openai.com/v1`)
   - `VOICEBOT_CATEGORIZATION_MODEL` (default `gpt-4.1`)
-  - `VOICEBOT_TASK_CREATION_MODEL` (default `gpt-4.1`)
 - Transcription errors persist diagnostics (`openai_key_mask`, `openai_key_source`, `openai_api_key_env_file`, `server_name`) for quota/file-path incident analysis; key mask format is normalized to `sk-...LAST4`.
 - Storage and services:
   - `OPENAI_*` keys are loaded from `backend/.env.production` for backend API, TS workers, and TS tgbot runtime.
@@ -228,8 +227,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 
 ### Voice agents integration (frontend -> agents)
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
-- PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex` for deterministic cwd + runtime model override.
-- `create_tasks` card no longer hardcodes model; model selection is controlled at runtime via launch config.
+- PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...` and inherits the model from `agents/fastagent.config.yaml`.
+- `create_tasks` card no longer hardcodes model; runtime default is currently `codexspark` unless CLI/PM2 overrides it.
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
 - Frontend trigger points:

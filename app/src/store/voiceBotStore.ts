@@ -155,8 +155,8 @@ interface VoiceBotSessionProcessingActionsSlice {
 interface VoiceBotSessionsListActionsSlice {
     fetchVoiceBotSessionsList: (options?: { force?: boolean; includeDeleted?: boolean }) => Promise<void>;
     postProcessSession: (sessionId: string) => Promise<void>;
-    createTasksFromChunks: (sessionId: string, chunks: CreateTaskChunk[]) => void;
-    createTasksFromRows: (sessionId: string, rows: Array<{ text?: string }>) => void;
+    createTasksFromChunks: (sessionId: string, chunks: CreateTaskChunk[]) => Promise<void>;
+    createTasksFromRows: (sessionId: string, rows: Array<{ text?: string }>) => Promise<void>;
     fetchTaskTypes: () => Promise<TaskTypeNode[]>;
     fetchPreparedProjects: () => Promise<void>;
     fetchPersonsList: () => Promise<VoicebotPerson[]>;
@@ -1144,11 +1144,6 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 }
             );
 
-            socket.on('tickets_prepared', (data: Record<string, unknown>) => {
-                const { openTicketsModal } = useSessionsUIStore.getState();
-                openTicketsModal(data as { tickets?: Array<Record<string, unknown>> });
-            });
-
             set({ socket });
         }
 
@@ -1727,21 +1722,34 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         }
     },
 
-    createTasksFromChunks: (sessionId, chunks) => {
+    createTasksFromChunks: async (sessionId, chunks) => {
         try {
             const socket = get().socket;
-            if (socket && sessionId && chunks && chunks.length > 0) {
-                socket.emit(SOCKET_EVENTS.CREATE_TASKS_FROM_CHUNKS, { session_id: sessionId, chunks_to_process: chunks });
-            }
+            if (!socket || !sessionId || !chunks || chunks.length === 0) return;
+
+            await new Promise<void>((resolve, reject) => {
+                socket.emit(
+                    SOCKET_EVENTS.CREATE_TASKS_FROM_CHUNKS,
+                    { session_id: sessionId, chunks_to_process: chunks },
+                    (response?: { ok?: boolean; error?: string }) => {
+                        if (response?.ok) {
+                            resolve();
+                            return;
+                        }
+                        reject(new Error(String(response?.error || 'internal_error')));
+                    }
+                );
+            });
         } catch (e) {
             console.error('Ошибка при создании задач из chunks:', e);
+            throw e;
         }
     },
 
-    createTasksFromRows: (sessionId, rows) => {
+    createTasksFromRows: async (sessionId, rows) => {
         if (!sessionId || rows.length === 0) return;
         const chunks_to_process = rows.map((row) => ({ text: row.text || '' }));
-        get().createTasksFromChunks(sessionId, chunks_to_process);
+        await get().createTasksFromChunks(sessionId, chunks_to_process);
     },
 
     fetchTaskTypes: async () => {

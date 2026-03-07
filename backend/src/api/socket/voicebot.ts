@@ -3,8 +3,11 @@ import jwt from 'jsonwebtoken';
 import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,
+  VOICEBOT_JOBS,
+  VOICEBOT_QUEUES,
 } from '../../constants.js';
 import { getDb } from '../../services/db.js';
+import { getVoicebotQueues } from '../../services/voicebotQueues.js';
 import { getLogger } from '../../utils/logger.js';
 import { PermissionManager, type Performer } from '../../permissions/permission-manager.js';
 import { computeSessionAccess } from '../../services/voicebot/session-socket-auth.js';
@@ -406,6 +409,26 @@ export function registerVoicebotSocketHandlers(
             replyError(reply, access.error);
             return;
           }
+          const commonQueue =
+            options.queues?.[VOICEBOT_QUEUES.COMMON] || getVoicebotQueues()?.[VOICEBOT_QUEUES.COMMON] || null;
+          if (!commonQueue) {
+            logger.warn('[voicebot-socket] create_tasks_from_chunks queue unavailable', {
+              socketId: socket.id,
+              session_id,
+            });
+            reply({ ok: false, error: 'queue_unavailable' });
+            return;
+          }
+          await commonQueue.add(
+            VOICEBOT_JOBS.common.CREATE_TASKS_FROM_CHUNKS,
+            {
+              session_id,
+              chunks_to_process,
+            },
+            {
+              attempts: 1,
+            }
+          );
           emitToSession(voicebotNamespace, session_id, 'session_status', {
             session_id,
             status: 'tasks_requested',
