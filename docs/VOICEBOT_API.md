@@ -85,12 +85,18 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - The frontend now sends a compact session envelope (`session_id`, `session_url`, `project_id`) instead of a giant transcript/categorization/material payload over Socket.IO.
 - The prompt rehydrates context through MCP `voice`:
   - `voice.fetch(..., mode="transcript")`
-  - `voice.search(session_id=..., limit=1)`
+  - `voice.project(project_id)`
   - `voice.session_possible_tasks(...)`
-  - `voice.crm_tickets(...)`
+  - `voice.crm_tickets(session_id=...)`
+  - `voice.crm_tickets(project_id=...)`
 - `NEW_0` Possible Tasks are mutable:
   - same-scope rows are rewritten in place by canonical `row_id/id`
   - duplicate suppression applies to materialized task space, not to mutable `NEW_0` baseline rows
+- Automatic runtime path:
+  - every successful text transcription completion enqueues `POSTPROCESSORS.CREATE_TASKS`,
+  - worker delegates to fast-agent `create_tasks`,
+  - refreshed possible-task rows are persisted to `automation_tasks` and synced into `processors_data.CREATE_TASKS` compatibility projection,
+  - only after persistence does the worker enqueue websocket refresh via `session_update.taskflow_refresh.possible_tasks`.
 
 ### Multi-process delivery
 - Socket.IO Redis adapter is enabled in backend bootstrap (`backend/src/index.ts`), so events are delivered correctly across PM2 processes.

@@ -54,6 +54,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 - `create_tasks` must not route through StratoProject execution; enrichment is direct MCP `voice`.
 - `create_tasks` treats current-session `NEW_0` possible tasks as a mutable baseline: same-scope rows should be returned with the same `row_id/id` and improved wording instead of being suppressed as duplicates.
 - `voice.fetch(..., mode="transcript")` is the canonical metadata source for session-backed task extraction and now carries a frontmatter block with `session-id`, `session-name`, `session-url`, `project-id`, `project-name`, and `routing-topic`.
+- If transcript metadata includes `project-id`, `create_tasks` must read exactly one project card through `voice.project(project_id)`; it should not rehydrate project context through `voice.search` or a full project list.
 
 ### Production Deployment (PM2)
 
@@ -88,11 +89,11 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 Agent cards are located in `agent-cards/` directory:
 
 ### create_tasks.md
-- **Model:** inherited from runtime (`--model` in launch config)
+- **Model:** inherited from runtime/config default
 - **Purpose:** Extract actionable tasks from compact session envelopes
 - **Input modes:** `raw_text`, `session_id`, `session_url` (plain string remains a legacy alias for `raw_text`)
 - **Enrichment:** direct MCP `voice` reads
-- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.session_possible_tasks(...)` -> `voice.crm_tickets(...)`
+- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.project(project_id)` -> `voice.session_possible_tasks(...)` -> `voice.crm_tickets(session_id)` -> `voice.crm_tickets(project_id)`
 - **Output:** canonical JSON array with `id/name/description/priority/performer_id/project_id/task_type_id/dialogue_tag/task_id_from_ai/dependencies_from_ai/dialogue_reference`
 - **Guardrails:** executor-ready descriptions, no finance/evaluative noise, no StratoProject execution hop, mutable `NEW_0` rewrite in place for same-scope rows
 

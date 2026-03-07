@@ -103,10 +103,14 @@ describe('handleTranscribeJob', () => {
     createTranscriptionMock.mockResolvedValue({ text: 'hello world' });
     getAudioDurationFromFileMock.mockResolvedValue(12);
     const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-1' }));
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'postprocessors-job-1' }));
     const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-1' }));
     getVoicebotQueuesMock.mockReturnValue({
       [VOICEBOT_QUEUES.PROCESSORS]: {
         add: processorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsQueueAdd,
       },
       [VOICEBOT_QUEUES.EVENTS]: {
         add: eventsQueueAdd,
@@ -139,6 +143,14 @@ describe('handleTranscribeJob', () => {
       expect.objectContaining({
         message_id: messageId.toString(),
         session_id: sessionId.toString(),
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+    expect(postprocessorsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        auto_requested_at: expect.any(Number),
       }),
       expect.objectContaining({ deduplication: expect.any(Object) })
     );

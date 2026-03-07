@@ -2,7 +2,6 @@ import { ObjectId } from 'mongodb';
 import {
   VOICEBOT_COLLECTIONS,
   VOICEBOT_JOBS,
-  VOICEBOT_PROCESSORS,
   VOICEBOT_QUEUES,
 } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
@@ -11,28 +10,26 @@ import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runti
 import { getLogger } from '../../../utils/logger.js';
 import {
   handleCreateTasksFromChunksJob,
-  type CreateTasksFromChunksJobData,
 } from './createTasksFromChunks.js';
 
 const logger = getLogger();
 
-const RETRY_DELAY_MS = 60_000;
-
 export type CreateTasksPostprocessingJobData = {
   session_id?: string;
+  auto_requested_at?: number;
 };
 
 type SessionRecord = {
   _id: ObjectId;
+  project_id?: ObjectId | string | null;
+  session_name?: string | null;
+  user_id?: ObjectId | string | null;
 };
 
 type MessageRecord = {
   _id: ObjectId;
-  message_type?: string;
   transcription_text?: string;
   text?: string;
-  categorization?: unknown;
-  processors_data?: Record<string, unknown>;
   message_timestamp?: number;
   message_id?: number | string;
 };
@@ -53,43 +50,6 @@ const runtimeQuery = (query: Record<string, unknown>) =>
     familyMatch: IS_PROD_RUNTIME,
     includeLegacyInProd: IS_PROD_RUNTIME,
   });
-
-const NON_CATEGORIZABLE_TYPES = new Set([
-  'image',
-  'screenshot',
-  'document',
-  'photo',
-  'file',
-  'attachment',
-]);
-
-const shouldRequireCategorization = (message: MessageRecord): boolean => {
-  const messageType = String(message.message_type || '').trim().toLowerCase();
-  if (NON_CATEGORIZABLE_TYPES.has(messageType)) return false;
-
-  const transcriptionText = String(message.transcription_text || '').trim();
-  const fallbackText = String(message.text || '').trim();
-  const effectiveText = transcriptionText || fallbackText;
-  if (!effectiveText) return false;
-  if (effectiveText === '[Image]' || effectiveText === '[Screenshot]') return false;
-  return true;
-};
-
-const isCategorizationReady = (message: MessageRecord): boolean => {
-  if (!shouldRequireCategorization(message)) {
-    return true;
-  }
-
-  if (Array.isArray(message.categorization)) {
-    return true;
-  }
-
-  const processor =
-    (message.processors_data?.[VOICEBOT_PROCESSORS.CATEGORIZATION] as Record<string, unknown> | undefined) ||
-    null;
-
-  return processor?.is_processed === true || processor?.is_finished === true;
-};
 
 const markSessionMessagesProcessed = async ({ sessionObjectId }: { sessionObjectId: ObjectId }): Promise<void> => {
   const db = getDb();
@@ -146,80 +106,61 @@ const markCreateTasksNoData = async ({ sessionObjectId }: { sessionObjectId: Obj
   );
 };
 
-const enqueueSessionTasksCreatedNotify = async (session_id: string): Promise<void> => {
-  const queues = getVoicebotQueues();
-  const notifiesQueue = queues?.[VOICEBOT_QUEUES.NOTIFIES];
-  if (!notifiesQueue) return;
-
-  await notifiesQueue.add(
-    VOICEBOT_JOBS.notifies.SESSION_TASKS_CREATED,
-    { session_id },
-    {
-      attempts: 1,
-      deduplication: { id: `${session_id}-SESSION_TASKS_CREATED` },
-    }
-  );
-};
-
-const enqueuePendingCategorizationJobs = async ({
+const enqueueCreateTasksPostprocessing = async ({
   session_id,
-  messages,
+  auto_requested_at,
 }: {
   session_id: string;
-  messages: MessageRecord[];
-}): Promise<{ enqueued: number; skippedNoQueue: boolean }> => {
+  auto_requested_at?: number;
+}): Promise<boolean> => {
   const queues = getVoicebotQueues();
-  const processorsQueue = queues?.[VOICEBOT_QUEUES.PROCESSORS];
-  if (!processorsQueue) {
-    return { enqueued: 0, skippedNoQueue: true };
+  const postprocessorsQueue = queues?.[VOICEBOT_QUEUES.POSTPROCESSORS];
+  if (!postprocessorsQueue) {
+    logger.warn('[voicebot-worker] create_tasks auto refresh skipped without postprocessors queue', {
+      session_id,
+    });
+    return false;
   }
 
-  const db = getDb();
-  let enqueued = 0;
-  const now = Date.now();
+  await postprocessorsQueue.add(
+    VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+    {
+      session_id,
+      ...(typeof auto_requested_at === 'number' ? { auto_requested_at } : {}),
+    },
+    {
+      deduplication: { id: `${session_id}-CREATE_TASKS-AUTO` },
+    }
+  );
+  return true;
+};
 
-  for (const message of messages) {
-    if (!shouldRequireCategorization(message)) continue;
-    if (isCategorizationReady(message)) continue;
-
-    const processorState = (message.processors_data?.[VOICEBOT_PROCESSORS.CATEGORIZATION] ||
-      {}) as Record<string, unknown>;
-    if (processorState.is_processing === true) continue;
-
-    const messageObjectId = new ObjectId(message._id);
-    const messageId = messageObjectId.toString();
-    const jobId = `${session_id}-${messageId}-CATEGORIZE`;
-    const processorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
-
-    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
-      runtimeQuery({ _id: messageObjectId }),
-      {
-        $set: {
-          [`${processorKey}.is_processing`]: true,
-          [`${processorKey}.is_processed`]: false,
-          [`${processorKey}.is_finished`]: false,
-          [`${processorKey}.job_queued_timestamp`]: now,
-        },
-        $unset: {
-          categorization_retry_reason: 1,
-          categorization_next_attempt_at: 1,
-        },
-      }
-    );
-
-    await processorsQueue.add(
-      VOICEBOT_JOBS.voice.CATEGORIZE,
-      {
-        message_id: messageId,
-        session_id,
-        job_id: jobId,
+const getLatestAutoRequestedAt = async ({
+  db,
+  sessionObjectId,
+}: {
+  db: ReturnType<typeof getDb>;
+  sessionObjectId: ObjectId;
+}): Promise<number> => {
+  const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+    runtimeQuery({ _id: sessionObjectId }),
+    {
+      projection: {
+        'processors_data.CREATE_TASKS.auto_requested_at': 1,
       },
-      { deduplication: { id: jobId } }
-    );
-    enqueued += 1;
-  }
-
-  return { enqueued, skippedNoQueue: false };
+    }
+  );
+  const processorsData =
+    session?.processors_data && typeof session.processors_data === 'object'
+      ? (session.processors_data as Record<string, unknown>)
+      : {};
+  const createTasksProcessor =
+    processorsData.CREATE_TASKS && typeof processorsData.CREATE_TASKS === 'object'
+      ? (processorsData.CREATE_TASKS as Record<string, unknown>)
+      : {};
+  const raw = createTasksProcessor.auto_requested_at;
+  const numeric = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(numeric) ? numeric : 0;
 };
 
 export const handleCreateTasksPostprocessingJob = async (
@@ -257,91 +198,45 @@ export const handleCreateTasksPostprocessingJob = async (
     };
   }
 
-  const allCategorized = messages.every(isCategorizationReady);
-  if (!allCategorized) {
-    const pendingCategorization = await enqueuePendingCategorizationJobs({
-      session_id,
-      messages,
-    });
-
-    if (pendingCategorization.enqueued > 0) {
-      logger.info('[voicebot-worker] create_tasks queued missing categorization jobs', {
-        session_id,
-        enqueued: pendingCategorization.enqueued,
-      });
-    }
-    if (pendingCategorization.skippedNoQueue) {
-      logger.warn('[voicebot-worker] create_tasks pending without processors queue', {
-        session_id,
-      });
-    }
-
-    await markCreateTasksPending({ sessionObjectId, isProcessing: false });
-
-    const queues = getVoicebotQueues();
-    const postprocessorsQueue = queues?.[VOICEBOT_QUEUES.POSTPROCESSORS];
-    if (!postprocessorsQueue) {
-      logger.warn('[voicebot-worker] create_tasks pending without postprocessors queue', {
-        session_id,
-      });
-      return {
-        ok: true,
-        skipped: true,
-        reason: 'categorization_pending',
-        requeued: false,
-        session_id,
-      };
-    }
-
-    const jobId = `${session_id}-CREATE_TASKS-${Date.now()}`;
-    await postprocessorsQueue.add(
-      VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
-      {
-        session_id,
-        job_id: jobId,
-      },
-      {
-        delay: RETRY_DELAY_MS,
-      }
-    );
-
-    return {
-      ok: true,
-      skipped: true,
-      reason: 'categorization_pending',
-      requeued: true,
-      session_id,
-    };
-  }
-
+  const startedAt = Date.now();
   await markCreateTasksPending({ sessionObjectId, isProcessing: true });
 
-  const chunksToProcess = messages
-    .map((message) => message.categorization)
-    .filter((value) => Array.isArray(value) && value.length > 0)
-    .flat() as CreateTasksFromChunksJobData['chunks_to_process'];
+  const hasAnyTranscript = messages.some((message) => {
+    const transcriptionText = String(message.transcription_text || '').trim();
+    const fallbackText = String(message.text || '').trim();
+    return Boolean(transcriptionText || fallbackText);
+  });
 
-  if (!chunksToProcess || chunksToProcess.length === 0) {
+  if (!hasAnyTranscript) {
     await markCreateTasksNoData({ sessionObjectId });
     await markSessionMessagesProcessed({ sessionObjectId });
     return {
       ok: true,
       skipped: true,
-      reason: 'no_chunks_to_process',
+      reason: 'no_transcript_text',
       session_id,
     };
   }
 
-  const result = await handleCreateTasksFromChunksJob({
-    session_id,
-    chunks_to_process: chunksToProcess,
-  });
-
-  if (result.ok && (result.tasks_count || 0) > 0) {
-    await enqueueSessionTasksCreatedNotify(session_id);
-  }
+  const result = await handleCreateTasksFromChunksJob({ session_id });
   if (result.ok) {
     await markSessionMessagesProcessed({ sessionObjectId });
+  }
+
+  const latestRequestedAt = await getLatestAutoRequestedAt({ db, sessionObjectId });
+  const shouldRequeue = latestRequestedAt > startedAt;
+  if (shouldRequeue) {
+    const requeued = await enqueueCreateTasksPostprocessing({
+      session_id,
+      auto_requested_at: latestRequestedAt,
+    });
+    if (requeued) {
+      logger.info('[voicebot-worker] create_tasks auto refresh requeued after newer transcription', {
+        session_id,
+        started_at: startedAt,
+        latest_requested_at: latestRequestedAt,
+      });
+    }
   }
 
   const response: CreateTasksPostprocessingResult = {
@@ -353,6 +248,7 @@ export const handleCreateTasksPostprocessingJob = async (
   if (typeof result.skipped === 'boolean') response.skipped = result.skipped;
   if (typeof result.reason === 'string' && result.reason) response.reason = result.reason;
   if (typeof result.error === 'string' && result.error) response.error = result.error;
+  if (shouldRequeue) response.requeued = true;
 
   return response;
 };

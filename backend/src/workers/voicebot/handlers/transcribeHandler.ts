@@ -77,6 +77,7 @@ type VoiceSessionRecord = {
   user_id?: ObjectId | string | null;
   project_id?: ObjectId | string | null;
   processors?: unknown[];
+  session_processors?: unknown[];
 };
 
 type CodexProject = {
@@ -810,6 +811,53 @@ const enqueueCategorizationIfEnabled = async ({
   );
 };
 
+const enqueueCreateTasksPostprocessingIfEnabled = async ({
+  db,
+  session,
+  session_id,
+}: {
+  db: ReturnType<typeof getDb>;
+  session: VoiceSessionRecord;
+  session_id: string;
+}): Promise<void> => {
+  const sessionProcessors = Array.isArray(session.session_processors)
+    ? session.session_processors.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
+  const createTasksEnabled =
+    sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_JOBS.postprocessing.CREATE_TASKS);
+
+  if (!createTasksEnabled) return;
+
+  const queues = getVoicebotQueues();
+  const postprocessorsQueue = queues?.[VOICEBOT_QUEUES.POSTPROCESSORS];
+  const requestedAt = Date.now();
+
+  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: session._id }), {
+    $set: {
+      'processors_data.CREATE_TASKS.auto_requested_at': requestedAt,
+      updated_at: new Date(),
+    },
+  });
+
+  if (!postprocessorsQueue) {
+    logger.warn('[voicebot-worker] create_tasks auto refresh queue unavailable after transcribe', {
+      session_id,
+    });
+    return;
+  }
+
+  await postprocessorsQueue.add(
+    VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+    {
+      session_id,
+      auto_requested_at: requestedAt,
+    },
+    {
+      deduplication: { id: `${session_id}-CREATE_TASKS-AUTO` },
+    }
+  );
+};
+
 const queueMessageUpdateEvent = async ({
   session_id,
   message_id,
@@ -1003,6 +1051,11 @@ export const handleTranscribeJob = async (
         message_id,
         messageObjectId,
       });
+      await enqueueCreateTasksPostprocessingIfEnabled({
+        db,
+        session,
+        session_id,
+      });
       await emitMessageUpdateByIdSafe({
         db,
         messageObjectId,
@@ -1070,6 +1123,11 @@ export const handleTranscribeJob = async (
         session_id,
         message_id,
         messageObjectId,
+      });
+      await enqueueCreateTasksPostprocessingIfEnabled({
+        db,
+        session,
+        session_id,
       });
       await emitMessageUpdateByIdSafe({
         db,
@@ -1494,16 +1552,21 @@ export const handleTranscribeJob = async (
       transcriptionText: transcription_text,
     });
 
-    await enqueueCategorizationIfEnabled({
-      db,
-      session,
-      session_id,
-      message_id,
-      messageObjectId,
-    });
-    await emitMessageUpdateByIdSafe({
-      db,
-      messageObjectId,
+  await enqueueCategorizationIfEnabled({
+    db,
+    session,
+    session_id,
+    message_id,
+    messageObjectId,
+  });
+  await enqueueCreateTasksPostprocessingIfEnabled({
+    db,
+    session,
+    session_id,
+  });
+  await emitMessageUpdateByIdSafe({
+    db,
+    messageObjectId,
       message_id,
       session_id,
     });

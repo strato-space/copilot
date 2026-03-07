@@ -230,10 +230,12 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
 - PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex` for deterministic cwd + runtime model override.
 - `create_tasks` card no longer hardcodes model; model selection is controlled at runtime via launch config.
-- `create_tasks` now expects a structured JSON envelope inside `message` and can enrich context directly through MCP `voice` and `gsh`; it must not route through `StratoProject` execution.
+- `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
+- Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.
+  - successful transcript completion in TS worker runtime auto-enqueues `CREATE_TASKS`, persists refreshed `NEW_0` master rows into `automation_tasks`, and only then emits `session_update.taskflow_refresh.possible_tasks` to all open viewers of the session.
 - Frontend MCP endpoint resolution order:
   1. `window.agents_api_url` (if set at runtime),
   2. `VITE_AGENTS_API_URL`,

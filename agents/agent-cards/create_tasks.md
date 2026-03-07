@@ -60,6 +60,7 @@ oneOf:
   - `routing-topic`
 - После metadata-fetch ОБЯЗАТЕЛЬНО используй `voice.session_possible_tasks(session_id=session_id)` для чтения уже существующих Possible Tasks этой сессии.
 - После metadata-fetch ОБЯЗАТЕЛЬНО используй `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")` для чтения уже созданных задач этой сессии.
+- Если из transcript meta-block известен `project-id`, ОБЯЗАТЕЛЬНО дочитай `voice.project(project_id)` как единственную карточку проекта для project-side metadata/context.
 - Если после metadata-fetch известен `project_id`, используй `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table")` и отфильтруй из результата закрытые/архивные статусы.
 - Если любой MCP-источник всё же вернул rows/tasks с `is_deleted=true` или непустым `deleted_at`, считай такие rows/tasks удалёнными и полностью исключай их из duplicate suppression, mutable-baseline reasoning и relation context.
 - Если session ref пришёл как URL и нужно надёжно нормализовать его до канонического вида, используй `voice.resolve_session_ref(session=<url-or-id>)`, но не вместо `voice.fetch(...)`.
@@ -69,18 +70,19 @@ oneOf:
 1. Нормализуй envelope.
 2. Если известен `session_id`, первым MCP-вызовом всегда сделай `voice.fetch(id=session_id, mode="transcript")`.
 3. Извлеки из transcript meta-block `project-id`, `project-name`, `session-name`, `session-url`, `routing-topic` и прочий metadata-контекст.
-4. Собери основной контекст из `raw_text` и transcript-fetch.
-5. Если известен `session_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.session_possible_tasks(session_id=session_id)` уже существующие Possible Tasks этой сессии.
-6. Если известен `session_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")` уже созданные задачи по этой сессии.
-7. Если из transcript meta-block известен `project-id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table")` все активные задачи проекта:
+4. Если из transcript meta-block известен `project-id`, ОБЯЗАТЕЛЬНО прочитай `voice.project(project_id)` и используй эту project card как project-side metadata context.
+5. Собери основной контекст из `raw_text`, transcript-fetch и project card (если есть).
+6. Если известен `session_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.session_possible_tasks(session_id=session_id)` уже существующие Possible Tasks этой сессии.
+7. Если известен `session_id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")` уже созданные задачи по этой сессии.
+8. Если из transcript meta-block известен `project-id`, ОБЯЗАТЕЛЬНО прочитай через MCP `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table")` все активные задачи проекта:
    - исключай закрытые/архивные статусы,
    - исключай удалённые rows/tasks (`is_deleted=true` или непустой `deleted_at`),
    - ориентируйся на активный пул работ (`Backlog`, `New / *`, `Plan / *`, `Ready`, `Progress *`, `Review / *`, `Upload / *`),
    - не считай активными `Done`, `Complete`, `PostWork`, `Archive`.
-8. Считай `voice.session_possible_tasks(session_id=...)` mutable baseline для текущей сессии и верни полный желаемый набор `NEW_0` rows для этой сессии, а не только дельту.
-9. Выдели только executor-ready задачи.
-10. Удали дубли и почти-дубли.
-11. Верни только канонический JSON-массив.
+9. Считай `voice.session_possible_tasks(session_id=...)` mutable baseline для текущей сессии и верни полный желаемый набор `NEW_0` rows для этой сессии, а не только дельту.
+10. Выдели только executor-ready задачи.
+11. Удали дубли и почти-дубли.
+12. Верни только канонический JSON-массив.
 
 Формат ответа:
 - Только валидный JSON-массив объектов.
@@ -118,7 +120,6 @@ oneOf:
   - если scope тот же, но задача уже выведена из `NEW_0` в обычную task space, не возвращай её как новую `Possible Task`;
   - если project_id известен и в проекте уже есть активная non-`NEW_0` задача с тем же смыслом, не возвращай дубликат;
   - если project_id известен и в проекте уже есть `NEW_0 voice_possible_task` с тем же смыслом из другой сессии, переиспользуй тот же `row_id/id` и обнови формулировку in-place вместо создания новой row;
-  - если roadmap/backlog из `gsh` уже содержит ту же executor-ready задачу, не клонируй её;
   - если во входе есть только статус, эмоция, жалоба, оценка или обсуждение без нового действия, не создавай задачу.
 - Для дедупликации в первую очередь сравнивай:
   - `name`,
