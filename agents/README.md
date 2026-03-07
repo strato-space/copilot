@@ -37,7 +37,6 @@ uv run --directory "$(pwd)" fast-agent serve \
   --config-path fastagent.config.yaml \
   --agent-cards agent-cards \
   --name copilot-agent-services \
-  --model codexplan \
   --transport http \
   --host 127.0.0.1 \
   --port 8722
@@ -47,7 +46,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 
 ## Runtime Notes
 
-- `create_tasks` inherits the runtime model from the process launch args (`--model codexplan` in local run and PM2). Do not pin a per-card model unless you intentionally want to change runtime behavior.
+- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `codexspark`.
 - Preferred `create_tasks` input is a compact structured envelope with modes `raw_text`, `session_id`, or `session_url`.
 - A plain string is still treated as legacy `raw_text` input for backward compatibility.
 - Session-backed task extraction enriches context directly through MCP `voice`.
@@ -98,7 +97,7 @@ Agent cards are located in `agent-cards/` directory:
 - **Guardrails:** executor-ready descriptions, no finance/evaluative noise, no StratoProject execution hop, mutable `NEW_0` rewrite in place for same-scope rows
 
 ### generate_session_title.md
-- **Model:** gpt-4.1-mini
+- **Model:** inherited from runtime/config
 - **Purpose:** Generate concise session titles (3-8 words)
 - **Output:** Single string with the title
 
