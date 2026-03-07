@@ -139,6 +139,7 @@ describe('Voicebot session_tab_counts route', () => {
       2,
       expect.objectContaining({
         is_deleted: { $ne: true },
+        codex_task: true,
         external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
       })
     );

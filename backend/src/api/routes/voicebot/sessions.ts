@@ -4757,6 +4757,7 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
                 mergeWithRuntimeFilter(
                     {
                         external_ref: externalRef,
+                        codex_task: true,
                         is_deleted: { $ne: true },
                     },
                     {
@@ -4939,6 +4940,7 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
                 mergeWithRuntimeFilter(
                     {
                         is_deleted: { $ne: true },
+                        codex_task: true,
                         external_ref: externalRef,
                     },
                     {

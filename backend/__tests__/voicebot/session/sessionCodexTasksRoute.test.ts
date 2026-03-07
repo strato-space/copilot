@@ -196,6 +196,7 @@ describe('Voicebot codex_tasks route', () => {
     expect(tasksFindMock).toHaveBeenCalledWith(
       expect.objectContaining({
         external_ref: externalRef,
+        codex_task: true,
         is_deleted: { $ne: true },
       }),
       expect.objectContaining({
