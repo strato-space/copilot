@@ -137,8 +137,6 @@ export const VOICEBOT_WORKER_MANIFEST: Record<string, VoicebotWorkerHandler> = {
     handleNotifyJob(payload as NotifyJobData, VOICEBOT_JOBS.notifies.SESSION_TRANSCRIPTION_DONE),
   [VOICEBOT_JOBS.notifies.SESSION_CATEGORIZATION_DONE]: async (payload: unknown) =>
     handleNotifyJob(payload as NotifyJobData, VOICEBOT_JOBS.notifies.SESSION_CATEGORIZATION_DONE),
-  [VOICEBOT_JOBS.notifies.SESSION_TASKS_CREATED]: async (payload: unknown) =>
-    handleNotifyJob(payload as NotifyJobData, VOICEBOT_JOBS.notifies.SESSION_TASKS_CREATED),
   [VOICEBOT_JOBS.notifies.SESSION_PROJECT_ASSIGNED]: async (payload: unknown) =>
     handleNotifyJob(payload as NotifyJobData, VOICEBOT_JOBS.notifies.SESSION_PROJECT_ASSIGNED),
   [VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE]: async (payload: unknown) =>
