@@ -4808,13 +4808,16 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
     }
 });
 
-const VOICE_SESSION_TASK_COUNT_STATUSES = [
+const VOICE_SESSION_WORK_TASK_COUNT_STATUSES = [
     TASK_STATUSES.READY_10,
     TASK_STATUSES.PROGRESS_0,
     TASK_STATUSES.PROGRESS_10,
     TASK_STATUSES.PROGRESS_20,
     TASK_STATUSES.PROGRESS_30,
     TASK_STATUSES.PROGRESS_40,
+] as const;
+
+const VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES = [
     TASK_STATUSES.REVIEW_10,
     TASK_STATUSES.REVIEW_20,
 ] as const;
@@ -4920,13 +4923,28 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: sessionRecord });
         const externalRef = voiceSessionUrlUtils.canonical(sessionId);
 
-        const [tasks_count, codex_count] = await Promise.all([
+        const [tasks_work_count, tasks_review_count, codex_count] = await Promise.all([
             db.collection(COLLECTIONS.TASKS).countDocuments(
                 mergeWithRuntimeFilter(
                     {
                         is_deleted: { $ne: true },
                         codex_task: { $ne: true },
-                        task_status: { $in: [...VOICE_SESSION_TASK_COUNT_STATUSES] },
+                        task_status: { $in: [...VOICE_SESSION_WORK_TASK_COUNT_STATUSES] },
+                        ...sessionScopedTaskMatch,
+                    },
+                    {
+                        field: 'runtime_tag',
+                        familyMatch: IS_PROD_RUNTIME,
+                        includeLegacyInProd: IS_PROD_RUNTIME,
+                    }
+                )
+            ),
+            db.collection(COLLECTIONS.TASKS).countDocuments(
+                mergeWithRuntimeFilter(
+                    {
+                        is_deleted: { $ne: true },
+                        codex_task: { $ne: true },
+                        task_status: { $in: [...VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES] },
                         ...sessionScopedTaskMatch,
                     },
                     {
@@ -4955,7 +4973,9 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         return res.status(200).json({
             success: true,
             session_id: sessionId,
-            tasks_count,
+            tasks_count: tasks_work_count + tasks_review_count,
+            tasks_work_count,
+            tasks_review_count,
             codex_count,
         });
     } catch (error) {

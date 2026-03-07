@@ -113,7 +113,8 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - `Codex`
   - `Screenshort`
 - `Log` intentionally has no count badge.
-- `Задачи` and `Codex` counts are loaded through `/api/voicebot/session_tab_counts`.
+- `Задачи` total + `Work / Review` counts are loaded through `/api/voicebot/session_tab_counts`.
+- `Codex` badge is derived from the same `codex/issues` source + session `source_ref` filter as the `Codex` tab content.
 - `Транскрипция`, `Категоризация`, and `Возможные задачи` show a subtle green pulse dot while their stage is still pending:
   - transcription pending = uploaded/new chunk not yet transcribed,
   - categorization pending = transcript exists but categorization is not complete,

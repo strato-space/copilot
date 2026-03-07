@@ -15,13 +15,13 @@ describe('SessionPage OperOps tasks tab contract', () => {
     expect(source).toContain('refreshToken={sessionTasksRefreshToken}');
   });
 
-  it('keeps tasks tab before Screenshort and provides Work/Review sub-tabs', () => {
+  it('keeps tasks tab before Screenshort and provides Work/Review sub-tabs with counts', () => {
     const idxTasks = source.indexOf("key: 'operops_tasks'");
     const idxScreenshort = source.indexOf("key: 'screenshort'");
 
     expect(idxTasks).toBeGreaterThanOrEqual(0);
     expect(idxScreenshort).toBeGreaterThan(idxTasks);
-    expect(source).toContain("{ key: 'work', label: 'Work' }");
-    expect(source).toContain("{ key: 'review', label: 'Review' }");
+    expect(source).toContain("{ key: 'work', label: renderTabLabel('Work', sessionWorkTasksCount) }");
+    expect(source).toContain("{ key: 'review', label: renderTabLabel('Review', sessionReviewTasksCount) }");
   });
 });

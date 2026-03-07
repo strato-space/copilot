@@ -5,8 +5,9 @@ import { useParams } from 'react-router-dom';
 
 import { CRMKanban } from '../../components/crm';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
+import { useRequestStore } from '../../store/requestStore';
 import { voicebotHttp } from '../../store/voicebotHttp';
-import { buildVoiceSessionTaskSourceRefs } from '../../utils/voiceSessionTaskSource';
+import { buildVoiceSessionTaskSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
 import {
     countVisibleCategorizationGroups,
     countVisibleTranscriptionMessages,
@@ -134,6 +135,7 @@ export default function SessionPage() {
         sessionTasksRefreshToken,
         sessionCodexRefreshToken,
     } = useVoiceBotStore();
+    const { api_request } = useRequestStore();
     const materialTargetMessageId = useSessionsUIStore((state) => state.materialTargetMessageId);
     const clearMaterialTargetMessageId = useSessionsUIStore((state) => state.clearMaterialTargetMessageId);
     const { hasPermission } = useCurrentUserPermissions();
@@ -143,6 +145,8 @@ export default function SessionPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [sessionOperOpsTasksCount, setSessionOperOpsTasksCount] = useState(0);
+    const [sessionWorkTasksCount, setSessionWorkTasksCount] = useState(0);
+    const [sessionReviewTasksCount, setSessionReviewTasksCount] = useState(0);
     const [sessionCodexCount, setSessionCodexCount] = useState(0);
 
     useEffect(() => {
@@ -276,25 +280,40 @@ export default function SessionPage() {
         let disposed = false;
         if (!sessionId) {
             setSessionOperOpsTasksCount(0);
+            setSessionWorkTasksCount(0);
+            setSessionReviewTasksCount(0);
             setSessionCodexCount(0);
             return;
         }
 
         const loadTabCounts = async (): Promise<void> => {
             try {
-                const response = await voicebotHttp.request<{
+                const [tabCountsResponse, codexIssues] = await Promise.all([
+                    voicebotHttp.request<{
                     success?: boolean;
                     tasks_count?: unknown;
+                    tasks_work_count?: unknown;
+                    tasks_review_count?: unknown;
                     codex_count?: unknown;
-                }>('voicebot/session_tab_counts', { session_id: sessionId }, true);
+                    }>('voicebot/session_tab_counts', { session_id: sessionId }, true),
+                    api_request<unknown>('codex/issues', { view: 'all', limit: 1000 }, { silent: true }),
+                ]);
                 if (disposed) return;
-                setSessionOperOpsTasksCount(Number(response?.tasks_count) || 0);
-                setSessionCodexCount(Number(response?.codex_count) || 0);
+                setSessionOperOpsTasksCount(Number(tabCountsResponse?.tasks_count) || 0);
+                setSessionWorkTasksCount(Number(tabCountsResponse?.tasks_work_count) || 0);
+                setSessionReviewTasksCount(Number(tabCountsResponse?.tasks_review_count) || 0);
+                setSessionCodexCount(
+                    Array.isArray(codexIssues)
+                        ? codexIssues.filter((issue) => ticketMatchesVoiceSessionSourceRefs(issue, sessionTaskSourceRefs)).length
+                        : 0
+                );
             } catch (error) {
                 if (disposed) return;
                 console.error('Failed to refresh voice tab counters:', error);
                 setSessionCodexCount(0);
                 setSessionOperOpsTasksCount(0);
+                setSessionWorkTasksCount(0);
+                setSessionReviewTasksCount(0);
             }
         };
 
@@ -303,8 +322,10 @@ export default function SessionPage() {
             disposed = true;
         };
     }, [
+        api_request,
         sessionCodexRefreshToken,
         sessionId,
+        sessionTaskSourceRefs,
         sessionTasksRefreshToken,
     ]);
 
@@ -349,8 +370,8 @@ export default function SessionPage() {
                         size="small"
                         className="bg-transparent"
                         items={[
-                            { key: 'work', label: 'Work' },
-                            { key: 'review', label: 'Review' },
+                            { key: 'work', label: renderTabLabel('Work', sessionWorkTasksCount) },
+                            { key: 'review', label: renderTabLabel('Review', sessionReviewTasksCount) },
                         ]}
                     />
                     <CRMKanban

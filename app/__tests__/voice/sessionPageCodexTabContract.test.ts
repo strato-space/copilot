@@ -13,6 +13,8 @@ describe('SessionPage codex tab contract', () => {
     expect(source).toContain("label: renderTabLabel('Codex', sessionCodexCount)");
     expect(source).toContain('children: <CodexIssuesTable sourceRefs={sessionTaskSourceRefs} refreshToken={sessionCodexRefreshToken} />');
     expect(source).toContain("'voicebot/session_tab_counts'");
+    expect(source).toContain("api_request<unknown>('codex/issues', { view: 'all', limit: 1000 }, { silent: true })");
+    expect(codexTableSource).toContain("api_request<unknown>('codex/issues'");
   });
 
   it('keeps Codex tab before Screenshort and Log tabs', () => {

@@ -317,7 +317,7 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
         } finally {
             setLoading(false);
         }
-    }, [api_request, limit, view]);
+    }, [api_request, limit]);
 
     useEffect(() => {
         void fetchIssues();

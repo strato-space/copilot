@@ -78,6 +78,7 @@ describe('Voicebot session_tab_counts route', () => {
 
     tasksCountDocumentsMock
       .mockResolvedValueOnce(7)
+      .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(3);
 
     const dbStub = {
@@ -117,7 +118,9 @@ describe('Voicebot session_tab_counts route', () => {
     expect(response.body).toEqual({
       success: true,
       session_id: sessionId.toHexString(),
-      tasks_count: 7,
+      tasks_count: 10,
+      tasks_work_count: 7,
+      tasks_review_count: 3,
       codex_count: 3,
     });
 
@@ -130,13 +133,25 @@ describe('Voicebot session_tab_counts route', () => {
           $in: expect.arrayContaining([
             TASK_STATUSES.READY_10,
             TASK_STATUSES.PROGRESS_0,
-            TASK_STATUSES.REVIEW_10,
           ]),
         },
       })
     );
     expect(tasksCountDocumentsMock).toHaveBeenNthCalledWith(
       2,
+      expect.objectContaining({
+        is_deleted: { $ne: true },
+        codex_task: { $ne: true },
+        task_status: {
+          $in: expect.arrayContaining([
+            TASK_STATUSES.REVIEW_10,
+            TASK_STATUSES.REVIEW_20,
+          ]),
+        },
+      })
+    );
+    expect(tasksCountDocumentsMock).toHaveBeenNthCalledWith(
+      3,
       expect.objectContaining({
         is_deleted: { $ne: true },
         codex_task: true,

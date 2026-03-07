@@ -111,6 +111,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - Voice session header includes a `Tasks` action before `Summarize`; it generates possible tasks from current meeting context without waiting for session close.
 - Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Возможные задачи`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
+- `Задачи` keeps a total count on the parent tab and separate counts on `Work` / `Review` subtabs.
+- `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.
 - `Транскрипция`, `Категоризация`, and `Возможные задачи` tabs now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
