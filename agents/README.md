@@ -55,6 +55,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 - `create_tasks` treats current-session `NEW_0` possible tasks as a mutable baseline: same-scope rows should be returned with the same `row_id/id` and improved wording instead of being suppressed as duplicates.
 - `voice.fetch(..., mode="transcript")` is the canonical metadata source for session-backed task extraction and now carries a frontmatter block with `session-id`, `session-name`, `session-url`, `project-id`, `project-name`, and `routing-topic`.
 - If transcript metadata includes `project-id`, `create_tasks` must read exactly one project card through `voice.project(project_id)`; it should not rehydrate project context through `voice.search` or a full project list.
+- `create_tasks` still excludes finance noise, but must keep explicit finance-adjacent operational documents (`счёт`, `invoice`, `акт`, `смета`, `КП`, `договор`) when they are directly поручены как рабочий deliverable.
 
 ### Production Deployment (PM2)
 

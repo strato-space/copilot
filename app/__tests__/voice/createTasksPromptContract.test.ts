@@ -26,4 +26,13 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).not.toContain('MCP `gsh`');
     expect(promptSource).not.toContain('`gsh`');
   });
+
+  it('allows explicit finance-adjacent operational documents instead of dropping them as finance noise', () => {
+    expect(promptSource).toContain('счёт');
+    expect(promptSource).toContain('invoice');
+    expect(promptSource).toContain('коммерческое предложение');
+    expect(promptSource).toContain('не отбрасывай это как finance noise');
+    expect(promptSource).toContain('не считай noise явные операционные поручения на подготовку финансовых документов');
+    expect(promptSource).toContain('допустимо вернуть задачу даже при неполной детализации');
+  });
 });
