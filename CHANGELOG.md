@@ -1,6 +1,29 @@
 # Changelog
 
+## 2026-03-08
+### PROBLEM SOLVED
+- **09:37** Voice session pages could miss a `possible_tasks` refresh after reconnect/resubscribe, transcript segment edit/delete/rollback did not requeue `CREATE_TASKS`, and live recompute still treated the latest LLM output as an authoritative replacement set, which made earlier candidate tasks disappear when row identities changed or dropped.
+- **09:37** Local/prod `copilot-agent-services` still depended on the host-global Codex auth file, which made agent runtime profile pinning brittle for `codexspark`-based `create_tasks` execution.
+
+### FEATURE IMPLEMENTED
+- **09:37** Added incremental possible-task refresh semantics for live voice flows: reconnect now replays a `possible_tasks` refresh hint, transcript mutations automatically requeue `CREATE_TASKS`, and live/manual refresh can preserve unmatched candidate rows as stale instead of deleting them immediately.
+- **09:37** Added repo-local Codex auth pinning for agents runtime through `CODEX_AUTH_JSON_PATH`, with the current PM2 setup pointing at `agents/.codex/auth.json`.
+
+### CHANGES
+- **09:37** Updated `backend/src/services/voicebot/persistPossibleTasks.ts`, `backend/src/workers/voicebot/handlers/{createTasksFromChunks,createTasksPostprocessing}.ts`, `backend/src/api/routes/voicebot/sessions.ts`, and `backend/src/api/socket/voicebot.ts` to support `refresh_mode={full_recompute|incremental_refresh}`, preserve stale possible-task rows during live refresh, replay `possible_tasks` fetch on `subscribe_on_session`, and requeue `CREATE_TASKS` after transcript edit/delete/rollback.
+- **09:37** Updated `app/src/store/voiceBotStore.ts` so manual `create_tasks` saves use `refresh_mode=incremental_refresh`, and refreshed repo/operator docs in `README.md` and `AGENTS.md` for the new possible-task/runtime auth contracts.
+- **09:37** Added/updated regression coverage in `backend/__tests__/voicebot/{runtime/sessionUtilityRuntimeBehavior.validation,socket/voicebotSocketDoneHandler,workers/workerCreateTasksFromChunksHandler,workers/workerCreateTasksPostprocessingRealtime,runtime/sessionsRuntimeCompatibilityRoute.deleteAndErrors}.test.ts`, `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.test.helpers.ts`, and `app/__tests__/voice/possibleTasksSaveCanonicalItemsContract.test.ts`.
+
 ## 2026-03-07
+### PROBLEM SOLVED
+- **23:34** TypeDB ontology still relied on a single mixed schema file and raw `source_ref` session linkage, which blurred AS-IS vs TO-BE semantics and broke lineage when task source refs became canonical voice session URLs.
+
+### FEATURE IMPLEMENTED
+- **23:34** Introduced fragment-based TypeDB schema assembly with canonical generated artifact `ontology/typedb/schema/str-ontology.tql`, added canonical voice-session-ref lookup in ingestion, and refreshed mapping/validation for current MongoDB parity.
+
+### CHANGES
+- **23:34** Added `ontology/typedb/scripts/build-typedb-schema.py`, introduced `schema/fragments/{00-kernel,10-as-is,20-to-be,30-bridges}`, pointed ontology ingest to generated `str-ontology.tql`, added mapping coverage for `summary_correlation_id`, `categorization_timestamp`, `transcription.provider/model/schema_version`, `task`, and normalized `voice_session_sources_oper_task` owner lookup via canonical voice URL -> session id transform.
+
 ### PROBLEM SOLVED
 - **06:57** `create_tasks` agents still relied on stale runtime defaults and prompt context, so session-derived task generation could miss transcript metadata and explicit invoice-task intent.
 - **08:27** Manual and automatic `create_tasks` flows still diverged in queue/realtime behavior, which produced stale notify symbols, unnecessary recomputation on session close, and delayed possible-task refresh after transcription.

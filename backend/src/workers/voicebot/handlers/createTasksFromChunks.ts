@@ -9,12 +9,16 @@ import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { getLogger } from '../../../utils/logger.js';
 import { runtimeQuery } from './shared/sharedRuntime.js';
 import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
-import { persistPossibleTasksForSession } from '../../../services/voicebot/persistPossibleTasks.js';
+import {
+  persistPossibleTasksForSession,
+  type PossibleTasksRefreshMode,
+} from '../../../services/voicebot/persistPossibleTasks.js';
 
 const logger = getLogger();
 
 export type CreateTasksFromChunksJobData = {
   session_id?: string;
+  refresh_mode?: PossibleTasksRefreshMode;
   chunks_to_process?: Array<
     | string
     | {
@@ -53,6 +57,14 @@ const toProjectId = (value: ObjectId | string | null | undefined): string => {
   if (!value) return '';
   if (typeof value === 'string') return value.trim();
   return value.toString().trim();
+};
+
+const normalizeRefreshMode = (value: unknown): PossibleTasksRefreshMode | null => {
+  const normalized = String(value || '').trim();
+  if (normalized === 'full_recompute' || normalized === 'incremental_refresh') {
+    return normalized;
+  }
+  return null;
 };
 
 const enqueuePossibleTasksRefresh = async ({
@@ -116,6 +128,8 @@ export const handleCreateTasksFromChunksJob = async (
         .map((value) => value.trim())
         .filter(Boolean)
     : [];
+  const refreshMode =
+    normalizeRefreshMode(payload.refresh_mode) ?? (chunkTexts.length > 0 ? 'incremental_refresh' : 'full_recompute');
 
   try {
     const tasks = await runCreateTasksAgent({
@@ -131,6 +145,7 @@ export const handleCreateTasksFromChunksJob = async (
       defaultProjectId: toProjectId(session.project_id),
       taskItems: tasks,
       createdById: session.user_id ? String(session.user_id) : '',
+      refreshMode,
     });
 
     await enqueuePossibleTasksRefresh({ session_id });

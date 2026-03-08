@@ -169,6 +169,51 @@ describe('voicebot socket session_done contract', () => {
     expect(writeDoneNotifyRequestedLogMock).not.toHaveBeenCalled();
   });
 
+  it('replays possible-task refresh hint when subscribing to a session room', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.PERFORMERS) {
+          return { findOne: jest.fn(async () => ({ _id: performerId, telegram_id: '123456' })) };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: jest.fn(async () => ({ _id: sessionId, chat_id: 123456 })) };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 1 })),
+        };
+      },
+    };
+    getDbMock.mockReturnValue(dbStub);
+    computeSessionAccessMock.mockReturnValue({ hasAccess: true, canUpdateSession: true });
+
+    const { io, namespace, getConnectionHandler } = setupSocketServer();
+    registerHandlers(io);
+
+    const { socket, handlers } = createSocket({ userId: performerId.toString() });
+    namespace.sockets.set(socket.id, socket);
+    await getConnectionHandler()(socket);
+
+    const ack = jest.fn();
+    await handlers.subscribe_on_session({ session_id: sessionId.toString() }, ack);
+
+    expect(ack).toHaveBeenCalledWith({ ok: true });
+    expect(socket.emit).toHaveBeenCalledWith(
+      'session_update',
+      expect.objectContaining({
+        _id: sessionId.toString(),
+        session_id: sessionId.toString(),
+        taskflow_refresh: expect.objectContaining({
+          reason: 'subscribe_replay',
+          possible_tasks: true,
+        }),
+      })
+    );
+  });
+
   it('uses server-side performer identity and returns ok ack on fallback done', async () => {
     const performerId = new ObjectId();
     const sessionId = new ObjectId();

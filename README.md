@@ -36,6 +36,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Sessions status in list uses state pictograms aligned with session page semantics; legacy red-dot-only marker is deprecated.
 - TS transcribe worker supports Telegram file recovery before transcription when local file path is missing.
 - TypeDB tooling was hard-moved to `ontology/typedb/scripts/*`; backend npm aliases call those canonical scripts.
+- Canonical generated ontology schema is `ontology/typedb/schema/str-ontology.tql`; editable source fragments live in `ontology/typedb/schema/fragments/*`.
+- Ontology architecture and rollout roadmap live in `plan/ontology-and-operations.md`.
+- `copilot` ontology is the kernel/common layer; projects are expected to extend it via per-project overlays and SemanticCards under `/home/strato-space/<project-slug>/`.
 
 ## Interface Contracts (High Impact)
 
@@ -106,6 +109,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
+- `subscribe_on_session` must replay a `session_update.taskflow_refresh.possible_tasks` hint so reconnecting session pages refetch canonical possible-task state even if an earlier realtime hint was missed.
 - `POST /api/voicebot/sessions/get` follows fail-fast lookup semantics and returns `404 Session not found` when the session cannot be resolved in canonical scope.
 - Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + text + `Materials` with sortable order.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
@@ -233,6 +237,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 ### Voice agents integration (frontend -> agents)
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
 - PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...` and inherits the model from `agents/fastagent.config.yaml`.
+- PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - `create_tasks` card no longer hardcodes model; runtime default is currently `codexspark` unless CLI/PM2 overrides it.
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
@@ -240,6 +245,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.
   - successful transcript completion in TS worker runtime auto-enqueues `CREATE_TASKS`, persists refreshed `NEW_0` master rows into `automation_tasks`, and only then emits `session_update.taskflow_refresh.possible_tasks` to all open viewers of the session.
+  - live/manual possible-task refresh can use `refresh_mode=incremental_refresh`, which preserves unmatched existing candidate rows as stale instead of deleting them immediately; `full_recompute` stays the explicit destructive mode.
 - Frontend MCP endpoint resolution order:
   1. `window.agents_api_url` (if set at runtime),
   2. `VITE_AGENTS_API_URL`,

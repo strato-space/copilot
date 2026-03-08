@@ -1125,7 +1125,6 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       ])
     );
-    expect(updateManySpy).toHaveBeenCalledTimes(1);
     expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
       expect.objectContaining({ _id: sessionId }),
       expect.objectContaining({
@@ -1151,6 +1150,181 @@ describe('Voicebot utility routes runtime behavior', () => {
           possible_tasks: true,
         }),
       }),
+    );
+  });
+
+  it('save_possible_tasks incremental_refresh preserves stale rows instead of deleting them', async () => {
+    const sessionId = new ObjectId();
+    const performerMongoId = new ObjectId();
+    const projectId = new ObjectId();
+    const staleMasterId = new ObjectId();
+    const newMasterId = new ObjectId();
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime incremental session',
+      project_id: projectId,
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    let masterDocs: Array<Record<string, unknown>> = [
+      {
+        _id: staleMasterId,
+        row_id: 'stale-row',
+        id: 'stale-row',
+        name: 'Stale row',
+        task_status: TASK_STATUSES.NEW_0,
+        source: 'VOICE_BOT',
+        source_kind: 'voice_possible_task',
+        source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        source_data: {
+          session_id: sessionId.toHexString(),
+          row_id: 'stale-row',
+          voice_sessions: [{ session_id: sessionId.toHexString(), role: 'primary' }],
+        },
+        created_at: new Date('2026-03-08T06:00:00.000Z'),
+        updated_at: new Date('2026-03-08T06:00:00.000Z'),
+      },
+    ];
+
+    const masterFind = jest.fn((filter: Record<string, unknown>) => ({
+      sort: () => ({
+        toArray: async () => {
+          const filterJson = JSON.stringify(filter);
+          if (filterJson.includes(`"project_id":"${projectId.toHexString()}"`) && filterJson.includes('"row_id"')) {
+            return [];
+          }
+          if (filterJson.includes(sessionId.toHexString())) {
+            return masterDocs;
+          }
+          return [];
+        },
+      }),
+    }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => {
+      const inserted = docs.map((doc, index) => ({
+        ...doc,
+        _id: index === 0 ? newMasterId : new ObjectId(),
+      }));
+      masterDocs = [...masterDocs, ...inserted];
+      return { insertedCount: inserted.length };
+    });
+    const tasksUpdateOneSpy = jest.fn(async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+      const docId = String(filter._id || '');
+      masterDocs = masterDocs.map((doc) => {
+        if (String(doc._id || '') !== docId) return doc;
+        const setPayload = (update.$set as Record<string, unknown>) || {};
+        const unsetPayload = (update.$unset as Record<string, unknown>) || {};
+        const nextDoc = { ...doc, ...setPayload };
+        Object.keys(unsetPayload).forEach((key) => {
+          delete (nextDoc as Record<string, unknown>)[key];
+        });
+        return nextDoc;
+      });
+      return { matchedCount: 1, modifiedCount: 1 };
+    });
+    const tasksUpdateManySpy = jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+            insertMany: insertManySpy,
+            updateOne: tasksUpdateOneSpy,
+            updateMany: tasksUpdateManySpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const emitSpy = jest.fn();
+    app.set('io', {
+      of: jest.fn(() => ({
+        to: jest.fn(() => ({
+          emit: emitSpy,
+        })),
+      })),
+    });
+
+    const response = await request(app)
+      .post('/voicebot/save_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        refresh_mode: 'incremental_refresh',
+        tasks: [
+          {
+            row_id: 'new-row',
+            id: 'new-row',
+            name: 'Fresh row',
+            description: 'Keep stale candidates too',
+            performer_id: performerMongoId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Saved project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.removed_row_ids).toBeUndefined();
+    expect(response.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'new-row', name: 'Fresh row' }),
+        expect.objectContaining({
+          row_id: 'stale-row',
+          name: 'Stale row',
+          source_data: expect.objectContaining({
+            refresh_state: 'stale',
+            last_refresh_mode: 'incremental_refresh',
+          }),
+        }),
+      ])
+    );
+    expect(tasksUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: staleMasterId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          source_data: expect.objectContaining({
+            refresh_state: 'stale',
+            last_refresh_mode: 'incremental_refresh',
+          }),
+        }),
+      })
+    );
+    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.data': expect.arrayContaining([
+            expect.objectContaining({ row_id: 'stale-row' }),
+            expect.objectContaining({ row_id: 'new-row' }),
+          ]),
+        }),
+      })
     );
   });
 

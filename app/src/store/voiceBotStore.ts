@@ -112,7 +112,7 @@ interface VoiceBotSessionProcessingActionsSlice {
     saveSessionPossibleTasks: (
         sessionId: string,
         tasks: Array<Record<string, unknown>> | VoicePossibleTask[],
-        options?: { silent?: boolean }
+        options?: { silent?: boolean; refreshMode?: 'full_recompute' | 'incremental_refresh' }
     ) => Promise<VoicePossibleTask[]>;
     triggerSessionReadyToSummarize: (sessionId: string) => Promise<Record<string, unknown>>;
     saveSessionSummary: (
@@ -1265,7 +1265,11 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         try {
             const response = await voicebotHttp.request<unknown>(
                 'voicebot/save_possible_tasks',
-                { session_id: normalizedSessionId, tasks: normalizedTasks },
+                {
+                    session_id: normalizedSessionId,
+                    tasks: normalizedTasks,
+                    refresh_mode: options?.refreshMode ?? 'full_recompute',
+                },
                 Boolean(options?.silent)
             );
             const responseTasks = parsePossibleTasksResponse(response, defaultProjectId);
@@ -1389,7 +1393,10 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             throw new Error('Некорректный ответ create_tasks: ожидался JSON-массив задач');
         }
 
-        const savedTasks = await get().saveSessionPossibleTasks(normalizedSessionId, tasks, { silent: true });
+        const savedTasks = await get().saveSessionPossibleTasks(normalizedSessionId, tasks, {
+            silent: true,
+            refreshMode: 'incremental_refresh',
+        });
         return {
             requestId,
             tasks: savedTasks,

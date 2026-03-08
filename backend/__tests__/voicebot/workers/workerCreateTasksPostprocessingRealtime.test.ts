@@ -79,6 +79,7 @@ describe('handleCreateTasksPostprocessingJob realtime refresh contract', () => {
     });
     expect(handleCreateTasksFromChunksJobMock).toHaveBeenCalledWith({
       session_id: sessionId.toString(),
+      refresh_mode: 'incremental_refresh',
     });
 
     expect(sessionsUpdateOne).toHaveBeenNthCalledWith(

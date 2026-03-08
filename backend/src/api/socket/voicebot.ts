@@ -316,6 +316,17 @@ export function registerVoicebotSocketHandlers(
             room: getVoicebotSessionRoom(session_id),
             subscribers: sessionSocketMap.get(session_id)?.size ?? 0,
           });
+          const updatedAt = new Date().toISOString();
+          socket.emit('session_update', {
+            _id: session_id,
+            session_id,
+            updated_at: updatedAt,
+            taskflow_refresh: {
+              reason: 'subscribe_replay',
+              possible_tasks: true,
+              updated_at: updatedAt,
+            },
+          });
           reply({ ok: true });
         } catch (error) {
           logger.error('[voicebot-socket] Error handling subscribe_on_session:', error);

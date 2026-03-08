@@ -79,6 +79,11 @@ import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
 import { completeSessionDoneFlow } from '../../../services/voicebotSessionDoneFlow.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { createBdIssue } from '../../../services/bdClient.js';
+import {
+    persistPossibleTasksForSession,
+    POSSIBLE_TASKS_REFRESH_MODE_VALUES,
+    type PossibleTasksRefreshMode,
+} from '../../../services/voicebot/persistPossibleTasks.js';
 
 // NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -232,6 +237,7 @@ const savePossibleTasksInputSchema = z
         session_id: z.string().trim().min(1),
         tasks: z.array(z.object({}).passthrough()).optional(),
         items: z.array(z.object({}).passthrough()).optional(),
+        refresh_mode: z.enum(POSSIBLE_TASKS_REFRESH_MODE_VALUES).optional(),
     })
     .superRefine((value, ctx) => {
         const tasks = Array.isArray(value.tasks) ? value.tasks : (Array.isArray(value.items) ? value.items : []);
@@ -1927,6 +1933,59 @@ const emitSessionSummaryRefreshHint = ({
             updated_at: updatedAt,
         },
     });
+};
+
+const requestSessionPossibleTasksRefresh = async ({
+    db,
+    sessionId,
+    refreshMode = 'incremental_refresh',
+}: {
+    db: Db;
+    sessionId: string;
+    refreshMode?: PossibleTasksRefreshMode;
+}): Promise<number> => {
+    const requestedAt = Date.now();
+
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+        runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+        {
+            $set: {
+                'processors_data.CREATE_TASKS.auto_requested_at': requestedAt,
+                'processors_data.CREATE_TASKS.is_processed': false,
+                'processors_data.CREATE_TASKS.is_processing': false,
+                updated_at: new Date(),
+            },
+            $unset: {
+                'processors_data.CREATE_TASKS.error': 1,
+                'processors_data.CREATE_TASKS.error_message': 1,
+                'processors_data.CREATE_TASKS.error_timestamp': 1,
+            },
+        }
+    );
+
+    const queues = getVoicebotQueues();
+    const postprocessorsQueue = queues?.[VOICEBOT_QUEUES.POSTPROCESSORS];
+    if (!postprocessorsQueue) {
+        logger.warn('[voicebot.sessions] create_tasks refresh queue unavailable', {
+            session_id: sessionId,
+            refresh_mode: refreshMode,
+        });
+        return requestedAt;
+    }
+
+    await postprocessorsQueue.add(
+        VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+        {
+            session_id: sessionId,
+            auto_requested_at: requestedAt,
+            refresh_mode: refreshMode,
+        },
+        {
+            deduplication: { id: `${sessionId}-CREATE_TASKS-AUTO` },
+        }
+    );
+
+    return requestedAt;
 };
 
 const voicebotApiAttachmentPath = (path: string): string => `/api/voicebot${path}`;
@@ -4511,31 +4570,11 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
         }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const taskItems = Array.isArray(parsedBody.data.tasks) ? parsedBody.data.tasks : (parsedBody.data.items ?? []);
-        const incomingRowIds = taskItems
-            .map((rawTask) => resolveSessionTaskRowLocator(rawTask as Record<string, unknown>))
-            .filter((item): item is { ok: true; row_id: string; source_fields: string[] } => item.ok)
-            .map((item) => item.row_id);
-        const {
-            sessionDocs: existingSessionDocs,
-            matchDocs: existingDocs,
-        } = await listPossibleTaskSaveMatchDocs({
-            db,
-            sessionId,
-            projectId: session.project_id ? String(session.project_id) : '',
-            rowIds: incomingRowIds,
-        });
-        const newDocs: Array<Record<string, unknown>> = [];
-        const now = new Date();
-        const defaultProjectId = session.project_id ? String(session.project_id) : '';
-        const sessionObjectId = new ObjectId(sessionId);
-        const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
-        const creatorId = performer?._id?.toHexString?.() ?? '';
-        const creatorName = String(performer?.real_name || performer?.name || '').trim();
-        const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
+        const taskItems = (Array.isArray(parsedBody.data.tasks) ? parsedBody.data.tasks : (parsedBody.data.items ?? []))
+            .map((rawTask) => rawTask as Record<string, unknown>);
+        const refreshMode = parsedBody.data.refresh_mode ?? 'full_recompute';
 
-        for (const [taskIndex, rawTask] of taskItems.entries()) {
-            const task = rawTask as Record<string, unknown>;
+        for (const [taskIndex, task] of taskItems.entries()) {
             const resolvedRowLocator = resolveSessionTaskRowLocator(task);
             if (!resolvedRowLocator.ok && resolvedRowLocator.error_code === 'ambiguous_row_locator') {
                 return res.status(409).json({
@@ -4545,102 +4584,18 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
                     values: resolvedRowLocator.values ?? [],
                 });
             }
-
-            const canonicalRowId = resolvedRowLocator.ok ? resolvedRowLocator.row_id : toTaskText(task.id);
-            const candidateKeys = new Set<string>(collectSessionTaskMutationLocatorKeys(task));
-            if (resolvedRowLocator.ok) {
-                candidateKeys.add(resolvedRowLocator.row_id);
-            }
-            let existingDoc: Record<string, unknown> | undefined;
-            for (const key of candidateKeys) {
-                existingDoc = existingAliasMap.get(key);
-                if (existingDoc) break;
-            }
-
-            const existingSourceData = existingDoc?.source_data && typeof existingDoc.source_data === 'object'
-                ? existingDoc.source_data as Record<string, unknown>
-                : {};
-            const existingVoiceSessions = Array.isArray(existingSourceData.voice_sessions)
-                ? existingSourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
-                : [];
-            const existingCurrentSessionLink = existingVoiceSessions.find((entry) => toTaskText(entry.session_id) === sessionId);
-            const currentSessionLink = {
-                ...(existingCurrentSessionLink ?? {}),
-                session_id: sessionId,
-                session_name: String((session as Record<string, unknown>).session_name || '') || toTaskText(existingCurrentSessionLink?.session_name),
-                ...(defaultProjectId ? { project_id: defaultProjectId } : (toTaskText(existingCurrentSessionLink?.project_id) ? { project_id: toTaskText(existingCurrentSessionLink?.project_id) } : {})),
-                created_at: toTaskText(existingCurrentSessionLink?.created_at) || now.toISOString(),
-                role: 'primary',
-            };
-            const mergedVoiceSessions = [
-                currentSessionLink,
-                ...existingVoiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId),
-            ];
-
-            const nextDoc = {
-                ...buildVoicePossibleTaskMasterDoc({
-                    rawTask: task,
-                    index: taskIndex,
-                    defaultProjectId,
-                    sessionId,
-                    sessionObjectId,
-                    externalRef: canonicalExternalRef,
-                    now,
-                    createdBy: {
-                        ...(creatorId ? { id: creatorId } : {}),
-                        ...(creatorName ? { name: creatorName } : {}),
-                    },
-                    existingCreatedAt: existingDoc?.created_at,
-                }),
-                source_ref: canonicalExternalRef,
-                external_ref: canonicalExternalRef,
-                source_data: {
-                    ...existingSourceData,
-                    session_id: sessionId,
-                    session_name: String((session as Record<string, unknown>).session_name || ''),
-                    voice_task_kind: 'possible_task',
-                    row_id: canonicalRowId,
-                    voice_sessions: mergedVoiceSessions,
-                },
-            };
-
-            if (existingDoc?._id instanceof ObjectId) {
-                await db.collection(COLLECTIONS.TASKS).updateOne(
-                    { _id: existingDoc._id },
-                    {
-                        $set: {
-                            ...nextDoc,
-                            updated_at: now,
-                            is_deleted: false,
-                        },
-                        $unset: {
-                            deleted_at: 1,
-                        },
-                    }
-                );
-            } else {
-                newDocs.push(nextDoc);
-            }
-
         }
 
-        if (newDocs.length > 0) {
-            await db.collection(COLLECTIONS.TASKS).insertMany(newDocs);
-        }
-
-        const nextSessionRowIds = new Set(incomingRowIds);
-        const staleRowIds = existingSessionDocs
-            .filter((doc) => !collectSessionTaskMutationLocatorKeys(doc).some((key) => nextSessionRowIds.has(key)))
-            .flatMap((doc) => collectSessionTaskMutationLocatorKeys(doc));
-        await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
-        const refreshedMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
-        const refreshedItems = refreshedMasterDocs
-            .map((item) => normalizeVoicePossibleTaskDocForApi(item))
-            .filter((item): item is Record<string, unknown> => item !== null);
-        const refreshedRows = refreshedMasterDocs
-            .map((item) => buildSessionCompatiblePossibleTaskRow(item))
-            .filter((item): item is Record<string, unknown> => item !== null);
-        await syncSessionPossibleTaskCompatibilityData({ db, sessionId, rows: refreshedRows });
+        const persisted = await persistPossibleTasksForSession({
+            db,
+            sessionId,
+            sessionName: String((session as Record<string, unknown>).session_name || ''),
+            defaultProjectId: session.project_id ? String(session.project_id) : '',
+            taskItems,
+            createdById: performer?._id?.toHexString?.() ?? '',
+            createdByName: String(performer?.real_name || performer?.name || '').trim(),
+            refreshMode,
+        });
 
         emitSessionTaskflowRefreshHint({
             req,
@@ -4652,9 +4607,9 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
         return res.status(200).json({
             success: true,
             session_id: sessionId,
-            saved_count: refreshedItems.length,
-            items: refreshedItems,
-            ...(staleRowIds.length > 0 ? { removed_row_ids: Array.from(new Set(staleRowIds)) } : {}),
+            saved_count: persisted.items.length,
+            items: persisted.items,
+            ...(persisted.removedRowIds.length > 0 ? { removed_row_ids: persisted.removedRowIds } : {}),
         });
     } catch (error) {
         logger.error('Error in save_possible_tasks:', error);
@@ -5936,6 +5891,19 @@ router.post('/edit_transcript_chunk', async (req: Request, res: Response) => {
             });
         }
 
+        try {
+            await requestSessionPossibleTasksRefresh({
+                db,
+                sessionId: session_id,
+                refreshMode: 'incremental_refresh',
+            });
+        } catch (refreshError) {
+            logger.warn('[voicebot.sessions] failed to requeue possible-task refresh after transcript edit', {
+                session_id,
+                error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+            });
+        }
+
         return res.status(200).json({ success: true, event: mapEventForApi(logEvent) });
     } catch (error) {
         logger.error('Error in edit_transcript_chunk:', error);
@@ -6114,6 +6082,19 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
                     reason: 'transcript_segment_deleted',
                     cleanup: cleanupStats,
                 },
+            });
+        }
+
+        try {
+            await requestSessionPossibleTasksRefresh({
+                db,
+                sessionId: session_id,
+                refreshMode: 'incremental_refresh',
+            });
+        } catch (refreshError) {
+            logger.warn('[voicebot.sessions] failed to requeue possible-task refresh after transcript delete', {
+                session_id,
+                error: refreshError instanceof Error ? refreshError.message : String(refreshError),
             });
         }
 
@@ -6807,6 +6788,19 @@ router.post('/rollback_event', async (req: Request, res: Response) => {
             await resetCategorizationForMessage({ db, sessionObjectId, messageObjectId });
         } catch (error) {
             logger.warn('Failed to reset categorization after rollback:', error);
+        }
+
+        try {
+            await requestSessionPossibleTasksRefresh({
+                db,
+                sessionId: sessionIdHex,
+                refreshMode: 'incremental_refresh',
+            });
+        } catch (refreshError) {
+            logger.warn('[voicebot.sessions] failed to requeue possible-task refresh after transcript rollback', {
+                session_id: sessionIdHex,
+                error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+            });
         }
 
         res.status(200).json({ success: true, event: mapEventForApi(rollbackEvent) });

@@ -218,7 +218,10 @@ export const handleCreateTasksPostprocessingJob = async (
     };
   }
 
-  const result = await handleCreateTasksFromChunksJob({ session_id });
+  const result = await handleCreateTasksFromChunksJob({
+    session_id,
+    refresh_mode: 'incremental_refresh',
+  });
   if (result.ok) {
     await markSessionMessagesProcessed({ sessionObjectId });
   }

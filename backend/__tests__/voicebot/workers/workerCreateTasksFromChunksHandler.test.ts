@@ -95,6 +95,12 @@ describe('handleCreateTasksFromChunksJob', () => {
       sessionId: sessionId.toString(),
       projectId: 'proj-1',
     });
+    expect(persistPossibleTasksForSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: sessionId.toString(),
+        refreshMode: 'full_recompute',
+      })
+    );
   });
 
   it('uses raw_text mode when explicit chunks are provided and emits session_update refresh', async () => {
@@ -153,6 +159,12 @@ describe('handleCreateTasksFromChunksJob', () => {
       projectId: 'proj-1',
       rawText: 'Need to ship parity this week',
     });
+    expect(persistPossibleTasksForSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: sessionId.toString(),
+        refreshMode: 'incremental_refresh',
+      })
+    );
     expect(eventsAdd).toHaveBeenCalledWith(
       VOICEBOT_JOBS.events.SEND_TO_SOCKET,
       expect.objectContaining({

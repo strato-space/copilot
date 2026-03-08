@@ -51,6 +51,7 @@ module.exports = {
             max_memory_restart: '1G',
             env: {
                 PYTHONUNBUFFERED: '1',
+                CODEX_AUTH_JSON_PATH: `${__dirname}/.codex/auth.json`,
             },
             error_file: './logs/copilot-agents-services.log',
             out_file: './logs/copilot-agents-services.log',

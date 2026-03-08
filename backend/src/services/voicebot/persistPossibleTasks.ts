@@ -16,6 +16,9 @@ import {
 } from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { toIdString, toTaskText } from '../../api/routes/voicebot/sessionsSharedUtils.js';
 
+export const POSSIBLE_TASKS_REFRESH_MODE_VALUES = ['full_recompute', 'incremental_refresh'] as const;
+export type PossibleTasksRefreshMode = (typeof POSSIBLE_TASKS_REFRESH_MODE_VALUES)[number];
+
 const runtimeTaskQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, {
     field: 'runtime_tag',
@@ -242,32 +245,31 @@ const softDeletePossibleTaskMasterRows = async ({
   const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
   if (normalizedRowIds.length === 0) return;
 
-  const docs = await db
-    .collection(COLLECTIONS.TASKS)
-    .find(
-      {
-        $and: [
-          buildPossibleTaskMasterRuntimeQuery(sessionId),
-          {
-            $or: [
-              { row_id: { $in: normalizedRowIds } },
-              { id: { $in: normalizedRowIds } },
-              { task_id_from_ai: { $in: normalizedRowIds } },
-              { 'source_data.row_id': { $in: normalizedRowIds } },
-            ],
-          },
-        ],
-      },
-      {
-        projection: {
-          _id: 1,
-          source_ref: 1,
-          external_ref: 1,
-          source_data: 1,
+  const cursor = toSortedTaskCursor(
+    db.collection(COLLECTIONS.TASKS),
+    {
+      $and: [
+        buildPossibleTaskMasterRuntimeQuery(sessionId),
+        {
+          $or: [
+            { row_id: { $in: normalizedRowIds } },
+            { id: { $in: normalizedRowIds } },
+            { task_id_from_ai: { $in: normalizedRowIds } },
+            { 'source_data.row_id': { $in: normalizedRowIds } },
+          ],
         },
-      }
-    )
-    .toArray() as Array<Record<string, unknown>>;
+      ],
+    },
+    {
+      projection: {
+        _id: 1,
+        source_ref: 1,
+        external_ref: 1,
+        source_data: 1,
+      },
+    }
+  );
+  const docs = cursor ? await cursor.toArray() as Array<Record<string, unknown>> : [];
 
   for (const doc of docs) {
     const docObjectId = doc._id instanceof ObjectId ? doc._id : null;
@@ -311,6 +313,71 @@ const softDeletePossibleTaskMasterRows = async ({
   }
 };
 
+const markPossibleTaskMasterRowsStale = async ({
+  db,
+  sessionId,
+  rowIds,
+  staleAt,
+}: {
+  db: Db;
+  sessionId: string;
+  rowIds: string[];
+  staleAt: Date;
+}): Promise<void> => {
+  const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
+  if (normalizedRowIds.length === 0) return;
+
+  const cursor = toSortedTaskCursor(
+    db.collection(COLLECTIONS.TASKS),
+    {
+      $and: [
+        buildPossibleTaskMasterRuntimeQuery(sessionId),
+        {
+          $or: [
+            { row_id: { $in: normalizedRowIds } },
+            { id: { $in: normalizedRowIds } },
+            { task_id_from_ai: { $in: normalizedRowIds } },
+            { 'source_data.row_id': { $in: normalizedRowIds } },
+          ],
+        },
+      ],
+    },
+    {
+      projection: {
+        _id: 1,
+        source_data: 1,
+      },
+    }
+  );
+  const docs = cursor ? await cursor.toArray() as Array<Record<string, unknown>> : [];
+
+  for (const doc of docs) {
+    const docObjectId = doc._id instanceof ObjectId ? doc._id : null;
+    if (!docObjectId) continue;
+
+    const sourceData =
+      doc.source_data && typeof doc.source_data === 'object'
+        ? (doc.source_data as Record<string, unknown>)
+        : {};
+
+    await db.collection(COLLECTIONS.TASKS).updateOne(
+      { _id: docObjectId },
+      {
+        $set: {
+          source_data: {
+            ...sourceData,
+            refresh_state: 'stale',
+            stale_since: toTaskText(sourceData.stale_since) || staleAt.toISOString(),
+            superseded_at: staleAt.toISOString(),
+            last_refresh_mode: 'incremental_refresh',
+          },
+          updated_at: staleAt,
+        },
+      }
+    );
+  }
+};
+
 export const persistPossibleTasksForSession = async ({
   db,
   sessionId,
@@ -319,6 +386,7 @@ export const persistPossibleTasksForSession = async ({
   taskItems,
   createdById,
   createdByName,
+  refreshMode = 'full_recompute',
 }: {
   db: Db;
   sessionId: string;
@@ -327,6 +395,7 @@ export const persistPossibleTasksForSession = async ({
   taskItems: Array<Record<string, unknown>>;
   createdById?: string;
   createdByName?: string;
+  refreshMode?: PossibleTasksRefreshMode;
 }): Promise<{
   items: Array<Record<string, unknown>>;
   rows: Array<Record<string, unknown>>;
@@ -366,6 +435,13 @@ export const persistPossibleTasksForSession = async ({
       existingDoc?.source_data && typeof existingDoc.source_data === 'object'
         ? (existingDoc.source_data as Record<string, unknown>)
         : {};
+    const {
+      refresh_state: _ignoredRefreshState,
+      stale_since: _ignoredStaleSince,
+      superseded_at: _ignoredSupersededAt,
+      last_refresh_mode: _ignoredLastRefreshMode,
+      ...persistedSourceData
+    } = existingSourceData;
     const existingVoiceSessions = Array.isArray(existingSourceData.voice_sessions)
       ? existingSourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
       : [];
@@ -401,12 +477,14 @@ export const persistPossibleTasksForSession = async ({
       source_ref: canonicalExternalRef,
       external_ref: canonicalExternalRef,
       source_data: {
-        ...existingSourceData,
+        ...persistedSourceData,
         session_id: sessionId,
         ...(sessionName ? { session_name: sessionName } : {}),
         voice_task_kind: 'possible_task',
         row_id: canonicalRowId,
         voice_sessions: mergedVoiceSessions,
+        refresh_state: 'active',
+        last_refresh_mode: refreshMode,
       },
     };
 
@@ -437,7 +515,11 @@ export const persistPossibleTasksForSession = async ({
   const staleRowIds = existingSessionDocs
     .filter((doc) => !collectVoicePossibleTaskLocatorKeys(doc).some((key) => nextSessionRowIds.has(key)))
     .flatMap((doc) => collectVoicePossibleTaskLocatorKeys(doc));
-  await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
+  if (refreshMode === 'incremental_refresh') {
+    await markPossibleTaskMasterRowsStale({ db, sessionId, rowIds: staleRowIds, staleAt: now });
+  } else {
+    await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
+  }
 
   const refreshedMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
   const refreshedItems = refreshedMasterDocs
@@ -451,6 +533,6 @@ export const persistPossibleTasksForSession = async ({
   return {
     items: refreshedItems,
     rows: refreshedRows,
-    removedRowIds: Array.from(new Set(staleRowIds)),
+    removedRowIds: refreshMode === 'full_recompute' ? Array.from(new Set(staleRowIds)) : [],
   };
 };

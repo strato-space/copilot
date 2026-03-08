@@ -68,6 +68,11 @@ Use these as non-negotiable implementation constraints derived from `origin/main
 - Ontology tooling path contract:
   - canonical scripts are under `ontology/typedb/scripts/*`;
   - do not add new backend-local duplicates under `backend/scripts` for TypeDB flow.
+  - canonical generated schema is `ontology/typedb/schema/str-ontology.tql`;
+  - editable source fragments are under `ontology/typedb/schema/fragments/*`;
+  - architecture / roadmap source is `plan/ontology-and-operations.md`.
+  - `copilot` ontology is the common kernel; project-local ontologies must extend it rather than fork it.
+  - semantic markdown (`SemanticCards`) is a required companion surface for key ontology objects and should live in project-local AFS plus the platform glossary.
 
 ## Core Principles
 
@@ -183,6 +188,7 @@ Preferred engineering principles for this repo:
 - `VITE_AGENTS_API_URL` must use plain HTTP for `:8722` (fast-agent runs without TLS); using `https://` can fail with `ERR_SSL_PACKET_LENGTH_TOO_LONG`.
 - Preferred target is loopback `http://127.0.0.1:8722` (bind `copilot-agent-services` to localhost only; do not expose `:8722` publicly).
 - Agents PM2 runtime is canonical via `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex`; `create_tasks` card must not hardcode model override.
+- PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
@@ -265,6 +271,7 @@ Preferred engineering principles for this repo:
 - TS transcribe worker now emits `message_update` for both success and failure branches (including quota/missing-file retries) so Transcription UI updates live without refresh.
 - Transcription fallback rows with `transcription_error` must render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) when transcript text is absent, and this placeholder must be replaceable in place via realtime `message_update`.
 - Frontend voice socket must connect to `/voicebot` namespace (not `/`) and subscribe via `subscribe_on_session`; otherwise live session updates will be dropped.
+- `subscribe_on_session` must replay a `session_update.taskflow_refresh.possible_tasks` hint so reconnecting session pages refetch canonical possible-task state even if an earlier realtime hint was missed.
 - Frontend voice socket reconnect flow must rehydrate current session and keep deterministic message ordering for `new_message`/`message_update` upserts.
 - Backend API process owns socket event delivery for `voicebot--events-*` queue via dedicated runtime (`startVoicebotSocketEventsWorker`); standalone workers should not consume `EVENTS` queue.
 - Runtime-tag aggregate scoping has been removed from operational read paths; nested `$lookup` joins are runtime-tag-agnostic until full environment-level DB cutover is complete.
@@ -316,6 +323,7 @@ Preferred engineering principles for this repo:
   - the agent may enrich context through MCP `voice` and `gsh`,
   - backend persists possible tasks into `automation_tasks` through `save_possible_tasks` / `process_possible_tasks`,
   - the agent must not route execution through `StratoProject`.
+- Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.

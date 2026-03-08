@@ -7,6 +7,7 @@ process.env.VOICE_RUNTIME_SERVER_NAME = 'p2';
 
 export const getDbMock = jest.fn();
 export const getRawDbMock = jest.fn();
+export const getVoicebotQueuesMock = jest.fn();
 export const generateDataFilterMock = jest.fn();
 export const getUserPermissionsMock = jest.fn();
 export const requirePermissionMock = jest.fn(
@@ -18,6 +19,10 @@ export const requirePermissionMock = jest.fn(
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
   getRawDb: getRawDbMock,
+}));
+
+jest.unstable_mockModule('../../../src/services/voicebotQueues.js', () => ({
+  getVoicebotQueues: getVoicebotQueuesMock,
 }));
 
 jest.unstable_mockModule('../../../src/permissions/permission-manager.js', () => ({
@@ -60,9 +65,11 @@ export const buildApp = () => {
 export const resetSessionsRuntimeCompatibilityMocks = () => {
   getDbMock.mockReset();
   getRawDbMock.mockReset();
+  getVoicebotQueuesMock.mockReset();
   generateDataFilterMock.mockReset();
   getUserPermissionsMock.mockReset();
   requirePermissionMock.mockClear();
+  getVoicebotQueuesMock.mockReturnValue(null);
   generateDataFilterMock.mockResolvedValue({});
   getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
 };
