@@ -1,0 +1,589 @@
+{
+  "activity_state": {
+    "declared_domain": "state",
+    "max_values": 10,
+    "collections": [
+      {
+        "collection": "automation_customers",
+        "target_entity": "client",
+        "source_field": "is_active"
+      },
+      {
+        "collection": "automation_clients",
+        "target_entity": "legacy_client",
+        "source_field": "is_active"
+      },
+      {
+        "collection": "automation_projects",
+        "target_entity": "project",
+        "source_field": "is_active"
+      },
+      {
+        "collection": "automation_project_groups",
+        "target_entity": "project_group",
+        "source_field": "is_active"
+      },
+      {
+        "collection": "automation_voice_bot_sessions",
+        "target_entity": "voice_session",
+        "source_field": "is_active"
+      },
+      {
+        "collection": "finops_expense_categories",
+        "target_entity": "cost_category",
+        "source_field": "is_active"
+      }
+    ],
+    "values": [
+      "true",
+      "false"
+    ],
+    "classification": "boolean-derived state domain"
+  },
+  "type_class": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_task_types_tree",
+        "target_entity": "task_type_tree",
+        "source_field": "type_class"
+      },
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "type_class"
+      }
+    ],
+    "values": [
+      "\"TASK\"",
+      "\"FUNCTIONALITY\"",
+      "null"
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "role_name": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_performers",
+        "target_entity": "performer_profile",
+        "source_field": "role"
+      }
+    ],
+    "values": [
+      "\"PERFORMER\"",
+      "\"SUPER_ADMIN\"",
+      "\"MANAGER\"",
+      "\"VIEWER\"",
+      "null"
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "salary_currency": {
+    "declared_domain": "dictionary",
+    "max_values": 10,
+    "collections": [
+      {
+        "collection": "automation_performers",
+        "target_entity": "performer_profile",
+        "source_field": "salary_currency"
+      }
+    ],
+    "values": [
+      "\"RUB\"",
+      "null"
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "status": {
+    "declared_domain": "dictionary",
+    "max_values": 50,
+    "collections": [
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "task_status"
+      }
+    ],
+    "values": [
+      "\"Archive\"",
+      "\"Complete\"",
+      "\"Backlog\"",
+      "\"Done\"",
+      "\"Review / Ready\"",
+      "\"Ready\"",
+      "\"Periodic\"",
+      "\"Progress 10\"",
+      "null",
+      "\"Plan / Approval\"",
+      "\"Plan / Performer\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "priority": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "priority"
+      }
+    ],
+    "values": [
+      "\"P3\"",
+      "\"🔥 P1 \"",
+      "\"P2\"",
+      "\"P7\"",
+      "\"P5\"",
+      "\"P4\"",
+      "\"\"",
+      "null",
+      "\"P6\"",
+      "\"🔥 P1\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "task_type_name": {
+    "declared_domain": "dictionary",
+    "max_values": 50,
+    "collections": [
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "task_type"
+      }
+    ],
+    "values": [
+      "null",
+      "\"67f846e0196efb66113f104c\"",
+      "\"67f846e0196efb66113f104e\"",
+      "\"67333b3a482852a4fb316e4d\"",
+      "\"67333b3a482852a4fb316e4a\"",
+      "\"67f846e0196efb66113f1049\"",
+      "\"67f846e0196efb66113f105b\"",
+      "\"67334ed7abb0be924bd6fd2b\"",
+      "\"67333b3a482852a4fb316e4e\"",
+      "\"67f846e0196efb66113f1073\"",
+      "\"67f846e0196efb66113f104a\"",
+      "\"67f846e0196efb66113f105f\"",
+      "\"67f846e0196efb66113f1053\"",
+      "\"67334ed7abb0be924bd6fd2a\"",
+      "\"67333b38482852a4fb316e40\"",
+      "\"67f846e0196efb66113f1074\"",
+      "\"67333b38482852a4fb316e42\"",
+      "\"67f846e0196efb66113f1061\"",
+      "\"67f846e0196efb66113f1065\"",
+      "\"67f846e0196efb66113f1044\"",
+      "\"67f846e0196efb66113f1046\"",
+      "\"67333b3b482852a4fb316e50\"",
+      "\"67f846e0196efb66113f106b\"",
+      "\"67f846e0196efb66113f104b\"",
+      "\"67f846e0196efb66113f104d\"",
+      "\"67f846e0196efb66113f105c\"",
+      "\"67f846e0196efb66113f1045\"",
+      "\"67f846e0196efb66113f1059\"",
+      "\"67f846e0196efb66113f105d\"",
+      "\"67333b38482852a4fb316e41\"",
+      "\"67f846e0196efb66113f106f\"",
+      "\"67f846e0196efb66113f104f\"",
+      "\"67333b39482852a4fb316e48\"",
+      "\"67f846e0196efb66113f1058\"",
+      "\"67f846e0196efb66113f105a\"",
+      "\"67f846e0196efb66113f1067\"",
+      "\"67f846e0196efb66113f106a\"",
+      "\"67333b39482852a4fb316e49\"",
+      "\"67f846e0196efb66113f1051\"",
+      "\"67f846e0196efb66113f106e\"",
+      "\"67f846e0196efb66113f1070\"",
+      "\"67fe01c06f6c9c68fe04b229\"",
+      "\"67333b38482852a4fb316e3f\"",
+      "\"67333b3a482852a4fb316e4c\"",
+      "\"67333b3a482852a4fb316e4f\"",
+      "\"67f846e0196efb66113f1048\"",
+      "\"67f846e0196efb66113f1052\"",
+      "\"67f846e0196efb66113f105e\"",
+      "\"67fdfeb86f6c9c68fe04b21f\"",
+      "\"67333b39482852a4fb316e44\"",
+      "\"67333b3b482852a4fb316e53\"",
+      "\"67f846e0196efb66113f1057\"",
+      "\"67f846e0196efb66113f1064\"",
+      "\"67f846e0196efb66113f1066\"",
+      "\"67f846e0196efb66113f1068\"",
+      "\"67f846e0196efb66113f1042\"",
+      "\"67f846e0196efb66113f1072\"",
+      "\"67333b39482852a4fb316e47\"",
+      "\"67333b3b482852a4fb316e52\"",
+      "\"67f846e0196efb66113f1060\"",
+      "\"67f846e0196efb66113f1062\"",
+      "\"67f846e0196efb66113f1071\"",
+      "\"67333b37482852a4fb316e3d\"",
+      "\"673ecb5066e64d4fbd48db05\"",
+      "\"6780efb29fa542a732a2886b\"",
+      "\"6780f291353fa861ed118d73\"",
+      "\"67810d5b353fa861ed118d91\"",
+      "\"678117fd353fa861ed118d99\"",
+      "\"67811de1353fa861ed118d9e\"",
+      "\"67811f11353fa861ed118da1\"",
+      "\"678123d2353fa861ed118dac\"",
+      "\"678126df353fa861ed118db0\"",
+      "\"6784e99ec67e60a83ec94c10\"",
+      "\"67860e74b9054c1eccaf3eda\"",
+      "\"6786a644b9054c1eccaf3ef0\"",
+      "\"6798620419c74cf55f86e2cd\"",
+      "\"679864f619c74cf55f86e2d2\"",
+      "\"679b914b19c74cf55f86e306\"",
+      "\"67a065a9588406fedff9f085\"",
+      "\"67a06607588406fedff9f087\"",
+      "\"67aad65c61f5f8fb0f4f0e9e\"",
+      "\"67ab009f61f5f8fb0f4f0ea4\"",
+      "\"67b47d933d3d30568ee2897d\"",
+      "\"67b58c4e3d3d30568ee28986\"",
+      "\"67b6dc3e3d3d30568ee2898c\"",
+      "\"67b83a8a3d3d30568ee28994\"",
+      "\"67bc472e3d3d30568ee289b5\"",
+      "\"67bdb6f8a44b50b30e29195a\"",
+      "\"67bf3458a44b50b30e291961\"",
+      "\"67c19598a44b50b30e291989\"",
+      "\"67d1735b45ffd1bfa277d409\"",
+      "\"67d2d49645ffd1bfa277d432\"",
+      "\"67d7f0722be02065d15ef008\"",
+      "\"67d84b4c2be02065d15ef03e\"",
+      "\"67d854792be02065d15ef052\"",
+      "\"67e1006dd9878352864e9982\"",
+      "\"67e542bad9878352864e99d9\"",
+      "\"67ea8788cd16c37fa5f0508c\"",
+      "\"67f5032571c3f180e061df12\"",
+      "\"67f5165571c3f180e061df30\"",
+      "\"67f846e0196efb66113f1043\"",
+      "\"67f846e0196efb66113f1050\"",
+      "\"67f846e0196efb66113f1054\"",
+      "\"67f846e0196efb66113f106c\"",
+      "\"67f8f0755ee31d5686fd042d\"",
+      "\"67f8f07d5ee31d5686fd042f\"",
+      "\"67fdff666f6c9c68fe04b221\"",
+      "\"67ffb3ba4d5d6361156f5b7b\"",
+      "\"67ffb88e4d5d6361156f5b85\"",
+      "\"6808c07430d84c45aa1a1662\"",
+      "\"682310ad3ec4f1a7f2f39944\"",
+      "\"6846b0942e8505e511939561\"",
+      "\"684964392e8505e5119395a1\"",
+      "\"685a9c0c18fb3e43aafbc223\"",
+      "\"689ef8f081aa49b7a386cb36\"",
+      "\"689eff1781aa49b7a386cb3e\"",
+      "\"68a803d581aa49b7a386cb6b\"",
+      "\"692e584034968b218a7f8620\""
+    ],
+    "classification": "open or mixed domain"
+  },
+  "source_kind": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "source_kind"
+      }
+    ],
+    "values": [
+      "null",
+      "\"voice_possible_task\"",
+      "\"voice_session\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "dialogue_tag": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "dialogue_tag"
+      }
+    ],
+    "values": [
+      "null",
+      "\"voice\"",
+      "\"call\"",
+      "\"chat\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "issue_type": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "issue_type"
+      }
+    ],
+    "values": [
+      "null"
+    ],
+    "classification": "null-only / no live domain"
+  },
+  "source_type": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_sessions",
+        "target_entity": "voice_session",
+        "source_field": "session_source"
+      },
+      {
+        "collection": "automation_voice_bot_messages",
+        "target_entity": "voice_message",
+        "source_field": "source_type"
+      },
+      {
+        "collection": "forecasts_project_month",
+        "target_entity": "forecast_project_month",
+        "source_field": "type"
+      }
+    ],
+    "values": [
+      "null",
+      "\"web\"",
+      "\"telegram\"",
+      "\"T&M\"",
+      "\"Fix\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "session_type": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_sessions",
+        "target_entity": "voice_session",
+        "source_field": "session_type"
+      },
+      {
+        "collection": "automation_voice_bot_messages",
+        "target_entity": "voice_message",
+        "source_field": "session_type"
+      }
+    ],
+    "values": [
+      "\"multiprompt_voice_session\"",
+      "null"
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "access_level": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_sessions",
+        "target_entity": "voice_session",
+        "source_field": "access_level"
+      }
+    ],
+    "values": [
+      "null",
+      "\"public\"",
+      "\"private\"",
+      "\"restricted\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "message_type": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_messages",
+        "target_entity": "voice_message",
+        "source_field": "message_type"
+      }
+    ],
+    "values": [
+      "null",
+      "\"voice\"",
+      "\"image\"",
+      "\"text\"",
+      "\"screenshot\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "mime_type": {
+    "declared_domain": "dictionary",
+    "max_values": 30,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_messages",
+        "target_entity": "voice_message",
+        "source_field": "mime_type"
+      },
+      {
+        "collection": "automation_google_drive_projects_files",
+        "target_entity": "drive_project_file",
+        "source_field": "mime_type"
+      },
+      {
+        "collection": "automation_google_drive_structure",
+        "target_entity": "drive_node",
+        "source_field": "mimeType"
+      }
+    ],
+    "values": [
+      "null",
+      "\"audio/webm\"",
+      "\"application/octet-stream\"",
+      "\"audio/ogg\"",
+      "\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\"",
+      "\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\"",
+      "\"image/png\"",
+      "\"application/x-font-ttf\"",
+      "\"application/vnd.google-apps.spreadsheet\"",
+      "\"application/vnd.google-apps.document\"",
+      "\"video/quicktime\"",
+      "\"application/pdf\"",
+      "\"video/mp4\"",
+      "\"image/jpeg\"",
+      "\"image/svg+xml\"",
+      "\"application/postscript\"",
+      "\"application/vnd.openxmlformats-officedocument.presentationml.presentation\"",
+      "\"application/x-zip-compressed\"",
+      "\"application/vnd.google-apps.presentation\"",
+      "\"application/msword\"",
+      "\"application/vnd.google-apps.form\"",
+      "\"text/html\"",
+      "\"application/vnd.google-apps.shortcut\"",
+      "\"application/vnd.oasis.opendocument.text\"",
+      "\"image/gif\"",
+      "\"text/x-markdown\"",
+      "\"application/x-xfig\"",
+      "\"application/vnd.google-apps.folder\""
+    ],
+    "classification": "open or mixed domain"
+  },
+  "event_status": {
+    "declared_domain": "state",
+    "max_values": 10,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_session_log",
+        "target_entity": "history_step",
+        "source_field": "status"
+      }
+    ],
+    "values": [
+      "\"done\"",
+      "\"error\"",
+      "\"pending\"",
+      "\"queued\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "event_group": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_session_log",
+        "target_entity": "history_step",
+        "source_field": "event_group"
+      }
+    ],
+    "values": [
+      "\"notify_webhook\"",
+      "\"transcript\"",
+      "\"categorization\"",
+      "\"summary\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "operation_type": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_voice_bot_session_merge_log",
+        "target_entity": "voice_session_merge_log",
+        "source_field": "operation_type"
+      }
+    ],
+    "values": [
+      "\"merge_sessions\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "project_name": {
+    "declared_domain": "open",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_google_drive_projects_files",
+        "target_entity": "drive_project_file",
+        "source_field": "project_name"
+      }
+    ],
+    "values": [
+      "\"PMO\"",
+      "\"Ural BortProvodnik\"",
+      "\"Metro Spot\"",
+      "\"Ural RMS\"",
+      "\"Metro MAPS\"",
+      "\"1XBet\"",
+      "\"Metro QAudit\"",
+      "\"Metro Voice\"",
+      "\"SovSport\"",
+      "\"Спорт день за днем\"",
+      "\"Spario Score\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "currency": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "forecasts_project_month",
+        "target_entity": "forecast_project_month",
+        "source_field": "forecast_currency"
+      },
+      {
+        "collection": "finops_expense_operations",
+        "target_entity": "cost_expense",
+        "source_field": "currency"
+      },
+      {
+        "collection": "finops_fx_rates",
+        "target_entity": "fx_monthly",
+        "source_field": "pair"
+      }
+    ],
+    "values": [
+      "null",
+      "\"RUB\"",
+      "\"USD\"",
+      "\"USD/RUB\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
+  "deletion_state": {
+    "declared_domain": "state",
+    "max_values": 10,
+    "collections": [
+      {
+        "collection": "finops_expense_operations",
+        "target_entity": "cost_expense",
+        "source_field": "is_deleted"
+      }
+    ],
+    "values": [
+      "false"
+    ],
+    "classification": "boolean-derived state domain"
+  }
+}

@@ -1,68 +1,56 @@
 ---
 type: agent
 name: generate_session_title
-description: "Generate concise session titles from transcript segments."
+description: "Generate concise session titles from plain transcript text or legacy enriched segments."
 default: true
 ---
 Ты — агент-генератор заголовков для диалогов и транскрипций.
 
 Формат входа:
 ```yaml
-type: array
-items:
-  type: object
-  properties:
-    start:
-      type: string
-      description: Начало сегмента в формате hh:mm:ss
-    end:
-      type: string
-      description: Конец сегмента в формате hh:mm:ss
-    speaker:
-      type: string
-      description: Имя или идентификатор спикера
-    text:
-      type: string
-      description: Очищенный информативный фрагмент
-    related_goal:
-      type: string
-      description: Цель если определена
-    segment_type:
-      type: string
-      description: Тип сегмента
-    keywords_grouped:
+type: string | array
+oneOf:
+  - type: string
+    description: Канонический текущий runtime contract. Plain text, собранный из `transcription_text` и/или `categorization[].text`.
+  - type: array
+    description: Legacy/enriched path, если вызывающий код передаст структурированные сегменты.
+    items:
       type: object
-      description: Ключевые слова сгруппированные по темам
-      additionalProperties:
-        type: array
-        items:
+      properties:
+        start:
           type: string
-    certainty_level:
-      type: string
-      description: Уровень уверенности
-    mentioned_roles:
-      type: array
-      description: Роли упомянутые в сегменте
-      items:
-        type: string
-    referenced_systems:
-      type: array
-      description: Системы упомянутые в сегменте
-      items:
-        type: string
-    new_pattern_detected:
-      type: string
-      description: Описание нетипового паттерна
-    quality_flag:
-      type: string
-      description: Качество фрагмента
-
-    topic_keywords:
-      type: array
-      description: 3-5 ключевых слов
-      items:
-        type: string        
+        end:
+          type: string
+        speaker:
+          type: string
+        text:
+          type: string
+        related_goal:
+          type: string
+        segment_type:
+          type: string
+        keywords_grouped:
+          type: object | string
+        certainty_level:
+          type: string
+        mentioned_roles:
+          type: array | string
+        referenced_systems:
+          type: array | string
+        new_pattern_detected:
+          type: string
+        quality_flag:
+          type: string
+        topic_keywords:
+          type: array | string
 ```
+
+Нормализация входа:
+- Считай строковый input основным и текущим боевым контрактом.
+- Если пришла строка, работай только по её смыслу без ожидания enrichment-полей.
+- Если пришёл массив сегментов, используй его как вспомогательно структурированный input.
+- Считай нормальным, что legacy/enriched поля могут быть string-shaped, а не массивами/объектами (`topic_keywords`, `mentioned_roles`, `referenced_systems`, `keywords_grouped`).
+- Никогда не считай отсутствие enrichment ошибкой.
 
 **Цель:** Создать краткий, информативный заголовок (3-8 слов), который точно отражает суть обсуждения.
 
@@ -75,8 +63,8 @@ items:
 
 * Step-back подход:
   - Сначала проанализируй общую структуру диалога
-  - Определи, есть ли enrichment-метки (topic_keywords, action_item, decision и др.)
-  - Если enrichment нет, извлекай информацию через анализ текста и ключевых слов
+  - Если enrichment-метки есть, используй их как слабый bonus-signal
+  - Если enrichment нет, извлекай информацию только через plain text
 
 * Приоритеты для заголовка:
   1. Основная тема/проект (если упоминается)

@@ -11,7 +11,7 @@ Contract baseline for current sync wave (`copilot-gym6.*`):
 ## Phase 0 - Environment
 
 1. Provision TypeDB (isolated env) and create database `str_opsportal_v1`.
-2. Import schema from `schema/str_opsportal_v1.tql`.
+2. Build schema from `schema/fragments/*` and import `schema/str-ontology.tql`.
 3. Create ingestion service skeleton with deadletter logging.
 
 ## Phase 1 - Core OperOps + Voice

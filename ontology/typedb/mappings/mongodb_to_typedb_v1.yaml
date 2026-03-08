@@ -1,7 +1,7 @@
 version: 1
 name: str_opsportal_mongodb_to_typedb
 source_database: stratodb
-schema_file: ../schema/str_opsportal_v1.tql
+schema_file: ../schema/str-ontology.tql
 
 id_normalization:
   strategy: stringify
@@ -18,7 +18,7 @@ collections:
       from: _id
     attributes:
       name: name
-      status: is_active
+      activity_state: is_active
       project_groups_ids: project_groups_ids
       created_at: created_at
       updated_at: updated_at
@@ -30,7 +30,7 @@ collections:
       from: _id
     attributes:
       name: name
-      status: is_active
+      activity_state: is_active
       drive_folder_id: drive_folder_id
       project_groups_ids: projects_ids
 
@@ -41,7 +41,7 @@ collections:
       from: _id
     attributes:
       name: name
-      status: is_active
+      activity_state: is_active
       project_group_ref: project_group
       board_id: board_id
       description: description
@@ -71,7 +71,7 @@ collections:
       from: _id
     attributes:
       name: name
-      status: is_active
+      activity_state: is_active
       project_groups_ids: projects_ids
       client_id: customer
       updated_at: updated_at
@@ -133,9 +133,9 @@ collections:
           from: project
 
   - collection: automation_performers
-    target_entity: person
+    target_entity: performer_profile
     key:
-      attribute: person_id
+      attribute: performer_profile_id
       from: _id
     attributes:
       name: real_name
@@ -172,11 +172,18 @@ collections:
       from: _id
     attributes:
       name: name
-      notifications: contacts
-      projects_access: projects
+      contacts_payload: contacts
+      project_participations: projects
       performer_id: performer_id
       updated_at: updated_at
       created_at: created_at
+    relations:
+      - relation: person_has_performer_profile
+        owner_role: person
+        owner_lookup:
+          entity: performer_profile
+          by: performer_profile_id
+          from: performer_id
 
   - collection: automation_tasks
     target_entity: oper_task
@@ -184,6 +191,7 @@ collections:
       attribute: task_id
       from: _id
     attributes:
+      row_id: row_id
       external_id: id
       old_id: old_id
       title: name
@@ -202,6 +210,7 @@ collections:
       performer_id: performer_id
       epic_task_id: epic
       planned_time: planned_time
+      type_class: type_class
       status_history: status_history
       task_status_history: task_status_history
       comments_list: comments_list
@@ -284,17 +293,18 @@ collections:
           entity: voice_session
           by: voice_session_id
           from: source_ref
+          transform: canonical_voice_ref_to_session_id
       - relation: oper_task_classified_as_task_type
         owner_role: oper_task
         owner_lookup:
           entity: task_type
           by: task_type_id
           from: task_type_id
-      - relation: oper_task_assigned_to_person
+      - relation: oper_task_assigned_to_performer_profile
         owner_role: oper_task
         owner_lookup:
-          entity: person
-          by: person_id
+          entity: performer_profile
+          by: performer_profile_id
           from: performer_id
 
   - collection: automation_work_hours
@@ -323,11 +333,11 @@ collections:
           entity: oper_task
           by: task_id
           from: ticket_db_id
-      - relation: person_creates_work_log
+      - relation: performer_profile_creates_work_log
         owner_role: work_log
         owner_lookup:
-          entity: person
-          by: person_id
+          entity: performer_profile
+          by: external_id
           from: created_by
 
   - collection: automation_voice_bot_sessions
@@ -336,7 +346,7 @@ collections:
       attribute: voice_session_id
       from: _id
     attributes:
-      status: status
+      activity_state: is_active
       source_type: session_source
       session_name: session_name
       session_type: session_type
@@ -382,6 +392,7 @@ collections:
       current_spreadsheet_file_id: current_spreadsheet_file_id
       summary_md_text: summary_md_text
       summary_saved_at: summary_saved_at
+      summary_correlation_id: summary_correlation_id
       runtime_tag: runtime_tag
       updated_at: updated_at
       created_at: created_at
@@ -421,10 +432,15 @@ collections:
       message_timestamp: message_timestamp
       timestamp: timestamp
       transcribe_timestamp: transcribe_timestamp
+      categorization_timestamp: categorization_timestamp
       is_transcribed: is_transcribed
       transcription_method: transcription_method
       transcription: transcription
       transcription_text: transcription_text
+      transcription_provider: transcription.provider
+      transcription_model: transcription.model
+      transcription_schema_version: transcription.schema_version
+      task: task
       summary: transcription_text
       categorization: categorization
       categorization_error: categorization_error
@@ -441,7 +457,6 @@ collections:
       dedup_replaced_by: dedup_replaced_by
       dedup_reason: dedup_reason
       processors_data: processors_data
-      status: status
       is_finalized: is_finalized
       is_deleted: is_deleted
       is_image_anchor: is_image_anchor
@@ -495,7 +510,7 @@ collections:
       attribute: history_step_id
       from: _id
     attributes:
-      status: status
+      event_status: status
       session_id: session_id
       event_time: event_time
       event_name: event_name
@@ -654,11 +669,11 @@ collections:
       performer_id: performer_id
       payments: payments
     relations:
-      - relation: person_has_legacy_finance_expense
+      - relation: performer_profile_has_legacy_finance_expense
         owner_role: legacy_finance_expense
         owner_lookup:
-          entity: person
-          by: person_id
+          entity: performer_profile
+          by: performer_profile_id
           from: performer_id
 
   - collection: automation_finances_income
@@ -669,9 +684,9 @@ collections:
     attributes:
       month_number: month
       year_number: year
-      performer: performer
+      performer_id: performer
       project_ref: project
-      task_type_name: task_type
+      legacy_finance_income_type_ref: task_type
       hours_amount: hours_amount
       hour_price: hour_price
     relations:
@@ -679,14 +694,20 @@ collections:
         owner_role: legacy_finance_income
         owner_lookup:
           entity: project
-          by: project_id
+          by: name
           from: project
       - relation: legacy_finance_income_has_type
         owner_role: legacy_finance_income
         owner_lookup:
           entity: legacy_finance_income_type
-          by: name
+          by: legacy_finance_income_type_id
           from: task_type
+      - relation: performer_profile_has_legacy_finance_income
+        owner_role: legacy_finance_income
+        owner_lookup:
+          entity: performer_profile
+          by: performer_profile_id
+          from: performer
 
   - collection: automation_finances_income_types
     target_entity: legacy_finance_income_type
@@ -736,7 +757,7 @@ collections:
       from: category_id
     attributes:
       name: name
-      status: is_active
+      activity_state: is_active
       created_by: created_by
       updated_by: updated_by
 
@@ -750,7 +771,7 @@ collections:
       currency: currency
       amount_original: amount
       amount_rub: amount
-      status: is_deleted
+      deletion_state: is_deleted
       created_at: created_at
       updated_at: updated_at
       project_id: project_id

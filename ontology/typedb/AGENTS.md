@@ -4,7 +4,7 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 
 ## Canonical Structure
 
-- `schema/` — TypeQL schema files.
+- `schema/` — canonical generated schema plus source fragments.
 - `mappings/` — source-to-ontology mapping YAML contracts.
 - `queries/` — validation and smoke query packs.
 - `scripts/` — ingestion/validation/runtime helpers.
@@ -15,11 +15,16 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 - Keep `backend/package.json` aliases `ontology:typedb:*` working.
 - Keep script defaults script-relative (no hidden dependency on current shell cwd).
 - Keep `scripts/requirements-typedb.txt` as the canonical dependency list for this tooling.
+- Keep `schema/str-ontology.tql` generated from `schema/fragments/*`; do not edit the generated schema manually.
+- `copilot` ontology is the kernel/common layer; project ontologies are overlays that extend it.
+- SemanticCards are the LLM-facing semantic surface and live in markdown, not in TQL alone.
 
 ## Editing Rules
 
 - Any schema change should be matched by mapping and validation query review.
 - Avoid changing IDs/attribute semantics silently; record intent in `docs/rollout_plan_v1.md`.
+- Edit fragments first, then rebuild the generated schema.
+- Keep TQL comments ultra-short (`what/not/why/semantic-card`) and push richer semantic explanation into `docs/semantic-glossary.md` and project-local SemanticCards.
 - If operator workflow changes, update:
   - `ontology/typedb/README.md`
   - repo root `CHANGELOG.md`
@@ -29,12 +34,52 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 From `/home/strato-space/copilot/backend`:
 
 1. `npm run ontology:typedb:py:setup`
-2. `npm run ontology:typedb:ingest:dry`
-3. `npm run ontology:typedb:validate`
+2. `npm run ontology:typedb:build`
+3. `npm run ontology:typedb:contract-check`
+4. `npm run ontology:typedb:domain-inventory`
+5. `npm run ontology:typedb:entity-sampling`
+6. `npm run ontology:typedb:ingest:dry`
+7. `npm run ontology:typedb:validate`
 
-If `.env.development` does not provide `MONGODB_CONNECTION_STRING`, construct and export it before ingestion:
+## Current Operation Modes
 
+- `ontology:typedb:build` — regenerate canonical schema from fragments.
+- `ontology:typedb:contract-check` — validate MongoDB documents against schema+mapping without TypeDB writes.
+- `ontology:typedb:ingest:*` — full scan / bootstrap path.
+- `ontology:typedb:sync:*` — incremental sync path using sync-state watermarks. Current safe scope is `automation_projects` + `automation_tasks` + `automation_voice_bot_sessions` + `automation_voice_bot_messages`.
+- Absence/tombstone semantics are documented in:
+  - `ontology/typedb/docs/incremental_absence_policy_v1.md`
+- current collection-level rule:
+  - only `automation_projects` is absence-actionable on full sync;
+  - tasks / sessions / messages remain protected from absence-only entity deletion in v1.
+
+If the shell does not already export `MONGODB_CONNECTION_STRING` and `DB_NAME`, export both before contract-check/ingest:
+
+`export DB_NAME="${DB_NAME}"`
 `export MONGODB_CONNECTION_STRING="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${DB_NAME}?authSource=admin&directConnection=true"`
+
+Domain inventory selection policy:
+- primary hints live inline in `schema/fragments/00-kernel/10-attributes-and-ids.tql`
+- marker format: `# @toon inventory=inspect ...`
+- default export/inventory selection is marker-controlled
+- use `--marked-only` to stay strict
+- use `--attrs ...` to force-include specific attrs
+- use `--include-heuristics` only when you want discovery mode beyond TOON-marked attrs
+- `automation_persons` and `automation_performers` are intentionally split:
+  - `person` = contact / participant / human reference
+  - `performer_profile` = internal performer/staff/account profile
+  - task assignment, work-log authorship, employee linkage, and legacy finance expense linkage terminate on `performer_profile`
+
+Entity sampling policy:
+- verification sampling inspects **all top-level Mongo fields**
+- TOON examples stay compact and ontology-relevant
+- default operator guidance:
+  - `--mode verify` for ontology/mapping review
+  - `--mode toon --toon-columns mapped` for LLM-facing examples
+- current defaults:
+  - `verify_limit=20`
+  - `toon_limit=3`
+  - `toon_columns=mapped`
 
 If you changed only docs, state explicitly that runtime validation was skipped.
 

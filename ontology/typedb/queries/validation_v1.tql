@@ -78,10 +78,20 @@ match
 get $f;
 count;
 
-# 7) Spot-check status normalization
+# 7) Spot-check status domain normalization
 match
   $t isa oper_task, has status $status;
 get $status;
+limit 20;
+
+match
+  $p isa project, has activity_state $activity_state;
+get $activity_state;
+limit 20;
+
+match
+  $h isa history_step, has event_status $event_status;
+get $event_status;
 limit 20;
 
 # 8) Spot-check ID normalization (all should be string attributes present)
@@ -188,9 +198,9 @@ match
 get $t;
 count;
 
-# 10.3 Tasks with source_ref should have VoiceSession relation materialized
+# 10.3 Tasks with source_kind=voice_session should have VoiceSession relation materialized
 match
-  $t isa oper_task, has source_ref $source_ref;
+  $t isa oper_task, has source_kind "voice_session", has source_ref $source_ref;
   not {
     (source_voice_session: $s, sourced_oper_task: $t) isa voice_session_sources_oper_task;
   };
@@ -231,6 +241,13 @@ count;
 match
   $t isa oper_task;
   not { $t has runtime_tag $runtime_tag; };
+get $t;
+count;
+
+# 10.9 Possible task canonical locator: voice_possible_task must have row_id
+match
+  $t isa oper_task, has source_kind "voice_possible_task";
+  not { $t has row_id $row_id; };
 get $t;
 count;
 

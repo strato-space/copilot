@@ -24,6 +24,9 @@ Scope: `/home/strato-space/copilot/ontology`
 ## Change Discipline
 
 - Keep schema and mapping changes atomic and documented.
+- Treat `ontology/typedb/schema/fragments/*` as editable source of truth and `ontology/typedb/schema/str-ontology.tql` as generated deploy artifact.
+- Treat `copilot` ontology as kernel/common layer for all project-local ontology overlays.
+- Keep project-local SemanticCards aligned with ontology changes whenever object semantics change.
 - If schema/mapping changes affect runtime assumptions, update:
   - `/home/strato-space/copilot/AGENTS.md`
   - `/home/strato-space/copilot/README.md`
@@ -35,6 +38,7 @@ Scope: `/home/strato-space/copilot/ontology`
 Run ontology tooling via backend npm aliases (stable operator contract):
 
 - `cd /home/strato-space/copilot/backend && npm run ontology:typedb:py:setup`
+- `cd /home/strato-space/copilot/backend && npm run ontology:typedb:build`
 - `cd /home/strato-space/copilot/backend && npm run ontology:typedb:ingest:dry`
 - `cd /home/strato-space/copilot/backend && npm run ontology:typedb:ingest:apply -- --init-schema`
 - `cd /home/strato-space/copilot/backend && npm run ontology:typedb:validate`

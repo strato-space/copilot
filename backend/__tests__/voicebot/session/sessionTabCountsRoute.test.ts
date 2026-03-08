@@ -14,6 +14,7 @@ const requirePermissionMock = jest.fn(
 );
 
 const tasksCountDocumentsMock = jest.fn();
+const tasksAggregateMock = jest.fn();
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -66,6 +67,7 @@ describe('Voicebot session_tab_counts route', () => {
     generateDataFilterMock.mockReset();
     requirePermissionMock.mockClear();
     tasksCountDocumentsMock.mockReset();
+    tasksAggregateMock.mockReset();
 
     const sessionDoc = {
       _id: sessionId,
@@ -76,16 +78,21 @@ describe('Voicebot session_tab_counts route', () => {
       source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
     };
 
-    tasksCountDocumentsMock
-      .mockResolvedValueOnce(7)
-      .mockResolvedValueOnce(3)
-      .mockResolvedValueOnce(3);
+    tasksAggregateMock.mockReturnValue({
+      toArray: async () => [
+        { _id: TASK_STATUSES.NEW_0, count: 4 },
+        { _id: TASK_STATUSES.READY_10, count: 7 },
+        { _id: TASK_STATUSES.REVIEW_10, count: 3 },
+      ],
+    });
+    tasksCountDocumentsMock.mockResolvedValueOnce(3);
 
     const dbStub = {
       collection: (name: string) => {
         if (name === COLLECTIONS.TASKS) {
           return {
             countDocuments: tasksCountDocumentsMock,
+            aggregate: tasksAggregateMock,
           };
         }
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
@@ -118,40 +125,34 @@ describe('Voicebot session_tab_counts route', () => {
     expect(response.body).toEqual({
       success: true,
       session_id: sessionId.toHexString(),
-      tasks_count: 10,
+      tasks_count: 14,
       tasks_work_count: 7,
       tasks_review_count: 3,
       codex_count: 3,
+      status_counts: [
+        { status: TASK_STATUSES.NEW_0, count: 4 },
+        { status: TASK_STATUSES.READY_10, count: 7 },
+        { status: TASK_STATUSES.REVIEW_10, count: 3 },
+      ],
     });
 
+    expect(tasksAggregateMock).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          $match: expect.objectContaining({
+            is_deleted: { $ne: true },
+            codex_task: { $ne: true },
+          }),
+        }),
+        expect.objectContaining({
+          $group: expect.objectContaining({
+            _id: '$task_status',
+          }),
+        }),
+      ])
+    );
     expect(tasksCountDocumentsMock).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({
-        is_deleted: { $ne: true },
-        codex_task: { $ne: true },
-        task_status: {
-          $in: expect.arrayContaining([
-            TASK_STATUSES.READY_10,
-            TASK_STATUSES.PROGRESS_0,
-          ]),
-        },
-      })
-    );
-    expect(tasksCountDocumentsMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        is_deleted: { $ne: true },
-        codex_task: { $ne: true },
-        task_status: {
-          $in: expect.arrayContaining([
-            TASK_STATUSES.REVIEW_10,
-            TASK_STATUSES.REVIEW_20,
-          ]),
-        },
-      })
-    );
-    expect(tasksCountDocumentsMock).toHaveBeenNthCalledWith(
-      3,
       expect.objectContaining({
         is_deleted: { $ne: true },
         codex_task: true,

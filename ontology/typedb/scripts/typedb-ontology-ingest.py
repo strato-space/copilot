@@ -4,6 +4,7 @@ import json
 import os
 import pathlib
 import re
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -54,18 +55,47 @@ VOICE_TRANSCRIPT_MAX_BYTES = 1_048_576
 VOICE_TRANSCRIPT_CHUNK_BYTES = 60_000
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 TYPEDB_ROOT_DIR = SCRIPT_DIR.parent
-DEFAULT_SCHEMA_PATH = TYPEDB_ROOT_DIR / "schema" / "str_opsportal_v1.tql"
+DEFAULT_SCHEMA_PATH = TYPEDB_ROOT_DIR / "schema" / "str-ontology.tql"
 DEFAULT_MAPPING_PATH = TYPEDB_ROOT_DIR / "mappings" / "mongodb_to_typedb_v1.yaml"
 DEFAULT_DEADLETTER_PATH = TYPEDB_ROOT_DIR / "logs" / "typedb-ontology-ingest-deadletter.ndjson"
+DEFAULT_SYNC_STATE_PATH = TYPEDB_ROOT_DIR / "logs" / "typedb-ontology-sync-state.json"
+SCHEMA_BUILD_SCRIPT = SCRIPT_DIR / "build-typedb-schema.py"
+INCREMENTAL_COLLECTIONS = {
+    # Stage-1 incremental scope is intentionally narrow until true
+    # update/reconcile semantics are implemented for mutable collections.
+    "automation_projects",
+    "automation_tasks",
+    "automation_voice_bot_sessions",
+    "automation_voice_bot_messages",
+}
+
+TOMBSTONE_RELATIONS: dict[str, set[str]] = {
+    "automation_tasks": {
+        "project_has_oper_task",
+        "voice_session_sources_oper_task",
+        "oper_task_classified_as_task_type",
+        "oper_task_assigned_to_person",
+    },
+    "automation_voice_bot_sessions": {
+        "project_has_voice_session",
+    },
+    "automation_voice_bot_messages": {
+        "voice_session_has_message",
+        "voice_message_chunked_as_transcript_chunk",
+    },
+}
 
 
 @dataclass
 class CliOptions:
     apply: bool
     init_schema: bool
+    sync_mode: str
     limit: Optional[int]
     collections: list[str]
     deadletter_path: pathlib.Path
+    sync_state_path: pathlib.Path
+    reset_sync_state: bool
     typedb_addresses: list[str]
     typedb_primary_address: str
     typedb_username: str
@@ -99,6 +129,7 @@ class IngestContext:
     entity_owned_attrs: dict[str, set[str]]
     relation_roles: dict[str, list[str]]
     entity_relation_roles: dict[tuple[str, str], set[str]]
+    sync_state: dict[str, Any]
 
 
 class DeadletterWriter:
@@ -125,6 +156,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Ingest MongoDB data into TypeDB ontology")
     parser.add_argument("--apply", action="store_true", help="Apply writes to TypeDB (default is dry-run)")
     parser.add_argument("--init-schema", action="store_true", help="Load schema before ingestion")
+    parser.add_argument(
+        "--sync-mode",
+        choices=["full", "incremental"],
+        default="full",
+        help="Choose full scan or incremental sync mode",
+    )
     parser.add_argument("--limit", type=int, default=None, help="Limit documents per collection")
     parser.add_argument(
         "--collections",
@@ -138,6 +175,13 @@ def parse_args() -> argparse.Namespace:
         default=str(DEFAULT_DEADLETTER_PATH),
         help="Path to deadletter NDJSON",
     )
+    parser.add_argument(
+        "--sync-state",
+        type=str,
+        default=str(DEFAULT_SYNC_STATE_PATH),
+        help="Path to sync state JSON for incremental mode",
+    )
+    parser.add_argument("--reset-sync-state", action="store_true", help="Reset stored incremental sync state")
     parser.add_argument("--typedb-addresses", type=str, default=None)
     parser.add_argument("--typedb-username", type=str, default=None)
     parser.add_argument("--typedb-password", type=str, default=None)
@@ -224,12 +268,15 @@ def parse_options(args: argparse.Namespace) -> CliOptions:
             file=sys.stderr,
         )
 
-    return CliOptions(
+    options = CliOptions(
         apply=bool(args.apply),
         init_schema=bool(args.init_schema),
+        sync_mode=args.sync_mode,
         limit=args.limit,
         collections=collections,
         deadletter_path=pathlib.Path(args.deadletter).resolve(),
+        sync_state_path=pathlib.Path(args.sync_state).resolve(),
+        reset_sync_state=bool(args.reset_sync_state),
         typedb_addresses=addresses,
         typedb_primary_address=addresses[0],
         typedb_username=args.typedb_username or os.getenv("TYPEDB_USERNAME") or "admin",
@@ -239,6 +286,8 @@ def parse_options(args: argparse.Namespace) -> CliOptions:
         schema_path=pathlib.Path(args.schema).resolve(),
         mapping_path=pathlib.Path(args.mapping).resolve(),
     )
+    maybe_build_generated_schema(options.schema_path)
+    return options
 
 
 def normalize_id(value: Any) -> Optional[str]:
@@ -302,6 +351,13 @@ def normalize_status_from_bool(value: Any) -> str:
     if bool_value is None:
         return "unknown"
     return "active" if bool_value else "inactive"
+
+
+def normalize_deletion_state_from_bool(value: Any) -> str:
+    bool_value = as_bool(value)
+    if bool_value is None:
+        return "unknown"
+    return "deleted" if bool_value else "present"
 
 
 def utf8_byte_length(value: str) -> int:
@@ -411,6 +467,8 @@ def append_datetime_attr(parts: list[str], attr: str, value: Optional[datetime])
 
 def as_datetime(value: Any) -> Optional[datetime]:
     if isinstance(value, datetime):
+        if value.tzinfo is not None and value.utcoffset() is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
     if isinstance(value, str):
         text = value.strip()
@@ -418,7 +476,10 @@ def as_datetime(value: Any) -> Optional[datetime]:
             return None
         normalized = text.replace("Z", "+00:00")
         try:
-            return datetime.fromisoformat(normalized)
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is not None and parsed.utcoffset() is not None:
+                return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            return parsed
         except ValueError:
             return None
     return None
@@ -461,6 +522,44 @@ def mapping_key_component(value: Any) -> Optional[str]:
     return normalize_id(value) or to_stringish(value)
 
 
+def canonical_voice_ref_to_session_id(value: Any) -> Optional[str]:
+    raw = mapping_key_component(value)
+    if raw is None:
+        return None
+    if re.fullmatch(r"[0-9a-f]{24}", raw):
+        return raw
+    for pattern in (
+        r"/voice/session/([0-9a-f]{24})(?:[/?#].*)?$",
+        r"/session/([0-9a-f]{24})(?:[/?#].*)?$",
+    ):
+        match = re.search(pattern, raw)
+        if match:
+            return match.group(1)
+    return None
+
+
+LOOKUP_TRANSFORMS: dict[str, Callable[[Any], Optional[str]]] = {
+    "canonical_voice_ref_to_session_id": canonical_voice_ref_to_session_id,
+}
+
+
+def apply_lookup_transform(name: Optional[str], value: Any) -> Optional[str]:
+    if not name:
+        return mapping_key_component(value)
+    transform = LOOKUP_TRANSFORMS.get(name)
+    if transform is None:
+        raise ValueError(f"Unsupported lookup transform: {name}")
+    return transform(value)
+
+
+def maybe_build_generated_schema(schema_path: pathlib.Path) -> None:
+    if schema_path.name != "str-ontology.tql":
+        return
+    if not SCHEMA_BUILD_SCRIPT.exists():
+        return
+    subprocess.run([sys.executable, str(SCHEMA_BUILD_SCRIPT)], check=True)
+
+
 def print_stats(stats: list[CollectionStats]) -> None:
     print("")
     print("[typedb-ontology-ingest] summary")
@@ -470,6 +569,95 @@ def print_stats(stats: list[CollectionStats]) -> None:
             f"failed={item.failed} skipped={item.skipped} rel_inserted={item.relations_inserted} "
             f"rel_failed={item.relation_failed} rel_skipped={item.relations_skipped}"
         )
+
+
+def load_sync_state(path: pathlib.Path, reset: bool = False) -> dict[str, Any]:
+    if reset or not path.exists():
+        return {"collections": {}}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict) and isinstance(payload.get("collections"), dict):
+            return payload
+    except Exception:
+        pass
+    return {"collections": {}}
+
+
+def save_sync_state(path: pathlib.Path, state: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    raw = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(raw)
+        if parsed.tzinfo is not None and parsed.utcoffset() is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+
+def build_collection_query(ctx: IngestContext, collection: str) -> dict[str, Any]:
+    if ctx.options.sync_mode != "incremental" or collection not in INCREMENTAL_COLLECTIONS:
+        return {}
+    collection_state = ctx.sync_state.get("collections", {}).get(collection, {})
+    if not isinstance(collection_state, dict):
+        return {}
+
+    clauses: list[dict[str, Any]] = []
+    last_updated_at = parse_iso_datetime(collection_state.get("last_seen_updated_at"))
+    if last_updated_at is not None:
+        clauses.append({"updated_at": {"$gt": last_updated_at}})
+
+    last_created_at = parse_iso_datetime(collection_state.get("last_seen_created_at"))
+    if last_created_at is not None:
+        clauses.append({"created_at": {"$gt": last_created_at}})
+
+    last_object_id = collection_state.get("last_seen_object_id")
+    if isinstance(last_object_id, str):
+        try:
+            clauses.append({"_id": {"$gt": ObjectId(last_object_id)}})
+        except Exception:
+            pass
+
+    if not clauses:
+        return {}
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$or": clauses}
+
+
+def is_tombstoned_doc(collection: str, doc: dict[str, Any]) -> bool:
+    if collection in TOMBSTONE_RELATIONS:
+        deleted = as_bool(doc.get("is_deleted"))
+        return deleted is True
+    return False
+
+
+def update_sync_state_for_doc(ctx: IngestContext, collection: str, doc: dict[str, Any]) -> None:
+    collections = ctx.sync_state.setdefault("collections", {})
+    collection_state = collections.setdefault(collection, {})
+
+    updated_at = as_datetime(doc.get("updated_at"))
+    created_at = as_datetime(doc.get("created_at"))
+    object_id = normalize_id(doc.get("_id"))
+
+    if updated_at is not None:
+        previous = parse_iso_datetime(collection_state.get("last_seen_updated_at"))
+        if previous is None or updated_at > previous:
+            collection_state["last_seen_updated_at"] = updated_at.isoformat()
+
+    if created_at is not None:
+        previous = parse_iso_datetime(collection_state.get("last_seen_created_at"))
+        if previous is None or created_at > previous:
+            collection_state["last_seen_created_at"] = created_at.isoformat()
+
+    if object_id is not None:
+        collection_state["last_seen_object_id"] = object_id
 
 
 def execute_query_in_transaction(driver: Any, database: str, tx_type: TransactionType, query: str) -> None:
@@ -507,6 +695,12 @@ def query_has_rows(driver: Any, database: str, query: str) -> bool:
             tx.close()
         except Exception as close_error:
             print(f"[typedb-ontology-ingest] closeTransaction warning: {close_error}", file=sys.stderr)
+
+
+def delete_query_if_exists(driver: Any, database: str, match_query: str, delete_query: str) -> None:
+    if not query_has_rows(driver, database, match_query):
+        return
+    execute_query_in_transaction(driver, database, TransactionType.WRITE, delete_query)
 
 
 def insert_query(
@@ -556,6 +750,480 @@ def insert_query(
         return False
 
 
+def literal_for_attr_value(attr: str, attr_type: str, raw_value: Any) -> Optional[str]:
+    if attr_type == "string":
+        if attr == "activity_state":
+            bool_status = as_bool(raw_value)
+            desired_value = normalize_status_from_bool(bool_status) if bool_status is not None else to_stringish(raw_value)
+        elif attr == "deletion_state":
+            bool_status = as_bool(raw_value)
+            desired_value = normalize_deletion_state_from_bool(bool_status) if bool_status is not None else to_stringish(raw_value)
+        else:
+            desired_value = to_stringish(raw_value)
+        return lit_string(desired_value) if desired_value is not None else None
+    if attr_type == "double":
+        numeric = as_number(raw_value)
+        return lit_number(numeric) if numeric is not None else None
+    if attr_type == "integer":
+        numeric = as_number(raw_value)
+        return lit_number(int(numeric)) if numeric is not None else None
+    if attr_type == "boolean":
+        boolean = as_bool(raw_value)
+        return lit_bool(boolean) if boolean is not None else None
+    if attr_type == "datetime":
+        dt = as_datetime(raw_value)
+        return lit_datetime(dt) if dt is not None else None
+    return None
+
+
+def reconcile_owned_attribute(
+    ctx: IngestContext,
+    *,
+    entity: str,
+    key_attr: str,
+    key_value: str,
+    attr: str,
+    desired_literal: Optional[str],
+) -> None:
+    if not ctx.options.apply or ctx.typedb_driver is None:
+        return
+    match_existing = (
+        f"match $e isa {entity}, has {key_attr} {lit_string(key_value)}, has {attr} $v; limit 1;"
+    )
+    delete_existing = (
+        f"match $e isa {entity}, has {key_attr} {lit_string(key_value)}, has {attr} $v; "
+        f"delete has $v of $e;"
+    )
+    delete_query_if_exists(ctx.typedb_driver, ctx.options.typedb_database, match_existing, delete_existing)
+    if desired_literal is None:
+        return
+    insert_query = (
+        f"match $e isa {entity}, has {key_attr} {lit_string(key_value)}; "
+        f"insert $e has {attr} {desired_literal};"
+    )
+    execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_query)
+
+
+def reconcile_relation(
+    ctx: IngestContext,
+    *,
+    relation_name: str,
+    source_entity: str,
+    source_key_attr: str,
+    source_key_value: str,
+    source_role: str,
+    owner_entity: str,
+    owner_by: str,
+    owner_role: str,
+    owner_value: Optional[str],
+) -> None:
+    if not ctx.options.apply or ctx.typedb_driver is None:
+        return
+
+    match_existing = (
+        f"match $e isa {source_entity}, has {source_key_attr} {lit_string(source_key_value)}; "
+        f"$r isa {relation_name}, links ({source_role}: $e, {owner_role}: $o); limit 1;"
+    )
+    delete_existing = (
+        f"match $e isa {source_entity}, has {source_key_attr} {lit_string(source_key_value)}; "
+        f"$r isa {relation_name}, links ({source_role}: $e, {owner_role}: $o); "
+        f"delete $r;"
+    )
+    delete_query_if_exists(ctx.typedb_driver, ctx.options.typedb_database, match_existing, delete_existing)
+
+    if owner_value is None:
+        return
+
+    insert_relation = (
+        f"match $e isa {source_entity}, has {source_key_attr} {lit_string(source_key_value)}; "
+        f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
+        f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
+    )
+    execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_relation)
+
+
+def upsert_entity(
+    ctx: IngestContext,
+    *,
+    entity: str,
+    key_attr: str,
+    key_value: str,
+    attr_specs: list[tuple[str, str, Any]],
+) -> None:
+    if not ctx.options.apply or ctx.typedb_driver is None:
+        return
+
+    exists_query = f"match $x isa {entity}, has {key_attr} {lit_string(key_value)}; limit 1;"
+    if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+        for attr, attr_type, raw_value in attr_specs:
+            reconcile_owned_attribute(
+                ctx,
+                entity=entity,
+                key_attr=key_attr,
+                key_value=key_value,
+                attr=attr,
+                desired_literal=literal_for_attr_value(attr, attr_type, raw_value),
+            )
+        return
+
+    fields = [f"insert $e isa {entity}", f"has {key_attr} {lit_string(key_value)}"]
+    for attr, attr_type, raw_value in attr_specs:
+        append_mapped_attr(fields, attr, attr_type, raw_value)
+    query = f"{', '.join(fields)};"
+    execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, query)
+
+
+def derive_canonical_voice_session_url(session_id: Optional[str]) -> Optional[str]:
+    if not session_id:
+        return None
+    return f"https://copilot.stratospace.fun/voice/session/{session_id}"
+
+
+def project_project_context_card(ctx: IngestContext, doc: dict[str, Any], project_id: str) -> None:
+    card_id = project_id
+    attr_specs = [
+        ("project_id", "string", project_id),
+        ("name", "string", as_string(doc.get("name"))),
+        ("summary", "string", as_string(doc.get("description"))),
+        ("activity_state", "string", normalize_status_from_bool(doc.get("is_active"))),
+        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+    ]
+    upsert_entity(
+        ctx,
+        entity="project_context_card",
+        key_attr="project_context_card_id",
+        key_value=card_id,
+        attr_specs=attr_specs,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="project_context_card_describes_project",
+        source_entity="project_context_card",
+        source_key_attr="project_context_card_id",
+        source_key_value=card_id,
+        source_role="project_context_card",
+        owner_entity="project",
+        owner_by="project_id",
+        owner_role="described_project",
+        owner_value=project_id,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="as_is_project_maps_to_project_context_card",
+        source_entity="project",
+        source_key_attr="project_id",
+        source_key_value=project_id,
+        source_role="as_is_project",
+        owner_entity="project_context_card",
+        owner_by="project_context_card_id",
+        owner_role="project_context_card",
+        owner_value=card_id,
+    )
+
+
+def project_oper_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
+    status_name = as_string(doc.get("task_status")) or as_string(doc.get("status"))
+    if status_name:
+        status_id = status_name
+        upsert_entity(
+            ctx,
+            entity="status_dict",
+            key_attr="status_id",
+            key_value=status_id,
+            attr_specs=[
+                ("name", "string", status_name),
+                ("module_scope", "string", "oper_task"),
+            ],
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="oper_task_has_status",
+            source_entity="oper_task",
+            source_key_attr="task_id",
+            source_key_value=task_id,
+            source_role="oper_task",
+            owner_entity="status_dict",
+            owner_by="status_id",
+            owner_role="task_status",
+            owner_value=status_id,
+        )
+
+    priority_value = as_number(doc.get("priority"))
+    if priority_value is not None:
+        priority_rank = int(priority_value)
+        priority_id = str(priority_rank)
+        upsert_entity(
+            ctx,
+            entity="priority_dict",
+            key_attr="priority_id",
+            key_value=priority_id,
+            attr_specs=[
+                ("name", "string", priority_id),
+                ("priority_rank", "integer", priority_rank),
+            ],
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="oper_task_has_priority",
+            source_entity="oper_task",
+            source_key_attr="task_id",
+            source_key_value=task_id,
+            source_role="oper_task",
+            owner_entity="priority_dict",
+            owner_by="priority_id",
+            owner_role="task_priority",
+            owner_value=priority_id,
+        )
+
+
+def project_target_task_view(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
+    target_id = task_id
+    attr_specs = [
+        ("project_id", "string", normalize_id(doc.get("project_id"))),
+        ("title", "string", as_string(doc.get("name"))),
+        ("summary", "string", as_string(doc.get("description"))),
+        ("description", "string", as_string(doc.get("description"))),
+        ("status", "string", as_string(doc.get("task_status")) or as_string(doc.get("status")) or "unknown"),
+        ("priority", "string", to_stringish(doc.get("priority"))),
+        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+    ]
+    upsert_entity(
+        ctx,
+        entity="target_task_view",
+        key_attr="target_task_view_id",
+        key_value=target_id,
+        attr_specs=attr_specs,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="as_is_oper_task_maps_to_target_task_view",
+        source_entity="oper_task",
+        source_key_attr="task_id",
+        source_key_value=task_id,
+        source_role="as_is_oper_task",
+        owner_entity="target_task_view",
+        owner_by="target_task_view_id",
+        owner_role="target_task_view",
+        owner_value=target_id,
+    )
+    if as_string(doc.get("source_kind")) == "voice_possible_task":
+        reconcile_relation(
+            ctx,
+            relation_name="as_is_possible_task_maps_to_target_task_view",
+            source_entity="oper_task",
+            source_key_attr="task_id",
+            source_key_value=task_id,
+            source_role="as_is_possible_task",
+            owner_entity="target_task_view",
+            owner_by="target_task_view_id",
+            owner_role="target_task_view",
+            owner_value=target_id,
+        )
+
+
+def project_mode_segment(ctx: IngestContext, doc: dict[str, Any], session_id: str) -> None:
+    segment_id = session_id
+    attr_specs = [
+        ("session_id", "string", session_id),
+        ("source_ref", "string", derive_canonical_voice_session_url(session_id)),
+        ("status", "string", as_string(doc.get("status")) or normalize_status_from_bool(doc.get("is_active"))),
+        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+    ]
+    upsert_entity(
+        ctx,
+        entity="mode_segment",
+        key_attr="mode_segment_id",
+        key_value=segment_id,
+        attr_specs=attr_specs,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="as_is_voice_session_maps_to_mode_segment",
+        source_entity="voice_session",
+        source_key_attr="voice_session_id",
+        source_key_value=session_id,
+        source_role="as_is_voice_session",
+        owner_entity="mode_segment",
+        owner_by="mode_segment_id",
+        owner_role="mode_segment",
+        owner_value=segment_id,
+    )
+
+
+def project_object_conclusion_from_session_summary(ctx: IngestContext, doc: dict[str, Any], session_id: str) -> None:
+    summary_text = as_string(doc.get("summary_md_text"))
+    if not summary_text:
+        return
+    conclusion_id = f"session-summary:{session_id}"
+    project_id = normalize_id(doc.get("project_id"))
+    attr_specs = [
+        ("summary", "string", truncate_utf8_to_bytes(summary_text, TYPEDB_SAFE_STRING_BYTES)),
+        ("description", "string", truncate_utf8_to_bytes(summary_text, TYPEDB_SAFE_STRING_BYTES)),
+        ("source_ref", "string", derive_canonical_voice_session_url(session_id)),
+        ("status", "string", "active"),
+        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ("updated_at", "datetime", as_datetime(doc.get("summary_saved_at")) or as_datetime(doc.get("updated_at"))),
+    ]
+    upsert_entity(
+        ctx,
+        entity="object_conclusion",
+        key_attr="object_conclusion_id",
+        key_value=conclusion_id,
+        attr_specs=attr_specs,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="as_is_summary_maps_to_object_conclusion",
+        source_entity="voice_session",
+        source_key_attr="voice_session_id",
+        source_key_value=session_id,
+        source_role="as_is_summary",
+        owner_entity="object_conclusion",
+        owner_by="object_conclusion_id",
+        owner_role="object_conclusion",
+        owner_value=conclusion_id,
+    )
+    if project_id is not None:
+        reconcile_relation(
+            ctx,
+            relation_name="object_conclusion_applies_to_project_context_card",
+            source_entity="object_conclusion",
+            source_key_attr="object_conclusion_id",
+            source_key_value=conclusion_id,
+            source_role="object_conclusion",
+            owner_entity="project_context_card",
+            owner_by="project_context_card_id",
+            owner_role="concluded_project_context_card",
+            owner_value=project_id,
+        )
+
+
+def project_object_event(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
+    session_id = normalize_id(doc.get("session_id"))
+    event_id = message_id
+    summary = as_string(doc.get("transcription_text")) or as_string(doc.get("text")) or as_string(doc.get("summary"))
+    attr_specs = [
+        ("event_time", "datetime", as_datetime(doc.get("updated_at")) or as_datetime(doc.get("created_at"))),
+        ("operation_type", "string", as_string(doc.get("message_type")) or as_string(doc.get("type")) or "voice_message"),
+        ("source_ref", "string", session_id),
+        ("summary", "string", truncate_utf8_to_bytes(summary, TYPEDB_SAFE_STRING_BYTES) if summary else None),
+        ("status", "string", as_string(doc.get("status")) or normalize_status_from_bool(doc.get("is_finalized"))),
+        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+    ]
+    upsert_entity(
+        ctx,
+        entity="object_event",
+        key_attr="object_event_id",
+        key_value=event_id,
+        attr_specs=attr_specs,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="as_is_voice_message_maps_to_object_event",
+        source_entity="voice_message",
+        source_key_attr="voice_message_id",
+        source_key_value=message_id,
+        source_role="as_is_voice_message",
+        owner_entity="object_event",
+        owner_by="object_event_id",
+        owner_role="object_event",
+        owner_value=event_id,
+    )
+    if session_id is not None:
+        reconcile_relation(
+            ctx,
+            relation_name="object_event_affects_mode_segment",
+            source_entity="object_event",
+            source_key_attr="object_event_id",
+            source_key_value=event_id,
+            source_role="object_event",
+            owner_entity="mode_segment",
+            owner_by="mode_segment_id",
+            owner_role="affected_mode_segment",
+            owner_value=session_id,
+        )
+
+
+def project_artifact_record_from_attachment(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
+    has_attachment = any(
+        doc.get(field)
+        for field in ("file_id", "file_name", "file_path", "attachments", "image_anchor_message_id")
+    )
+    if not has_attachment:
+        return
+    artifact_id = f"voice-message-attachment:{message_id}"
+    project_id = normalize_id(doc.get("project_id"))
+    attr_specs = [
+        ("project_id", "string", project_id),
+        ("source_type", "string", as_string(doc.get("source_type")) or "voice_message_attachment"),
+        ("source_ref", "string", message_id),
+        ("external_ref", "string", as_string(doc.get("file_path")) or as_string(doc.get("file_id"))),
+        ("title", "string", as_string(doc.get("file_name")) or f"attachment:{message_id}"),
+        ("summary", "string", as_string(doc.get("file_name")) or as_string(doc.get("mime_type"))),
+        ("status", "string", as_string(doc.get("status")) or "active"),
+        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+    ]
+    upsert_entity(
+        ctx,
+        entity="artifact_record",
+        key_attr="artifact_record_id",
+        key_value=artifact_id,
+        attr_specs=attr_specs,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="as_is_attachment_maps_to_artifact_record",
+        source_entity="voice_message",
+        source_key_attr="voice_message_id",
+        source_key_value=message_id,
+        source_role="as_is_attachment",
+        owner_entity="artifact_record",
+        owner_by="artifact_record_id",
+        owner_role="artifact_record",
+        owner_value=artifact_id,
+    )
+
+
+def reconcile_transcript_chunks(
+    ctx: IngestContext,
+    *,
+    voice_message_id: str,
+    chunks: list[tuple[str, str]],
+) -> None:
+    if not ctx.options.apply or ctx.typedb_driver is None:
+        return
+    match_existing = (
+        f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+        f"$r isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); "
+        f"$c isa transcript_chunk, has transcript_chunk_id $cid; limit 1;"
+    )
+    delete_existing = (
+        f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+        f"$r isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); "
+        f"$c isa transcript_chunk, has transcript_chunk_id $cid; "
+        f"delete $r; $c;"
+    )
+    delete_query_if_exists(ctx.typedb_driver, ctx.options.typedb_database, match_existing, delete_existing)
+
+    for chunk_id, chunk_text in chunks:
+        insert_chunk = (
+            f"insert $c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}, "
+            f"has summary {lit_string(chunk_text)};"
+        )
+        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_chunk)
+        insert_relation = (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}; "
+            f"insert (voice_message: $m, transcript_chunk: $c) isa voice_message_chunked_as_transcript_chunk;"
+        )
+        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_relation)
+
+
 def insert_relation_query(
     ctx: IngestContext,
     stats: CollectionStats,
@@ -603,8 +1271,8 @@ def for_each_doc(
     handler: Callable[[dict[str, Any], CollectionStats], None],
 ) -> CollectionStats:
     stats = CollectionStats(collection=collection)
-
-    cursor = ctx.db[collection].find({})
+    query = build_collection_query(ctx, collection)
+    cursor = ctx.db[collection].find(query).sort("_id", 1)
     if ctx.options.limit is not None:
         cursor = cursor.limit(ctx.options.limit)
 
@@ -612,6 +1280,7 @@ def for_each_doc(
         doc = dict(raw_doc)
         stats.scanned += 1
         handler(doc, stats)
+        update_sync_state_for_doc(ctx, collection, doc)
 
         if stats.scanned % 500 == 0:
             print(
@@ -639,7 +1308,7 @@ def ingest_customers(ctx: IngestContext) -> CollectionStats:
 
         fields = ["insert $c isa client", f"has client_id {lit_string(doc_id)}"]
         append_string_attr(fields, "name", as_string(doc.get("name")))
-        append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_active")))
+        append_string_attr(fields, "activity_state", normalize_status_from_bool(doc.get("is_active")))
         query = f"{', '.join(fields)};"
         insert_query(
             ctx,
@@ -673,7 +1342,7 @@ def ingest_projects(ctx: IngestContext) -> CollectionStats:
 
         fields = ["insert $p isa project", f"has project_id {lit_string(doc_id)}"]
         append_string_attr(fields, "name", as_string(doc.get("name")))
-        append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_active")))
+        append_string_attr(fields, "activity_state", normalize_status_from_bool(doc.get("is_active")))
         append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
         query = f"{', '.join(fields)};"
         insert_query(
@@ -687,6 +1356,7 @@ def ingest_projects(ctx: IngestContext) -> CollectionStats:
             key_attr="project_id",
             key_value=doc_id,
         )
+        project_project_context_card(ctx, doc, doc_id)
 
     return for_each_doc(ctx, "automation_projects", handler)
 
@@ -725,8 +1395,10 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             key_attr="task_id",
             key_value=doc_id,
         )
+        project_target_task_view(ctx, doc, doc_id)
+        project_oper_task_status_and_priority(ctx, doc, doc_id)
 
-        project_id = normalize_id(doc.get("project_id"))
+        project_id = None if is_tombstoned_doc("automation_tasks", doc) else normalize_id(doc.get("project_id"))
         if not project_id:
             return
 
@@ -753,6 +1425,13 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
 
 
 def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
+    incremental_reconcile = (
+        ctx.options.apply
+        and ctx.options.sync_mode == "incremental"
+        and "automation_voice_bot_sessions" in INCREMENTAL_COLLECTIONS
+        and ctx.typedb_driver is not None
+    )
+
     def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
         doc_id = normalize_id(doc.get("_id"))
         if not doc_id:
@@ -767,116 +1446,171 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
             )
             return
 
-        status = as_string(doc.get("status")) or normalize_status_from_bool(doc.get("is_active"))
-        fields = ["insert $s isa voice_session", f"has voice_session_id {lit_string(doc_id)}"]
-        append_string_attr(fields, "status", status)
-        append_string_attr(fields, "source_type", as_string(doc.get("session_source")))
-        append_string_attr(fields, "session_name", as_string(doc.get("session_name")))
-        append_string_attr(fields, "session_type", as_string(doc.get("session_type")))
-        append_string_attr(fields, "project_id", normalize_id(doc.get("project_id")))
-        append_string_attr(fields, "chat_id", to_stringish(doc.get("chat_id")))
-        append_string_attr(fields, "user_id", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id")))
-        append_string_attr(fields, "access_level", as_string(doc.get("access_level")))
-        append_number_attr(fields, "done_count", as_number(doc.get("done_count")))
-        append_bool_attr(fields, "is_active", as_bool(doc.get("is_active")))
-        append_bool_attr(fields, "is_active_legacy", as_bool(doc.get("is_active:")))
-        append_bool_attr(fields, "is_deleted", as_bool(doc.get("is_deleted")))
-        append_bool_attr(fields, "is_messages_processed", as_bool(doc.get("is_messages_processed")))
-        append_bool_attr(fields, "is_waiting", as_bool(doc.get("is_waiting")))
-        append_bool_attr(fields, "is_corrupted", as_bool(doc.get("is_corrupted")))
-        append_bool_attr(fields, "is_postprocessing", as_bool(doc.get("is_postprocessing")))
-        append_bool_attr(fields, "is_finished", as_bool(doc.get("is_finished")))
-        append_bool_attr(fields, "is_finalized", as_bool(doc.get("is_finalized")))
-        append_bool_attr(fields, "to_finalize", as_bool(doc.get("to_finalize")))
-        append_string_attr(fields, "participants", to_capped_stringish(doc.get("participants")))
-        append_string_attr(fields, "allowed_users", to_capped_stringish(doc.get("allowed_users")))
-        append_string_attr(fields, "processors", to_capped_stringish(doc.get("processors")))
-        append_string_attr(fields, "session_processors", to_capped_stringish(doc.get("session_processors")))
-        append_string_attr(fields, "processors_data", to_capped_stringish(doc.get("processors_data")))
-        append_string_attr(fields, "last_message_id", to_stringish(doc.get("last_message_id")))
-        append_number_attr(fields, "last_message_timestamp", as_number(doc.get("last_message_timestamp")))
-        append_number_attr(fields, "last_voice_timestamp", as_number(doc.get("last_voice_timestamp")))
-        append_number_attr(
-            fields,
-            "postprocessing_job_queued_timestamp",
-            as_number(doc.get("postprocessing_job_queued_timestamp")),
-        )
-        append_datetime_attr(fields, "title_generated_at", as_datetime(doc.get("title_generated_at")))
-        append_string_attr(fields, "title_generated_by", as_string(doc.get("title_generated_by")))
-        append_datetime_attr(fields, "finished_at", as_datetime(doc.get("finished_at")))
-        append_datetime_attr(fields, "done_at", as_datetime(doc.get("done_at")))
-        append_datetime_attr(fields, "deleted_at", as_datetime(doc.get("deleted_at")))
-        append_string_attr(fields, "deletion_reason", as_string(doc.get("deletion_reason")))
-        append_string_attr(
-            fields,
-            "pending_image_anchor_message_id",
-            normalize_id(doc.get("pending_image_anchor_message_id"))
-            or normalize_id(doc.get("pending_image_anchor_oid"))
-            or to_stringish(doc.get("pending_image_anchor_message_id"))
-            or to_stringish(doc.get("pending_image_anchor_oid")),
-        )
-        append_string_attr(fields, "pending_image_anchor_oid", to_stringish(doc.get("pending_image_anchor_oid")))
-        append_datetime_attr(
-            fields,
-            "pending_image_anchor_created_at",
-            as_datetime(doc.get("pending_image_anchor_created_at")),
-        )
-        append_string_attr(
-            fields,
-            "merged_into_session_id",
-            normalize_id(doc.get("merged_into_session_id")) or to_stringish(doc.get("merged_into_session_id")),
-        )
-        append_string_attr(fields, "error_source", as_string(doc.get("error_source")))
-        append_string_attr(fields, "transcription_error", as_string(doc.get("transcription_error")))
-        append_string_attr(fields, "error_message", to_capped_stringish(doc.get("error_message")))
-        append_string_attr(fields, "error_message_id", normalize_id(doc.get("error_message_id")))
-        append_datetime_attr(fields, "error_timestamp", as_datetime(doc.get("error_timestamp")))
-        append_string_attr(fields, "current_spreadsheet_file_id", as_string(doc.get("current_spreadsheet_file_id")))
-        append_string_attr(fields, "summary_md_text", as_string(doc.get("summary_md_text")))
-        append_datetime_attr(fields, "summary_saved_at", as_datetime(doc.get("summary_saved_at")))
-        append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
-        append_datetime_attr(fields, "updated_at", as_datetime(doc.get("updated_at")))
-        append_datetime_attr(fields, "created_at", as_datetime(doc.get("created_at")))
-        query = f"{', '.join(fields)};"
-        insert_query(
-            ctx,
-            stats,
-            "automation_voice_bot_sessions",
-            doc_id,
-            query,
-            {"_id": doc_id},
-            entity="voice_session",
-            key_attr="voice_session_id",
-            key_value=doc_id,
-        )
+        activity_state = normalize_status_from_bool(doc.get("is_active"))
+        attr_specs: list[tuple[str, str, Any]] = [
+            ("activity_state", "string", activity_state),
+            ("source_type", "string", as_string(doc.get("session_source"))),
+            ("session_name", "string", as_string(doc.get("session_name"))),
+            ("session_type", "string", as_string(doc.get("session_type"))),
+            ("project_id", "string", normalize_id(doc.get("project_id"))),
+            ("chat_id", "string", to_stringish(doc.get("chat_id"))),
+            ("user_id", "string", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id"))),
+            ("access_level", "string", as_string(doc.get("access_level"))),
+            ("done_count", "integer", as_number(doc.get("done_count"))),
+            ("is_active", "boolean", as_bool(doc.get("is_active"))),
+            ("is_active_legacy", "boolean", as_bool(doc.get("is_active:"))),
+            ("is_deleted", "boolean", as_bool(doc.get("is_deleted"))),
+            ("is_messages_processed", "boolean", as_bool(doc.get("is_messages_processed"))),
+            ("is_waiting", "boolean", as_bool(doc.get("is_waiting"))),
+            ("is_corrupted", "boolean", as_bool(doc.get("is_corrupted"))),
+            ("is_postprocessing", "boolean", as_bool(doc.get("is_postprocessing"))),
+            ("is_finished", "boolean", as_bool(doc.get("is_finished"))),
+            ("is_finalized", "boolean", as_bool(doc.get("is_finalized"))),
+            ("to_finalize", "boolean", as_bool(doc.get("to_finalize"))),
+            ("participants", "string", to_capped_stringish(doc.get("participants"))),
+            ("allowed_users", "string", to_capped_stringish(doc.get("allowed_users"))),
+            ("processors", "string", to_capped_stringish(doc.get("processors"))),
+            ("session_processors", "string", to_capped_stringish(doc.get("session_processors"))),
+            ("processors_data", "string", to_capped_stringish(doc.get("processors_data"))),
+            ("last_message_id", "string", to_stringish(doc.get("last_message_id"))),
+            ("last_message_timestamp", "double", as_number(doc.get("last_message_timestamp"))),
+            ("last_voice_timestamp", "double", as_number(doc.get("last_voice_timestamp"))),
+            ("postprocessing_job_queued_timestamp", "double", as_number(doc.get("postprocessing_job_queued_timestamp"))),
+            ("title_generated_at", "datetime", as_datetime(doc.get("title_generated_at"))),
+            ("title_generated_by", "string", as_string(doc.get("title_generated_by"))),
+            ("finished_at", "datetime", as_datetime(doc.get("finished_at"))),
+            ("done_at", "datetime", as_datetime(doc.get("done_at"))),
+            ("deleted_at", "datetime", as_datetime(doc.get("deleted_at"))),
+            ("deletion_reason", "string", as_string(doc.get("deletion_reason"))),
+            (
+                "pending_image_anchor_message_id",
+                "string",
+                normalize_id(doc.get("pending_image_anchor_message_id"))
+                or normalize_id(doc.get("pending_image_anchor_oid"))
+                or to_stringish(doc.get("pending_image_anchor_message_id"))
+                or to_stringish(doc.get("pending_image_anchor_oid")),
+            ),
+            ("pending_image_anchor_oid", "string", to_stringish(doc.get("pending_image_anchor_oid"))),
+            ("pending_image_anchor_created_at", "datetime", as_datetime(doc.get("pending_image_anchor_created_at"))),
+            (
+                "merged_into_session_id",
+                "string",
+                normalize_id(doc.get("merged_into_session_id")) or to_stringish(doc.get("merged_into_session_id")),
+            ),
+            ("error_source", "string", as_string(doc.get("error_source"))),
+            ("transcription_error", "string", as_string(doc.get("transcription_error"))),
+            ("error_message", "string", to_capped_stringish(doc.get("error_message"))),
+            ("error_message_id", "string", normalize_id(doc.get("error_message_id"))),
+            ("error_timestamp", "datetime", as_datetime(doc.get("error_timestamp"))),
+            ("current_spreadsheet_file_id", "string", as_string(doc.get("current_spreadsheet_file_id"))),
+            ("summary_md_text", "string", as_string(doc.get("summary_md_text"))),
+            ("summary_saved_at", "datetime", as_datetime(doc.get("summary_saved_at"))),
+            ("summary_correlation_id", "string", as_string(doc.get("summary_correlation_id"))),
+            ("runtime_tag", "string", as_string(doc.get("runtime_tag"))),
+            ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+            ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ]
 
-        project_id = normalize_id(doc.get("project_id"))
+        if incremental_reconcile and ctx.typedb_driver is not None:
+            exists_query = f"match $x isa voice_session, has voice_session_id {lit_string(doc_id)}; limit 1;"
+            if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                for attr, attr_type, raw_value in attr_specs:
+                    reconcile_owned_attribute(
+                        ctx,
+                        entity="voice_session",
+                        key_attr="voice_session_id",
+                        key_value=doc_id,
+                        attr=attr,
+                        desired_literal=literal_for_attr_value(attr, attr_type, raw_value),
+                    )
+                stats.skipped += 1
+            else:
+                fields = ["insert $s isa voice_session", f"has voice_session_id {lit_string(doc_id)}"]
+                for attr, attr_type, raw_value in attr_specs:
+                    append_mapped_attr(fields, attr, attr_type, raw_value)
+                query = f"{', '.join(fields)};"
+                insert_query(
+                    ctx,
+                    stats,
+                    "automation_voice_bot_sessions",
+                    doc_id,
+                    query,
+                    {"_id": doc_id},
+                    entity="voice_session",
+                    key_attr="voice_session_id",
+                    key_value=doc_id,
+                )
+        else:
+            fields = ["insert $s isa voice_session", f"has voice_session_id {lit_string(doc_id)}"]
+            for attr, attr_type, raw_value in attr_specs:
+                append_mapped_attr(fields, attr, attr_type, raw_value)
+            query = f"{', '.join(fields)};"
+            insert_query(
+                ctx,
+                stats,
+                "automation_voice_bot_sessions",
+                doc_id,
+                query,
+                {"_id": doc_id},
+                entity="voice_session",
+                key_attr="voice_session_id",
+                key_value=doc_id,
+            )
+        project_mode_segment(ctx, doc, doc_id)
+        project_object_conclusion_from_session_summary(ctx, doc, doc_id)
+
+        project_id = None if is_tombstoned_doc("automation_voice_bot_sessions", doc) else normalize_id(doc.get("project_id"))
         if not project_id:
             return
 
-        relation_query = (
-            f"match $p isa project, has project_id {lit_string(project_id)}; "
-            f"$s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
-            "insert (owner_project: $p, voice_session: $s) isa project_has_voice_session;"
-        )
-        insert_relation_query(
-            ctx,
-            stats,
-            "automation_voice_bot_sessions",
-            doc_id,
-            relation_query,
-            {"voice_session_id": doc_id, "project_id": project_id},
-            exists_query=(
+        if incremental_reconcile:
+            reconcile_relation(
+                ctx,
+                relation_name="project_has_voice_session",
+                source_entity="voice_session",
+                source_key_attr="voice_session_id",
+                source_key_value=doc_id,
+                source_role="voice_session",
+                owner_entity="project",
+                owner_by="project_id",
+                owner_role="owner_project",
+                owner_value=project_id,
+            )
+            if project_id is None:
+                stats.relations_skipped += 1
+            else:
+                stats.relations_inserted += 1
+        else:
+            relation_query = (
                 f"match $p isa project, has project_id {lit_string(project_id)}; "
                 f"$s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
-                "(owner_project: $p, voice_session: $s) isa project_has_voice_session; limit 1;"
-            ),
-        )
+                "insert (owner_project: $p, voice_session: $s) isa project_has_voice_session;"
+            )
+            insert_relation_query(
+                ctx,
+                stats,
+                "automation_voice_bot_sessions",
+                doc_id,
+                relation_query,
+                {"voice_session_id": doc_id, "project_id": project_id},
+                exists_query=(
+                    f"match $p isa project, has project_id {lit_string(project_id)}; "
+                    f"$s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
+                    "(owner_project: $p, voice_session: $s) isa project_has_voice_session; limit 1;"
+                ),
+            )
 
     return for_each_doc(ctx, "automation_voice_bot_sessions", handler)
 
 
 def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
+    incremental_reconcile = (
+        ctx.options.apply
+        and ctx.options.sync_mode == "incremental"
+        and "automation_voice_bot_messages" in INCREMENTAL_COLLECTIONS
+        and ctx.typedb_driver is not None
+    )
+
     def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
         doc_id = normalize_id(doc.get("_id"))
         if not doc_id:
@@ -902,109 +1636,118 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
             if capped_transcript is not None
             else None
         )
-        status = as_string(doc.get("status")) or normalize_status_from_bool(doc.get("is_finalized"))
         resolved_session_id = normalize_id(doc.get("session_id"))
 
-        fields = ["insert $m isa voice_message", f"has voice_message_id {lit_string(doc_id)}"]
-        append_string_attr(fields, "source_type", as_string(doc.get("source_type")))
-        append_string_attr(fields, "session_id", resolved_session_id)
-        append_string_attr(fields, "session_type", as_string(doc.get("session_type")))
-        append_string_attr(
-            fields,
-            "message_type",
-            as_string(doc.get("message_type")) or as_string(doc.get("type")),
-        )
-        append_string_attr(fields, "message_id", to_stringish(doc.get("message_id")))
-        append_string_attr(fields, "chat_id", to_stringish(doc.get("chat_id")))
-        append_string_attr(fields, "speaker", as_string(doc.get("speaker")))
-        append_string_attr(fields, "file_id", as_string(doc.get("file_id")))
-        append_string_attr(fields, "file_hash", as_string(doc.get("file_hash")))
-        append_string_attr(fields, "hash_sha256", as_string(doc.get("hash_sha256")))
-        append_string_attr(fields, "file_unique_id", as_string(doc.get("file_unique_id")))
-        append_string_attr(fields, "file_path", as_string(doc.get("file_path")))
-        append_string_attr(fields, "file_name", as_string(doc.get("file_name")))
-        append_number_attr(fields, "file_size", as_number(doc.get("file_size")))
-        append_string_attr(fields, "mime_type", as_string(doc.get("mime_type")))
-        append_string_attr(fields, "file_metadata", to_capped_stringish(doc.get("file_metadata")))
-        append_string_attr(fields, "attachments", to_capped_stringish(doc.get("attachments")))
-        append_number_attr(fields, "duration", as_number(doc.get("duration")))
-        append_string_attr(fields, "text", to_capped_stringish(doc.get("text")))
-        append_number_attr(fields, "message_timestamp", as_number(doc.get("message_timestamp")))
-        append_number_attr(fields, "timestamp", as_number(doc.get("timestamp")))
-        append_number_attr(fields, "transcribe_timestamp", as_number(doc.get("transcribe_timestamp")))
-        append_bool_attr(fields, "is_transcribed", as_bool(doc.get("is_transcribed")))
-        append_string_attr(fields, "transcription_method", as_string(doc.get("transcription_method")))
-        append_string_attr(fields, "transcription", to_capped_stringish(doc.get("transcription")))
-        append_string_attr(fields, "transcription_text", summary_text)
-        append_string_attr(fields, "categorization", to_capped_stringish(doc.get("categorization")))
-        append_string_attr(fields, "categorization_error", as_string(doc.get("categorization_error")))
-        append_string_attr(
-            fields,
-            "categorization_error_message",
-            to_capped_stringish(doc.get("categorization_error_message")),
-        )
-        append_datetime_attr(
-            fields,
-            "categorization_error_timestamp",
-            as_datetime(doc.get("categorization_error_timestamp")),
-        )
-        append_string_attr(fields, "categorization_retry_reason", as_string(doc.get("categorization_retry_reason")))
-        append_datetime_attr(
-            fields,
-            "categorization_next_attempt_at",
-            as_datetime(doc.get("categorization_next_attempt_at")),
-        )
-        append_number_attr(fields, "categorization_attempts", as_number(doc.get("categorization_attempts")))
-        append_string_attr(fields, "transcription_error", as_string(doc.get("transcription_error")))
-        append_string_attr(
-            fields,
-            "transcription_error_context",
-            to_capped_stringish(doc.get("transcription_error_context")),
-        )
-        append_string_attr(fields, "error_message", to_capped_stringish(doc.get("error_message")))
-        append_string_attr(
-            fields,
-            "error_message_id",
-            normalize_id(doc.get("error_message_id")) or to_stringish(doc.get("error_message_id")),
-        )
-        append_datetime_attr(fields, "error_timestamp", as_datetime(doc.get("error_timestamp")))
-        append_string_attr(
-            fields,
-            "dedup_replaced_by",
-            normalize_id(doc.get("dedup_replaced_by")) or to_stringish(doc.get("dedup_replaced_by")),
-        )
-        append_string_attr(fields, "dedup_reason", as_string(doc.get("dedup_reason")))
-        append_string_attr(fields, "processors_data", to_capped_stringish(doc.get("processors_data")))
-        append_string_attr(fields, "summary", summary_text)
-        append_string_attr(fields, "status", status)
-        append_bool_attr(fields, "is_finalized", as_bool(doc.get("is_finalized")))
-        append_bool_attr(fields, "is_deleted", as_bool(doc.get("is_deleted")))
-        append_bool_attr(fields, "is_image_anchor", as_bool(doc.get("is_image_anchor")))
-        append_string_attr(
-            fields,
-            "image_anchor_message_id",
-            normalize_id(doc.get("image_anchor_message_id")) or to_stringish(doc.get("image_anchor_message_id")),
-        )
-        append_datetime_attr(fields, "image_anchor_linked_at", as_datetime(doc.get("image_anchor_linked_at")))
-        append_bool_attr(fields, "to_transcribe", as_bool(doc.get("to_transcribe")))
-        append_string_attr(fields, "uploaded_by", normalize_id(doc.get("uploaded_by")))
-        append_string_attr(fields, "user_id", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id")))
-        append_string_attr(fields, "username", as_string(doc.get("username")))
-        append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
-        append_datetime_attr(fields, "created_at", as_datetime(doc.get("created_at")))
-        append_datetime_attr(fields, "updated_at", as_datetime(doc.get("updated_at")))
-        query = f"{', '.join(fields)};"
-        insert_query(
-            ctx,
-            stats,
-            "automation_voice_bot_messages",
-            doc_id,
-            query,
-            {"_id": doc_id},
-            entity="voice_message",
-            key_attr="voice_message_id",
-            key_value=doc_id,
-        )
+        attr_specs: list[tuple[str, str, Any]] = [
+            ("source_type", "string", as_string(doc.get("source_type"))),
+            ("session_id", "string", resolved_session_id),
+            ("session_type", "string", as_string(doc.get("session_type"))),
+            ("message_type", "string", as_string(doc.get("message_type")) or as_string(doc.get("type"))),
+            ("message_id", "string", to_stringish(doc.get("message_id"))),
+            ("chat_id", "string", to_stringish(doc.get("chat_id"))),
+            ("speaker", "string", as_string(doc.get("speaker"))),
+            ("file_id", "string", as_string(doc.get("file_id"))),
+            ("file_hash", "string", as_string(doc.get("file_hash"))),
+            ("hash_sha256", "string", as_string(doc.get("hash_sha256"))),
+            ("file_unique_id", "string", as_string(doc.get("file_unique_id"))),
+            ("file_path", "string", as_string(doc.get("file_path"))),
+            ("file_name", "string", as_string(doc.get("file_name"))),
+            ("file_size", "double", as_number(doc.get("file_size"))),
+            ("mime_type", "string", as_string(doc.get("mime_type"))),
+            ("file_metadata", "string", to_capped_stringish(doc.get("file_metadata"))),
+            ("attachments", "string", to_capped_stringish(doc.get("attachments"))),
+            ("duration", "double", as_number(doc.get("duration"))),
+            ("text", "string", to_capped_stringish(doc.get("text"))),
+            ("message_timestamp", "double", as_number(doc.get("message_timestamp"))),
+            ("timestamp", "double", as_number(doc.get("timestamp"))),
+            ("transcribe_timestamp", "double", as_number(doc.get("transcribe_timestamp"))),
+            ("is_transcribed", "boolean", as_bool(doc.get("is_transcribed"))),
+            ("transcription_method", "string", as_string(doc.get("transcription_method"))),
+            ("transcription", "string", to_capped_stringish(doc.get("transcription"))),
+            ("transcription_text", "string", summary_text),
+            ("transcription_provider", "string", as_string(resolve_doc_path(doc, "transcription.provider"))),
+            ("transcription_model", "string", as_string(resolve_doc_path(doc, "transcription.model"))),
+            ("transcription_schema_version", "integer", as_number(resolve_doc_path(doc, "transcription.schema_version"))),
+            ("transcription_raw", "string", to_capped_stringish(doc.get("transcription_raw"))),
+            ("task", "string", as_string(doc.get("task"))),
+            ("categorization", "string", to_capped_stringish(doc.get("categorization"))),
+            ("categorization_timestamp", "double", as_number(doc.get("categorization_timestamp"))),
+            ("categorization_error", "string", as_string(doc.get("categorization_error"))),
+            ("categorization_error_message", "string", to_capped_stringish(doc.get("categorization_error_message"))),
+            ("categorization_error_timestamp", "datetime", as_datetime(doc.get("categorization_error_timestamp"))),
+            ("categorization_retry_reason", "string", as_string(doc.get("categorization_retry_reason"))),
+            ("categorization_next_attempt_at", "datetime", as_datetime(doc.get("categorization_next_attempt_at"))),
+            ("categorization_attempts", "integer", as_number(doc.get("categorization_attempts"))),
+            ("transcription_error", "string", as_string(doc.get("transcription_error"))),
+            ("transcription_error_context", "string", to_capped_stringish(doc.get("transcription_error_context"))),
+            ("error_message", "string", to_capped_stringish(doc.get("error_message"))),
+            ("error_message_id", "string", normalize_id(doc.get("error_message_id")) or to_stringish(doc.get("error_message_id"))),
+            ("error_timestamp", "datetime", as_datetime(doc.get("error_timestamp"))),
+            ("dedup_replaced_by", "string", normalize_id(doc.get("dedup_replaced_by")) or to_stringish(doc.get("dedup_replaced_by"))),
+            ("dedup_reason", "string", as_string(doc.get("dedup_reason"))),
+            ("processors_data", "string", to_capped_stringish(doc.get("processors_data"))),
+            ("summary", "string", summary_text),
+            ("is_finalized", "boolean", as_bool(doc.get("is_finalized"))),
+            ("is_deleted", "boolean", as_bool(doc.get("is_deleted"))),
+            ("is_image_anchor", "boolean", as_bool(doc.get("is_image_anchor"))),
+            ("image_anchor_message_id", "string", normalize_id(doc.get("image_anchor_message_id")) or to_stringish(doc.get("image_anchor_message_id"))),
+            ("image_anchor_linked_at", "datetime", as_datetime(doc.get("image_anchor_linked_at"))),
+            ("to_transcribe", "boolean", as_bool(doc.get("to_transcribe"))),
+            ("uploaded_by", "string", normalize_id(doc.get("uploaded_by"))),
+            ("user_id", "string", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id"))),
+            ("username", "string", as_string(doc.get("username"))),
+            ("runtime_tag", "string", as_string(doc.get("runtime_tag"))),
+            ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+            ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+        ]
+
+        if incremental_reconcile and ctx.typedb_driver is not None:
+            exists_query = f"match $x isa voice_message, has voice_message_id {lit_string(doc_id)}; limit 1;"
+            if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                for attr, attr_type, raw_value in attr_specs:
+                    reconcile_owned_attribute(
+                        ctx,
+                        entity="voice_message",
+                        key_attr="voice_message_id",
+                        key_value=doc_id,
+                        attr=attr,
+                        desired_literal=literal_for_attr_value(attr, attr_type, raw_value),
+                    )
+                stats.skipped += 1
+            else:
+                fields = ["insert $m isa voice_message", f"has voice_message_id {lit_string(doc_id)}"]
+                for attr, attr_type, raw_value in attr_specs:
+                    append_mapped_attr(fields, attr, attr_type, raw_value)
+                query = f"{', '.join(fields)};"
+                insert_query(
+                    ctx,
+                    stats,
+                    "automation_voice_bot_messages",
+                    doc_id,
+                    query,
+                    {"_id": doc_id},
+                    entity="voice_message",
+                    key_attr="voice_message_id",
+                    key_value=doc_id,
+                )
+        else:
+            fields = ["insert $m isa voice_message", f"has voice_message_id {lit_string(doc_id)}"]
+            for attr, attr_type, raw_value in attr_specs:
+                append_mapped_attr(fields, attr, attr_type, raw_value)
+            query = f"{', '.join(fields)};"
+            insert_query(
+                ctx,
+                stats,
+                "automation_voice_bot_messages",
+                doc_id,
+                query,
+                {"_id": doc_id},
+                entity="voice_message",
+                key_attr="voice_message_id",
+                key_value=doc_id,
+            )
+        project_object_event(ctx, doc, doc_id)
+        project_artifact_record_from_attachment(ctx, doc, doc_id)
 
         if raw_transcript is not None and capped_transcript is not None and raw_transcript != capped_transcript:
             ctx.deadletter.write(
@@ -1019,10 +1762,18 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                 }
             )
 
-        if capped_transcript is not None and utf8_byte_length(capped_transcript) > TYPEDB_SAFE_STRING_BYTES:
+        tombstoned = is_tombstoned_doc("automation_voice_bot_messages", doc)
+        chunk_pairs: list[tuple[str, str]] = []
+        if (not tombstoned) and capped_transcript is not None and utf8_byte_length(capped_transcript) > TYPEDB_SAFE_STRING_BYTES:
             chunks = split_utf8_by_bytes(capped_transcript, VOICE_TRANSCRIPT_CHUNK_BYTES)
             for index, chunk in enumerate(chunks, start=1):
                 chunk_id = f"{doc_id}:chunk:{index:05d}"
+                chunk_pairs.append((chunk_id, chunk))
+        if incremental_reconcile:
+            reconcile_transcript_chunks(ctx, voice_message_id=doc_id, chunks=chunk_pairs)
+            stats.relations_inserted += len(chunk_pairs)
+        else:
+            for chunk_id, chunk in chunk_pairs:
                 chunk_entity_query = (
                     f"insert $c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}, "
                     f"has summary {lit_string(chunk)};"
@@ -1036,7 +1787,6 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                     {
                         "voice_message_id": doc_id,
                         "transcript_chunk_id": chunk_id,
-                        "chunk_index": index,
                     },
                     exists_query=(
                         f"match $c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}; "
@@ -1058,7 +1808,6 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                     {
                         "voice_message_id": doc_id,
                         "transcript_chunk_id": chunk_id,
-                        "chunk_index": index,
                     },
                     exists_query=(
                         f"match $m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
@@ -1067,28 +1816,46 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                     ),
                 )
 
-        session_id = resolved_session_id
+        session_id = None if tombstoned else resolved_session_id
         if not session_id:
             return
 
-        relation_query = (
-            f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
-            f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
-            "insert (voice_session: $s, voice_message: $m) isa voice_session_has_message;"
-        )
-        insert_relation_query(
-            ctx,
-            stats,
-            "automation_voice_bot_messages",
-            doc_id,
-            relation_query,
-            {"voice_message_id": doc_id, "voice_session_id": session_id},
-            exists_query=(
+        if incremental_reconcile:
+            reconcile_relation(
+                ctx,
+                relation_name="voice_session_has_message",
+                source_entity="voice_message",
+                source_key_attr="voice_message_id",
+                source_key_value=doc_id,
+                source_role="voice_message",
+                owner_entity="voice_session",
+                owner_by="voice_session_id",
+                owner_role="voice_session",
+                owner_value=session_id,
+            )
+            if session_id is None:
+                stats.relations_skipped += 1
+            else:
+                stats.relations_inserted += 1
+        else:
+            relation_query = (
                 f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
                 f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
-                "(voice_session: $s, voice_message: $m) isa voice_session_has_message; limit 1;"
-            ),
-        )
+                "insert (voice_session: $s, voice_message: $m) isa voice_session_has_message;"
+            )
+            insert_relation_query(
+                ctx,
+                stats,
+                "automation_voice_bot_messages",
+                doc_id,
+                relation_query,
+                {"voice_message_id": doc_id, "voice_session_id": session_id},
+                exists_query=(
+                    f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
+                    f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
+                    "(voice_session: $s, voice_message: $m) isa voice_session_has_message; limit 1;"
+                ),
+            )
 
     return for_each_doc(ctx, "automation_voice_bot_messages", handler)
 
@@ -1177,7 +1944,7 @@ def ingest_expense_categories(ctx: IngestContext) -> CollectionStats:
 
         fields = ["insert $c isa cost_category", f"has cost_category_id {lit_string(doc_id)}"]
         append_string_attr(fields, "name", as_string(doc.get("name")))
-        append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_active")))
+        append_string_attr(fields, "activity_state", normalize_status_from_bool(doc.get("is_active")))
         query = f"{', '.join(fields)};"
         insert_query(
             ctx,
@@ -1215,7 +1982,7 @@ def ingest_expense_operations(ctx: IngestContext) -> CollectionStats:
         append_string_attr(fields, "currency", as_string(doc.get("currency")))
         append_number_attr(fields, "amount_original", as_number(doc.get("amount")))
         append_number_attr(fields, "amount_rub", as_number(doc.get("amount")))
-        append_string_attr(fields, "status", normalize_status_from_bool(doc.get("is_deleted")))
+        append_string_attr(fields, "deletion_state", normalize_deletion_state_from_bool(doc.get("is_deleted")))
         append_string_attr(fields, "runtime_tag", as_string(doc.get("runtime_tag")))
         query = f"{', '.join(fields)};"
         insert_query(
@@ -1383,10 +2150,21 @@ def parse_schema_metadata(
     return attr_types, entity_owned_attrs, relation_roles, entity_relation_roles
 
 
+def resolve_doc_path(doc: dict[str, Any], field_path: str) -> Any:
+    current: Any = doc
+    for part in field_path.split("."):
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+        if current is None:
+            return None
+    return current
+
+
 def build_key_from_mapping(doc: dict[str, Any], key_cfg: dict[str, Any]) -> Optional[str]:
     from_field = key_cfg.get("from")
     if isinstance(from_field, str) and from_field:
-        return mapping_key_component(doc.get(from_field))
+        return mapping_key_component(resolve_doc_path(doc, from_field))
 
     compose_fields = key_cfg.get("compose")
     if isinstance(compose_fields, list) and compose_fields:
@@ -1394,7 +2172,7 @@ def build_key_from_mapping(doc: dict[str, Any], key_cfg: dict[str, Any]) -> Opti
         for field in compose_fields:
             if not isinstance(field, str) or not field:
                 return None
-            part = mapping_key_component(doc.get(field))
+            part = mapping_key_component(resolve_doc_path(doc, field))
             if part is None:
                 return None
             parts.append(part)
@@ -1410,11 +2188,15 @@ def append_mapped_attr(
     raw_value: Any,
 ) -> None:
     if attr_type == "string":
-        # Preserve historical active/inactive semantics for status-like flags.
-        if attr == "status":
+        if attr == "activity_state":
             bool_status = as_bool(raw_value)
             if bool_status is not None:
                 append_string_attr(parts, attr, normalize_status_from_bool(bool_status))
+                return
+        if attr == "deletion_state":
+            bool_status = as_bool(raw_value)
+            if bool_status is not None:
+                append_string_attr(parts, attr, normalize_deletion_state_from_bool(bool_status))
                 return
         append_string_attr(parts, attr, to_stringish(raw_value))
         return
@@ -1447,10 +2229,10 @@ def resolve_mapped_value(
     coalesce_fields: Optional[list[str]],
 ) -> Any:
     if not coalesce_fields:
-        return doc.get(default_source_field)
+        return resolve_doc_path(doc, default_source_field)
 
     for field in coalesce_fields:
-        candidate = doc.get(field)
+        candidate = resolve_doc_path(doc, field)
         if is_non_empty_mapped_value(candidate):
             return candidate
     return None
@@ -1513,6 +2295,12 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
     if not isinstance(key_attr, str) or not key_attr:
         raise ValueError(f"Mapping for {collection} has invalid key attribute")
 
+    incremental_reconcile = (
+        ctx.options.apply
+        and ctx.options.sync_mode == "incremental"
+        and collection in INCREMENTAL_COLLECTIONS
+    )
+
     def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
         source_id = build_key_from_mapping(doc, key_cfg)
         if source_id is None:
@@ -1529,6 +2317,7 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
 
         fields = [f"insert $e isa {target_entity}", f"has {key_attr} {lit_string(source_id)}"]
         owned_attrs = ctx.entity_owned_attrs.get(target_entity, set())
+        desired_attr_literals: list[tuple[str, Optional[str]]] = []
         if isinstance(attributes_cfg, dict):
             for attr, source_field in attributes_cfg.items():
                 if not isinstance(attr, str) or not isinstance(source_field, str):
@@ -1548,20 +2337,77 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
                             if isinstance(field, str) and field
                         ]
                 raw_value = resolve_mapped_value(doc, source_field, coalesce_fields)
+                if attr_type == "string":
+                    if attr == "activity_state":
+                        bool_status = as_bool(raw_value)
+                        desired_value = normalize_status_from_bool(bool_status) if bool_status is not None else to_stringish(raw_value)
+                    elif attr == "deletion_state":
+                        bool_status = as_bool(raw_value)
+                        desired_value = normalize_deletion_state_from_bool(bool_status) if bool_status is not None else to_stringish(raw_value)
+                    else:
+                        desired_value = to_stringish(raw_value)
+                    desired_literal = lit_string(desired_value) if desired_value is not None else None
+                elif attr_type == "double":
+                    numeric = as_number(raw_value)
+                    desired_literal = lit_number(numeric) if numeric is not None else None
+                elif attr_type == "integer":
+                    numeric = as_number(raw_value)
+                    desired_literal = lit_number(int(numeric)) if numeric is not None else None
+                elif attr_type == "boolean":
+                    boolean = as_bool(raw_value)
+                    desired_literal = lit_bool(boolean) if boolean is not None else None
+                elif attr_type == "datetime":
+                    dt = as_datetime(raw_value)
+                    desired_literal = lit_datetime(dt) if dt is not None else None
+                else:
+                    desired_literal = None
+                desired_attr_literals.append((attr, desired_literal))
                 append_mapped_attr(fields, attr, attr_type, raw_value)
 
-        query = f"{', '.join(fields)};"
-        insert_query(
-            ctx,
-            stats,
-            collection,
-            source_id,
-            query,
-            {"_id": source_id},
-            entity=target_entity,
-            key_attr=key_attr,
-            key_value=source_id,
-        )
+        if incremental_reconcile and ctx.typedb_driver is not None:
+            exists_query = (
+                f"match $x isa {target_entity}, has {key_attr} {lit_string(source_id)}; limit 1;"
+            )
+            if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                for attr, desired_literal in desired_attr_literals:
+                    reconcile_owned_attribute(
+                        ctx,
+                        entity=target_entity,
+                        key_attr=key_attr,
+                        key_value=source_id,
+                        attr=attr,
+                        desired_literal=desired_literal,
+                    )
+                stats.skipped += 1
+            else:
+                query = f"{', '.join(fields)};"
+                insert_query(
+                    ctx,
+                    stats,
+                    collection,
+                    source_id,
+                    query,
+                    {"_id": source_id},
+                    entity=target_entity,
+                    key_attr=key_attr,
+                    key_value=source_id,
+                )
+        else:
+            query = f"{', '.join(fields)};"
+            insert_query(
+                ctx,
+                stats,
+                collection,
+                source_id,
+                query,
+                {"_id": source_id},
+                entity=target_entity,
+                key_attr=key_attr,
+                key_value=source_id,
+            )
+
+        if collection == "automation_tasks":
+            project_oper_task_status_and_priority(ctx, doc, source_id)
 
         if not isinstance(relations_cfg, list):
             return
@@ -1587,7 +2433,11 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
             if not isinstance(owner_from, str) or not owner_from:
                 continue
 
-            owner_value = mapping_key_component(doc.get(owner_from))
+            owner_transform = owner_lookup.get("transform")
+            if owner_transform is not None and not isinstance(owner_transform, str):
+                continue
+
+            owner_value = apply_lookup_transform(owner_transform, resolve_doc_path(doc, owner_from))
             if owner_value is None:
                 continue
 
@@ -1617,31 +2467,51 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
 
             source_role, owner_role = roles
 
-            relation_query = (
-                f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
-                f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
-                f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
-            )
-            exists_query = (
-                f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
-                f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
-                f"({source_role}: $e, {owner_role}: $o) isa {relation_name}; limit 1;"
-            )
-            insert_relation_query(
-                ctx,
-                stats,
-                collection,
-                source_id,
-                relation_query,
-                {
-                    "source_id": source_id,
-                    "relation": relation_name,
-                    "owner_entity": owner_entity,
-                    "owner_by": owner_by,
-                    "owner_value": owner_value,
-                },
-                exists_query=exists_query,
-            )
+            if incremental_reconcile:
+                if is_tombstoned_doc(collection, doc) and relation_name in TOMBSTONE_RELATIONS.get(collection, set()):
+                    owner_value = None
+                reconcile_relation(
+                    ctx,
+                    relation_name=relation_name,
+                    source_entity=target_entity,
+                    source_key_attr=key_attr,
+                    source_key_value=source_id,
+                    source_role=source_role,
+                    owner_entity=owner_entity,
+                    owner_by=owner_by,
+                    owner_role=owner_role,
+                    owner_value=owner_value,
+                )
+                if owner_value is None:
+                    stats.relations_skipped += 1
+                else:
+                    stats.relations_inserted += 1
+            else:
+                relation_query = (
+                    f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
+                    f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
+                    f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
+                )
+                exists_query = (
+                    f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
+                    f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
+                    f"({source_role}: $e, {owner_role}: $o) isa {relation_name}; limit 1;"
+                )
+                insert_relation_query(
+                    ctx,
+                    stats,
+                    collection,
+                    source_id,
+                    relation_query,
+                    {
+                        "source_id": source_id,
+                        "relation": relation_name,
+                        "owner_entity": owner_entity,
+                        "owner_by": owner_by,
+                        "owner_value": owner_value,
+                    },
+                    exists_query=exists_query,
+                )
 
     return for_each_doc(ctx, collection, handler)
 
@@ -1701,12 +2571,14 @@ def main() -> int:
 
     print(
         f"[typedb-ontology-ingest] mode={'apply' if options.apply else 'dry-run'} "
+        f"sync_mode={options.sync_mode} "
         f"addresses={','.join(options.typedb_addresses)} db={options.typedb_database} "
         f"limit={options.limit if options.limit is not None else 'none'} "
         f"collections={','.join(options.collections)}"
     )
 
     deadletter = DeadletterWriter(options.deadletter_path)
+    sync_state = load_sync_state(options.sync_state_path, reset=options.reset_sync_state)
     mongo_client = MongoClient(resolve_mongo_uri())
     typedb_driver = None
 
@@ -1726,6 +2598,7 @@ def main() -> int:
             entity_owned_attrs=entity_owned_attrs,
             relation_roles=relation_roles,
             entity_relation_roles=entity_relation_roles,
+            sync_state=sync_state,
         )
         stats: list[CollectionStats] = []
 
@@ -1748,6 +2621,9 @@ def main() -> int:
 
         print_stats(stats)
         print(f"[typedb-ontology-ingest] deadletter={deadletter.path}")
+        if options.apply:
+            save_sync_state(options.sync_state_path, ctx.sync_state)
+            print(f"[typedb-ontology-ingest] sync_state={options.sync_state_path}")
         return 0
     except Exception as error:
         print(f"[typedb-ontology-ingest] failed: {error}", file=sys.stderr)

@@ -28,52 +28,29 @@ import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 
-const VOICE_SESSION_TASK_SUBTAB_CONFIGS = {
-    work: {
-        statuses: ['READY_10', 'PROGRESS_0', 'PROGRESS_10', 'PROGRESS_20', 'PROGRESS_30', 'PROGRESS_40'],
-        columns: [
-            'mark',
-            'created_at',
-            'updated_at',
-            'project',
-            'epic',
-            'title',
-            'performer',
-            'priority',
-            'task_status',
-            'task_type',
-            'shipment_date',
-            'estimated_time_edit',
-            'total_hours',
-            'dashboard_comment',
-            'edit_action',
-            'notification',
-        ],
-    },
-    review: {
-        statuses: ['REVIEW_10', 'REVIEW_20'],
-        columns: [
-            'mark',
-            'created_at',
-            'updated_at',
-            'project',
-            'epic',
-            'title',
-            'performer',
-            'priority',
-            'task_status',
-            'task_type',
-            'shipment_date',
-            'estimated_time_edit',
-            'total_hours',
-            'dashboard_comment',
-            'edit_action',
-            'notification',
-        ],
-    },
-} as const;
+const VOICE_SESSION_TASK_COLUMNS = [
+    'mark',
+    'created_at',
+    'updated_at',
+    'project',
+    'epic',
+    'title',
+    'performer',
+    'priority',
+    'task_status',
+    'task_type',
+    'shipment_date',
+    'estimated_time_edit',
+    'total_hours',
+    'dashboard_comment',
+    'edit_action',
+    'notification',
+] as const;
 
-type VoiceSessionTaskSubTabKey = keyof typeof VOICE_SESSION_TASK_SUBTAB_CONFIGS;
+type VoiceSessionTaskStatusCount = {
+    status: string;
+    count: number;
+};
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -141,12 +118,11 @@ export default function SessionPage() {
     const { hasPermission } = useCurrentUserPermissions();
     const [customPromptResult, setCustomPromptResult] = useState<unknown>(null);
     const [activeTab, setActiveTab] = useState('2');
-    const [sessionTasksSubTab, setSessionTasksSubTab] = useState<VoiceSessionTaskSubTabKey>('work');
+    const [sessionTasksSubTab, setSessionTasksSubTab] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [sessionOperOpsTasksCount, setSessionOperOpsTasksCount] = useState(0);
-    const [sessionWorkTasksCount, setSessionWorkTasksCount] = useState(0);
-    const [sessionReviewTasksCount, setSessionReviewTasksCount] = useState(0);
+    const [sessionTaskStatusCounts, setSessionTaskStatusCounts] = useState<VoiceSessionTaskStatusCount[]>([]);
     const [sessionCodexCount, setSessionCodexCount] = useState(0);
 
     useEffect(() => {
@@ -247,10 +223,17 @@ export default function SessionPage() {
     }, [sessionId, addSessionTextChunk, addSessionImageChunk, materialTargetMessageId]);
 
     const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
-    const activeTasksConfig = VOICE_SESSION_TASK_SUBTAB_CONFIGS[sessionTasksSubTab];
     const sessionTaskSourceRefs = useMemo(
         () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
         [sessionId, voiceBotSession]
+    );
+    const sessionTaskTabs = useMemo(
+        () => sessionTaskStatusCounts.filter((entry) => entry.count > 0 && entry.status.trim().length > 0),
+        [sessionTaskStatusCounts]
+    );
+    const activeSessionTaskStatuses = useMemo(
+        () => (sessionTasksSubTab ? [sessionTasksSubTab] : []),
+        [sessionTasksSubTab]
     );
     const transcriptionCount = useMemo(
         () => countVisibleTranscriptionMessages(voiceBotMessages),
@@ -280,8 +263,7 @@ export default function SessionPage() {
         let disposed = false;
         if (!sessionId) {
             setSessionOperOpsTasksCount(0);
-            setSessionWorkTasksCount(0);
-            setSessionReviewTasksCount(0);
+            setSessionTaskStatusCounts([]);
             setSessionCodexCount(0);
             return;
         }
@@ -295,13 +277,21 @@ export default function SessionPage() {
                     tasks_work_count?: unknown;
                     tasks_review_count?: unknown;
                     codex_count?: unknown;
+                    status_counts?: Array<{ status?: unknown; count?: unknown }>;
                     }>('voicebot/session_tab_counts', { session_id: sessionId }, true),
                     api_request<unknown>('codex/issues', { view: 'all', limit: 1000 }, { silent: true }),
                 ]);
                 if (disposed) return;
+                const statusCounts = Array.isArray(tabCountsResponse?.status_counts)
+                    ? tabCountsResponse.status_counts
+                        .map((entry) => ({
+                            status: String(entry?.status || '').trim(),
+                            count: Number(entry?.count) || 0,
+                        }))
+                        .filter((entry) => entry.status.length > 0 && entry.count > 0)
+                    : [];
                 setSessionOperOpsTasksCount(Number(tabCountsResponse?.tasks_count) || 0);
-                setSessionWorkTasksCount(Number(tabCountsResponse?.tasks_work_count) || 0);
-                setSessionReviewTasksCount(Number(tabCountsResponse?.tasks_review_count) || 0);
+                setSessionTaskStatusCounts(statusCounts);
                 setSessionCodexCount(
                     Array.isArray(codexIssues)
                         ? codexIssues.filter((issue) => ticketMatchesVoiceSessionSourceRefs(issue, sessionTaskSourceRefs)).length
@@ -312,8 +302,7 @@ export default function SessionPage() {
                 console.error('Failed to refresh voice tab counters:', error);
                 setSessionCodexCount(0);
                 setSessionOperOpsTasksCount(0);
-                setSessionWorkTasksCount(0);
-                setSessionReviewTasksCount(0);
+                setSessionTaskStatusCounts([]);
             }
         };
 
@@ -328,6 +317,19 @@ export default function SessionPage() {
         sessionTaskSourceRefs,
         sessionTasksRefreshToken,
     ]);
+
+    useEffect(() => {
+        if (sessionTaskTabs.length === 0) {
+            if (sessionTasksSubTab) {
+                setSessionTasksSubTab('');
+            }
+            return;
+        }
+        const hasActiveTab = sessionTaskTabs.some((entry) => entry.status === sessionTasksSubTab);
+        if (!sessionTasksSubTab || !hasActiveTab) {
+            setSessionTasksSubTab(sessionTaskTabs[0]?.status || '');
+        }
+    }, [sessionTaskTabs, sessionTasksSubTab]);
 
     const renderTabLabel = (label: string, count: number, options?: { processing?: boolean; showCount?: boolean }) => (
         <span className="inline-flex items-center gap-1.5">
@@ -364,25 +366,31 @@ export default function SessionPage() {
             label: renderTabLabel('Задачи', sessionOperOpsTasksCount),
             children: (
                 <div className="flex flex-col gap-3">
-                    <Tabs
-                        activeKey={sessionTasksSubTab}
-                        onChange={(nextTab) => setSessionTasksSubTab(nextTab as VoiceSessionTaskSubTabKey)}
-                        size="small"
-                        className="bg-transparent"
-                        items={[
-                            { key: 'work', label: renderTabLabel('Work', sessionWorkTasksCount) },
-                            { key: 'review', label: renderTabLabel('Review', sessionReviewTasksCount) },
-                        ]}
-                    />
-                    <CRMKanban
-                        key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab}`}
-                        filter={{
-                            task_status: [...activeTasksConfig.statuses],
-                            source_ref: sessionTaskSourceRefs,
-                        }}
-                        refreshToken={sessionTasksRefreshToken}
-                        columns={[...activeTasksConfig.columns]}
-                    />
+                    {sessionTaskTabs.length > 0 ? (
+                        <>
+                            <Tabs
+                                activeKey={sessionTasksSubTab}
+                                onChange={(nextTab) => setSessionTasksSubTab(nextTab)}
+                                size="small"
+                                className="bg-transparent"
+                                items={sessionTaskTabs.map((entry) => ({
+                                    key: entry.status,
+                                    label: renderTabLabel(entry.status, entry.count),
+                                }))}
+                            />
+                            <CRMKanban
+                                key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab || 'none'}`}
+                                filter={{
+                                    task_status: activeSessionTaskStatuses,
+                                    source_ref: sessionTaskSourceRefs,
+                                }}
+                                refreshToken={sessionTasksRefreshToken}
+                                columns={[...VOICE_SESSION_TASK_COLUMNS]}
+                            />
+                        </>
+                    ) : (
+                        <div className="text-sm text-slate-500">Нет задач для этой сессии.</div>
+                    )}
                 </div>
             ),
         },

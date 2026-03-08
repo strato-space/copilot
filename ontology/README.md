@@ -5,6 +5,8 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 ## Purpose
 
 - Keep conceptual data model documents (ERD/protocol) close to executable ontology assets.
+- Treat `copilot` ontology as the reusable kernel for per-project ontology overlays.
+- Treat project-local SemanticCards and AFS layouts as part of the ontology surface, not just project docs.
 - Provide one place where agents can understand domain structure before touching backend/frontend contracts.
 - Avoid drift between planning documents and TypeDB schema/mapping implementation.
 
@@ -12,10 +14,16 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 
 - `str-opsportal-erd-draft-v0.md` — consolidated ERD draft for STR OpsPortal domains.
 - `fpf-erd-extraction-protocol-str-opsportal.md` — extraction protocol used to derive ERD from source systems.
-- `typedb/schema/str_opsportal_v1.tql` — TypeQL schema.
+- `typedb/schema/str-ontology.tql` — canonical generated TypeQL schema.
+- `typedb/schema/fragments/*` — editable schema source fragments (`kernel`, `as_is`, `to_be`, `bridges`).
 - `typedb/mappings/mongodb_to_typedb_v1.yaml` — mapping contract from Mongo collections to TypeDB entities/relations.
 - `typedb/queries/validation_v1.tql` — validation/smoke queries.
 - `typedb/docs/rollout_plan_v1.md` — rollout and migration notes.
+- `typedb/docs/entity_sampling_latest.md` — Mongo-backed full-doc verification samples and compact TOON examples.
+- `typedb/docs/semantic-glossary.md` plus `ontology/typedb/docs/bounded_context_bridge_rules_v1.md`, `ontology/typedb/docs/semantic_cards_workflow_v1.md`, and `ontology/typedb/docs/object_history_and_output_contract_v1.md` — LLM-facing semantic glossary for the ontology kernel.
+- `typedb/docs/status_domain_inventory_2026-03-08.md` — data-backed status-domain split for live Mongo object families.
+- `typedb` AS-IS layer explicitly separates `person` and `performer_profile`; do not collapse `automation_persons` and `automation_performers` into one ontology object.
+- TOON-marked kernel attributes are the source of truth for dictionary-like field inspection and generated inline domain values in `str-ontology.tql`.
 
 ## Key Rules
 
@@ -53,7 +61,7 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - Deep runtime-contract alignment (`copilot-aonw`) added Voice merge-log ontology coverage plus expanded session/message/session-log fields for anchors, dedup hashes, runtime diagnostics, and merge traceability.
 - Validation suite was expanded with runtime-quality gates (orphan session/merge logs, image-anchor integrity, runtime-tag completeness, and close-flow `done_at` consistency checks).
 - TypeDB ontology assets were reconciled with production MongoDB structure:
-  - schema: `typedb/schema/str_opsportal_v1.tql`
+  - schema: `typedb/schema/str-ontology.tql`
   - mappings: `typedb/mappings/mongodb_to_typedb_v1.yaml`
   - ingestion tooling: `typedb/scripts/typedb-ontology-ingest.py`
 - Ingestion pipeline now supports broader mapping-driven coverage and safer idempotent relation writes.

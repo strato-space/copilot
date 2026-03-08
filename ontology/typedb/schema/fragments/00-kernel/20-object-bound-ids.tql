@@ -1,0 +1,25 @@
+# Additional ids for Mode Engine, object-bound lifecycle, and SemanticCards-aware TO-BE entities.
+
+attribute mode_definition_id, value string;
+attribute mode_segment_id, value string;
+attribute interaction_scope_id, value string;
+attribute aggregation_window_id, value string;
+attribute context_pack_id, value string;
+attribute output_contract_id, value string;
+attribute promise_content_id, value string;
+attribute admissibility_gate_id, value string;
+attribute writeback_gate_id, value string;
+attribute artifact_record_id, value string;
+attribute artifact_patch_id, value string;
+attribute object_revision_id, value string;
+attribute object_event_id, value string;
+attribute object_note_id, value string;
+attribute object_conclusion_id, value string;
+attribute object_manifest_id, value string;
+attribute writeback_decision_id, value string;
+attribute review_annotation_id, value string;
+attribute access_policy_id, value string;
+attribute working_memory_id, value string;
+attribute session_memory_id, value string;
+attribute project_memory_id, value string;
+attribute shared_memory_id, value string;

@@ -4063,6 +4063,7 @@ const materializeSessionTickets = async ({
     removeFromPossibleTasks,
     explicitRemoveRowIds,
     refreshReason,
+    targetTaskStatus,
 }: {
     req: Request;
     db: Db;
@@ -4074,6 +4075,7 @@ const materializeSessionTickets = async ({
     removeFromPossibleTasks: boolean;
     explicitRemoveRowIds: Set<string>;
     refreshReason: 'create_tickets' | 'process_possible_tasks';
+    targetTaskStatus: string;
 }): Promise<Record<string, unknown>> => {
     const now = new Date();
     const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
@@ -4286,7 +4288,7 @@ const materializeSessionTickets = async ({
                 performer: taskPerformer,
                 created_at: now,
                 updated_at: now,
-                    task_status: TASK_STATUSES.READY_10,
+                    task_status: targetTaskStatus,
                     task_status_history: [],
                     last_status_update: now,
                     status_update_checked: false,
@@ -4537,6 +4539,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             removeFromPossibleTasks,
             explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'create_tickets',
+            targetTaskStatus: TASK_STATUSES.READY_10,
         });
         return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
@@ -4672,6 +4675,7 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
             removeFromPossibleTasks,
             explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'process_possible_tasks',
+            targetTaskStatus: TASK_STATUSES.NEW_0,
         });
         return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
@@ -4777,6 +4781,11 @@ const VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES = [
     TASK_STATUSES.REVIEW_20,
 ] as const;
 
+const CANONICAL_TASK_STATUS_ORDER = Object.values(TASK_STATUSES);
+const CANONICAL_TASK_STATUS_ORDER_INDEX = new Map(
+    CANONICAL_TASK_STATUS_ORDER.map((status, index) => [status, index])
+);
+
 const normalizeSessionScopedSourceRefs = (values: unknown[]): string[] => {
     const normalizeValue = (value: unknown): string => toTaskText(value).replace(/\/+$/, '');
     const extractSessionId = (value: string): string => {
@@ -4878,37 +4887,29 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: sessionRecord });
         const externalRef = voiceSessionUrlUtils.canonical(sessionId);
 
-        const [tasks_work_count, tasks_review_count, codex_count] = await Promise.all([
-            db.collection(COLLECTIONS.TASKS).countDocuments(
-                mergeWithRuntimeFilter(
-                    {
-                        is_deleted: { $ne: true },
-                        codex_task: { $ne: true },
-                        task_status: { $in: [...VOICE_SESSION_WORK_TASK_COUNT_STATUSES] },
-                        ...sessionScopedTaskMatch,
+        const nonCodexSessionTaskMatch = mergeWithRuntimeFilter(
+            {
+                is_deleted: { $ne: true },
+                codex_task: { $ne: true },
+                ...sessionScopedTaskMatch,
+            },
+            {
+                field: 'runtime_tag',
+                familyMatch: IS_PROD_RUNTIME,
+                includeLegacyInProd: IS_PROD_RUNTIME,
+            }
+        );
+
+        const [statusCountsRaw, codex_count] = await Promise.all([
+            db.collection(COLLECTIONS.TASKS).aggregate([
+                { $match: nonCodexSessionTaskMatch },
+                {
+                    $group: {
+                        _id: '$task_status',
+                        count: { $sum: 1 },
                     },
-                    {
-                        field: 'runtime_tag',
-                        familyMatch: IS_PROD_RUNTIME,
-                        includeLegacyInProd: IS_PROD_RUNTIME,
-                    }
-                )
-            ),
-            db.collection(COLLECTIONS.TASKS).countDocuments(
-                mergeWithRuntimeFilter(
-                    {
-                        is_deleted: { $ne: true },
-                        codex_task: { $ne: true },
-                        task_status: { $in: [...VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES] },
-                        ...sessionScopedTaskMatch,
-                    },
-                    {
-                        field: 'runtime_tag',
-                        familyMatch: IS_PROD_RUNTIME,
-                        includeLegacyInProd: IS_PROD_RUNTIME,
-                    }
-                )
-            ),
+                },
+            ]).toArray() as Promise<Array<{ _id?: unknown; count?: unknown }>>,
             db.collection(COLLECTIONS.TASKS).countDocuments(
                 mergeWithRuntimeFilter(
                     {
@@ -4925,13 +4926,41 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             ),
         ]);
 
+        const status_counts = statusCountsRaw
+            .map((entry) => {
+                const status = toTaskText(entry?._id) || 'Unknown';
+                const count = Number(entry?.count) || 0;
+                if (!status || count <= 0) return null;
+                return { status, count };
+            })
+            .filter((entry): entry is { status: string; count: number } => Boolean(entry))
+            .sort((left, right) => {
+                const leftIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(left.status as (typeof CANONICAL_TASK_STATUS_ORDER)[number]);
+                const rightIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(right.status as (typeof CANONICAL_TASK_STATUS_ORDER)[number]);
+                if (leftIndex != null && rightIndex != null) return leftIndex - rightIndex;
+                if (leftIndex != null) return -1;
+                if (rightIndex != null) return 1;
+                return left.status.localeCompare(right.status, 'ru');
+            });
+
+        const tasks_count = status_counts.reduce((sum, entry) => sum + entry.count, 0);
+        const workStatusSet = new Set(VOICE_SESSION_WORK_TASK_COUNT_STATUSES);
+        const reviewStatusSet = new Set(VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES);
+        const tasks_work_count = status_counts
+            .filter((entry) => workStatusSet.has(entry.status as typeof VOICE_SESSION_WORK_TASK_COUNT_STATUSES[number]))
+            .reduce((sum, entry) => sum + entry.count, 0);
+        const tasks_review_count = status_counts
+            .filter((entry) => reviewStatusSet.has(entry.status as typeof VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES[number]))
+            .reduce((sum, entry) => sum + entry.count, 0);
+
         return res.status(200).json({
             success: true,
             session_id: sessionId,
-            tasks_count: tasks_work_count + tasks_review_count,
+            tasks_count,
             tasks_work_count,
             tasks_review_count,
             codex_count,
+            status_counts,
         });
     } catch (error) {
         logger.error('Error in session_tab_counts:', error);

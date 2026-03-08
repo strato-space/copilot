@@ -1,0 +1,1050 @@
+# Initial target-state semantic core aligned to Mode Engine, object-bound lifecycle, SemanticCards, and per-project AFS semantics.
+
+# --- <semantic-card id="project_context_card"> ---
+# kind: bounded-context-surface
+# fpf_basis:
+#   - U.BoundedContext
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ProjectWorld
+# what: Stable semantic entrypoint for one project.
+# not: Not a raw project row or routing template.
+# why: Provides one canonical project surface for reasoning, packs, policy, and ontology inheritance.
+entity project_context_card,
+  owns project_context_card_id @key,
+  owns project_id,
+  owns name,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays project_context_card_describes_project:project_context_card,
+  plays project_context_card_binds_context_pack:project_context_card,
+  plays object_revision_revises_project_context_card:revised_project_context_card,
+  plays object_note_attaches_to_project_context_card:noted_project_context_card,
+  plays object_conclusion_applies_to_project_context_card:concluded_project_context_card,
+  plays project_memory_scopes_project_context_card:scoped_project_context_card;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="agent_role"> ---
+# kind: role-taxon
+# fpf_basis:
+#   - A.2 Role Taxonomy
+#   - A.2.1 U.RoleAssignment
+# scope: BC.AgentWorld
+# what: Named responsibility profile used by agents.
+# not: Not a workflow or runtime worker instance.
+# why: Separates role semantics from execution mechanics.
+entity agent_role,
+  owns agent_role_id @key,
+  owns name,
+  owns description,
+  owns role_name,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays agent_role_executes_prompt_pipeline:agent_role;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="prompt_pipeline"> ---
+# kind: workflow-definition
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+# scope: BC.AgentWorld
+# what: Reusable prompt/workflow definition.
+# not: Not a single run or mode segment.
+# why: Makes durable prompt logic queryable and reviewable.
+entity prompt_pipeline,
+  owns prompt_pipeline_id @key,
+  owns name,
+  owns description,
+  owns source_ref,
+  owns module_scope,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays agent_role_executes_prompt_pipeline:prompt_pipeline;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="mode_definition"> ---
+# kind: mode-definition
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Reusable Mode Engine definition.
+# not: Not a session and not a segment.
+# why: Holds stable mode semantics, budgets, and expected outputs.
+entity mode_definition,
+  owns mode_definition_id @key,
+  owns name,
+  owns description,
+  owns module_scope,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays mode_segment_uses_mode_definition:mode_definition,
+  plays mode_definition_emits_output_contract:mode_definition,
+  plays context_pack_supports_mode_definition:supported_mode_definition;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="mode_segment"> ---
+# kind: mode-segment
+# fpf_basis:
+#   - U.BoundedContext
+#   - A.6.5 U.RelationSlotDiscipline
+# scope: BC.ModeEngineWorld
+# what: Bounded interval of a session under one active mode.
+# not: Not the whole session.
+# why: Preserves traceability when mode or scope changes.
+entity mode_segment,
+  owns mode_segment_id @key,
+  owns session_id,
+  owns source_ref,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays mode_segment_uses_mode_definition:mode_segment,
+  plays mode_segment_has_interaction_scope:mode_segment,
+  plays mode_segment_uses_aggregation_window:mode_segment,
+  plays mode_segment_uses_context_pack:mode_segment,
+  plays context_bundle_assembles_mode_segment:mode_segment,
+  plays object_revision_revises_mode_segment:revised_mode_segment,
+  plays object_event_affects_mode_segment:affected_mode_segment,
+  plays session_memory_scopes_mode_segment:scoped_mode_segment,
+  plays as_is_voice_session_maps_to_mode_segment:mode_segment;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="interaction_scope"> ---
+# kind: scope-definition
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Named interaction shape such as personal or group.
+# not: Not a permission policy.
+# why: Makes conversational format explicit in reasoning.
+entity interaction_scope,
+  owns interaction_scope_id @key,
+  owns name,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays mode_segment_has_interaction_scope:interaction_scope;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="aggregation_window"> ---
+# kind: aggregation-policy
+# fpf_basis:
+#   - A.6 Signature Stack
+# scope: BC.ModeEngineWorld
+# what: Window used to aggregate chunks before output.
+# not: Not a transcript chunk.
+# why: Makes output granularity explicit and auditable.
+entity aggregation_window,
+  owns aggregation_window_id @key,
+  owns name,
+  owns summary,
+  owns duration_ms,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays mode_segment_uses_aggregation_window:aggregation_window;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="context_pack"> ---
+# kind: context-pack
+# fpf_basis:
+#   - U.BoundedContext
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ModeEngineWorld
+# what: Curated package of context sources.
+# not: Not the whole project memory.
+# why: Makes context selection reusable and bounded.
+entity context_pack,
+  owns context_pack_id @key,
+  owns project_id,
+  owns source_ref,
+  owns name,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays mode_segment_uses_context_pack:context_pack,
+  plays context_pack_supports_mode_definition:context_pack,
+  plays project_context_card_binds_context_pack:bound_context_pack,
+  plays shared_memory_supports_context_pack:supported_context_pack;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="output_contract"> ---
+# kind: contract-surface
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+#   - A.6.C Contract Unpacking
+# scope: BC.ModeEngineWorld
+# what: Declared output surface and operational expectations.
+# not: Not the artifact itself.
+# why: Separates promised output from artifact instances and gates.
+entity output_contract,
+  owns output_contract_id @key,
+  owns name,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays mode_definition_emits_output_contract:output_contract,
+  plays output_contract_promises_content:output_contract,
+  plays output_contract_uses_admissibility_gate:output_contract,
+  plays output_contract_uses_writeback_gate:output_contract,
+  plays output_contract_targets_artifact_record:output_contract,
+  plays context_bundle_realizes_output_contract:output_contract;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="promise_content"> ---
+# kind: promise-clause
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+# scope: BC.ModeEngineWorld
+# what: Semantic payload promised by an output contract.
+# not: Not a gate or transport wrapper.
+# why: Aligns output semantics with FPF PromiseContent.
+entity promise_content,
+  owns promise_content_id @key,
+  owns name,
+  owns description,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays output_contract_promises_content:promise_content;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="admissibility_gate"> ---
+# kind: admissibility-gate
+# fpf_basis:
+#   - A.6 Signature Stack
+# scope: BC.ModeEngineWorld
+# what: Gate deciding whether an output may be emitted.
+# not: Not the output content.
+# why: Separates admissibility from promised content.
+entity admissibility_gate,
+  owns admissibility_gate_id @key,
+  owns name,
+  owns description,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays output_contract_uses_admissibility_gate:admissibility_gate;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="writeback_gate"> ---
+# kind: writeback-gate
+# fpf_basis:
+#   - A.2.8 U.Commitment
+#   - A.2.9 U.SpeechAct
+# scope: BC.ModeEngineWorld
+# what: Gate deciding whether output may be written back.
+# not: Not the writeback decision itself.
+# why: Makes writeback policy explicit.
+entity writeback_gate,
+  owns writeback_gate_id @key,
+  owns name,
+  owns description,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays output_contract_uses_writeback_gate:writeback_gate;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="artifact_record"> ---
+# kind: semantic-artifact
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Durable semantic artifact object.
+# not: Not a raw file blob or generic memory item.
+# why: Gives outputs stable identity and lineage.
+entity artifact_record,
+  owns artifact_record_id @key,
+  owns project_id,
+  owns source_type,
+  owns source_ref,
+  owns external_ref,
+  owns title,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays artifact_record_supports_project:artifact_record,
+  plays artifact_patch_updates_artifact_record:artifact_record,
+  plays output_contract_targets_artifact_record:artifact_record,
+  plays object_revision_revises_artifact_record:revised_artifact_record,
+  plays object_event_affects_artifact_record:affected_artifact_record,
+  plays object_note_attaches_to_artifact_record:noted_artifact_record,
+  plays object_conclusion_applies_to_artifact_record:concluded_artifact_record,
+  plays object_manifest_describes_artifact_record:manifested_artifact_record,
+  plays as_is_attachment_maps_to_artifact_record:artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="artifact_patch"> ---
+# kind: artifact-patch
+# fpf_basis:
+#   - A.6.S U.SignatureEngineeringPair
+# scope: BC.ArtifactWorld
+# what: Versioned update applied to an artifact record.
+# not: Not the artifact itself.
+# why: Captures patch-aware evolution of artifacts.
+entity artifact_patch,
+  owns artifact_patch_id @key,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays artifact_patch_updates_artifact_record:artifact_patch;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="context_bundle"> ---
+# kind: context-bundle
+# fpf_basis:
+#   - U.BoundedContext
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Assembled context package for one reasoning act.
+# not: Not a raw session or memory store.
+# why: Makes context assembly inspectable and reproducible.
+entity context_bundle,
+  owns context_bundle_id @key,
+  owns project_id,
+  owns source_type,
+  owns source_ref,
+  owns name,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays context_bundle_assembles_project:context_bundle,
+  plays context_bundle_assembles_mode_segment:context_bundle,
+  plays context_bundle_assembles_task:context_bundle,
+  plays context_bundle_realizes_output_contract:context_bundle,
+  plays object_manifest_assembled_for_context_bundle:context_bundle,
+  plays access_policy_governs_context_bundle:context_bundle,
+  plays working_memory_scopes_context_bundle:scoped_context_bundle;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view"> ---
+# kind: target-task-surface
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.TaskWorld
+# what: Normalized semantic view of a task.
+# not: Not a raw Mongo task row.
+# why: Provides one stable target for task reasoning.
+entity target_task_view,
+  owns target_task_view_id @key,
+  owns project_id,
+  owns title,
+  owns summary,
+  owns description,
+  owns status,
+  owns priority,
+  owns created_at,
+  owns updated_at,
+  plays context_bundle_assembles_task:assembled_task,
+  plays object_revision_revises_target_task_view:revised_target_task_view,
+  plays object_event_affects_target_task_view:affected_target_task_view,
+  plays object_note_attaches_to_target_task_view:noted_target_task_view,
+  plays object_conclusion_applies_to_target_task_view:concluded_target_task_view,
+  plays as_is_oper_task_maps_to_target_task_view:target_task_view,
+  plays as_is_possible_task_maps_to_target_task_view:target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_revision"> ---
+# kind: history-revision
+# fpf_basis:
+#   - A.6.S U.SignatureEngineeringPair
+# scope: BC.ArtifactWorld
+# what: Revision record attached to one object.
+# not: Not a global history bucket.
+# why: Supports current-state plus explicit history access.
+entity object_revision,
+  owns object_revision_id @key,
+  owns source_ref,
+  owns row_version,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays object_revision_revises_project_context_card:object_revision,
+  plays object_revision_revises_mode_segment:object_revision,
+  plays object_revision_revises_target_task_view:object_revision,
+  plays object_revision_revises_artifact_record:object_revision;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_event"> ---
+# kind: history-event
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Event attached to one object.
+# not: Not a detached audit blob.
+# why: Captures object-level change history with provenance.
+entity object_event,
+  owns object_event_id @key,
+  owns event_time,
+  owns operation_type,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays object_event_affects_mode_segment:object_event,
+  plays object_event_affects_target_task_view:object_event,
+  plays object_event_affects_artifact_record:object_event,
+  plays as_is_voice_message_maps_to_object_event:object_event;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_note"> ---
+# kind: object-note
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Human or agent note attached to one object.
+# not: Not free-floating memory.
+# why: Lets notes stay object-bound and queryable.
+entity object_note,
+  owns object_note_id @key,
+  owns notes,
+  owns source_ref,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays object_note_attaches_to_project_context_card:object_note,
+  plays object_note_attaches_to_target_task_view:object_note,
+  plays object_note_attaches_to_artifact_record:object_note,
+  plays writeback_decision_writes_object_note:object_note;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_conclusion"> ---
+# kind: object-conclusion
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Interpreted conclusion attached to one object.
+# not: Not a raw summary text.
+# why: Separates interpreted state from raw event history.
+entity object_conclusion,
+  owns object_conclusion_id @key,
+  owns summary,
+  owns description,
+  owns source_ref,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays object_conclusion_applies_to_project_context_card:object_conclusion,
+  plays object_conclusion_applies_to_target_task_view:object_conclusion,
+  plays object_conclusion_applies_to_artifact_record:object_conclusion,
+  plays as_is_summary_maps_to_object_conclusion:object_conclusion;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_manifest"> ---
+# kind: context-manifest
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Manifest describing selected and excluded context.
+# not: Not the context bundle itself.
+# why: Makes context assembly explainable and auditable.
+entity object_manifest,
+  owns object_manifest_id @key,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays object_manifest_describes_artifact_record:object_manifest,
+  plays object_manifest_assembled_for_context_bundle:object_manifest;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="writeback_decision"> ---
+# kind: review-decision
+# fpf_basis:
+#   - A.2.8 U.Commitment
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Decision to write information back to an object.
+# not: Not the note or conclusion itself.
+# why: Separates policy and review from resulting state change.
+entity writeback_decision,
+  owns writeback_decision_id @key,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays writeback_decision_writes_object_note:writeback_decision,
+  plays review_annotation_approves_writeback:writeback_decision;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="review_annotation"> ---
+# kind: review-annotation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Approval or rejection annotation over a decision.
+# not: Not the writeback itself.
+# why: Makes human or agent review part of semantic trace.
+entity review_annotation,
+  owns review_annotation_id @key,
+  owns comment,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays review_annotation_approves_writeback:review_annotation;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="access_policy"> ---
+# kind: access-policy
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ArtifactWorld
+# what: Policy governing access to a context bundle or object.
+# not: Not a routing decision.
+# why: Makes visibility and policy semantics explicit.
+entity access_policy,
+  owns access_policy_id @key,
+  owns name,
+  owns description,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays access_policy_governs_context_bundle:access_policy;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="working_memory"> ---
+# kind: memory-classification
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Short-horizon object-scoped memory semantics.
+# not: Not a global memory store.
+# why: Encodes in-the-moment context scope from Mode Engine.
+entity working_memory,
+  owns working_memory_id @key,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays working_memory_scopes_context_bundle:working_memory;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="session_memory"> ---
+# kind: memory-classification
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Session-bounded object-scoped memory semantics.
+# not: Not project memory.
+# why: Encodes reusable context within one session lifecycle.
+entity session_memory,
+  owns session_memory_id @key,
+  owns session_id,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays session_memory_scopes_mode_segment:session_memory;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="project_memory"> ---
+# kind: memory-classification
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProjectWorld
+# what: Long-lived project-bound memory semantics.
+# not: Not shared cross-project memory.
+# why: Captures durable project context as an object-scoped layer.
+entity project_memory,
+  owns project_memory_id @key,
+  owns project_id,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays project_memory_scopes_project_context_card:project_memory;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="shared_memory"> ---
+# kind: memory-classification
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.ProjectWorld
+# what: Explicitly shared/domain memory semantics.
+# not: Not default project memory.
+# why: Prevents implicit context leakage across projects.
+entity shared_memory,
+  owns shared_memory_id @key,
+  owns source_ref,
+  owns summary,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays shared_memory_supports_context_pack:shared_memory;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="project_context_card_describes_project"> ---
+# kind: projection-relation
+# fpf_basis:
+#   - U.BoundedContext
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ProjectWorld
+# what: Connects the project semantic card to the project it describes.
+# not: Not a routing or ownership relation.
+# why: Makes one semantic card the canonical project-facing surface.
+relation project_context_card_describes_project,
+  relates project_context_card,
+  relates described_project;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="agent_role_executes_prompt_pipeline"> ---
+# kind: workflow-relation
+# fpf_basis:
+#   - A.2 Role Taxonomy
+#   - C.Agent-Tools-CAL
+# scope: BC.AgentWorld
+# what: Links an agent role to a prompt pipeline it is allowed to execute.
+# not: Not a runtime invocation record.
+# why: Separates stable role/pipeline compatibility from one run.
+relation agent_role_executes_prompt_pipeline,
+  relates agent_role,
+  relates prompt_pipeline;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="mode_segment_uses_mode_definition"> ---
+# kind: mode-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Links a mode segment to the mode definition governing it.
+# not: Not a session-level alias.
+# why: Makes mode switches explicit.
+relation mode_segment_uses_mode_definition,
+  relates mode_segment,
+  relates mode_definition;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="mode_segment_has_interaction_scope"> ---
+# kind: mode-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Links a mode segment to its interaction scope.
+# not: Not an ACL relation.
+# why: Keeps personal/group semantics explicit.
+relation mode_segment_has_interaction_scope,
+  relates mode_segment,
+  relates interaction_scope;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="mode_segment_uses_aggregation_window"> ---
+# kind: mode-relation
+# fpf_basis:
+#   - A.6 Signature Stack
+# scope: BC.ModeEngineWorld
+# what: Links a mode segment to the aggregation window it uses.
+# not: Not a timer event.
+# why: Makes output granularity explicit.
+relation mode_segment_uses_aggregation_window,
+  relates mode_segment,
+  relates aggregation_window;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="mode_segment_uses_context_pack"> ---
+# kind: context-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Links a mode segment to a permitted context pack.
+# not: Not evidence that every source in the pack was consumed.
+# why: Separates allowed context from assembled context.
+relation mode_segment_uses_context_pack,
+  relates mode_segment,
+  relates context_pack;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="mode_definition_emits_output_contract"> ---
+# kind: contract-relation
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+# scope: BC.ModeEngineWorld
+# what: Links a mode definition to an output contract it emits.
+# not: Not the output artifact itself.
+# why: Makes delivery obligations explicit.
+relation mode_definition_emits_output_contract,
+  relates mode_definition,
+  relates output_contract;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="output_contract_promises_content"> ---
+# kind: contract-relation
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+# scope: BC.ModeEngineWorld
+# what: Links an output contract to the semantic payload it promises.
+# not: Not an admissibility check.
+# why: Separates promise from gating.
+relation output_contract_promises_content,
+  relates output_contract,
+  relates promise_content;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="output_contract_uses_admissibility_gate"> ---
+# kind: gate-relation
+# fpf_basis:
+#   - A.6 Signature Stack
+# scope: BC.ModeEngineWorld
+# what: Links an output contract to its admissibility gate.
+# not: Not writeback.
+# why: Separates acceptance from persistence.
+relation output_contract_uses_admissibility_gate,
+  relates output_contract,
+  relates admissibility_gate;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="output_contract_uses_writeback_gate"> ---
+# kind: gate-relation
+# fpf_basis:
+#   - A.2.8 U.Commitment
+#   - A.2.9 U.SpeechAct
+# scope: BC.ModeEngineWorld
+# what: Links an output contract to its writeback gate.
+# not: Not the writeback decision itself.
+# why: Separates permission to write from the writeback event.
+relation output_contract_uses_writeback_gate,
+  relates output_contract,
+  relates writeback_gate;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="output_contract_targets_artifact_record"> ---
+# kind: contract-relation
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+# scope: BC.ArtifactWorld
+# what: Links an output contract to the artifact record it targets.
+# not: Not the produced artifact patch.
+# why: Keeps output destination explicit.
+relation output_contract_targets_artifact_record,
+  relates output_contract,
+  relates artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="artifact_record_supports_project"> ---
+# kind: artifact-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Links an artifact record to the project it supports.
+# not: Not simple file containment.
+# why: Lets artifacts participate in project reasoning.
+relation artifact_record_supports_project,
+  relates artifact_record,
+  relates supported_project;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="artifact_patch_updates_artifact_record"> ---
+# kind: lineage-relation
+# fpf_basis:
+#   - A.6.S U.SignatureEngineeringPair
+# scope: BC.ArtifactWorld
+# what: Links an artifact patch to the artifact record it updates.
+# not: Not a writeback review relation.
+# why: Captures artifact version lineage.
+relation artifact_patch_updates_artifact_record,
+  relates artifact_patch,
+  relates artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="context_bundle_assembles_project"> ---
+# kind: context-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ProjectWorld
+# what: Links a context bundle to the project context it assembles.
+# not: Not a bridge from raw project rows.
+# why: Keeps one reasoning act tied to one project context.
+relation context_bundle_assembles_project,
+  relates context_bundle,
+  relates assembled_project;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="context_bundle_assembles_mode_segment"> ---
+# kind: context-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ModeEngineWorld
+# what: Links a context bundle to the mode segment it serves.
+# not: Not a mode-definition relation.
+# why: Binds one reasoning act to one bounded session interval.
+relation context_bundle_assembles_mode_segment,
+  relates context_bundle,
+  relates mode_segment;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="context_bundle_assembles_task"> ---
+# kind: context-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.TaskWorld
+# what: Links a context bundle to the task view it serves.
+# not: Not task materialization.
+# why: Supports task-scoped reasoning bundles.
+relation context_bundle_assembles_task,
+  relates context_bundle,
+  relates assembled_task;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="context_bundle_realizes_output_contract"> ---
+# kind: contract-relation
+# fpf_basis:
+#   - A.6.C Contract Unpacking
+# scope: BC.ModeEngineWorld
+# what: Links a context bundle to the output contract realized in that reasoning act.
+# not: Not a promise on its own.
+# why: Makes contract realization auditable.
+relation context_bundle_realizes_output_contract,
+  relates context_bundle,
+  relates output_contract;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_revision_revises_project_context_card"> ---
+# kind: history-relation
+# fpf_basis:
+#   - A.6.S U.SignatureEngineeringPair
+# scope: BC.ProjectWorld
+# what: Links a project context card to one of its revisions.
+# not: Not a generic timeline edge.
+# why: Keeps project current/history explicit.
+relation object_revision_revises_project_context_card,
+  relates object_revision,
+  relates revised_project_context_card;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_revision_revises_mode_segment"> ---
+# kind: history-relation
+# fpf_basis:
+#   - A.6.S U.SignatureEngineeringPair
+# scope: BC.ModeEngineWorld
+# what: Links a mode segment to one of its revisions.
+# not: Not a session bridge.
+# why: Tracks semantic changes to segment state.
+relation object_revision_revises_mode_segment,
+  relates object_revision,
+  relates revised_mode_segment;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_revision_revises_target_task_view"> ---
+# kind: history-relation
+# fpf_basis:
+#   - A.6.S U.SignatureEngineeringPair
+# scope: BC.TaskWorld
+# what: Links a task view to one of its revisions.
+# not: Not a patch relation.
+# why: Tracks task view history.
+relation object_revision_revises_target_task_view,
+  relates object_revision,
+  relates revised_target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_revision_revises_artifact_record"> ---
+# kind: history-relation
+# fpf_basis:
+#   - A.6.S U.SignatureEngineeringPair
+# scope: BC.ArtifactWorld
+# what: Links an artifact record to one of its revisions.
+# not: Not the artifact patch relation.
+# why: Separates revisions from patches.
+relation object_revision_revises_artifact_record,
+  relates object_revision,
+  relates revised_artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_event_affects_mode_segment"> ---
+# kind: history-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ModeEngineWorld
+# what: Links an object event to the mode segment it affected.
+# not: Not a mode bridge.
+# why: Captures segment-local history.
+relation object_event_affects_mode_segment,
+  relates object_event,
+  relates affected_mode_segment;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_event_affects_target_task_view"> ---
+# kind: history-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.TaskWorld
+# what: Links an object event to the task view it affected.
+# not: Not a task bridge.
+# why: Captures object-bound task history.
+relation object_event_affects_target_task_view,
+  relates object_event,
+  relates affected_target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_event_affects_artifact_record"> ---
+# kind: history-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Links an object event to the artifact record it affected.
+# not: Not patch lineage.
+# why: Captures event-level artifact history.
+relation object_event_affects_artifact_record,
+  relates object_event,
+  relates affected_artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_note_attaches_to_project_context_card"> ---
+# kind: annotation-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ProjectWorld
+# what: Attaches an object note to a project context card.
+# not: Not a free-standing note.
+# why: Keeps note semantics object-bound.
+relation object_note_attaches_to_project_context_card,
+  relates object_note,
+  relates noted_project_context_card;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_note_attaches_to_target_task_view"> ---
+# kind: annotation-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.TaskWorld
+# what: Attaches an object note to a task view.
+# not: Not task materialization.
+# why: Keeps task notes object-bound.
+relation object_note_attaches_to_target_task_view,
+  relates object_note,
+  relates noted_target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_note_attaches_to_artifact_record"> ---
+# kind: annotation-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Attaches an object note to an artifact record.
+# not: Not artifact content itself.
+# why: Keeps artifact notes separate from artifact body.
+relation object_note_attaches_to_artifact_record,
+  relates object_note,
+  relates noted_artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_conclusion_applies_to_project_context_card"> ---
+# kind: conclusion-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ProjectWorld
+# what: Attaches an object conclusion to a project context card.
+# not: Not a raw summary blob.
+# why: Keeps project conclusions explicit.
+relation object_conclusion_applies_to_project_context_card,
+  relates object_conclusion,
+  relates concluded_project_context_card;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_conclusion_applies_to_target_task_view"> ---
+# kind: conclusion-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.TaskWorld
+# what: Attaches an object conclusion to a task view.
+# not: Not the task itself.
+# why: Keeps inferred task conclusions explicit.
+relation object_conclusion_applies_to_target_task_view,
+  relates object_conclusion,
+  relates concluded_target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_conclusion_applies_to_artifact_record"> ---
+# kind: conclusion-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Attaches an object conclusion to an artifact record.
+# not: Not the artifact body.
+# why: Separates semantic conclusions from artifact content.
+relation object_conclusion_applies_to_artifact_record,
+  relates object_conclusion,
+  relates concluded_artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_manifest_describes_artifact_record"> ---
+# kind: manifest-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Links an object manifest to an artifact record it describes.
+# not: Not a patch relation.
+# why: Makes artifact context selection explicit.
+relation object_manifest_describes_artifact_record,
+  relates object_manifest,
+  relates manifested_artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="working_memory_scopes_context_bundle"> ---
+# kind: memory-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Links working-memory classification to one context bundle.
+# not: Not a generic memory bucket.
+# why: Makes memory mode object-bound.
+relation working_memory_scopes_context_bundle,
+  relates working_memory,
+  relates scoped_context_bundle;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="session_memory_scopes_mode_segment"> ---
+# kind: memory-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Links session-memory classification to one mode segment.
+# not: Not project memory.
+# why: Makes session memory explicit.
+relation session_memory_scopes_mode_segment,
+  relates session_memory,
+  relates scoped_mode_segment;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="project_memory_scopes_project_context_card"> ---
+# kind: memory-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProjectWorld
+# what: Links project-memory classification to one project context card.
+# not: Not shared memory.
+# why: Makes project memory explicit.
+relation project_memory_scopes_project_context_card,
+  relates project_memory,
+  relates scoped_project_context_card;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="shared_memory_supports_context_pack"> ---
+# kind: memory-relation
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.ProjectWorld
+# what: Links shared-memory classification to a context pack.
+# not: Not implicit cross-project leakage.
+# why: Makes shared memory explicit and policy-aware.
+relation shared_memory_supports_context_pack,
+  relates shared_memory,
+  relates supported_context_pack;
+# --- </semantic-card> ---

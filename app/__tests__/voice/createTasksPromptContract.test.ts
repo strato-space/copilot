@@ -27,6 +27,24 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).not.toContain('`gsh`');
   });
 
+  it('matches current MongoDB possible-task reality instead of assuming rich fully-populated rows', () => {
+    expect(promptSource).toContain('task_status="Backlog"');
+    expect(promptSource).toContain('source="VOICE_BOT"');
+    expect(promptSource).toContain('source_kind="voice_possible_task"');
+    expect(promptSource).toContain('mutable baseline');
+    expect(promptSource).toContain('project_id` и `performer_id` могут быть пустыми строками');
+    expect(promptSource).toContain('row_id` и `id` — канонические mutation locators');
+    expect(promptSource).toContain('sparse project card');
+  });
+
+  it('treats analysis, plan-improvement, and final-spec work as separate tasks in sequential workflows', () => {
+    expect(promptSource).toContain('проанализировать материалы');
+    expect(promptSource).toContain('предложить улучшения плана');
+    expect(promptSource).toContain('подготовить финальные спецификации');
+    expect(promptSource).toContain('считаются разными задачами');
+    expect(promptSource).toContain('Не схлопывай анализ в подготовку спецификаций');
+  });
+
   it('allows explicit finance-adjacent operational documents instead of dropping them as finance noise', () => {
     expect(promptSource).toContain('счёт');
     expect(promptSource).toContain('invoice');

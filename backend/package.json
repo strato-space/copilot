@@ -30,9 +30,16 @@
     "voice:summarize-mcp-watchdog:dry": "tsx scripts/summarize-mcp-watchdog.ts",
     "voice:summarize-mcp-watchdog:apply": "tsx scripts/summarize-mcp-watchdog.ts --apply",
     "ontology:typedb:py:setup": "python3 -m venv ../ontology/typedb/.venv && ../ontology/typedb/.venv/bin/pip install --upgrade pip && ../ontology/typedb/.venv/bin/pip install -r ../ontology/typedb/scripts/requirements-typedb.txt",
+    "ontology:typedb:build": "python3 ../ontology/typedb/scripts/build-typedb-schema.py",
+    "ontology:typedb:test": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh -m unittest discover -s ../ontology/typedb/tests -p 'test_*.py'",
+    "ontology:typedb:contract-check": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-contract-check.py",
     "ontology:typedb:ingest:dry": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-ingest.py",
     "ontology:typedb:ingest:apply": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-ingest.py --apply",
-    "ontology:typedb:validate": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-validate.py"
+    "ontology:typedb:sync:dry": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-ingest.py --sync-mode incremental",
+    "ontology:typedb:sync:apply": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-ingest.py --apply --sync-mode incremental",
+    "ontology:typedb:validate": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-validate.py",
+    "ontology:typedb:domain-inventory": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-domain-inventory.py",
+    "ontology:typedb:entity-sampling": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-entity-sampling.py"
   },
   "keywords": [],
   "author": "",

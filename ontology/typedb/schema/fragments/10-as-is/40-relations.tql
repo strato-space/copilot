@@ -1,0 +1,299 @@
+# ==============================
+# Relations
+# ==============================
+
+relation client_owns_project,
+  relates owner_client,
+  relates owned_project;
+
+relation client_has_project_group,
+  relates owner_client,
+  relates owned_project_group;
+
+relation project_group_has_project,
+  relates project_group,
+  relates linked_project;
+
+relation project_has_project_link,
+  relates owner_project,
+  relates linked_project_link;
+
+relation project_has_voice_context_item,
+  relates owner_project,
+  relates context_item;
+
+relation dialog_represented_by_context_item,
+  relates dialog,
+  relates context_item;
+
+relation dialog_has_transcript_segment,
+  relates dialog,
+  relates segment;
+
+relation transcript_segment_spoken_by_person,
+  relates segment,
+  relates speaker_person;
+
+relation dialog_yields_agreement,
+  relates dialog,
+  relates agreement;
+
+relation agreement_evidenced_by_context_item,
+  relates agreement,
+  relates context_item;
+
+relation agreement_creates_oper_task,
+  relates agreement,
+  relates oper_task;
+
+relation project_has_oper_task,
+  relates owner_project,
+  relates oper_task;
+
+relation voice_session_sources_oper_task,
+  relates source_voice_session,
+  relates sourced_oper_task;
+
+relation oper_task_classified_as_task_type,
+  relates oper_task,
+  relates task_type;
+
+relation task_type_tree_classifies_oper_task,
+  relates task_type_tree,
+  relates oper_task;
+
+relation oper_task_evidenced_by_context_item,
+  relates oper_task,
+  relates context_item;
+
+relation oper_task_has_status,
+  relates oper_task,
+  relates task_status;
+
+relation oper_task_has_priority,
+  relates oper_task,
+  relates task_priority;
+
+relation oper_task_assigned_to_performer_profile,
+  relates oper_task,
+  relates assignee_performer_profile;
+
+relation project_has_epic_task,
+  relates owner_project,
+  relates epic_task;
+
+relation oper_task_has_work_log,
+  relates oper_task,
+  relates work_log;
+
+relation performer_profile_creates_work_log,
+  relates author_performer_profile,
+  relates work_log;
+
+relation execution_job_executed_by_agent,
+  relates execution_job,
+  relates agent;
+
+relation project_has_kpi,
+  relates owner_project,
+  relates kpi;
+
+relation kpi_observed_as_observation,
+  relates kpi,
+  relates kpi_observation;
+
+relation kpi_observation_fires_trigger_event,
+  relates kpi_observation,
+  relates trigger_event;
+
+relation trigger_event_emits_recommendation,
+  relates trigger_event,
+  relates recommendation;
+
+relation recommendation_authored_by_agent,
+  relates recommendation,
+  relates agent;
+
+relation project_has_project_rate,
+  relates owner_project,
+  relates project_rate;
+
+relation performer_profile_maps_to_employee,
+  relates source_performer_profile,
+  relates target_employee;
+
+relation employee_has_month_cost,
+  relates employee,
+  relates employee_month_cost;
+
+relation project_has_timesheet,
+  relates owner_project,
+  relates timesheet_monthly;
+
+relation employee_contributes_timesheet,
+  relates employee,
+  relates timesheet_monthly;
+
+relation project_has_fact_month,
+  relates owner_project,
+  relates fact_project_month;
+
+relation project_has_forecast_month,
+  relates owner_project,
+  relates forecast_project_month;
+
+relation forecast_version_contains_forecast_month,
+  relates forecast_version,
+  relates forecast_project_month;
+
+relation period_closes_fact_month,
+  relates period,
+  relates fact_project_month;
+
+relation period_governs_forecast_month,
+  relates period,
+  relates forecast_project_month;
+
+relation fx_converts_fact_month,
+  relates fx_monthly,
+  relates fact_project_month;
+
+relation fx_converts_forecast_month,
+  relates fx_monthly,
+  relates forecast_project_month;
+
+relation project_has_cost_expense,
+  relates owner_project,
+  relates cost_expense;
+
+relation expense_operation_has_log,
+  relates cost_expense,
+  relates expense_operation_log;
+
+relation cost_category_classifies_expense,
+  relates cost_category,
+  relates cost_expense;
+
+relation period_buckets_cost_expense,
+  relates period,
+  relates cost_expense;
+
+relation person_has_performer_profile,
+  relates person,
+  relates performer_profile;
+
+relation performer_profile_has_legacy_finance_expense,
+  relates performer_profile,
+  relates legacy_finance_expense;
+
+relation project_has_legacy_finance_income,
+  relates owner_project,
+  relates legacy_finance_income;
+
+relation legacy_finance_income_has_type,
+  relates legacy_finance_income,
+  relates legacy_finance_income_type;
+
+relation performer_profile_has_legacy_finance_income,
+  relates performer_profile,
+  relates legacy_finance_income;
+
+relation project_has_agent_request,
+  relates owner_project,
+  relates agent_request;
+
+relation agent_request_updates_fact_month,
+  relates agent_request,
+  relates fact_project_month;
+
+relation agent_request_updates_forecast_month,
+  relates agent_request,
+  relates forecast_project_month;
+
+relation alert_setting_configures_alert_event,
+  relates alert_setting,
+  relates alert_event;
+
+relation alert_event_creates_notification_item,
+  relates alert_event,
+  relates notification_item;
+
+relation notification_preference_governs_notification_item,
+  relates notification_preference,
+  relates notification_item;
+
+relation mode_tag_bound_skill_binding,
+  relates mode_tag,
+  relates skill_binding;
+
+relation project_has_voice_session,
+  relates owner_project,
+  relates voice_session;
+
+relation project_has_google_drive_file,
+  relates owner_project,
+  relates drive_project_file;
+
+relation project_has_voice_topic,
+  relates owner_project,
+  relates voice_topic;
+
+relation mode_tag_selected_for_voice_session,
+  relates mode_tag,
+  relates voice_session;
+
+relation voice_session_has_message,
+  relates voice_session,
+  relates voice_message;
+
+relation voice_session_has_topic,
+  relates voice_session,
+  relates voice_topic;
+
+relation tg_voice_session_bound_to_voice_session,
+  relates tg_voice_session,
+  relates bound_voice_session;
+
+relation voice_message_chunked_as_transcript_chunk,
+  relates voice_message,
+  relates transcript_chunk;
+
+relation voice_session_processed_by_run,
+  relates voice_session,
+  relates processing_run;
+
+relation processing_run_produces_task_draft,
+  relates processing_run,
+  relates task_draft;
+
+relation task_draft_normalized_to_plan_item,
+  relates task_draft,
+  relates plan_item;
+
+relation patch_contains_operation,
+  relates patch,
+  relates patch_operation;
+
+relation patch_attempted_as_apply_attempt,
+  relates patch,
+  relates apply_attempt;
+
+relation patch_operation_mutates_oper_task,
+  relates patch_operation,
+  relates oper_task;
+
+relation voice_session_has_history_step,
+  relates voice_session,
+  relates history_step;
+
+relation voice_session_emits_metric_event,
+  relates voice_session,
+  relates ops_metric_event;
+
+relation voice_session_has_merge_log,
+  relates target_session,
+  relates merge_log;
+
+relation ops_metric_event_aggregated_to_snapshot,
+  relates ops_metric_event,
+  relates ops_analytics_snapshot;

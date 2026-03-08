@@ -20,6 +20,7 @@ Use this as a fast guardrail before implementing anything:
   - canonical payload shape `id/name/description/priority/...`,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with status `NEW_0`,
+  - `process_possible_tasks` keeps session-scoped materializations in `NEW_0`; only explicit ticket creation promotes them into work statuses,
   - session `processors_data.CREATE_TASKS` is compatibility projection only, not the source of truth.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
@@ -37,6 +38,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - TS transcribe worker supports Telegram file recovery before transcription when local file path is missing.
 - TypeDB tooling was hard-moved to `ontology/typedb/scripts/*`; backend npm aliases call those canonical scripts.
 - Canonical generated ontology schema is `ontology/typedb/schema/str-ontology.tql`; editable source fragments live in `ontology/typedb/schema/fragments/*`.
+- Ontology operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`.
 - Ontology architecture and rollout roadmap live in `plan/ontology-and-operations.md`.
 - `copilot` ontology is the kernel/common layer; projects are expected to extend it via per-project overlays and SemanticCards under `/home/strato-space/<project-slug>/`.
 
@@ -115,7 +117,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - Voice session header includes a `Tasks` action before `Summarize`; it generates possible tasks from current meeting context without waiting for session close.
 - Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Возможные задачи`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
-- `Задачи` keeps a total count on the parent tab and separate counts on `Work` / `Review` subtabs.
+- `Задачи` keeps a total count on the parent tab while the subtab list now comes from backend `status_counts` (`voicebot/session_tab_counts`); the UI falls back to the first available status and shows an explicit empty state when no session-linked tasks exist.
 - `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.
 - `Транскрипция`, `Категоризация`, and `Возможные задачи` tabs now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
@@ -240,7 +242,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - `create_tasks` card no longer hardcodes model; runtime default is currently `codexspark` unless CLI/PM2 overrides it.
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
+- `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
+- `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.

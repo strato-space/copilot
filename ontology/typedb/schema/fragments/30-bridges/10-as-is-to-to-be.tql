@@ -1,0 +1,172 @@
+# Explicit AS-IS -> TO-BE semantic bridges for object-bound lifecycle, Mode Engine semantics, and per-project context.
+
+# --- <semantic-card id="as_is_project_maps_to_project_context_card"> ---
+# kind: projection-bridge
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.ProjectWorld
+# what: Maps an operational project to its semantic project card.
+# not: Not a CRUD alias.
+# why: Bridges runtime project rows into the target semantic model.
+relation as_is_project_maps_to_project_context_card,
+  relates as_is_project,
+  relates project_context_card;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="as_is_voice_session_maps_to_mode_segment"> ---
+# kind: projection-bridge
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.VoiceWorld
+# what: Maps an operational voice session to a mode segment.
+# not: Not a generic bundle mapping.
+# why: Makes Mode Engine the primary interpretation of session flow.
+relation as_is_voice_session_maps_to_mode_segment,
+  relates as_is_voice_session,
+  relates mode_segment;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="as_is_oper_task_maps_to_target_task_view"> ---
+# kind: projection-bridge
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.TaskWorld
+# what: Maps an operational task row to target task semantics.
+# not: Not a materialization command.
+# why: Provides stable task semantics above runtime rows.
+relation as_is_oper_task_maps_to_target_task_view,
+  relates as_is_oper_task,
+  relates target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="as_is_possible_task_maps_to_target_task_view"> ---
+# kind: projection-bridge
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.TaskWorld
+# what: Maps an operational possible-task row to target task semantics.
+# not: Not a second task store.
+# why: Keeps possible and materialized tasks compatible in TO-BE.
+relation as_is_possible_task_maps_to_target_task_view,
+  relates as_is_possible_task,
+  relates target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="as_is_voice_message_maps_to_object_event"> ---
+# kind: lineage-bridge
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.VoiceWorld
+# what: Maps an operational voice message to an object event.
+# not: Not a transcript chunk.
+# why: Turns message flow into object-bound history.
+relation as_is_voice_message_maps_to_object_event,
+  relates as_is_voice_message,
+  relates object_event;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="as_is_summary_maps_to_object_conclusion"> ---
+# kind: lineage-bridge
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.ArtifactWorld
+# what: Maps an operational summary-bearing source to an object-bound conclusion.
+# not: Not a free-floating inference detached from source evidence.
+# why: Preserves semantic conclusions from summaries while keeping provenance explicit.
+relation as_is_summary_maps_to_object_conclusion,
+  relates as_is_summary,
+  relates object_conclusion;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="as_is_attachment_maps_to_artifact_record"> ---
+# kind: lineage-bridge
+# fpf_basis:
+#   - A.6.9 U.CrossContextSamenessDisambiguation
+# scope: BC.ArtifactWorld
+# what: Maps an attachment-bearing source to an artifact record.
+# not: Not raw storage metadata.
+# why: Gives attachments stable semantic artifact identity.
+relation as_is_attachment_maps_to_artifact_record,
+  relates as_is_attachment,
+  relates artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="object_manifest_assembled_for_context_bundle"> ---
+# kind: context-bridge
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Connects a manifest to the bundle it governed.
+# not: Not a CRUD link.
+# why: Makes context assembly reproducible and inspectable.
+relation object_manifest_assembled_for_context_bundle,
+  relates object_manifest,
+  relates context_bundle;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="writeback_decision_writes_object_note"> ---
+# kind: lineage-bridge
+# fpf_basis:
+#   - A.2.8 U.Commitment
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Connects a writeback decision to the note it writes.
+# not: Not the note itself.
+# why: Preserves writeback lineage.
+relation writeback_decision_writes_object_note,
+  relates writeback_decision,
+  relates object_note;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="review_annotation_approves_writeback"> ---
+# kind: policy-bridge
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Connects a review annotation to a writeback decision.
+# not: Not the writeback effect.
+# why: Separates review semantics from execution semantics.
+relation review_annotation_approves_writeback,
+  relates review_annotation,
+  relates writeback_decision;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="access_policy_governs_context_bundle"> ---
+# kind: policy-bridge
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ArtifactWorld
+# what: Connects an access policy to a context bundle.
+# not: Not a routing rule.
+# why: Makes context visibility explicit.
+relation access_policy_governs_context_bundle,
+  relates access_policy,
+  relates context_bundle;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="project_context_card_binds_context_pack"> ---
+# kind: context-bridge
+# fpf_basis:
+#   - U.BoundedContext
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ProjectWorld
+# what: Binds a project card to an approved context pack.
+# not: Not a raw file link.
+# why: Makes project-level context defaults reusable.
+relation project_context_card_binds_context_pack,
+  relates project_context_card,
+  relates bound_context_pack;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="context_pack_supports_mode_definition"> ---
+# kind: context-bridge
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ModeEngineWorld
+# what: Declares that a context pack is valid for a mode definition.
+# not: Not evidence of one concrete run.
+# why: Separates reusable compatibility from runtime usage.
+relation context_pack_supports_mode_definition,
+  relates context_pack,
+  relates supported_mode_definition;
+# --- </semantic-card> ---

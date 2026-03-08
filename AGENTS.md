@@ -31,6 +31,7 @@ These decisions are part of the current platform contract and must be preserved 
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
   - `task_type_id` is optional in Possible Tasks UI,
   - possible tasks are master records in `automation_tasks` with `task_status=NEW_0`,
+  - `process_possible_tasks` must keep materialized session tasks in `NEW_0`; only explicit ticket creation promotes them into delivery statuses,
   - session `processors_data.CREATE_TASKS` is compatibility projection only.
 
 ## Critical Interfaces To Preserve
@@ -70,6 +71,7 @@ Use these as non-negotiable implementation constraints derived from `origin/main
   - do not add new backend-local duplicates under `backend/scripts` for TypeDB flow.
   - canonical generated schema is `ontology/typedb/schema/str-ontology.tql`;
   - editable source fragments are under `ontology/typedb/schema/fragments/*`;
+  - operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`,
   - architecture / roadmap source is `plan/ontology-and-operations.md`.
   - `copilot` ontology is the common kernel; project-local ontologies must extend it rather than fork it.
   - semantic markdown (`SemanticCards`) is a required companion surface for key ontology objects and should live in project-local AFS plus the platform glossary.
@@ -312,7 +314,9 @@ Preferred engineering principles for this repo:
   - frontend consumes the hint without full-page reload
   - refresh tokens must increment additively so repeated hints remain concurrency-safe
 - `CREATE_TASKS` persistence in API/worker paths is strict canonical `id/name/description/priority/...`; runtime fallback for legacy human-title keys is disabled.
+- `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and documented in `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md`.
+- `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
 - Session summary persistence is canonical:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
   - route emits realtime `session_update.taskflow_refresh.summary`,
@@ -322,6 +326,7 @@ Preferred engineering principles for this repo:
   - frontend calls MCP tool `create_tasks` with a structured JSON envelope serialized into `message`,
   - the agent may enrich context through MCP `voice` and `gsh`,
   - backend persists possible tasks into `automation_tasks` through `save_possible_tasks` / `process_possible_tasks`,
+  - `process_possible_tasks` keeps those session-scoped materializations in `NEW_0`; only `create_tickets` promotes them to regular work statuses like `READY_10`,
   - the agent must not route execution through `StratoProject`.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
@@ -333,6 +338,7 @@ Preferred engineering principles for this repo:
 - Voice sessions list supports `include_deleted` server filter and frontend `Показывать удаленные`; creator/participant filters drop numeric identity placeholders so only human labels are shown.
 - Voice sessions list must force a refetch when `include_deleted` intent changes during an in-flight list load; loading guard should not block `force=true` mode sync.
 - Voice sessions list supports bulk delete for selected non-deleted rows (`Удалить выбранные` with confirmation) while preserving row-click navigation behavior.
+- Voice session task subtabs now come from backend `status_counts` (`voicebot/session_tab_counts`) instead of a hardcoded `Work/Review` split; the UI must fall back to the first available status and show an explicit empty state when no session-linked tasks exist.
 - Categorization table contract is now `Time | Audio | Text | Materials`; legacy `Обработка`/processing column rendering path was removed.
 - Categorization rows use stable identity (`row_id`/`segment_oid` first, deterministic fallback key second), so row selection/actions are row-local and collision-safe.
 - Categorization row actions now include Copy/Edit/Delete in the frontend and call backend routes `POST /api/voicebot/edit_categorization_chunk` and `POST /api/voicebot/delete_categorization_chunk`.
