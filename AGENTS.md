@@ -69,10 +69,11 @@ Use these as non-negotiable implementation constraints derived from `origin/main
 - Ontology tooling path contract:
   - canonical scripts are under `ontology/typedb/scripts/*`;
   - do not add new backend-local duplicates under `backend/scripts` for TypeDB flow.
-  - canonical generated schema is `ontology/typedb/schema/str-ontology.tql`;
-  - editable source fragments are under `ontology/typedb/schema/fragments/*`;
-  - operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`,
-  - architecture / roadmap source is `plan/ontology-and-operations.md`.
+  - canonical generated ontology outputs are `ontology/typedb/schema/str-ontology.yaml` and `ontology/typedb/schema/str-ontology.tql`;
+  - editable source fragments are under `ontology/typedb/schema/fragments/*.toon.yaml`;
+  - generated inventory and sampling artifacts live under `ontology/typedb/inventory_latest/*`,
+  - operator workflow now includes `ontology:typedb:{toon:bootstrap,toon:validate,build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`,
+  - architecture / roadmap sources are `ontology/plan/ontology-and-operations.md` and `ontology/plan/toon-source-migration.md`.
   - `copilot` ontology is the common kernel; project-local ontologies must extend it rather than fork it.
   - semantic markdown (`SemanticCards`) is a required companion surface for key ontology objects and should live in project-local AFS plus the platform glossary.
 

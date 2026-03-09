@@ -15,15 +15,21 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - `str-opsportal-erd-draft-v0.md` — consolidated ERD draft for STR OpsPortal domains.
 - `fpf-erd-extraction-protocol-str-opsportal.md` — extraction protocol used to derive ERD from source systems.
 - `typedb/schema/str-ontology.tql` — canonical generated TypeQL schema.
-- `typedb/schema/fragments/*` — editable schema source fragments (`kernel`, `as_is`, `to_be`, `bridges`).
+- `typedb/schema/str-ontology.yaml` — canonical generated TOON aggregate.
+- `typedb/schema/fragments/*/*.toon.yaml` — canonical editable TOON source fragments (`kernel`, `as_is`, `to_be`, `bridges`).
 - `typedb/mappings/mongodb_to_typedb_v1.yaml` — mapping contract from Mongo collections to TypeDB entities/relations.
 - `typedb/queries/validation_v1.tql` — validation/smoke queries.
 - `typedb/docs/rollout_plan_v1.md` — rollout and migration notes.
-- `typedb/docs/entity_sampling_latest.md` — Mongo-backed full-doc verification samples and compact TOON examples.
+- `plan/ontology-and-operations.md` — implemented architecture roadmap for the object-bound ontology model.
+- `plan/toon-source-migration.md` — active migration plan for TOON source, generator, and inventory layout.
+- `typedb/inventory_latest/entity_sampling_latest.md` — Mongo-backed full-doc verification samples and compact TOON examples.
+- `typedb/inventory_latest/domain_inventory_latest.md` and `typedb/inventory_latest/domain_inventory_latest.json` — canonical latest domain inventory outputs for TOON-marked dictionary-like attributes.
 - `typedb/docs/semantic-glossary.md` plus `ontology/typedb/docs/bounded_context_bridge_rules_v1.md`, `ontology/typedb/docs/semantic_cards_workflow_v1.md`, and `ontology/typedb/docs/object_history_and_output_contract_v1.md` — LLM-facing semantic glossary for the ontology kernel.
 - `typedb/docs/status_domain_inventory_2026-03-08.md` — data-backed status-domain split for live Mongo object families.
 - `typedb` AS-IS layer explicitly separates `person` and `performer_profile`; do not collapse `automation_persons` and `automation_performers` into one ontology object.
 - TOON-marked kernel attributes are the source of truth for dictionary-like field inspection and generated inline domain values in `str-ontology.tql`.
+- Ontology-specific implementation plans live under `ontology/plan/`.
+- Current migration plan for TOON source lives at `ontology/plan/toon-source-migration.md`.
 
 ## Key Rules
 

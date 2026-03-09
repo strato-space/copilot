@@ -19,23 +19,26 @@ This folder contains a first executable scaffold of the STR OpsPortal ontology i
 - `backend/package.json` `ontology:typedb:*` commands are the stable operator interface and now resolve into `ontology/typedb`.
 - For ingestion defaults, keep schema/deadletter locations script-relative to avoid cwd-dependent behavior.
 - Future ontology updates must not restore old backend-local script copies (`backend/scripts/typedb-*`, `backend/requirements-typedb.txt`).
-- Generated schema is built from `schema/fragments/*` via `scripts/build-typedb-schema.py`.
+- Generated YAML/TQL outputs are built from `schema/fragments/*.toon.yaml` via `scripts/build-typedb-schema.py`.
 
 
 ## Schema Layout
 
-- `schema/fragments/00-kernel/*` - shared attributes, ids, and reusable base vocabulary
-- `schema/fragments/10-as-is/*` - current operational semantics mirrored from Mongo/runtime
-- `schema/fragments/20-to-be/*` - target-state semantic model fragments
-- `schema/fragments/30-bridges/*` - explicit AS-IS <-> TO-BE bridge semantics
+- `schema/fragments/00-kernel/*.toon.yaml` - shared attributes, ids, and reusable base vocabulary
+- `schema/fragments/10-as-is/*.toon.yaml` - current operational semantics mirrored from Mongo/runtime
+- `schema/fragments/20-to-be/*.toon.yaml` - target-state semantic model fragments
+- `schema/fragments/30-bridges/*.toon.yaml` - explicit AS-IS <-> TO-BE bridge semantics
+- `schema/str-ontology.yaml` - canonical generated TOON aggregate
 - `schema/str-ontology.tql` - canonical generated schema artifact for ingest/apply
 
 ## SemanticCards and Per-Project AFS
 
-- Ontology uses a dual surface:
-  - formal surface: TypeQL fragments + generated schema
-  - semantic surface: markdown SemanticCards
+Ontology uses a dual surface:
+  - source surface: TOON YAML fragments
+  - generated surfaces: `str-ontology.yaml` and `str-ontology.tql`
+  - companion surface: markdown semantic glossary and project-local long-form companion cards where needed
 - Platform-level semantic companion lives at `ontology/typedb/docs/semantic-glossary.md`.
+- Generated `str-ontology.tql` remains comment-rich for inspection, but TOON YAML is the editable source of truth.
 - Each project is expected to have a local AFS root under `/home/strato-space/<project-slug>/` with:
   - `ontology/tql/`
   - `ontology/semantic/`
@@ -173,10 +176,14 @@ These remain operational/runtime-facing or are intentionally replaced by object-
 - `scripts/typedb-ontology-validate.py` - ontology validation checks
 - `scripts/typedb-ontology-domain-inventory.py` - distinct-value inventory for dictionary-like mapped fields
 - `scripts/typedb-ontology-entity-sampling.py` - Mongo-backed entity/document sampling for ontology verification and compact TOON examples
+- `scripts/typedb-ontology-bootstrap-toon.py` - bootstrap `.toon.yaml` fragments from legacy `.tql`
+- `scripts/typedb-ontology-toon-validate.py` - validate TOON source fragments
 - `scripts/run-typedb-python.sh` - helper launcher for ontology Python venv
 - `scripts/requirements-typedb.txt` - Python dependencies for ontology tooling
+- `schema/str-ontology.yaml` - canonical generated TOON aggregate
 - `schema/str-ontology.tql` - canonical generated ontology schema (deploy artifact)
-- `schema/fragments/*` - editable source fragments (`kernel`, `as_is`, `to_be`, `bridges`)
+- `schema/fragments/*/*.toon.yaml` - editable TOON source fragments (`kernel`, `as_is`, `to_be`, `bridges`)
+- `schema/toon.schema.yaml` - normative TOON schema contract
 - `mappings/mongodb_to_typedb_v1.yaml` - MongoDB to TypeDB mapping contract
 - `queries/validation_v1.tql` - validation and smoke-check queries
 - `docs/rollout_plan_v1.md` - phased implementation plan
@@ -211,11 +218,12 @@ Current live split:
 
 Data-backed inventory references:
 - `docs/status_domain_inventory_2026-03-08.md`
-- `docs/domain_inventory_latest.md`
-- `docs/domain_inventory_marked_only.md`
+- `inventory_latest/domain_inventory_latest.md`
+- `inventory_latest/domain_inventory_latest.json`
+- `inventory_latest/domain_inventory_marked_only.md`
 
 Primary selector policy:
-- inventory fields may be marked inline in `schema/fragments/00-kernel/10-attributes-and-ids.tql` via `# @toon inventory=inspect ...`
+- inventory fields are defined in `schema/fragments/00-kernel/10-attributes-and-ids.toon.yaml`; generated TQL renders them as `# @toon inventory=inspect ...`
 - default inventory run is marker-controlled
 - CLI may override selection with `--attrs ...`
 - `--marked-only` keeps the run strictly on TOON-marked attrs plus explicit CLI attrs
@@ -233,8 +241,10 @@ Entity sampling policy:
   - `minimal` — smaller human/LLM-friendly projection
   - `all` — full top-level fields
 - reports:
-  - `docs/entity_sampling_latest.md`
-  - `docs/entity_sampling_latest.json`
+  - `inventory_latest/entity_sampling_latest.md`
+  - `inventory_latest/entity_sampling_latest.json`
+  - `inventory_latest/domain_inventory_latest.md`
+  - `inventory_latest/domain_inventory_latest.json`
 
 ## Person vs Performer Profile
 
@@ -289,6 +299,8 @@ Generic human semantics remain on `person`, for example:
 From `copilot/backend`:
 
 - `npm run ontology:typedb:py:setup`
+- `npm run ontology:typedb:toon:bootstrap`
+- `npm run ontology:typedb:toon:validate`
 - `npm run ontology:typedb:build`
 - `npm run ontology:typedb:contract-check`
 - `npm run ontology:typedb:domain-inventory`
@@ -315,7 +327,7 @@ From `copilot/backend`:
 6. Run validation:
    - `npm run ontology:typedb:validate`
 7. For strict kernel-marked dictionary audit only:
-   - `python3 ../ontology/typedb/scripts/typedb-ontology-domain-inventory.py --marked-only --mapping ../ontology/typedb/mappings/mongodb_to_typedb_v1.yaml --kernel-attrs ../ontology/typedb/schema/fragments/00-kernel/10-attributes-and-ids.tql --output ../ontology/typedb/docs/domain_inventory_marked_only.md`
+   - `python3 ../ontology/typedb/scripts/typedb-ontology-domain-inventory.py --marked-only --mapping ../ontology/typedb/mappings/mongodb_to_typedb_v1.yaml --kernel-attrs ../ontology/typedb/schema/fragments/00-kernel/10-attributes-and-ids.toon.yaml --output ../ontology/typedb/inventory_latest/domain_inventory_marked_only.md`
 8. For discovery mode beyond TOON-marked attrs:
    - `python3 ../ontology/typedb/scripts/typedb-ontology-domain-inventory.py --include-heuristics`
 9. For ontology verification sampling (all top-level fields):
@@ -348,6 +360,13 @@ Current incremental semantics:
   - weak evidence: incremental-window absence
   - stronger evidence: collection-classified full-sync absence
   - only `automation_projects` is currently absence-actionable on full sync
+
+## TOON Source of Truth
+
+- `*.toon.yaml` under `schema/fragments/` are the canonical editable ontology source.
+- `str-ontology.yaml` and `str-ontology.tql` are generated outputs.
+- `build` validates TOON fragments, generates the aggregate YAML view, and then generates TQL.
+- `tql` blocks are stored whole inside TOON cards; semantic metadata is not split into micro-fields of code.
 
 ## Operational Contract
 

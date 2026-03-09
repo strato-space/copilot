@@ -6,6 +6,7 @@
 - Ticket line: ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  Closed 44
 - Plan status: implemented.
 - BD policy: work is delivered in waves; `BD Tracking` is the execution log, not the backlog itself.
+- Follow-on TOON migration plan: `ontology/plan/toon-source-migration.md`
 
 ## Goal
 Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
@@ -30,13 +31,14 @@ Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
 - [x] Treat `copilot` ontology as the common kernel; project ontologies are overlays that extend it.
 
 ## Current Ontology Assets
-- [x] Existing generated TypeDB schema exists at `ontology/typedb/schema/str-ontology.tql`.
-- [x] Editable schema fragments exist under `ontology/typedb/schema/fragments/*`.
+- [x] Existing generated ontology outputs exist at `ontology/typedb/schema/str-ontology.yaml` and `ontology/typedb/schema/str-ontology.tql`.
+- [x] Editable TOON source fragments exist under `ontology/typedb/schema/fragments/*.toon.yaml`.
 - [x] Existing Mongo -> TypeDB mapping exists at `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`.
 - [x] Existing ontology tooling exists under `ontology/typedb/scripts/*`.
+- [x] Generated inventory and sampling outputs exist under `ontology/typedb/inventory_latest/`.
 - [x] Existing rollout plan exists at `ontology/typedb/docs/rollout_plan_v1.md`.
 - [x] Existing runtime gap matrix exists at `ontology/typedb/docs/runtime_contract_gap_matrix_v1.md`.
-- [x] Existing operator modes exist: `build`, `contract-check`, `ingest:*`, `sync:*`.
+- [x] Existing operator modes exist: `toon:bootstrap`, `toon:validate`, `build`, `contract-check`, `ingest:*`, `sync:*`.
 
 ## Contract Documents
 - `ontology/typedb/docs/bounded_context_and_overlay_contract_v1.md` — bounded contexts, sameness rules, overlay/import workflow

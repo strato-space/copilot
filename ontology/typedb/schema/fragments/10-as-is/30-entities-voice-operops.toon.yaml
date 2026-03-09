@@ -1,0 +1,517 @@
+version: 1
+layer: 10-as-is
+fragment: 30-entities-voice-operops
+cards:
+- target: entity
+  id: mode_tag
+  tql: |-
+    entity mode_tag,
+      owns mode_tag_id @key,
+      owns name,
+      owns status,
+      plays mode_tag_bound_skill_binding:mode_tag,
+      plays mode_tag_selected_for_voice_session:mode_tag;
+  kind: operational-record
+  scope: BC.ModeEngineWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `mode_tag` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `mode_tag` in the ontology.
+- target: entity
+  id: mode_skill_binding
+  tql: |-
+    entity mode_skill_binding,
+      owns external_id @key,
+      owns name,
+      owns status,
+      owns runtime_tag,
+      plays mode_tag_bound_skill_binding:skill_binding;
+  kind: operational-record
+  scope: BC.ModeEngineWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `mode_skill_binding` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `mode_skill_binding` in the ontology.
+- target: entity
+  id: voice_session
+  tql: |-
+    entity voice_session,
+      owns voice_session_id @key,
+      owns project_id,
+      owns source_type,
+      owns session_name,
+      owns session_type,
+      owns chat_id,
+      owns user_id,
+      owns access_level,
+      owns participants,
+      owns allowed_users,
+      owns processors,
+      owns session_processors,
+      owns processors_data,
+      owns last_message_id,
+      owns last_message_timestamp,
+      owns last_voice_timestamp,
+      owns done_at,
+      owns summary_saved_at,
+      owns summary_md_text,
+      owns done_count,
+      owns is_messages_processed,
+      owns is_waiting,
+      owns is_corrupted,
+      owns is_postprocessing,
+      owns is_finished,
+      owns is_finalized,
+      owns to_finalize,
+      owns finished_at,
+      owns title_generated_at,
+      owns title_generated_by,
+      owns postprocessing_job_queued_timestamp,
+      owns current_spreadsheet_file_id,
+      owns summary_correlation_id,
+      owns deleted_at,
+      owns deletion_reason,
+      owns pending_image_anchor_message_id,
+      owns pending_image_anchor_oid,
+      owns pending_image_anchor_created_at,
+      owns merged_into_session_id,
+      owns error_source,
+      owns transcription_error,
+      owns error_message,
+      owns error_message_id,
+      owns error_timestamp,
+      owns activity_state,
+      owns is_active,
+      owns is_active_legacy,
+      owns is_deleted,
+      owns runtime_tag,
+      owns created_at,
+      owns updated_at,
+      plays project_has_voice_session:voice_session,
+      plays voice_session_sources_oper_task:source_voice_session,
+      plays mode_tag_selected_for_voice_session:voice_session,
+      plays voice_session_has_message:voice_session,
+      plays voice_session_has_topic:voice_session,
+      plays tg_voice_session_bound_to_voice_session:bound_voice_session,
+      plays voice_session_processed_by_run:voice_session,
+      plays voice_session_has_history_step:voice_session,
+      plays voice_session_emits_metric_event:voice_session,
+      plays voice_session_has_merge_log:target_session,
+      plays as_is_voice_session_maps_to_mode_segment:as_is_voice_session,
+      plays as_is_summary_maps_to_object_conclusion:as_is_summary;
+  kind: operational-record
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `voice_session` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session` in the ontology.
+- target: entity
+  id: voice_message
+  tql: |-
+    entity voice_message,
+      owns voice_message_id @key,
+      owns session_id,
+      owns message_type,
+      owns message_id,
+      owns chat_id,
+      owns speaker,
+      owns session_type,
+      owns file_hash,
+      owns hash_sha256,
+      owns file_id,
+      owns file_unique_id,
+      owns file_path,
+      owns file_name,
+      owns file_size,
+      owns mime_type,
+      owns file_metadata,
+      owns attachments,
+      owns duration,
+      owns message_timestamp,
+      owns timestamp,
+      owns transcribe_timestamp,
+      owns categorization_timestamp,
+      owns source_type,
+      owns text,
+      owns image_anchor_message_id,
+      owns image_anchor_linked_at,
+      owns transcription,
+      owns transcription_method,
+      owns transcription_text,
+      owns transcription_provider,
+      owns transcription_model,
+      owns transcription_schema_version,
+      owns transcription_raw,
+      owns task,
+      owns categorization,
+      owns categorization_error,
+      owns categorization_error_message,
+      owns categorization_error_timestamp,
+      owns categorization_retry_reason,
+      owns categorization_next_attempt_at,
+      owns categorization_attempts,
+      owns transcription_error,
+      owns transcription_error_context,
+      owns error_message,
+      owns error_message_id,
+      owns error_timestamp,
+      owns dedup_replaced_by,
+      owns dedup_reason,
+      owns processors_data,
+      owns is_transcribed,
+      owns is_finalized,
+      owns is_deleted,
+      owns to_transcribe,
+      owns is_image_anchor,
+      owns uploaded_by,
+      owns user_id,
+      owns username,
+      owns runtime_tag,
+      owns summary,
+      owns created_at,
+      owns updated_at,
+      plays voice_session_has_message:voice_message,
+      plays voice_message_chunked_as_transcript_chunk:voice_message,
+      plays as_is_voice_message_maps_to_object_event:as_is_voice_message,
+      plays as_is_attachment_maps_to_artifact_record:as_is_attachment;
+  kind: operational-record
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `voice_message` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_message` in the ontology.
+- target: entity
+  id: voice_topic
+  tql: |-
+    entity voice_topic,
+      owns voice_topic_id @key,
+      owns session_id,
+      owns project_id,
+      owns topic_title,
+      owns topic_description,
+      owns chunks,
+      owns assignment_reasoning,
+      owns created_at,
+      plays voice_session_has_topic:voice_topic,
+      plays project_has_voice_topic:voice_topic;
+  kind: operational-record
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `voice_topic` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_topic` in the ontology.
+- target: entity
+  id: tg_voice_session
+  tql: |-
+    entity tg_voice_session,
+      owns tg_voice_session_id @key,
+      owns telegram_user_id,
+      owns chat_id,
+      owns username,
+      owns active_session_id,
+      owns runtime_tag,
+      owns created_at,
+      owns updated_at,
+      plays tg_voice_session_bound_to_voice_session:tg_voice_session;
+  kind: operational-record
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `tg_voice_session` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `tg_voice_session` in the ontology.
+- target: entity
+  id: drive_project_file
+  tql: |-
+    entity drive_project_file,
+      owns drive_project_file_id @key,
+      owns created_time,
+      owns drive_folder_id,
+      owns file_id,
+      owns file_name,
+      owns file_path,
+      owns file_size,
+      owns last_scanned_at,
+      owns mime_type,
+      owns modified_time,
+      owns parents,
+      owns project_id,
+      owns project_name,
+      owns web_view_link,
+      owns created_at,
+      plays project_has_google_drive_file:drive_project_file;
+  kind: operational-record
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `drive_project_file` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `drive_project_file` in the ontology.
+- target: entity
+  id: drive_event_channel
+  tql: |-
+    entity drive_event_channel,
+      owns drive_event_channel_id @key,
+      owns channel_id,
+      owns resource_id,
+      owns expiration,
+      owns token,
+      owns page_token,
+      owns is_active;
+  kind: operational-record
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `drive_event_channel` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `drive_event_channel` in the ontology.
+- target: entity
+  id: drive_node
+  tql: |-
+    entity drive_node,
+      owns drive_node_id @key,
+      owns node_id,
+      owns name,
+      owns parent_node_id,
+      owns date_indexed,
+      owns is_folder,
+      owns mime_type;
+  kind: operational-record
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `drive_node` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `drive_node` in the ontology.
+- target: entity
+  id: object_locator
+  tql: |-
+    entity object_locator,
+      owns object_locator_id @key,
+      owns oid,
+      owns entity_type,
+      owns parent_collection,
+      owns parent_id,
+      owns parent_prefix,
+      owns path,
+      owns created_at,
+      owns updated_at;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `object_locator` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `object_locator` in the ontology.
+- target: entity
+  id: transcript_chunk
+  tql: |-
+    entity transcript_chunk,
+      owns transcript_chunk_id @key,
+      owns summary,
+      owns started_at,
+      owns ended_at,
+      plays voice_message_chunked_as_transcript_chunk:transcript_chunk;
+  kind: operational-record
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `transcript_chunk` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `transcript_chunk` in the ontology.
+- target: entity
+  id: processing_run
+  tql: |-
+    entity processing_run,
+      owns processing_run_id @key,
+      owns status,
+      owns started_at,
+      owns ended_at,
+      plays voice_session_processed_by_run:processing_run,
+      plays processing_run_produces_task_draft:processing_run;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `processing_run` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `processing_run` in the ontology.
+- target: entity
+  id: task_draft
+  tql: |-
+    entity task_draft,
+      owns task_draft_id @key,
+      owns title,
+      owns description,
+      owns status,
+      owns priority_rank,
+      plays processing_run_produces_task_draft:task_draft,
+      plays task_draft_normalized_to_plan_item:task_draft;
+  kind: operational-record
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `task_draft` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `task_draft` in the ontology.
+- target: entity
+  id: plan_item
+  tql: |-
+    entity plan_item,
+      owns plan_item_id @key,
+      owns status,
+      owns priority_rank,
+      owns due_at,
+      plays task_draft_normalized_to_plan_item:plan_item;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `plan_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `plan_item` in the ontology.
+- target: entity
+  id: patch
+  tql: |-
+    entity patch,
+      owns patch_id @key,
+      owns status,
+      owns created_at,
+      plays patch_contains_operation:patch,
+      plays patch_attempted_as_apply_attempt:patch;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `patch` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `patch` in the ontology.
+- target: entity
+  id: patch_operation
+  tql: |-
+    entity patch_operation,
+      owns patch_operation_id @key,
+      owns status,
+      plays patch_contains_operation:patch_operation,
+      plays patch_operation_mutates_oper_task:patch_operation;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `patch_operation` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `patch_operation` in the ontology.
+- target: entity
+  id: apply_attempt
+  tql: |-
+    entity apply_attempt,
+      owns apply_attempt_id @key,
+      owns status,
+      owns created_at,
+      plays patch_attempted_as_apply_attempt:apply_attempt;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `apply_attempt` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `apply_attempt` in the ontology.
+- target: entity
+  id: history_step
+  tql: |-
+    entity history_step,
+      owns history_step_id @key,
+      owns session_id,
+      owns project_id,
+      owns message_id,
+      owns event_name,
+      owns event_version,
+      owns event_group,
+      owns action,
+      owns actor,
+      owns source,
+      owns diff,
+      owns target,
+      owns reason,
+      owns metadata,
+      owns correlation_id,
+      owns source_event_id,
+      owns is_replay,
+      owns event_time,
+      owns runtime_tag,
+      owns event_status,
+      owns created_at,
+      plays voice_session_has_history_step:history_step;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `history_step` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `history_step` in the ontology.
+- target: entity
+  id: voice_session_merge_log
+  tql: |-
+    entity voice_session_merge_log,
+      owns voice_session_merge_log_id @key,
+      owns operation_type,
+      owns entity_type,
+      owns entity_id,
+      owns related_entity_ids,
+      owns payload_before,
+      owns payload_after,
+      owns stats_before,
+      owns stats_after,
+      owns request_id,
+      owns performed_by,
+      owns performed_at,
+      owns result,
+      owns error_message,
+      owns runtime_tag,
+      owns created_at,
+      owns updated_at,
+      plays voice_session_has_merge_log:merge_log;
+  kind: operational-record
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `voice_session_merge_log` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_merge_log` in the ontology.
+- target: entity
+  id: ops_metric_event
+  tql: |-
+    entity ops_metric_event,
+      owns external_id @key,
+      owns status,
+      owns created_at,
+      plays voice_session_emits_metric_event:ops_metric_event,
+      plays ops_metric_event_aggregated_to_snapshot:ops_metric_event;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `ops_metric_event` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `ops_metric_event` in the ontology.
+- target: entity
+  id: ops_analytics_snapshot
+  tql: |-
+    entity ops_analytics_snapshot,
+      owns external_id @key,
+      owns month_key,
+      owns value_number,
+      owns created_at,
+      plays ops_metric_event_aggregated_to_snapshot:ops_analytics_snapshot;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `ops_analytics_snapshot` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `ops_analytics_snapshot` in the ontology.

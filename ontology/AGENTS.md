@@ -24,7 +24,7 @@ Scope: `/home/strato-space/copilot/ontology`
 ## Change Discipline
 
 - Keep schema and mapping changes atomic and documented.
-- Treat `ontology/typedb/schema/fragments/*` as editable source of truth and `ontology/typedb/schema/str-ontology.tql` as generated deploy artifact.
+- Treat `ontology/typedb/schema/fragments/*.toon.yaml` as editable source of truth and `ontology/typedb/schema/str-ontology.yaml` / `ontology/typedb/schema/str-ontology.tql` as generated artifacts.
 - Treat `copilot` ontology as kernel/common layer for all project-local ontology overlays.
 - Keep project-local SemanticCards aligned with ontology changes whenever object semantics change.
 - If schema/mapping changes affect runtime assumptions, update:

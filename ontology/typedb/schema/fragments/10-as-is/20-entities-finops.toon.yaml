@@ -1,0 +1,396 @@
+version: 1
+layer: 10-as-is
+fragment: 20-entities-finops
+cards:
+- target: entity
+  id: project_rate
+  tql: |-
+    entity project_rate,
+      owns project_rate_id @key,
+      owns project_id,
+      owns month_key,
+      owns amount_rub,
+      owns row_version,
+      plays project_has_project_rate:project_rate;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `project_rate` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_rate` in the ontology.
+- target: entity
+  id: employee
+  tql: |-
+    entity employee,
+      owns employee_id @key,
+      owns external_id,
+      owns name,
+      owns status,
+      plays performer_profile_maps_to_employee:target_employee,
+      plays employee_has_month_cost:employee,
+      plays employee_contributes_timesheet:employee;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `employee` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `employee` in the ontology.
+- target: entity
+  id: employee_month_cost
+  tql: |-
+    entity employee_month_cost,
+      owns employee_month_cost_id @key,
+      owns month_key,
+      owns amount_rub,
+      owns hours_value,
+      plays employee_has_month_cost:employee_month_cost;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `employee_month_cost` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `employee_month_cost` in the ontology.
+- target: entity
+  id: timesheet_monthly
+  tql: |-
+    entity timesheet_monthly,
+      owns timesheet_monthly_id @key,
+      owns project_id,
+      owns month_key,
+      owns hours_value,
+      plays project_has_timesheet:timesheet_monthly,
+      plays employee_contributes_timesheet:timesheet_monthly;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `timesheet_monthly` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `timesheet_monthly` in the ontology.
+- target: entity
+  id: fact_project_month
+  tql: |-
+    entity fact_project_month,
+      owns fact_project_month_id @key,
+      owns project_id,
+      owns month_key,
+      owns currency,
+      owns amount_original,
+      owns amount_rub,
+      owns row_version,
+      plays project_has_fact_month:fact_project_month,
+      plays period_closes_fact_month:fact_project_month,
+      plays fx_converts_fact_month:fact_project_month;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `fact_project_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `fact_project_month` in the ontology.
+- target: entity
+  id: forecast_version
+  tql: |-
+    entity forecast_version,
+      owns forecast_version_id @key,
+      owns name,
+      owns status,
+      plays forecast_version_contains_forecast_month:forecast_version;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `forecast_version` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `forecast_version` in the ontology.
+- target: entity
+  id: forecast_project_month
+  tql: |-
+    entity forecast_project_month,
+      owns forecast_project_month_id @key,
+      owns forecast_version_id,
+      owns project_id,
+      owns month_key,
+      owns source_type,
+      owns currency,
+      owns amount_original,
+      owns amount_rub,
+      owns forecast_hours,
+      owns forecast_cost_rub,
+      owns rate_rub_per_hour_snapshot,
+      owns fx_used,
+      owns comment,
+      owns row_version,
+      owns updated_by,
+      owns updated_source,
+      owns updated_at,
+      plays project_has_forecast_month:forecast_project_month,
+      plays forecast_version_contains_forecast_month:forecast_project_month,
+      plays period_governs_forecast_month:forecast_project_month,
+      plays fx_converts_forecast_month:forecast_project_month;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `forecast_project_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `forecast_project_month` in the ontology.
+- target: entity
+  id: fx_monthly
+  tql: |-
+    entity fx_monthly,
+      owns fx_monthly_id @key,
+      owns month_key,
+      owns currency,
+      owns value_number,
+      owns source,
+      owns created_by,
+      owns created_at,
+      plays fx_converts_fact_month:fx_monthly,
+      plays fx_converts_forecast_month:fx_monthly;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `fx_monthly` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `fx_monthly` in the ontology.
+- target: entity
+  id: period
+  tql: |-
+    entity period,
+      owns period_id @key,
+      owns month_key,
+      owns status,
+      owns updated_at,
+      plays period_closes_fact_month:period,
+      plays period_governs_forecast_month:period,
+      plays period_buckets_cost_expense:period;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `period` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `period` in the ontology.
+- target: entity
+  id: cost_category
+  tql: |-
+    entity cost_category,
+      owns cost_category_id @key,
+      owns name,
+      owns activity_state,
+      owns created_by,
+      owns updated_by,
+      plays cost_category_classifies_expense:cost_category;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `cost_category` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `cost_category` in the ontology.
+- target: entity
+  id: cost_expense
+  tql: |-
+    entity cost_expense,
+      owns cost_expense_id @key,
+      owns project_id,
+      owns month_key,
+      owns currency,
+      owns amount_original,
+      owns amount_rub,
+      owns deletion_state,
+      owns runtime_tag,
+      owns created_at,
+      owns updated_at,
+      owns fx_used,
+      owns vendor,
+      owns comment,
+      owns created_by,
+      owns updated_by,
+      owns attachments,
+      plays project_has_cost_expense:cost_expense,
+      plays cost_category_classifies_expense:cost_expense,
+      plays period_buckets_cost_expense:cost_expense,
+      plays expense_operation_has_log:cost_expense;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `cost_expense` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `cost_expense` in the ontology.
+- target: entity
+  id: finops_expense_operation_log
+  tql: |-
+    entity finops_expense_operation_log,
+      owns finops_expense_operation_log_id @key,
+      owns operation_id,
+      owns action,
+      owns before_payload,
+      owns after_payload,
+      owns changed_at,
+      owns changed_by,
+      owns comment,
+      owns runtime_tag,
+      plays expense_operation_has_log:expense_operation_log;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `finops_expense_operation_log` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `finops_expense_operation_log` in the ontology.
+- target: entity
+  id: legacy_finance_expense
+  tql: |-
+    entity legacy_finance_expense,
+      owns legacy_finance_expense_id @key,
+      owns month_number,
+      owns year_number,
+      owns performer_id,
+      owns payments,
+      plays performer_profile_has_legacy_finance_expense:legacy_finance_expense;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `legacy_finance_expense` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `legacy_finance_expense` in the ontology.
+- target: entity
+  id: legacy_finance_income
+  tql: |-
+    entity legacy_finance_income,
+      owns legacy_finance_income_id @key,
+      owns month_number,
+      owns year_number,
+      owns performer_id,
+      owns project_ref,
+      owns legacy_finance_income_type_ref,
+      owns hours_amount,
+      owns hour_price,
+      plays project_has_legacy_finance_income:legacy_finance_income,
+      plays legacy_finance_income_has_type:legacy_finance_income,
+      plays performer_profile_has_legacy_finance_income:legacy_finance_income;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `legacy_finance_income` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `legacy_finance_income` in the ontology.
+- target: entity
+  id: legacy_finance_income_type
+  tql: |-
+    entity legacy_finance_income_type,
+      owns legacy_finance_income_type_id @key,
+      owns name,
+      plays legacy_finance_income_has_type:legacy_finance_income_type;
+  kind: dictionary-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `legacy_finance_income_type` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `legacy_finance_income_type` in the ontology.
+- target: entity
+  id: counterparty
+  tql: |-
+    entity counterparty,
+      owns counterparty_id @key,
+      owns name,
+      owns status;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `counterparty` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `counterparty` in the ontology.
+- target: entity
+  id: agent_request
+  tql: |-
+    entity agent_request,
+      owns agent_request_id @key,
+      owns project_id,
+      owns month_key,
+      owns status,
+      owns created_at,
+      plays project_has_agent_request:agent_request,
+      plays agent_request_updates_fact_month:agent_request,
+      plays agent_request_updates_forecast_month:agent_request;
+  kind: operational-record
+  scope: BC.AgentWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `agent_request` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `agent_request` in the ontology.
+- target: entity
+  id: alert_setting
+  tql: |-
+    entity alert_setting,
+      owns alert_setting_id @key,
+      owns status,
+      plays alert_setting_configures_alert_event:alert_setting;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `alert_setting` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `alert_setting` in the ontology.
+- target: entity
+  id: alert_event
+  tql: |-
+    entity alert_event,
+      owns alert_event_id @key,
+      owns severity,
+      owns status,
+      owns created_at,
+      plays alert_setting_configures_alert_event:alert_event,
+      plays alert_event_creates_notification_item:alert_event;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `alert_event` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `alert_event` in the ontology.
+- target: entity
+  id: notification_item
+  tql: |-
+    entity notification_item,
+      owns notification_item_id @key,
+      owns severity,
+      owns status,
+      owns title,
+      owns created_at,
+      plays alert_event_creates_notification_item:notification_item,
+      plays notification_preference_governs_notification_item:notification_item;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `notification_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `notification_item` in the ontology.
+- target: entity
+  id: notification_preference
+  tql: |-
+    entity notification_preference,
+      owns external_id @key,
+      owns status,
+      plays notification_preference_governs_notification_item:notification_preference;
+  kind: operational-record
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Entity `notification_preference` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `notification_preference` in the ontology.

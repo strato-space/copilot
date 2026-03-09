@@ -1,0 +1,966 @@
+version: 1
+layer: 10-as-is
+fragment: 40-relations
+cards:
+- target: relation
+  id: client_owns_project
+  tql: |-
+    relation client_owns_project,
+      relates owner_client,
+      relates owned_project;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `client_owns_project` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `client_owns_project` in the ontology.
+- target: relation
+  id: client_has_project_group
+  tql: |-
+    relation client_has_project_group,
+      relates owner_client,
+      relates owned_project_group;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `client_has_project_group` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `client_has_project_group` in the ontology.
+- target: relation
+  id: project_group_has_project
+  tql: |-
+    relation project_group_has_project,
+      relates project_group,
+      relates linked_project;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_group_has_project` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_group_has_project` in the ontology.
+- target: relation
+  id: project_has_project_link
+  tql: |-
+    relation project_has_project_link,
+      relates owner_project,
+      relates linked_project_link;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_project_link` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_project_link` in the ontology.
+- target: relation
+  id: project_has_voice_context_item
+  tql: |-
+    relation project_has_voice_context_item,
+      relates owner_project,
+      relates context_item;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_voice_context_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_voice_context_item` in the ontology.
+- target: relation
+  id: dialog_represented_by_context_item
+  tql: |-
+    relation dialog_represented_by_context_item,
+      relates dialog,
+      relates context_item;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `dialog_represented_by_context_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `dialog_represented_by_context_item` in the ontology.
+- target: relation
+  id: dialog_has_transcript_segment
+  tql: |-
+    relation dialog_has_transcript_segment,
+      relates dialog,
+      relates segment;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `dialog_has_transcript_segment` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `dialog_has_transcript_segment` in the ontology.
+- target: relation
+  id: transcript_segment_spoken_by_person
+  tql: |-
+    relation transcript_segment_spoken_by_person,
+      relates segment,
+      relates speaker_person;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `transcript_segment_spoken_by_person` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `transcript_segment_spoken_by_person` in the ontology.
+- target: relation
+  id: dialog_yields_agreement
+  tql: |-
+    relation dialog_yields_agreement,
+      relates dialog,
+      relates agreement;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `dialog_yields_agreement` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `dialog_yields_agreement` in the ontology.
+- target: relation
+  id: agreement_evidenced_by_context_item
+  tql: |-
+    relation agreement_evidenced_by_context_item,
+      relates agreement,
+      relates context_item;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `agreement_evidenced_by_context_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `agreement_evidenced_by_context_item` in the ontology.
+- target: relation
+  id: agreement_creates_oper_task
+  tql: |-
+    relation agreement_creates_oper_task,
+      relates agreement,
+      relates oper_task;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `agreement_creates_oper_task` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `agreement_creates_oper_task` in the ontology.
+- target: relation
+  id: project_has_oper_task
+  tql: |-
+    relation project_has_oper_task,
+      relates owner_project,
+      relates oper_task;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_oper_task` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_oper_task` in the ontology.
+- target: relation
+  id: voice_session_sources_oper_task
+  tql: |-
+    relation voice_session_sources_oper_task,
+      relates source_voice_session,
+      relates sourced_oper_task;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_session_sources_oper_task` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_sources_oper_task` in the ontology.
+- target: relation
+  id: oper_task_classified_as_task_type
+  tql: |-
+    relation oper_task_classified_as_task_type,
+      relates oper_task,
+      relates task_type;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `oper_task_classified_as_task_type` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `oper_task_classified_as_task_type` in the ontology.
+- target: relation
+  id: task_type_tree_classifies_oper_task
+  tql: |-
+    relation task_type_tree_classifies_oper_task,
+      relates task_type_tree,
+      relates oper_task;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `task_type_tree_classifies_oper_task` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `task_type_tree_classifies_oper_task` in the ontology.
+- target: relation
+  id: oper_task_evidenced_by_context_item
+  tql: |-
+    relation oper_task_evidenced_by_context_item,
+      relates oper_task,
+      relates context_item;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `oper_task_evidenced_by_context_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `oper_task_evidenced_by_context_item` in the ontology.
+- target: relation
+  id: oper_task_has_status
+  tql: |-
+    relation oper_task_has_status,
+      relates oper_task,
+      relates task_status;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `oper_task_has_status` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `oper_task_has_status` in the ontology.
+- target: relation
+  id: oper_task_has_priority
+  tql: |-
+    relation oper_task_has_priority,
+      relates oper_task,
+      relates task_priority;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `oper_task_has_priority` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `oper_task_has_priority` in the ontology.
+- target: relation
+  id: oper_task_assigned_to_performer_profile
+  tql: |-
+    relation oper_task_assigned_to_performer_profile,
+      relates oper_task,
+      relates assignee_performer_profile;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `oper_task_assigned_to_performer_profile` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `oper_task_assigned_to_performer_profile` in the ontology.
+- target: relation
+  id: project_has_epic_task
+  tql: |-
+    relation project_has_epic_task,
+      relates owner_project,
+      relates epic_task;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_epic_task` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_epic_task` in the ontology.
+- target: relation
+  id: oper_task_has_work_log
+  tql: |-
+    relation oper_task_has_work_log,
+      relates oper_task,
+      relates work_log;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `oper_task_has_work_log` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `oper_task_has_work_log` in the ontology.
+- target: relation
+  id: performer_profile_creates_work_log
+  tql: |-
+    relation performer_profile_creates_work_log,
+      relates author_performer_profile,
+      relates work_log;
+  kind: operational-relation
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `performer_profile_creates_work_log` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `performer_profile_creates_work_log` in the ontology.
+- target: relation
+  id: execution_job_executed_by_agent
+  tql: |-
+    relation execution_job_executed_by_agent,
+      relates execution_job,
+      relates agent;
+  kind: operational-relation
+  scope: BC.AgentWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `execution_job_executed_by_agent` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `execution_job_executed_by_agent` in the ontology.
+- target: relation
+  id: project_has_kpi
+  tql: |-
+    relation project_has_kpi,
+      relates owner_project,
+      relates kpi;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_kpi` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_kpi` in the ontology.
+- target: relation
+  id: kpi_observed_as_observation
+  tql: |-
+    relation kpi_observed_as_observation,
+      relates kpi,
+      relates kpi_observation;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `kpi_observed_as_observation` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `kpi_observed_as_observation` in the ontology.
+- target: relation
+  id: kpi_observation_fires_trigger_event
+  tql: |-
+    relation kpi_observation_fires_trigger_event,
+      relates kpi_observation,
+      relates trigger_event;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `kpi_observation_fires_trigger_event` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `kpi_observation_fires_trigger_event` in the ontology.
+- target: relation
+  id: trigger_event_emits_recommendation
+  tql: |-
+    relation trigger_event_emits_recommendation,
+      relates trigger_event,
+      relates recommendation;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `trigger_event_emits_recommendation` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `trigger_event_emits_recommendation` in the ontology.
+- target: relation
+  id: recommendation_authored_by_agent
+  tql: |-
+    relation recommendation_authored_by_agent,
+      relates recommendation,
+      relates agent;
+  kind: operational-relation
+  scope: BC.AgentWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `recommendation_authored_by_agent` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `recommendation_authored_by_agent` in the ontology.
+- target: relation
+  id: project_has_project_rate
+  tql: |-
+    relation project_has_project_rate,
+      relates owner_project,
+      relates project_rate;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_project_rate` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_project_rate` in the ontology.
+- target: relation
+  id: performer_profile_maps_to_employee
+  tql: |-
+    relation performer_profile_maps_to_employee,
+      relates source_performer_profile,
+      relates target_employee;
+  kind: operational-relation
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `performer_profile_maps_to_employee` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `performer_profile_maps_to_employee` in the ontology.
+- target: relation
+  id: employee_has_month_cost
+  tql: |-
+    relation employee_has_month_cost,
+      relates employee,
+      relates employee_month_cost;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `employee_has_month_cost` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `employee_has_month_cost` in the ontology.
+- target: relation
+  id: project_has_timesheet
+  tql: |-
+    relation project_has_timesheet,
+      relates owner_project,
+      relates timesheet_monthly;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_timesheet` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_timesheet` in the ontology.
+- target: relation
+  id: employee_contributes_timesheet
+  tql: |-
+    relation employee_contributes_timesheet,
+      relates employee,
+      relates timesheet_monthly;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `employee_contributes_timesheet` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `employee_contributes_timesheet` in the ontology.
+- target: relation
+  id: project_has_fact_month
+  tql: |-
+    relation project_has_fact_month,
+      relates owner_project,
+      relates fact_project_month;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_fact_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_fact_month` in the ontology.
+- target: relation
+  id: project_has_forecast_month
+  tql: |-
+    relation project_has_forecast_month,
+      relates owner_project,
+      relates forecast_project_month;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_forecast_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_forecast_month` in the ontology.
+- target: relation
+  id: forecast_version_contains_forecast_month
+  tql: |-
+    relation forecast_version_contains_forecast_month,
+      relates forecast_version,
+      relates forecast_project_month;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `forecast_version_contains_forecast_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `forecast_version_contains_forecast_month` in the ontology.
+- target: relation
+  id: period_closes_fact_month
+  tql: |-
+    relation period_closes_fact_month,
+      relates period,
+      relates fact_project_month;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `period_closes_fact_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `period_closes_fact_month` in the ontology.
+- target: relation
+  id: period_governs_forecast_month
+  tql: |-
+    relation period_governs_forecast_month,
+      relates period,
+      relates forecast_project_month;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `period_governs_forecast_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `period_governs_forecast_month` in the ontology.
+- target: relation
+  id: fx_converts_fact_month
+  tql: |-
+    relation fx_converts_fact_month,
+      relates fx_monthly,
+      relates fact_project_month;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `fx_converts_fact_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `fx_converts_fact_month` in the ontology.
+- target: relation
+  id: fx_converts_forecast_month
+  tql: |-
+    relation fx_converts_forecast_month,
+      relates fx_monthly,
+      relates forecast_project_month;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `fx_converts_forecast_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `fx_converts_forecast_month` in the ontology.
+- target: relation
+  id: project_has_cost_expense
+  tql: |-
+    relation project_has_cost_expense,
+      relates owner_project,
+      relates cost_expense;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_cost_expense` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_cost_expense` in the ontology.
+- target: relation
+  id: expense_operation_has_log
+  tql: |-
+    relation expense_operation_has_log,
+      relates cost_expense,
+      relates expense_operation_log;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `expense_operation_has_log` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `expense_operation_has_log` in the ontology.
+- target: relation
+  id: cost_category_classifies_expense
+  tql: |-
+    relation cost_category_classifies_expense,
+      relates cost_category,
+      relates cost_expense;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `cost_category_classifies_expense` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `cost_category_classifies_expense` in the ontology.
+- target: relation
+  id: period_buckets_cost_expense
+  tql: |-
+    relation period_buckets_cost_expense,
+      relates period,
+      relates cost_expense;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `period_buckets_cost_expense` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `period_buckets_cost_expense` in the ontology.
+- target: relation
+  id: person_has_performer_profile
+  tql: |-
+    relation person_has_performer_profile,
+      relates person,
+      relates performer_profile;
+  kind: operational-relation
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `person_has_performer_profile` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `person_has_performer_profile` in the ontology.
+- target: relation
+  id: performer_profile_has_legacy_finance_expense
+  tql: |-
+    relation performer_profile_has_legacy_finance_expense,
+      relates performer_profile,
+      relates legacy_finance_expense;
+  kind: operational-relation
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `performer_profile_has_legacy_finance_expense` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `performer_profile_has_legacy_finance_expense` in the ontology.
+- target: relation
+  id: project_has_legacy_finance_income
+  tql: |-
+    relation project_has_legacy_finance_income,
+      relates owner_project,
+      relates legacy_finance_income;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_legacy_finance_income` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_legacy_finance_income` in the ontology.
+- target: relation
+  id: legacy_finance_income_has_type
+  tql: |-
+    relation legacy_finance_income_has_type,
+      relates legacy_finance_income,
+      relates legacy_finance_income_type;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `legacy_finance_income_has_type` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `legacy_finance_income_has_type` in the ontology.
+- target: relation
+  id: performer_profile_has_legacy_finance_income
+  tql: |-
+    relation performer_profile_has_legacy_finance_income,
+      relates performer_profile,
+      relates legacy_finance_income;
+  kind: operational-relation
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `performer_profile_has_legacy_finance_income` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `performer_profile_has_legacy_finance_income` in the ontology.
+- target: relation
+  id: project_has_agent_request
+  tql: |-
+    relation project_has_agent_request,
+      relates owner_project,
+      relates agent_request;
+  kind: operational-relation
+  scope: BC.AgentWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_agent_request` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_agent_request` in the ontology.
+- target: relation
+  id: agent_request_updates_fact_month
+  tql: |-
+    relation agent_request_updates_fact_month,
+      relates agent_request,
+      relates fact_project_month;
+  kind: operational-relation
+  scope: BC.AgentWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `agent_request_updates_fact_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `agent_request_updates_fact_month` in the ontology.
+- target: relation
+  id: agent_request_updates_forecast_month
+  tql: |-
+    relation agent_request_updates_forecast_month,
+      relates agent_request,
+      relates forecast_project_month;
+  kind: operational-relation
+  scope: BC.AgentWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `agent_request_updates_forecast_month` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `agent_request_updates_forecast_month` in the ontology.
+- target: relation
+  id: alert_setting_configures_alert_event
+  tql: |-
+    relation alert_setting_configures_alert_event,
+      relates alert_setting,
+      relates alert_event;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `alert_setting_configures_alert_event` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `alert_setting_configures_alert_event` in the ontology.
+- target: relation
+  id: alert_event_creates_notification_item
+  tql: |-
+    relation alert_event_creates_notification_item,
+      relates alert_event,
+      relates notification_item;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `alert_event_creates_notification_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `alert_event_creates_notification_item` in the ontology.
+- target: relation
+  id: notification_preference_governs_notification_item
+  tql: |-
+    relation notification_preference_governs_notification_item,
+      relates notification_preference,
+      relates notification_item;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `notification_preference_governs_notification_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `notification_preference_governs_notification_item` in the ontology.
+- target: relation
+  id: mode_tag_bound_skill_binding
+  tql: |-
+    relation mode_tag_bound_skill_binding,
+      relates mode_tag,
+      relates skill_binding;
+  kind: operational-relation
+  scope: BC.ModeEngineWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `mode_tag_bound_skill_binding` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `mode_tag_bound_skill_binding` in the ontology.
+- target: relation
+  id: project_has_voice_session
+  tql: |-
+    relation project_has_voice_session,
+      relates owner_project,
+      relates voice_session;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_voice_session` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_voice_session` in the ontology.
+- target: relation
+  id: project_has_google_drive_file
+  tql: |-
+    relation project_has_google_drive_file,
+      relates owner_project,
+      relates drive_project_file;
+  kind: operational-relation
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_google_drive_file` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_google_drive_file` in the ontology.
+- target: relation
+  id: project_has_voice_topic
+  tql: |-
+    relation project_has_voice_topic,
+      relates owner_project,
+      relates voice_topic;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `project_has_voice_topic` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `project_has_voice_topic` in the ontology.
+- target: relation
+  id: mode_tag_selected_for_voice_session
+  tql: |-
+    relation mode_tag_selected_for_voice_session,
+      relates mode_tag,
+      relates voice_session;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `mode_tag_selected_for_voice_session` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `mode_tag_selected_for_voice_session` in the ontology.
+- target: relation
+  id: voice_session_has_message
+  tql: |-
+    relation voice_session_has_message,
+      relates voice_session,
+      relates voice_message;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_session_has_message` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_has_message` in the ontology.
+- target: relation
+  id: voice_session_has_topic
+  tql: |-
+    relation voice_session_has_topic,
+      relates voice_session,
+      relates voice_topic;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_session_has_topic` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_has_topic` in the ontology.
+- target: relation
+  id: tg_voice_session_bound_to_voice_session
+  tql: |-
+    relation tg_voice_session_bound_to_voice_session,
+      relates tg_voice_session,
+      relates bound_voice_session;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `tg_voice_session_bound_to_voice_session` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `tg_voice_session_bound_to_voice_session` in the ontology.
+- target: relation
+  id: voice_message_chunked_as_transcript_chunk
+  tql: |-
+    relation voice_message_chunked_as_transcript_chunk,
+      relates voice_message,
+      relates transcript_chunk;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_message_chunked_as_transcript_chunk` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_message_chunked_as_transcript_chunk` in the ontology.
+- target: relation
+  id: voice_session_processed_by_run
+  tql: |-
+    relation voice_session_processed_by_run,
+      relates voice_session,
+      relates processing_run;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_session_processed_by_run` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_processed_by_run` in the ontology.
+- target: relation
+  id: processing_run_produces_task_draft
+  tql: |-
+    relation processing_run_produces_task_draft,
+      relates processing_run,
+      relates task_draft;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `processing_run_produces_task_draft` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `processing_run_produces_task_draft` in the ontology.
+- target: relation
+  id: task_draft_normalized_to_plan_item
+  tql: |-
+    relation task_draft_normalized_to_plan_item,
+      relates task_draft,
+      relates plan_item;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `task_draft_normalized_to_plan_item` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `task_draft_normalized_to_plan_item` in the ontology.
+- target: relation
+  id: patch_contains_operation
+  tql: |-
+    relation patch_contains_operation,
+      relates patch,
+      relates patch_operation;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `patch_contains_operation` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `patch_contains_operation` in the ontology.
+- target: relation
+  id: patch_attempted_as_apply_attempt
+  tql: |-
+    relation patch_attempted_as_apply_attempt,
+      relates patch,
+      relates apply_attempt;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `patch_attempted_as_apply_attempt` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `patch_attempted_as_apply_attempt` in the ontology.
+- target: relation
+  id: patch_operation_mutates_oper_task
+  tql: |-
+    relation patch_operation_mutates_oper_task,
+      relates patch_operation,
+      relates oper_task;
+  kind: operational-relation
+  scope: BC.TaskWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `patch_operation_mutates_oper_task` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `patch_operation_mutates_oper_task` in the ontology.
+- target: relation
+  id: voice_session_has_history_step
+  tql: |-
+    relation voice_session_has_history_step,
+      relates voice_session,
+      relates history_step;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_session_has_history_step` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_has_history_step` in the ontology.
+- target: relation
+  id: voice_session_emits_metric_event
+  tql: |-
+    relation voice_session_emits_metric_event,
+      relates voice_session,
+      relates ops_metric_event;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_session_emits_metric_event` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_emits_metric_event` in the ontology.
+- target: relation
+  id: voice_session_has_merge_log
+  tql: |-
+    relation voice_session_has_merge_log,
+      relates target_session,
+      relates merge_log;
+  kind: operational-relation
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `voice_session_has_merge_log` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `voice_session_has_merge_log` in the ontology.
+- target: relation
+  id: ops_metric_event_aggregated_to_snapshot
+  tql: |-
+    relation ops_metric_event_aggregated_to_snapshot,
+      relates ops_metric_event,
+      relates ops_analytics_snapshot;
+  kind: operational-relation
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - U.BoundedContext
+  what: Relation `ops_metric_event_aggregated_to_snapshot` in the ontology.
+  not: Not an unrelated ontology object.
+  why: Preserves semantic meaning for `ops_metric_event_aggregated_to_snapshot` in the ontology.

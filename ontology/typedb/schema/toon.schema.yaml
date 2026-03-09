@@ -1,0 +1,78 @@
+version: 1
+name: str_ontology_toon_schema
+description: >
+  Normative TOON contract for ontology source fragments. TOON is a YAML-compatible
+  format with stricter semantic requirements than plain YAML.
+
+fragment:
+  required:
+    - version
+    - layer
+    - fragment
+    - cards
+  fields:
+    version: integer
+    layer:
+      enum:
+        - 00-kernel
+        - 10-as-is
+        - 20-to-be
+        - 30-bridges
+    fragment: string
+    cards: list
+
+card:
+  required:
+    - id
+    - target
+    - kind
+    - scope
+    - fpf_basis
+    - what
+    - not
+    - why
+    - tql
+  fields:
+    id: string
+    target:
+      enum:
+        - attribute
+        - entity
+        - relation
+    kind: string
+    scope: string
+    fpf_basis: list[string]
+    what: string
+    not: string
+    why: string
+    causes:
+      required_for_layers:
+        - 00-kernel
+        - 20-to-be
+      fields:
+        formal_what: string
+        material_composed_of: string
+        efficient_created_by: string
+        final_goal: string
+    inventory:
+      optional: true
+      fields:
+        inspect: boolean
+        domain:
+          enum:
+            - dictionary
+            - state
+            - structured
+            - open
+        max_values: integer
+    tql: string
+
+policy:
+  source_of_truth: TOON YAML fragments
+  generated_outputs:
+    - schema/str-ontology.yaml
+    - schema/str-ontology.tql
+  notes:
+    - Every TOON file must be valid YAML.
+    - Not every YAML file is valid TOON.
+    - `tql` stores the full executable block; semantic metadata is not split into partial code fields.

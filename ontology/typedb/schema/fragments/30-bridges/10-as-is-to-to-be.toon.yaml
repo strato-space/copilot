@@ -1,0 +1,173 @@
+version: 1
+layer: 30-bridges
+fragment: 10-as-is-to-to-be
+cards:
+- target: relation
+  id: as_is_project_maps_to_project_context_card
+  tql: |-
+    relation as_is_project_maps_to_project_context_card,
+      relates as_is_project,
+      relates project_context_card;
+  kind: projection-bridge
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Maps an operational project to its semantic project card.
+  not: Not a CRUD alias.
+  why: Bridges runtime project rows into the target semantic model.
+- target: relation
+  id: as_is_voice_session_maps_to_mode_segment
+  tql: |-
+    relation as_is_voice_session_maps_to_mode_segment,
+      relates as_is_voice_session,
+      relates mode_segment;
+  kind: projection-bridge
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Maps an operational voice session to a mode segment.
+  not: Not a generic bundle mapping.
+  why: Makes Mode Engine the primary interpretation of session flow.
+- target: relation
+  id: as_is_oper_task_maps_to_target_task_view
+  tql: |-
+    relation as_is_oper_task_maps_to_target_task_view,
+      relates as_is_oper_task,
+      relates target_task_view;
+  kind: projection-bridge
+  scope: BC.TaskWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Maps an operational task row to target task semantics.
+  not: Not a materialization command.
+  why: Provides stable task semantics above runtime rows.
+- target: relation
+  id: as_is_possible_task_maps_to_target_task_view
+  tql: |-
+    relation as_is_possible_task_maps_to_target_task_view,
+      relates as_is_possible_task,
+      relates target_task_view;
+  kind: projection-bridge
+  scope: BC.TaskWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Maps an operational possible-task row to target task semantics.
+  not: Not a second task store.
+  why: Keeps possible and materialized tasks compatible in TO-BE.
+- target: relation
+  id: as_is_voice_message_maps_to_object_event
+  tql: |-
+    relation as_is_voice_message_maps_to_object_event,
+      relates as_is_voice_message,
+      relates object_event;
+  kind: lineage-bridge
+  scope: BC.VoiceWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Maps an operational voice message to an object event.
+  not: Not a transcript chunk.
+  why: Turns message flow into object-bound history.
+- target: relation
+  id: as_is_summary_maps_to_object_conclusion
+  tql: |-
+    relation as_is_summary_maps_to_object_conclusion,
+      relates as_is_summary,
+      relates object_conclusion;
+  kind: lineage-bridge
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Maps an operational summary-bearing source to an object-bound conclusion.
+  not: Not a free-floating inference detached from source evidence.
+  why: Preserves semantic conclusions from summaries while keeping provenance explicit.
+- target: relation
+  id: as_is_attachment_maps_to_artifact_record
+  tql: |-
+    relation as_is_attachment_maps_to_artifact_record,
+      relates as_is_attachment,
+      relates artifact_record;
+  kind: lineage-bridge
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Maps an attachment-bearing source to an artifact record.
+  not: Not raw storage metadata.
+  why: Gives attachments stable semantic artifact identity.
+- target: relation
+  id: object_manifest_assembled_for_context_bundle
+  tql: |-
+    relation object_manifest_assembled_for_context_bundle,
+      relates object_manifest,
+      relates context_bundle;
+  kind: context-bridge
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Connects a manifest to the bundle it governed.
+  not: Not a CRUD link.
+  why: Makes context assembly reproducible and inspectable.
+- target: relation
+  id: writeback_decision_writes_object_note
+  tql: |-
+    relation writeback_decision_writes_object_note,
+      relates writeback_decision,
+      relates object_note;
+  kind: lineage-bridge
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Connects a writeback decision to the note it writes.
+  not: Not the note itself.
+  why: Preserves writeback lineage.
+- target: relation
+  id: review_annotation_approves_writeback
+  tql: |-
+    relation review_annotation_approves_writeback,
+      relates review_annotation,
+      relates writeback_decision;
+  kind: policy-bridge
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Connects a review annotation to a writeback decision.
+  not: Not the writeback effect.
+  why: Separates review semantics from execution semantics.
+- target: relation
+  id: access_policy_governs_context_bundle
+  tql: |-
+    relation access_policy_governs_context_bundle,
+      relates access_policy,
+      relates context_bundle;
+  kind: policy-bridge
+  scope: BC.ArtifactWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Connects an access policy to a context bundle.
+  not: Not a routing rule.
+  why: Makes context visibility explicit.
+- target: relation
+  id: project_context_card_binds_context_pack
+  tql: |-
+    relation project_context_card_binds_context_pack,
+      relates project_context_card,
+      relates bound_context_pack;
+  kind: context-bridge
+  scope: BC.ProjectWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Binds a project card to an approved context pack.
+  not: Not a raw file link.
+  why: Makes project-level context defaults reusable.
+- target: relation
+  id: context_pack_supports_mode_definition
+  tql: |-
+    relation context_pack_supports_mode_definition,
+      relates context_pack,
+      relates supported_mode_definition;
+  kind: context-bridge
+  scope: BC.ModeEngineWorld
+  fpf_basis:
+  - A.6.9 U.CrossContextSamenessDisambiguation
+  what: Declares that a context pack is valid for a mode definition.
+  not: Not evidence of one concrete run.
+  why: Separates reusable compatibility from runtime usage.

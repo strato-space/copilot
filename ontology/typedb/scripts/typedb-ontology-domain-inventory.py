@@ -14,10 +14,11 @@ from pymongo import MongoClient
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TYPEDB_ROOT = SCRIPT_DIR.parent
+INVENTORY_ROOT = TYPEDB_ROOT / 'inventory_latest'
 DEFAULT_MAPPING_PATH = TYPEDB_ROOT / 'mappings' / 'mongodb_to_typedb_v1.yaml'
-DEFAULT_OUTPUT_PATH = TYPEDB_ROOT / 'docs' / 'domain_inventory_latest.md'
-DEFAULT_JSON_OUTPUT_PATH = TYPEDB_ROOT / 'docs' / 'domain_inventory_latest.json'
-DEFAULT_KERNEL_ATTRS_PATH = TYPEDB_ROOT / 'schema' / 'fragments' / '00-kernel' / '10-attributes-and-ids.tql'
+DEFAULT_OUTPUT_PATH = INVENTORY_ROOT / 'domain_inventory_latest.md'
+DEFAULT_JSON_OUTPUT_PATH = INVENTORY_ROOT / 'domain_inventory_latest.json'
+DEFAULT_KERNEL_ATTRS_PATH = TYPEDB_ROOT / 'schema' / 'fragments' / '00-kernel' / '10-attributes-and-ids.toon.yaml'
 
 CANDIDATE_TOKENS = {
     'status', 'state', 'type', 'kind', 'scope', 'role', 'priority', 'severity', 'currency',
@@ -36,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--json-output', type=Path, default=DEFAULT_JSON_OUTPUT_PATH)
     p.add_argument('--limit-values', type=int, default=30)
     p.add_argument('--attrs', type=str, default='', help='Comma-separated attribute names to force-include')
-    p.add_argument('--marked-only', action='store_true', help='Inspect only attrs marked in kernel TQL plus any --attrs overrides')
+    p.add_argument('--marked-only', action='store_true', help='Inspect only attrs marked in kernel TOON/YAML plus any --attrs overrides')
     p.add_argument('--include-heuristics', action='store_true', help='Include heuristic candidates from mapping in addition to TOON-marked attrs')
     return p.parse_args()
 
@@ -60,6 +61,27 @@ def is_candidate(attr: str) -> bool:
 def parse_marked_kernel_attrs(path: Path) -> dict[str, dict[str, Any]]:
     if not path.exists():
         return {}
+    if path.suffixes[-2:] == ['.toon', '.yaml'] or path.name.endswith('.toon.yaml'):
+        payload = yaml.safe_load(path.read_text(encoding='utf-8'))
+        cards = payload.get('cards') if isinstance(payload, dict) else None
+        if not isinstance(cards, list):
+            return {}
+        marked: dict[str, dict[str, Any]] = {}
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+            if card.get('target') != 'attribute':
+                continue
+            inventory = card.get('inventory')
+            if not isinstance(inventory, dict) or not inventory.get('inspect'):
+                continue
+            meta: dict[str, Any] = {'inventory': 'inspect'}
+            if 'domain' in inventory:
+                meta['domain'] = str(inventory['domain'])
+            if 'max_values' in inventory and inventory['max_values'] is not None:
+                meta['max_values'] = str(inventory['max_values'])
+            marked[str(card['id'])] = meta
+        return marked
     marked: dict[str, dict[str, Any]] = {}
     pending_meta: dict[str, Any] | None = None
     for raw_line in path.read_text(encoding='utf-8').splitlines():

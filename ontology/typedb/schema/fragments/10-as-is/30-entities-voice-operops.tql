@@ -14,6 +14,11 @@ entity mode_skill_binding,
   owns runtime_tag,
   plays mode_tag_bound_skill_binding:skill_binding;
 
+# ---
+dfsdf
+sdfsdf
+a: b
+# ---
 entity voice_session,
   owns voice_session_id @key,
   owns project_id,

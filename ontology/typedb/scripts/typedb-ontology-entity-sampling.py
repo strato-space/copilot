@@ -14,9 +14,10 @@ from pymongo import MongoClient
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TYPEDB_ROOT = SCRIPT_DIR.parent
+INVENTORY_ROOT = TYPEDB_ROOT / "inventory_latest"
 DEFAULT_MAPPING_PATH = TYPEDB_ROOT / "mappings" / "mongodb_to_typedb_v1.yaml"
-DEFAULT_OUTPUT_PATH = TYPEDB_ROOT / "docs" / "entity_sampling_latest.md"
-DEFAULT_JSON_OUTPUT_PATH = TYPEDB_ROOT / "docs" / "entity_sampling_latest.json"
+DEFAULT_OUTPUT_PATH = INVENTORY_ROOT / "entity_sampling_latest.md"
+DEFAULT_JSON_OUTPUT_PATH = INVENTORY_ROOT / "entity_sampling_latest.json"
 
 
 def parse_args() -> argparse.Namespace:

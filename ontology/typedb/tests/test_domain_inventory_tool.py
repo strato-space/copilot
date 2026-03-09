@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "scripts" / "typedb-ontology-domain-inventory.py"
-KERNEL_ATTRS_PATH = ROOT / "schema" / "fragments" / "00-kernel" / "10-attributes-and-ids.tql"
+KERNEL_ATTRS_PATH = ROOT / "schema" / "fragments" / "00-kernel" / "10-attributes-and-ids.toon.yaml"
 
 spec = importlib.util.spec_from_file_location("typedb_domain_inventory_test_module", SCRIPT_PATH)
 if spec is None or spec.loader is None:

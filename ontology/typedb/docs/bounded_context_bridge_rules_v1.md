@@ -96,7 +96,7 @@ Rules:
 - all overlay entities must have project-local SemanticCards
 
 ## Import / Update Workflow
-1. Update kernel only in `copilot/ontology/typedb/schema/fragments/*`
+1. Update kernel only in `copilot/ontology/typedb/schema/fragments/00-kernel/*.toon.yaml`
 2. Rebuild generated kernel schema
 3. Update project overlay fragments in `/home/strato-space/<project-slug>/ontology/tql/`
 4. Rebuild project-local generated schema if the project keeps one

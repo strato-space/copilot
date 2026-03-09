@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-03-09
+### PROBLEM SOLVED
+- **22:02** Ontology authoring still depended on legacy editable `.tql` fragments while generated outputs, plans, and inventory artifacts were spread across mixed root and `docs/` locations, which made the schema source of truth and operator workflow harder to validate and explain.
+- **22:02** Domain-inventory and entity-sampling runs still wrote generated audit outputs into `ontology/typedb/docs/`, so generated data artifacts were mixed with maintained documentation and TOON-domain audits were harder to regenerate cleanly.
+
+### FEATURE IMPLEMENTED
+- **22:02** Migrated the ontology source-of-truth to canonical `*.toon.yaml` fragments, added dual generated outputs (`ontology/typedb/schema/str-ontology.yaml` and `ontology/typedb/schema/str-ontology.tql`), and introduced dedicated TOON bootstrap/validation tooling.
+- **22:02** Normalized ontology project structure by moving the architecture and migration plans into `ontology/plan/` and relocating generated inventory/sampling artifacts into `ontology/typedb/inventory_latest/`.
+
+### CHANGES
+- **22:02** Added `ontology/typedb/scripts/{typedb_ontology_toon.py,typedb-ontology-bootstrap-toon.py,typedb-ontology-toon-validate.py}`, updated `ontology/typedb/scripts/build-typedb-schema.py`, and extended `backend/package.json` so ontology build now validates TOON fragments and emits both generated ontology artifacts.
+- **22:02** Added editable TOON fragments under `ontology/typedb/schema/fragments/{00-kernel,10-as-is,20-to-be,30-bridges}/*.toon.yaml`, refreshed `ontology/typedb/schema/str-ontology.tql`, and expanded ontology test coverage for TOON parsing, validation, and generated-output assertions.
+- **22:02** Moved generated inventory outputs into `ontology/typedb/inventory_latest/`, moved ontology planning docs into `ontology/plan/`, updated inventory scripts/tests/docs to the new locations, and removed legacy generated inventory files from `ontology/typedb/docs/`.
+- **22:02** Refreshed repo and ontology documentation in `AGENTS.md`, `README.md`, `ontology/{AGENTS.md,README.md}`, `ontology/typedb/{AGENTS.md,README.md}`, and `ontology/typedb/docs/{bounded_context_bridge_rules_v1.md,rollout_plan_v1.md}` for the TOON source-of-truth and canonical path contract.
+
 ## 2026-03-08
 ### PROBLEM SOLVED
 - **09:37** Voice session pages could miss a `possible_tasks` refresh after reconnect/resubscribe, transcript segment edit/delete/rollback did not requeue `CREATE_TASKS`, and live recompute still treated the latest LLM output as an authoritative replacement set, which made earlier candidate tasks disappear when row identities changed or dropped.
