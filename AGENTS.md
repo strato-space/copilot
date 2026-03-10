@@ -670,6 +670,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added merge-session API/store scaffolding (`voicebot/sessions/merge`, `mergeSessions(...)`) with explicit confirmation phrase and merge-log collection constant (`automation_voice_bot_session_merge_log`).
 - Added TS transcribe Telegram transport recovery flow (`getFile` -> download -> persist `file_path` -> transcribe) and matching regression coverage in `workerTranscribeHandler` tests.
 - Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.
+- Added planning draft `plan/voice-task-status-normalization-plan.md` for the proposed `NEW_0` -> `DRAFT` / `BACKLOG` split; treat it as exploratory only and keep the currently approved `NEW_0` runtime contract until a new spec is accepted.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.

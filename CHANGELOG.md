@@ -2,17 +2,23 @@
 
 ## 2026-03-10
 ### PROBLEM SOLVED
+- **11:45** Ontology authoring had flipped fully to TOON fragments, which removed the direct annotated TQL surface used for schema review and operator debugging.
 - **18:37** Production Voice session pages were serving a mixed task-tab contract: live `session_tab_counts` responses still exposed legacy `tasks_work_count/tasks_review_count` without `status_counts`, while the current session UI expected `status_counts`, so `Задачи` could show a non-zero badge and still render `Нет задач для этой сессии.` for the same session.
 - **18:37** Voice task-tab filtering still risked passing human-readable status labels into `CRMKanban`, even though Kanban filtering is keyed by canonical CRM status ids; this would keep task lists empty after backend rollout even when `status_counts` started arriving.
+- **22:02** The Voice task-status normalization problem still lacked a shared repository plan, so the overloaded `NEW_0` draft/backlog semantics were documented only informally.
 
 ### FEATURE IMPLEMENTED
+- **11:45** Restored annotated TQL as the editable ontology source and removed the TOON fragment layer from active authoring flow.
 - **18:37** Standardized the Voice task-tab contract on the new `status_counts` shape only and removed legacy `tasks_work_count/tasks_review_count` handling from both frontend and backend.
 - **18:37** Added deterministic status-label-to-CRM-key normalization in the Voice session page so `status_counts` drives the same task filters that `CRMKanban` expects.
+- **22:02** Added a dedicated Voice task-status normalization planning draft with an AS-IS production snapshot, proposed `DRAFT` / `BACKLOG` split, and rollout sprints.
 
 ### CHANGES
+- **11:45** Reverted ontology authoring back to annotated TQL source files and removed the intermediate TOON fragment layer from the active toolchain.
 - **18:37** Updated `backend/src/api/routes/voicebot/sessions.ts` and `backend/__tests__/voicebot/session/sessionTabCountsRoute.test.ts` so `POST /api/voicebot/session_tab_counts` now returns only `tasks_count`, `codex_count`, and ordered `status_counts`.
 - **18:37** Updated `app/src/pages/voice/SessionPage.tsx` and Voice frontend contract tests so the session `Задачи` tab is keyed by canonical CRM status ids derived from backend `status_counts`, with legacy `Work/Review` fallback code removed.
 - **18:37** Refreshed `AGENTS.md` and `README.md` to document the new-contract-only requirement for Voice task subtabs and the mandatory status-label normalization before `CRMKanban` filtering.
+- **22:02** Added `plan/voice-task-status-normalization-plan.md` and synchronized `README.md` / `AGENTS.md` references while explicitly keeping the approved `NEW_0` runtime contract in force until a replacement spec is accepted.
 
 ## 2026-03-09
 ### PROBLEM SOLVED
@@ -1859,19 +1865,6 @@
 ### CHANGES
 - **18:55** Fixed Mermaid line-break rendering and recap formatting in `docs/copilot-repo-visual-recap.html`.
 - **22:02** Updated close-session documentation artifacts (`AGENTS.md`, `README.md`) to align with recap handoff context.
-
-## 2026-03-03
-### PROBLEM SOLVED
-- **13:37** `mcp@voice`, `actions@voice`, and CLI close flows still depended on a legacy Socket.IO `session_done` initiation path in `tools/voice`, so automation transport semantics, timeout behavior, and failure handling diverged from the canonical Copilot REST close route.
-- **13:37** The execution status for the session-done REST parity plan was only captured in local commits and open `bd` work, without a repository changelog/closeout summary tying the validation evidence to the finished epic.
-
-### FEATURE IMPLEMENTED
-- **13:37** Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`): `tools/voice` close wrappers now use backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout, route-absence-only alias fallback, and no automatic retry, while preserving the stable outward payload for MCP/Actions/CLI callers.
-- **13:37** Completed the full validation chain for the parity rollout: targeted voice test matrix (`71 passed`), a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21` with downstream `CREATE_TASKS` refresh, new `done_at`, and notify delivery events confirmed.
-
-### CHANGES
-- **13:37** Updated execution evidence in `plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md` and closed the corresponding `bd` tasks/epic (`copilot-7b9y`, `.1`..`.10`).
-- **13:37** Registered follow-up bug `copilot-q5cc` because fresh `session_log` entries still report legacy socket-origin source metadata for REST-initiated `actions@voice` closes.
 
 ## 2026-03-02
 ### PROBLEM SOLVED

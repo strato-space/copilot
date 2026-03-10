@@ -217,6 +217,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
 - Synced legacy planning references copied for context now live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
 - Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
+- Status-normalization proposal draft lives in `plan/voice-task-status-normalization-plan.md` (AS-IS production snapshot + proposed `DRAFT` / `BACKLOG` split); it is exploratory and does not override the approved `NEW_0` possible-task contract until a replacement spec is accepted.
 
 
 ### Voice runtime: key configuration map
