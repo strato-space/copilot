@@ -4767,20 +4767,6 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
     }
 });
 
-const VOICE_SESSION_WORK_TASK_COUNT_STATUSES = [
-    TASK_STATUSES.READY_10,
-    TASK_STATUSES.PROGRESS_0,
-    TASK_STATUSES.PROGRESS_10,
-    TASK_STATUSES.PROGRESS_20,
-    TASK_STATUSES.PROGRESS_30,
-    TASK_STATUSES.PROGRESS_40,
-] as const;
-
-const VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES = [
-    TASK_STATUSES.REVIEW_10,
-    TASK_STATUSES.REVIEW_20,
-] as const;
-
 const CANONICAL_TASK_STATUS_ORDER = Object.values(TASK_STATUSES);
 const CANONICAL_TASK_STATUS_ORDER_INDEX = new Map(
     CANONICAL_TASK_STATUS_ORDER.map((status, index) => [status, index])
@@ -4944,21 +4930,10 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             });
 
         const tasks_count = status_counts.reduce((sum, entry) => sum + entry.count, 0);
-        const workStatusSet = new Set(VOICE_SESSION_WORK_TASK_COUNT_STATUSES);
-        const reviewStatusSet = new Set(VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES);
-        const tasks_work_count = status_counts
-            .filter((entry) => workStatusSet.has(entry.status as typeof VOICE_SESSION_WORK_TASK_COUNT_STATUSES[number]))
-            .reduce((sum, entry) => sum + entry.count, 0);
-        const tasks_review_count = status_counts
-            .filter((entry) => reviewStatusSet.has(entry.status as typeof VOICE_SESSION_REVIEW_TASK_COUNT_STATUSES[number]))
-            .reduce((sum, entry) => sum + entry.count, 0);
-
         return res.status(200).json({
             success: true,
             session_id: sessionId,
             tasks_count,
-            tasks_work_count,
-            tasks_review_count,
             codex_count,
             status_counts,
         });

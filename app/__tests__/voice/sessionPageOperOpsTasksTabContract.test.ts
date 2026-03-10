@@ -22,16 +22,23 @@ describe('SessionPage OperOps tasks tab contract', () => {
 
     expect(idxTasks).toBeGreaterThanOrEqual(0);
     expect(idxScreenshort).toBeGreaterThan(idxTasks);
-    expect(source).toContain('const sessionTaskTabs = useMemo(');
-    expect(source).toContain("key: entry.status");
-    expect(source).toContain("label: renderTabLabel(entry.status, entry.count)");
+    expect(source).toContain('const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {');
+    expect(source).toContain("key: entry.key");
+    expect(source).toContain("label: renderTabLabel(entry.label, entry.count)");
     expect(source).toContain('task_status: activeSessionTaskStatuses');
-    expect(source).not.toContain("{ key: 'work', label: renderTabLabel('Work', sessionWorkTasksCount) }");
-    expect(source).not.toContain("{ key: 'review', label: renderTabLabel('Review', sessionReviewTasksCount) }");
+    expect(source).not.toContain("label: 'Work'");
+    expect(source).not.toContain("label: 'Review'");
   });
 
   it('falls back to the first available status tab when the selected status disappears', () => {
     expect(source).toContain('if (!sessionTasksSubTab || !hasActiveTab) {');
-    expect(source).toContain("setSessionTasksSubTab(sessionTaskTabs[0]?.status || '')");
+    expect(source).toContain("setSessionTasksSubTab(sessionTaskTabs[0]?.key || '')");
+  });
+
+  it('treats status_counts as the only session task breakdown contract', () => {
+    expect(source).not.toContain('tasks_work_count?: unknown;');
+    expect(source).not.toContain('tasks_review_count?: unknown;');
+    expect(source).not.toContain('setSessionWorkTasksCount(');
+    expect(source).not.toContain('setSessionReviewTasksCount(');
   });
 });

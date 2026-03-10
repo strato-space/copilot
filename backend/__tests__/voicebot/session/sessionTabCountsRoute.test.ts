@@ -126,8 +126,6 @@ describe('Voicebot session_tab_counts route', () => {
       success: true,
       session_id: sessionId.toHexString(),
       tasks_count: 14,
-      tasks_work_count: 7,
-      tasks_review_count: 3,
       codex_count: 3,
       status_counts: [
         { status: TASK_STATUSES.NEW_0, count: 4 },

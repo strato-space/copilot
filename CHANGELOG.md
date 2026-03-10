@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-10
+### PROBLEM SOLVED
+- **18:37** Production Voice session pages were serving a mixed task-tab contract: live `session_tab_counts` responses still exposed legacy `tasks_work_count/tasks_review_count` without `status_counts`, while the current session UI expected `status_counts`, so `Задачи` could show a non-zero badge and still render `Нет задач для этой сессии.` for the same session.
+- **18:37** Voice task-tab filtering still risked passing human-readable status labels into `CRMKanban`, even though Kanban filtering is keyed by canonical CRM status ids; this would keep task lists empty after backend rollout even when `status_counts` started arriving.
+
+### FEATURE IMPLEMENTED
+- **18:37** Standardized the Voice task-tab contract on the new `status_counts` shape only and removed legacy `tasks_work_count/tasks_review_count` handling from both frontend and backend.
+- **18:37** Added deterministic status-label-to-CRM-key normalization in the Voice session page so `status_counts` drives the same task filters that `CRMKanban` expects.
+
+### CHANGES
+- **18:37** Updated `backend/src/api/routes/voicebot/sessions.ts` and `backend/__tests__/voicebot/session/sessionTabCountsRoute.test.ts` so `POST /api/voicebot/session_tab_counts` now returns only `tasks_count`, `codex_count`, and ordered `status_counts`.
+- **18:37** Updated `app/src/pages/voice/SessionPage.tsx` and Voice frontend contract tests so the session `Задачи` tab is keyed by canonical CRM status ids derived from backend `status_counts`, with legacy `Work/Review` fallback code removed.
+- **18:37** Refreshed `AGENTS.md` and `README.md` to document the new-contract-only requirement for Voice task subtabs and the mandatory status-label normalization before `CRMKanban` filtering.
+
 ## 2026-03-09
 ### PROBLEM SOLVED
 - **22:02** Ontology authoring still depended on legacy editable `.tql` fragments while generated outputs, plans, and inventory artifacts were spread across mixed root and `docs/` locations, which made the schema source of truth and operator workflow harder to validate and explain.

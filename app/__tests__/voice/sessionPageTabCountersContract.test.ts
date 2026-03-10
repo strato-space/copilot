@@ -12,12 +12,12 @@ describe('SessionPage tab counters and indicators contract', () => {
     expect(source).toContain("label: renderTabLabel('Категоризация', categorizationCount");
     expect(source).toContain("label: renderTabLabel('Возможные задачи', possibleTasksCount");
     expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount)");
-    expect(source).toContain("label: renderTabLabel('Work', sessionWorkTasksCount)");
-    expect(source).toContain("label: renderTabLabel('Review', sessionReviewTasksCount)");
     expect(source).toContain("label: renderTabLabel('Codex', sessionCodexCount)");
     expect(source).toContain("label: renderTabLabel('Screenshort', screenshortCount)");
     expect(source).toContain("label: renderTabLabel('Log', 0, { showCount: false })");
     expect(source).toContain('const renderTabLabel = (label: string, count: number');
+    expect(source).not.toContain("label: 'Work'");
+    expect(source).not.toContain("label: 'Review'");
   });
 
   it('marks only Transcription, Categorization, and Possible Tasks with processing dots', () => {

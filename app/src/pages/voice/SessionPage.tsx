@@ -26,6 +26,7 @@ import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
 import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
+import { TASK_STATUSES } from '../../constants/crm';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 
 const VOICE_SESSION_TASK_COLUMNS = [
@@ -48,8 +49,15 @@ const VOICE_SESSION_TASK_COLUMNS = [
 ] as const;
 
 type VoiceSessionTaskStatusCount = {
-    status: string;
+    label: string;
     count: number;
+};
+
+type VoiceSessionTaskTab = {
+    key: string;
+    label: string;
+    count: number;
+    taskStatuses: string[];
 };
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
@@ -227,13 +235,22 @@ export default function SessionPage() {
         () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
         [sessionId, voiceBotSession]
     );
-    const sessionTaskTabs = useMemo(
-        () => sessionTaskStatusCounts.filter((entry) => entry.count > 0 && entry.status.trim().length > 0),
-        [sessionTaskStatusCounts]
-    );
+    const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {
+        return sessionTaskStatusCounts
+            .map((entry) => {
+                const matchedStatusKey = Object.entries(TASK_STATUSES).find(([, value]) => value === entry.label)?.[0] ?? '';
+                return {
+                    key: matchedStatusKey || entry.label,
+                    label: entry.label,
+                    count: entry.count,
+                    taskStatuses: matchedStatusKey ? [matchedStatusKey] : [],
+                };
+            })
+            .filter((entry) => entry.count > 0 && entry.label.trim().length > 0 && entry.taskStatuses.length > 0);
+    }, [sessionTaskStatusCounts]);
     const activeSessionTaskStatuses = useMemo(
-        () => (sessionTasksSubTab ? [sessionTasksSubTab] : []),
-        [sessionTasksSubTab]
+        () => sessionTaskTabs.find((entry) => entry.key === sessionTasksSubTab)?.taskStatuses ?? [],
+        [sessionTaskTabs, sessionTasksSubTab]
     );
     const transcriptionCount = useMemo(
         () => countVisibleTranscriptionMessages(voiceBotMessages),
@@ -274,8 +291,6 @@ export default function SessionPage() {
                     voicebotHttp.request<{
                     success?: boolean;
                     tasks_count?: unknown;
-                    tasks_work_count?: unknown;
-                    tasks_review_count?: unknown;
                     codex_count?: unknown;
                     status_counts?: Array<{ status?: unknown; count?: unknown }>;
                     }>('voicebot/session_tab_counts', { session_id: sessionId }, true),
@@ -285,10 +300,10 @@ export default function SessionPage() {
                 const statusCounts = Array.isArray(tabCountsResponse?.status_counts)
                     ? tabCountsResponse.status_counts
                         .map((entry) => ({
-                            status: String(entry?.status || '').trim(),
+                            label: String(entry?.status || '').trim(),
                             count: Number(entry?.count) || 0,
                         }))
-                        .filter((entry) => entry.status.length > 0 && entry.count > 0)
+                        .filter((entry) => entry.label.length > 0 && entry.count > 0)
                     : [];
                 setSessionOperOpsTasksCount(Number(tabCountsResponse?.tasks_count) || 0);
                 setSessionTaskStatusCounts(statusCounts);
@@ -325,9 +340,9 @@ export default function SessionPage() {
             }
             return;
         }
-        const hasActiveTab = sessionTaskTabs.some((entry) => entry.status === sessionTasksSubTab);
+        const hasActiveTab = sessionTaskTabs.some((entry) => entry.key === sessionTasksSubTab);
         if (!sessionTasksSubTab || !hasActiveTab) {
-            setSessionTasksSubTab(sessionTaskTabs[0]?.status || '');
+            setSessionTasksSubTab(sessionTaskTabs[0]?.key || '');
         }
     }, [sessionTaskTabs, sessionTasksSubTab]);
 
@@ -374,8 +389,8 @@ export default function SessionPage() {
                                 size="small"
                                 className="bg-transparent"
                                 items={sessionTaskTabs.map((entry) => ({
-                                    key: entry.status,
-                                    label: renderTabLabel(entry.status, entry.count),
+                                    key: entry.key,
+                                    label: renderTabLabel(entry.label, entry.count),
                                 }))}
                             />
                             <CRMKanban

@@ -339,7 +339,8 @@ Preferred engineering principles for this repo:
 - Voice sessions list supports `include_deleted` server filter and frontend `Показывать удаленные`; creator/participant filters drop numeric identity placeholders so only human labels are shown.
 - Voice sessions list must force a refetch when `include_deleted` intent changes during an in-flight list load; loading guard should not block `force=true` mode sync.
 - Voice sessions list supports bulk delete for selected non-deleted rows (`Удалить выбранные` with confirmation) while preserving row-click navigation behavior.
-- Voice session task subtabs now come from backend `status_counts` (`voicebot/session_tab_counts`) instead of a hardcoded `Work/Review` split; the UI must fall back to the first available status and show an explicit empty state when no session-linked tasks exist.
+- Voice session task subtabs are new-contract only: backend `voicebot/session_tab_counts` must return ordered `status_counts`, and clients must not rely on legacy `tasks_work_count` / `tasks_review_count` fields or hardcoded `Work/Review` splits.
+- Frontend session task tabs must map backend status labels back to canonical CRM status keys before passing filters into `CRMKanban`; do not pass human-readable labels directly as task-status filter values.
 - Categorization table contract is now `Time | Audio | Text | Materials`; legacy `Обработка`/processing column rendering path was removed.
 - Categorization rows use stable identity (`row_id`/`segment_oid` first, deterministic fallback key second), so row selection/actions are row-local and collision-safe.
 - Categorization row actions now include Copy/Edit/Delete in the frontend and call backend routes `POST /api/voicebot/edit_categorization_chunk` and `POST /api/voicebot/delete_categorization_chunk`.

@@ -118,7 +118,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - Voice session header includes a `Tasks` action before `Summarize`; it generates possible tasks from current meeting context without waiting for session close.
 - Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Возможные задачи`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
-- `Задачи` keeps a total count on the parent tab while the subtab list now comes from backend `status_counts` (`voicebot/session_tab_counts`); the UI falls back to the first available status and shows an explicit empty state when no session-linked tasks exist.
+- `Задачи` is a new-contract-only view: the parent tab keeps total count, and the subtab list must come from backend `status_counts` (`voicebot/session_tab_counts`) with no fallback to legacy `tasks_work_count` / `tasks_review_count`.
+- Frontend Voice task tabs must translate backend status labels back into canonical CRM status keys before filtering `CRMKanban`; label strings are not valid task-status filter inputs by themselves.
 - `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.
 - `Транскрипция`, `Категоризация`, and `Возможные задачи` tabs now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
