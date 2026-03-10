@@ -4,7 +4,7 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 
 ## Canonical Structure
 
-- `schema/` — canonical generated YAML/TQL outputs plus TOON source fragments.
+- `schema/` — canonical generated TQL output plus editable annotated TQL fragments.
 - `mappings/` — source-to-ontology mapping YAML contracts.
 - `queries/` — validation and smoke query packs.
 - `scripts/` — ingestion/validation/runtime helpers.
@@ -15,16 +15,16 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 - Keep `backend/package.json` aliases `ontology:typedb:*` working.
 - Keep script defaults script-relative (no hidden dependency on current shell cwd).
 - Keep `scripts/requirements-typedb.txt` as the canonical dependency list for this tooling.
-- Keep `schema/str-ontology.yaml` and `schema/str-ontology.tql` generated from `schema/fragments/*.toon.yaml`; do not edit generated outputs manually.
+- Keep `schema/str-ontology.tql` generated from `schema/fragments/*.tql`; do not edit the generated schema manually.
 - `copilot` ontology is the kernel/common layer; project ontologies are overlays that extend it.
-- TOON YAML is the canonical LLM/human-readable source surface; generated TQL may keep comment-rich semantic cards for inspection, but generated outputs are not edited directly.
+- Annotated TQL fragments are the canonical editable source surface. Generated TQL remains an inspectable artifact, but is not edited directly.
 
 ## Editing Rules
 
 - Any schema change should be matched by mapping and validation query review.
 - Avoid changing IDs/attribute semantics silently; record intent in `docs/rollout_plan_v1.md`.
-- Edit TOON fragments first, then rebuild the generated YAML/TQL outputs.
-- Keep editable semantics in TOON cards. Use generated TQL as an inspectable execution artifact, not as the editable semantic source.
+- Edit TQL fragments first, then rebuild the generated schema.
+- Keep rich semantic comments directly in the annotated TQL fragments.
 - If operator workflow changes, update:
   - `ontology/typedb/README.md`
   - repo root `CHANGELOG.md`
@@ -34,13 +34,12 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 From `/home/strato-space/copilot/backend`:
 
 1. `npm run ontology:typedb:py:setup`
-2. `npm run ontology:typedb:toon:validate`
-3. `npm run ontology:typedb:build`
-4. `npm run ontology:typedb:contract-check`
-5. `npm run ontology:typedb:domain-inventory`
-6. `npm run ontology:typedb:entity-sampling`
-7. `npm run ontology:typedb:ingest:dry`
-8. `npm run ontology:typedb:validate`
+2. `npm run ontology:typedb:build`
+3. `npm run ontology:typedb:contract-check`
+4. `npm run ontology:typedb:domain-inventory`
+5. `npm run ontology:typedb:entity-sampling`
+6. `npm run ontology:typedb:ingest:dry`
+7. `npm run ontology:typedb:validate`
 
 ## Current Operation Modes
 
@@ -60,7 +59,7 @@ If the shell does not already export `MONGODB_CONNECTION_STRING` and `DB_NAME`, 
 `export MONGODB_CONNECTION_STRING="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${DB_NAME}?authSource=admin&directConnection=true"`
 
 Domain inventory selection policy:
-- primary hints live inline in `schema/fragments/00-kernel/10-attributes-and-ids.toon.yaml`
+- primary hints live inline in `schema/fragments/00-kernel/10-attributes-and-ids.tql`
 - marker format: `# @toon inventory=inspect ...`
 - default export/inventory selection is marker-controlled
 - use `--marked-only` to stay strict

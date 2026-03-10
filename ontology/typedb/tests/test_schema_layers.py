@@ -44,31 +44,22 @@ class SchemaLayersTest(unittest.TestCase):
         self.assertNotIn("entity routing_item_template,", text)
         self.assertNotIn("entity routing_item_instance,", text)
 
-    def test_yaml_aggregate_keeps_semantic_metadata(self) -> None:
+    def test_build_metadata_uses_tql_fragments_as_source(self) -> None:
         payload, _ = build.build_outputs()
-        serialized = build.emit_yaml(payload)
-        self.assertIn("kind: bounded-context-surface", serialized)
-        self.assertIn("kind: projection-bridge", serialized)
-        self.assertIn("fpf_basis:", serialized)
-        self.assertIn("cards:", serialized)
+        self.assertEqual(payload["generated_from"], "ontology/typedb/schema/fragments/*.tql")
+        self.assertEqual(payload["sections"], ["kernel", "as_is", "to_be", "bridges"])
 
     def test_render_toon_values_for_small_domain(self) -> None:
         values = build.render_toon_values(
-            {"id": "status"},
+            "status",
             {"status": {"declared_domain": "dictionary", "max_values": 5, "values": ['"Archive"', '"Backlog"']}},
         )
         self.assertEqual(values, "# @toon values: Archive | Backlog")
 
     def test_render_toon_values_sorts_null_first_then_alphabetically(self) -> None:
         values = build.render_toon_values(
-            {"id": "priority"},
-            {
-                "priority": {
-                    "declared_domain": "dictionary",
-                    "max_values": 10,
-                    "values": ['"P3"', '"🔥 P1 "', "null", '"P2"', '"🔥 P1"'],
-                }
-            },
+            "priority",
+            {"priority": {"declared_domain": "dictionary", "max_values": 10, "values": ['"P3"', '"🔥 P1 "', "null", '"P2"', '"🔥 P1"']}},
         )
         self.assertEqual(values, "# @toon values: null | P2 | P3 | 🔥 P1")
 
@@ -92,7 +83,7 @@ class SchemaLayersTest(unittest.TestCase):
 
     def test_render_toon_values_for_large_domain(self) -> None:
         values = build.render_toon_values(
-            {"id": "task_type_name"},
+            "task_type_name",
             {"task_type_name": {"declared_domain": "dictionary", "max_values": 2, "values": ['\"A\"', '\"B\"', '\"C\"']}},
         )
         self.assertEqual(values, "# @toon values: <too many values; see domain_inventory_latest.md>")
@@ -103,6 +94,10 @@ class SchemaLayersTest(unittest.TestCase):
         self.assertIn('<semantic-card id="project">', text)
         self.assertIn("# kind: bounded-context-surface", text)
         self.assertIn("# kind: operational-record", text)
+
+    def test_generated_tql_header_points_to_tql_fragments(self) -> None:
+        _, text = build.build_outputs()
+        self.assertIn("# Generated from ontology/typedb/schema/fragments/*.tql", text)
 
 
 if __name__ == "__main__":

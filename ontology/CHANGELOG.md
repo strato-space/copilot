@@ -1,5 +1,95 @@
 # Ontology Changelog
 
+## 2026-03-10
+
+### PROBLEM SOLVED
+
+- **11:43** TOON/YAML fragment source and fragment-level markdown cards reduced readability compared with annotated TQL, turning the ontology source into duplication-heavy noise. The ontology stack was rolled back to a single editable TQL source so operators and LLM-facing inspection again read one canonical structure.
+- **11:43** Ontology operator contracts had drifted around TOON bootstrap/validation commands and YAML outputs, while the intended working format was already accepted as TQL. Active docs, scripts, and tests were realigned so the source-of-truth contract is unambiguous again.
+
+### FEATURE IMPLEMENTED
+
+- **11:43** Restored annotated `*.tql` fragments as the only editable ontology source under `ontology/typedb/schema/fragments/**`.
+- **11:43** Preserved generated inventory/sampling outputs under `ontology/typedb/inventory_latest/` and kept generated `# @toon values:` enrichment in `str-ontology.tql` for compact operator/LLM guidance.
+
+### CHANGES
+
+- Removed fragment-level TOON/YAML/MD duplicates from `ontology/typedb/schema/fragments/**`.
+- Removed TOON-only tooling/tests from the active path and simplified build back to TQL-first generation:
+  - `ontology/typedb/scripts/build-typedb-schema.py`
+  - `ontology/typedb/scripts/typedb-ontology-domain-inventory.py`
+  - `ontology/typedb/tests/test_schema_layers.py`
+  - `ontology/typedb/tests/test_domain_inventory_tool.py`
+  - `ontology/typedb/tests/test_status_domains.py`
+- Deleted the TOON migration scratch plan:
+  - `ontology/plan/toon-source-migration.md`
+- Updated docs:
+  - `ontology/README.md`
+  - `ontology/AGENTS.md`
+  - `ontology/typedb/README.md`
+  - `ontology/typedb/AGENTS.md`
+  - repo root `README.md`
+  - repo root `AGENTS.md`
+  - `backend/package.json` ontology script list
+
+## 2026-03-09
+
+### PROBLEM SOLVED
+
+- **22:06** Ontology source, generated artifacts, and inventory/report locations were inconsistent: plans lived in the shared repo plan area, generated reports were split between `typedb/` and `typedb/docs/`, and source/build assumptions were drifting. Paths were normalized so ontology planning and generated outputs had stable homes.
+- **22:06** The ontology stack lacked a structured migration path for experimenting with TOON/YAML source while preserving the existing TypeDB workflow. A controlled TOON migration slice was introduced and validated before later rollback decisions.
+
+### FEATURE IMPLEMENTED
+
+- **22:06** Added a TOON migration slice with canonical generated outputs:
+  - `ontology/typedb/schema/str-ontology.yaml`
+  - `ontology/typedb/schema/str-ontology.tql`
+- **22:06** Added generated inventory/sampling home:
+  - `ontology/typedb/inventory_latest/`
+
+### CHANGES
+
+- Added TOON migration tooling and validation path:
+  - `typedb-ontology-bootstrap-toon.py`
+  - `typedb-ontology-toon-validate.py`
+  - `typedb_ontology_toon.py`
+- Added `*.toon.yaml` source fragments for:
+  - `00-kernel`
+  - `10-as-is`
+  - `20-to-be`
+  - `30-bridges`
+- Added migration plan:
+  - `ontology/plan/toon-source-migration.md`
+- Updated operator docs and package scripts to recognize the TOON migration workflow.
+
+## 2026-03-08
+
+### PROBLEM SOLVED
+
+- **22:08** AS-IS ontology was too coarse around people, performers, finance links, and dictionary-like fields, causing semantic conflation and under-specified validation. Live Mongo-backed audit exposed the mismatches and the ontology was tightened against actual operational structures.
+- **22:08** The ontology lacked repeatable Mongo-backed inventory and sampling procedures for dictionary-like domains and entity shapes, making semantic drift hard to spot. Dedicated audit tooling and reports were added.
+
+### FEATURE IMPLEMENTED
+
+- **22:08** Split `person` and `performer_profile` in AS-IS ontology and retargeted performer-backed relations to `performer_profile`.
+- **22:08** Added data-backed domain inventory and entity sampling operator paths:
+  - `ontology:typedb:domain-inventory`
+  - `ontology:typedb:entity-sampling`
+- **22:08** Introduced object-bound ontology contracts, SemanticCards, and per-project AFS planning/docs as the working architecture baseline.
+
+### CHANGES
+
+- Updated schema/mapping/validation to:
+  - separate `person` from `performer_profile`
+  - split status/state/deletion domains
+  - fix `legacy_finance_income` project/type/performer linkage
+- Added/updated docs:
+  - `ontology/typedb/docs/status_domain_inventory_2026-03-08.md`
+  - `ontology/typedb/docs/mongodb_entity_audit_2026-03-08.md`
+  - `ontology/typedb/docs/semantic-glossary.md`
+  - `ontology/plan/ontology-and-operations.md`
+- Added ontology audit tests and operator reports for Mongo-backed verification.
+
 ## 2026-03-03
 
 ### PROBLEM SOLVED

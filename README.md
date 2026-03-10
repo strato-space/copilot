@@ -37,10 +37,10 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Sessions status in list uses state pictograms aligned with session page semantics; legacy red-dot-only marker is deprecated.
 - TS transcribe worker supports Telegram file recovery before transcription when local file path is missing.
 - TypeDB tooling was hard-moved to `ontology/typedb/scripts/*`; backend npm aliases call those canonical scripts.
-- Canonical generated ontology outputs are `ontology/typedb/schema/str-ontology.yaml` and `ontology/typedb/schema/str-ontology.tql`; editable source fragments live in `ontology/typedb/schema/fragments/*.toon.yaml`.
+- Canonical generated ontology output is `ontology/typedb/schema/str-ontology.tql`; editable source fragments live in `ontology/typedb/schema/fragments/*.tql`.
 - Generated inventory and sampling artifacts live in `ontology/typedb/inventory_latest/*`.
-- Ontology operator workflow now includes `ontology:typedb:{toon:bootstrap,toon:validate,build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`.
-- Ontology architecture and rollout roadmap live in `ontology/plan/ontology-and-operations.md`, with the TOON migration follow-up tracked in `ontology/plan/toon-source-migration.md`.
+- Ontology operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`.
+- Ontology architecture and rollout roadmap live in `ontology/plan/ontology-and-operations.md`.
 - `copilot` ontology is the kernel/common layer; projects are expected to extend it via per-project overlays and SemanticCards under `/home/strato-space/<project-slug>/`.
 
 ## Interface Contracts (High Impact)

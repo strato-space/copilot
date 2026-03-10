@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / "scripts" / "typedb-ontology-domain-inventory.py"
-KERNEL_ATTRS_PATH = ROOT / "schema" / "fragments" / "00-kernel" / "10-attributes-and-ids.toon.yaml"
+KERNEL_ATTRS_PATH = ROOT / "schema" / "fragments" / "00-kernel" / "10-attributes-and-ids.tql"
 
 spec = importlib.util.spec_from_file_location("typedb_domain_inventory_test_module", SCRIPT_PATH)
 if spec is None or spec.loader is None:
@@ -19,7 +19,7 @@ spec.loader.exec_module(tool)
 
 
 class DomainInventoryToolTest(unittest.TestCase):
-    def test_parse_marked_kernel_attrs_reads_toon_markers(self) -> None:
+    def test_parse_marked_kernel_attrs_reads_inline_markers(self) -> None:
         marked = tool.parse_marked_kernel_attrs(KERNEL_ATTRS_PATH)
         self.assertIn("status", marked)
         self.assertEqual(marked["status"]["inventory"], "inspect")

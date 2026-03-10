@@ -30,8 +30,6 @@
     "voice:summarize-mcp-watchdog:dry": "tsx scripts/summarize-mcp-watchdog.ts",
     "voice:summarize-mcp-watchdog:apply": "tsx scripts/summarize-mcp-watchdog.ts --apply",
     "ontology:typedb:py:setup": "python3 -m venv ../ontology/typedb/.venv && ../ontology/typedb/.venv/bin/pip install --upgrade pip && ../ontology/typedb/.venv/bin/pip install -r ../ontology/typedb/scripts/requirements-typedb.txt",
-    "ontology:typedb:toon:bootstrap": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-bootstrap-toon.py",
-    "ontology:typedb:toon:validate": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-toon-validate.py",
     "ontology:typedb:build": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/build-typedb-schema.py",
     "ontology:typedb:test": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh -m unittest discover -s ../ontology/typedb/tests -p 'test_*.py'",
     "ontology:typedb:contract-check": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-contract-check.py",

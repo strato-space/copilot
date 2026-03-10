@@ -3,37 +3,57 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-from typedb_ontology_toon import (
-    FRAGMENT_SECTION_ORDER,
-    emit_yaml,
-    load_toon_fragment,
-    render_inventory_comments,
-    render_semantic_card_comments,
-    sort_inventory_values,
-    validate_toon_fragment,
-)
-
 TYPEDB_ROOT = SCRIPT_DIR.parent
-SCHEMA_ROOT = TYPEDB_ROOT / "schema"
-FRAGMENTS_ROOT = SCHEMA_ROOT / "fragments"
-DEFAULT_TQL_OUTPUT = SCHEMA_ROOT / "str-ontology.tql"
-DEFAULT_YAML_OUTPUT = SCHEMA_ROOT / "str-ontology.yaml"
+FRAGMENTS_ROOT = TYPEDB_ROOT / "schema" / "fragments"
+DEFAULT_OUTPUT = TYPEDB_ROOT / "schema" / "str-ontology.tql"
 DEFAULT_DOMAIN_JSON = TYPEDB_ROOT / "inventory_latest" / "domain_inventory_latest.json"
+
+SECTION_ORDER = [
+    ("kernel", FRAGMENTS_ROOT / "00-kernel"),
+    ("as_is", FRAGMENTS_ROOT / "10-as-is"),
+    ("to_be", FRAGMENTS_ROOT / "20-to-be"),
+    ("bridges", FRAGMENTS_ROOT / "30-bridges"),
+]
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build canonical TOON aggregate and TypeDB schema from TOON fragments")
-    parser.add_argument("--tql-output", type=Path, default=DEFAULT_TQL_OUTPUT)
-    parser.add_argument("--yaml-output", type=Path, default=DEFAULT_YAML_OUTPUT)
-    parser.add_argument("--domain-json", type=Path, default=DEFAULT_DOMAIN_JSON)
+    parser = argparse.ArgumentParser(description="Build canonical TypeDB schema from TQL fragments")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Canonical generated schema path")
+    parser.add_argument(
+        "--domain-json",
+        type=Path,
+        default=DEFAULT_DOMAIN_JSON,
+        help="Optional JSON sidecar produced by domain-inventory for generated # @toon values injection",
+    )
     return parser.parse_args()
+
+
+def read_section(dir_path: Path) -> list[str]:
+    if not dir_path.exists():
+        return [f"# (missing directory: {dir_path})"]
+
+    files = sorted(p for p in dir_path.glob("*.tql") if p.is_file())
+    if not files:
+        return [f"# (no fragments in {dir_path.name})"]
+
+    lines: list[str] = []
+    for fragment in files:
+        text = fragment.read_text(encoding="utf-8").strip()
+        fragment_tag = fragment.stem.split("-", 1)[-1]
+        lines.append(f"# --- <{dir_path.name[3:]}.{fragment_tag}> ---")
+        if text:
+            lines.extend(text.splitlines())
+        else:
+            lines.append("# (empty fragment)")
+        lines.append(f"# --- </{dir_path.name[3:]}.{fragment_tag}> ---")
+        lines.append("")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 def load_domain_inventory(path: Path) -> dict[str, dict] | None:
@@ -42,10 +62,12 @@ def load_domain_inventory(path: Path) -> dict[str, dict] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def render_toon_values(card: dict, inventory: dict[str, dict] | None) -> str | None:
+def render_toon_values(attr: str | dict, inventory: dict[str, dict] | None) -> str | None:
+    if isinstance(attr, dict):
+        attr = str(attr.get("id"))
     if not inventory:
         return None
-    payload = inventory.get(card["id"])
+    payload = inventory.get(attr)
     if not payload:
         return None
     values = payload.get("values") or []
@@ -53,85 +75,63 @@ def render_toon_values(card: dict, inventory: dict[str, dict] | None) -> str | N
     max_values = payload.get("max_values") or 0
     if declared_domain == "structured":
         return "# @toon values: <structured domain; see domain_inventory_latest.md>"
-    if not values:
+    if len(values) == 0:
         return None
     if max_values and len(values) > int(max_values):
         return "# @toon values: <too many values; see domain_inventory_latest.md>"
-    return "# @toon values: " + " | ".join(sort_inventory_values(values))
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        display = str(value).strip('"').strip()
+        if display in seen:
+            continue
+        seen.add(display)
+        normalized.append(display)
+    normalized.sort(key=lambda value: (value != "null", value.casefold()))
+    return "# @toon values: " + " | ".join(normalized)
 
 
-def load_sections() -> list[dict]:
-    section_payloads: list[dict] = []
-    errors: list[str] = []
-    for section in FRAGMENT_SECTION_ORDER:
-        section_dir = FRAGMENTS_ROOT / section
-        fragments: list[dict] = []
-        for fragment_path in sorted(section_dir.glob("*.toon.yaml")):
-            payload = load_toon_fragment(fragment_path)
-            errors.extend(validate_toon_fragment(payload, fragment_path))
-            fragments.append(payload)
-        section_payloads.append({"name": section.split("-", 1)[-1].replace("-", "_"), "fragments": fragments})
-    if errors:
-        raise ValueError("\n".join(errors))
-    return section_payloads
-
-
-def build_tql(section_payloads: list[dict], inventory: dict[str, dict] | None) -> str:
-    out = [
-        "define",
-        "",
-        "# Generated from ontology/typedb/schema/fragments/*.toon.yaml",
-        "# Do not edit this file manually; edit TOON fragments and regenerate.",
-        "",
-    ]
-    seen_attribute_ids: set[str] = set()
-    for section in section_payloads:
-        section_name = section["name"]
-        out.append(f"# --- <{section_name}> ---")
-        for fragment in section["fragments"]:
-            out.append(f"# --- <{section_name}.{fragment['fragment']}> ---")
-            for card in fragment["cards"]:
-                target = card["target"]
-                tql_block = str(card["tql"]).rstrip()
-                if target == "attribute":
-                    if card["id"] in seen_attribute_ids:
-                        continue
-                    seen_attribute_ids.add(card["id"])
-                    for line in render_inventory_comments(card):
-                        out.append(line)
-                    out.extend(tql_block.splitlines())
-                    values_line = render_toon_values(card, inventory)
-                    if values_line:
-                        out.append(values_line)
-                        out.append("")
-                else:
-                    out.extend(render_semantic_card_comments(card))
-                    out.extend(tql_block.splitlines())
-                if out[-1] != "":
-                    out.append("")
-            if out[-1] == "":
-                out.pop()
-            out.append(f"# --- </{section_name}.{fragment['fragment']}> ---")
-            out.append("")
-        if out[-1] == "":
-            out.pop()
-        out.append(f"# --- </{section_name}> ---")
-        out.append("")
+def inject_toon_values(schema_text: str, inventory: dict[str, dict] | None) -> str:
+    if not inventory:
+        return schema_text
+    lines = schema_text.splitlines()
+    out: list[str] = []
+    for line in lines:
+        out.append(line)
+        stripped = line.strip()
+        if stripped.startswith("attribute "):
+            attr_name = stripped.split()[1].rstrip(",")
+            values_line = render_toon_values(attr_name, inventory)
+            if values_line:
+                out.append(values_line)
+                out.append("")
     return "\n".join(out).rstrip() + "\n"
 
 
-def build_outputs(inventory: dict[str, dict] | None = None) -> tuple[dict, str]:
-    sections = load_sections()
-    aggregate = {
-        "version": 1,
-        "generated_from": "ontology/typedb/schema/fragments/*.toon.yaml",
-        "sections": sections,
-    }
-    return aggregate, build_tql(sections, inventory)
-
-
 def build_schema_text(domain_inventory: dict[str, dict] | None = None) -> str:
-    return build_tql(load_sections(), domain_inventory)
+    out: list[str] = [
+        "define",
+        "",
+        "# Generated from ontology/typedb/schema/fragments/*.tql",
+        "# Do not edit this file manually; edit TQL fragments and regenerate.",
+        "",
+    ]
+    for section_name, section_dir in SECTION_ORDER:
+        out.append(f"# --- <{section_name}> ---")
+        out.extend(read_section(section_dir))
+        out.append(f"# --- </{section_name}> ---")
+        out.append("")
+    text = "\n".join(out).rstrip() + "\n"
+    return inject_toon_values(text, domain_inventory)
+
+
+def build_outputs(domain_inventory: dict[str, dict] | None = None) -> tuple[dict, str]:
+    payload = {
+        "generated_from": "ontology/typedb/schema/fragments/*.tql",
+        "sections": ["kernel", "as_is", "to_be", "bridges"],
+    }
+    return payload, build_schema_text(domain_inventory)
 
 
 def write_text(path: Path, content: str) -> None:
@@ -141,13 +141,10 @@ def write_text(path: Path, content: str) -> None:
 
 def main() -> int:
     args = parse_args()
-    inventory = load_domain_inventory(args.domain_json)
-    aggregate, tql_text = build_outputs(inventory)
-    yaml_text = emit_yaml(aggregate)
-    write_text(args.yaml_output, yaml_text)
-    write_text(args.tql_output, tql_text)
-    print(f"[build-typedb-schema] wrote {args.yaml_output}")
-    print(f"[build-typedb-schema] wrote {args.tql_output}")
+    domain_inventory = load_domain_inventory(args.domain_json)
+    schema_text = build_schema_text(domain_inventory)
+    write_text(args.output, schema_text)
+    print(f"[build-typedb-schema] wrote {args.output}")
     return 0
 
 

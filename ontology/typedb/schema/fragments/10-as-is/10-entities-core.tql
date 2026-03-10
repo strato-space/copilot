@@ -20,6 +20,7 @@ entity client,
   plays client_owns_project:owner_client,
   plays client_has_project_group:owner_client;
 # --- </semantic-card> ---
+
 # --- <semantic-card id="legacy_client"> ---
 # kind: legacy-record
 # fpf_basis:
