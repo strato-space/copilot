@@ -76,6 +76,7 @@ export const COLLECTIONS = {
 
   // People & Organizations
   PERFORMERS: 'automation_performers',
+  PROJECT_PERFORMER_LINKS: 'automation_project_performer_links',
   PERFORMERS_ROLES: 'automation_performers_roles',
   PERFORMER_PAYMENTS: 'automation_performer_payments',
   CUSTOMERS: 'automation_customers',
@@ -91,6 +92,7 @@ export const COLLECTIONS = {
   FINANCES_INCOME_TYPES: 'finops_finances_income_types',
   FACTS_PROJECT_MONTH: 'facts_project_month',
   FORECASTS_PROJECT_MONTH: 'forecasts_project_month',
+  FORECASTS_PROJECT_MONTH_HISTORY: 'forecasts_project_month_history',
   FX_MONTHLY: 'fx_monthly',
   FUND_COMMENTS: 'fund_comments',
   AUDIT_EVENTS: 'audit_events',
@@ -112,6 +114,9 @@ export const COLLECTIONS = {
   TRACKS: 'automation_tracks',
 
   // Telegram
+  TELEGRAM_CHATS: 'automation_telegram_chats',
+  TELEGRAM_USERS: 'automation_telegram_users',
+  TELEGRAM_CHAT_MEMBERSHIPS: 'automation_telegram_chat_memberships',
   TG_USER_CONTEXTS: 'automation_tg_user_contexts',
 
   // Google Drive
@@ -136,6 +141,10 @@ export const MONGO_INDEX_NAMES = {
 
   TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG: 'idx_tasks_is_deleted_task_status_runtime_tag',
   WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG: 'idx_work_hours_ticket_db_id_runtime_tag',
+  PROJECT_PERFORMER_LINKS_PROJECT_PERFORMER_ACTIVE: 'idx_project_performer_links_project_performer_active',
+  TELEGRAM_CHATS_CHAT_ID: 'idx_telegram_chats_chat_id',
+  TELEGRAM_USERS_TELEGRAM_ID: 'idx_telegram_users_telegram_id',
+  TELEGRAM_CHAT_MEMBERSHIPS_CHAT_USER_ACTIVE: 'idx_telegram_chat_memberships_chat_user_active',
 } as const;
 
 export const MONGO_EXISTING_INDEX_NAMES_BY_COLLECTION: Record<string, readonly string[]> = {
@@ -144,6 +153,10 @@ export const MONGO_EXISTING_INDEX_NAMES_BY_COLLECTION: Record<string, readonly s
   [COLLECTIONS.PROJECTS]: [MONGO_INDEX_NAMES.ID],
   [COLLECTIONS.PROJECT_GROUPS]: [MONGO_INDEX_NAMES.ID],
   [COLLECTIONS.CUSTOMERS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.PROJECT_PERFORMER_LINKS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.TELEGRAM_CHATS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.TELEGRAM_USERS]: [MONGO_INDEX_NAMES.ID],
+  [COLLECTIONS.TELEGRAM_CHAT_MEMBERSHIPS]: [MONGO_INDEX_NAMES.ID],
 } as const;
 
 export const MONGO_STARTUP_INDEXES = [
@@ -162,6 +175,39 @@ export const MONGO_STARTUP_INDEXES = [
     key: {
       ticket_db_id: 1,
       runtime_tag: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.PROJECT_PERFORMER_LINKS,
+    name: MONGO_INDEX_NAMES.PROJECT_PERFORMER_LINKS_PROJECT_PERFORMER_ACTIVE,
+    key: {
+      project_id: 1,
+      performer_id: 1,
+      is_active: 1,
+      start_date: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.TELEGRAM_CHATS,
+    name: MONGO_INDEX_NAMES.TELEGRAM_CHATS_CHAT_ID,
+    key: {
+      chat_id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.TELEGRAM_USERS,
+    name: MONGO_INDEX_NAMES.TELEGRAM_USERS_TELEGRAM_ID,
+    key: {
+      telegram_id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.TELEGRAM_CHAT_MEMBERSHIPS,
+    name: MONGO_INDEX_NAMES.TELEGRAM_CHAT_MEMBERSHIPS_CHAT_USER_ACTIVE,
+    key: {
+      chat_id: 1,
+      telegram_user_id: 1,
+      is_active: 1,
     },
   },
 ] as const;
@@ -506,8 +552,12 @@ export const VOICEBOT_COLLECTIONS = {
   AGENTS_RUN_RESULTS: 'automation_agents_run_results',
   // Shared collections (also in COLLECTIONS)
   PERFORMERS: 'automation_performers',
+  PROJECT_PERFORMER_LINKS: 'automation_project_performer_links',
   PROJECTS: 'automation_projects',
   PERSONS: 'automation_persons',
+  TELEGRAM_CHATS: 'automation_telegram_chats',
+  TELEGRAM_USERS: 'automation_telegram_users',
+  TELEGRAM_CHAT_MEMBERSHIPS: 'automation_telegram_chat_memberships',
   PERMISSIONS_LOG: 'automation_permissions_log',
   SESSION_LOG: 'automation_voice_bot_session_log',
   SESSION_MERGE_LOG: 'automation_voice_bot_session_merge_log',

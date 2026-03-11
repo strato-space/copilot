@@ -1,0 +1,20 @@
+[
+  {
+    "label": "full-mic1-seg001",
+    "input": "/home/strato-space/copilot/backend/uploads/voicebot/1773237979373-798492166.webm",
+    "combined_json": "/home/strato-space/copilot/output/full-mic1-seg001.combined.diarized.json",
+    "combined_md": "/home/strato-space/copilot/output/full-mic1-seg001.combined.diarized.md",
+    "parts": 3,
+    "segments": 108,
+    "text_length": 5999
+  },
+  {
+    "label": "full-mic2-seg001",
+    "input": "/home/strato-space/copilot/backend/uploads/voicebot/1773237982381-824837249.webm",
+    "combined_json": "/home/strato-space/copilot/output/full-mic2-seg001.combined.diarized.json",
+    "combined_md": "/home/strato-space/copilot/output/full-mic2-seg001.combined.diarized.md",
+    "parts": 3,
+    "segments": 330,
+    "text_length": 18044
+  }
+]

@@ -543,8 +543,11 @@ LOOKUP_TRANSFORMS: dict[str, Callable[[Any], Optional[str]]] = {
 }
 
 
-def apply_lookup_transform(name: Optional[str], value: Any) -> Optional[str]:
+def apply_lookup_transform(name: Optional[str], value: Any) -> Any:
     if not name:
+        if isinstance(value, list):
+            values = [mapping_key_component(item) for item in value]
+            return [item for item in values if item]
         return mapping_key_component(value)
     transform = LOOKUP_TRANSFORMS.get(name)
     if transform is None:
@@ -815,7 +818,7 @@ def reconcile_relation(
     owner_entity: str,
     owner_by: str,
     owner_role: str,
-    owner_value: Optional[str],
+    owner_value: Optional[str | list[str]],
 ) -> None:
     if not ctx.options.apply or ctx.typedb_driver is None:
         return
@@ -834,12 +837,15 @@ def reconcile_relation(
     if owner_value is None:
         return
 
-    insert_relation = (
-        f"match $e isa {source_entity}, has {source_key_attr} {lit_string(source_key_value)}; "
-        f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
-        f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
-    )
-    execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_relation)
+    owner_values = owner_value if isinstance(owner_value, list) else [owner_value]
+    normalized_values = [value for value in owner_values if isinstance(value, str) and value]
+    for value in dict.fromkeys(normalized_values):
+        insert_relation = (
+            f"match $e isa {source_entity}, has {source_key_attr} {lit_string(source_key_value)}; "
+            f"$o isa {owner_entity}, has {owner_by} {lit_string(value)}; "
+            f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
+        )
+        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_relation)
 
 
 def upsert_entity(

@@ -20,6 +20,7 @@ attribute link_label, value string;
 attribute url, value string;
 attribute link, value string;
 attribute module_name, value string;
+attribute directives, value string;
 # @toon inventory=inspect domain=open max_values=20
 attribute module_scope, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
@@ -100,6 +101,7 @@ attribute source, value string;
 attribute source_type, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute source_kind, value string;
+attribute chat_type, value string;
 attribute source_ref, value string;
 attribute external_ref, value string;
 attribute source_data, value string;
@@ -185,6 +187,7 @@ attribute status_history, value string;
 attribute row_id, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute role_name, value string;
+attribute role, value string;
 attribute roles, value string;
 attribute additional_roles, value string;
 attribute corporate_email, value string;
@@ -198,6 +201,8 @@ attribute custom_permissions, value string;
 attribute password_hash, value string;
 attribute google_drive_name, value string;
 attribute telegram_name, value string;
+attribute telegram_username, value string;
+attribute telegram_display_name, value string;
 attribute notifications, value string;
 attribute contacts_payload, value string;
 attribute payments_settings, value string;
@@ -207,6 +212,7 @@ attribute works, value string;
 attribute project_groups_ids, value string;
 attribute performer_id, value string;
 attribute performer_profile_id, value string;
+attribute project_performer_link_id, value string;
 attribute performer, value string;
 attribute legacy_finance_income_type_ref, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
@@ -241,8 +247,14 @@ attribute done_count, value integer;
 attribute categorization_attempts, value integer;
 attribute codex_review_summary_attempts, value integer;
 attribute chat_id, value string;
+attribute chat_name, value string;
+attribute telegram_chat_id, value string;
 attribute user_id, value string;
 attribute telegram_user_id, value string;
+attribute linked_project_ids, value string;
+attribute membership_role, value string;
+attribute membership_source, value string;
+attribute confidence, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute access_level, value string;
 attribute participants, value string;

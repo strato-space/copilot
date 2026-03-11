@@ -76,6 +76,8 @@ export interface FactProjectMonth {
   billed_amount_rub: number;
   comment?: string | null;
   row_version: number;
+  created_at?: Date;
+  created_by?: string | null;
   updated_at: Date;
   updated_by: string;
   updated_source: ActorType;
@@ -106,6 +108,8 @@ export interface ForecastProjectMonth {
   forecast_cost_rub: number;
   comment?: string | null;
   row_version: number;
+  created_at?: Date;
+  created_by?: string | null;
   updated_at: Date;
   updated_by: string;
   updated_source: ActorType;

@@ -172,6 +172,7 @@ Preferred engineering principles for this repo:
 - Frontend build (manual): `cd app && npm install && npm run build` (outputs to `app/dist`).
 - Miniapp build (manual): `cd miniapp && npm install && npm run build` (outputs to `miniapp/dist`).
 - Backend build (manual): `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
+- Figma module build (manual): `cd figma && npm install && npm run build`.
 
 ### Service Execution Rules
 - All long-running services (backend, miniapp backend, agents) MUST be started via PM2, NEVER using Vite dev server directly.
@@ -197,6 +198,7 @@ Preferred engineering principles for this repo:
 - Frontend code lives in `app/src/`.
 - Miniapp code lives in `miniapp/src/`.
 - Backend code lives in `backend/src/`.
+- Figma indexing code lives in `figma/src/`.
 - Agents code lives in `agents/`.
 - Do not store build artifacts outside module directories.
 - For `app/`, keep only TypeScript/TSX sources and avoid JS duplicates.
@@ -217,11 +219,16 @@ Preferred engineering principles for this repo:
 - `copilot-miniapp-backend-dev` / `copilot-miniapp-backend-local` — miniapp backend API (`npm run dev:miniapp` with `backend/.env.development`).
 - Ensure dev frontend builds exist before serving via Nginx: `cd app && npm run build-dev` and `cd miniapp && npm run build-dev`.
 
+### PM2 services (figma standalone) -> repo paths
+- `copilot-figma-indexer-dev` / `copilot-figma-indexer-prod` — Figma BullMQ/Mongo indexing runtime from `figma/dist/cli/index.js` (`serve:indexer`) via `figma/scripts/pm2-figma.ecosystem.config.cjs`.
+- `copilot-figma-webhook-receiver-dev` / `copilot-figma-webhook-receiver-prod` — Figma webhook HTTP runtime from `figma/dist/cli/index.js` (`serve:webhooks`) via `figma/scripts/pm2-figma.ecosystem.config.cjs`.
+
 ## Product Notes (FinOps)
 - FX rates live in `app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
 - The plan-fact grid keeps at least one pinned month; users can pin up to 3 and can unpin the active month if another month remains pinned.
 - Plan-fact pages now use API-only data (no local mock/snapshot fallback in frontend store or analytics page).
 - Plan-fact project edits are persisted via `PUT /api/plan-fact/project` (fields: `project_name`, `subproject_name`, `contract_type`, `rate_rub_per_hour`) and contract type updates are propagated to facts/forecasts.
+- Forecast edits now require a non-empty comment, and monthly revision history is exposed through `GET /api/plan-fact/forecast-history` backed by `forecasts_project_month_history`.
 - Expense attachments are served from `/uploads/expenses`.
 - Guide directories use mock fallback data when automation APIs fail and expose a global Log sidebar from the Guide header.
 - FinOps spec-source inventory and open scope questions are tracked in `docs/FINOPS_SPEC_DISCOVERY.md` until product scope is approved.
@@ -268,6 +275,8 @@ Preferred engineering principles for this repo:
 - Voice upload path must broadcast `new_message` and `session_update` into room `voicebot:session:<session_id>` immediately after successful upload.
 - Voice upload API now propagates `request_id` in both success and error payloads (`X-Request-ID` passthrough or generated), and backend logs each upload stage with the same correlation id.
 - Voice upload must accept audio-only recorder blobs mislabeled as `video/webm` and normalize persisted/session-response MIME to `audio/webm`.
+- Voice admin/person/project payloads may be enriched with Telegram chat/user data and project-performer memberships through `backend/src/services/telegramKnowledge.ts`; seed those records via `backend/scripts/seed-telegram-knowledge.ts` (`npm run telegram:knowledge:seed:{dry,apply}`).
+- `POST /api/voicebot/project_performers` returns a permission-checked project payload plus linked performers sourced from `automation_project_performer_links` and `automation_telegram_*`.
 - Categorization pipeline must emit `message_update` over websocket (through `SEND_TO_SOCKET` events queue) so Categorization tab updates without manual refresh.
 - `CREATE_TASKS` realtime contract is session-room first: workers must emit `tickets_prepared` with canonical `session_id`; `socket_id` is optional and only narrows delivery to one socket when present.
 - Socket events runtime must pass through non-object payloads for `tickets_prepared` (array-of-task contract) without object coercion.

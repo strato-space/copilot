@@ -1,6 +1,7 @@
 import { Button, Card, Tabs, Typography, message } from 'antd';
 import dayjs from 'dayjs';
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
+import ForecastHistoryDrawer from '../components/ForecastHistoryDrawer';
 import PlanFactDrawer from '../components/PlanFactDrawer';
 import PlanFactGrid from '../components/PlanFactGrid';
 import ExpensesGrid, { type ExpensesGridHandle } from '../components/ExpensesGrid';
@@ -43,6 +44,8 @@ export default function PlanFactPage(): ReactElement {
 
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [drawerContext, setDrawerContext] = useState<PlanFactCellContext | null>(null);
+  const [forecastHistoryOpen, setForecastHistoryOpen] = useState<boolean>(false);
+  const [forecastHistoryContext, setForecastHistoryContext] = useState<PlanFactCellContext | null>(null);
   const [activeTab, setActiveTab] = useState<'income' | 'expense' | 'bonus' | 'fund'>('income');
   const expensesRef = useRef<ExpensesGridHandle | null>(null);
   const triggerCheck = useNotificationStore((state) => state.triggerCheck);
@@ -246,6 +249,16 @@ export default function PlanFactPage(): ReactElement {
     setDrawerContext(null);
   };
 
+  const handleOpenForecastHistory = (context: PlanFactCellContext): void => {
+    setForecastHistoryContext(context);
+    setForecastHistoryOpen(true);
+  };
+
+  const handleCloseForecastHistory = (): void => {
+    setForecastHistoryOpen(false);
+    setForecastHistoryContext(null);
+  };
+
   const handleApply = (context: PlanFactCellContext, values: PlanFactMonthCell): void => {
     const mode = context.edit_mode ?? 'forecast';
     const payload = {
@@ -265,8 +278,15 @@ export default function PlanFactPage(): ReactElement {
         handleCloseDrawer();
         message.success('Изменения сохранены');
       })
-      .catch(() => {
-        message.error('Не удалось сохранить изменения. Проверьте подключение к серверу.');
+      .catch((err: unknown) => {
+        const backendMessage =
+          typeof err === 'object'
+          && err !== null
+          && 'response' in err
+          && typeof (err as { response?: { data?: { error?: { message?: unknown } } } }).response?.data?.error?.message === 'string'
+            ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
+            : null;
+        message.error(backendMessage ?? 'Не удалось сохранить изменения. Проверьте подключение к серверу.');
       });
   };
 
@@ -370,6 +390,7 @@ export default function PlanFactPage(): ReactElement {
                   focusMonth={focusMonth}
                   onFocusMonthChange={handleFocusMonthChange}
                   onOpenDrawer={handleOpenDrawer}
+                  onOpenForecastHistory={handleOpenForecastHistory}
                 />
               ),
             },
@@ -415,12 +436,20 @@ export default function PlanFactPage(): ReactElement {
         />
       </Card>
       {activeTab === 'income' && (
-        <PlanFactDrawer
-          open={drawerOpen}
-          context={drawerContext}
-          onClose={handleCloseDrawer}
-          onApply={handleApply}
-        />
+        <>
+          <PlanFactDrawer
+            open={drawerOpen}
+            context={drawerContext}
+            onClose={handleCloseDrawer}
+            onApply={handleApply}
+          />
+          <ForecastHistoryDrawer
+            open={forecastHistoryOpen}
+            context={forecastHistoryContext}
+            forecastVersionId={forecastVersionId}
+            onClose={handleCloseForecastHistory}
+          />
+        </>
       )}
     </div>
   );

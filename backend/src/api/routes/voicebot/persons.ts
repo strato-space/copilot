@@ -10,6 +10,10 @@ import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb } from '../../../services/db.js';
 import { buildPerformerSelectorFilter } from '../../../services/performerLifecycle.js';
+import {
+    enrichPersonsWithTelegramAndProjectLinks,
+    enrichPerformersWithTelegramAndProjectLinks,
+} from '../../../services/telegramKnowledge.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const router = Router();
@@ -66,7 +70,9 @@ router.post('/list',
                                         then: {
                                             _id: "$$performerData._id",
                                             name: { $ifNull: ["$$performerData.name", "$$performerData.real_name"] },
-                                            corporate_email: "$$performerData.corporate_email"
+                                            corporate_email: "$$performerData.corporate_email",
+                                            telegram_id: "$$performerData.telegram_id",
+                                            telegram_name: "$$performerData.telegram_name"
                                         },
                                         else: null
                                     }
@@ -126,7 +132,20 @@ router.post('/list',
                 }
             ]).toArray();
 
-            res.status(200).json(result);
+            const enrichedResult = await enrichPersonsWithTelegramAndProjectLinks(
+                db,
+                result as Array<{
+                    _id?: unknown;
+                    performer_id?: unknown;
+                    performer?: {
+                        _id?: unknown;
+                        telegram_id?: unknown;
+                        telegram_name?: unknown;
+                    } | null;
+                }>,
+            );
+
+            res.status(200).json(enrichedResult);
         } catch (error) {
             logger.error('Error in persons/list:', error);
             res.status(500).json({ error: String(error) });
@@ -305,7 +324,9 @@ router.post('/list_performers',
                 name: 1,
                 real_name: 1,
                 corporate_email: 1,
-                projects_access: 1
+                projects_access: 1,
+                telegram_id: 1,
+                telegram_name: 1,
             }).sort({
                 name: 1,
                 real_name: 1,
@@ -317,10 +338,21 @@ router.post('/list_performers',
                 _id: p._id,
                 name: p.name || p.real_name,
                 email: p.corporate_email,
-                projects_access: p.projects_access || []
+                projects_access: p.projects_access || [],
+                telegram_id: (p as Document & { telegram_id?: unknown }).telegram_id,
+                telegram_name: (p as Document & { telegram_name?: unknown }).telegram_name,
             }));
 
-            res.status(200).json(result);
+            const enrichedResult = await enrichPerformersWithTelegramAndProjectLinks(
+                db,
+                result as Array<{
+                    _id?: unknown;
+                    telegram_id?: unknown;
+                    telegram_name?: unknown;
+                }>,
+            );
+
+            res.status(200).json(enrichedResult);
         } catch (error) {
             logger.error('Error in persons/list_performers:', error);
             res.status(500).json({ error: String(error) });

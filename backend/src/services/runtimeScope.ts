@@ -98,6 +98,7 @@ const RUNTIME_SCOPED_COLLECTION_NAMES = [
   'finops_finances_income_types',
   'facts_project_month',
   'forecasts_project_month',
+  'forecasts_project_month_history',
   'fx_monthly',
   'fund_comments',
   'finops_expense_categories',

@@ -35,6 +35,7 @@ attribute link_label, value string;
 attribute url, value string;
 attribute link, value string;
 attribute module_name, value string;
+attribute directives, value string;
 # @toon inventory=inspect domain=open max_values=20
 attribute module_scope, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
@@ -121,6 +122,7 @@ attribute source_type, value string;
 attribute source_kind, value string;
 # @toon values: null | voice_possible_task | voice_session
 
+attribute chat_type, value string;
 attribute source_ref, value string;
 attribute external_ref, value string;
 attribute source_data, value string;
@@ -216,6 +218,7 @@ attribute row_id, value string;
 attribute role_name, value string;
 # @toon values: null | MANAGER | PERFORMER | SUPER_ADMIN | VIEWER
 
+attribute role, value string;
 attribute roles, value string;
 attribute additional_roles, value string;
 attribute corporate_email, value string;
@@ -231,6 +234,8 @@ attribute custom_permissions, value string;
 attribute password_hash, value string;
 attribute google_drive_name, value string;
 attribute telegram_name, value string;
+attribute telegram_username, value string;
+attribute telegram_display_name, value string;
 attribute notifications, value string;
 attribute contacts_payload, value string;
 attribute payments_settings, value string;
@@ -240,6 +245,7 @@ attribute works, value string;
 attribute project_groups_ids, value string;
 attribute performer_id, value string;
 attribute performer_profile_id, value string;
+attribute project_performer_link_id, value string;
 attribute performer, value string;
 attribute legacy_finance_income_type_ref, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
@@ -284,8 +290,14 @@ attribute done_count, value integer;
 attribute categorization_attempts, value integer;
 attribute codex_review_summary_attempts, value integer;
 attribute chat_id, value string;
+attribute chat_name, value string;
+attribute telegram_chat_id, value string;
 attribute user_id, value string;
 attribute telegram_user_id, value string;
+attribute linked_project_ids, value string;
+attribute membership_role, value string;
+attribute membership_source, value string;
+attribute confidence, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute access_level, value string;
 # @toon values: null | private | public | restricted
@@ -642,12 +654,14 @@ entity project,
   plays project_has_epic_task:owner_project,
   plays project_has_google_drive_file:owner_project,
   plays project_has_voice_topic:owner_project,
+  plays project_has_telegram_chat_source:owner_project,
   plays project_has_legacy_finance_income:owner_project,
   plays project_has_fact_month:owner_project,
   plays project_has_forecast_month:owner_project,
   plays project_has_cost_expense:owner_project,
   plays project_has_agent_request:owner_project,
   plays project_has_kpi:owner_project,
+  plays project_performer_link_binds_project:bound_project,
   plays project_context_card_describes_project:described_project,
   plays artifact_record_supports_project:supported_project,
   plays context_bundle_assembles_project:assembled_project,
@@ -687,7 +701,8 @@ entity person,
   owns created_at,
   owns updated_at,
   plays transcript_segment_spoken_by_person:speaker_person,
-  plays person_has_performer_profile:person;
+  plays person_has_performer_profile:person,
+  plays telegram_user_maps_to_person:linked_person;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="performer_profile"> ---
@@ -728,11 +743,80 @@ entity performer_profile,
   owns notifications,
   owns payments_settings,
   plays person_has_performer_profile:performer_profile,
+  plays telegram_user_maps_to_performer_profile:linked_performer_profile,
   plays oper_task_assigned_to_performer_profile:assignee_performer_profile,
+  plays project_performer_link_binds_performer_profile:linked_performer_profile,
   plays performer_profile_maps_to_employee:source_performer_profile,
   plays performer_profile_creates_work_log:author_performer_profile,
   plays performer_profile_has_legacy_finance_expense:performer_profile,
   plays performer_profile_has_legacy_finance_income:performer_profile;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="telegram_chat"> ---
+# kind: operational-record
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProjectWorld
+# what: Operational Telegram group/source chat attached to projects and performers.
+# not: Not a direct-message session and not a voice session.
+# why: Preserves first-class project_chat / performer_chat / design-chat routing sources in AS-IS.
+entity telegram_chat,
+  owns telegram_chat_id @key,
+  owns chat_name,
+  owns chat_type,
+  owns source_kind,
+  owns directives,
+  owns linked_project_ids,
+  owns is_active,
+  owns created_at,
+  owns updated_at,
+  plays project_has_telegram_chat_source:source_chat,
+  plays telegram_chat_has_member:telegram_chat;
+
+# --- <semantic-card id="telegram_user"> ---
+# kind: operational-record
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProjectWorld
+# what: Operational Telegram user/contact record linked to person and/or performer profile.
+# not: Not a generic person row and not a chat itself.
+# why: Separates Telegram platform identity from internal performer profile while preserving linkage.
+entity telegram_user,
+  owns telegram_user_id @key,
+  owns telegram_username,
+  owns telegram_display_name,
+  owns performer_id,
+  owns person_id,
+  owns is_active,
+  owns created_at,
+  owns updated_at,
+  plays telegram_chat_has_member:telegram_user,
+  plays telegram_user_maps_to_person:telegram_user,
+  plays telegram_user_maps_to_performer_profile:telegram_user;
+
+# --- <semantic-card id="project_performer_link"> ---
+# kind: operational-record
+# fpf_basis:
+#   - A.2.1 U.RoleAssignment
+# scope: BC.ProjectWorld
+# what: Canonical temporal many-to-many relation record between project and performer.
+# not: Not permissions/access payload and not a generic person participation field.
+# why: Holds the authoritative project membership window used by runtime and ontology projection.
+entity project_performer_link,
+  owns project_performer_link_id @key,
+  owns project_id,
+  owns performer_id,
+  owns person_id,
+  owns role,
+  owns source,
+  owns confidence,
+  owns start_date,
+  owns end_date,
+  owns is_active,
+  owns created_at,
+  owns updated_at,
+  plays project_performer_link_binds_project:project_performer_link,
+  plays project_performer_link_binds_performer_profile:project_performer_link;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="team"> ---
@@ -1810,6 +1894,30 @@ relation oper_task_has_work_log,
 relation performer_profile_creates_work_log,
   relates author_performer_profile,
   relates work_log;
+
+relation telegram_chat_has_member,
+  relates telegram_chat,
+  relates telegram_user;
+
+relation telegram_user_maps_to_person,
+  relates telegram_user,
+  relates linked_person;
+
+relation telegram_user_maps_to_performer_profile,
+  relates telegram_user,
+  relates linked_performer_profile;
+
+relation project_has_telegram_chat_source,
+  relates owner_project,
+  relates source_chat;
+
+relation project_performer_link_binds_project,
+  relates bound_project,
+  relates project_performer_link;
+
+relation project_performer_link_binds_performer_profile,
+  relates linked_performer_profile,
+  relates project_performer_link;
 
 relation execution_job_executed_by_agent,
   relates execution_job,

@@ -1,4 +1,4 @@
-import { Button, Divider, Drawer, Form, Input, InputNumber, Space, Tag, Typography } from 'antd';
+import { Button, Divider, Drawer, Form, Input, InputNumber, Space, Tag, Typography, message } from 'antd';
 import { type ReactElement, useEffect, useState } from 'react';
 import { type PlanFactCellContext, type PlanFactMonthCell } from '../services/types';
 import { formatCurrency, formatMonthLabel, formatNumber } from '../utils/format';
@@ -46,6 +46,7 @@ export default function PlanFactDrawer({ open, context, onClose, onApply }: Prop
 
   const isTimeAndMaterials = context?.contract_type === 'T&M';
   const isFix = context?.contract_type === 'Fix';
+  const mode = context?.edit_mode ?? 'forecast';
   const rate = context?.rate_rub_per_hour ?? 0;
   const canEditHours = isTimeAndMaterials || isFix;
   const canEditRub = !isTimeAndMaterials && !isFix;
@@ -78,8 +79,11 @@ export default function PlanFactDrawer({ open, context, onClose, onApply }: Prop
     if (!context) {
       return;
     }
-    const mode = context.edit_mode ?? 'forecast';
     const cleanedComment = comment.trim();
+    if (mode === 'forecast' && cleanedComment.length === 0) {
+      message.warning('Для прогноза нужен комментарий с причиной изменения или пояснением.');
+      return;
+    }
 
     // For Fix contracts the amount is fixed and edited in Guides (Projects).
     // In Plan/Fact we only let users enter hours, while keeping the amount identical in plan and fact.
@@ -139,14 +143,25 @@ export default function PlanFactDrawer({ open, context, onClose, onApply }: Prop
             )}
           </div>
           <div>
-            <Typography.Text type="secondary">Комментарий</Typography.Text>
+            <Typography.Text type="secondary">
+              {mode === 'forecast' ? 'Комментарий к прогнозу' : 'Комментарий к факту'}
+            </Typography.Text>
             <Input.TextArea
               value={comment}
               onChange={(e): void => setComment(e.target.value)}
               autoSize={{ minRows: 2, maxRows: 4 }}
-              placeholder="Комментарий"
+              placeholder={
+                mode === 'forecast'
+                  ? 'Причина изменения прогноза или пояснение'
+                  : 'Комментарий'
+              }
               className="mt-1"
             />
+            {mode === 'forecast' ? (
+              <Typography.Text type="secondary" className="mt-1 block text-xs">
+                Комментарий обязателен для каждой новой версии прогноза.
+              </Typography.Text>
+            ) : null}
           </div>
           <Divider />
           <Form layout="vertical">

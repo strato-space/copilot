@@ -1,0 +1,43 @@
+{
+  "name": "copilot-figma",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Figma indexer and webhook receiver for Copilot",
+  "type": "module",
+  "main": "dist/cli/index.js",
+  "scripts": {
+    "dev:indexer": "tsx src/cli/index.ts serve:indexer",
+    "dev:webhooks": "tsx src/cli/index.ts serve:webhooks",
+    "build": "tsc -p tsconfig.json",
+    "start:indexer": "node dist/cli/index.js serve:indexer",
+    "start:webhooks": "node dist/cli/index.js serve:webhooks",
+    "sync:bootstrap": "tsx src/cli/index.ts sync:bootstrap",
+    "sync:team": "tsx src/cli/index.ts sync:team",
+    "sync:project": "tsx src/cli/index.ts sync:project",
+    "sync:file": "tsx src/cli/index.ts sync:file",
+    "stats": "tsx src/cli/index.ts stats",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest --runInBand",
+    "test:watch": "NODE_OPTIONS='--experimental-vm-modules' jest --watch"
+  },
+  "dependencies": {
+    "bullmq": "^5.7.13",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "ioredis": "^5.4.1",
+    "mongodb": "^7.0.0",
+    "prom-client": "^15.1.0",
+    "winston": "^3.13.0",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.0.10",
+    "@types/supertest": "^6.0.3",
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

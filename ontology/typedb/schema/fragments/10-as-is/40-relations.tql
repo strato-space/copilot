@@ -90,6 +90,30 @@ relation performer_profile_creates_work_log,
   relates author_performer_profile,
   relates work_log;
 
+relation telegram_chat_has_member,
+  relates telegram_chat,
+  relates telegram_user;
+
+relation telegram_user_maps_to_person,
+  relates telegram_user,
+  relates linked_person;
+
+relation telegram_user_maps_to_performer_profile,
+  relates telegram_user,
+  relates linked_performer_profile;
+
+relation project_has_telegram_chat_source,
+  relates owner_project,
+  relates source_chat;
+
+relation project_performer_link_binds_project,
+  relates bound_project,
+  relates project_performer_link;
+
+relation project_performer_link_binds_performer_profile,
+  relates linked_performer_profile,
+  relates project_performer_link;
+
 relation execution_job_executed_by_agent,
   relates execution_job,
   relates agent;

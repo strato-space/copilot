@@ -9,6 +9,10 @@ import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
 import { PermissionManager } from '../../../permissions/permission-manager.js';
 import { PERMISSIONS, ROLES } from '../../../permissions/permissions-config.js';
 import { getDb } from '../../../services/db.js';
+import {
+    enrichPerformersWithTelegramAndProjectLinks,
+    enrichProjectsWithTelegramAndPerformerLinks,
+} from '../../../services/telegramKnowledge.js';
 import { getLogger } from '../../../utils/logger.js';
 
 const router = Router();
@@ -67,6 +71,7 @@ router.post('/users',
                 real_name: 1,
                 corporate_email: 1,
                 telegram_id: 1,
+                telegram_name: 1,
                 role: 1,
                 additional_roles: 1,
                 custom_permissions: 1,
@@ -81,8 +86,17 @@ router.post('/users',
                 computed_permissions: [], // Will be filled on client if needed
             }));
 
+            const enrichedUsers = await enrichPerformersWithTelegramAndProjectLinks(
+                db,
+                usersWithRoleDetails as Array<{
+                    _id?: unknown;
+                    telegram_id?: unknown;
+                    telegram_name?: unknown;
+                }>,
+            );
+
             res.status(200).json({
-                users: usersWithRoleDetails
+                users: enrichedUsers
             });
         } catch (error) {
             logger.error('Get users with roles error:', error);
@@ -505,7 +519,9 @@ router.post('/projects/all',
                     description: 1
                 }).toArray();
 
-            res.status(200).json(projects);
+            const enrichedProjects = await enrichProjectsWithTelegramAndPerformerLinks(db, projects);
+
+            res.status(200).json(enrichedProjects);
         } catch (error) {
             logger.error('Get all projects error:', error);
             res.status(500).json({ error: "Internal server error" });

@@ -58,6 +58,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Plan-fact months can be pinned (up to 3), and the totals row stays visible under pinned months.
 - Plan-fact frontend uses API-only data (local `mockPlanFact` fallback and CRM snapshot badges were removed from pages/stores).
 - Plan-fact project edits are persisted through `PUT /api/plan-fact/project`; backend propagates `contract_type` updates into facts/forecasts records for the same `project_id`.
+- Forecast edits now require a non-empty comment, and forecast revision history is available through `GET /api/plan-fact/forecast-history` with UI access from the income grid drawer flow.
 - The Expenses tab combines payroll and other costs, with category-level operations and sticky totals.
 - Expense attachments are uploaded via `/api/uploads/expense-attachments` and served from `/uploads/expenses`.
 - Guide directories fall back to mock data when the automation API is unavailable, and the Guide header includes a global Log sidebar.
@@ -98,6 +99,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
 - Voice API source of truth is local: `/api/voicebot/*` (flat contract + legacy aliases during migration).
 - Runtime isolation is enforced by per-environment deployment/database boundaries; `runtime_tag` is not a canonical runtime filter contract.
+- Voice admin/person/project payloads can be enriched with Telegram user/chat links and project-performer memberships; `POST /api/voicebot/project_performers` returns a permission-checked `{ project, performers }` payload backed by `automation_telegram_*` and `automation_project_performer_links`.
+- Telegram/project knowledge can be seeded into those collections with `cd backend && npm run telegram:knowledge:seed:dry` or `cd backend && npm run telegram:knowledge:seed:apply`.
 - WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
 - Upload route returns structured oversize diagnostics (`413 file_too_large` with max-size metadata), and WebRTC upload client normalizes these payloads into concise UI-safe error messages.
@@ -276,6 +279,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `app/` React + Vite frontend for Finance Ops and OperOps/CRM.
 - `miniapp/` React + Vite miniapp frontend.
 - `backend/` Node/Express API for FinOps, CRM, VoiceBot, and miniapp backend routes.
+- `figma/` standalone TypeScript service for Figma indexing, webhook intake, BullMQ workers, and PM2 packaging.
 - `agents/` Python-based agents service and PM2 helper scripts.
 - `scripts/` deployment helpers (`pm2-backend.sh`, `check-envs.sh`).
 - `docs/`, `specs/`, `projects/` for product documentation and specs.
@@ -315,6 +319,9 @@ For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port
 - Manual frontend builds:
   - `cd app && npm install && npm run build-dev`
   - `cd miniapp && npm install && npm run build-dev`
+- Manual Figma module flow:
+  - `cd figma && npm install && npm run build`
+  - `cd figma && ./scripts/pm2-figma.sh dev start`
 
 ## Repository Sync (bd)
 This repo uses `bd` (Beads) and the `beads-sync` branch to keep repository metadata consistent.

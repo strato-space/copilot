@@ -3,6 +3,7 @@ import { sendOk } from '../middleware/response.js';
 import { AppError } from '../middleware/error.js';
 import {
   buildPlanFactGrid,
+  getForecastProjectMonthHistory,
   updatePlanFactProject,
   upsertFactProjectMonth,
   upsertForecastProjectMonth,
@@ -118,6 +119,15 @@ router.get('/plan-fact', async (req: Request, res: Response) => {
   sendOk(res, payload);
 });
 
+router.get('/plan-fact/forecast-history', async (req: Request, res: Response) => {
+  const projectId = planFactParser.requiredString(req.query.project_id, 'project_id');
+  const month = planFactParser.monthFromBody(req.query.month);
+  const forecastVersionId = (req.query.forecast_version_id as string | undefined) ?? 'baseline';
+
+  const payload = await getForecastProjectMonthHistory(forecastVersionId, projectId, month);
+  sendOk(res, payload);
+});
+
 router.put('/plan-fact/entry', async (req: Request, res: Response) => {
   const projectId = planFactParser.requiredString(req.body?.project_id, 'project_id');
   const month = planFactParser.monthFromBody(req.body?.month);
@@ -125,7 +135,7 @@ router.put('/plan-fact/entry', async (req: Request, res: Response) => {
   const contractType = planFactParser.contractType(req.body?.contract_type);
   const hours = planFactParser.requiredNumber(req.body?.hours, 'hours');
   const amountRub = planFactParser.requiredNumber(req.body?.amount_rub, 'amount_rub');
-  const comment = typeof req.body?.comment === 'string' ? req.body.comment : undefined;
+  const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim() : undefined;
 
   if (mode === 'fact') {
     const saved = await upsertFactProjectMonth({
@@ -141,6 +151,9 @@ router.put('/plan-fact/entry', async (req: Request, res: Response) => {
   }
 
   if (mode === 'forecast') {
+    if (!comment) {
+      throw new AppError('comment is required for forecast updates', 400, 'VALIDATION_ERROR');
+    }
     const forecastVersionId = planFactParser.requiredString(req.body?.forecast_version_id, 'forecast_version_id');
     const saved = await upsertForecastProjectMonth({
       forecast_version_id: forecastVersionId,

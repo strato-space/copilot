@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-11
+### PROBLEM SOLVED
+- **22:03** Plan-fact forecast edits could overwrite monthly values without a required rationale, and operators had no built-in history view to audit how a forecast changed over time.
+- **22:03** Voice admin/person/project payloads lacked Telegram chat, Telegram user, and project-performer membership context, so project routing and performer discovery stayed fragmented across separate datasets.
+- **22:03** The ontology and repo runtime layout still lacked first-class Telegram/project-membership modeling and a standalone Figma indexing subsystem, while the current workspace also contained undocumented runtime/debug artifacts that needed explicit closeout acceptance.
+
+### FEATURE IMPLEMENTED
+- **22:03** Enforced mandatory forecast comments for forecast edits and added a dedicated forecast-history drawer/API so plan-fact revisions are visible from the income grid.
+- **22:03** Added Telegram knowledge enrichment for Voice project/person/performer surfaces, a permission-checked `project_performers` route, and a seed pipeline for Telegram/project membership data.
+- **22:03** Expanded the TypeDB ontology for Telegram chats/users and canonical project-performer links, and added a standalone `figma/` module with indexer/webhook runtimes, CLI commands, PM2 packaging, tests, and operations docs.
+
+### CHANGES
+- **22:03** Updated `app/src/components/{PlanFactDrawer.tsx,PlanFactGrid.tsx,ForecastHistoryDrawer.tsx}`, `app/src/pages/PlanFactPage.tsx`, `app/src/services/types.ts`, `backend/src/api/routes/planFact.ts`, `backend/src/services/planFactService.ts`, `backend/src/models/types.ts`, `backend/src/constants.ts`, and `backend/src/services/runtimeScope.ts` to require trimmed forecast comments, increment row versions, persist `forecasts_project_month_history`, and expose `GET /api/plan-fact/forecast-history`.
+- **22:03** Added `backend/src/services/telegramKnowledge.ts`, `backend/scripts/seed-telegram-knowledge.ts`, `POST /api/voicebot/project_performers`, Telegram/project enrichment in `backend/src/api/routes/voicebot/{permissions.ts,persons.ts,sessions.ts}`, new shared collection/index definitions in `backend/src/constants.ts`, and repo env visibility for `figma/.env.{development,production}` in `.gitignore` and `scripts/check-envs.sh`.
+- **22:03** Extended `ontology/typedb/{schema,mappings,queries,scripts}` for `telegram_chat`, `telegram_user`, and `project_performer_link`, added the standalone `figma/` package (`README.md`, `OPERATIONS.md`, CLI/runtime/jobs/tests/PM2 scripts), normalized the new planning/docs surfaces back to English during closeout, and accepted the current workspace artifacts under `output/` together with placeholder files `page` and `section`.
+
 ## 2026-03-10
 ### PROBLEM SOLVED
 - **11:45** Ontology authoring had flipped fully to TOON fragments, which removed the direct annotated TQL surface used for schema review and operator debugging.

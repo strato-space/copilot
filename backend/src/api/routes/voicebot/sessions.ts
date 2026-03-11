@@ -33,6 +33,10 @@ import { PERMISSIONS } from '../../../permissions/permissions-config.js';
 import { getDb, getRawDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import {
+    enrichPerformersWithTelegramAndProjectLinks,
+    enrichProjectsWithTelegramAndPerformerLinks,
+} from '../../../services/telegramKnowledge.js';
+import {
     buildRuntimeFilter,
     IS_PROD_RUNTIME,
     mergeWithRuntimeFilter,
@@ -2662,9 +2666,99 @@ router.post('/projects', async (req: Request, res: Response) => {
             projects = await PermissionManager.getUserAccessibleProjects(performer, db);
         }
 
-        return res.status(200).json(projects);
+        const enrichedProjects = await enrichProjectsWithTelegramAndPerformerLinks(
+            db,
+            projects as Array<{ _id?: unknown }>,
+        );
+
+        return res.status(200).json(enrichedProjects);
     } catch (error) {
         logger.error('Error in projects:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/project_performers', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest & { body?: { project_id?: unknown } };
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const projectId = toObjectIdOrNull(vreq.body?.project_id);
+        if (!projectId) {
+            return res.status(400).json({ error: 'project_id is required' });
+        }
+
+        const userPermissions = await PermissionManager.getUserPermissions(performer, db);
+        if (!userPermissions.includes(PERMISSIONS.PROJECTS.READ_ALL) && !userPermissions.includes(PERMISSIONS.PROJECTS.READ_ASSIGNED)) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        if (!userPermissions.includes(PERMISSIONS.PROJECTS.READ_ALL)) {
+            const accessibleProjects = await PermissionManager.getUserAccessibleProjects(performer, db);
+            const hasAccess = accessibleProjects.some((item) => toIdString((item as { _id?: unknown })._id) === projectId.toHexString());
+            if (!hasAccess) {
+                return res.status(403).json({ error: 'Forbidden' });
+            }
+        }
+
+        const projectDoc = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne({
+            _id: projectId,
+            is_deleted: { $ne: true },
+        });
+        if (!projectDoc) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const [project] = await enrichProjectsWithTelegramAndPerformerLinks(
+            db,
+            [projectDoc as { _id?: unknown }],
+        );
+        const projectWithLinks = project ?? {
+            ...projectDoc,
+            telegram_chats: [],
+            project_performer_links: [],
+        };
+
+        const performerIds = Array.from(
+            new Set(
+                (projectWithLinks.project_performer_links || [])
+                    .map((item) => item.performer_id)
+                    .filter((value): value is string => typeof value === 'string' && value.length > 0),
+            ),
+        ).map((value) => new ObjectId(value));
+
+        const performers = performerIds.length
+            ? await db.collection(VOICEBOT_COLLECTIONS.PERFORMERS)
+                .find({
+                    _id: { $in: performerIds },
+                    is_deleted: { $ne: true },
+                })
+                .project({
+                    _id: 1,
+                    name: 1,
+                    real_name: 1,
+                    corporate_email: 1,
+                    telegram_id: 1,
+                    telegram_name: 1,
+                    role: 1,
+                    projects_access: 1,
+                    is_active: 1,
+                })
+                .toArray()
+            : [];
+
+        const enrichedPerformers = await enrichPerformersWithTelegramAndProjectLinks(
+            db,
+            performers as Array<{ _id?: unknown; telegram_id?: unknown; telegram_name?: unknown }>,
+        );
+
+        return res.status(200).json({
+            project: projectWithLinks,
+            performers: enrichedPerformers,
+        });
+    } catch (error) {
+        logger.error('Error in project_performers:', error);
         return res.status(500).json({ error: String(error) });
     }
 });

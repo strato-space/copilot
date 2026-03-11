@@ -52,6 +52,28 @@ export interface UpsertForecastParams {
   comment?: string | null;
 }
 
+export interface ForecastHistoryEntry {
+  id: string;
+  forecast_version_id: string;
+  project_id: string;
+  month: string;
+  contract_type: ForecastProjectMonth['type'];
+  forecast_hours: number;
+  forecast_amount_rub: number;
+  comment: string | null;
+  row_version: number;
+  changed_at: Date;
+  changed_by: string | null;
+  changed_source: string | null;
+}
+
+export interface ForecastHistoryResponse {
+  forecast_version_id: string;
+  project_id: string;
+  month: string;
+  entries: ForecastHistoryEntry[];
+}
+
 type CustomerDoc = {
   _id: { toString(): string };
   name?: string;
@@ -73,6 +95,10 @@ type ProjectDoc = {
   project_group?: string | ObjectId;
   updated_at?: Date | string;
   updated_by?: string;
+};
+
+type ForecastHistoryDoc = ForecastProjectMonth & {
+  _id?: ObjectId;
 };
 
 const getCustomers = async (): Promise<CustomerDoc[]> => {
@@ -103,11 +129,27 @@ const getFactsByMonth = async (months: string[]) => {
 
 const getForecastsByMonth = async (forecastVersionId: string, months: string[]) => {
   const db = await connectDb();
-  const collection = db.collection(COLLECTIONS.FORECASTS_PROJECT_MONTH);
+  const collection: Collection<ForecastProjectMonth> = db.collection(COLLECTIONS.FORECASTS_PROJECT_MONTH);
   return collection
     .find({ forecast_version_id: forecastVersionId, month: { $in: months } })
+    .sort({ updated_at: 1, _id: 1 })
     .toArray();
 };
+
+const toForecastHistoryEntry = (doc: ForecastHistoryDoc): ForecastHistoryEntry => ({
+  id: doc._id instanceof ObjectId ? doc._id.toHexString() : String(doc._id ?? ''),
+  forecast_version_id: doc.forecast_version_id,
+  project_id: doc.project_id,
+  month: doc.month,
+  contract_type: doc.type,
+  forecast_hours: doc.forecast_hours,
+  forecast_amount_rub: doc.forecast_amount_rub,
+  comment: doc.comment ?? null,
+  row_version: doc.row_version,
+  changed_at: doc.created_at ?? doc.updated_at,
+  changed_by: doc.updated_by ?? doc.created_by ?? null,
+  changed_source: doc.updated_source ?? null,
+});
 
 const emptyCell = (): PlanFactMonthCell => ({
   fact_rub: 0,
@@ -224,62 +266,128 @@ export const upsertFactProjectMonth = async (params: UpsertFactParams) => {
   const db = await connectDb();
   const collection: Collection<FactProjectMonth> = db.collection(COLLECTIONS.FACTS_PROJECT_MONTH);
   const now = new Date();
-  const payload: FactProjectMonth = {
-    project_id: params.project_id,
-    month: params.month,
+  const filter = { project_id: params.project_id, month: params.month };
+  const existing = await collection.findOne(filter);
+  const rowVersion = (existing?.row_version ?? 0) + 1;
+  const payload = {
     type: params.contract_type,
     billed_hours: params.billed_hours,
     billed_amount_rub: params.billed_amount_rub,
     fx_manual_used: false,
-    row_version: 1,
+    row_version: rowVersion,
     updated_at: now,
     updated_by: 'ui',
-    updated_source: 'user',
+    updated_source: 'user' as const,
     comment: params.comment ?? null,
   };
   await collection.updateOne(
-    { project_id: params.project_id, month: params.month },
-    { $set: payload, $setOnInsert: { project_id: params.project_id, month: params.month } },
+    filter,
+    {
+      $set: payload,
+      $setOnInsert: {
+        project_id: params.project_id,
+        month: params.month,
+        created_at: now,
+        created_by: 'ui',
+      },
+    },
     { upsert: true },
   );
-  return payload;
+  return {
+    project_id: params.project_id,
+    month: params.month,
+    ...payload,
+    created_at: existing?.created_at ?? now,
+    created_by: existing?.created_by ?? 'ui',
+  } satisfies FactProjectMonth;
 };
 
 export const upsertForecastProjectMonth = async (params: UpsertForecastParams) => {
   const db = await connectDb();
-  const collection: Collection<ForecastProjectMonth> = db.collection(COLLECTIONS.FORECASTS_PROJECT_MONTH);
+  const snapshotCollection: Collection<ForecastProjectMonth> = db.collection(COLLECTIONS.FORECASTS_PROJECT_MONTH);
+  const historyCollection: Collection<ForecastHistoryDoc> = db.collection(COLLECTIONS.FORECASTS_PROJECT_MONTH_HISTORY);
   const now = new Date();
-  const payload: ForecastProjectMonth = {
+  const filter = {
     forecast_version_id: params.forecast_version_id,
     project_id: params.project_id,
     month: params.month,
+  };
+  const existing = await snapshotCollection.findOne(filter);
+  const rowVersion = (existing?.row_version ?? 0) + 1;
+  const payload = {
     type: params.contract_type,
     forecast_hours: params.forecast_hours,
     forecast_amount_rub: params.forecast_amount_rub,
     forecast_cost_rub: 0,
-    row_version: 1,
+    row_version: rowVersion,
     updated_at: now,
     updated_by: 'ui',
-    updated_source: 'user',
+    updated_source: 'user' as const,
     comment: params.comment ?? null,
   };
-  await collection.updateOne(
-    {
-      forecast_version_id: params.forecast_version_id,
-      project_id: params.project_id,
-      month: params.month,
-    },
+  await snapshotCollection.updateOne(
+    filter,
     {
       $set: payload,
       $setOnInsert: {
         forecast_version_id: params.forecast_version_id,
         project_id: params.project_id,
         month: params.month,
+        created_at: now,
+        created_by: 'ui',
       },
     },
     { upsert: true },
   );
-  return payload;
+  const historyEntry: ForecastHistoryDoc = {
+    forecast_version_id: params.forecast_version_id,
+    project_id: params.project_id,
+    month: params.month,
+    ...payload,
+    created_at: now,
+    created_by: 'ui',
+  };
+  await historyCollection.insertOne(historyEntry);
+  return {
+    ...historyEntry,
+    created_at: existing?.created_at ?? now,
+    created_by: existing?.created_by ?? 'ui',
+  } satisfies ForecastProjectMonth;
+};
+
+export const getForecastProjectMonthHistory = async (
+  forecastVersionId: string,
+  projectId: string,
+  month: string,
+): Promise<ForecastHistoryResponse> => {
+  const db = await connectDb();
+  const historyCollection: Collection<ForecastHistoryDoc> = db.collection(COLLECTIONS.FORECASTS_PROJECT_MONTH_HISTORY);
+  const snapshotCollection: Collection<ForecastProjectMonth> = db.collection(COLLECTIONS.FORECASTS_PROJECT_MONTH);
+  const filter = {
+    forecast_version_id: forecastVersionId,
+    project_id: projectId,
+    month,
+  };
+
+  const historyDocs = await historyCollection
+    .find(filter)
+    .sort({ created_at: -1, updated_at: -1, _id: -1 })
+    .toArray();
+
+  const entries = historyDocs.map(toForecastHistoryEntry);
+  if (entries.length === 0) {
+    const snapshotDoc = await snapshotCollection.findOne(filter);
+    if (snapshotDoc) {
+      entries.push(toForecastHistoryEntry(snapshotDoc));
+    }
+  }
+
+  return {
+    forecast_version_id: forecastVersionId,
+    project_id: projectId,
+    month,
+    entries,
+  };
 };
 
 export interface UpdatePlanFactProjectParams {

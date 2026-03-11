@@ -91,6 +91,15 @@ print_env_summary "App local" "$ROOT_DIR/app/.env.localhost" \
   "VITE_VOICEBOT_BASE_URL" \
   "VITE_OPEROPS_EMBED_BASE_URL"
 
+print_env_summary "Figma dev" "$ROOT_DIR/figma/.env.development" \
+  "FIGMA_WEBHOOK_PORT" \
+  "FIGMA_WEBHOOK_PUBLIC_BASE_URL" \
+  "FIGMA_TEAM_IDS"
+print_env_summary "Figma prod" "$ROOT_DIR/figma/.env.production" \
+  "FIGMA_WEBHOOK_PORT" \
+  "FIGMA_WEBHOOK_PUBLIC_BASE_URL" \
+  "FIGMA_TEAM_IDS"
+
 print_env_summary "Miniapp dev" "$ROOT_DIR/miniapp/.env.development" \
   "VITE_API_URL" \
   "VITE_MINIAPP_BACKEND_PORT"

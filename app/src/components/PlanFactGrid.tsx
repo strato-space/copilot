@@ -1,7 +1,7 @@
 import { Button, Table, Tag, Tooltip, Typography } from 'antd';
 import {
   ArrowRightOutlined,
-  EditOutlined,
+  EyeOutlined,
   FilterOutlined,
   PushpinFilled,
   PushpinOutlined,
@@ -40,6 +40,7 @@ interface Props {
   focusMonth: string;
   onFocusMonthChange: (month: string) => void;
   onOpenDrawer: (context: PlanFactCellContext) => void;
+  onOpenForecastHistory: (context: PlanFactCellContext) => void;
 }
 
 type SummaryCellProps = TdHTMLAttributes<HTMLTableCellElement> & {
@@ -181,11 +182,17 @@ const ValueCell = ({
   valueHours,
   onOpen,
   ariaLabel,
+  secondaryAction,
 }: {
   valueRub: number;
   valueHours: number;
   onOpen?: () => void;
   ariaLabel?: string;
+  secondaryAction?: {
+    onClick: () => void;
+    ariaLabel: string;
+    title: string;
+  };
 }): ReactElement => {
   const hasValue = valueRub !== 0 || valueHours !== 0;
   const content = (
@@ -199,30 +206,65 @@ const ValueCell = ({
     </div>
   );
 
-  if (!onOpen) {
+  if (!onOpen && !secondaryAction) {
     return <div className="px-2">{content}</div>;
   }
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={ariaLabel}
-      className="finops-cell-button group w-full rounded-lg px-2 py-2 border border-transparent hover:border-slate-200 hover:bg-slate-50 transition"
-    >
-      <div className="finops-cell-content">
-        {content}
-        <EditOutlined className="finops-cell-icon text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-    </button>
+    <div className="flex items-start gap-2 rounded-lg border border-transparent px-1 py-1 hover:border-slate-200 hover:bg-slate-50 transition">
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={ariaLabel}
+          className="finops-cell-button min-w-0 flex-1 rounded-md px-1 py-1 text-left"
+        >
+          {content}
+        </button>
+      ) : (
+        <div className="min-w-0 flex-1 px-1">{content}</div>
+      )}
+
+      {secondaryAction ? (
+        <Tooltip title={secondaryAction.title}>
+          <Button
+            type="text"
+            size="small"
+            icon={<EyeOutlined />}
+            aria-label={secondaryAction.ariaLabel}
+            onClick={secondaryAction.onClick}
+            className="mt-0.5 shrink-0 text-slate-400 opacity-100 hover:!text-slate-900"
+          />
+        </Tooltip>
+      ) : null}
+    </div>
   );
 };
+
+const buildCellContext = (
+  row: RowItem,
+  month: string,
+  values: PlanFactMonthCell,
+  editMode: 'fact' | 'forecast',
+): PlanFactCellContext => ({
+  customer_id: row.customer_id,
+  customer_name: row.customer_name,
+  project_id: row.project_id ?? '',
+  project_name: row.project_name ?? '',
+  subproject_name: row.subproject_name ?? '',
+  contract_type: row.contract_type ?? 'T&M',
+  rate_rub_per_hour: row.rate_rub_per_hour ?? null,
+  month,
+  edit_mode: editMode,
+  values,
+});
 
 const buildColumns = (
   months: string[],
   focusMonth: string,
   onFocusMonthChange: (month: string) => void,
   onOpenDrawer: (context: PlanFactCellContext) => void,
+  onOpenForecastHistory: (context: PlanFactCellContext) => void,
   customerFilters: { text: string; value: string }[],
   pinnedMonths: string[],
   onTogglePin: (month: string) => void,
@@ -366,26 +408,18 @@ const buildColumns = (
           render: (_: unknown, row: RowItem): ReactElement => {
             const cell = row.months[month] ?? emptyCell();
             const fxFactor = getFxFactor(month);
-            const handleOpen = (): void => {
-              onOpenDrawer({
-                customer_id: row.customer_id,
-                customer_name: row.customer_name,
-                project_id: row.project_id ?? '',
-                project_name: row.project_name ?? '',
-                subproject_name: row.subproject_name ?? '',
-                contract_type: row.contract_type ?? 'T&M',
-                rate_rub_per_hour: row.rate_rub_per_hour ?? null,
-                month,
-                edit_mode: 'forecast',
-                values: cell,
-              });
-            };
+            const context = buildCellContext(row, month, cell, 'forecast');
             return (
               <ValueCell
                 valueRub={cell.forecast_rub * fxFactor}
                 valueHours={cell.forecast_hours}
-                onOpen={handleOpen}
+                onOpen={(): void => onOpenDrawer(context)}
                 ariaLabel={`Открыть ${row.project_name ?? 'проект'} за ${formatMonthLabel(month)} (прогноз)`}
+                secondaryAction={{
+                  onClick: (): void => onOpenForecastHistory(context),
+                  ariaLabel: `Открыть историю прогноза ${row.project_name ?? 'проект'} за ${formatMonthLabel(month)}`,
+                  title: 'История прогноза',
+                }}
               />
             );
           },
@@ -401,25 +435,12 @@ const buildColumns = (
           render: (_: unknown, row: RowItem): ReactElement => {
             const cell = row.months[month] ?? emptyCell();
             const fxFactor = getFxFactor(month);
-            const handleOpen = (): void => {
-              onOpenDrawer({
-                customer_id: row.customer_id,
-                customer_name: row.customer_name,
-                project_id: row.project_id ?? '',
-                project_name: row.project_name ?? '',
-                subproject_name: row.subproject_name ?? '',
-                contract_type: row.contract_type ?? 'T&M',
-                rate_rub_per_hour: row.rate_rub_per_hour ?? null,
-                month,
-                edit_mode: 'fact',
-                values: cell,
-              });
-            };
+            const context = buildCellContext(row, month, cell, 'fact');
             return (
               <ValueCell
                 valueRub={(row.contract_type === 'Fix' ? cell.forecast_rub : cell.fact_rub) * fxFactor}
                 valueHours={cell.fact_hours}
-                onOpen={handleOpen}
+                onOpen={(): void => onOpenDrawer(context)}
                 ariaLabel={`Открыть ${row.project_name ?? 'проект'} за ${formatMonthLabel(month)} (факт)`}
               />
             );
@@ -438,6 +459,7 @@ export default function PlanFactGrid({
   focusMonth,
   onFocusMonthChange,
   onOpenDrawer,
+  onOpenForecastHistory,
 }: Props): ReactElement {
   const [tableFilters, setTableFilters] = useState<Record<string, FilterValue | null>>({});
   const fxRates = useFxStore((state) => state.rates);
@@ -542,6 +564,7 @@ export default function PlanFactGrid({
         focusMonth,
         onFocusMonthChange,
         onOpenDrawer,
+        onOpenForecastHistory,
         customerFilters,
         pinnedMonths,
         handleTogglePin,

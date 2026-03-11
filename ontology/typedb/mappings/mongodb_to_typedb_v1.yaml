@@ -185,6 +185,86 @@ collections:
           by: performer_profile_id
           from: performer_id
 
+  - collection: automation_telegram_chats
+    target_entity: telegram_chat
+    key:
+      attribute: telegram_chat_id
+      from: chat_id
+    attributes:
+      chat_name: name
+      chat_type: chat_type
+      source_kind: source_kind
+      directives: directives
+      linked_project_ids: linked_project_ids
+      is_active: is_active
+      created_at: created_at
+      updated_at: updated_at
+    relations:
+      - relation: project_has_telegram_chat_source
+        owner_role: owner_project
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: linked_project_ids
+
+  - collection: automation_telegram_users
+    target_entity: telegram_user
+    key:
+      attribute: telegram_user_id
+      from: telegram_id
+    attributes:
+      telegram_username: username
+      telegram_display_name: display_name
+      performer_id: performer_id
+      person_id: person_id
+      is_active: is_active
+      created_at: created_at
+      updated_at: updated_at
+    relations:
+      - relation: telegram_user_maps_to_person
+        owner_role: linked_person
+        owner_lookup:
+          entity: person
+          by: person_id
+          from: person_id
+      - relation: telegram_user_maps_to_performer_profile
+        owner_role: linked_performer_profile
+        owner_lookup:
+          entity: performer_profile
+          by: performer_profile_id
+          from: performer_id
+
+  - collection: automation_project_performer_links
+    target_entity: project_performer_link
+    key:
+      attribute: project_performer_link_id
+      from: _id
+    attributes:
+      project_id: project_id
+      performer_id: performer_id
+      person_id: person_id
+      role: role
+      source: source
+      confidence: confidence
+      start_date: start_date
+      end_date: end_date
+      is_active: is_active
+      created_at: created_at
+      updated_at: updated_at
+    relations:
+      - relation: project_performer_link_binds_project
+        owner_role: bound_project
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: project_id
+      - relation: project_performer_link_binds_performer_profile
+        owner_role: linked_performer_profile
+        owner_lookup:
+          entity: performer_profile
+          by: performer_profile_id
+          from: performer_id
+
   - collection: automation_tasks
     target_entity: oper_task
     key:

@@ -105,6 +105,16 @@ match
 get $pid;
 limit 20;
 
+match
+  $c isa telegram_chat, has telegram_chat_id $chat_id;
+get $chat_id;
+limit 20;
+
+match
+  $u isa telegram_user, has telegram_user_id $telegram_user_id;
+get $telegram_user_id;
+limit 20;
+
 # 9) Voice runtime-contract spot checks
 # 9.1 Session logs linked to sessions
 match
@@ -254,3 +264,27 @@ count;
 # 11) Source boundary note
 # Validation here covers MongoDB-ingested ontology entities.
 # BD-only Codex issues exposed via /api/crm/codex/* are intentionally out of scope for this query pack.
+
+# 12) Telegram / temporal membership spot checks
+match
+  (owner_project: $p, source_chat: $c) isa project_has_telegram_chat_source;
+  $p has project_id $project_id;
+  $c has telegram_chat_id $chat_id;
+get $project_id, $chat_id;
+limit 50;
+
+match
+  (telegram_user: $u, linked_performer_profile: $pf) isa telegram_user_maps_to_performer_profile;
+  $u has telegram_user_id $telegram_user_id;
+  $pf has performer_profile_id $performer_profile_id;
+get $telegram_user_id, $performer_profile_id;
+limit 50;
+
+match
+  (bound_project: $p, project_performer_link: $l) isa project_performer_link_binds_project;
+  (linked_performer_profile: $pf, project_performer_link: $l) isa project_performer_link_binds_performer_profile;
+  $p has project_id $project_id;
+  $pf has performer_profile_id $performer_profile_id;
+  $l has is_active $is_active;
+get $project_id, $performer_profile_id, $is_active;
+limit 50;

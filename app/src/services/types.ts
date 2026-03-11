@@ -28,6 +28,28 @@ export interface PlanFactGridResponse {
   customers: PlanFactCustomerRow[];
 }
 
+export interface ForecastHistoryEntry {
+  id: string;
+  forecast_version_id: string;
+  project_id: string;
+  month: string;
+  contract_type: 'T&M' | 'Fix';
+  forecast_hours: number;
+  forecast_amount_rub: number;
+  comment: string | null;
+  row_version: number;
+  changed_at: string;
+  changed_by: string | null;
+  changed_source: string | null;
+}
+
+export interface ForecastHistoryResponse {
+  forecast_version_id: string;
+  project_id: string;
+  month: string;
+  entries: ForecastHistoryEntry[];
+}
+
 export interface PlanFactCellContext {
   customer_id: string;
   customer_name: string;
