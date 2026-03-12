@@ -102,6 +102,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Runtime isolation is enforced by per-environment deployment/database boundaries; `runtime_tag` is not a canonical runtime filter contract.
 - Voice admin/person/project payloads can be enriched with Telegram user/chat links and project-performer memberships; `POST /api/voicebot/project_performers` returns a permission-checked `{ project, performers }` payload backed by `automation_telegram_*` and `automation_project_performer_links`.
 - Telegram/project knowledge can be seeded into those collections with `cd backend && npm run telegram:knowledge:seed:dry` or `cd backend && npm run telegram:knowledge:seed:apply`.
+- Telegram seed rollout/rollback contract lives in `ontology/plan/telegram-knowledge-seed-rollout.md`.
 - WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
 - Upload route returns structured oversize diagnostics (`413 file_too_large` with max-size metadata), and WebRTC upload client normalizes these payloads into concise UI-safe error messages.

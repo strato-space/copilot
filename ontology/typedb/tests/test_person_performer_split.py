@@ -54,7 +54,7 @@ class PersonPerformerSplitTest(unittest.TestCase):
         self.assertIn('relation performer_profile_has_legacy_finance_expense,', rels)
 
         self.assertIn('plays oper_task_assigned_to_performer_profile:assignee_performer_profile,', core)
-        self.assertIn('plays person_has_performer_profile:person;', core)
+        self.assertIn('plays person_has_performer_profile:person,', core)
         self.assertIn('plays performer_profile_maps_to_employee:target_employee,', finops)
 
 

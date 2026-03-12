@@ -55,6 +55,8 @@ VOICE_TRANSCRIPT_MAX_BYTES = 1_048_576
 VOICE_TRANSCRIPT_CHUNK_BYTES = 60_000
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 TYPEDB_ROOT_DIR = SCRIPT_DIR.parent
+COPILOT_ROOT_DIR = TYPEDB_ROOT_DIR.parent.parent
+BACKEND_ENV_PATH = COPILOT_ROOT_DIR / "backend" / ".env.production"
 DEFAULT_SCHEMA_PATH = TYPEDB_ROOT_DIR / "schema" / "str-ontology.tql"
 DEFAULT_MAPPING_PATH = TYPEDB_ROOT_DIR / "mappings" / "mongodb_to_typedb_v1.yaml"
 DEFAULT_DEADLETTER_PATH = TYPEDB_ROOT_DIR / "logs" / "typedb-ontology-ingest-deadletter.ndjson"
@@ -211,6 +213,12 @@ def parse_bool(raw: Optional[str], default: bool = False) -> bool:
     if value in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def load_operator_env() -> None:
+    if BACKEND_ENV_PATH.exists():
+        load_dotenv(BACKEND_ENV_PATH, override=False)
+    load_dotenv(override=False)
 
 
 def parse_typedb_addresses(raw: str) -> list[str]:
@@ -2557,7 +2565,7 @@ INGESTERS: dict[str, Callable[[IngestContext], CollectionStats]] = {
 
 
 def main() -> int:
-    load_dotenv()
+    load_operator_env()
     options = parse_options(parse_args())
     mapping_by_collection = load_mapping_by_collection(options.mapping_path)
     missing_from_mapping = [collection for collection in options.collections if collection not in mapping_by_collection]

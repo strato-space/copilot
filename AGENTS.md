@@ -278,6 +278,7 @@ Preferred engineering principles for this repo:
 - Voice upload must accept audio-only recorder blobs mislabeled as `video/webm` and normalize persisted/session-response MIME to `audio/webm`.
 - Voice admin/person/project payloads may be enriched with Telegram chat/user data and project-performer memberships through `backend/src/services/telegramKnowledge.ts`; seed those records via `backend/scripts/seed-telegram-knowledge.ts` (`npm run telegram:knowledge:seed:{dry,apply}`).
 - `POST /api/voicebot/project_performers` returns a permission-checked project payload plus linked performers sourced from `automation_project_performer_links` and `automation_telegram_*`.
+- Seed rollout and rollback steps for the Telegram knowledge slice are documented in `ontology/plan/telegram-knowledge-seed-rollout.md`.
 - Categorization pipeline must emit `message_update` over websocket (through `SEND_TO_SOCKET` events queue) so Categorization tab updates without manual refresh.
 - `CREATE_TASKS` realtime contract is session-room first: workers must emit `tickets_prepared` with canonical `session_id`; `socket_id` is optional and only narrows delivery to one socket when present.
 - Socket events runtime must pass through non-object payloads for `tickets_prepared` (array-of-task contract) without object coercion.

@@ -53,10 +53,7 @@ From `/home/strato-space/copilot/backend`:
   - only `automation_projects` is absence-actionable on full sync;
   - tasks / sessions / messages remain protected from absence-only entity deletion in v1.
 
-If the shell does not already export `MONGODB_CONNECTION_STRING` and `DB_NAME`, export both before contract-check/ingest:
-
-`export DB_NAME="${DB_NAME}"`
-`export MONGODB_CONNECTION_STRING="mongodb://${MONGO_USER}:${MONGO_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${DB_NAME}?authSource=admin&directConnection=true"`
+Ontology operator scripts now auto-load `backend/.env.production` when shell env is absent, so `contract-check`, `domain-inventory`, `entity-sampling`, and `ingest` can be run directly from `/home/strato-space/copilot/backend` without manual Mongo export in normal prod-local workflows.
 
 Domain inventory selection policy:
 - primary hints live inline in `schema/fragments/00-kernel/10-attributes-and-ids.tql`

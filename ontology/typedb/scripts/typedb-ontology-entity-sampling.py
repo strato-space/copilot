@@ -14,6 +14,8 @@ from pymongo import MongoClient
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TYPEDB_ROOT = SCRIPT_DIR.parent
+COPILOT_ROOT = TYPEDB_ROOT.parent.parent
+BACKEND_ENV_PATH = COPILOT_ROOT / "backend" / ".env.production"
 INVENTORY_ROOT = TYPEDB_ROOT / "inventory_latest"
 DEFAULT_MAPPING_PATH = TYPEDB_ROOT / "mappings" / "mongodb_to_typedb_v1.yaml"
 DEFAULT_OUTPUT_PATH = INVENTORY_ROOT / "entity_sampling_latest.md"
@@ -46,6 +48,12 @@ def resolve_mongo() -> tuple[MongoClient, str]:
     if not db_name:
         raise ValueError("DB_NAME is not set")
     return MongoClient(mongo_uri), db_name
+
+
+def load_operator_env() -> None:
+    if BACKEND_ENV_PATH.exists():
+        from dotenv import load_dotenv
+        load_dotenv(BACKEND_ENV_PATH, override=False)
 
 
 def top_level_keys(doc: dict[str, Any]) -> list[str]:
@@ -115,6 +123,7 @@ def render_markdown_table(rows: list[dict[str, Any]]) -> list[str]:
 
 
 def main() -> int:
+    load_operator_env()
     args = parse_args()
     mapping = yaml.safe_load(args.mapping.read_text(encoding="utf-8"))
     client, db_name = resolve_mongo()

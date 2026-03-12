@@ -2,33 +2,30 @@
 
 **Сформировано**: 2026-03-12  
 **Основание**: `stash@{0}` + `stash@{1}` в `copilot/main`  
-**Статус**: execution planning
+**Статус**: implemented
 
 ## Кратко
 
-В репозитории сохранены два stash, которые вместе образуют один незавершенный feature slice:
+В репозитории сохранены два stash, которые исторически образовывали один feature slice:
 
 - `stash@{0}` — новый runtime/service слой Telegram knowledge
 - `stash@{1}` — tracked-интеграция этого слоя в backend routes и ontology
 
-Это не случайный мусор и не «две мелкие правки». Это один отдельный незавершенный workstream, который был сознательно сохранен при закрытии сессии, чтобы не потерять код.
+Сейчас это уже не “код, который надо восстановить”, а historical donor для hardening: большая часть feature уже landed в `main`, а оставшаяся работа — это dedupe, слойная чистота, focused tests и rollout discipline.
 
 ## Что лежит в stash
 
 ### `stash@{0}`
 
-Полностью отсутствующий в текущем `HEAD` runtime слой:
+Этот runtime/service слой уже влит в текущий `main`:
 - `backend/src/services/telegramKnowledge.ts`
 - `backend/scripts/seed-telegram-knowledge.ts`
 
-Это означает:
-- сервисный слой не влит;
-- seed/import path не влит;
-- даже если часть идеи уже отражена в docs/ontology, сам production runtime feature отсутствует.
+Текущая задача уже не в восстановлении этих файлов, а в их hardening и покрытии тестами.
 
 ### `stash@{1}`
 
-Tracked-интеграционный слой:
+Tracked-интеграционный слой исторически содержал:
 - `backend/package.json`
 - `backend/src/api/routes/voicebot/permissions.ts`
 - `backend/src/api/routes/voicebot/persons.ts`
@@ -44,7 +41,7 @@ Tracked-интеграционный слой:
 
 По сравнению с текущим `HEAD` это уже не полностью новый слой, а **частично пересеченный** слой:
 - часть смыслов уже была переосмыслена и встроена в текущую ontology/voice модель;
-- но сами Telegram knowledge изменения системно не доведены.
+- но в текущем `main` большая часть этих изменений уже landed; remaining work — hardening, dedupe, tests, and rollout discipline.
 
 ## Findings
 
@@ -128,63 +125,12 @@ Treat stash as:
 - not canonical branch state.
 
 ### Rule 3
-Land work in this order:
-1. semantics reconciliation
-2. service/seed layer
-3. route integration
-4. ontology parity
-5. tests
-6. rollout plan
+Land the remaining work in this order:
+1. dedupe + utility extraction
+2. focused tests
+3. rollout plan
 
 ## Work Breakdown
-
-### T1 Rebase stash semantics against current voice and ontology contracts
-Goal:
-- identify which stash hunks are still valid,
-- which are obsolete,
-- which are already landed elsewhere,
-- and which need adaptation.
-
-Acceptance:
-- reconciliation note exists for both stashes;
-- every file from stash is classified into:
-  - `obsolete`
-  - `already landed`
-  - `still needed with adaptation`
-  - `still needed as-is`
-
-### T2 Land `telegramKnowledge` service and seed pipeline
-Goal:
-- integrate:
-  - `backend/src/services/telegramKnowledge.ts`
-  - `backend/scripts/seed-telegram-knowledge.ts`
-- plus required constants/indexes/packages.
-
-Acceptance:
-- service compiles;
-- seed has dry-run/apply modes;
-- service does not depend on route-layer helpers.
-
-### T3 Integrate Telegram knowledge into Voice routes
-Goal:
-- enrich:
-  - `/voicebot/projects`
-  - `/voicebot/persons/list_performers`
-  - session/person/permissions payloads
-  - `project_performers`
-
-Acceptance:
-- routes return enriched payloads without breaking current access filters;
-- sparse envs/tests do not crash when Telegram collections are absent or minimally stubbed.
-
-### T4 Reconcile ontology schema + mapping + validation for telegram knowledge
-Goal:
-- integrate `telegram_chat`, `telegram_user`, `project_performer_link` into current TQL-first ontology.
-
-Acceptance:
-- current ontology source remains annotated TQL;
-- mapping and validation reflect current `person` / `performer_profile` split;
-- no stale schema assumptions from old stash survive unreviewed.
 
 ### T5 Add focused regression coverage
 Goal:
@@ -196,6 +142,15 @@ Goal:
 Acceptance:
 - no route 500s in tests due to missing `.find()` or incomplete collection stubs;
 - Telegram knowledge slice has direct test ownership.
+
+### T7 Deduplicate `project_performer_links` and extract neutral Telegram ID utils
+Goal:
+- deduplicate `project_performer_links` in person enrichment
+- move ID helpers out of route-layer into neutral utility/service layer
+
+Acceptance:
+- no duplicate `project_performer_links` when both `person_id` and `performer_id` point to the same row
+- `telegramKnowledge.ts` no longer imports ID helpers from route-layer files
 
 ### T6 Prepare prod-safe seed / rollout / rollback plan
 Goal:
@@ -210,14 +165,7 @@ Acceptance:
 
 ## DAG
 
-- `copilot-5gdl.1 -> copilot-5gdl.2`
-- `copilot-5gdl.1 -> copilot-5gdl.3`
-- `copilot-5gdl.1 -> copilot-5gdl.4`
-- `copilot-5gdl.2 -> copilot-5gdl.3`
-- `copilot-5gdl.2 -> copilot-5gdl.6`
-- `copilot-5gdl.4 -> copilot-5gdl.6`
-- `copilot-5gdl.3 -> copilot-5gdl.5`
-- `copilot-5gdl.4 -> copilot-5gdl.5`
+- `copilot-5gdl.7 -> copilot-5gdl.5`
 - `copilot-5gdl.5 -> copilot-5gdl.6`
 
 ## Test Plan
@@ -251,15 +199,16 @@ Acceptance:
 
 ## Assumptions
 
-- `stash@{0}` remains the only preserved copy of the runtime service/seed layer and therefore must not be dropped casually.
-- `stash@{1}` contains meaningful integration work, but must be selectively re-applied, not mechanically restored.
+- `stash` is no longer the canonical source of missing code; it is now only an audit/donor artifact.
+- Most of the Telegram knowledge slice is already landed in `main`; remaining work is hardening.
 - The Telegram knowledge slice should be integrated as a separate wave, not folded into unrelated Voice or ontology fixes.
 
 ## BD Tracking
-- 🟡 `copilot-5gdl` — [voice][telegram] Integrate preserved telegram-knowledge stash wave
-- ⚪ `copilot-5gdl.1` — T1 Rebase telegram-knowledge stash semantics against current voice and ontology contracts
-- ⚪ `copilot-5gdl.2` — T2 Land telegramKnowledge service and seed pipeline
-- ⚪ `copilot-5gdl.3` — T3 Integrate Telegram knowledge enrichment into Voice routes
-- ⚪ `copilot-5gdl.4` — T4 Reconcile ontology schema, mapping, and validation for telegram knowledge
-- ⚪ `copilot-5gdl.5` — T5 Add focused regression coverage for telegram knowledge slice
-- ⚪ `copilot-5gdl.6` — T6 Prepare prod-safe seed, rollout, and rollback plan
+- ✅ `copilot-5gdl` — [voice][telegram] Integrate preserved telegram-knowledge stash wave
+- ✅ `copilot-5gdl.1` — T1 Rebase telegram-knowledge stash semantics against current voice and ontology contracts
+- ✅ `copilot-5gdl.2` — T2 Land telegramKnowledge service and seed pipeline
+- ✅ `copilot-5gdl.3` — T3 Integrate Telegram knowledge enrichment into Voice routes
+- ✅ `copilot-5gdl.4` — T4 Reconcile ontology schema, mapping, and validation for telegram knowledge
+- ✅ `copilot-5gdl.5` — T5 Add focused regression coverage for telegram knowledge slice
+- ✅ `copilot-5gdl.6` — T6 Prepare prod-safe seed, rollout, and rollback plan
+- ✅ `copilot-5gdl.7` — T7 Deduplicate project_performer_links and extract neutral Telegram ID utils

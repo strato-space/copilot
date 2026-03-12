@@ -6,7 +6,7 @@ import {
   type WithId,
 } from 'mongodb';
 import { COLLECTIONS } from '../constants.js';
-import { toIdString, toObjectIdArray, toObjectIdOrNull } from '../api/routes/voicebot/sessionsSharedUtils.js';
+import { toIdString, toObjectIdArray, toObjectIdOrNull } from '../utils/mongoIds.js';
 
 export type TelegramChatSourceKind =
   | 'project_chat'
@@ -145,6 +145,25 @@ const getProjectPerformerLinksCollection = (db: Db): Collection<ProjectPerformer
 
 const uniqueStrings = (values: Array<string | null | undefined>): string[] =>
   Array.from(new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean)));
+
+const dedupeProjectPerformerLinks = (links: ProjectPerformerLinkRef[]): ProjectPerformerLinkRef[] => {
+  const byKey = new Map<string, ProjectPerformerLinkRef>();
+  for (const link of links) {
+    const key = [
+      link.id ?? '',
+      link.project_id,
+      link.performer_id,
+      link.person_id ?? '',
+      link.role ?? '',
+      link.source ?? '',
+      link.start_date ?? '',
+    ].join('|');
+    if (!byKey.has(key)) {
+      byKey.set(key, link);
+    }
+  }
+  return Array.from(byKey.values());
+};
 
 const safeFindToArray = async <T>(
   collection: FindableCollection<T>,
@@ -502,7 +521,7 @@ export const enrichPersonsWithTelegramAndProjectLinks = async <T extends Minimal
       ...person,
       telegram_user: telegramUser,
       telegram_chats: telegramChats,
-      project_performer_links: projectPerformerLinks,
+      project_performer_links: dedupeProjectPerformerLinks(projectPerformerLinks),
     };
   });
 };

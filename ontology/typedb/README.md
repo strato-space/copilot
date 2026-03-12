@@ -20,6 +20,7 @@ This folder contains a first executable scaffold of the STR OpsPortal ontology i
 - For ingestion defaults, keep schema/deadletter locations script-relative to avoid cwd-dependent behavior.
 - Future ontology updates must not restore old backend-local script copies (`backend/scripts/typedb-*`, `backend/requirements-typedb.txt`).
 - Generated TQL output is built from `schema/fragments/*.tql` via `scripts/build-typedb-schema.py`.
+- Ontology operator scripts now auto-load `backend/.env.production` when shell env is absent, so `contract-check`, `domain-inventory`, `entity-sampling`, and `ingest` can be run directly from `copilot/backend` without manual Mongo export in normal prod-local workflows.
 
 
 ## Schema Layout

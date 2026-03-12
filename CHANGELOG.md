@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-13
+### PROBLEM SOLVED
+- **14:20** Voice task status normalization was still only half-finished on paper and in runtime assumptions: drafts and accepted Voice tasks had already been migrated conceptually, but some product surfaces and docs still behaved as if `READY_10` were the accepted Voice target and `NEW_0` remained the live draft bucket.
+- **14:20** Voice session accepted-task visibility still broke when session linkage lived in `source_data.voice_sessions[]`: the page badge and backend count API could show accepted tasks, while the embedded `CRMKanban` grid still rendered an empty list for the same session.
+- **14:20** Telegram knowledge integration still relied on historical stash framing, route-layer ID helpers, and missing focused coverage around `/voicebot/project_performers`, leaving the slice “mostly landed” but not cleanly hardened.
+- **14:20** Ontology operator scripts still required manual `MONGODB_CONNECTION_STRING` shell exports even though the main backend already had a canonical production env path.
+
+### FEATURE IMPLEMENTED
+- **14:20** Completed the Voice status dictionary rollout: draft Voice tasks now persist as `DRAFT_10`, accepted Voice tasks materialize and recover as `BACKLOG_10`, and the production data migration path now converges to zero legacy Voice candidates on repeated dry-runs.
+- **14:20** Fixed the final accepted-task visibility gap in Voice session `Задачи`: session-scoped matching now includes `source_data.voice_sessions[].session_id`, so the `Backlog` subtab and the grid agree with `/api/voicebot/session_tab_counts`.
+- **14:20** Finished Telegram knowledge hardening: deduplicated `project_performer_links`, extracted neutral Mongo ID helpers, added focused service/route/ontology tests, and documented a prod-safe seed rollout/rollback contract.
+- **14:20** Aligned ontology operator tooling with the main backend configuration so `contract-check`, `domain-inventory`, `entity-sampling`, and `ingest` auto-load `backend/.env.production` without ad hoc env bootstrapping.
+
+### CHANGES
+- **14:20** Updated `backend/src/constants.ts`, `app/src/constants/crm.ts`, `backend/src/api/routes/voicebot/{possibleTasksMasterModel,sessions}.ts`, `backend/src/services/voicebot/{persistPossibleTasks,repairSoftDeletedMaterializedTasks,migrateVoiceTaskStatuses}.ts`, and `backend/scripts/voicebot-migrate-task-statuses.ts` to finish the `DRAFT_10 / BACKLOG_10` Voice taskflow split and migration workflow.
+- **14:20** Updated `app/src/pages/operops/{CRMPage.tsx,voiceTabGrouping.ts}`, `app/src/utils/voiceSessionTaskSource.ts`, `app/src/store/kanbanStore.ts`, `backend/src/miniapp/routes/index.ts`, and `agents/agent-cards/create_tasks.md` so accepted Voice tasks remain visible in OperOps/Voice/miniapp surfaces after the status split.
+- **14:20** Added/updated regression coverage in `backend/__tests__/voicebot/{migrateVoiceTaskStatuses,repairSoftDeletedMaterializedTasks,session/sessionTabCountsRoute,runtime/sessionUtilityRuntimeBehavior.validation}.test.ts`, `app/__tests__/voice/{createTasksPromptContract,sessionTaskSourceFilterBehavior,sessionPageTabCountersContract}.test.ts`, and `app/__tests__/operops/voiceTabGroupingBehavior.test.ts`.
+- **14:20** Added `backend/src/utils/mongoIds.ts`, updated `backend/src/services/telegramKnowledge.ts`, and added focused tests `backend/__tests__/services/telegramKnowledge.test.ts`, `backend/__tests__/voicebot/projectPerformersRoute.test.ts`, and `ontology/typedb/tests/test_telegram_knowledge_contract.py`.
+- **14:20** Added and synchronized ontology/Telegram docs and runbooks: `ontology/plan/{telegram-knowledge-stash-integration-plan,telegram-knowledge-seed-rollout}.md`, `ontology/typedb/{README.md,AGENTS.md}`, `ontology/typedb/scripts/{typedb-ontology-ingest,typedb-ontology-contract-check,typedb-ontology-domain-inventory,typedb-ontology-entity-sampling}.py`, plus repo docs `README.md` and `AGENTS.md`.
+
 ## 2026-03-12
 ### PROBLEM SOLVED
 - **12:05** Voice `Possible Tasks` materialization still used the legacy destructive path: `process_possible_tasks` wrote selected rows back into `NEW_0 / Backlog`, then the cleanup logic soft-deleted those same rows immediately, so accepted tasks disappeared from `Возможные задачи` and never showed up in `Задачи` or CRM.

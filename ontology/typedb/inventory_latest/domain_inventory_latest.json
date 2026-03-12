@@ -97,6 +97,31 @@
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },
+  "source_kind": {
+    "declared_domain": "dictionary",
+    "max_values": 20,
+    "collections": [
+      {
+        "collection": "automation_telegram_chats",
+        "target_entity": "telegram_chat",
+        "source_field": "source_kind"
+      },
+      {
+        "collection": "automation_tasks",
+        "target_entity": "oper_task",
+        "source_field": "source_kind"
+      }
+    ],
+    "values": [
+      "\"project_chat\"",
+      "\"performer_chat\"",
+      "\"general_design_chat\"",
+      "null",
+      "\"voice_possible_task\"",
+      "\"voice_session\""
+    ],
+    "classification": "likely enumerated/string-dictionary domain"
+  },
   "status": {
     "declared_domain": "dictionary",
     "max_values": 50,
@@ -110,6 +135,7 @@
     "values": [
       "\"Archive\"",
       "\"Complete\"",
+      "\"Draft\"",
       "\"Backlog\"",
       "\"Done\"",
       "\"Review / Ready\"",
@@ -141,8 +167,8 @@
       "\"P4\"",
       "\"\"",
       "null",
-      "\"P6\"",
-      "\"🔥 P1\""
+      "\"🔥 P1\"",
+      "\"P6\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },
@@ -277,23 +303,6 @@
       "\"692e584034968b218a7f8620\""
     ],
     "classification": "open or mixed domain"
-  },
-  "source_kind": {
-    "declared_domain": "dictionary",
-    "max_values": 20,
-    "collections": [
-      {
-        "collection": "automation_tasks",
-        "target_entity": "oper_task",
-        "source_field": "source_kind"
-      }
-    ],
-    "values": [
-      "null",
-      "\"voice_possible_task\"",
-      "\"voice_session\""
-    ],
-    "classification": "likely enumerated/string-dictionary domain"
   },
   "dialogue_tag": {
     "declared_domain": "dictionary",

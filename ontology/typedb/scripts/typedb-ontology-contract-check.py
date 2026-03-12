@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from dotenv import load_dotenv
 from pymongo import MongoClient
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -114,7 +113,7 @@ def classify_issue_level(collection: str, kind: str, detail: str) -> str:
 
 
 def main() -> int:
-    load_dotenv()
+    ingest.load_operator_env()
     args = parse_args()
     schema_path = Path(args.schema).resolve()
     mapping_path = Path(args.mapping).resolve()

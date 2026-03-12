@@ -19,6 +19,8 @@ DEFAULT_MAPPING_PATH = TYPEDB_ROOT / 'mappings' / 'mongodb_to_typedb_v1.yaml'
 DEFAULT_OUTPUT_PATH = INVENTORY_ROOT / 'domain_inventory_latest.md'
 DEFAULT_JSON_OUTPUT_PATH = INVENTORY_ROOT / 'domain_inventory_latest.json'
 DEFAULT_KERNEL_ATTRS_PATH = TYPEDB_ROOT / 'schema' / 'fragments' / '00-kernel' / '10-attributes-and-ids.tql'
+COPILOT_ROOT = TYPEDB_ROOT.parent.parent
+BACKEND_ENV_PATH = COPILOT_ROOT / 'backend' / '.env.production'
 
 CANDIDATE_TOKENS = {
     'status', 'state', 'type', 'kind', 'scope', 'role', 'priority', 'severity', 'currency',
@@ -50,6 +52,12 @@ def resolve_mongo() -> tuple[MongoClient, str]:
     if not db_name:
         raise ValueError('DB_NAME is not set')
     return MongoClient(mongo_uri), db_name
+
+
+def load_operator_env() -> None:
+    if BACKEND_ENV_PATH.exists():
+        from dotenv import load_dotenv
+        load_dotenv(BACKEND_ENV_PATH, override=False)
 
 
 def is_candidate(attr: str) -> bool:
@@ -105,6 +113,7 @@ def classify(values: list[Any]) -> str:
 
 
 def main() -> int:
+    load_operator_env()
     args = parse_args()
     mapping = yaml.safe_load(args.mapping.read_text(encoding='utf-8'))
     marked_attrs = parse_marked_kernel_attrs(args.kernel_attrs)
