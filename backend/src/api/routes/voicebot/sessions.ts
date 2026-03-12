@@ -4366,6 +4366,9 @@ const materializeSessionTickets = async ({
             continue;
         }
 
+        const isAcceptedFromPossibleTask = refreshReason === 'process_possible_tasks';
+        const acceptedBy = String(creatorId || creatorEmail || creatorName || '').trim();
+
             tasksToSave.push({
                 sourceTaskId: ticketId,
                 existingTaskId,
@@ -4404,6 +4407,15 @@ const materializeSessionTickets = async ({
                         session_id: toTaskText(incomingSourceData.session_id) || sessionId,
                         voice_sessions: mergedVoiceSessions,
                     },
+                    ...(isAcceptedFromPossibleTask
+                        ? {
+                            accepted_from_possible_task: true,
+                            accepted_from_row_id: ticketId,
+                            accepted_at: now,
+                            ...(acceptedBy ? { accepted_by: acceptedBy } : {}),
+                            ...(creatorName ? { accepted_by_name: creatorName } : {}),
+                        }
+                        : {}),
                     ...(creatorId ? { created_by: creatorId } : {}),
                     ...(creatorName ? { created_by_name: creatorName } : {}),
                     ...(parentRelation ? { parent: parentRelation, parent_id: parentRelation.id } : {}),
@@ -4769,7 +4781,7 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
             removeFromPossibleTasks,
             explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'process_possible_tasks',
-            targetTaskStatus: TASK_STATUSES.NEW_0,
+            targetTaskStatus: TASK_STATUSES.READY_10,
         });
         return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
@@ -4971,6 +4983,7 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             {
                 is_deleted: { $ne: true },
                 codex_task: { $ne: true },
+                source_kind: { $ne: 'voice_possible_task' },
                 ...sessionScopedTaskMatch,
             },
             {

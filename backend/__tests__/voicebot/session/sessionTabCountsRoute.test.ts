@@ -80,7 +80,6 @@ describe('Voicebot session_tab_counts route', () => {
 
     tasksAggregateMock.mockReturnValue({
       toArray: async () => [
-        { _id: TASK_STATUSES.NEW_0, count: 4 },
         { _id: TASK_STATUSES.READY_10, count: 7 },
         { _id: TASK_STATUSES.REVIEW_10, count: 3 },
       ],
@@ -125,21 +124,21 @@ describe('Voicebot session_tab_counts route', () => {
     expect(response.body).toEqual({
       success: true,
       session_id: sessionId.toHexString(),
-      tasks_count: 14,
+      tasks_count: 10,
       codex_count: 3,
       status_counts: [
-        { status: TASK_STATUSES.NEW_0, count: 4 },
         { status: TASK_STATUSES.READY_10, count: 7 },
         { status: TASK_STATUSES.REVIEW_10, count: 3 },
       ],
     });
 
-    expect(tasksAggregateMock).toHaveBeenCalledWith(
+        expect(tasksAggregateMock).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
           $match: expect.objectContaining({
             is_deleted: { $ne: true },
             codex_task: { $ne: true },
+            source_kind: { $ne: 'voice_possible_task' },
           }),
         }),
         expect.objectContaining({

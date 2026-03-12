@@ -43,10 +43,10 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 |---|---|---|
 | `/api/voicebot/possible_tasks` | `POST` | Canonical read path for current session Possible Tasks. Prefers `automation_tasks` master rows in status `NEW_0`, falls back to compatibility projection only when master rows are absent. |
 | `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session Possible Tasks into `automation_tasks`, rewrite mutable `NEW_0` rows in place, sync compatibility projection, and return canonical saved `items`. |
-| `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected Possible Tasks into regular tasks by transitioning master rows from `NEW_0` to `READY_10`. |
+| `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected Possible Tasks into accepted tasks with `READY_10` as the current hotfix target status, stamp acceptance metadata, and remove them from draft views without soft-deleting the task document. |
 | `/api/voicebot/delete_task_from_session` | `POST` | Remove a Possible Task from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
 | `/api/voicebot/codex_tasks` | `POST` | Return Codex/BD tasks linked to the current voice session. |
-| `/api/voicebot/session_tab_counts` | `POST` | Return lightweight `Задачи` + `Codex` counts for voice session tab badges. |
+| `/api/voicebot/session_tab_counts` | `POST` | Return lightweight `Задачи` + `Codex` counts for voice session tab badges; draft rows with `source_kind=voice_possible_task` are excluded from accepted-task counts. |
 
 ## Session resolution contract
 - Canonical session APIs use fail-fast lookup semantics and return `404` when a session cannot be resolved in current operational scope.
@@ -93,6 +93,10 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - `NEW_0` Possible Tasks are mutable:
   - same-scope rows are rewritten in place by canonical `row_id/id`
   - duplicate suppression applies to materialized task space, not to mutable `NEW_0` baseline rows
+- `process_possible_tasks` is now non-destructive:
+  - selected rows materialize into `READY_10`,
+  - accepted rows retain `source_kind=voice_session` plus acceptance metadata,
+  - cleanup removes them from draft views but must not soft-delete the materialized task document
 - Automatic runtime path:
   - every successful text transcription completion enqueues `POSTPROCESSORS.CREATE_TASKS`,
   - worker delegates to fast-agent `create_tasks`,

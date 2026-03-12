@@ -18,6 +18,7 @@ dist/
 backend/logs/
 backend/uploads/
 logs/
+output/
 
 # Google service account
 google_service_account.json

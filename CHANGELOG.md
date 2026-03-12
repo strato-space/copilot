@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-12
+### PROBLEM SOLVED
+- **12:05** Voice `Possible Tasks` materialization still used the legacy destructive path: `process_possible_tasks` wrote selected rows back into `NEW_0 / Backlog`, then the cleanup logic soft-deleted those same rows immediately, so accepted tasks disappeared from `Возможные задачи` and never showed up in `Задачи` or CRM.
+- **12:05** Voice session task counters still counted draft `voice_possible_task` rows inside `Задачи`, so operators could see a non-zero accepted-task badge while the actual accepted-task view stayed empty or misleading.
+- **12:05** The `Possible Tasks` submit path had almost no structured browser diagnostics, which made it hard to localize whether a failure happened before submit, during request assembly, or after the backend response.
+- **12:05** The repo still tracked generated `output/` artifacts, so one formatting-only commit accidentally bundled output de-tracking changes and made history noisier than intended.
+
+### FEATURE IMPLEMENTED
+- **12:05** Fixed Voice accepted-task materialization so `process_possible_tasks` now promotes selected rows into `READY_10` as the hotfix target, preserves the task document, stamps acceptance metadata, and no longer self-deletes the accepted row.
+- **12:05** Added a dedicated repair path for already broken rows and verified it on the canonical production repro session `69b26496b771d8ccdee31f98`, restoring five soft-deleted materialized tasks back into live accepted-task state.
+- **12:05** Added structured frontend diagnostics for `Possible Tasks` submit flow and verified the new logs in Chrome on production (`create_selected.submit`, `process_possible_tasks.request`, `process_possible_tasks.response`, `create_selected.result`).
+- **12:05** Cleaned repository tracking for `output/` artifacts via `.gitignore`, while leaving the local files intact.
+
+### CHANGES
+- **12:05** Updated `backend/src/api/routes/voicebot/sessions.ts` so `process_possible_tasks` materializes selected rows into `READY_10`, stamps `accepted_from_possible_task` / `accepted_from_row_id` / `accepted_at` / `accepted_by`, and `session_tab_counts` excludes `source_kind=voice_possible_task` from accepted-task counts.
+- **12:05** Added repair tooling in `backend/src/services/voicebot/repairSoftDeletedMaterializedTasks.ts` and `backend/scripts/voicebot-repair-softdeleted-materialized-tasks.ts`, plus npm scripts `voice:repair:softdeleted-materialized:{dry,apply}` in `backend/package.json`.
+- **12:05** Added regression coverage in `backend/__tests__/voicebot/{runtime/sessionUtilityRuntimeBehavior.validation,session/sessionTabCountsRoute,repairSoftDeletedMaterializedTasks}.test.ts` and frontend logging coverage in `app/__tests__/voice/possibleTasksLoggingContract.test.ts`.
+- **12:05** Updated `app/src/components/voice/PossibleTasks.tsx` and `app/src/store/voiceBotStore.ts` with structured submit-path console logging, refreshed `plan/voice-task-status-normalization-plan.md`, and synchronized `README.md`, `AGENTS.md`, and `docs/VOICEBOT_API.md` to the deployed hotfix contract.
+- **12:05** Added `output/` to `.gitignore` and stopped tracking generated files under `output/`; the earlier local commit `13778bc` still mixed that cleanup with the `format.ts` ruble-spacing fix, so follow-up issue `copilot-m1ct` remains open for history cleanup if needed.
+
 ## 2026-03-11
 ### PROBLEM SOLVED
 - **22:03** Plan-fact forecast edits could overwrite monthly values without a required rationale, and operators had no built-in history view to audit how a forecast changed over time.

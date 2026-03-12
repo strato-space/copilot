@@ -1,457 +1,533 @@
-# Plan: Voice Task Status Normalization
+# План: нормализация статусов Voice-задач
 
-**Generated**: 2026-03-10
-**Estimated Complexity**: High
+**Сформировано**: 2026-03-10  
+**Обновлено после prod-диагностики**: 2026-03-12  
+**Оценка сложности**: High
 
-## Current Task Status Dictionary (AS-IS)
+## Кратко
 
-Current CRM task statuses as defined in the shared constants, supplemented with a production database snapshot of active non-deleted tasks in `automation_tasks` collected on 2026-03-10.
+Сейчас в Voice-потоке смешаны три разных сущности:
 
-| Status key | Status label | Current active count | Current role / observation |
+1. черновики из вкладки `Возможные задачи`;
+2. реальные задачи, уже принятые в работу;
+3. legacy-материализация через старый путь `create_tickets`.
+
+Главная проблема не только в словаре статусов, но и в том, что текущий runtime ведет себя как старый destructive path:
+
+- выбранная `Possible Task` не должна удаляться как объект;
+- она должна **изменить статус** и выйти из draft-представления;
+- без явного delete-запроса удалять задачу из `automation_tasks` нельзя.
+
+## Текущий инцидент, подтвержденный по production
+
+Сессия:
+- `69b26496b771d8ccdee31f98`
+- `https://copilot.stratospace.fun/voice/session/69b26496b771d8ccdee31f98`
+
+Подтверждено по логам и Mongo:
+
+1. Пользователь выбрал `Possible Task`, назначил исполнителя и нажал `Создать выбранные`.
+2. Backend действительно получил `POST /api/voicebot/process_possible_tasks`.
+3. Выбранная строка была переведена в документ с:
+   - `source_kind = voice_session`
+   - заполненными `performer_id` и `project_id`
+4. Но этот же документ сразу попал под cleanup-path и был soft-delete’нут.
+5. Результат:
+   - задача исчезает из `Возможных задач`;
+   - во вкладке `Задачи` и в CRM не появляется;
+   - оператор видит «пропажу», а не создание.
+
+### Точный root cause инцидента
+
+`/process_possible_tasks` сейчас передает:
+- `targetTaskStatus = NEW_0`
+
+А значит backend materialize-path создает/обновляет выбранную задачу как:
+- `task_status = Backlog`
+- при этом она уже `source_kind = voice_session`
+
+После этого старый cleanup-path продолжает трактовать ее как removable possible-task row и soft-delete’ит.
+
+То есть баг двойной:
+1. неверный target status у `process_possible_tasks`;
+2. legacy destructive semantics: «создание задачи = удалить источник», хотя теперь источник и задача — это один и тот же объект, меняющий статус.
+
+## Текущее состояние словаря статусов (AS-IS)
+
+Снимок взят из shared constants и дополнен production snapshot из `automation_tasks`.
+
+| Ключ | Лейбл | Текущее значение / target-оценка | Роль / наблюдение |
 |---|---|---:|---|
-| `NEW_0` | `Backlog` | 172 | General backlog bucket; currently overloaded by draft Voice possible-task rows |
-| `NEW_10` | `New / Request` | 0 | Raw incoming request before clarification |
-| `NEW_20` | `New / Clientask` | 0 | Client-origin request that is not yet normalized into delivery flow |
-| `NEW_30` | `New / Detail` | 0 | Needs clarification or decomposition before planning |
-| `NEW_40` | `New / Readyforplan` | 0 | Ready to enter the planning pipeline |
-| `PLANNED_10` | `Plan / Approval` | 0 | Plan prepared and waiting for approval |
-| `PLANNED_20` | `Plan / Performer` | 0 | Planned and assigned at performer-planning stage |
-| `READY_10` | `Ready` | 37 | Accepted and ready for execution; currently the cleanest post-acceptance status |
-| `PROGRESS_0` | `Rejected` | 0 | Explicit rejection state |
-| `PROGRESS_10` | `Progress 10` | 6 | Execution started |
-| `PROGRESS_20` | `Progress 25` | 0 | Intermediate execution checkpoint |
-| `PROGRESS_30` | `Progress 50` | 0 | Mid / late execution checkpoint |
-| `PROGRESS_40` | `Progress 90` | 0 | Nearly complete |
-| `REVIEW_10` | `Review / Ready` | 54 | Ready for review |
-| `REVIEW_20` | `Review / Implement` | 0 | Rework cycle after review |
-| `AGREEMENT_10` | `Upload / Deadline` | 0 | Preparing for delivery / deadline alignment |
-| `AGREEMENT_20` | `Upload / Delivery` | 0 | Final delivery / release stage |
-| `DONE_10` | `Done` | 79 | Done, but not yet fully closed |
-| `DONE_20` | `Complete` | 210 | Fully completed work |
-| `DONE_30` | `PostWork` | 0 | Post-delivery work |
-| `ARCHIVE` | `Archive` | 2997 | Historical closed-task tail; dominant terminal bucket |
-| `PERIODIC` | `Periodic` | 10 | Repeating / recurring work |
+| `NEW_0` | `Backlog` | 172 | Перегруженный бакет: в нем сейчас смешаны и draft Voice rows, и backlog-семаника |
+| `NEW_10` | `New / Request` | 0 | Первичный входящий запрос |
+| `NEW_20` | `New / Clientask` | 0 | Клиентский запрос до нормализации |
+| `NEW_30` | `New / Detail` | 0 | Требует уточнения |
+| `NEW_40` | `New / Readyforplan` | 0 | Готово к планированию |
+| `PLANNED_10` | `Plan / Approval` | 0 | План на согласовании |
+| `PLANNED_20` | `Plan / Performer` | 0 | План на стороне исполнителя |
+| `READY_10` | `Ready` | 37 | Реальная принятая задача, готовая к исполнению |
+| `PROGRESS_0` | `Rejected` | 0 | Явный reject |
+| `PROGRESS_10` | `Progress 10` | 6 | Работа начата |
+| `PROGRESS_20` | `Progress 25` | 0 | Промежуточный чекпоинт |
+| `PROGRESS_30` | `Progress 50` | 0 | Mid-state |
+| `PROGRESS_40` | `Progress 90` | 0 | Почти завершено |
+| `REVIEW_10` | `Review / Ready` | 54 | Готово к ревью |
+| `REVIEW_20` | `Review / Implement` | 0 | Возврат из ревью |
+| `AGREEMENT_10` | `Upload / Deadline` | 0 | Подготовка к дедлайну |
+| `AGREEMENT_20` | `Upload / Delivery` | 0 | Delivery / handoff |
+| `DONE_10` | `Done` | 79 | Выполнено |
+| `DONE_20` | `Complete` | 210 | Полностью завершено |
+| `DONE_30` | `PostWork` | 0 | Пост-работа |
+| `ARCHIVE` | `Archive` | 2997 | Исторический хвост |
+| `PERIODIC` | `Periodic` | 10 | Периодические задачи |
 
-### Snapshot Note
+Дополнительно:
+- есть `4` активных rows с `task_status = null`;
+- это отдельный legacy cleanup и не должно смешиваться с этим планом.
 
-- Total active non-deleted tasks in production: **3569**
-- There are also **4** active rows with missing `task_status` (`null`) in the database; those are separate legacy data-quality problems and should be normalized independently.
+## Срез именно Voice-слоя (production snapshot)
 
-## Current Database Statistics (Voice Slice, Production Snapshot)
+Voice non-codex tasks (`source = VOICE_BOT`, `codex_task != true`, active non-deleted):
 
-Voice non-codex tasks (`source = VOICE_BOT`, `codex_task != true`, active non-deleted) currently split like this:
-
-| task_status | source_kind | Count | Interpretation |
+| task_status | source_kind | Count | Смысл |
 |---|---|---:|---|
-| `Backlog` | `voice_possible_task` | 94 | Canonical draft possible-task rows |
-| `Ready` | `voice_session` | 13 | Clean accepted / materialized Voice tasks |
-| `Ready` | `(missing)` | 12 | Legacy accepted Voice tasks without normalized `source_kind` |
-| `Review / Ready` | `(missing)` | 9 | Legacy Voice tasks already in review without normalized `source_kind` |
-| `Progress 10` | `(missing)` | 1 | Legacy Voice task already in execution without normalized `source_kind` |
-| `Archive` | `(missing)` | 32 | Historical archived Voice-linked tasks without normalized `source_kind` |
+| `Backlog` | `voice_possible_task` | 94 | Черновики `Possible Tasks` |
+| `Ready` | `voice_session` | 13 | Нормально материализованные Voice-задачи |
+| `Ready` | `(missing)` | 12 | Legacy accepted Voice tasks без нормализованного `source_kind` |
+| `Review / Ready` | `(missing)` | 9 | Legacy review rows |
+| `Progress 10` | `(missing)` | 1 | Legacy execution row |
+| `Archive` | `(missing)` | 32 | Исторические архивные Voice rows |
 
-Voice summary bucket:
+Ключевое наблюдение:
+- в проде уже есть нормальные `voice_session + Ready` rows,
+- но runtime path `process_possible_tasks` по-прежнему умеет производить неправильный destructive сценарий.
 
-| Voice bucket | Count | Meaning |
-|---|---:|---|
-| `draft_possible` | 94 | Current draft possible tasks |
-| `materialized_voice_session` | 13 | Current accepted Voice tasks with normalized `source_kind=voice_session` |
-| `legacy_missing_source_kind` | 54 | Historical Voice tasks that still rely on session linkage but lack explicit `source_kind` |
+## Главная модельная ошибка
 
-Most important observation from the database snapshot:
+Один и тот же `NEW_0 / Backlog` сейчас значит сразу две разные вещи:
 
-- the **current production dataset does not show active `voice_session + NEW_0` rows**,
-- but the **current code path still allows that outcome** through `process_possible_tasks`,
-- so the model is semantically unsafe even if the existing data has only partially drifted so far.
+1. draft-row из `Возможных задач`;
+2. реальная backlog-задача.
 
-## Proposed Split Criterion For `NEW_0`
+Это недопустимо.
 
-Proposed normalization rule:
+Кроме того, старый destructive cleanup предполагает, что:
+- possible task — это временный объект,
+- а реальная задача — новый отдельный объект.
 
-- `DRAFT`: new status used only for drafts from `Возможные задачи`
-- `BACKLOG`: new canonical status for real backlog tasks
-- `NEW_0`: temporary legacy status that should be eliminated after migration
+Но фактическая целевая модель уже другая:
+- possible task и принятая задача — это **один объект**, который меняет статус и представление.
 
-### Split Criterion
+## Целевая семаника
 
-For every current row with status `NEW_0 / Backlog`:
+### Нормализация терминов
 
-1. If `source_kind = voice_possible_task`, classify it as `DRAFT`.
-2. If `source_kind != voice_possible_task`, classify it as `BACKLOG`.
-3. If `source_kind` is missing, use the fallback criterion:
-   - if the row carries draft possible-task markers (`source_data.voice_task_kind = possible_task`, draft session projection, draft locator chain), classify it as `DRAFT`;
-   - otherwise classify it as `BACKLOG`.
+В этом плане используются три разных модальности, и их нужно не смешивать:
 
-### Practical Conclusion From The Current Dataset
+- **стратегическая целевая модель**:
+  - accepted Voice task = `BACKLOG_10`
+- **безопасный немедленный hotfix**:
+  - accepted Voice task временно можно materialize в `READY_10`, если это снижает риск и объем правок
+- **legacy input model**:
+  - draft possible-task rows все еще живут в `NEW_0`, пока миграция не завершена
 
-- In the current production snapshot this criterion is already almost unambiguous:
-  - `94` rows with `Backlog + voice_possible_task` should move to `DRAFT`;
-  - no active `voice_session + NEW_0` rows were found;
-  - remaining non-voice `NEW_0` rows should become `BACKLOG`.
+То есть:
+- `BACKLOG_10` — это **целевая норма**,
+- `READY_10` — это **временный operational hotfix target**,
+- `NEW_0` — это **устаревший перегруженный статус**, который подлежит элиминации.
 
-### New Target Semantics
+### Базовые правила
 
-- `DRAFT`:
-  - only for possible tasks,
-  - not treated as part of the accepted delivery backlog,
-  - shown in `Возможные задачи` and other draft-oriented review surfaces.
-- `BACKLOG`:
-  - a real task already accepted into the system as a backlog item,
-  - may already have project, performer, relationships, and an OperOps card,
-  - participates in the normal task lifecycle.
+1. `Possible Tasks` — это только draft-срез.
+2. Принятие задачи из `Possible Tasks` означает **переход объекта в рабочий статус**, а не удаление объекта.
+3. Без явного delete-запроса backend не должен soft-delete’ить задачу после materialization.
+4. Вкладка `Задачи` должна показывать только принятые рабочие задачи.
+5. Вкладка `Возможные задачи` должна показывать только draft-строки.
+6. UI counts не должны смешивать draft и accepted rows.
 
-## Overview
+### Рекомендуемая целевая модель
 
-Voice task flows currently mix three different concepts inside the same CRM status space:
+| Ключ | Лейбл | Активных | Роль / наблюдение |
+|---|---|---:|---|
+| `DRAFT_10` | `Draft` | target: вместо текущих `94` draft rows | Только черновики из `Возможных задач`; не считаются рабочими задачами и не должны попадать в CRM/вкладку `Задачи` |
+| `BACKLOG_10` | `Backlog` | target: вместо реальных backlog rows, сейчас частично смешано в `NEW_0` | Реальная принятая задача, уже вышедшая из draft-flow; может иметь проект, исполнителя, связи и участвует в обычном lifecycle |
+| `READY_10` | `Ready` | 37 + часть voice rows после immediate fix | Безопасный промежуточный target для hotfix, если пока не вводим новый ключ `BACKLOG_10`; accepted Voice task можно временно materialize’ить сюда |
+| `NEW_0` | `Backlog` | legacy-only, после миграции должно стать `0` | Устаревший перегруженный статус; сейчас смешивает draft и backlog semantics, должен исчезнуть из runtime write-paths |
+| `REVIEW_10` | `Review / Ready` | 54 | Обычный следующий этап после выполнения; не draft и не backlog |
+| `PROGRESS_10` | `Progress 10` | 6 | Обычное исполнение; не требует специальных voice-оговорок |
+| `DONE_10` | `Done` | 79 | Выполнено |
+| `DONE_20` | `Complete` | 210 | Полностью завершено |
+| `ARCHIVE` | `Archive` | 2997 | Архивный хвост |
 
-1. draft possible tasks produced by Voice AI,
-2. accepted tasks materialized from the `Possible Tasks` tab,
-3. legacy tasks created through the older `create_tickets` path.
+И отдельно для voice-originated rows:
 
-This creates a status-semantics collision:
+| source_kind | Целевой статус | Где видна | Роль / наблюдение |
+|---|---|---|---|
+| `voice_possible_task` | `DRAFT_10` | `Возможные задачи` | Draft-only |
+| `voice_session` | `BACKLOG_10` | `Задачи`, CRM | Принятая реальная задача |
+| `voice_session` | `READY_10` | `Задачи`, CRM | Допустимый временный hotfix target до полной миграции на `BACKLOG_10` |
 
-- `Possible Tasks` master rows live in `NEW_0 / Backlog`,
-- the current `process_possible_tasks` flow also materializes accepted tasks into `NEW_0 / Backlog`,
-- the older `create_tickets` flow materializes into `READY_10 / Ready`,
-- Voice session `Задачи` counts currently include all non-codex session-linked tasks, so draft `voice_possible_task` rows leak into the same tab as accepted OperOps tasks.
+### Промежуточный pragmatic rule до полной миграции статусов
 
-The result matches the operator confusion already visible in production: `Backlog` may contain rows with performer, project, and task card even though those rows still mix draft and accepted work semantics.
+Даже до введения нового словаря статусов нужно сразу зафиксировать:
 
-This plan normalizes the model so draft rows and accepted OperOps tasks are never ambiguous again.
+- `process_possible_tasks` **не имеет права** писать принятую задачу обратно в draft bucket;
+- `process_possible_tasks` **не имеет права** удалять materialized row как `Possible Task`;
+- accepted row должна остаться в `automation_tasks` и перейти в рабочую семантику.
 
-## Current State Audit
+### Правило восстановления уже сломанных строк
 
-### Canonical entities and statuses
+Если задача была:
+- материализована из `Possible Tasks`,
+- получила `performer_id` и `project_id`,
+- получила `source_kind = voice_session`,
+- а потом была soft-delete’нута legacy cleanup path,
 
-| Flow | Storage shape | Source kind | Status key | UI label | Notes |
-|---|---|---|---|---|---|
-| Voice possible task draft | `automation_tasks` master row | `voice_possible_task` | `NEW_0` | `Backlog` | Saved by `save_possible_tasks` / AI persistence |
-| Accepted from `Possible Tasks` tab | `automation_tasks` task row | `voice_session` | `NEW_0` | `Backlog` | Current `process_possible_tasks` path; main semantic bug |
-| Legacy create path | `automation_tasks` task row | `voice_session` | `READY_10` | `Ready` | Current `create_tickets` path |
-| Codex issue | `automation_tasks` or BD sync issue | `voice_session` + `codex_task=true` | separate path | separate tab | Out of scope for this status-normalization track |
+то такая задача должна восстанавливаться как:
+- `task_status = READY_10` в текущем hotfix phase
+- `task_status = BACKLOG_10` после полной миграции словаря статусов
+- `is_deleted = false`
+- `deleted_at = null`
 
-### Current code paths
+То есть восстановление должно возвращать ее не в draft bucket, а в нормальную accepted semantics.
 
-- `save_possible_tasks` persists or updates possible-task master rows and keeps them in `NEW_0`.
-  - Backend: `backend/src/services/voicebot/persistPossibleTasks.ts`
-  - Backend route: `backend/src/api/routes/voicebot/sessions.ts`
-- `process_possible_tasks` takes selected rows from the `Possible Tasks` tab and materializes them into real tasks, but still writes `targetTaskStatus = NEW_0`.
-  - Frontend caller: `app/src/store/voiceBotStore.ts`
-  - Backend route: `backend/src/api/routes/voicebot/sessions.ts`
-- `create_tickets` materializes tasks into `READY_10`.
-  - Backend route: `backend/src/api/routes/voicebot/sessions.ts`
-- Voice session `Задачи` tab counts all session-linked non-codex tasks and therefore includes both:
-  - `source_kind = voice_possible_task`
-  - `source_kind = voice_session`
+## AS-IS и TO-BE truth table
 
-## Root Cause
+| Сущность | source_kind | task_status | Где видна | Комментарий |
+|---|---|---|---|---|
+| draft possible task | `voice_possible_task` | `DRAFT_10` (target) / `NEW_0` (legacy) | `Возможные задачи` | Draft-only |
+| accepted voice task | `voice_session` | `BACKLOG_10` (target) / временно `READY_10` как immediate fix | `Задачи`, CRM | Реальная задача |
+| codex-linked issue | `voice_session` + `codex_task=true` | отдельный path | `Codex` | Вне этого плана |
 
-Status currently carries two orthogonal meanings at once:
+## Немедленные продуктовые решения
 
-- workflow stage (`draft` vs `accepted`),
-- delivery status (`Backlog`, `Ready`, `Progress`, `Review`, and so on).
+Эти решения больше не считаются открытыми:
 
-`NEW_0` is overloaded for both:
+1. Принятая задача из `Possible Tasks` **не удаляется**, а меняет статус.
+2. Удаление возможно только через явный delete/unlink path.
+3. `session_tab_counts.tasks_count` не должен включать draft rows.
+4. Если row не материализована, UI не должен создавать впечатление, что она уже находится во вкладке `Задачи`.
 
-- "draft possible task not yet accepted",
-- "accepted task already materialized from Voice".
+## Immediate bugfix track
 
-That is the core modeling bug.
+### Bug A: `process_possible_tasks` materializes into wrong status
 
-## Normalization Goal
+**Описание**
+- Сейчас route пишет `targetTaskStatus = NEW_0`.
+- Это и есть непосредственная причина self-deletion после materialization.
 
-Adopt one unambiguous rule set:
+**Целевой контракт**
+- `process_possible_tasks` должен materialize selected rows в рабочий статус, а не в draft.
+- До полной статусной миграции безопасный immediate fix:
+  - `READY_10`
+- После полной нормализации:
+  - `BACKLOG_10`
 
-1. `Possible Tasks` are draft rows only.
-2. Draft rows may reuse `automation_tasks` if necessary, but they must never be counted or rendered as accepted Voice session tasks.
-3. Accepting a row from `Possible Tasks` must create or promote a real OperOps task into `BACKLOG`, not into the same draft status bucket.
-4. Voice session `Задачи` must show accepted OperOps tasks only.
-5. `NEW_0` must disappear from the target status dictionary and remain only as migration input.
-6. Historical mixed rows must be migrated into one canonical model.
+**Нормализация модальности**
+- `READY_10` здесь — только hotfix target;
+- `BACKLOG_10` — целевой target after status dictionary migration;
+- спеку нельзя трактовать так, будто оба статуса одновременно являются финальной нормой.
 
-## Recommended Target Model
+### Bug B: legacy cleanup удаляет materialized row
 
-### Recommended semantics
+**Описание**
+- Сейчас cleanup path действует по старой модели «создали задачу -> удалили possible-task объект».
+- В новой модели это неверно.
 
-- Replace `NEW_0` with two explicit target statuses:
-  - `DRAFT`
-  - `BACKLOG`
-- Keep draft possible tasks as:
-  - `source_kind = voice_possible_task`
-  - `task_status = DRAFT`
-- Materialized accepted tasks from the `Possible Tasks` tab must become:
-  - `source_kind = voice_session`
-  - `task_status = BACKLOG`
-- Existing real backlog tasks currently living in `NEW_0` must also become:
-  - `task_status = BACKLOG`
-- Voice session `Задачи` counts and table queries must exclude:
-  - `source_kind = voice_possible_task`
-- Voice session `Возможные задачи` must remain the only place where `voice_possible_task` drafts are shown in the session UI.
+**Целевой контракт**
+- `remove_from_possible_tasks` означает только:
+  - убрать строку из draft-представления,
+  - убрать из session compatibility projection,
+  - убрать из local UI list,
+  - **но не soft-delete’ить сам materialized task document**.
 
-### Why this target is preferred
+Если destructive bug уже сработал, repair-path должен:
+- найти такие soft-delete’нутые rows,
+- восстановить их,
+- в hotfix phase вернуть им `READY_10`,
+- после полной миграции вернуть им `BACKLOG_10`,
+- сохранить audit trail восстановления.
 
-- It removes the current ambiguity where one status means both "draft" and "real backlog task".
-- It makes the meaning of `Возможные задачи` explicit at the status level.
-- It aligns explicit user acceptance with a post-draft backlog status instead of jumping directly into execution readiness.
-- It preserves current operator intuition: if a row is in `Задачи`, it is already a real task.
-- It simplifies the status model because `NEW_0` disappears from the target dictionary.
+### Bug C: вкладка `Задачи` врет счетчиком
 
-## Open Product Decisions
+**Описание**
+- `session_tab_counts` считает session-linked non-codex rows, включая draft `Backlog`.
+- Из-за этого пользователь видит число в `Задачи`, хотя реальных рабочих задач нет.
 
-These decisions should be resolved before implementation starts:
+**Целевой контракт**
+- `tasks_count` считает только accepted task rows.
+- Draft rows учитываются только в `possible_tasks`.
 
-1. Should draft possible tasks require performer selection before acceptance, or should performer remain optional until materialization?
-2. Should `DRAFT` and `BACKLOG` be introduced as exact new status keys, or should they use prefixed CRM-style keys such as `DRAFT_10` and `BACKLOG_10` with labels `Draft` / `Backlog`?
-3. Should `voice_possible_task` drafts remain in `automation_tasks`, or move to a separate storage model later?
-4. Should the older `create_tickets` path be retired entirely once the accepted default status becomes `BACKLOG`?
+### Bug D: недостаточная диагностика фронта
 
-Default assumption for this plan:
+**Описание**
+- В `PossibleTasks` почти нет submit-path logging.
+- Невозможно локализовать, что именно произошло:
+  - какие row ids были выбраны,
+  - какие `performer_id` были назначены,
+  - какой payload ушел,
+  - какой response вернулся,
+  - по какой причине submit был aborted.
 
-- keep drafts in `automation_tasks` for now,
-- keep performer editable on drafts,
-- promote accepted rows to `BACKLOG`,
-- deprecate and remove `NEW_0` after migration.
+**Требование**
+- Это не обязательная часть текущего hotfix, но должно быть отдельным `bd` issue.
+- Issue уже заведен:
+  - `copilot-22j9` — `[voice][ui] Add actionable submit-path logging for Possible Tasks materialization`
 
-## Sprint 1: Freeze The Canonical Status Policy
+## Sprint 1: Freeze canonical status policy
 
-**Goal**: Establish the status/source-kind truth table and remove ambiguity from contracts before data migration.
+### Task 1.1: Зафиксировать truth table
+- где: этот план, `AGENTS.md`, `README.md`
+- acceptance:
+  - draft vs accepted различаются явно;
+  - `voice_possible_task` и `voice_session` не смешиваются;
+  - `NEW_0` зафиксирован как legacy-only.
 
-**Demo / Validation**:
+### Task 1.2: Зафиксировать illegal combinations
+- illegal examples:
+  - `voice_session + DRAFT_10`
+  - materialized row + destructive auto-delete without explicit request
+  - draft row inside `Задачи`
 
-- Architecture review can answer, for any Voice-originated row:
-  - is it draft or accepted?
-  - where should it appear in UI?
-  - what status/source_kind combination is legal?
+## Sprint 2: Backend contract normalization
 
-### Task 1.1: Write the status truth table
+### Task 2.1: Исправить `process_possible_tasks`
+- route должен materialize в рабочий status target
+- route не должен re-enter draft bucket
+- acceptance:
+  - выбранная задача не становится `NEW_0`/`Backlog` draft-row после materialization
 
-- **Location**: `plan/voice-task-status-normalization-plan.md`, `AGENTS.md`, `README.md`
-- **Description**: Document allowed combinations of `source_kind`, `task_status`, and visible UI surfaces.
-- **Dependencies**: None.
-- **Acceptance Criteria**:
-  - draft vs accepted is explicitly defined;
-  - `voice_possible_task + DRAFT` is marked as draft-only;
-  - `voice_session + BACKLOG` is marked as the accepted default;
-  - `NEW_0` is marked as legacy input only.
-- **Validation**:
-  - review with product owner or operator.
+### Task 2.2: Убрать destructive semantics из materialization path
+- remove-from-possible != delete-document
+- acceptance:
+  - задача исчезает из draft-view,
+  - но остается в `automation_tasks` как рабочая задача
 
-### Task 1.2: Define illegal combinations
-
-- **Location**: `docs/` or a follow-up note under `plan/`
-- **Description**: Enumerate disallowed states, especially `voice_session + DRAFT` and any surviving `NEW_0` after migration.
-- **Dependencies**: Task 1.1.
-- **Acceptance Criteria**:
-  - illegal combinations are listed with intended remediation.
-- **Validation**:
-  - cross-check against current DB examples.
-
-## Sprint 2: Backend Contract Normalization
-
-**Goal**: Make backend routes reflect the canonical model and eliminate `NEW_0` from runtime status semantics.
-
-**Demo / Validation**:
-
-- Selecting a row in `Possible Tasks` creates a real task in `Backlog`.
-- Session `Задачи` count excludes draft rows.
-
-### Task 2.1: Normalize acceptance target status
-
-- **Location**: `backend/src/api/routes/voicebot/sessions.ts`
-- **Description**: Change `process_possible_tasks` so accepted tasks materialize with `targetTaskStatus = BACKLOG`, and remove `NEW_0` from the post-acceptance path. Review whether `create_tickets` should align to the same target or be retired.
-- **Dependencies**: Sprint 1.
-- **Acceptance Criteria**:
-  - no accepted task from the `Possible Tasks` tab is written as `NEW_0`;
-  - no accepted task from the `Possible Tasks` tab is written as `DRAFT`;
-  - route semantics are explicit and documented.
-- **Validation**:
-  - route test covering accepted row -> `BACKLOG`.
-
-### Task 2.2: Introduce explicit `DRAFT` and `BACKLOG` statuses
-
-- **Location**: shared status dictionary and all dependent mappings
-- **Description**: Add explicit target statuses `DRAFT` and `BACKLOG`, define labels and integrations, and mark `NEW_0` as legacy-only.
-- **Dependencies**: Task 2.1.
-- **Acceptance Criteria**:
-  - `NEW_0` is no longer produced by runtime write paths;
-  - `DRAFT` and `BACKLOG` are available in shared dictionaries and mapping layers.
-- **Validation**:
-  - shared constants and mapping tests.
-
-### Task 2.3: Exclude draft rows from Voice session `Задачи`
-
-- **Location**: `backend/src/api/routes/voicebot/sessions.ts`
-- **Description**: Update `session_tab_counts` and any session-task listing queries to exclude `source_kind = voice_possible_task`.
-- **Dependencies**: Task 2.2.
-- **Acceptance Criteria**:
-  - `Задачи` counts only accepted `voice_session` tasks;
-  - `Возможные задачи` remains the draft-only view.
-- **Validation**:
-  - route tests with mixed draft and accepted rows.
+### Task 2.3: Исправить `session_tab_counts`
+- `tasks_count` не включает draft rows
+- acceptance:
+  - вкладка `Задачи` перестает маскировать баги materialization path
 
 ### Task 2.4: Stamp acceptance metadata
+- при принятии возможной задачи stamp:
+  - `accepted_from_possible_task`
+  - `accepted_from_row_id`
+  - `accepted_at`
+  - `accepted_by`
 
-- **Location**: `backend/src/api/routes/voicebot/sessions.ts`
-- **Description**: When a possible task is accepted or materialized, stamp metadata such as `accepted_from_possible_task`, `accepted_from_row_id`, `accepted_at`, and `accepted_by`.
-- **Dependencies**: Task 2.1.
-- **Acceptance Criteria**:
-  - accepted rows are distinguishable without heuristics.
-- **Validation**:
-  - insert and update tests for materialization payloads.
+## Sprint 3: Data migration and repair
 
-## Sprint 3: Data Migration And Repair
+### Task 3.1: Dry-run audit
+- report:
+  - draft rows
+  - accepted rows
+  - mixed legacy rows
+  - missing `source_kind`
+  - rows, попавшие под destructive bug
 
-**Goal**: Repair already mixed historical rows.
+### Task 3.2: Миграция `NEW_0`
+- split into `DRAFT_10` and `BACKLOG_10`
+- `NEW_0` уходит из целевого runtime model
 
-**Demo / Validation**:
+### Task 3.3: Repair already broken rows
+- кейсы вроде `69b26496...` должны repair’иться отдельно:
+  - soft-deleted rows, которые были materialized,
+  - но удалены legacy cleanup path
+  - в hotfix phase после repair такие rows должны возвращаться в `READY_10`, а не в `NEW_0`
+  - после полной миграции — в `BACKLOG_10`
 
-- Dry-run report classifies historical rows into draft vs accepted buckets.
-- Apply mode produces deterministic migrations and preserves traceability.
+## Sprint 4: Frontend alignment
 
-### Task 3.1: Build audit query/report
+### Task 4.1: Draft-only Possible Tasks UI
+- accepted row после materialization не должна визуально выглядеть как draft
 
-- **Location**: `backend/scripts/` or `backend/src/scripts/`
-- **Description**: Add a dry-run script that reports:
-  - rows to become `DRAFT`,
-  - rows to become `BACKLOG`,
-  - rows already in later delivery statuses,
-  - rows with missing `source_kind`,
-  - counts per session and per project.
-- **Dependencies**: Sprint 2.
-- **Acceptance Criteria**:
-  - operators can see exactly how many mixed rows exist.
-- **Validation**:
-  - dry-run output on a production snapshot.
+### Task 4.2: Accepted-only Tasks tab
+- `Задачи` = только accepted task rows
 
-### Task 3.2: Migrate historical accepted rows
+### Task 4.3: Better submit diagnostics
+- `bd`: `copilot-22j9`
+- structured console logging:
+  - selected row ids
+  - assigned performers
+  - payload summary
+  - response summary
+  - client-side abort reasons
 
-- **Location**: migration script under `backend/scripts/`
-- **Description**: Split historical `NEW_0` rows into `DRAFT` and `BACKLOG` using the agreed criterion, with audit logging and no heuristic jump into `READY_10`.
-- **Dependencies**: Task 3.1.
-- **Acceptance Criteria**:
-  - historical draft rows no longer remain in `NEW_0`;
-  - historical accepted backlog rows no longer remain in `NEW_0`;
-  - `NEW_0` is absent from the migrated target dataset.
-- **Validation**:
-  - apply-mode test on fixture or sandbox dataset.
+## Sprint 5: Regression coverage and rollout
 
-### Task 3.3: Recompute session tab counts after migration
+### Task 5.1: Backend regression tests
+Покрыть:
+- selected possible task -> materialized accepted task
+- no self-soft-delete after materialization
+- `tasks_count` excludes draft rows
 
-- **Location**: backend maintenance script or admin route
-- **Description**: Refresh and revalidate session-linked counts after migration.
-- **Dependencies**: Task 3.2.
-- **Acceptance Criteria**:
-  - existing sessions show normalized `Draft / Backlog / Ready / ...` splits.
-- **Validation**:
-  - smoke-check on representative sessions.
-
-## Sprint 4: Frontend Alignment
-
-**Goal**: Ensure Voice UI and OperOps UI reflect the normalized lifecycle cleanly.
-
-**Demo / Validation**:
-
-- `Возможные задачи` shows drafts only.
-- `Задачи` shows accepted tasks only.
-- Accepting a draft removes it from `Possible Tasks` and surfaces it in `Задачи` as `Backlog`.
-
-### Task 4.1: Keep `Possible Tasks` draft-only in UI
-
-- **Location**: `app/src/store/voiceBotStore.ts`, `app/src/components/voice/PossibleTasks.tsx`
-- **Description**: Make frontend assumptions explicit: acceptance promotes a row out of draft flow rather than leaving it in the same semantic state.
-- **Dependencies**: Sprint 2.
-- **Acceptance Criteria**:
-  - the accept flow does not leave an accepted row visually indistinguishable from a draft.
-- **Validation**:
-  - UI contract test for the accept flow.
-
-### Task 4.2: Align Voice session `Задачи` with accepted-only semantics
-
-- **Location**: `app/src/pages/voice/SessionPage.tsx`
-- **Description**: Keep `Задачи` dependent on backend `status_counts`, but validate that counts and tabs reflect accepted tasks only.
-- **Dependencies**: Sprint 2.
-- **Acceptance Criteria**:
-  - no draft `DRAFT` row from `voice_possible_task` appears in `Задачи`.
-- **Validation**:
-  - browser smoke-check on mixed historical sessions.
-
-### Task 4.3: Align the OperOps Voice backlog view
-
-- **Location**: `app/src/pages/operops/CRMPage.tsx`, `app/src/pages/operops/voiceTabGrouping.ts`
-- **Description**: Confirm that the OperOps `Voice` backlog continues to represent draft `DRAFT` possible tasks intentionally, while session `Задачи` remains accepted-only.
-- **Dependencies**: Sprint 2.
-- **Acceptance Criteria**:
-  - OperOps backlog remains the draft-review workspace;
-  - Voice session `Задачи` is not a duplicate of that backlog.
-- **Validation**:
-  - contract test and manual review.
-
-## Sprint 5: Regression Coverage And Rollout
-
-**Goal**: Lock the model with tests and deployment checks.
-
-**Demo / Validation**:
-
-- Two known production sessions should show normalized counts after rollout.
-
-### Task 5.1: Add backend regression tests
-
-- **Location**: `backend/__tests__/voicebot/session/`
-- **Description**: Cover mixed draft and accepted rows, accepted-row status target, and status-count exclusion rules.
-- **Dependencies**: Sprint 2.
-- **Acceptance Criteria**:
-  - tests fail if draft rows re-enter session `Задачи`.
-- **Validation**:
-  - Jest backend suite.
-
-### Task 5.2: Add frontend regression tests
-
-- **Location**: `app/__tests__/voice/`
-- **Description**: Cover the `Possible Tasks` accept flow, session tab counts and labels, and task visibility across `Возможные задачи` vs `Задачи`.
-- **Dependencies**: Sprint 4.
-- **Acceptance Criteria**:
-  - tests fail if frontend reintroduces mixed draft and accepted semantics.
-- **Validation**:
-  - Jest frontend suite.
+### Task 5.2: Frontend regression tests
+Покрыть:
+- `Possible Tasks` create flow
+- cross-tab visibility
+- no false-positive `Задачи` count from draft rows
 
 ### Task 5.3: Production smoke checklist
+Проверить на реальных сессиях:
+- только draft rows
+- draft + accepted rows
+- repaired historical rows
 
-- **Location**: runbook in `plan/` or `docs/`
-- **Description**: Validate on real sessions after deploy:
-  - a session with both drafts and accepted tasks,
-  - a session with only drafts,
-  - a session with only accepted tasks.
-- **Dependencies**: Sprint 3 and Sprint 4.
-- **Acceptance Criteria**:
-  - counts and visible rows match the target model.
-- **Validation**:
-  - browser-based smoke-check on production.
+### MCP Google Chrome smoke: canonical repro session
 
-## Testing Strategy
+Базовая prod-сессия для smoke и regression reproduction:
+- `69b26496b771d8ccdee31f98`
+- `https://copilot.stratospace.fun/voice/session/69b26496b771d8ccdee31f98`
 
-- Backend:
-  - route tests for `possible_tasks`, `process_possible_tasks`, `create_tickets`, and `session_tab_counts`,
-  - migration dry-run and apply tests.
-- Frontend:
-  - session task-tab contracts,
-  - accept-from-possible-tasks flow,
-  - cross-tab visibility assertions.
-- Production:
-  - inspect `session_tab_counts` payloads,
-  - inspect Voice session `Задачи` rows,
-  - confirm that draft rows are `DRAFT`,
-  - confirm that accepted rows are `BACKLOG` by default.
+Цель:
+- воспроизвести текущий destructive bug на старом коде;
+- подтвердить corrected behavior после фикса;
+- использовать один и тот же reproducible browser path через MCP Google Chrome.
 
-## Potential Risks And Gotchas
+#### Проверка до фикса
 
-- Historical `NEW_0` rows with missing `source_kind` may not always be distinguishable from untouched drafts without explicit acceptance metadata.
-- Some operators may rely on seeing accepted Voice tasks in `Backlog`; rollout will require communication.
-- OperOps `Voice` backlog and Voice session `Задачи` can drift again if source-kind filtering is not mirrored in both backend and frontend.
-- Migration scripts must be idempotent and dry-run-first.
+1. Открыть страницу сессии в браузере через MCP Google Chrome.
+2. Перейти во вкладку `Возможные задачи`.
+3. Выбрать одну или несколько draft-задач.
+4. Назначить исполнителя из списка.
+5. Нажать `Создать выбранные`.
 
-## Rollback Plan
+Ожидаемое buggy behavior (AS-IS):
+- задача исчезает из `Возможных задач`;
+- во вкладке `Задачи` реальная рабочая строка не появляется;
+- в CRM задача не появляется;
+- в backend Mongo строка может оказаться:
+  - `source_kind = voice_session`
+  - с заполненными `performer_id` / `project_id`
+  - но `is_deleted = true`
 
-- Revert frontend visibility logic for Voice session `Задачи`.
-- Revert the backend status split only if the migration has not yet been applied.
-- Keep the migration apply step behind an explicit operator flag; do not auto-run it on deploy.
-- Preserve an audit report of all migrated task IDs so status rollback can be scripted if needed.
+#### Проверка после фикса
+
+1. Открыть ту же сессию через MCP Google Chrome.
+2. Взять одну из оставшихся draft-задач.
+3. Назначить исполнителя.
+4. Нажать `Создать выбранные`.
+
+Ожидаемое correct behavior:
+- задача уходит из draft-view `Возможные задачи`;
+- задача появляется во вкладке `Задачи`;
+- задача появляется в CRM;
+- в Mongo документ:
+  - не soft-delete’нут;
+  - имеет рабочий статус (`READY_10` как hotfix или `BACKLOG_10` после полной миграции);
+  - сохраняет `source_kind = voice_session`;
+  - сохраняет связь с voice session через `external_ref/source_ref/source_data`
+
+#### Что дополнительно проверить в MCP Google Chrome
+
+- console logging around submit path:
+  - selected row ids
+  - assigned performer ids
+  - payload summary
+  - backend response summary
+  - client-side abort reasons
+- `session_tab_counts`:
+  - `Задачи` не включают draft rows
+  - `Возможные задачи` показывают только draft rows
+- cross-tab visibility:
+  - одна и та же строка не должна одновременно выглядеть как draft и как accepted task
+- повторный refresh страницы:
+  - materialized задача не должна “исчезать” после reload
+
+## Testing strategy
+
+### Backend
+- route tests for:
+  - `process_possible_tasks`
+  - `create_tickets`
+  - `possible_tasks`
+  - `session_tab_counts`
+- migration dry-run/apply tests
+- repair-script tests
+
+### Frontend
+- `PossibleTasks` submit flow
+- `SessionPage` tab counts and visibility
+- logging contract tests
+
+### Production
+- inspect Mongo documents after materialization
+- inspect backend access logs for `process_possible_tasks`
+- confirm no materialized row is soft-deleted unless explicit delete path runs
+
+## Risks
+
+- historical `NEW_0` rows with missing `source_kind` still потребуют migration heuristics;
+- until the status dictionary is fully normalized, immediate fix and target model will coexist temporarily;
+- if UI and backend are fixed separately, operators may still see inconsistent behavior.
+
+## Локализация `NEW_0` в коде и точки элиминации
+
+На текущий момент `NEW_0` все еще живет в нескольких местах. Их нужно разделить на:
+- **legacy-read compatibility**
+- **runtime write-paths**, которые подлежат изменению
+
+### 1. Shared constants
+- [backend/src/constants.ts](/home/strato-space/copilot/backend/src/constants.ts)
+- [app/src/constants/crm.ts](/home/strato-space/copilot/app/src/constants/crm.ts)
+
+Что сделать:
+- добавить `DRAFT_10` и `BACKLOG_10`
+- пометить `NEW_0` как legacy-only
+
+### 2. Draft possible-task persistence
+- [backend/src/services/voicebot/persistPossibleTasks.ts](/home/strato-space/copilot/backend/src/services/voicebot/persistPossibleTasks.ts)
+- [backend/src/api/routes/voicebot/possibleTasksMasterModel.ts](/home/strato-space/copilot/backend/src/api/routes/voicebot/possibleTasksMasterModel.ts)
+- [backend/src/api/routes/voicebot/sessions.ts](/home/strato-space/copilot/backend/src/api/routes/voicebot/sessions.ts)
+
+Что сделать:
+- все draft possible-task write paths перевести с `NEW_0` на `DRAFT_10`
+
+### 3. Materialization path
+- [backend/src/api/routes/voicebot/sessions.ts](/home/strato-space/copilot/backend/src/api/routes/voicebot/sessions.ts)
+
+Текущее bug место:
+- `process_possible_tasks` сейчас пишет `targetTaskStatus: TASK_STATUSES.NEW_0`
+
+Что сделать:
+- hotfix: `READY_10`
+- target model: `BACKLOG_10`
+
+### 4. Voice / OperOps UI grouping
+- [app/src/pages/operops/voiceTabGrouping.ts](/home/strato-space/copilot/app/src/pages/operops/voiceTabGrouping.ts)
+- [backend/src/api/routes/voicebot/sessions.ts](/home/strato-space/copilot/backend/src/api/routes/voicebot/sessions.ts)
+
+Что сделать:
+- перестать трактовать `NEW_0` как рабочий backlog bucket
+- UI and counts должны группировать draft rows отдельно как `DRAFT_10`
+
+## Rollback plan
+
+- route-level rollback only before migration apply;
+- migration must stay behind explicit operator flag;
+- repair scripts must produce audit logs of touched task ids.
+
+## BD
+
+Текущая execution wave:
+
+- 🟡 `copilot-8uac` — [voice] Task status normalization: draft vs accepted session-task semantics
+- ✅ `copilot-8uac.1` — T1 Freeze canonical voice task status policy and target truth table
+- ✅ `copilot-pp5o` — [voice] process_possible_tasks creates Backlog tasks and immediately soft-deletes them
+- ✅ `copilot-8uac.2` — T3 Exclude draft rows from session Tasks counts and accepted-task views
+- ✅ `copilot-8uac.3` — T4 Add acceptance metadata and repair flow for soft-deleted materialized rows
+- ✅ `copilot-8uac.4` — T5 Add regression coverage and production smoke for normalized voice task lifecycle
+- ✅ `copilot-22j9` — [voice][ui] Add actionable submit-path logging for Possible Tasks materialization
+- ⚪ `copilot-8uac.5` — T6 Migrate runtime status dictionary from NEW_0 to DRAFT_10/BACKLOG_10
+
+### DAG
+
+- `copilot-8uac.1 -> copilot-pp5o`
+- `copilot-8uac.1 -> copilot-8uac.2`
+- `copilot-8uac.1 -> copilot-8uac.3`
+- `copilot-8uac.1 -> copilot-8uac.5`
+- `copilot-pp5o -> copilot-8uac.3`
+- `copilot-pp5o -> copilot-8uac.4`
+- `copilot-8uac.2 -> copilot-8uac.4`
+- `copilot-8uac.3 -> copilot-8uac.4`
+- `copilot-22j9 -> copilot-8uac.4`

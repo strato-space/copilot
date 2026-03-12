@@ -1914,7 +1914,9 @@ describe('Voicebot utility routes runtime behavior', () => {
         $set: expect.objectContaining({
           name: 'Stored row',
           description: 'Stored description',
-          task_status: TASK_STATUSES.NEW_0,
+          task_status: TASK_STATUSES.READY_10,
+          accepted_from_possible_task: true,
+          accepted_from_row_id: 'stored-row',
         }),
       })
     );

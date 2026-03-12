@@ -2026,6 +2026,18 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 })(),
             }));
 
+            console.info('[voice.possible_tasks] process_possible_tasks.request', {
+                sessionId: get().currentSessionId,
+                selectedRowIds: selectedTicketIds,
+                selectedCount: selectedTicketIds.length,
+                payload: preparedTickets.map((ticket) => ({
+                    row_id: String(ticket.row_id || ticket.id || '').trim(),
+                    performer_id: String(ticket.performer_id || '').trim(),
+                    project_id: String(ticket.project_id || '').trim(),
+                    priority: String(ticket.priority || '').trim(),
+                })),
+            });
+
             const response = await voicebotHttp.request<Record<string, unknown>>(
                 'voicebot/process_possible_tasks',
                 {
@@ -2049,6 +2061,15 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                     .filter(Boolean)
                 : [];
             const removedRowIds = removedRowIdsRaw.length > 0 ? removedRowIdsRaw : createdTaskIds;
+            const rowErrors = extractVoiceTaskCreateRowErrors(response);
+
+            console.info('[voice.possible_tasks] process_possible_tasks.response', {
+                sessionId: get().currentSessionId,
+                operationStatus: String(response?.operation_status || ''),
+                createdTaskIds,
+                removedRowIds,
+                rowErrorsCount: rowErrors.length,
+            });
 
             if (createdTaskIds.length > 0) {
                 set((state) => {
@@ -2062,7 +2083,6 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 message.success(`Создано ${createdTaskIds.length} задач`);
             }
 
-            const rowErrors = extractVoiceTaskCreateRowErrors(response);
             if (rowErrors.length > 0) {
                 const backendError = extractVoiceTaskCreateErrorText(response) || 'Не удалось создать задачи';
                 throw new VoiceTaskCreateValidationError(backendError, rowErrors);
@@ -2078,6 +2098,13 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 ? (e.response?.data as unknown)
                 : null;
             const rowErrors = extractVoiceTaskCreateRowErrors(backendPayload);
+            console.error('[voice.possible_tasks] process_possible_tasks.failed', {
+                sessionId: get().currentSessionId,
+                selectedRowIds: selectedTicketIds,
+                backendPayload,
+                rowErrorsCount: rowErrors.length,
+                error: e,
+            });
             if (rowErrors.length > 0) {
                 const backendError = extractVoiceTaskCreateErrorText(backendPayload) || 'Не удалось создать задачи';
                 throw new VoiceTaskCreateValidationError(backendError, rowErrors);

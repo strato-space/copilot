@@ -323,10 +323,19 @@ function PossibleTasksSessionScope() {
 
   const handleCreateSelected = async () => {
     if (selectedRowKeys.length === 0) {
+      console.info('[voice.possible_tasks] create_selected.aborted', {
+        reason: 'no_selection',
+        sessionId: voiceBotSession?._id || null,
+      });
       message.warning('Выберите хотя бы одну задачу');
       return;
     }
     if (!hasSessionProject) {
+      console.info('[voice.possible_tasks] create_selected.aborted', {
+        reason: 'missing_session_project',
+        sessionId: voiceBotSession?._id || null,
+        selectedRowIds: selectedRowKeys,
+      });
       message.error('У сессии не выбран проект. Укажите проект в шапке сессии.');
       return;
     }
@@ -344,6 +353,13 @@ function PossibleTasksSessionScope() {
     if (invalid.length > 0) {
       const first = invalid[0];
       if (!first) return;
+      console.info('[voice.possible_tasks] create_selected.aborted', {
+        reason: 'invalid_selected_task',
+        sessionId: voiceBotSession?._id || null,
+        selectedRowIds: selectedRowKeys,
+        firstInvalidRowId: first.task.row_id,
+        missingFields: first.missing,
+      });
       message.error(
         `Задача "${first.task.name}" не готова: ${first.missing
           .map((field) => REQUIRED_FIELD_LABELS[field])
@@ -368,10 +384,30 @@ function PossibleTasksSessionScope() {
       dialogue_reference: toText(task.dialogue_reference) || null,
     }));
 
+    console.info('[voice.possible_tasks] create_selected.submit', {
+      sessionId: voiceBotSession?._id || null,
+      selectedRowIds: selectedRowKeys,
+      selectedCount: selectedRowKeys.length,
+      performerIds: Array.from(new Set(payload.map((task) => toText(task.performer_id)).filter(Boolean))),
+      payload: payload.map((task) => ({
+        row_id: task.row_id,
+        performer_id: task.performer_id,
+        project_id: task.project_id,
+        priority: task.priority,
+      })),
+    });
+
     setIsSubmitting(true);
     setRowCreationErrors({});
     try {
       const result = await confirmSelectedTickets(selectedRowKeys, payload);
+      console.info('[voice.possible_tasks] create_selected.result', {
+        sessionId: voiceBotSession?._id || null,
+        selectedRowIds: selectedRowKeys,
+        createdTaskIds: result.createdTaskIds,
+        removedRowIds: result.removedRowIds,
+        rowErrorsCount: result.rowErrors.length,
+      });
       const removedRowIdSet = new Set(result.removedRowIds);
       if (removedRowIdSet.size > 0) {
         setSelectedRowKeys((prev) => prev.filter((id) => !removedRowIdSet.has(id)));
@@ -394,6 +430,11 @@ function PossibleTasksSessionScope() {
       }
     } catch (error) {
       if (isVoiceTaskCreateValidationError(error)) {
+        console.warn('[voice.possible_tasks] create_selected.validation_failed', {
+          sessionId: voiceBotSession?._id || null,
+          selectedRowIds: selectedRowKeys,
+          rowErrors: error.rowErrors,
+        });
         const rowErrorsByTaskId: Record<string, TaskRowCreationErrors> = {};
         for (const rowError of error.rowErrors) {
           const rowKey = rowsById.get(rowError.ticketId)?.row_id || rowError.ticketId;
@@ -436,6 +477,11 @@ function PossibleTasksSessionScope() {
         message.error(genericError);
         return;
       }
+      console.error('[voice.possible_tasks] create_selected.failed', {
+        sessionId: voiceBotSession?._id || null,
+        selectedRowIds: selectedRowKeys,
+        error,
+      });
       console.error('Ошибка при создании задач:', error);
       message.error('Не удалось создать задачи');
     } finally {

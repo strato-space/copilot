@@ -31,7 +31,9 @@ These decisions are part of the current platform contract and must be preserved 
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
   - `task_type_id` is optional in Possible Tasks UI,
   - possible tasks are master records in `automation_tasks` with `task_status=NEW_0`,
-  - `process_possible_tasks` must keep materialized session tasks in `NEW_0`; only explicit ticket creation promotes them into delivery statuses,
+  - `process_possible_tasks` now materializes selected rows into `READY_10` as the accepted-task hotfix target,
+  - accepted materialized rows must not be soft-deleted by possible-task cleanup,
+  - the full `NEW_0 -> DRAFT_10/BACKLOG_10` migration remains separate tracked work,
   - session `processors_data.CREATE_TASKS` is compatibility projection only.
 
 ## Critical Interfaces To Preserve
@@ -336,7 +338,8 @@ Preferred engineering principles for this repo:
   - frontend calls MCP tool `create_tasks` with a structured JSON envelope serialized into `message`,
   - the agent may enrich context through MCP `voice` and `gsh`,
   - backend persists possible tasks into `automation_tasks` through `save_possible_tasks` / `process_possible_tasks`,
-  - `process_possible_tasks` keeps those session-scoped materializations in `NEW_0`; only `create_tickets` promotes them to regular work statuses like `READY_10`,
+  - `process_possible_tasks` now promotes selected rows into `READY_10` while keeping draft rows in `NEW_0`,
+  - selected rows leave draft views without being soft-deleted,
   - the agent must not route execution through `StratoProject`.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
@@ -679,7 +682,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added merge-session API/store scaffolding (`voicebot/sessions/merge`, `mergeSessions(...)`) with explicit confirmation phrase and merge-log collection constant (`automation_voice_bot_session_merge_log`).
 - Added TS transcribe Telegram transport recovery flow (`getFile` -> download -> persist `file_path` -> transcribe) and matching regression coverage in `workerTranscribeHandler` tests.
 - Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.
-- Added planning draft `plan/voice-task-status-normalization-plan.md` for the proposed `NEW_0` -> `DRAFT` / `BACKLOG` split; treat it as exploratory only and keep the currently approved `NEW_0` runtime contract until a new spec is accepted.
+- Added and activated `plan/voice-task-status-normalization-plan.md`: the `READY_10` hotfix for accepted Voice tasks is deployed, while the full `NEW_0 -> DRAFT_10/BACKLOG_10` migration remains open follow-up work.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.
