@@ -281,6 +281,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                             $or: performerMatch,
                             task_status: {
                                 $in: [
+                                    TASK_STATUSES.BACKLOG_10,
                                     TASK_STATUSES.READY_10,
                                     TASK_STATUSES.PROGRESS_10,
                                     TASK_STATUSES.PROGRESS_20,

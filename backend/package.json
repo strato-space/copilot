@@ -29,6 +29,8 @@
     "voice:dedupe:webm:apply": "tsx scripts/voicebot-dedupe-webm-filenames.ts --apply",
     "voice:repair:softdeleted-materialized:dry": "tsx scripts/voicebot-repair-softdeleted-materialized-tasks.ts",
     "voice:repair:softdeleted-materialized:apply": "tsx scripts/voicebot-repair-softdeleted-materialized-tasks.ts --apply",
+    "voice:migrate-task-statuses:dry": "tsx scripts/voicebot-migrate-task-statuses.ts",
+    "voice:migrate-task-statuses:apply": "tsx scripts/voicebot-migrate-task-statuses.ts --apply",
     "voice:close-idle:dry": "tsx scripts/voicebot-close-inactive-sessions.ts",
     "voice:close-idle:apply": "tsx scripts/voicebot-close-inactive-sessions.ts --apply",
     "voice:summarize-mcp-watchdog:dry": "tsx scripts/summarize-mcp-watchdog.ts",

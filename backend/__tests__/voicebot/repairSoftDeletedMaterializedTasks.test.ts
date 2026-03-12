@@ -22,7 +22,17 @@ describe('repairSoftDeletedMaterializedTasks', () => {
             is_deleted: true,
             source: 'VOICE_BOT',
             source_kind: 'voice_session',
-            task_status: TASK_STATUSES.NEW_0,
+            task_status: expect.objectContaining({
+              $in: expect.arrayContaining([
+                TASK_STATUSES.NEW_0,
+                TASK_STATUSES.DRAFT_10,
+                TASK_STATUSES.READY_10,
+                TASK_STATUSES.BACKLOG_10,
+                'Backlog',
+                'Ready',
+                'Draft',
+              ]),
+            }),
           }),
           expect.objectContaining({
             $or: expect.arrayContaining([
@@ -73,7 +83,7 @@ describe('repairSoftDeletedMaterializedTasks', () => {
     ]);
   });
 
-  it('restores candidates into READY_10 and stamps acceptance metadata', async () => {
+  it('restores candidates into BACKLOG_10 and stamps acceptance metadata', async () => {
     const candidateId = new ObjectId();
     const findOne = jest.fn(async () => ({
       _id: candidateId,
@@ -109,7 +119,7 @@ describe('repairSoftDeletedMaterializedTasks', () => {
         $set: expect.objectContaining({
           is_deleted: false,
           deleted_at: null,
-          task_status: TASK_STATUSES.READY_10,
+          task_status: TASK_STATUSES.BACKLOG_10,
           accepted_from_possible_task: true,
           accepted_from_row_id: 'NEW_0-001',
           accepted_by: '6863eab6a6d7b324e2df310a',

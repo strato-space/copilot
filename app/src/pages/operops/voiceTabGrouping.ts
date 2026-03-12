@@ -163,7 +163,17 @@ const isArchiveLike = (ticket: Ticket): boolean => {
 
 const isPossibleTask = (ticket: Ticket): boolean => {
   const taskStatus = toText(ticket.task_status);
-  return taskStatus === TASK_STATUSES.NEW_0 || taskStatus === 'NEW_0';
+  if (taskStatus === TASK_STATUSES.DRAFT_10) return true;
+  if (taskStatus !== TASK_STATUSES.BACKLOG_10 && taskStatus !== TASK_STATUSES.NEW_0 && taskStatus !== 'NEW_0' && taskStatus !== 'Backlog') {
+    return false;
+  }
+
+  const sourceKind = toText(ticket.source_kind);
+  if (sourceKind === 'voice_possible_task') return true;
+  if (sourceKind === 'voice_session') return false;
+
+  const sourceInfo = resolveTaskSourceInfo(ticket);
+  return sourceKind.length === 0 && sourceInfo.reference.includes('/voice/session/');
 };
 
 export const isVoiceBacklogTask = (ticket: Ticket): boolean => isPossibleTask(ticket);

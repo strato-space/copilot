@@ -2,6 +2,9 @@ import { ObjectId } from 'mongodb';
 import { TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
 import { normalizeDateField, toIdString, toTaskReferenceList, toTaskText } from './sessionsSharedUtils.js';
 
+export const LEGACY_VOICE_DRAFT_STATUS = 'Backlog';
+export const ACTIVE_VOICE_DRAFT_STATUSES = [TASK_STATUSES.DRAFT_10, LEGACY_VOICE_DRAFT_STATUS] as const;
+
 export const VOICE_POSSIBLE_TASK_RELATION_TYPES = [
   'parent-child',
   'blocks',
@@ -232,8 +235,9 @@ export const buildVoicePossibleTaskMasterQuery = ({
 }): Record<string, unknown> => ({
   is_deleted: { $ne: true },
   codex_task: { $ne: true },
-  task_status: TASK_STATUSES.NEW_0,
+  task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
   source: 'VOICE_BOT',
+  source_kind: 'voice_possible_task',
   $or: [
     { external_ref: externalRef },
     { source_ref: externalRef },
@@ -309,7 +313,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
     ...(dependencyViews.length > 0 ? { dependencies: dependencyViews } : {}),
     ...(childViews.length > 0 ? { children: childViews } : {}),
     ...(parentView ? { parent: parentView, parent_id: parentView.id } : {}),
-    task_status: TASK_STATUSES.NEW_0,
+    task_status: TASK_STATUSES.DRAFT_10,
     task_status_history: [],
     last_status_update: now,
     status_update_checked: false,
@@ -365,7 +369,10 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
     source_ref: toTaskText(record.source_ref),
     external_ref: toTaskText(record.external_ref),
     ...(record.source_data && typeof record.source_data === 'object' ? { source_data: record.source_data } : {}),
-    task_status: toTaskText(record.task_status),
+    task_status:
+      toTaskText(record.task_status) === LEGACY_VOICE_DRAFT_STATUS || toTaskText(record.task_status) === TASK_STATUSES.NEW_0
+        ? TASK_STATUSES.DRAFT_10
+        : toTaskText(record.task_status),
     created_at: normalizeDateField(record.created_at),
     updated_at: normalizeDateField(record.updated_at),
   };

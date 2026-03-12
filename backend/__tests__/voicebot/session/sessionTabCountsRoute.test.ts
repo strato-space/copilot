@@ -80,7 +80,7 @@ describe('Voicebot session_tab_counts route', () => {
 
     tasksAggregateMock.mockReturnValue({
       toArray: async () => [
-        { _id: TASK_STATUSES.READY_10, count: 7 },
+        { _id: TASK_STATUSES.BACKLOG_10, count: 7 },
         { _id: TASK_STATUSES.REVIEW_10, count: 3 },
       ],
     });
@@ -127,7 +127,7 @@ describe('Voicebot session_tab_counts route', () => {
       tasks_count: 10,
       codex_count: 3,
       status_counts: [
-        { status: TASK_STATUSES.READY_10, count: 7 },
+        { status: TASK_STATUSES.BACKLOG_10, count: 7 },
         { status: TASK_STATUSES.REVIEW_10, count: 3 },
       ],
     });
@@ -139,6 +139,11 @@ describe('Voicebot session_tab_counts route', () => {
             is_deleted: { $ne: true },
             codex_task: { $ne: true },
             source_kind: { $ne: 'voice_possible_task' },
+            $or: expect.arrayContaining([
+              expect.objectContaining({
+                'source_data.voice_sessions.session_id': expect.any(Object),
+              }),
+            ]),
           }),
         }),
         expect.objectContaining({

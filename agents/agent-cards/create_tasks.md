@@ -66,7 +66,7 @@ oneOf:
 4. Дочитай `voice.project(project_id)`, если известен `project-id`.
 5. Дочитай existing possible tasks и existing materialized tasks этой сессии.
 6. Дочитай активные задачи проекта, если известен `project-id`.
-7. Считай `voice.session_possible_tasks(session_id=...)` mutable baseline для текущей сессии и верни полный желаемый набор `NEW_0` rows для этой сессии, а не только дельту.
+7. Считай `voice.session_possible_tasks(session_id=...)` mutable baseline для текущей сессии и верни полный желаемый набор `DRAFT_10` rows для этой сессии, а не только дельту.
 8. Выдели только executor-ready задачи.
 9. Удали явные дубли.
 10. Верни только канонический JSON-массив.
@@ -97,15 +97,15 @@ oneOf:
 - Для неизвестных `performer_id`, `project_id`, `task_type_id` возвращай пустую строку.
 - Если `dialogue_tag` неочевиден, используй `"voice"`.
 - `dependencies_from_ai` всегда должен быть массивом строк.
-- В текущем Mongo reality `Possible Tasks` материализуются как `automation_tasks` со значениями вроде `task_status="Backlog"`, `source="VOICE_BOT"`, `source_kind="voice_possible_task"`; это operational форма текущего `NEW_0`, и её нужно воспринимать как mutable baseline, а не как обычные materialized work tasks.
+- В текущем Mongo reality `Possible Tasks` материализуются как `automation_tasks` со значениями вроде `task_status="Draft"`, `source="VOICE_BOT"`, `source_kind="voice_possible_task"`; это operational форма текущего `DRAFT_10`, и её нужно воспринимать как mutable baseline, а не как обычные materialized work tasks.
 - В текущем Mongo reality у existing possible tasks `project_id` и `performer_id` могут быть пустыми строками; не отбрасывай и не переоткрывай scope только из-за пустого `project_id` у historical `voice_possible_task`.
 
 Дедупликация и snapshot semantics:
 - `voice.session_possible_tasks(session_id=...)` — это НЕ immutable duplicates, а mutable baseline.
-- Если задача уже есть в `NEW_0` и scope тот же, верни её с тем же `row_id/id`, но обнови формулировку при необходимости.
-- Если scope тот же, но задача уже материализована вне `NEW_0`, не возвращай её как новую Possible Task.
-- Если project_id известен и есть активная non-`NEW_0` задача с тем же смыслом, не возвращай дубликат.
-- Если project_id известен и есть `NEW_0 voice_possible_task` с тем же смыслом из другой сессии, переиспользуй тот же `row_id/id` и обнови формулировку in-place.
+- Если задача уже есть в `DRAFT_10` и scope тот же, верни её с тем же `row_id/id`, но обнови формулировку при необходимости.
+- Если scope тот же, но задача уже материализована вне `DRAFT_10`, не возвращай её как новую Possible Task.
+- Если project_id известен и есть активная non-`DRAFT_10` задача с тем же смыслом, не возвращай дубликат.
+- Если project_id известен и есть `DRAFT_10 voice_possible_task` с тем же смыслом из другой сессии, переиспользуй тот же `row_id/id` и обнови формулировку in-place.
 - `row_id` и `id` — канонические mutation locators; `task_id_from_ai` — metadata fallback, а не primary identity.
 - удалённые rows/tasks никогда не считаются основанием подавлять новую Possible Task.
 - ручное удаление `Possible Task` не является permanent veto.

@@ -133,7 +133,13 @@ describe('VoiceBot /projects parity', () => {
     const response = await request(app).post('/voicebot/projects').send({});
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual(assignedProjects);
+    expect(response.body).toEqual([
+      {
+        ...assignedProjects[0],
+        telegram_chats: [],
+        project_performer_links: [],
+      },
+    ]);
     expect(getUserAccessibleProjectsMock).toHaveBeenCalledTimes(1);
   });
 });

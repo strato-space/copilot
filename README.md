@@ -19,10 +19,9 @@ Use this as a fast guardrail before implementing anything:
 - Possible Tasks contract:
   - canonical payload shape `id/name/description/priority/...`,
   - `task_type_id` stays optional,
-  - master store is `automation_tasks` with status `NEW_0`,
-  - `process_possible_tasks` now materializes selected rows into `READY_10` as the accepted-task hotfix target,
+  - master store is `automation_tasks` with draft status `DRAFT_10`,
+  - `process_possible_tasks` now materializes selected rows into `BACKLOG_10`,
   - accepted rows must not be soft-deleted by possible-task cleanup,
-  - full dictionary migration to `DRAFT_10/BACKLOG_10` remains a separate follow-up,
   - session `processors_data.CREATE_TASKS` is compatibility projection only, not the source of truth.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
@@ -92,7 +91,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Codex relationship groups are normalized in details card as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency reading.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 - OperOps `Voice` tab is possible-task-centric:
-  - primary dataset is `NEW_0` tasks from `automation_tasks`,
+  - primary dataset is `DRAFT_10` tasks from `automation_tasks`,
   - first group is orphan possible tasks without voice linkage,
   - then session-linked groups sorted newest-first,
   - processed tasks for a session are shown collapsed for reference.
@@ -114,13 +113,17 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `CREATE_TASKS` realtime delivery is Mongo-first and session-room based: workers persist refreshed Possible Tasks first, then enqueue `session_update.taskflow_refresh.possible_tasks` so all viewers refresh from canonical backend state.
 - `Possible Tasks` recompute is driven by successful transcript chunks; it is no longer tied to session completion or to categorization completion.
 - `process_possible_tasks` is now non-destructive:
-  - selected rows materialize into `READY_10`,
+  - selected rows materialize into `BACKLOG_10`,
   - accepted rows keep `source_kind = voice_session`,
   - cleanup removes them from draft views but must not soft-delete the materialized task document.
 - Voice session `Задачи` count excludes draft rows with `source_kind = voice_possible_task`; the tab now reflects accepted tasks only.
 - Repaired materialized rows can be restored with:
   - `cd backend && npm run voice:repair:softdeleted-materialized:dry -- --session <session_id>`
   - `cd backend && npm run voice:repair:softdeleted-materialized:apply -- --session <session_id>`
+- Historical Voice status normalization can be migrated with:
+  - `cd backend && npm run voice:migrate-task-statuses:dry [-- --session <session_id>]`
+  - `cd backend && npm run voice:migrate-task-statuses:apply [-- --session <session_id>]`
+- Voice/OperOps session task matching must also honor `source_data.voice_sessions[].session_id`, not only canonical session URLs in `source_ref` / `external_ref`, so accepted tasks remain visible after status migration and repair.
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
@@ -184,7 +187,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page shows `Возможные задачи` tab when `processors_data.CREATE_TASKS.data` is present and user has `PROJECTS.UPDATE`; the table uses compact design (no standalone status/project/AI columns), keeps `description`, and validates required fields inline.
-- Possible tasks are persisted as master Mongo tasks in `automation_tasks` with `task_status=NEW_0`; session-local taskflow payloads keep only a synchronized projection for compatibility and realtime UI hydration.
+- Possible tasks are persisted as master Mongo tasks in `automation_tasks` with `task_status=DRAFT_10`; session-local taskflow payloads keep only a synchronized projection for compatibility and realtime UI hydration.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - Possible Tasks creation flow now emits structured submit diagnostics in browser console:
@@ -238,7 +241,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
 - Synced legacy planning references copied for context now live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
 - Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
-- Status-normalization execution plan lives in `plan/voice-task-status-normalization-plan.md`; the hotfix portion is deployed (`process_possible_tasks -> READY_10`, accepted-only task counts, repair path, submit diagnostics), while the full `NEW_0 -> DRAFT_10/BACKLOG_10` migration remains tracked as follow-up work.
+- Voice status normalization contract now lives in `plan/voice-task-status-normalization-plan.md` as an as-built document; it records the deployed `DRAFT_10 / BACKLOG_10` runtime split for Voice taskflow.
+- Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
 
 
 ### Voice runtime: key configuration map
@@ -272,7 +276,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.
-  - successful transcript completion in TS worker runtime auto-enqueues `CREATE_TASKS`, persists refreshed `NEW_0` master rows into `automation_tasks`, and only then emits `session_update.taskflow_refresh.possible_tasks` to all open viewers of the session.
+  - successful transcript completion in TS worker runtime auto-enqueues `CREATE_TASKS`, persists refreshed `DRAFT_10` master rows into `automation_tasks`, and only then emits `session_update.taskflow_refresh.possible_tasks` to all open viewers of the session.
   - live/manual possible-task refresh can use `refresh_mode=incremental_refresh`, which preserves unmatched existing candidate rows as stale instead of deleting them immediately; `full_recompute` stays the explicit destructive mode.
 - Frontend MCP endpoint resolution order:
   1. `window.agents_api_url` (if set at runtime),

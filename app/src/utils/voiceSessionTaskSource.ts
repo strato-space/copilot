@@ -41,6 +41,20 @@ const getValueByPath = (input: unknown, path: string): unknown => {
   return current;
 };
 
+const getVoiceSessionIdsFromArray = (input: unknown): string[] => {
+  if (!Array.isArray(input)) return [];
+  const ids = new Set<string>();
+  for (const entry of input) {
+    const record = toRecord(entry);
+    if (!record) continue;
+    const sessionId = normalizeVoiceSessionSourceRef(record.session_id);
+    if (sessionId) ids.add(sessionId);
+    const sessionDbId = normalizeVoiceSessionSourceRef(record.session_db_id);
+    if (sessionDbId) ids.add(sessionDbId);
+  }
+  return Array.from(ids);
+};
+
 export const normalizeVoiceSessionSourceRef = (value: unknown): string => {
   const rawValue = toLookupValue(value).trim();
   if (!rawValue) return '';
@@ -136,6 +150,7 @@ export const ticketMatchesVoiceSessionSourceRefs = (
     getValueByPath(ticketRecord, 'source_data.session_db_id'),
     getValueByPath(ticketRecord, 'source_data.payload.session_id'),
     getValueByPath(ticketRecord, 'source_data.payload.session_db_id'),
+    ...getVoiceSessionIdsFromArray(getValueByPath(ticketRecord, 'source_data.voice_sessions')),
   ]);
 
   return ticketRefs.some((ref) => filterRefSet.has(ref));

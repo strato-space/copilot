@@ -5,7 +5,7 @@ export const formatCurrency = (value: number): string => {
     maximumFractionDigits: 0,
     useGrouping: true,
   }).format(value);
-  return `${formatted}&nbsp;₽`;
+  return `${formatted} ₽`;
 };
 
 export const formatNumber = (value: number): string =>

@@ -396,10 +396,11 @@ const CRMPage = () => {
     // Status widgets
     const widget_statuses: Record<string, string[]> = {
         total: [
-            'NEW_10', 'NEW_20', 'NEW_30', 'NEW_40', 'PROGRESS_0', 'PLANNED_10', 'PLANNED_20', 'READY_10',
+            'BACKLOG_10', 'NEW_10', 'NEW_20', 'NEW_30', 'NEW_40', 'PROGRESS_0', 'PLANNED_10', 'PLANNED_20', 'READY_10',
             'PROGRESS_10', 'PROGRESS_20', 'PROGRESS_30', 'PROGRESS_40',
             'REVIEW_10', 'REVIEW_20', 'AGREEMENT_10', 'AGREEMENT_20', 'DONE_10',
         ].map((s) => TASK_STATUSES[s as keyof typeof TASK_STATUSES] as string),
+        backlog: ['BACKLOG_10'].map((s) => TASK_STATUSES[s as keyof typeof TASK_STATUSES] as string),
         new: ['NEW_10', 'NEW_20', 'NEW_30', 'NEW_40'].map((s) => TASK_STATUSES[s as keyof typeof TASK_STATUSES] as string),
         plan: ['PLANNED_10', 'PLANNED_20'].map((s) => TASK_STATUSES[s as keyof typeof TASK_STATUSES] as string),
         work: ['READY_10', 'PROGRESS_0', 'PROGRESS_10', 'PROGRESS_20', 'PROGRESS_30', 'PROGRESS_40'].map((s) => TASK_STATUSES[s as keyof typeof TASK_STATUSES] as string),
@@ -430,6 +431,15 @@ const CRMPage = () => {
             filter: {
                 ...savedFilters,
                 task_status: ['PLANNED_10', 'PLANNED_20'],
+            },
+            columns: ['mark', 'created_at', 'updated_at', 'project', 'epic', 'order', 'title', 'performer', 'priority', 'task_status', 'task_type', 'shipment_date', 'estimated_time_edit', 'dashboard_comment', 'edit_action', 'notification'],
+        },
+        backlog: {
+            key: 'backlog',
+            label: 'Backlog',
+            filter: {
+                task_status: ['BACKLOG_10'].map((s) => TASK_STATUSES[s as keyof typeof TASK_STATUSES] as string),
+                ...savedFilters,
             },
             columns: ['mark', 'created_at', 'updated_at', 'project', 'epic', 'order', 'title', 'performer', 'priority', 'task_status', 'task_type', 'shipment_date', 'estimated_time_edit', 'dashboard_comment', 'edit_action', 'notification'],
         },
@@ -483,7 +493,7 @@ const CRMPage = () => {
     const mainTabs = useMemo(() => [
         { key: 'voice', label: 'Voice' },
         { key: 'plan', label: 'Plan', subTabs: ['new', 'plan'] },
-        { key: 'backlog', label: 'Backlog', subTabs: ['work', 'review'] },
+        { key: 'backlog', label: 'Backlog', subTabs: ['backlog', 'work', 'review'] },
         { key: 'work', label: 'Work', configKey: 'work' },
         { key: 'review', label: 'Review', configKey: 'review' },
         { key: 'done', label: 'Done', configKey: 'done' },
@@ -500,10 +510,10 @@ const CRMPage = () => {
         }
     }, [savedTab, resolvedMainTab, saveTab]);
 
-    const [subTabsState, setSubTabsState] = useState({ plan: 'new', backlog: 'work' });
+    const [subTabsState, setSubTabsState] = useState({ plan: 'new', backlog: 'backlog' });
 
     const activeMainTab = resolvedMainTab;
-    const activeSubTabs = activeMainTab === 'plan' ? ['new', 'plan'] : activeMainTab === 'backlog' ? ['work', 'review'] : [];
+    const activeSubTabs = activeMainTab === 'plan' ? ['new', 'plan'] : activeMainTab === 'backlog' ? ['backlog', 'work', 'review'] : [];
     const activeSubTab = activeMainTab === 'plan' ? subTabsState.plan : activeMainTab === 'backlog' ? subTabsState.backlog : null;
     const activeConfigKey = activeSubTab ?? mainTabs.find((tab) => tab.key === activeMainTab)?.configKey ?? null;
     const activeConfig = activeConfigKey ? subTabConfigs[activeConfigKey] : null;
@@ -930,7 +940,13 @@ const CRMPage = () => {
                             {activeSubTabs.length > 0 ? (
                                 <div className="mt-3 flex flex-wrap gap-2">
                                     {activeSubTabs.map((subKey) => {
-                                        const countMap: Record<string, number> = { new: widgets.new ?? 0, plan: widgets.plan ?? 0, work: widgets.work ?? 0, review: widgets.review ?? 0 };
+                                        const countMap: Record<string, number> = {
+                                            new: widgets.new ?? 0,
+                                            plan: widgets.plan ?? 0,
+                                            backlog: widgets.backlog ?? 0,
+                                            work: widgets.work ?? 0,
+                                            review: widgets.review ?? 0,
+                                        };
                                         return (
                                             <Tag
                                                 key={subKey}
@@ -959,7 +975,7 @@ const CRMPage = () => {
                                     styles={{ body: { padding: 24 } }}
                                 >
                                     <div className="mb-4 flex flex-wrap items-center gap-2">
-                                        <Tag color="blue">NEW_0: {voiceBacklogSummary.taskCount}</Tag>
+                                        <Tag color="blue">DRAFT_10: {voiceBacklogSummary.taskCount}</Tag>
                                         <Tag color="default">Групп: {voiceBacklogSummary.groupCount}</Tag>
                                         <Tag color="processing">Сессий: {voiceBacklogSummary.sessionCount}</Tag>
                                         <Tag color="warning">Orphan: {voiceBacklogSummary.orphanCount}</Tag>
@@ -1039,7 +1055,7 @@ const CRMPage = () => {
                                             }))}
                                         />
                                     ) : (
-                                        <Empty description="NEW_0 voice tasks не найдены" />
+                                        <Empty description="DRAFT_10 voice tasks не найдены" />
                                     )}
                                 </Card>
 

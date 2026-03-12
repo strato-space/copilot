@@ -95,7 +95,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     const [insertedDocs] = insertManySpy.mock.calls[0] as [Array<Record<string, unknown>>];
     expect(Array.isArray(insertedDocs)).toBe(true);
     expect(insertedDocs).toHaveLength(1);
-    expect(insertedDocs[0]?.task_status).toBe(TASK_STATUSES.READY_10);
+    expect(insertedDocs[0]?.task_status).toBe(TASK_STATUSES.BACKLOG_10);
     expect(insertedDocs[0]?.source_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
     expect((insertedDocs[0]?.source_data as Record<string, unknown>)?.session_id).toBe(sessionId.toHexString());
   });
@@ -937,7 +937,7 @@ describe('Voicebot utility routes runtime behavior', () => {
             project: 'Master project',
             project_id: new ObjectId().toHexString(),
             performer_id: new ObjectId().toHexString(),
-            task_status: TASK_STATUSES.NEW_0,
+            task_status: TASK_STATUSES.DRAFT_10,
             source: 'VOICE_BOT',
             source_kind: 'voice_session',
             source_ref: sessionId.toHexString(),
@@ -983,7 +983,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         id: 'master-row',
         name: 'Master row',
         project: 'Master project',
-        task_status: TASK_STATUSES.NEW_0,
+        task_status: TASK_STATUSES.DRAFT_10,
       }),
     ]);
     expect(response.body.items).not.toEqual(
@@ -1020,7 +1020,7 @@ describe('Voicebot utility routes runtime behavior', () => {
                 _id: existingMasterId,
                 row_id: 'stale-row',
                 id: 'stale-row',
-                task_status: TASK_STATUSES.NEW_0,
+                task_status: TASK_STATUSES.DRAFT_10,
                 source: 'VOICE_BOT',
                 source_kind: 'voice_session',
                 source_ref: sessionId.toHexString(),
@@ -1118,7 +1118,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           id: 'new-row',
           name: 'Saved row',
           project: 'Saved project',
-          task_status: TASK_STATUSES.NEW_0,
+          task_status: TASK_STATUSES.DRAFT_10,
           relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
           source_kind: 'voice_possible_task',
           source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
@@ -1176,7 +1176,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         row_id: 'stale-row',
         id: 'stale-row',
         name: 'Stale row',
-        task_status: TASK_STATUSES.NEW_0,
+        task_status: TASK_STATUSES.DRAFT_10,
         source: 'VOICE_BOT',
         source_kind: 'voice_possible_task',
         source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
@@ -1471,7 +1471,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       priority_reason: 'Old reason',
       project_id: projectId.toHexString(),
       project: 'Shared project',
-      task_status: TASK_STATUSES.NEW_0,
+      task_status: TASK_STATUSES.DRAFT_10,
       source: 'VOICE_BOT',
       source_kind: 'voice_possible_task',
       source_ref: otherCanonicalRef,
@@ -1657,7 +1657,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       performer_id: performerMongoId.toHexString(),
       project_id: projectId.toHexString(),
       project: 'Shared project',
-      task_status: TASK_STATUSES.NEW_0,
+      task_status: TASK_STATUSES.DRAFT_10,
       source: 'VOICE_BOT',
       source_kind: 'voice_possible_task',
       source_ref: `https://copilot.stratospace.fun/voice/session/${otherSessionId.toHexString()}`,
@@ -1835,7 +1835,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           performer_id: validPerformerId.toHexString(),
           project_id: projectId.toHexString(),
           project: 'Stored project',
-          task_status: TASK_STATUSES.NEW_0,
+          task_status: TASK_STATUSES.DRAFT_10,
           source: 'VOICE_BOT',
           source_kind: 'voice_possible_task',
           source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
@@ -1914,7 +1914,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         $set: expect.objectContaining({
           name: 'Stored row',
           description: 'Stored description',
-          task_status: TASK_STATUSES.READY_10,
+          task_status: TASK_STATUSES.BACKLOG_10,
           accepted_from_possible_task: true,
           accepted_from_row_id: 'stored-row',
         }),
@@ -1950,7 +1950,7 @@ describe('Voicebot utility routes runtime behavior', () => {
             performer_id: validPerformerId.toHexString(),
             project_id: projectId.toHexString(),
             project: 'Stored project',
-            task_status: TASK_STATUSES.NEW_0,
+            task_status: TASK_STATUSES.DRAFT_10,
             source: 'VOICE_BOT',
             source_kind: 'voice_possible_task',
             source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,

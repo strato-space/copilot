@@ -3,7 +3,9 @@
  */
 
 export const TASK_STATUSES = {
-    NEW_0: 'Backlog',
+    NEW_0: 'Legacy / Backlog',
+    DRAFT_10: 'Draft',
+    BACKLOG_10: 'Backlog',
     NEW_10: 'New / Request',
     NEW_20: 'New / Clientask',
     NEW_30: 'New / Detail',
@@ -73,7 +75,9 @@ export const ACTION_SHEETS = {
 } as const;
 
 export const CRM_TO_NOTION_STATUSES: Record<string, string> = {
+    Draft: 'No Status',
     Backlog: 'No Status',
+    'Legacy / Backlog': 'No Status',
     'New / Request': 'No Status',
     'New / Clientask': 'No Status',
     'New / Detail': 'No Status',

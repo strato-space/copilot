@@ -28,9 +28,10 @@ describe('create_tasks prompt contract', () => {
   });
 
   it('matches current MongoDB possible-task reality instead of assuming rich fully-populated rows', () => {
-    expect(promptSource).toContain('task_status="Backlog"');
+    expect(promptSource).toContain('task_status="Draft"');
     expect(promptSource).toContain('source="VOICE_BOT"');
     expect(promptSource).toContain('source_kind="voice_possible_task"');
+    expect(promptSource).toContain('DRAFT_10');
     expect(promptSource).toContain('mutable baseline');
     expect(promptSource).toContain('project_id` и `performer_id` могут быть пустыми строками');
     expect(promptSource).toContain('row_id` и `id` — канонические mutation locators');

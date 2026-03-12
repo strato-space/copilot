@@ -78,12 +78,18 @@ describe('POST /voicebot/persons/list_performers', () => {
         name: 'Active User',
         email: 'active@strato.space',
         projects_access: [],
+        telegram_user: null,
+        telegram_chats: [],
+        project_performer_links: [],
       },
       {
         _id: includedPerformerId.toHexString(),
         name: 'Archived User',
         email: 'archived@strato.space',
         projects_access: [],
+        telegram_user: null,
+        telegram_chats: [],
+        project_performer_links: [],
       },
     ]);
 

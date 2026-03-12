@@ -123,6 +123,14 @@ type EnrichedTelegramRefs = {
   telegram_chats: TelegramChatRef[];
 };
 
+type FindResult<T> = {
+  toArray?: () => Promise<WithId<T>[]>;
+};
+
+type FindableCollection<T> = {
+  find?: (query: Record<string, unknown>) => FindResult<T> | null | undefined;
+};
+
 const getTelegramChatsCollection = (db: Db): Collection<TelegramChatDocument> =>
   db.collection<TelegramChatDocument>(COLLECTIONS.TELEGRAM_CHATS);
 
@@ -137,6 +145,16 @@ const getProjectPerformerLinksCollection = (db: Db): Collection<ProjectPerformer
 
 const uniqueStrings = (values: Array<string | null | undefined>): string[] =>
   Array.from(new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean)));
+
+const safeFindToArray = async <T>(
+  collection: FindableCollection<T>,
+  query: Record<string, unknown>,
+): Promise<WithId<T>[]> => {
+  if (typeof collection.find !== 'function') return [];
+  const cursor = collection.find(query);
+  if (!cursor || typeof cursor.toArray !== 'function') return [];
+  return cursor.toArray();
+};
 
 const toDateOrNull = (value: unknown): Date | null => {
   if (value instanceof Date) return value;
@@ -336,16 +354,14 @@ export const enrichPerformersWithTelegramAndProjectLinks = async <T extends Mini
   const telegramIds = uniqueStrings(performers.map((item) => String(item.telegram_id ?? '').trim()));
 
   const [telegramUsers, projectLinks] = await Promise.all([
-    getTelegramUsersCollection(db)
-      .find({
-        $or: [
-          ...(performerIds.length ? [{ performer_id: { $in: performerIds } }] : []),
-          ...(telegramIds.length ? [{ telegram_id: { $in: telegramIds } }] : []),
-        ],
-      })
-      .toArray(),
+    safeFindToArray<TelegramUserDocument>(getTelegramUsersCollection(db), {
+      $or: [
+        ...(performerIds.length ? [{ performer_id: { $in: performerIds } }] : []),
+        ...(telegramIds.length ? [{ telegram_id: { $in: telegramIds } }] : []),
+      ],
+    }),
     performerIds.length
-      ? getProjectPerformerLinksCollection(db).find({ performer_id: { $in: performerIds } }).toArray()
+      ? safeFindToArray<ProjectPerformerLinkDocument>(getProjectPerformerLinksCollection(db), { performer_id: { $in: performerIds } })
       : Promise.resolve([] as WithId<ProjectPerformerLinkDocument>[]),
   ]);
 
@@ -370,12 +386,11 @@ export const enrichPerformersWithTelegramAndProjectLinks = async <T extends Mini
 
   const [memberships, chats] = effectiveTelegramUserIds.length
     ? await Promise.all([
-        getTelegramChatMembershipsCollection(db)
-          .find({ telegram_user_id: { $in: effectiveTelegramUserIds }, is_active: { $ne: false } })
-          .toArray(),
-        getTelegramChatsCollection(db)
-          .find({ is_active: { $ne: false } })
-          .toArray(),
+        safeFindToArray<TelegramChatMembershipDocument>(getTelegramChatMembershipsCollection(db), {
+          telegram_user_id: { $in: effectiveTelegramUserIds },
+          is_active: { $ne: false },
+        }),
+        safeFindToArray<TelegramChatDocument>(getTelegramChatsCollection(db), { is_active: { $ne: false } }),
       ])
     : [[], []];
 
@@ -415,20 +430,20 @@ export const enrichPersonsWithTelegramAndProjectLinks = async <T extends Minimal
 
   const [telegramUsers, projectLinks] = await Promise.all([
     (personIds.length || performerIds.length)
-      ? getTelegramUsersCollection(db).find({
+      ? safeFindToArray<TelegramUserDocument>(getTelegramUsersCollection(db), {
           $or: [
             ...(personIds.length ? [{ person_id: { $in: personIds } }] : []),
             ...(performerIds.length ? [{ performer_id: { $in: performerIds } }] : []),
           ],
-        }).toArray()
-      : Promise.resolve([] as TelegramUserDocument[]),
+        })
+      : Promise.resolve([] as WithId<TelegramUserDocument>[]),
     (personIds.length || performerIds.length)
-      ? getProjectPerformerLinksCollection(db).find({
+      ? safeFindToArray<ProjectPerformerLinkDocument>(getProjectPerformerLinksCollection(db), {
           $or: [
             ...(personIds.length ? [{ person_id: { $in: personIds } }] : []),
             ...(performerIds.length ? [{ performer_id: { $in: performerIds } }] : []),
           ],
-        }).toArray()
+        })
       : Promise.resolve([] as WithId<ProjectPerformerLinkDocument>[]),
   ]);
 
@@ -447,12 +462,11 @@ export const enrichPersonsWithTelegramAndProjectLinks = async <T extends Minimal
   const effectiveTelegramUserIds = uniqueStrings(Array.from(telegramUsersByPlatformId.keys()));
   const [memberships, chats] = effectiveTelegramUserIds.length
     ? await Promise.all([
-        getTelegramChatMembershipsCollection(db)
-          .find({ telegram_user_id: { $in: effectiveTelegramUserIds }, is_active: { $ne: false } })
-          .toArray(),
-        getTelegramChatsCollection(db)
-          .find({ is_active: { $ne: false } })
-          .toArray(),
+        safeFindToArray<TelegramChatMembershipDocument>(getTelegramChatMembershipsCollection(db), {
+          telegram_user_id: { $in: effectiveTelegramUserIds },
+          is_active: { $ne: false },
+        }),
+        safeFindToArray<TelegramChatDocument>(getTelegramChatsCollection(db), { is_active: { $ne: false } }),
       ])
     : [[], []];
 
@@ -500,8 +514,11 @@ export const enrichProjectsWithTelegramAndPerformerLinks = async <T extends Mini
   const projectIds = projects.map((item) => toObjectIdOrNull(item._id)).filter((item): item is ObjectId => item !== null);
   const [projectLinks, chats] = projectIds.length
     ? await Promise.all([
-        getProjectPerformerLinksCollection(db).find({ project_id: { $in: projectIds } }).toArray(),
-        getTelegramChatsCollection(db).find({ linked_project_ids: { $in: projectIds }, is_active: { $ne: false } }).toArray(),
+        safeFindToArray<ProjectPerformerLinkDocument>(getProjectPerformerLinksCollection(db), { project_id: { $in: projectIds } }),
+        safeFindToArray<TelegramChatDocument>(getTelegramChatsCollection(db), {
+          linked_project_ids: { $in: projectIds },
+          is_active: { $ne: false },
+        }),
       ])
     : [[], []];
 

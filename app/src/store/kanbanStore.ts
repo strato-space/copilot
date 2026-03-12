@@ -789,6 +789,8 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             await api_request('epics/delete', { epic: epic._id }, { silent: true });
             get().fetchDictionary();
             get().fetchTickets([
+                'DRAFT_10',
+                'BACKLOG_10',
                 'NEW_0',
                 'NEW_10',
                 'NEW_20',

@@ -30,10 +30,9 @@ These decisions are part of the current platform contract and must be preserved 
 - Voice/OperOps integration remains canonical:
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
   - `task_type_id` is optional in Possible Tasks UI,
-  - possible tasks are master records in `automation_tasks` with `task_status=NEW_0`,
-  - `process_possible_tasks` now materializes selected rows into `READY_10` as the accepted-task hotfix target,
+  - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
+  - `process_possible_tasks` now materializes selected rows into `BACKLOG_10`,
   - accepted materialized rows must not be soft-deleted by possible-task cleanup,
-  - the full `NEW_0 -> DRAFT_10/BACKLOG_10` migration remains separate tracked work,
   - session `processors_data.CREATE_TASKS` is compatibility projection only.
 
 ## Critical Interfaces To Preserve
@@ -258,7 +257,7 @@ Preferred engineering principles for this repo:
 - OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
 - OperOps `Voice` tab is possible-task-centric:
-  - orphan `NEW_0` tasks without voice linkage render first,
+  - orphan `DRAFT_10` tasks without voice linkage render first,
   - session-linked groups follow newest-first,
   - processed tasks linked to the same session stay collapsed for reference.
 
@@ -338,9 +337,11 @@ Preferred engineering principles for this repo:
   - frontend calls MCP tool `create_tasks` with a structured JSON envelope serialized into `message`,
   - the agent may enrich context through MCP `voice` and `gsh`,
   - backend persists possible tasks into `automation_tasks` through `save_possible_tasks` / `process_possible_tasks`,
-  - `process_possible_tasks` now promotes selected rows into `READY_10` while keeping draft rows in `NEW_0`,
+  - `process_possible_tasks` now promotes selected rows into `BACKLOG_10` while keeping draft rows in `DRAFT_10`,
   - selected rows leave draft views without being soft-deleted,
   - the agent must not route execution through `StratoProject`.
+- Historical Voice status normalization is handled by `backend/scripts/voicebot-migrate-task-statuses.ts` (`npm run voice:migrate-task-statuses:{dry,apply}`), with optional `--session <session_id>` scoping for production cleanup.
+- Voice/OperOps accepted-task filtering must match `source_data.voice_sessions[].session_id` in addition to canonical session URL refs in `source_ref` / `external_ref`; otherwise repaired or migrated rows can disappear from session-scoped task views.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
@@ -682,7 +683,8 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added merge-session API/store scaffolding (`voicebot/sessions/merge`, `mergeSessions(...)`) with explicit confirmation phrase and merge-log collection constant (`automation_voice_bot_session_merge_log`).
 - Added TS transcribe Telegram transport recovery flow (`getFile` -> download -> persist `file_path` -> transcribe) and matching regression coverage in `workerTranscribeHandler` tests.
 - Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.
-- Added and activated `plan/voice-task-status-normalization-plan.md`: the `READY_10` hotfix for accepted Voice tasks is deployed, while the full `NEW_0 -> DRAFT_10/BACKLOG_10` migration remains open follow-up work.
+- Added and activated `plan/voice-task-status-normalization-plan.md` as the current as-built status contract: the deployed Voice taskflow now uses `DRAFT_10` for drafts and `BACKLOG_10` for accepted materialized rows.
+- Added `plan/voice-session-task-edit-parity-spec.md` as the separate feature spec for making Voice session tab `Задачи` editing match OperOps `CRMKanban`.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.

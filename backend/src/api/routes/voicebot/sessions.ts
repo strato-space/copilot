@@ -60,6 +60,7 @@ import {
     toTaskText,
 } from './sessionsSharedUtils.js';
 import {
+    ACTIVE_VOICE_DRAFT_STATUSES,
     buildSessionCompatiblePossibleTaskRow,
     buildVoicePossibleTaskMasterDoc,
     buildVoicePossibleTaskMasterQuery,
@@ -840,7 +841,7 @@ const buildProjectScopedPossibleTaskRuntimeQuery = ({
         {
             is_deleted: { $ne: true },
             codex_task: { $ne: true },
-            task_status: TASK_STATUSES.NEW_0,
+            task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
             source: 'VOICE_BOT',
             source_kind: 'voice_possible_task',
             project_id: projectId,
@@ -4645,7 +4646,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             removeFromPossibleTasks,
             explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'create_tickets',
-            targetTaskStatus: TASK_STATUSES.READY_10,
+            targetTaskStatus: TASK_STATUSES.BACKLOG_10,
         });
         return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
@@ -4781,7 +4782,7 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
             removeFromPossibleTasks,
             explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'process_possible_tasks',
-            targetTaskStatus: TASK_STATUSES.READY_10,
+            targetTaskStatus: TASK_STATUSES.BACKLOG_10,
         });
         return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
@@ -4944,6 +4945,7 @@ const buildSessionScopedTaskMatch = ({
             { 'source_data.voice_session_id': { $in: refs } },
             { 'source_data.session_id': { $in: refs } },
             { 'source_data.session_db_id': { $in: refs } },
+            { 'source_data.voice_sessions.session_id': { $in: refs } },
             { 'source_data.payload.session_id': { $in: refs } },
             { 'source_data.payload.session_db_id': { $in: refs } },
         ],

@@ -10,7 +10,7 @@ describe('OperOps Voice tab grouping behavior', () => {
     id: overrides.id ?? `task-${Math.random().toString(36).slice(2)}`,
     name: overrides.name ?? 'Task',
     project: overrides.project ?? 'Alpha',
-    task_status: overrides.task_status ?? 'Backlog',
+    task_status: overrides.task_status ?? 'Draft',
     ...(overrides.project_id ? { project_id: overrides.project_id } : {}),
     ...(overrides.source ? { source: overrides.source } : {}),
     ...(overrides.source_data ? { source_data: overrides.source_data } : {}),
@@ -24,21 +24,29 @@ describe('OperOps Voice tab grouping behavior', () => {
     ...(overrides.description ? { description: overrides.description } : {}),
   });
 
-  it('keeps only NEW_0 tasks in the grouped dataset, including orphan non-voice rows', () => {
+  it('keeps only draft voice tasks in the grouped dataset and excludes non-voice or accepted backlog rows', () => {
     const voiceTicket = makeTicket({
       id: 'voice-1',
       source: 'VOICE_BOT',
+      source_kind: 'voice_possible_task',
       source_data: { session_id: sessionId },
     });
-    const nonVoiceTicket = makeTicket({ id: 'manual-1', source: 'manual' });
+    const nonVoiceTicket = makeTicket({ id: 'manual-1', source: 'manual', task_status: 'Backlog' });
     const nonBacklogTicket = makeTicket({ id: 'voice-2', source: 'VOICE_BOT', task_status: 'Ready' });
+    const acceptedVoiceBacklogTicket = makeTicket({
+      id: 'accepted-voice-1',
+      source: 'VOICE_BOT',
+      source_kind: 'voice_session',
+      task_status: 'Backlog',
+    });
 
     expect(isVoiceBacklogTask(voiceTicket)).toBe(true);
-    expect(isVoiceBacklogTask(nonVoiceTicket)).toBe(true);
+    expect(isVoiceBacklogTask(nonVoiceTicket)).toBe(false);
     expect(isVoiceBacklogTask(nonBacklogTicket)).toBe(false);
+    expect(isVoiceBacklogTask(acceptedVoiceBacklogTicket)).toBe(false);
   });
 
-  it('groups NEW_0 tasks by linked voice session and collects orphan voice tasks separately', () => {
+  it('groups DRAFT_10 tasks by linked voice session and collects orphan voice tasks separately', () => {
     const grouped = buildVoiceBacklogGroups({
       tickets: [
         makeTicket({

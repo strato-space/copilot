@@ -63,6 +63,19 @@ describe('voice session task source filter behavior', () => {
     expect(ticketMatchesVoiceSessionSourceRefs(ticket, refs)).toBe(true);
   });
 
+  it('matches ticket when session is stored in source_data.voice_sessions array', () => {
+    const refs = buildVoiceSessionTaskSourceRefs(sessionId, null);
+    const ticket = {
+      source_data: {
+        voice_sessions: [
+          { session_id: sessionId },
+        ],
+      },
+    };
+
+    expect(ticketMatchesVoiceSessionSourceRefs(ticket, refs)).toBe(true);
+  });
+
   it('does not match unrelated session source refs', () => {
     const refs = buildVoiceSessionTaskSourceRefs(sessionId, null);
     const ticket = {

@@ -7,6 +7,7 @@ import {
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../runtimeScope.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
 import {
+  ACTIVE_VOICE_DRAFT_STATUSES,
   buildSessionCompatiblePossibleTaskRow,
   buildVoicePossibleTaskMasterDoc,
   buildVoicePossibleTaskMasterQuery,
@@ -131,7 +132,7 @@ const buildProjectScopedPossibleTaskRuntimeQuery = ({
   runtimeTaskQuery({
     is_deleted: { $ne: true },
     codex_task: { $ne: true },
-    task_status: TASK_STATUSES.NEW_0,
+    task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
     source: 'VOICE_BOT',
     source_kind: 'voice_possible_task',
     project_id: projectId,

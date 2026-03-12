@@ -73,12 +73,12 @@ export const buildSoftDeletedMaterializedTaskRepairQuery = ({
 }: {
   sessionId?: string;
 } = {}): Record<string, unknown> => {
-  const baseQuery: Record<string, unknown> = {
+const baseQuery: Record<string, unknown> = {
     is_deleted: true,
     codex_task: { $ne: true },
     source: 'VOICE_BOT',
     source_kind: 'voice_session',
-    task_status: TASK_STATUSES.NEW_0,
+    task_status: { $in: [TASK_STATUSES.NEW_0, TASK_STATUSES.DRAFT_10, TASK_STATUSES.READY_10, TASK_STATUSES.BACKLOG_10, 'Backlog', 'Ready', 'Draft'] },
     performer_id: { $nin: ['', null] },
     project_id: { $nin: ['', null] },
     $or: [
@@ -147,7 +147,7 @@ export const collectSoftDeletedMaterializedTaskRepairPlan = async ({
 export const applySoftDeletedMaterializedTaskRepairPlan = async ({
   db,
   candidates,
-  restoredTaskStatus = TASK_STATUSES.READY_10,
+  restoredTaskStatus = TASK_STATUSES.BACKLOG_10,
 }: ApplySoftDeletedMaterializedTaskRepairPlanOptions): Promise<{ matched: number; modified: number }> => {
   let matched = 0;
   let modified = 0;
