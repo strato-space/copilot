@@ -5,35 +5,60 @@
 - Plan status: specification completed and internally verified.
 - Canonical epic: `copilot-cux2`
 
-**Статус документа**: proposal  
-**Дата**: 2026-03-13  
-**Основание**: текущий runtime-контракт `DRAFT_10 / BACKLOG_10`, существующие routes `voicebot/possible_tasks`, `voicebot/session_tab_counts`, `voice.crm_tickets(session_id=...)`, `voice.session_possible_tasks(session_id)`, и текущая OperOps CRM surface.
+**Статус документа**: approved next-wave replacement contract  
+**Дата**: 2026-03-14  
+**Основание**: текущий runtime-контракт [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md), существующие routes `voicebot/possible_tasks`, `voicebot/session_tab_counts`, `voice.crm_tickets(session_id=...)`, `voice.session_possible_tasks(session_id)`, текущая OperOps CRM surface и закрепленные product notes в [AGENTS.md](/home/strato-space/copilot/AGENTS.md).
 
 ## Кратко
 
-Эта спецификация описывает, как привести Voice и OperOps к одной статусно-ориентированной модели задач.
+Эта спецификация утверждает **целевой replacement contract для следующей implementation wave** по task surfaces Voice и OperOps.
+
+Главный смысл документа:
+- он **заменяет target UX/status-surface semantics** для следующей волны;
+- он **не меняет текущий runtime сам по себе**;
+- до старта реализации current production truth остается за [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md) и актуальными repo product notes в [AGENTS.md](/home/strato-space/copilot/AGENTS.md);
+- текущая волна ограничена правкой спецификации: implementation planned, but not launched.
 
 Базовый тезис:
-- `Возможные задачи` не являются отдельной сущностью и не требуют отдельной target-surface semantics;
-- все surfaces работают поверх одной коллекции `automation_tasks`;
-- различие между draft и accepted rows задается только `task_status`;
-- `source_kind` — вспомогательный provenance/runtime marker;
-- `codex_task` — отдельный тип taskflow, а не атрибут различения между draft и accepted rows.
+- `Возможные задачи` не являются отдельной storage-сущностью;
+- все task surfaces работают поверх одной коллекции `automation_tasks`;
+- различие между draft и accepted rows задается главным образом `task_status`;
+- но `voice.session_possible_tasks(session_id)` — это не просто отчетный фильтр, а **mutable draft baseline** со своим поведенческим контрактом;
+- `source_kind` — вспомогательный provenance/runtime marker, а не главный semantic discriminator;
+- `codex_task` — отдельный тип taskflow, а не атрибут различения между draft и accepted rows;
+- `PERIODIC` в target ontology выводится из lifecycle dictionary и переносится в отдельную recurrence dimension.
 
-Текущий runtime уже близок к этой модели:
-- draft Voice rows = `DRAFT_10`
-- accepted Voice rows = `BACKLOG_10`
-- `source_kind` сейчас помогает различать origin/runtime-path, но не должен считаться главным semantic discriminator;
-- `Codex` — отдельный тип taskflow/view по `codex_task = true`.
+## 1. Нормативная рамка документа
 
-Новая цель:
-- зафиксировать одну ментальную модель в спеках, MCP и UI;
-- сделать OperOps полностью status-first;
-- трактовать draft как обычный status filter `DRAFT_10` внутри общей task surface.
+### 1.1 Что документ делает
 
-## 1. Единая модель задач
+Этот документ:
+- фиксирует `As Is` runtime/storage/UI semantics;
+- фиксирует `To Be` replacement contract следующей волны;
+- задает migration direction;
+- оставляет текущий production runtime неизменным до начала implementation wave.
 
-### 1.1 Канонический storage model
+### 1.2 Что документ не делает
+
+Этот документ:
+- не утверждает, что target behavior уже реализован;
+- не отменяет текущий продовый as-built contract;
+- не запускает кодовые изменения в этой волне;
+- не заменяет текущие smoke/recovery/runbook документы.
+
+### 1.3 Источники истины по слоям
+
+До начала реализации:
+- `As Is runtime truth`:
+  - [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md)
+  - [AGENTS.md](/home/strato-space/copilot/AGENTS.md)
+  - текущий код в `app/`, `backend/`, `miniapp/`
+- `To Be target truth`:
+  - этот файл
+
+## 2. Единая модель задач
+
+### 2.1 Канонический storage model
 
 Все Voice-derived rows — это документы в `automation_tasks`.
 
@@ -42,19 +67,15 @@
 | Вид строки | Статус | Что означает |
 |---|---|---|
 | Draft Voice row | `DRAFT_10` | Черновик из `Возможных задач` |
-| Accepted Voice task (initial) | `BACKLOG_10` | Начальный accepted status сразу после materialization |
+| Accepted Voice task (initial) | `BACKLOG_10` | Текущий accepted bucket сразу после materialization |
 | Codex task | свой lifecycle | Отдельный Codex taskflow |
 
 Дополнительно:
-- accepted rows дальше живут обычным CRM lifecycle:
-  - `READY_10`
-  - `PROGRESS_*`
-  - `REVIEW_*`
-  - `DONE_*`
-  - `ARCHIVE`
-  - `PERIODIC`
+- accepted rows дальше живут обычным CRM lifecycle;
+- draft и accepted rows разделены storage-wise статусом;
+- `source_kind` и `codex_task` остаются orthogonal dimensions.
 
-### 1.1.1 Справка по `source_kind`
+### 2.1.1 Справка по `source_kind`
 
 `source_kind` не является главным semantic discriminator для draft vs accepted.
 
@@ -71,7 +92,7 @@
 | `voice_session` | Accepted Voice task / session-linked task marker |
 | другие значения | Не относятся к этому draft/accepted split и не должны участвовать в его главной нормализации |
 
-### 1.1.2 Задействованные ontology objects и relations
+### 2.1.2 Задействованные ontology objects и relations
 
 Новая нормализация должна опираться на уже существующую ontology, а не придумывать отдельный vocabulary только для UI.
 
@@ -121,50 +142,63 @@
 - `as_is_voice_session_maps_to_mode_segment`
 - `as_is_voice_message_maps_to_object_event`
 
-Но текущая спека не требует немедленного переключения UI на TO-BE projection.  
-Она фиксирует status-first semantics поверх текущего AS-IS storage model.
+Но текущая спецификация не требует немедленного переключения UI на TO-BE projection.  
+Она фиксирует status-first semantics поверх текущего AS-IS storage model и задает следующий replacement contract.
 
-### 1.2 Следствие для backend semantics
+### 2.2 Следствие для backend semantics
 
 Отсюда следует:
-- `possible_tasks` не является отдельной сущностью;
-- это draft-only view над `automation_tasks`;
+- `possible_tasks` не является отдельной storage-сущностью;
 - `crm_tickets(session_id=...)` — accepted-task view над той же коллекцией;
-- `codex_tasks` — отдельный codex-only view над той же коллекцией, но это уже отдельный task type, а не часть draft/accepted split.
+- `voicebot/codex_tasks` — codex-only **session-scoped** view над той же коллекцией;
+- OperOps `Codex` в целом не должен в этой спеke описываться как Mongo-only view над `automation_tasks`, потому что current product surface там backed by `bd` CLI / issue tracker, а не только общей task collection;
+- но `session_possible_tasks(session_id)` нельзя сводить к “тонкому фильтру” без поведенческого контракта.
 
-## 2. Label-only contract
+### 2.3 Контракт `voice.session_possible_tasks(session_id)`
 
-### 2.1 Принцип
+#### Storage semantics
 
-Во всех user-facing surfaces должны показываться только **лейблы**, а не внутренние keys.
+Storage-wise:
+- это draft-only view над `automation_tasks`;
+- в текущем runtime этот draft layer выражается прежде всего через `task_status = DRAFT_10`.
 
-Примеры:
+#### Behavioral semantics
 
-| Key | Label |
-|---|---|
-| `DRAFT_10` | `Draft` |
-| `BACKLOG_10` | `Backlog` |
-| `READY_10` | `Ready` |
-| `REVIEW_10` | `Review / Ready` |
-| `DONE_10` | `Done` |
+Behavior-wise:
+- это **mutable draft baseline** для текущей voice session;
+- route возвращает не immutable snapshot, а текущий канонический набор draft rows для этой сессии;
+- допускается in-place update существующих draft rows;
+- при совпадении scope должен переиспользоваться тот же `row_id/id`;
+- route участвует в dedupe semantics относительно уже materialized accepted tasks;
+- route может переиспользовать draft rows между сессиями, если это требуется текущим create-tasks contract;
+- это не mere reporting route и не should-be-treated-as “just another filtered list”.
 
-### 2.2 Диагностические исключения
+#### Split against accepted tasks
 
-Строки вида:
-- `Draft (voice_possible_task)`
-- `Backlog (voice_session)`
+В этой нормализации:
+- `voice.crm_tickets(session_id)` = accepted-only session task view
+- `voice.session_possible_tasks(session_id)` = mutable draft baseline
 
-допустимы только в:
-- diagnostic logs
-- product/debug explanations
-- migration/repair notes
+## 3. Ключи, stored values и labels
 
-В обычном UI и обычных отчетах preferred form:
-- `Draft`
-- `Backlog`
-- `Ready`
+Текущий runtime словарь статусов encoded как:
+- `status key -> stored/user-facing string value`
 
-## 2.2.1 Таблица текущих статусов CRM (As Is)
+Практически это значит:
+- часть кода оперирует status keys (`DRAFT_10`, `READY_10`, ...)
+- часть current surfaces фактически живет через stored labels (`Draft`, `Backlog`, ...)
+- отдельные current UI flows still reverse-resolve keys from labels
+
+Поэтому в этом документе нужно различать:
+- `status key`
+- `current stored/runtime value`
+- `user-facing label`
+
+Target-wave contract хочет key-first filters и API semantics, но нельзя писать так, как будто это уже универсально true в текущем runtime.
+
+## 4. As Is status dictionary
+
+### 4.1 Таблица текущих статусов CRM (As Is)
 
 Для полноты этот документ дублирует текущий словарь статусов из runtime-контракта.
 
@@ -175,7 +209,7 @@
 
 Текущее количество ниже — это live active count из Mongo (`automation_tasks`, `is_deleted != true`) на момент последней проверки.
 
-| Лейбл | Ключ | Текущее кол-во | Текущий runtime смысл | Исполнительский surface |
+| Live label | Key | Текущее кол-во | Текущий runtime смысл | Исполнительский surface |
 |---|---|---:|---|---|
 | `Legacy / Backlog` | `NEW_0` | `0` | Legacy-only alias; не должен использоваться новым write-path | `—` |
 | `Draft` | `DRAFT_10` | `243` | Текущий storage bucket для `voice_possible_task`; draft-only rows | `—` |
@@ -187,12 +221,12 @@
 | `Plan / Approval` | `PLANNED_10` | `0` | План на согласовании | `—` |
 | `Plan / Performer` | `PLANNED_20` | `0` | План на стороне исполнителя | `—` |
 | `Ready` | `READY_10` | `18` | Общий ready-state после backlog | `✏️` |
-| `Progress 0` | `PROGRESS_0` | `0` | Готово к старту | `✏️` |
-| `In Progress` | `PROGRESS_10` | `6` | Работа начата | `✏️` |
+| `Rejected` | `PROGRESS_0` | `0` | Legacy drift status; current live label is `Rejected` и не найдено следов использования статуса | `✏️` |
+| `Progress 10` | `PROGRESS_10` | `6` | Работа начата | `✏️` |
 | `Progress 25` | `PROGRESS_20` | `0` | Промежуточный чекпоинт | `✏️` |
 | `Progress 50` | `PROGRESS_30` | `0` | Mid-state | `✏️` |
 | `Progress 90` | `PROGRESS_40` | `0` | Почти завершено | `✏️` |
-| `Review` | `REVIEW_10` | `54` | Готово к ревью | `✏️` |
+| `Review / Ready` | `REVIEW_10` | `54` | Готово к ревью / приемке | `✏️` |
 | `Review / Implement` | `REVIEW_20` | `0` | Возврат из ревью | `👁` |
 | `Upload / Deadline` | `AGREEMENT_10` | `0` | Подготовка к дедлайну | `—` |
 | `Upload / Delivery` | `AGREEMENT_20` | `0` | Delivery / handoff | `—` |
@@ -200,11 +234,37 @@
 | `Complete` | `DONE_20` | `209` | Полностью завершено | `—` |
 | `PostWork` | `DONE_30` | `0` | Пост-работа | `—` |
 | `Archive` | `ARCHIVE` | `3002` | Исторический хвост | `—` |
-| `Periodic` | `PERIODIC` | `10` | Периодические задачи | `👁` |
+| `Periodic` | `PERIODIC` | `10` | Legacy recurring runtime bucket | `👁` |
 
-## 2.3 Полное непересекающееся разбиение статусов (As Is)
+### 4.2 As Is note: `PROGRESS_0`
 
-Для status-first модели главным должен быть один полный partition по status groups.
+`PROGRESS_0` требует отдельного пояснения, потому что это current semantic drift point.
+
+Наблюдаемое по живому коду и текущим документам:
+- live backend/app/miniapp constants задают `PROGRESS_0 = Rejected`;
+- старые planning материалы описывали этот же key как `Progress 0 / Готово к старту`;
+- current OperOps grouping все еще включает `PROGRESS_0` в `Work`;
+- active live count = `0`, что снижает migration risk.
+
+Следствие:
+- текущий runtime label и старое плановое объяснение расходятся;
+- это нужно считать legacy drift, а не нормальным устойчивым semantics;
+- в `As Is` этот статус должен нормализоваться как отдельный `Rejected` status group, а не как подвид `In Progress`;
+- именно поэтому `PROGRESS_0` в target model подлежит удалению, а не сохранению.
+
+Краткий результат обследования live usage:
+- текущих задач со `status = Rejected / PROGRESS_0` не найдено;
+- inline `task_status_history` в `automation_tasks` не содержит переходов через `Rejected / PROGRESS_0`;
+- audit-коллекция `automation_tasks_histrory` не содержит переходов с `old_value/new_value = Rejected / PROGRESS_0`.
+
+Как выполнялась проверка:
+- проверялся current `task_status` в `automation_tasks`;
+- отдельно проверялись массивы `task_status_history` в самих задачах;
+- отдельно проверялась audit-коллекция `automation_tasks_histrory` по полю `property = task_status`.
+
+### 4.3 Полное непересекающееся разбиение статусов (As Is)
+
+Для current status-first анализа главным должен быть один полный partition по status groups.
 
 | Status group | Статусы | Лейбл группы |
 |---|---|---|
@@ -213,7 +273,8 @@
 | `Plan` | `PLANNED_10`, `PLANNED_20` | `Plan` |
 | `Backlog` | `BACKLOG_10` | `Backlog` |
 | `Ready` | `READY_10` | `Ready` |
-| `In Progress` | `PROGRESS_0`, `PROGRESS_10`, `PROGRESS_20`, `PROGRESS_30`, `PROGRESS_40` | `In Progress` |
+| `Rejected` | `PROGRESS_0` | `Rejected` |
+| `In Progress` | `PROGRESS_10`, `PROGRESS_20`, `PROGRESS_30`, `PROGRESS_40` | `In Progress` |
 | `Review` | `REVIEW_10`, `REVIEW_20` | `Review` |
 | `Upload` | `AGREEMENT_10`, `AGREEMENT_20` | `Upload` |
 | `Done` | `DONE_10`, `DONE_20`, `DONE_30` | `Done` |
@@ -221,28 +282,90 @@
 | `Periodic` | `PERIODIC` | `Periodic` |
 
 Это разбиение:
-- полное относительно `TASK_STATUSES`
-- непересекающееся
-- пригодное как для UI, так и для отчетов
+- полное относительно текущего `TASK_STATUSES`;
+- непересекающееся;
+- пригодное как для текущего UI mismatch analysis, так и для migration reasoning.
 
 `source_kind` и `codex_task` в это разбиение не входят; это orthogonal dimensions.
 
-Важно:
-- `Periodic` пока intentionally не переразбирается в этой спеke;
-- в `As Is` и в текущих UI surfaces он остается отдельным stored status, даже если онтологически ближе к orthogonal mode.
+## 5. As Is overview: recurring tasks (`PERIODIC`)
 
-## 2.4 Целевое разбиение статусов (To Be)
+### 5.1 Почему этот срез tractable
 
-Ниже зафиксирована целевая нормализация, вытекающая из product reasoning:
+Сейчас активных `PERIODIC` rows всего `10`.
+
+Это достаточно маленький объем, чтобы:
+- показать полный inventory прямо в спеke;
+- вручную провалидировать recurring slice;
+- выполнить explicit migration в separate recurrence dimension без mass heuristics.
+
+### 5.2 Полный текущий список
+
+1. `Ресёрч ComfyUI-схем для локальной генерации + Server run` — project `MediaGen` — performer `Марат Кабиров` — priority `P4`
+2. `Планирование, коммуникации по проекту, сбор обратной связи Ural БП` — project `Ural BortProvodnik` — performer `Valentin Gatitulin` — priority `P7`
+3. `Планирование, коммуникации по проекту, сбор обратной связи Metro Spot` — project `Metro Spot` — performer `Valentin Gatitulin` — priority `P7`
+4. `Планирование, коммуникации по проекту, сбор обратной связи Ural RMS` — project `Ural` — performer `Valentin Gatitulin` — priority `P7`
+5. `Отчетность Jira` — project `Andrey Q2 OKR` — performer `Андрей Сергеев` — priority `🔥 P1`
+6. `Постановка задач в CRM: Заведение и актуализация задач` — project `Andrey Q2 OKR` — performer `Андрей Сергеев` — priority `🔥 P1`
+7. `Metro: Исследование, стратегия, дизайн надзор.` — project `Metro Spot` — performer `Nikita Renye` — priority `P7`
+8. `Ural: Исследование, стратегия, дизайн надзор.` — project `Ural` — performer `Nikita Renye` — priority `P7`
+9. `Саппорт входящих запросов (быстрые генерация для команды)` — project `PMO` — performer `Марат Кабиров` — priority `🔥 P1`
+10. `Адаптация креативов под форматы` — project `RockStar` — performer `Ербол Тастанбеков` — priority `P3`
+
+### 5.3 Минимальная аналитика
+
+- total active `PERIODIC` rows: `10`
+- projects covered: `7`
+- performers covered: `5`
+- `source` / `source_kind` distribution: у всех `10` строк explicit source markers отсутствуют
+
+#### Концентрация по проектам
+
+- `Metro Spot` = `2`
+- `Ural` = `2`
+- `Andrey Q2 OKR` = `2`
+- `MediaGen` = `1`
+- `Ural BortProvodnik` = `1`
+- `PMO` = `1`
+- `RockStar` = `1`
+
+#### Концентрация по исполнителям
+
+- `Valentin Gatitulin` = `3`
+- `Марат Кабиров` = `2`
+- `Андрей Сергеев` = `2`
+- `Nikita Renye` = `2`
+- `Ербол Тастанбеков` = `1`
+
+#### Распределение по приоритетам
+
+- `🔥 P1` = `3`
+- `P3` = `1`
+- `P4` = `1`
+- `P7` = `5`
+
+### 5.4 Интерпретация
+
+Текущие periodic rows:
+- достаточно малочисленны, чтобы мигрировать их explicit-way;
+- по содержанию больше похожи на recurring operating commitments, чем на lifecycle states;
+- тем самым поддерживают target decision: recurrence должна жить вне lifecycle status dictionary.
+
+## 6. To Be: next-wave target status dictionary
+
+### 6.1 Базовое target-решение
+
+Следующая implementation wave должна перейти к следующей целевой модели:
 
 - `DRAFT_10` и `NEW_*` принадлежат одному семейству draft/new work-in-definition;
 - `BACKLOG_10` и `READY_10` принадлежат одному семейству accepted ready work;
 - `NEW_0` по смыслу совпадает с draft-низшим уровнем и должен схлопнуться в `DRAFT_10`;
 - `PROGRESS_0` в целевой модели считается legacy-статусом и подлежит удалению из словаря;
 - `PROGRESS_20`, `PROGRESS_30`, `PROGRESS_40` в целевой модели считаются избыточными промежуточными чекпоинтами и подлежат удалению;
+- `PERIODIC` в целевой модели не является lifecycle status и уходит в отдельную recurrence dimension;
 - ключи и labels должны быть приведены к более общепринятой task-tracker semantics.
 
-### 2.4.1 Целевая цепочка схлопывания
+### 6.2 Целевая цепочка схлопывания
 
 | As Is | To Be |
 |---|---|
@@ -259,36 +382,44 @@
 | `PROGRESS_20` | `<remove>` |
 | `PROGRESS_30` | `<remove>` |
 | `PROGRESS_40` | `<remove>` |
+| `REVIEW_20` | `<remove or merge to PROGRESS_10>` |
+| `AGREEMENT_10` | `<remove>` |
+| `AGREEMENT_20` | `<remove>` |
+| `DONE_20` | `DONE_10` |
+| `DONE_30` | `DONE_10` |
+| `PERIODIC` | `<move to recurrence flag>` |
 
-### 2.4.2 Целевой смысл
+### 6.3 Целевой смысл
 
 В целевой модели:
-- `Draft` включает и LLM-derived candidates, и любые новые задачи в разной степени проработки;
+- `Draft` включает LLM-derived candidates и любые новые задачи в разной степени проработки;
 - `Ready` становится первым accepted bucket для обычной рабочей задачи;
 - отдельная группа `New` исчезает как самостоятельная status family и встраивается в `Draft`;
 - label `Backlog` в целевой модели не используется как top-level status family;
 - `Work` переименовывается в `In Progress`;
-- `PROGRESS_0` не сохраняется в целевом словаре и должен быть элиминирован при миграции.
-- `NEW_0`, `NEW_*`, `DRAFT_20`, `DRAFT_30`, `DRAFT_40` не сохраняются как отдельные target-статусы и должны быть схлопнуты в `DRAFT_10`;
-- `PROGRESS_20`, `PROGRESS_30`, `PROGRESS_40` не сохраняются в целевом словаре и должны быть элиминированы при миграции.
+- `PERIODIC` больше не считается task lifecycle status.
 
-### 2.4.4 Таблица целевых статусов CRM (To Be)
+### 6.4 Таблица целевых статусов CRM (To Be)
 
 Текущее количество ниже — это live active count из Mongo (`automation_tasks`, `is_deleted != true`) на момент последней проверки.  
 Если целевой статус схлопывает несколько `As Is` статусов, в колонке показана агрегированная текущая сумма.
 
-| Лейбл | Ключ | Текущее кол-во (As Is) | Целевой смысл | Исполнительский surface |
+| Target label | Key | Текущее кол-во (As Is) | Целевой смысл | Исполнительский surface |
 |---|---|---:|---|---|
 | `Draft` | `DRAFT_10` | `243` | Задача существует как черновик: её можно уточнять, дополнять, объединять или отклонять до принятия в рабочий контур. | `—` |
 | `Ready` | `READY_10` | `129` | Задача принята в работу, назначена и полностью готова к началу исполнения, но исполнитель еще не перевел её в активное выполнение. | `✏️` |
-| `In_Progress` | `PROGRESS_10` | `6` | Исполнитель уже начал работу над задачей, и задача находится в активной фазе исполнения. | `✏️` |
+| `In Progress` | `PROGRESS_10` | `6` | Исполнитель уже начал работу над задачей, и задача находится в активной фазе исполнения. | `✏️` |
 | `Review` | `REVIEW_10` | `54` | Исполнитель завершил основной объем работы и передал задачу на проверку, согласование или приемку. | `✏️` |
 | `Done` | `DONE_10` | `288` | Работа по задаче завершена и результат принят как достаточный; дополнительных рабочих шагов внутри обычного цикла больше не требуется. | `—` |
 | `Archive` | `ARCHIVE` | `3002` | Задача выведена из активного контура и хранится только как историческая запись. | `—` |
 
-### 2.4.5 Таблица статусов CRM к удалению (To Be)
+Важно:
+- это approved target dictionary следующей волны;
+- это **не** уже развернутый runtime словарь.
 
-| Ключ | Текущее кол-во (As Is) | Текущий лейбл | Текущий runtime смысл | Причина удаления / схлопывания | Целевое действие |
+### 6.5 Таблица статусов CRM к удалению / переносу (To Be)
+
+| Ключ | Текущее кол-во (As Is) | Live label | Текущий runtime смысл | Причина удаления / переноса | Целевое действие |
 |---|---:|---|---|---|---|
 | `NEW_0` | `0` | `Legacy / Backlog` | Legacy alias для раннего чернового bucket. | Дублирует ранний draft bucket. | `merge -> DRAFT_10` |
 | `NEW_10` | `0` | `New / Request` | Первичный входящий запрос. | `New` family схлопывается в единый Draft. | `merge -> DRAFT_10` |
@@ -301,22 +432,21 @@
 | `PLANNED_10` | `0` | `Plan / Approval` | План на согласовании. | Отдельный plan bucket не нужен в целевой модели. | `remove` |
 | `PLANNED_20` | `0` | `Plan / Performer` | План на стороне исполнителя. | Отдельный plan bucket не нужен в целевой модели. | `remove` |
 | `BACKLOG_10` | `111` | `Backlog` | Текущий accepted-task bucket для Voice materialization. | Accepted flow должен начинаться сразу с `Ready`. | `merge -> READY_10` |
-| `PROGRESS_0` | `0` | `Progress 0` | Готово к старту. | Legacy status, не нужен в целевом словаре. | `remove` |
+| `PROGRESS_0` | `0` | `Rejected` | Legacy semantic drift status. | Не должен жить внутри target work axis. | `remove` |
 | `PROGRESS_20` | `0` | `Progress 25` | Промежуточный чекпоинт. | Избыточный промежуточный чекпоинт. | `remove` |
 | `PROGRESS_30` | `0` | `Progress 50` | Mid-state. | Избыточный промежуточный чекпоинт. | `remove` |
 | `PROGRESS_40` | `0` | `Progress 90` | Почти завершено. | Избыточный промежуточный чекпоинт. | `remove` |
-| `REVIEW_20` | `0` | `Review / Implement` | Возврат из ревью. | Не отдельный целевой top-level status. | `remove or merge to In Progress` |
+| `REVIEW_20` | `0` | `Review / Implement` | Возврат из ревью. | Не отдельный целевой top-level status. | `remove or merge to PROGRESS_10` |
 | `AGREEMENT_10` | `0` | `Upload / Deadline` | Подготовка к дедлайну. | Отдельный upload bucket не нужен в целевой модели. | `remove` |
 | `AGREEMENT_20` | `0` | `Upload / Delivery` | Delivery / handoff. | Отдельный upload bucket не нужен в целевой модели. | `remove` |
 | `DONE_20` | `209` | `Complete` | Полностью завершено. | Избыточный финальный статус. | `merge -> DONE_10` |
 | `DONE_30` | `0` | `PostWork` | Пост-работа. | Post-work не отдельный целевой top-level status. | `merge -> DONE_10` |
-| `PERIODIC` | `10` | `Periodic` | Периодические задачи. | Recurrence mode, а не lifecycle status. | `remove or move to separate recurrence flag` |
+| `PERIODIC` | `10` | `Periodic` | Legacy recurring runtime bucket. | Recurrence mode, а не lifecycle status. | `move -> recurrence flag` |
 
-### 2.4.6 Итоговая целевая статусная ось
+### 6.6 Итоговая целевая статусная ось
 
-В целевой модели отдельная таблица `status group -> statuses` больше не нужна, потому что у каждой целевой группы остается ровно один канонический статусный ключ.
+В target model у каждой целевой группы остается ровно один канонический lifecycle status key:
 
-Итоговая целевая ось такова:
 - `Draft` -> `DRAFT_10`
 - `Ready` -> `READY_10`
 - `In Progress` -> `PROGRESS_10`
@@ -324,23 +454,43 @@
 - `Done` -> `DONE_10`
 - `Archive` -> `ARCHIVE`
 
+И отдельно:
+- `Recurrence` -> orthogonal recurrence dimension, без отдельного lifecycle status key
+
 Важно:
 - user-facing surfaces показывают **лейбл**
-- filters, API и код должны опираться на **ключ статуса**, а не на лейбл
+- filters, API и code paths в target wave должны опираться на **ключ статуса**, а не на лейбл
 
-## 3. Voice session surfaces
+## 7. Voice session surfaces
 
-### 3.1 Рекомендованный target
+### 7.1 As Is product contract
+
+Текущий product contract таков:
+- OperOps `Voice` tab является possible-task-centric;
+- orphan `DRAFT_10` tasks без voice linkage рендерятся первыми;
+- session-linked groups идут newest-first;
+- processed tasks, связанные с той же session, остаются collapsed for reference.
+
+Это соответствует текущему закрепленному repo contract и не должно описываться так, будто уже заменено в runtime.
+
+### 7.2 Target replacement contract
+
+Следующая implementation wave должна заменить этот UX contract на следующий:
 
 Target surfaces:
 - `Задачи`
 - `Codex`
 
-`Draft` не требует отдельной target tab semantics и выражается обычным status filter внутри общей task surface.
+В target model:
+- `Draft` не имеет отдельной tab semantics;
+- drafts выражаются как обычный status filter внутри общей task surface `Задачи`;
+- `Codex` остается отдельным codex-only surface.
 
-### 3.2 Target filters
+Это не cosmetic cleanup, а **прямая замена текущего Voice surface contract**.
 
-Все фильтры ниже должны задаваться по **ключам статусов**, а не по пользовательским лейблам.
+### 7.3 Target filters
+
+Все filters ниже должны задаваться по **ключам статусов**, а не по пользовательским лейблам.
 
 #### `Задачи`
 
@@ -354,7 +504,7 @@ Filter:
   - `REVIEW_10`
   - `DONE_10`
   - `ARCHIVE`
-- `source_kind != voice_possible_task` можно использовать как secondary integrity guard, но не как основную норму
+- `source_kind != voice_possible_task` допустим только как secondary integrity guard, но не как primary semantic discriminator accepted/draft split
 
 #### `Codex`
 
@@ -362,18 +512,18 @@ Filter:
 - session scope
 - `codex_task = true`
 
-### 3.3 Вывод
+### 7.4 Вывод
 
 Из этого следует:
 - отдельный `voicebot/possible_tasks` route может остаться как compatibility/view facade;
-- но новая спека должна считать его thin filtered view over `automation_tasks`;
-- draft и accepted surfaces должны различаться только фильтрами, а не отдельной target-онтологией вкладок.
+- но next-wave spec считает его mutable draft-baseline surface over `automation_tasks`, а не отдельной ontology tab;
+- draft и accepted surfaces должны различаться status/filter semantics плюс mutable-baseline behavior, а не разной target-онтологией вкладок.
 
-## 4. OperOps tab normalization
+## 8. OperOps tab normalization
 
-### 4.1 Target contract
+### 8.1 Target contract
 
-OperOps tabs должны быть полностью status-first.
+OperOps tabs в следующей волне должны быть полностью status-first.
 
 | Tab | Filter contract |
 |---|---|
@@ -385,22 +535,22 @@ OperOps tabs должны быть полностью status-first.
 | `Archive` | `ARCHIVE` |
 | `Codex` | `codex_task = true` |
 
-### 4.2 Важное ограничение
+### 8.2 Важное ограничение
 
 Special grouping допустима только как presentation layer:
-- например `voiceTabGrouping` для draft Voice rows
+- например current `voiceTabGrouping` для possible-task-centric `Voice`
 
 Но она не должна считаться отдельной semantic model.
 
 Иначе говоря:
-- tab contract определяется статусом;
+- tab contract определяется lifecycle/relevance semantics;
 - grouping contract определяется presentation need.
 
-## 4.3 Текущая фактическая группировка в OperOps
+### 8.3 Текущая фактическая группировка в OperOps (As Is)
 
-Ниже зафиксировано текущее поведение `CRMPage.tsx`, чтобы этот документ был самодостаточным.
+Ниже зафиксировано текущее поведение `CRMPage.tsx`, чтобы документ был самодостаточным.
 
-### 4.3.1 Верхние summary widgets
+#### 8.3.1 Верхние summary widgets
 
 | Виджет | Фактические статусы |
 |---|---|
@@ -413,11 +563,11 @@ Special grouping допустима только как presentation layer:
 | `Review` | `REVIEW_10`, `REVIEW_20` |
 | `Done` | `DONE_10`, `DONE_30` |
 
-### 4.3.2 Нижние main tabs и subtabs
+#### 8.3.2 Нижние main tabs и subtabs
 
 | Surface | Фактические статусы / правило |
 |---|---|
-| `Voice` | все не-архивные voice-related rows; внутри `Voice backlog` draft определяется как `DRAFT_10`, а legacy/voice grouping дополнительно использует `source_kind` |
+| `Voice` | все не-архивные voice-related rows; внутри Voice grouping draft определяется как `DRAFT_10`, а possible-task-centric grouping дополнительно использует `source_kind` и linkage |
 | `Plan > New` | `NEW_10`, `NEW_20`, `NEW_30`, `NEW_40` |
 | `Plan > Plan` | `PLANNED_10`, `PLANNED_20` |
 | `Backlog > Backlog` | `BACKLOG_10` |
@@ -429,23 +579,24 @@ Special grouping допустима только как presentation layer:
 | `Archive` | `DONE_20`, `ARCHIVE` |
 | `Codex` | `codex_task = true`, без CRM status filter |
 
-### 4.3.3 Текущий mismatch
+#### 8.3.3 Текущий mismatch
 
 | Проблема | Наблюдение |
 |---|---|
 | Неполное покрытие верхних виджетов | `DRAFT_10`, `ARCHIVE`, `PERIODIC`, `DONE_20` и часть legacy state не попадают в верхнюю строку |
 | Перекрытие навигации | `Backlog > Work` и main tab `Work` используют одни и те же статусы; то же для `Review` |
-| `Voice` не status-first | вкладка `Voice` использует special grouping поверх неархивных rows, а не чистый status partition |
+| `Voice` не status-first | вкладка `Voice` использует possible-task-centric grouping поверх неархивных rows, а не чистый status partition |
 | `Done`/`Archive` split неочевиден | `DONE_20` живет в `Archive`, а `DONE_10`/`DONE_30` — в `Done` |
 | `Upload` есть в статусах, но отсутствует как main tab | есть widget и subtab config, но нет main tab |
+| `PROGRESS_0` semantic drift | live label = `Rejected`, но current widget/tab grouping still treats it as part of work |
 
-## 4.4 Telegram miniapp: что доступно исполнителю по статусам
+## 9. Telegram miniapp: performer-facing status surface
+
+### 9.1 As Is
 
 Текущий miniapp backend задаёт отдельный performer-facing status surface.
 
-### 4.4.1 Какие задачи исполнитель вообще видит в miniapp
-
-Сейчас miniapp отдаёт исполнителю только задачи со статусами:
+Сейчас miniapp отдает исполнителю только задачи со статусами:
 
 | Группа | Статусы |
 |---|---|
@@ -456,7 +607,7 @@ Special grouping допустима только как presentation layer:
 
 То есть miniapp **не** является полным окном во весь словарь статусов.
 
-Он не показывает по текущему route:
+Он не показывает:
 - `DRAFT_10`
 - `NEW_*`
 - `PLANNED_*`
@@ -465,58 +616,42 @@ Special grouping допустима только как presentation layer:
 - `DONE_*`
 - `ARCHIVE`
 
-### 4.4.2 Какие статусы miniapp формально может поставить
+`/miniapp/tickets/set-status` сейчас принимает любой `newStatus`, если он входит в `TASK_STATUSES`, кроме отдельного запрета менять статус у `PERIODIC`.
 
-`/miniapp/tickets/set-status` сейчас принимает любой `newStatus`, если он входит в `TASK_STATUSES`.
+### 9.2 Target-wave interpretation
 
-Но есть важное исключение:
-- если текущий статус задачи = `PERIODIC`,
-- miniapp не позволяет менять статус этой задачи.
+В рамках этой спеки miniapp нужно трактовать как:
+- `Performer Work Surface`
+- а не как “полный status-first CRM surface”
 
-Следствие:
-- visibility surface miniapp уже уже, чем полный словарь;
-- status mutation surface backend формально шире, чем видимость;
-- это нужно считать отдельным miniapp-specific contract, а не общим CRM contract.
+Это означает:
+- current miniapp behavior остается As Is до implementation wave;
+- target decision про lifecycle normalization не делает miniapp автоматически полным окном во весь словарь;
+- после выноса recurrence в отдельную dimension miniapp performer-work contract должен быть приведен в соответствие новой recurrence semantics.
 
-### 4.4.3 Нормативный вывод
+## 10. MCP / API normalization
 
-В дальнейшей нормализации нужно отдельно решить:
-
-1. miniapp должен быть:
-   - полным status-first surface для исполнителя
-   - или ограниченным performer-work surface
-
-2. если оставляем второй вариант, его нужно явно описывать как:
-   - `Performer Work Surface`
-   - а не как “все статусы, доступные исполнителю”
-
-3. status mutation policy в miniapp должна быть приведена в соответствие с его visibility policy:
-   - либо mutation тоже ограничивается видимыми группами,
-   - либо это явно документируется как backend-level permissiveness
-
-## 5. MCP / API normalization
-
-### 5.1 Текущий фактический контракт
+### 10.1 Текущий фактический контракт
 
 Сейчас по коду и MCP:
 
 - `voice.project(project_id)` / `voice.projects()`
   - project context
-- `voice.fetch(session_id, mode=\"transcript\")`
+- `voice.fetch(session_id, mode="transcript")`
   - transcript + metadata
 - `voice.crm_tickets(session_id=...)`
   - accepted task view for a session
 - `voice.session_possible_tasks(session_id)`
-  - draft task view for a session
+  - mutable draft baseline for a session
 
-### 5.2 Нормализация mental model
+### 10.2 Нормализация mental model
 
-Новая спека должна закрепить:
+Новая спека закрепляет:
 
 - `voice.crm_tickets(session_id)` = accepted-only session task view
-- `voice.session_possible_tasks(session_id)` = draft-only session task view
+- `voice.session_possible_tasks(session_id)` = mutable draft baseline
 
-### 5.3 Future direction
+### 10.3 Future direction
 
 В будущем можно ввести unified method, например:
 - `voice.session_tasks(session_id, include_drafts=true|false, include_codex=true|false)`
@@ -524,15 +659,15 @@ Special grouping допустима только как presentation layer:
 Но это future simplification.  
 Сейчас удалять `session_possible_tasks` не требуется.
 
-## 6. Контракт project binding для voice session
+## 11. Контракт project binding для voice session
 
-### 6.1 Нормализация
+### 11.1 Нормализация
 
 - `session.project_id` = canonical project binding
 - `session_name` = human-readable label only
 - `routing-topic` = derived routing classification
 
-### 6.2 Следствие
+### 11.2 Следствие
 
 Direct voice-session reporting должен использовать:
 - `session.project_id`
@@ -542,7 +677,7 @@ Direct voice-session reporting должен использовать:
 - это metadata conflict
 - routing не должен переопределяться по `session_name`
 
-### 6.3 Bucket rule
+### 11.3 Bucket rule
 
 Voice session может войти в operational bucket только если:
 - её `project_id` входит в whitelist `sources.project[]`
@@ -552,58 +687,70 @@ Voice session может войти в operational bucket только если:
 
 Это уже соответствует текущему patched `StratoProject` behavior.
 
-## 7. Product decision
+## 12. Product decision
 
 ### Решение
 
-Целевая модель:
-- отдельная вкладка `Возможные задачи` не нужна;
-- draft rows показываются как обычный status filter `DRAFT_10` внутри общей task surface `Задачи`.
+Целевая модель следующей волны:
+- отдельная вкладка `Возможные задачи` не нужна как самостоятельная target semantics;
+- draft rows показываются как обычный status filter `DRAFT_10` внутри общей task surface `Задачи`;
+- `voice.session_possible_tasks(session_id)` при этом сохраняется как mutable draft-baseline route;
+- `PERIODIC` уходит из target lifecycle ontology в отдельную recurrence dimension.
 
 ### Почему
 
 Потому что:
-- draft и accepted rows уже являются одной сущностью;
-- их различие целиком выражается статусом;
-- отдельная draft tab semantics создает лишнее дублирование в UI и API модели.
+- draft и accepted rows уже являются одной storage-сущностью;
+- различие draft/accepted в основном выражается статусом плюс mutable-baseline behavior draft surface;
+- отдельная draft tab semantics создает лишнее дублирование в target UI и API модели;
+- recurring commitments и lifecycle states — это разные виды вещей и не должны жить в одной статусной оси.
 
-## 8. Тестовые сценарии
+## 13. Тестовые сценарии
+
+### Contract framing
+- документ явно читается как approved next-wave replacement contract
+- документ не притворяется описанием уже реализованного target behavior
 
 ### Session scope
 - `voice.crm_tickets(session_id)` возвращает только accepted rows
-- `voice.session_possible_tasks(session_id)` возвращает только draft rows
+- `voice.session_possible_tasks(session_id)` описан как mutable baseline, а не immutable projection
 
-### Label-only
-- в user-facing tables и reports показываются только labels
-- internal keys не показываются вне diagnostic contexts
+### Label / key / value wording
+- user-facing tables и reports показывают labels
+- current runtime value и status key не смешиваются в одном термине
+- current reverse-resolution behavior в UI не замаскирован под key-first universal truth
 
 ### Voice / task surfaces
-- вкладка `Задачи` при фильтре `DRAFT_10` == `DRAFT_10` session-scoped count
-- accepted filters внутри вкладки `Задачи` exclude `voice_possible_task`
-- `Codex` count matches `codex_task = true`
+- current `Voice` tab описан как possible-task-centric `As Is`
+- target `Voice` contract описан как `Задачи` + `Codex`
+- draft target semantics выражен через status filter внутри `Задачи`
 
 ### OperOps tabs
-- каждый tab определяется explicit status filter set
-- никаких hidden semantic shortcuts кроме draft grouping layer
+- каждый target tab определяется explicit status filter set
+- current mismatches перечислены отдельно и не смешаны с target contract
+
+### `PROGRESS_0`
+- documented as `Rejected` in As Is
+- есть короткое пояснение о legacy semantic drift
+- указано, что current UI still treats it as work-like grouping
+
+### `PERIODIC`
+- нет подвешенного “maybe remove later” language
+- As Is recurring inventory содержит ровно 10 строк
+- target decision фиксирует move to recurrence dimension
 
 ### Metadata conflict
 - direct voice session report uses `session.project_id`
 - conflicting `session_name` не re-route’ит session
 
-### Reporting
-- draft rows не называются `Backlog`
-- нет шума вида `Срок: не указан`
-- используется только реальный CRM status
+## 14. Assumptions
 
-## Assumptions
+- В этой волне меняется только спецификация; runtime поведение не меняется.
+- До начала implementation wave production truth остается за [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md) и текущими repo product notes.
+- Следующая implementation wave должна использовать этот документ как decision-complete target contract.
+- Инвентарь recurring tasks собран по live `automation_tasks`, где `is_deleted != true` и `task_status = Periodic`, на момент проверки 2026-03-14.
 
-- Это новая documentation-only spec, без кодовых изменений в этой волне.
-- [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md) остается as-built runtime contract.
-- Новый файл служит semantic/UX normalization spec поверх уже реализованного runtime.
-- Canonical new file:
-  - `/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md`
-
-## BD
+## 15. BD
 
 - ✅ `copilot-cux2` — [operops][voice] Normalize task widgets and tabs to complete non-overlapping status partition
 - ✅ `copilot-cux2.1` — T1 Define complete non-overlapping task status partition
@@ -614,3 +761,36 @@ Voice session может войти в operational bucket только если:
 
 - `copilot-cux2.1 -> copilot-cux2.3`
 - `copilot-cux2.2 -> copilot-cux2.3`
+
+## 16. Future deprecation path: `voice.session_possible_tasks(session_id)`
+
+`voice.session_possible_tasks(session_id)` не должен считаться вечным target endpoint.
+
+В рамках next-wave contract он остается допустимым как:
+- current mutable draft-baseline surface;
+- compatibility facade для существующих consumers.
+
+Но следующий шаг после внедрения unified target semantics должен быть таким:
+
+1. Спроектировать replacement contract, который покрывает:
+   - draft subset как mutable baseline;
+   - accepted subset;
+   - codex subset;
+   - row reuse / dedupe expectations.
+
+2. Перевести consumers на replacement surface:
+   - MCP / agent contracts;
+   - session task surfaces;
+   - любые internal integrations, читающие current route.
+
+3. Оставить `voice.session_possible_tasks(session_id)` как deprecated compatibility route на transition window.
+
+4. Удалить route только после того, как:
+   - replacement contract введен;
+   - consumers мигрированы;
+   - mutable-baseline semantics сохранена;
+   - regression / smoke coverage подтверждает parity.
+
+Следовательно:
+- route не удаляется в этой волне;
+- но задачи на его deprecation и eventual removal должны считаться частью следующего cleanup / convergence wave.

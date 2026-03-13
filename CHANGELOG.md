@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-14
+### PROBLEM SOLVED
+- **02:04** The Voice/OperOps surface-normalization draft still read like a documentation overlay, so it mixed current runtime truth with next-wave target semantics and left key decisions (`mutable draft baseline`, `PERIODIC`, Voice tab replacement scope, Codex surface wording) underspecified.
+- **02:04** Telegram knowledge seeding still resolved routing-project aliases through ad hoc topic parsing inside the seed script, which made checked-in routing coverage harder to reuse and left MediaGen legacy/active project-id parity under-tested.
+
+### FEATURE IMPLEMENTED
+- **02:04** Recast the Voice/OperOps surface-normalization document into an approved next-wave replacement contract with explicit `As Is` vs `To Be` sections, a mutable-baseline definition for `voice.session_possible_tasks`, an audited `PROGRESS_0 = Rejected` note, a full recurring-task inventory, and a deprecation path for the current draft route.
+- **02:04** Added shared routing-project extraction for Telegram knowledge seeding and locked the routing/crosswalk contract with focused backend tests, including MediaGen legacy+active project coverage and StratoProject prompt expectations.
+
+### CHANGES
+- **02:04** Rewrote `plan/voice-task-surface-normalization-spec.md` so it now documents the approved next-wave replacement contract, separates runtime truth from target semantics, moves `PERIODIC` into recurrence ontology, inventories all 10 current recurring tasks, records that live history contains no `PROGRESS_0 / Rejected` task usage, and scopes `voicebot/codex_tasks` separately from the broader `bd`-backed OperOps Codex surface.
+- **02:04** Added `backend/src/utils/routingConfig.ts`, updated `backend/scripts/seed-telegram-knowledge.ts` to reuse extracted routing project sources and alias handling, and added regression coverage in `backend/__tests__/utils/routingConfig.test.ts`, `backend/__tests__/settings/mediaGenRoutingContract.test.ts`, and `backend/__tests__/prompt/stratoProjectVoiceRoutingContract.test.ts`.
+
 ## 2026-03-13
 ### PROBLEM SOLVED
 - **22:01** Dense plan-fact currency cells could wrap placeholders or compact RUB values onto multiple lines, which made forecast/fact/value rows taller than their neighbors and reduced scanability in the monthly grid.

@@ -10,6 +10,7 @@ import {
   upsertTelegramChatMembership,
   upsertTelegramUser,
 } from '../src/services/telegramKnowledge.js';
+import { extractRoutingProjectSources } from '../src/utils/routingConfig.js';
 
 type ChatShape = {
   chat_id: string;
@@ -111,35 +112,37 @@ async function main(): Promise<void> {
   }
 
   const projectByAlias = new Map<string, string>();
+  const setProjectAlias = (alias: string | null | undefined, projectId: string) => {
+    const key = String(alias || '').trim().toLowerCase();
+    if (!key || projectByAlias.has(key)) return;
+    projectByAlias.set(key, projectId);
+  };
+
   for (const row of knowledge['project-crosswalk'] || []) {
     for (const alias of row.sheet_aliases || []) {
-      projectByAlias.set(alias.trim().toLowerCase(), row.voice_project_id);
+      setProjectAlias(alias, row.voice_project_id);
     }
     if (row.voice_project_name) {
-      projectByAlias.set(row.voice_project_name.trim().toLowerCase(), row.voice_project_id);
+      setProjectAlias(row.voice_project_name, row.voice_project_id);
     }
     if (row.routing_topic) {
-      projectByAlias.set(row.routing_topic.trim().toLowerCase(), row.voice_project_id);
+      setProjectAlias(row.routing_topic, row.voice_project_id);
       const tail = row.routing_topic.split('/').map((part) => part.trim()).filter(Boolean).at(-1);
-      if (tail) projectByAlias.set(tail.toLowerCase(), row.voice_project_id);
+      if (tail) setProjectAlias(tail, row.voice_project_id);
     }
   }
 
   for (const item of routing) {
     const topic = typeof item.topic === 'string' ? item.topic : null;
-    const sources = Array.isArray(item.sources) ? item.sources : [];
-    const project = sources.find((source) => source && typeof source === 'object' && 'project' in source) as
-      | { project?: { project_id?: string; name?: string } }
-      | undefined;
-    if (project?.project?.project_id) {
-      if (topic) {
-        projectByAlias.set(topic.trim().toLowerCase(), project.project.project_id);
-        const tail = topic.split('/').map((part) => part.trim()).filter(Boolean).at(-1);
-        if (tail) projectByAlias.set(tail.toLowerCase(), project.project.project_id);
-      }
-      if (project.project.name) {
-        projectByAlias.set(project.project.name.trim().toLowerCase(), project.project.project_id);
-      }
+    const routingProjects = extractRoutingProjectSources(item);
+    if (topic && routingProjects.length === 1) {
+      setProjectAlias(topic, routingProjects[0]?.project_id || '');
+      const tail = topic.split('/').map((part) => part.trim()).filter(Boolean).at(-1);
+      if (tail) setProjectAlias(tail, routingProjects[0]?.project_id || '');
+    }
+    for (const project of routingProjects) {
+      setProjectAlias(project.name, project.project_id);
+      setProjectAlias(project.alias, project.project_id);
     }
   }
 

@@ -103,6 +103,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Runtime isolation is enforced by per-environment deployment/database boundaries; `runtime_tag` is not a canonical runtime filter contract.
 - Voice admin/person/project payloads can be enriched with Telegram user/chat links and project-performer memberships; `POST /api/voicebot/project_performers` returns a permission-checked `{ project, performers }` payload backed by `automation_telegram_*` and `automation_project_performer_links`.
 - Telegram/project knowledge can be seeded into those collections with `cd backend && npm run telegram:knowledge:seed:dry` or `cd backend && npm run telegram:knowledge:seed:apply`.
+- Telegram knowledge seeding now reuses shared routing-project extraction (`backend/src/utils/routingConfig.ts`) so routing topics, project names, and project aliases resolve consistently when one routing item carries multiple project sources.
 - Telegram seed rollout/rollback contract lives in `ontology/plan/telegram-knowledge-seed-rollout.md`.
 - WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
@@ -245,7 +246,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
 - Voice status normalization contract now lives in `plan/voice-task-status-normalization-plan.md` as an as-built document; it records the deployed `DRAFT_10 / BACKLOG_10` runtime split for Voice taskflow.
 - Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
-- Status-first Voice/OperOps surface convergence is proposed in `plan/voice-task-surface-normalization-spec.md` under epic `copilot-cux2`.
+- Status-first Voice/OperOps surface convergence now lives in `plan/voice-task-surface-normalization-spec.md` as the approved next-wave replacement contract; current production behavior remains governed by the as-built `plan/voice-task-status-normalization-plan.md` until rollout starts.
 - MPIC methodology review and artifact-graph corrections are documented in `ontology/plan/mpic-process-review.md`.
 
 

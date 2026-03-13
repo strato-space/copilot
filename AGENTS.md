@@ -278,6 +278,7 @@ Preferred engineering principles for this repo:
 - Voice upload API now propagates `request_id` in both success and error payloads (`X-Request-ID` passthrough or generated), and backend logs each upload stage with the same correlation id.
 - Voice upload must accept audio-only recorder blobs mislabeled as `video/webm` and normalize persisted/session-response MIME to `audio/webm`.
 - Voice admin/person/project payloads may be enriched with Telegram chat/user data and project-performer memberships through `backend/src/services/telegramKnowledge.ts`; seed those records via `backend/scripts/seed-telegram-knowledge.ts` (`npm run telegram:knowledge:seed:{dry,apply}`).
+- Telegram knowledge seeding now reuses shared routing-project extraction (`backend/src/utils/routingConfig.ts`) so routing topics, project names, and project aliases resolve consistently when one routing item carries multiple project sources.
 - `POST /api/voicebot/project_performers` returns a permission-checked project payload plus linked performers sourced from `automation_project_performer_links` and `automation_telegram_*`.
 - Seed rollout and rollback steps for the Telegram knowledge slice are documented in `ontology/plan/telegram-knowledge-seed-rollout.md`.
 - Categorization pipeline must emit `message_update` over websocket (through `SEND_TO_SOCKET` events queue) so Categorization tab updates without manual refresh.
@@ -687,7 +688,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.
 - Added and activated `plan/voice-task-status-normalization-plan.md` as the current as-built status contract: the deployed Voice taskflow now uses `DRAFT_10` for drafts and `BACKLOG_10` for accepted materialized rows.
 - Added `plan/voice-session-task-edit-parity-spec.md` as the separate feature spec for making Voice session tab `Задачи` editing match OperOps `CRMKanban`.
-- Added `plan/voice-task-surface-normalization-spec.md` as the status-first proposal for converging Voice and OperOps task surfaces under epic `copilot-cux2`.
+- Added `plan/voice-task-surface-normalization-spec.md` as the approved next-wave replacement contract for converging Voice and OperOps task surfaces under epic `copilot-cux2`; current production behavior still follows the as-built `plan/voice-task-status-normalization-plan.md` until rollout begins.
 - Added `ontology/plan/mpic-process-review.md` as the current methodology critique for MPIC artifact-graph layering, authority boundaries, and generation preconditions.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
