@@ -61,7 +61,7 @@
 | `PLANNED_10` | `Plan / Approval` | План на согласовании |
 | `PLANNED_20` | `Plan / Performer` | План на стороне исполнителя |
 | `READY_10` | `Ready` | Общий non-voice ready-state; Voice accepted rows сюда больше не materialize'ятся |
-| `PROGRESS_0` | `Rejected` | Явный reject |
+| `PROGRESS_0` | `Progress 0` | Готово к старту |
 | `PROGRESS_10` | `Progress 10` | Работа начата |
 | `PROGRESS_20` | `Progress 25` | Промежуточный чекпоинт |
 | `PROGRESS_30` | `Progress 50` | Mid-state |

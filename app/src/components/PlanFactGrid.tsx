@@ -197,7 +197,7 @@ const ValueCell = ({
   const hasValue = valueRub !== 0 || valueHours !== 0;
   const content = (
     <div className="finops-cell-text">
-      <div className={hasValue ? 'text-[11px] font-semibold text-slate-900' : 'text-[11px] font-semibold text-slate-400'}>
+      <div className={hasValue ? 'text-[11px] font-semibold text-slate-900' : 'text-[11px] font-semibold text-slate-400 whitespace-nowrap'}>
         {hasValue ? formatCurrency(valueRub) : '—'}
       </div>
       <div className={hasValue ? 'text-[9px] text-slate-500' : 'text-[9px] text-slate-400'}>
@@ -618,7 +618,7 @@ export default function PlanFactGrid({
                     : undefined;
                 const forecastContent = (
                   <div className="finops-cell-text">
-                    <div className={cell.forecast_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400'}>
+                    <div className={cell.forecast_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400 whitespace-nowrap'}>
                       {cell.forecast_rub ? formatCurrency(cell.forecast_rub * fxFactor) : '—'}
                     </div>
                     <div className={cell.forecast_hours ? 'text-[10px] text-slate-500' : 'text-[10px] text-slate-400'}>
@@ -628,7 +628,7 @@ export default function PlanFactGrid({
                 );
                 const factContent = (
                   <div className="finops-cell-text">
-                    <div className={cell.fact_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400'}>
+                    <div className={cell.fact_rub ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-slate-400 whitespace-nowrap'}>
                       {cell.fact_rub ? formatCurrency(cell.fact_rub * fxFactor) : '—'}
                     </div>
                     <div className={cell.fact_hours ? 'text-[10px] text-slate-500' : 'text-[10px] text-slate-400'}>

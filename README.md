@@ -57,6 +57,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - FX rates are managed in `app/src/store/fxStore.ts` and recalculate RUB values in analytics, KPIs, and plan-fact tables.
 - The Employees directory supports a chat-driven form fill that prompts for missing fields.
 - Plan-fact months can be pinned (up to 3), and the totals row stays visible under pinned months.
+- Compact plan-fact `Value`, `Forecast`, and `Fact` RUB cells must keep the amount on one line so dense month grids do not introduce row-height jitter from wrapped currency text.
 - Plan-fact frontend uses API-only data (local `mockPlanFact` fallback and CRM snapshot badges were removed from pages/stores).
 - Plan-fact project edits are persisted through `PUT /api/plan-fact/project`; backend propagates `contract_type` updates into facts/forecasts records for the same `project_id`.
 - Forecast edits now require a non-empty comment, and forecast revision history is available through `GET /api/plan-fact/forecast-history` with UI access from the income grid drawer flow.
@@ -244,6 +245,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
 - Voice status normalization contract now lives in `plan/voice-task-status-normalization-plan.md` as an as-built document; it records the deployed `DRAFT_10 / BACKLOG_10` runtime split for Voice taskflow.
 - Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
+- Status-first Voice/OperOps surface convergence is proposed in `plan/voice-task-surface-normalization-spec.md` under epic `copilot-cux2`.
+- MPIC methodology review and artifact-graph corrections are documented in `ontology/plan/mpic-process-review.md`.
 
 
 ### Voice runtime: key configuration map

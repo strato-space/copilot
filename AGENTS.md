@@ -227,6 +227,7 @@ Preferred engineering principles for this repo:
 ## Product Notes (FinOps)
 - FX rates live in `app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
 - The plan-fact grid keeps at least one pinned month; users can pin up to 3 and can unpin the active month if another month remains pinned.
+- Compact plan-fact `Value`, `Forecast`, and `Fact` RUB cells must stay single-line so monthly grid rows do not grow unpredictably from wrapped currency text.
 - Plan-fact pages now use API-only data (no local mock/snapshot fallback in frontend store or analytics page).
 - Plan-fact project edits are persisted via `PUT /api/plan-fact/project` (fields: `project_name`, `subproject_name`, `contract_type`, `rate_rub_per_hour`) and contract type updates are propagated to facts/forecasts.
 - Forecast edits now require a non-empty comment, and monthly revision history is exposed through `GET /api/plan-fact/forecast-history` backed by `forecasts_project_month_history`.
@@ -686,6 +687,8 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.
 - Added and activated `plan/voice-task-status-normalization-plan.md` as the current as-built status contract: the deployed Voice taskflow now uses `DRAFT_10` for drafts and `BACKLOG_10` for accepted materialized rows.
 - Added `plan/voice-session-task-edit-parity-spec.md` as the separate feature spec for making Voice session tab `Задачи` editing match OperOps `CRMKanban`.
+- Added `plan/voice-task-surface-normalization-spec.md` as the status-first proposal for converging Voice and OperOps task surfaces under epic `copilot-cux2`.
+- Added `ontology/plan/mpic-process-review.md` as the current methodology critique for MPIC artifact-graph layering, authority boundaries, and generation preconditions.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.
 - Added Voice Sessions list URL-state workflow (`tab`, filters, pagination) with inline project reassignment and active-project-only selector options in `app/src/pages/voice/SessionsListPage.tsx`.

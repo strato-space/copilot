@@ -2,18 +2,25 @@
 
 ## 2026-03-13
 ### PROBLEM SOLVED
+- **22:01** Dense plan-fact currency cells could wrap placeholders or compact RUB values onto multiple lines, which made forecast/fact/value rows taller than their neighbors and reduced scanability in the monthly grid.
+- **22:01** The checked-in Voice status contract still described `PROGRESS_0` as a reject bucket, and there was no follow-up spec explaining how Voice and OperOps task surfaces should converge on one status-first model after the `DRAFT_10 / BACKLOG_10` rollout.
+- **02:42** MPIC process guidance still described evidence, business modeling, and UI artifacts as a single linear chain, which blurred authority boundaries and made downstream generation rules harder to reason about.
 - **14:20** Voice task status normalization was still only half-finished on paper and in runtime assumptions: drafts and accepted Voice tasks had already been migrated conceptually, but some product surfaces and docs still behaved as if `READY_10` were the accepted Voice target and `NEW_0` remained the live draft bucket.
 - **14:20** Voice session accepted-task visibility still broke when session linkage lived in `source_data.voice_sessions[]`: the page badge and backend count API could show accepted tasks, while the embedded `CRMKanban` grid still rendered an empty list for the same session.
 - **14:20** Telegram knowledge integration still relied on historical stash framing, route-layer ID helpers, and missing focused coverage around `/voicebot/project_performers`, leaving the slice “mostly landed” but not cleanly hardened.
 - **14:20** Ontology operator scripts still required manual `MONGODB_CONNECTION_STRING` shell exports even though the main backend already had a canonical production env path.
 
 ### FEATURE IMPLEMENTED
+- **22:01** Locked compact plan-fact currency rendering to a single line and aligned the Voice task-status planning set around the current `Progress 0` meaning plus a new status-first surface-normalization proposal.
+- **02:42** Added an MPIC process review that reframes the methodology as a layered artifact graph with explicit evidence normalization, authority layers, generation preconditions, and change-impact rules.
 - **14:20** Completed the Voice status dictionary rollout: draft Voice tasks now persist as `DRAFT_10`, accepted Voice tasks materialize and recover as `BACKLOG_10`, and the production data migration path now converges to zero legacy Voice candidates on repeated dry-runs.
 - **14:20** Fixed the final accepted-task visibility gap in Voice session `Задачи`: session-scoped matching now includes `source_data.voice_sessions[].session_id`, so the `Backlog` subtab and the grid agree with `/api/voicebot/session_tab_counts`.
 - **14:20** Finished Telegram knowledge hardening: deduplicated `project_performer_links`, extracted neutral Mongo ID helpers, added focused service/route/ontology tests, and documented a prod-safe seed rollout/rollback contract.
 - **14:20** Aligned ontology operator tooling with the main backend configuration so `contract-check`, `domain-inventory`, `entity-sampling`, and `ingest` auto-load `backend/.env.production` without ad hoc env bootstrapping.
 
 ### CHANGES
+- **22:01** Updated `app/src/components/PlanFactGrid.tsx` to add `whitespace-nowrap` for compact value/forecast/fact RUB cells, updated `plan/voice-task-status-normalization-plan.md` so `PROGRESS_0` is documented as `Progress 0`, added `plan/voice-task-surface-normalization-spec.md` for epic `copilot-cux2`, and refreshed `README.md` plus `AGENTS.md` with the new plan references.
+- **02:42** Added `ontology/plan/mpic-process-review.md` with the artifact-graph and authority-model review for the MPIC generation methodology.
 - **14:20** Updated `backend/src/constants.ts`, `app/src/constants/crm.ts`, `backend/src/api/routes/voicebot/{possibleTasksMasterModel,sessions}.ts`, `backend/src/services/voicebot/{persistPossibleTasks,repairSoftDeletedMaterializedTasks,migrateVoiceTaskStatuses}.ts`, and `backend/scripts/voicebot-migrate-task-statuses.ts` to finish the `DRAFT_10 / BACKLOG_10` Voice taskflow split and migration workflow.
 - **14:20** Updated `app/src/pages/operops/{CRMPage.tsx,voiceTabGrouping.ts}`, `app/src/utils/voiceSessionTaskSource.ts`, `app/src/store/kanbanStore.ts`, `backend/src/miniapp/routes/index.ts`, and `agents/agent-cards/create_tasks.md` so accepted Voice tasks remain visible in OperOps/Voice/miniapp surfaces after the status split.
 - **14:20** Added/updated regression coverage in `backend/__tests__/voicebot/{migrateVoiceTaskStatuses,repairSoftDeletedMaterializedTasks,session/sessionTabCountsRoute,runtime/sessionUtilityRuntimeBehavior.validation}.test.ts`, `app/__tests__/voice/{createTasksPromptContract,sessionTaskSourceFilterBehavior,sessionPageTabCountersContract}.test.ts`, and `app/__tests__/operops/voiceTabGroupingBehavior.test.ts`.
