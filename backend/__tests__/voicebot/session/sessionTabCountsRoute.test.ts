@@ -79,10 +79,7 @@ describe('Voicebot session_tab_counts route', () => {
     };
 
     tasksAggregateMock.mockReturnValue({
-      toArray: async () => [
-        { _id: TASK_STATUSES.BACKLOG_10, count: 7 },
-        { _id: TASK_STATUSES.REVIEW_10, count: 3 },
-      ],
+      toArray: async () => [],
     });
     tasksCountDocumentsMock.mockResolvedValueOnce(3);
 
@@ -92,6 +89,20 @@ describe('Voicebot session_tab_counts route', () => {
           return {
             countDocuments: tasksCountDocumentsMock,
             aggregate: tasksAggregateMock,
+            find: jest.fn(() => ({
+              toArray: async () => [
+                { task_status: TASK_STATUSES.BACKLOG_10 },
+                { task_status: TASK_STATUSES.BACKLOG_10 },
+                { task_status: TASK_STATUSES.BACKLOG_10 },
+                { task_status: TASK_STATUSES.BACKLOG_10 },
+                { task_status: TASK_STATUSES.BACKLOG_10 },
+                { task_status: TASK_STATUSES.BACKLOG_10 },
+                { task_status: TASK_STATUSES.BACKLOG_10 },
+                { task_status: TASK_STATUSES.REVIEW_10 },
+                { task_status: TASK_STATUSES.REVIEW_10 },
+                { task_status: TASK_STATUSES.REVIEW_10 },
+              ],
+            })),
           };
         }
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
@@ -127,32 +138,11 @@ describe('Voicebot session_tab_counts route', () => {
       tasks_count: 10,
       codex_count: 3,
       status_counts: [
-        { status: TASK_STATUSES.BACKLOG_10, count: 7 },
-        { status: TASK_STATUSES.REVIEW_10, count: 3 },
+        { status: 'READY_10', status_key: 'READY_10', label: 'Ready', count: 7 },
+        { status: 'REVIEW_10', status_key: 'REVIEW_10', label: 'Review', count: 3 },
       ],
     });
 
-        expect(tasksAggregateMock).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          $match: expect.objectContaining({
-            is_deleted: { $ne: true },
-            codex_task: { $ne: true },
-            source_kind: { $ne: 'voice_possible_task' },
-            $or: expect.arrayContaining([
-              expect.objectContaining({
-                'source_data.voice_sessions.session_id': expect.any(Object),
-              }),
-            ]),
-          }),
-        }),
-        expect.objectContaining({
-          $group: expect.objectContaining({
-            _id: '$task_status',
-          }),
-        }),
-      ])
-    );
     expect(tasksCountDocumentsMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({

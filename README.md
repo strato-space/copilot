@@ -20,7 +20,7 @@ Use this as a fast guardrail before implementing anything:
   - canonical payload shape `id/name/description/priority/...`,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with draft status `DRAFT_10`,
-  - `process_possible_tasks` now materializes selected rows into `BACKLOG_10`,
+  - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted rows must not be soft-deleted by possible-task cleanup,
   - session `processors_data.CREATE_TASKS` is compatibility projection only, not the source of truth.
 
@@ -91,11 +91,10 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Codex issue IDs now use one token renderer across `Issue ID` and `Relationships` (blue link + copy action); relationship rows also show status pictograms (`open`, `in_progress`, `blocked`, `deferred`, `closed`, fallback).
 - Codex relationship groups are normalized in details card as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency reading.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
-- OperOps `Voice` tab is possible-task-centric:
-  - primary dataset is `DRAFT_10` tasks from `automation_tasks`,
-  - first group is orphan possible tasks without voice linkage,
-  - then session-linked groups sorted newest-first,
-  - processed tasks for a session are shown collapsed for reference.
+- OperOps main task navigation is status-first:
+  - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
+  - the `Draft` tab still renders the orphan/session-grouped possible-task backlog above the CRM table as presentation-only grouping,
+  - accepted Voice tasks are treated as `Ready` work, not as a separate `Backlog` semantic bucket.
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
@@ -116,9 +115,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `CREATE_TASKS` realtime delivery is Mongo-first and session-room based: workers persist refreshed Possible Tasks first, then enqueue `session_update.taskflow_refresh.possible_tasks` so all viewers refresh from canonical backend state.
 - `Possible Tasks` recompute is driven by successful transcript chunks; it is no longer tied to session completion or to categorization completion.
 - `process_possible_tasks` is now non-destructive:
-  - selected rows materialize into `BACKLOG_10`,
+  - selected rows materialize into `READY_10`,
   - accepted rows keep `source_kind = voice_session`,
   - cleanup removes them from draft views but must not soft-delete the materialized task document.
+- Target task-surface normalization is now partially landed in runtime:
+  - Voice session task counters normalize legacy stored statuses into the target lifecycle axis,
+  - generic CRM status pickers now expose only the target editable subset (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`),
+  - miniapp treats recurring work as lifecycle work plus recurring metadata instead of a standalone `Periodic` bucket.
 - Voice session `Задачи` count excludes draft rows with `source_kind = voice_possible_task`; the tab now reflects accepted tasks only.
 - Repaired materialized rows can be restored with:
   - `cd backend && npm run voice:repair:softdeleted-materialized:dry -- --session <session_id>`
@@ -244,7 +247,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
 - Synced legacy planning references copied for context now live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
 - Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
-- Voice status normalization contract now lives in `plan/voice-task-status-normalization-plan.md` as an as-built document; it records the deployed `DRAFT_10 / BACKLOG_10` runtime split for Voice taskflow.
+- Voice status normalization contract now lives in `plan/voice-task-status-normalization-plan.md` as an as-built document; current deployed runtime uses `DRAFT_10` for drafts and `READY_10` for accepted materialized Voice work, with legacy `BACKLOG_10` preserved as compatibility/migration input only.
 - Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
 - Status-first Voice/OperOps surface convergence now lives in `plan/voice-task-surface-normalization-spec.md` as the approved next-wave replacement contract; current production behavior remains governed by the as-built `plan/voice-task-status-normalization-plan.md` until rollout starts.
 - MPIC methodology review and artifact-graph corrections are documented in `ontology/plan/mpic-process-review.md`.

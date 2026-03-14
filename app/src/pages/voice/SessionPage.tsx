@@ -26,7 +26,7 @@ import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
 import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
-import { TASK_STATUSES } from '../../constants/crm';
+import { TASK_STATUSES, type TaskStatusKey } from '../../constants/crm';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 
 const VOICE_SESSION_TASK_COLUMNS = [
@@ -49,7 +49,8 @@ const VOICE_SESSION_TASK_COLUMNS = [
 ] as const;
 
 type VoiceSessionTaskStatusCount = {
-    label: string;
+    status: string;
+    label?: string;
     count: number;
 };
 
@@ -57,7 +58,23 @@ type VoiceSessionTaskTab = {
     key: string;
     label: string;
     count: number;
-    taskStatuses: string[];
+    taskStatuses: TaskStatusKey[];
+};
+
+const TASK_STATUS_LABEL_TO_KEY: Record<string, TaskStatusKey> = Object.entries(TASK_STATUSES).reduce(
+    (acc, [key, label]) => {
+        acc[label] = key as TaskStatusKey;
+        return acc;
+    },
+    {} as Record<string, TaskStatusKey>
+);
+
+const isTaskStatusKey = (value: string): value is TaskStatusKey => value in TASK_STATUSES;
+
+const resolveSessionStatusKey = (rawStatus: string): TaskStatusKey | undefined => {
+    if (!rawStatus) return undefined;
+    if (isTaskStatusKey(rawStatus)) return rawStatus;
+    return TASK_STATUS_LABEL_TO_KEY[rawStatus];
 };
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
@@ -238,12 +255,13 @@ export default function SessionPage() {
     const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {
         return sessionTaskStatusCounts
             .map((entry) => {
-                const matchedStatusKey = Object.entries(TASK_STATUSES).find(([, value]) => value === entry.label)?.[0] ?? '';
+                const resolvedKey = resolveSessionStatusKey(entry.status);
+                const label = String(entry.label || '').trim() || (resolvedKey ? TASK_STATUSES[resolvedKey] : entry.status);
                 return {
-                    key: matchedStatusKey || entry.label,
-                    label: entry.label,
+                    key: (resolvedKey ?? entry.status) as string,
+                    label,
                     count: entry.count,
-                    taskStatuses: matchedStatusKey ? [matchedStatusKey] : [],
+                    taskStatuses: resolvedKey ? [resolvedKey] : [],
                 };
             })
             .filter((entry) => entry.count > 0 && entry.label.trim().length > 0 && entry.taskStatuses.length > 0);
@@ -292,7 +310,7 @@ export default function SessionPage() {
                     success?: boolean;
                     tasks_count?: unknown;
                     codex_count?: unknown;
-                    status_counts?: Array<{ status?: unknown; count?: unknown }>;
+                    status_counts?: Array<{ status?: unknown; label?: unknown; count?: unknown }>;
                     }>('voicebot/session_tab_counts', { session_id: sessionId }, true),
                     api_request<unknown>('codex/issues', { view: 'all', limit: 1000 }, { silent: true }),
                 ]);
@@ -300,10 +318,11 @@ export default function SessionPage() {
                 const statusCounts = Array.isArray(tabCountsResponse?.status_counts)
                     ? tabCountsResponse.status_counts
                         .map((entry) => ({
-                            label: String(entry?.status || '').trim(),
+                            status: String(entry?.status || '').trim(),
+                            label: String(entry?.label || '').trim(),
                             count: Number(entry?.count) || 0,
                         }))
-                        .filter((entry) => entry.label.length > 0 && entry.count > 0)
+                        .filter((entry) => entry.status.length > 0 && entry.count > 0)
                     : [];
                 setSessionOperOpsTasksCount(Number(tabCountsResponse?.tasks_count) || 0);
                 setSessionTaskStatusCounts(statusCounts);

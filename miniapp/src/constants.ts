@@ -81,12 +81,13 @@ const constants = {
         Complete: 'Done',
         PostWork: 'Done',
         Archive: 'Archive',
-        Periodic: 'Periodic',
+        Periodic: 'In Progress',
     },
     performer_crm_statuses: {
         Ready: 'Ready',
         'In Progress': 'Progress 10',
         Review: 'Review / Ready',
+        Done: 'Done',
     },
     crm_to_notion_statuses: {
         Backlog: 'No Status',

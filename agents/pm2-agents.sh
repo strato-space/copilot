@@ -3,7 +3,7 @@
 # PM2 Management Script for Copilot Agent Services
 #
 
-set -e
+set -euo pipefail
 
 # Цвета для вывода
 RED='\033[0;31m'
@@ -14,6 +14,9 @@ NC='\033[0m'
 print_success() { echo -e "${GREEN}✓ $1${NC}"; }
 print_error() { echo -e "${RED}✗ $1${NC}"; }
 print_info() { echo -e "${BLUE}→ $1${NC}"; }
+
+PM2_APP_NAME="copilot-agent-services"
+PM2_ECOSYSTEM_FILE="ecosystem.config.cjs"
 
 # Проверка PM2
 check_pm2() {
@@ -61,31 +64,32 @@ start_services() {
     create_logs_dir
     
     print_info "Запуск Copilot Agent Services..."
-    # pm2 start возвращает ненулевой код, если процесс уже запущен (делает restart)
-    set +e
-    pm2 start ecosystem.config.cjs
-    set -e
+    if pm2 describe "$PM2_APP_NAME" >/dev/null 2>&1; then
+        pm2 restart "$PM2_ECOSYSTEM_FILE" --only "$PM2_APP_NAME" --update-env
+    else
+        pm2 start "$PM2_ECOSYSTEM_FILE" --only "$PM2_APP_NAME" --update-env
+    fi
     print_success "Сервис запущен на http://127.0.0.1:8722"
 }
 
 stop_services() {
     check_pm2
     print_info "Остановка сервиса..."
-    pm2 stop ecosystem.config.cjs
+    pm2 stop "$PM2_ECOSYSTEM_FILE" --only "$PM2_APP_NAME"
     print_success "Сервис остановлен"
 }
 
 restart_services() {
     check_pm2
     print_info "Перезапуск сервиса..."
-    pm2 restart ecosystem.config.cjs
+    pm2 restart "$PM2_ECOSYSTEM_FILE" --only "$PM2_APP_NAME" --update-env
     print_success "Сервис перезапущен"
 }
 
 delete_services() {
     check_pm2
     print_info "Удаление сервиса из PM2..."
-    pm2 delete ecosystem.config.cjs 2>/dev/null || true
+    pm2 delete "$PM2_ECOSYSTEM_FILE" --only "$PM2_APP_NAME" 2>/dev/null || true
     print_success "Сервис удалён"
 }
 

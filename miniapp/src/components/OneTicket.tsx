@@ -205,6 +205,8 @@ const OneTicket = () => {
         }
     };
 
+    const isRecurring = ticket.task_status === constants.task_statuses.PERIODIC || ticket.recurrence_mode === 'periodic';
+
     return (
         <>
             <div className="flex flex-col items-start justify-between gap-2 self-stretch px-4 py-2 pb-22">
@@ -232,6 +234,11 @@ const OneTicket = () => {
                                 {(constants.simplified_crm_statuses as Record<string, string>)[ticket.task_status]}
                             </div>
                         </div>
+                        {isRecurring ? (
+                            <div className="flex h-5 items-center justify-center rounded-sm border border-[#3086ff]/40 bg-[#e6efff]/10 px-2 text-[10px] font-medium leading-none text-[#3086ff]">
+                                Recurring task
+                            </div>
+                        ) : null}
                     </div>
                 </div>
                 {collapseItems.length > 0 ? (
@@ -324,23 +331,19 @@ const OneTicket = () => {
                             >
                                 <ClockCircleOutlined className="h-5 w-5" />
                             </div>
-                            {ticket.task_status !== constants.task_statuses.PERIODIC ? (
-                                <div
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2b2b2b] bg-[#1a1a1a]"
-                                    onClick={() => setActiveActionSheet(constants.action_sheets.REJECT_TICKET)}
-                                >
-                                    <StopOutlined />
-                                </div>
-                            ) : null}
-                        </div>
-                        {ticket.task_status !== constants.task_statuses.PERIODIC ? (
                             <div
-                                className="flex h-12 w-[216px] items-center justify-center gap-2 rounded-full border border-[#3086ff] bg-[#3086ff] p-3"
-                                onClick={() => setActiveActionSheet(constants.action_sheets.CHANGE_STATUS)}
+                                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2b2b2b] bg-[#1a1a1a]"
+                                onClick={() => setActiveActionSheet(constants.action_sheets.REJECT_TICKET)}
                             >
-                                <div className="text-center text-lg font-normal leading-[24px] text-white">Change status</div>
+                                <StopOutlined />
                             </div>
-                        ) : null}
+                        </div>
+                        <div
+                            className="flex h-12 w-[216px] items-center justify-center gap-2 rounded-full border border-[#3086ff] bg-[#3086ff] p-3"
+                            onClick={() => setActiveActionSheet(constants.action_sheets.CHANGE_STATUS)}
+                        >
+                            <div className="text-center text-lg font-normal leading-[24px] text-white">Change status</div>
+                        </div>
                     </div>
                 </div>
             </div>

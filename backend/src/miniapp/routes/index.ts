@@ -13,6 +13,7 @@ import type { Logger } from 'winston';
 import { COLLECTIONS, NOTIFICATIONS, TASK_CLASSES, TASK_STATUSES } from '../../constants.js';
 import { getRawDb } from '../../services/db.js';
 import { AppError } from '../../api/middleware/error.js';
+import { TARGET_PERFORMER_TASK_STATUS_VALUES } from '../../services/taskStatusSurface.js';
 import {
     buildWorkHoursLookupByTicketDbId,
     normalizeTicketDbId,
@@ -288,6 +289,10 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                                     TASK_STATUSES.PROGRESS_30,
                                     TASK_STATUSES.PROGRESS_40,
                                     TASK_STATUSES.REVIEW_10,
+                                    TASK_STATUSES.REVIEW_20,
+                                    TASK_STATUSES.DONE_10,
+                                    TASK_STATUSES.DONE_20,
+                                    TASK_STATUSES.DONE_30,
                                     TASK_STATUSES.PERIODIC,
                                 ],
                             },
@@ -546,7 +551,7 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
             const ticketId = req.body.ticket as string;
             const newTaskStatus = req.body.newStatus as string;
 
-            if (!Object.values(TASK_STATUSES).includes(newTaskStatus as (typeof TASK_STATUSES)[keyof typeof TASK_STATUSES])) {
+            if (!TARGET_PERFORMER_TASK_STATUS_VALUES.includes(newTaskStatus as (typeof TARGET_PERFORMER_TASK_STATUS_VALUES)[number])) {
                 res.status(500).json({ result: 'error' });
                 return;
             }
@@ -554,11 +559,6 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
             const ticket = await db.collection(COLLECTIONS.TASKS).findOne({ _id: new ObjectId(ticketId) });
             if (!ticket) {
                 res.status(404).json({ result: 'not_found' });
-                return;
-            }
-
-            if (ticket.task_status === TASK_STATUSES.PERIODIC) {
-                res.status(500).json({ result: 'error' });
                 return;
             }
 

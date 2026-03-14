@@ -85,6 +85,12 @@ import { completeSessionDoneFlow } from '../../../services/voicebotSessionDoneFl
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { createBdIssue } from '../../../services/bdClient.js';
 import {
+    getTargetTaskStatusLabel,
+    normalizeTargetTaskStatusKey,
+    TARGET_TASK_STATUS_KEYS,
+    type TargetTaskStatusKey,
+} from '../../../services/taskStatusSurface.js';
+import {
     persistPossibleTasksForSession,
     POSSIBLE_TASKS_REFRESH_MODE_VALUES,
     type PossibleTasksRefreshMode,
@@ -4646,7 +4652,7 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             removeFromPossibleTasks,
             explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'create_tickets',
-            targetTaskStatus: TASK_STATUSES.BACKLOG_10,
+            targetTaskStatus: TASK_STATUSES.READY_10,
         });
         return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
@@ -4782,7 +4788,7 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
             removeFromPossibleTasks,
             explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'process_possible_tasks',
-            targetTaskStatus: TASK_STATUSES.BACKLOG_10,
+            targetTaskStatus: TASK_STATUSES.READY_10,
         });
         return res.status(Number(materializeResult.status || 200)).json(materializeResult.body);
     } catch (error) {
@@ -4874,9 +4880,9 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
     }
 });
 
-const CANONICAL_TASK_STATUS_ORDER = Object.values(TASK_STATUSES);
+const CANONICAL_TASK_STATUS_ORDER = [...TARGET_TASK_STATUS_KEYS];
 const CANONICAL_TASK_STATUS_ORDER_INDEX = new Map(
-    CANONICAL_TASK_STATUS_ORDER.map((status, index) => [status, index])
+  CANONICAL_TASK_STATUS_ORDER.map((status, index) => [status, index])
 );
 
 const normalizeSessionScopedSourceRefs = (values: unknown[]): string[] => {
@@ -4995,16 +5001,10 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             }
         );
 
-        const [statusCountsRaw, codex_count] = await Promise.all([
-            db.collection(COLLECTIONS.TASKS).aggregate([
-                { $match: nonCodexSessionTaskMatch },
-                {
-                    $group: {
-                        _id: '$task_status',
-                        count: { $sum: 1 },
-                    },
-                },
-            ]).toArray() as Promise<Array<{ _id?: unknown; count?: unknown }>>,
+        const [sessionTasks, codex_count] = await Promise.all([
+            db.collection(COLLECTIONS.TASKS)
+                .find(nonCodexSessionTaskMatch, { projection: { task_status: 1, recurrence_mode: 1 } })
+                .toArray() as Promise<Array<{ task_status?: unknown; recurrence_mode?: unknown }>>,
             db.collection(COLLECTIONS.TASKS).countDocuments(
                 mergeWithRuntimeFilter(
                     {
@@ -5021,21 +5021,28 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             ),
         ]);
 
-        const status_counts = statusCountsRaw
-            .map((entry) => {
-                const status = toTaskText(entry?._id) || 'Unknown';
-                const count = Number(entry?.count) || 0;
-                if (!status || count <= 0) return null;
-                return { status, count };
-            })
-            .filter((entry): entry is { status: string; count: number } => Boolean(entry))
+        const groupedStatusCounts = sessionTasks.reduce((acc, task) => {
+            const targetStatusKey = normalizeTargetTaskStatusKey(task);
+            if (!targetStatusKey) return acc;
+            acc.set(targetStatusKey, (acc.get(targetStatusKey) ?? 0) + 1);
+            return acc;
+        }, new Map<TargetTaskStatusKey, number>());
+
+        const status_counts = Array.from(groupedStatusCounts.entries())
+            .map(([statusKey, count]) => ({
+                status: statusKey,
+                status_key: statusKey,
+                label: getTargetTaskStatusLabel(statusKey),
+                count,
+            }))
+            .filter((entry) => entry.count > 0)
             .sort((left, right) => {
-                const leftIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(left.status as (typeof CANONICAL_TASK_STATUS_ORDER)[number]);
-                const rightIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(right.status as (typeof CANONICAL_TASK_STATUS_ORDER)[number]);
+                const leftIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(left.status_key);
+                const rightIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(right.status_key);
                 if (leftIndex != null && rightIndex != null) return leftIndex - rightIndex;
                 if (leftIndex != null) return -1;
                 if (rightIndex != null) return 1;
-                return left.status.localeCompare(right.status, 'ru');
+                return left.status_key.localeCompare(right.status_key, 'ru');
             });
 
         const tasks_count = status_counts.reduce((sum, entry) => sum + entry.count, 0);

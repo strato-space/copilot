@@ -266,6 +266,12 @@ export const TASK_STATUSES = {
 
 export type TaskStatus = (typeof TASK_STATUSES)[keyof typeof TASK_STATUSES];
 
+export const TASK_RECURRENCE_MODES = {
+  PERIODIC: 'periodic',
+} as const;
+
+export type TaskRecurrenceMode = (typeof TASK_RECURRENCE_MODES)[keyof typeof TASK_RECURRENCE_MODES];
+
 // =============================================================================
 // Task Classes
 // =============================================================================

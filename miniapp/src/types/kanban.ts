@@ -37,6 +37,7 @@ export interface Ticket {
     name: string;
     project?: string;
     task_status: string;
+    recurrence_mode?: string | null;
     priority?: string;
     created_at?: string;
     updated_at?: string;

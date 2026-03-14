@@ -4,14 +4,19 @@
 ### PROBLEM SOLVED
 - **02:04** The Voice/OperOps surface-normalization draft still read like a documentation overlay, so it mixed current runtime truth with next-wave target semantics and left key decisions (`mutable draft baseline`, `PERIODIC`, Voice tab replacement scope, Codex surface wording) underspecified.
 - **02:04** Telegram knowledge seeding still resolved routing-project aliases through ad hoc topic parsing inside the seed script, which made checked-in routing coverage harder to reuse and left MediaGen legacy/active project-id parity under-tested.
+- **10:34** The initial implementation/deploy wave still left the generic CRM status picker on the full legacy dictionary, left repo docs describing `BACKLOG_10`/possible-task-centric surfaces, and emitted noisy PM2 agent restart errors during rollout even though services came back online.
 
 ### FEATURE IMPLEMENTED
 - **02:04** Recast the Voice/OperOps surface-normalization document into an approved next-wave replacement contract with explicit `As Is` vs `To Be` sections, a mutable-baseline definition for `voice.session_possible_tasks`, an audited `PROGRESS_0 = Rejected` note, a full recurring-task inventory, and a deprecation path for the current draft route.
 - **02:04** Added shared routing-project extraction for Telegram knowledge seeding and locked the routing/crosswalk contract with focused backend tests, including MediaGen legacy+active project coverage and StratoProject prompt expectations.
+- **10:34** Landed the runtime wave for the new task surface model: accepted Voice tasks now materialize into `READY_10`, Voice session counters normalize legacy statuses into the target axis, OperOps main tabs are status-first, recurring tasks now travel through lifecycle work with recurring metadata, and CRM status pickers are constrained to the target editable subset.
+- **10:34** Completed the rollout wave: production task-surface normalization was applied to live data, `dev/local/prod` PM2 runtimes were redeployed successfully, and the noisy `pm2-agents.sh` restart path was fixed and verified.
 
 ### CHANGES
 - **02:04** Rewrote `plan/voice-task-surface-normalization-spec.md` so it now documents the approved next-wave replacement contract, separates runtime truth from target semantics, moves `PERIODIC` into recurrence ontology, inventories all 10 current recurring tasks, records that live history contains no `PROGRESS_0 / Rejected` task usage, and scopes `voicebot/codex_tasks` separately from the broader `bd`-backed OperOps Codex surface.
 - **02:04** Added `backend/src/utils/routingConfig.ts`, updated `backend/scripts/seed-telegram-knowledge.ts` to reuse extracted routing project sources and alias handling, and added regression coverage in `backend/__tests__/utils/routingConfig.test.ts`, `backend/__tests__/settings/mediaGenRoutingContract.test.ts`, and `backend/__tests__/prompt/stratoProjectVoiceRoutingContract.test.ts`.
+- **10:34** Updated `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/services/voicebot/{migrateVoiceTaskStatuses,repairSoftDeletedMaterializedTasks}.ts`, `backend/src/services/{taskStatusSurface,taskSurfaceNormalization}.ts`, `backend/scripts/task-surface-normalize.ts`, `backend/src/api/routes/crm/tickets.ts`, `backend/src/miniapp/routes/index.ts`, `app/src/pages/operops/CRMPage.tsx`, `app/src/components/crm/CRMKanban.tsx`, `app/src/pages/voice/SessionPage.tsx`, `miniapp/src/{constants.ts,pages/KanbanPage.tsx,store/kanban.ts,components/OneTicket.tsx,components/TicketHead.tsx,types/kanban.ts}`, and focused regression tests to implement the target status axis, recurring-task handling, and picker validation.
+- **10:34** Updated `agents/pm2-agents.sh`, `README.md`, `AGENTS.md`, and `plan/voice-task-surface-normalization-spec.md`; closed `copilot-sc1b`, `copilot-ds1z`, and `copilot-oabx`; left `copilot-kdqs` open for the eventual `voice.session_possible_tasks` deprecation wave.
 
 ## 2026-03-13
 ### PROBLEM SOLVED

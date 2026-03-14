@@ -14,6 +14,7 @@ import { AppError } from '../../middleware/error.js';
 import { normalizeTicketDbId } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
+import { TARGET_EDITABLE_TASK_STATUS_VALUES } from '../../../services/taskStatusSurface.js';
 import {
     buildTaskAttachmentDownloadUrl,
     createTaskAttachmentFromUpload,
@@ -442,6 +443,14 @@ router.post('/update', async (req: Request, res: Response) => {
             return;
         }
 
+        if (
+            Object.prototype.hasOwnProperty.call(updateProps, 'task_status') &&
+            !TARGET_EDITABLE_TASK_STATUS_VALUES.includes(updateProps.task_status as (typeof TARGET_EDITABLE_TASK_STATUS_VALUES)[number])
+        ) {
+            res.status(400).json({ error: 'task_status is not allowed for CRM mutation' });
+            return;
+        }
+
         // Sanitize description if present
         if (updateProps.description !== undefined) {
             updateProps.description = sanitizeHtml(updateProps.description as string, {
@@ -792,10 +801,15 @@ router.post('/bulk-change-status', async (req: Request, res: Response) => {
     try {
         const db = getDb();
         const ticketIds = req.body.tickets as string[];
-        const newStatus = req.body.status as string;
+        const newStatus = (req.body.status ?? req.body.new_status) as string;
 
         if (!ticketIds || !Array.isArray(ticketIds) || !newStatus) {
             res.status(400).json({ error: 'tickets array and status are required' });
+            return;
+        }
+
+        if (!TARGET_EDITABLE_TASK_STATUS_VALUES.includes(newStatus as (typeof TARGET_EDITABLE_TASK_STATUS_VALUES)[number])) {
+            res.status(400).json({ error: 'task_status is not allowed for CRM mutation' });
             return;
         }
 

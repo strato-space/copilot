@@ -8,6 +8,8 @@ describe('constants', () => {
 
     it('has performer status mapping', () => {
         expect(constants.performer_crm_statuses.Ready).toBe('Ready');
+        expect(constants.performer_crm_statuses['In Progress']).toBe('Progress 10');
         expect(constants.performer_crm_statuses.Review).toBe('Review / Ready');
+        expect(constants.performer_crm_statuses.Done).toBe('Done');
     });
 });

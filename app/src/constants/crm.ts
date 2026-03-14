@@ -39,6 +39,19 @@ export const TASK_STATUSES = {
 export type TaskStatusKey = keyof typeof TASK_STATUSES;
 export type TaskStatusValue = (typeof TASK_STATUSES)[TaskStatusKey];
 
+export const TARGET_EDITABLE_TASK_STATUS_KEYS = [
+    'DRAFT_10',
+    'READY_10',
+    'PROGRESS_10',
+    'REVIEW_10',
+    'DONE_10',
+    'ARCHIVE',
+] as const satisfies readonly TaskStatusKey[];
+
+export const TARGET_EDITABLE_TASK_STATUSES = TARGET_EDITABLE_TASK_STATUS_KEYS.map(
+    (statusKey) => TASK_STATUSES[statusKey]
+);
+
 export const TASK_CLASSES = {
     TASK: 'TASK',
     FUNCTIONALITY: 'FUNCTIONALITY',

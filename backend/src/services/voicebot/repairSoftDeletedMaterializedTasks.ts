@@ -147,7 +147,7 @@ export const collectSoftDeletedMaterializedTaskRepairPlan = async ({
 export const applySoftDeletedMaterializedTaskRepairPlan = async ({
   db,
   candidates,
-  restoredTaskStatus = TASK_STATUSES.BACKLOG_10,
+  restoredTaskStatus = TASK_STATUSES.READY_10,
 }: ApplySoftDeletedMaterializedTaskRepairPlanOptions): Promise<{ matched: number; modified: number }> => {
   let matched = 0;
   let modified = 0;

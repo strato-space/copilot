@@ -31,7 +31,7 @@ describe('migrateVoiceTaskStatuses', () => {
         source: 'VOICE_BOT',
         source_kind: 'voice_session',
         task_status: expect.objectContaining({
-          $in: expect.arrayContaining(['Ready', TASK_STATUSES.READY_10]),
+          $in: expect.arrayContaining(['Backlog', TASK_STATUSES.BACKLOG_10]),
         }),
       })
     );
@@ -55,7 +55,7 @@ describe('migrateVoiceTaskStatuses', () => {
     });
   });
 
-  it('migrates drafts to DRAFT_10 and accepted rows to BACKLOG_10', async () => {
+  it('migrates drafts to DRAFT_10 and accepted rows to READY_10', async () => {
     const updateMany = jest
       .fn(async () => ({ matchedCount: 3, modifiedCount: 3 }))
       .mockResolvedValueOnce({ matchedCount: 6, modifiedCount: 6 })
@@ -89,7 +89,7 @@ describe('migrateVoiceTaskStatuses', () => {
       }),
       expect.objectContaining({
         $set: expect.objectContaining({
-          task_status: TASK_STATUSES.BACKLOG_10,
+          task_status: TASK_STATUSES.READY_10,
         }),
       })
     );

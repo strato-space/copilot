@@ -97,7 +97,13 @@ export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
             }
         },
         messageApi: null,
-        statusesFilter: ['PROGRESS_10', 'PROGRESS_20', 'PROGRESS_30', 'PROGRESS_40'],
+        statusesFilter: [
+            constants.task_statuses.PROGRESS_10,
+            constants.task_statuses.PROGRESS_20,
+            constants.task_statuses.PROGRESS_30,
+            constants.task_statuses.PROGRESS_40,
+            constants.task_statuses.PERIODIC,
+        ],
         setStatusesFilter: (statuses) => set({ statusesFilter: statuses }),
         tickets: [],
         boards: [],

@@ -17,14 +17,24 @@ const tabs: Record<string, string> = {
     '1': 'Ready',
     '2': 'In Progress',
     '3': 'Review',
-    '4': 'Periodic',
+    '4': 'Done',
 };
 
 const statuses: Record<string, string[]> = {
-    Ready: ['READY_10'],
-    'In Progress': ['PROGRESS_10', 'PROGRESS_20', 'PROGRESS_30', 'PROGRESS_40'],
-    Review: ['REVIEW_10'],
-    Periodic: ['PERIODIC'],
+    Ready: [constants.task_statuses.READY_10],
+    'In Progress': [
+        constants.task_statuses.PROGRESS_10,
+        constants.task_statuses.PROGRESS_20,
+        constants.task_statuses.PROGRESS_30,
+        constants.task_statuses.PROGRESS_40,
+        constants.task_statuses.PERIODIC,
+    ],
+    Review: [constants.task_statuses.REVIEW_10, constants.task_statuses.REVIEW_20],
+    Done: [
+        constants.task_statuses.DONE_10,
+        constants.task_statuses.DONE_20,
+        constants.task_statuses.DONE_30,
+    ],
 };
 
 const KanbanPage = () => {

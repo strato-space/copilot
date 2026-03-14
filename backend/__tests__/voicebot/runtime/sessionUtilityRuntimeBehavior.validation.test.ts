@@ -95,7 +95,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     const [insertedDocs] = insertManySpy.mock.calls[0] as [Array<Record<string, unknown>>];
     expect(Array.isArray(insertedDocs)).toBe(true);
     expect(insertedDocs).toHaveLength(1);
-    expect(insertedDocs[0]?.task_status).toBe(TASK_STATUSES.BACKLOG_10);
+    expect(insertedDocs[0]?.task_status).toBe(TASK_STATUSES.READY_10);
     expect(insertedDocs[0]?.source_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
     expect((insertedDocs[0]?.source_data as Record<string, unknown>)?.session_id).toBe(sessionId.toHexString());
   });
@@ -1914,7 +1914,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         $set: expect.objectContaining({
           name: 'Stored row',
           description: 'Stored description',
-          task_status: TASK_STATUSES.BACKLOG_10,
+          task_status: TASK_STATUSES.READY_10,
           accepted_from_possible_task: true,
           accepted_from_row_id: 'stored-row',
         }),

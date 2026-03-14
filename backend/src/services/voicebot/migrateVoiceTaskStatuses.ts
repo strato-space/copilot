@@ -34,7 +34,7 @@ export const buildAcceptedVoiceTaskStatusMigrationQuery = (sessionId?: string): 
   is_deleted: { $ne: true },
   source: 'VOICE_BOT',
   source_kind: 'voice_session',
-  task_status: { $in: ['Ready', TASK_STATUSES.READY_10] },
+  task_status: { $in: ['Backlog', TASK_STATUSES.BACKLOG_10] },
   ...buildSessionScope(sessionId),
 });
 
@@ -72,7 +72,7 @@ export const applyVoiceTaskStatusMigration = async ({
   };
   const acceptedUpdate: UpdateFilter<Record<string, unknown>> = {
     $set: {
-      task_status: TASK_STATUSES.BACKLOG_10,
+      task_status: TASK_STATUSES.READY_10,
       updated_at: new Date(),
     },
   };

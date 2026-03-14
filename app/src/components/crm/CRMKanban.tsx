@@ -45,7 +45,7 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
-import { TASK_STATUSES } from '../../constants/crm';
+import { TARGET_EDITABLE_TASK_STATUSES, TASK_STATUSES } from '../../constants/crm';
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
 import { normalizeVoiceSessionSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
@@ -445,7 +445,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
     const statusOptions = useMemo(
         () =>
-            Object.values(TASK_STATUSES).map((value) => ({
+            TARGET_EDITABLE_TASK_STATUSES.map((value) => ({
                 value,
                 label: value,
             })),
@@ -1335,7 +1335,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                     <div className="flex gap-4 items-center">
                         <div>Выбрано задач: {selectedRows.length}</div>
                         <Select
-                            options={Object.values(TASK_STATUSES).map((value) => ({ value, label: value }))}
+                            options={statusOptions}
                             onSelect={setSelectedNewStatus}
                             showSearch
                             className="w-[180px]"

@@ -11,7 +11,7 @@ describe('SessionPage OperOps tasks tab contract', () => {
     expect(source).toContain('<CRMKanban');
     expect(source).toContain('buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession)');
     expect(source).toContain("'voicebot/session_tab_counts'");
-    expect(source).toContain('status_counts?: Array<{ status?: unknown; count?: unknown }>;');
+    expect(source).toContain('status_counts?: Array<{ status?: unknown; label?: unknown; count?: unknown }>;');
     expect(source).toContain('source_ref: sessionTaskSourceRefs');
     expect(source).toContain('refreshToken={sessionTasksRefreshToken}');
   });

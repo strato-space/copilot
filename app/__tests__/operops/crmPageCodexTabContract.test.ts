@@ -8,17 +8,14 @@ describe('OperOps CRM Codex tab contract', () => {
   const codexTableSource = fs.readFileSync(codexTablePath, 'utf8');
 
   it('adds Codex tab after Archive and renders shared Codex table component', () => {
-    const archiveTabIndex = source.indexOf("{ key: 'archive', label: 'Archive', configKey: 'archive' },");
-    const codexTabIndex = source.indexOf("{ key: 'codex', label: 'Codex' },");
-
-    expect(archiveTabIndex).toBeGreaterThan(-1);
-    expect(codexTabIndex).toBeGreaterThan(archiveTabIndex);
+    expect(source).toContain("const STATUS_TAB_KEYS: OperOpsStatusTabKey[] = ['draft', 'ready', 'in_progress', 'review', 'done', 'archive', 'codex'];");
     expect(source).toContain("import CodexIssuesTable from '../../components/codex/CodexIssuesTable';");
     expect(source).toContain('<CodexIssuesTable />');
   });
 
   it('uses shared table rendering semantics on Codex tab', () => {
-    expect(source).toContain('activeMainTab === \'codex\'');
+    expect(source).toContain('const isCodexTab = activeTabDefinition?.isCodex ?? false;');
+    expect(source).toContain('isCodexTab ? (');
     expect(source).toContain('<CodexIssuesTable />');
     expect(source).not.toContain('const [codexLoading');
     expect(source).not.toContain('setCodexLoadError');
