@@ -10,6 +10,9 @@
 - **21:48** Voice session pages still carried a separate top-level `Возможные задачи` tab on top of the new task counters contract, which duplicated the draft surface instead of treating `DRAFT_10` as just another status bucket inside unified `Задачи`.
 - **21:48** Manual `Summarize` retries still kept the button disabled for three minutes even when the request failed immediately, creating avoidable operator dead time after backend or validation errors.
 - **21:48** Repo-level docs (`README`, `AGENTS`, `VOICEBOT_API`, task-surface spec) still mixed the old separate `Возможные задачи` UI semantics with the new status-first target model, so implementation and documentation drifted again after the latest convergence edits.
+- **23:13** The new `Задачи` subtab strip still undercounted drafts and could collapse into a zero-state mismatch: live `PossibleTasks` rows were visible in the `Draft` view while both the `Draft` badge and the parent `Задачи` badge could still show `0`.
+- **23:13** OperOps still had duplicate lifecycle navigation in practice: counts lived in the tab contract, but the old top summary-widget row remained rendered alongside the tabs.
+- **23:13** The task-surface spec and repo docs still lagged the latest beads state after the bug wave started, so `## 15. BD` / `## Status` and the current README/AGENTS/API notes did not mention the new bug-fix follow-ups.
 
 ### FEATURE IMPLEMENTED
 - **02:04** Recast the Voice/OperOps surface-normalization document into an approved next-wave replacement contract with explicit `As Is` vs `To Be` sections, a mutable-baseline definition for `voice.session_possible_tasks`, an audited `PROGRESS_0 = Rejected` note, a full recurring-task inventory, and a deprecation path for the current draft route.
@@ -21,6 +24,9 @@
 - **21:48** Unified the Voice session task surface under a single `Задачи` tab: backend `session_tab_counts` now includes `DRAFT_10`, the page renders `PossibleTasks` only inside the `Draft` status subtab, and the obsolete separate `Возможные задачи` top tab contract is gone.
 - **21:48** Shortened manual `Summarize` debounce to 15 seconds and reset it immediately on failure, keeping only accidental double-click protection instead of a long post-error lockout.
 - **21:48** Re-synchronized the repo docs around the implemented status-first contract: inline lifecycle counts on `Задачи`/OperOps filters, no separate target semantics for `Возможные задачи`, and `possible_tasks` routes explicitly framed as compatibility draft-baseline APIs.
+- **23:13** Fixed the zero-state/count drift in Voice `Задачи`: the lifecycle filter axis is now always rendered, `Draft` count can fall back to the mutable draft baseline, and the parent `Задачи` count is computed as the sum of all lifecycle buckets including `Draft`.
+- **23:13** Removed the duplicate OperOps lifecycle summary widgets and moved the lifecycle counters fully into the tab labels, matching the approved target contract.
+- **23:13** Updated the spec and repo docs to the current beads picture, including the new open bug follow-ups and the revised convergence-wave status line.
 
 ### CHANGES
 - **02:04** Rewrote `plan/voice-task-surface-normalization-spec.md` so it now documents the approved next-wave replacement contract, separates runtime truth from target semantics, moves `PERIODIC` into recurrence ontology, inventories all 10 current recurring tasks, records that live history contains no `PROGRESS_0 / Rejected` task usage, and scopes `voicebot/codex_tasks` separately from the broader `bd`-backed OperOps Codex surface.
@@ -32,6 +38,9 @@
 - **21:48** Simplified `app/src/pages/operops/CRMPage.tsx` by dropping the special draft-only Voice backlog/session cards, tightened `app/src/components/crm/CRMKanban.tsx` to filter by normalized target-status keys, and extended `app/src/utils/taskStatusSurface.ts` with reusable target-status matching.
 - **21:48** Updated `app/src/components/voice/MeetingCard.tsx` and `app/__tests__/voice/meetingCardSummarizeAndIconContract.test.ts` so failed summarize attempts clear the cooldown immediately and successful retries only keep a 15-second anti-bounce lock.
 - **21:48** Synchronized `README.md`, `AGENTS.md`, `docs/VOICEBOT_API.md`, and `plan/voice-task-surface-normalization-spec.md` to the unified `Задачи` / `Codex` contract and recorded the convergence-wave doc note on `copilot-ojxy`.
+- **23:13** Updated `app/src/pages/voice/SessionPage.tsx` so fixed lifecycle subtabs are keyed by target status order, `Draft` count reconciles against the local mutable draft baseline, and the parent `Задачи` count is derived from the full lifecycle sum.
+- **23:13** Updated `app/src/pages/operops/CRMPage.tsx` to remove the duplicate lifecycle widget row and keep lifecycle counts inline inside the main tab labels.
+- **23:13** Refreshed `app/__tests__/voice/{sessionPageTabCountersContract,sessionPageOperOpsTasksTabContract}.test.ts`, `app/__tests__/operops/crmPageCodexTabContract.test.ts`, `README.md`, `AGENTS.md`, `docs/VOICEBOT_API.md`, and `plan/voice-task-surface-normalization-spec.md` for the new zero-safe lifecycle-axis/count contract and the latest `bd` bug set (`copilot-e5cj`, `copilot-7jdj`, `copilot-krp8`).
 
 ## 2026-03-13
 ### PROBLEM SOLVED

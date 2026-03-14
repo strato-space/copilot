@@ -21,6 +21,14 @@ describe('OperOps CRM Codex tab contract', () => {
     expect(source).not.toContain('setCodexLoadError');
   });
 
+  it('keeps lifecycle counts inline on tabs and removes duplicate summary widgets', () => {
+    expect(source).toContain('const renderMainTabLabel = useCallback((label: string, count?: number) => (');
+    expect(source).toContain('const countKey = key === \'codex\' ? null : key;');
+    expect(source).toContain('const count = countKey ? widgets[countKey] ?? 0 : undefined;');
+    expect(source).not.toContain("{ key: 'total', label: 'Total' }");
+    expect(source).not.toContain("className=\"flex items-center gap-2 rounded-lg border border-[#E6EBF3] bg-[#F8FAFF] px-2.5 py-1\"");
+  });
+
   it('keeps codex issue links on codex operops task route', () => {
     expect(codexTableSource).toContain('return `/operops/codex/task/${taskId}`;');
   });

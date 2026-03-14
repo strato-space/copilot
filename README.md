@@ -93,6 +93,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 - OperOps main task navigation is status-first:
   - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
+  - lifecycle counts belong inline in those tab labels,
+  - duplicate top summary widgets with the same lifecycle labels/counts are not part of the target contract,
   - the `Draft` tab still renders the orphan/session-grouped possible-task backlog above the CRM table as presentation-only grouping,
   - accepted Voice tasks are treated as `Ready` work, not as a separate `Backlog` semantic bucket.
 
@@ -144,6 +146,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
 - `Задачи` is the unified session task surface: the parent tab keeps total count, and the subtab list must come from backend `status_counts` (`voicebot/session_tab_counts`) with no fallback to legacy `tasks_work_count` / `tasks_review_count`.
 - Inside `Задачи`, lifecycle subtabs are status-first (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) and show the per-status count inline in the label.
+- The lifecycle subtab axis inside `Задачи` must remain visible even when every bucket count is zero; empty state belongs inside the selected lifecycle bucket, not instead of the lifecycle filter row.
+- The parent `Задачи` count must include all lifecycle buckets, including `Draft`; during compatibility lag it must not undercount draft rows already present in the mutable `possibleTasks` baseline.
 - Frontend Voice task tabs must translate backend status labels back into canonical CRM status keys before filtering `CRMKanban`; label strings are not valid task-status filter inputs by themselves.
 - Voice and OperOps task displays must render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) rather than raw stored labels like `Progress 10` or `Review / Ready`.
 - `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.

@@ -120,6 +120,8 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - Voice and OperOps task surfaces should render the target display labels `Draft / Ready / In Progress / Review / Done / Archive` instead of raw stored labels.
 - `Задачи` total + lifecycle subtab counts are loaded through `/api/voicebot/session_tab_counts`.
 - The unified `Задачи` surface derives its lifecycle subtabs from backend `status_counts` and renders the count inline in each subtab label.
+- The lifecycle subtab axis inside `Задачи` is fixed (`Draft / Ready / In Progress / Review / Done / Archive`) and remains visible even when all counts are zero.
+- The parent `Задачи` count must include `Draft`; during compatibility lag the UI may need to reconcile backend `status_counts` with the mutable `possible_tasks` baseline for the same session.
 - `Codex` badge is derived from the same `codex/issues` source + session `source_ref` filter as the `Codex` tab content.
 - `Транскрипция`, `Категоризация`, and `Задачи` show a subtle green pulse dot while their stage is still pending:
   - transcription pending = uploaded/new chunk not yet transcribed,

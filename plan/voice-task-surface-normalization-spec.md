@@ -1,8 +1,8 @@
 # Спецификация: нормализация task surfaces Voice и OperOps по статусам
 
 ## Status
-- Ticket line: ⚪Open 4  🟡In Progress 3  💤Deferred 0  ⛔Blocked 0  Closed 6
-- Plan status: approved target contract; production data aligned; UI/API convergence in progress.
+- Ticket line: ⚪Open 6  🟡In Progress 2  💤Deferred 0  ⛔Blocked 0  Closed 8
+- Plan status: approved target contract; production data aligned; convergence and bug-fix wave in progress.
 - Canonical design epic: `copilot-cux2`
 - Current execution epic: `copilot-ojxy`
 
@@ -516,6 +516,9 @@ Filter:
   - `DONE_10`
   - `ARCHIVE`
 - label filter’а показывает count справа для соответствующего bucket;
+- parent counter у верхней вкладки `Задачи` равен сумме всех lifecycle buckets внутри неё, включая `Draft`;
+- during convergence, displayed `Draft` count и parent `Задачи` count не должны терять mutable draft-baseline rows даже если backend `status_counts` временно отстаёт от compatibility draft source for the same session;
+- fixed lifecycle axis inside `Задачи` должна рендериться и при zero-state; empty state допустим только внутри выбранного lifecycle filter, а не вместо filter row;
 - `source_kind != voice_possible_task` допустим только как secondary integrity guard, но не как primary semantic discriminator accepted/draft split
 
 #### `Codex`
@@ -794,9 +797,12 @@ Voice session может войти в operational bucket только если:
 - ✅ `copilot-ds1z` — Roll out task surface normalization data migration and runtime deploy
 - 🟡 `copilot-ojxy` — [voice][surface] Remove separate Possible Tasks surface and converge on status-filtered Tasks tab
 - 🟡 `copilot-ojxy.1` — T1 Replace Voice session tabs with unified status filters inside `Задачи`
-- ⚪ `copilot-ojxy.2` — T4 Migrate tests, docs, and MCP contracts for unified task surface
+- ✅ `copilot-ojxy.2` — T4 Migrate tests, docs, and MCP contracts for unified task surface
 - ⚪ `copilot-ojxy.3` — T2 Deprecate `voicebot/possible_tasks` and `voice.session_possible_tasks` to compatibility mode
 - 🟡 `copilot-ojxy.4` — T3 Normalize OperOps main tabs and remove duplicate status counters/views
+- ⚪ `copilot-e5cj` — [voice][tasks] Render fixed lifecycle filters inside session `Задачи` even when all counts are zero
+- ⚪ `copilot-7jdj` — [operops][ui] Remove duplicate lifecycle summary widgets once counts are shown inline on tabs
+- ⚪ `copilot-krp8` — [voice][tasks] Keep session lifecycle filter order fixed instead of sparse `status_counts`-driven ordering
 - ⏳ `copilot-kdqs` — Deprecate `voice.session_possible_tasks` after unified session-task surface lands
 - ⏳ `copilot-oabx` — Fix pm2 agent restart path in `pm2-backend.sh` rollout
 
@@ -811,6 +817,9 @@ Voice session может войти в operational bucket только если:
 - `copilot-ojxy.2 -> copilot-ojxy`
 - `copilot-ojxy.3 -> copilot-ojxy`
 - `copilot-ojxy.4 -> copilot-ojxy`
+- `copilot-ojxy.1 -> copilot-e5cj`
+- `copilot-ojxy.1 -> copilot-krp8`
+- `copilot-ojxy.4 -> copilot-7jdj`
 - `copilot-sc1b -> copilot-kdqs`
 - `copilot-ds1z -> copilot-oabx`
 

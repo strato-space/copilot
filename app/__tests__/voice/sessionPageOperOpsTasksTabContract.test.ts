@@ -7,7 +7,7 @@ describe('SessionPage OperOps tasks tab contract', () => {
 
   it("renders unified 'Задачи' tab with status-driven content for the current session", () => {
     expect(source).toContain("key: 'operops_tasks'");
-    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending })");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionTasksTotalCount, { processing: hasPossibleTasksPending })");
     expect(source).toContain('const isDraftSessionTaskSubTab = activeSessionTaskStatuses.includes(\'DRAFT_10\');');
     expect(source).toContain('<PossibleTasks />');
     expect(source).toContain('<CRMKanban');
@@ -18,21 +18,26 @@ describe('SessionPage OperOps tasks tab contract', () => {
     expect(source).toContain('refreshToken={sessionTasksRefreshToken}');
   });
 
-  it('keeps tasks tab before Screenshort and derives sub-tabs from actual task statuses', () => {
+  it('keeps tasks tab before Screenshort and derives fixed lifecycle sub-tabs from target status keys', () => {
     const idxTasks = source.indexOf("key: 'operops_tasks'");
     const idxScreenshort = source.indexOf("key: 'screenshort'");
 
     expect(idxTasks).toBeGreaterThanOrEqual(0);
     expect(idxScreenshort).toBeGreaterThan(idxTasks);
+    expect(source).toContain('const TARGET_VOICE_TASK_SUBTAB_KEYS = [...TARGET_TASK_STATUS_KEYS] as TargetVoiceTaskSubtabKey[];');
+    expect(source).toContain('const isTargetVoiceTaskSubtabKey = (value: TaskStatusKey): value is TargetVoiceTaskSubtabKey =>');
     expect(source).toContain('const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {');
-    expect(source).toContain("key: entry.key");
+    expect(source).toContain('TARGET_VOICE_TASK_SUBTAB_KEYS.map((statusKey) => ({');
+    expect(source).toContain("label: TARGET_TASK_STATUS_LABELS[statusKey]");
     expect(source).toContain("label: renderTabLabel(entry.label, entry.count)");
+    expect(source).toContain('const sessionTasksTotalCount = useMemo(');
     expect(source).toContain('task_status: activeSessionTaskStatuses');
     expect(source).not.toContain("label: 'Work'");
     expect(source).not.toContain("label: 'Review'");
   });
 
-  it('falls back to the first available status tab when the selected status disappears', () => {
+  it('falls back to the first lifecycle status tab when the selected status disappears', () => {
+    expect(source).toContain('const hasActiveTab = sessionTaskTabs.some((entry) => entry.key === sessionTasksSubTab);');
     expect(source).toContain('if (!sessionTasksSubTab || !hasActiveTab) {');
     expect(source).toContain("setSessionTasksSubTab(sessionTaskTabs[0]?.key || '')");
   });

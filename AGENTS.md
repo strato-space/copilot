@@ -260,6 +260,7 @@ Preferred engineering principles for this repo:
 - OperOps main task navigation is status-first:
   - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
   - lifecycle counts should be shown inline in those tab labels instead of duplicated summary widgets,
+  - duplicate top summary widgets with the same lifecycle labels/counts are a bug, not an accepted transition state,
   - the `Draft` tab is a normal status-first CRM surface; legacy voice backlog grouping is historical reference only,
   - accepted Voice tasks are treated as `Ready` work instead of a separate `Backlog` semantic bucket.
 
@@ -307,6 +308,8 @@ Preferred engineering principles for this repo:
 - Web pasted images are uploaded to backend storage through `POST /api/voicebot/upload_attachment` (alias `/api/voicebot/attachment`) and persisted under `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Screenshort cards must keep canonical `https://...` URLs fully visible, while `data:image/...;base64,...` values are rendered in truncated preview form (`data:image/...;base64,...`) with Copy action preserving the full raw URL.
 - Session page should not expose a separate `Возможные задачи` top tab; draft rows belong to the unified `Задачи` surface under the `DRAFT_10` / `Draft` lifecycle subtab, keeping the compact task-table contract (no standalone status/project/AI columns, keep `description`).
+- The lifecycle subtab axis inside `Задачи` is fixed (`Draft / Ready / In Progress / Review / Done / Archive`) and remains visible even when every bucket count is zero.
+- The parent `Задачи` count must include all lifecycle buckets, including `Draft`; during compatibility lag it must not drop draft rows already present in the mutable `possibleTasks` baseline.
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
 - Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:

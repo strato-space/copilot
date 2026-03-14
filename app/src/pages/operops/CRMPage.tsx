@@ -463,9 +463,21 @@ const CRMPage = () => {
         return counts;
     }, [tickets]);
 
+    const renderMainTabLabel = useCallback((label: string, count?: number) => (
+        <span className="inline-flex items-center gap-1.5">
+            <span>{label}</span>
+            {typeof count === 'number' ? <span className="text-xs text-slate-500">{count}</span> : null}
+        </span>
+    ), []);
+
     const mainTabs = useMemo(
-        () => STATUS_TAB_KEYS.map((key) => ({ key, label: STATUS_TAB_DEFINITIONS[key].label })),
-        []
+        () => STATUS_TAB_KEYS.map((key) => {
+            const definition = STATUS_TAB_DEFINITIONS[key];
+            const countKey = key === 'codex' ? null : key;
+            const count = countKey ? widgets[countKey] ?? 0 : undefined;
+            return { key, label: renderMainTabLabel(definition.label, count) };
+        }),
+        [renderMainTabLabel, widgets]
     );
 
     const mainTabKeys = mainTabs.map((tab) => tab.key);
@@ -868,22 +880,7 @@ const CRMPage = () => {
                         <div className="bg-white border border-[#E6EBF3] rounded-2xl px-4 py-4 sm:px-6 sm:py-5 shadow-sm">
                             <div className="flex flex-wrap items-center gap-4">
                                 <div className="text-[26px] sm:text-[30px] font-semibold text-[#1F2937]">OperOps</div>
-                                <div className="flex flex-1 flex-wrap justify-start gap-2">
-                                {[
-                                    { key: 'total', label: 'Total' },
-                                    { key: 'draft', label: 'Draft' },
-                                    { key: 'ready', label: 'Ready' },
-                                    { key: 'in_progress', label: 'In Progress' },
-                                    { key: 'review', label: 'Review' },
-                                    { key: 'done', label: 'Done' },
-                                    { key: 'archive', label: 'Archive' },
-                                ].map(({ key, label }) => (
-                                    <div key={key} className="flex items-center gap-2 rounded-lg border border-[#E6EBF3] bg-[#F8FAFF] px-2.5 py-1">
-                                        <div className="text-[11px] text-[#667085]">{label}</div>
-                                        <div className="text-[13px] font-semibold text-[#1D4ED8]">{widgets[key] ?? 0}</div>
-                                    </div>
-                                ))}
-                                </div>
+                                <div className="flex-1" />
                                 <div className="flex flex-wrap gap-2">
                                     <Button icon={<FileExcelOutlined />} onClick={() => setReportModalKind('jira')}>
                                         Jira-style отчет

@@ -10,7 +10,7 @@ describe('SessionPage tab counters and indicators contract', () => {
   it('renders compact count labels for all voice tabs except Log', () => {
     expect(source).toContain("label: renderTabLabel('Транскрипция', transcriptionCount");
     expect(source).toContain("label: renderTabLabel('Категоризация', categorizationCount");
-    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending })");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionTasksTotalCount, { processing: hasPossibleTasksPending })");
     expect(source).toContain("label: renderTabLabel('Codex', sessionCodexCount)");
     expect(source).toContain("label: renderTabLabel('Screenshort', screenshortCount)");
     expect(source).toContain("label: renderTabLabel('Log', 0, { showCount: false })");
@@ -19,10 +19,19 @@ describe('SessionPage tab counters and indicators contract', () => {
     expect(source).not.toContain("label: 'Review'");
   });
 
+  it('always renders a fixed lifecycle filter axis inside unified Tasks', () => {
+    expect(source).toContain('const sessionTaskCountByStatus = useMemo(() => {');
+    expect(source).toContain('TARGET_VOICE_TASK_SUBTAB_KEYS.map((statusKey) => ({');
+    expect(source).toContain("label: TARGET_TASK_STATUS_LABELS[statusKey]");
+    expect(source).toContain("count: sessionTaskCountByStatus.get(statusKey) ?? 0");
+    expect(source).toContain("setSessionTasksSubTab(sessionTaskTabs[0]?.key || '')");
+    expect(source).not.toContain('.filter((entry) => entry.count > 0');
+  });
+
   it('marks only Transcription, Categorization, and unified Tasks with processing dots', () => {
     expect(source).toContain('{ processing: hasTranscriptionPending }');
     expect(source).toContain('{ processing: hasCategorizationPending }');
-    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending })");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionTasksTotalCount, { processing: hasPossibleTasksPending })");
     expect(source).not.toContain("label: renderTabLabel('Codex', sessionCodexCount, { processing:");
     expect(source).not.toContain("label: renderTabLabel('Screenshort', screenshortCount, { processing:");
   });

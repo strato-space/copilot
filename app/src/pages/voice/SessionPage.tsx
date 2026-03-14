@@ -8,7 +8,6 @@ import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useRequestStore } from '../../store/requestStore';
 import { voicebotHttp } from '../../store/voicebotHttp';
 import { buildVoiceSessionTaskSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
-import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
 import {
     countVisibleCategorizationGroups,
     countVisibleTranscriptionMessages,
@@ -25,7 +24,7 @@ import CodexIssuesTable from '../../components/codex/CodexIssuesTable';
 import CustomPromptResult from '../../components/voice/CustomPromptResult';
 import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
-import { TASK_STATUSES, type TaskStatusKey } from '../../constants/crm';
+import { TARGET_TASK_STATUS_KEYS, TARGET_TASK_STATUS_LABELS, TASK_STATUSES, type TaskStatusKey } from '../../constants/crm';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 
 const VOICE_SESSION_TASK_COLUMNS = [
@@ -59,6 +58,12 @@ type VoiceSessionTaskTab = {
     count: number;
     taskStatuses: TaskStatusKey[];
 };
+
+type TargetVoiceTaskSubtabKey = (typeof TARGET_TASK_STATUS_KEYS)[number];
+
+const TARGET_VOICE_TASK_SUBTAB_KEYS = [...TARGET_TASK_STATUS_KEYS] as TargetVoiceTaskSubtabKey[];
+const isTargetVoiceTaskSubtabKey = (value: TaskStatusKey): value is TargetVoiceTaskSubtabKey =>
+    TARGET_VOICE_TASK_SUBTAB_KEYS.includes(value as TargetVoiceTaskSubtabKey);
 
 const TASK_STATUS_LABEL_TO_KEY: Record<string, TaskStatusKey> = Object.entries(TASK_STATUSES).reduce(
     (acc, [key, label]) => {
@@ -249,20 +254,30 @@ export default function SessionPage() {
         () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
         [sessionId, voiceBotSession]
     );
+    const draftPossibleTasksCount = possibleTasks.length;
+    const sessionTaskCountByStatus = useMemo(() => {
+        const counts = new Map<TargetVoiceTaskSubtabKey, number>();
+        for (const entry of sessionTaskStatusCounts) {
+            const resolvedKey = resolveSessionStatusKey(entry.status);
+            if (!resolvedKey) continue;
+            if (!isTargetVoiceTaskSubtabKey(resolvedKey)) continue;
+            counts.set(resolvedKey, entry.count);
+        }
+        counts.set('DRAFT_10', Math.max(counts.get('DRAFT_10') ?? 0, draftPossibleTasksCount));
+        return counts;
+    }, [draftPossibleTasksCount, sessionTaskStatusCounts]);
     const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {
-        return sessionTaskStatusCounts
-            .map((entry) => {
-                const resolvedKey = resolveSessionStatusKey(entry.status);
-                const label = String(entry.label || '').trim() || getTaskStatusDisplayLabel(entry.status);
-                return {
-                    key: (resolvedKey ?? entry.status) as string,
-                    label,
-                    count: entry.count,
-                    taskStatuses: resolvedKey ? [resolvedKey] : [],
-                };
-            })
-            .filter((entry) => entry.count > 0 && entry.label.trim().length > 0 && entry.taskStatuses.length > 0);
-    }, [sessionTaskStatusCounts]);
+        return TARGET_VOICE_TASK_SUBTAB_KEYS.map((statusKey) => ({
+            key: statusKey,
+            label: TARGET_TASK_STATUS_LABELS[statusKey],
+            count: sessionTaskCountByStatus.get(statusKey) ?? 0,
+            taskStatuses: [statusKey],
+        }));
+    }, [sessionTaskCountByStatus]);
+    const sessionTasksTotalCount = useMemo(
+        () => sessionTaskTabs.reduce((sum, entry) => sum + entry.count, 0),
+        [sessionTaskTabs]
+    );
     const activeSessionTaskStatuses = useMemo(
         () => sessionTaskTabs.find((entry) => entry.key === sessionTasksSubTab)?.taskStatuses ?? [],
         [sessionTaskTabs, sessionTasksSubTab]
@@ -350,12 +365,6 @@ export default function SessionPage() {
     ]);
 
     useEffect(() => {
-        if (sessionTaskTabs.length === 0) {
-            if (sessionTasksSubTab) {
-                setSessionTasksSubTab('');
-            }
-            return;
-        }
         const hasActiveTab = sessionTaskTabs.some((entry) => entry.key === sessionTasksSubTab);
         if (!sessionTasksSubTab || !hasActiveTab) {
             setSessionTasksSubTab(sessionTaskTabs[0]?.key || '');
@@ -385,38 +394,34 @@ export default function SessionPage() {
         },
         {
             key: 'operops_tasks',
-            label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending }),
+            label: renderTabLabel('Задачи', sessionTasksTotalCount, { processing: hasPossibleTasksPending }),
             children: (
                 <div className="flex flex-col gap-3">
-                    {sessionTaskTabs.length > 0 ? (
-                        <>
-                            <Tabs
-                                activeKey={sessionTasksSubTab}
-                                onChange={(nextTab) => setSessionTasksSubTab(nextTab)}
-                                size="small"
-                                className="bg-transparent"
-                                items={sessionTaskTabs.map((entry) => ({
-                                    key: entry.key,
-                                    label: renderTabLabel(entry.label, entry.count),
-                                }))}
+                    <>
+                        <Tabs
+                            activeKey={sessionTasksSubTab}
+                            onChange={(nextTab) => setSessionTasksSubTab(nextTab)}
+                            size="small"
+                            className="bg-transparent"
+                            items={sessionTaskTabs.map((entry) => ({
+                                key: entry.key,
+                                label: renderTabLabel(entry.label, entry.count),
+                            }))}
+                        />
+                        {isDraftSessionTaskSubTab ? (
+                            <PossibleTasks />
+                        ) : (
+                            <CRMKanban
+                                key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab || 'none'}`}
+                                filter={{
+                                    task_status: activeSessionTaskStatuses,
+                                    source_ref: sessionTaskSourceRefs,
+                                }}
+                                refreshToken={sessionTasksRefreshToken}
+                                columns={[...VOICE_SESSION_TASK_COLUMNS]}
                             />
-                            {isDraftSessionTaskSubTab ? (
-                                <PossibleTasks />
-                            ) : (
-                                <CRMKanban
-                                    key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab || 'none'}`}
-                                    filter={{
-                                        task_status: activeSessionTaskStatuses,
-                                        source_ref: sessionTaskSourceRefs,
-                                    }}
-                                    refreshToken={sessionTasksRefreshToken}
-                                    columns={[...VOICE_SESSION_TASK_COLUMNS]}
-                                />
-                            )}
-                        </>
-                    ) : (
-                        <div className="text-sm text-slate-500">Нет задач для этой сессии.</div>
-                    )}
+                        )}
+                    </>
                 </div>
             ),
         },
