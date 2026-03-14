@@ -5,9 +5,11 @@ describe('SessionPage OperOps tasks tab contract', () => {
   const pagePath = path.resolve(process.cwd(), 'src/pages/voice/SessionPage.tsx');
   const source = fs.readFileSync(pagePath, 'utf8');
 
-  it("renders 'Задачи' tab with CRMKanban filtered by current session source refs", () => {
+  it("renders unified 'Задачи' tab with status-driven content for the current session", () => {
     expect(source).toContain("key: 'operops_tasks'");
-    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount)");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending })");
+    expect(source).toContain('const isDraftSessionTaskSubTab = activeSessionTaskStatuses.includes(\'DRAFT_10\');');
+    expect(source).toContain('<PossibleTasks />');
     expect(source).toContain('<CRMKanban');
     expect(source).toContain('buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession)');
     expect(source).toContain("'voicebot/session_tab_counts'");

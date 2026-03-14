@@ -141,12 +141,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - Voice session header includes a `Tasks` action before `Summarize`; it generates possible tasks from current meeting context without waiting for session close.
 - Voice session header top action row now owns both `Скачать Транскрипцию` and `Загрузить аудио`; `SessionStatusWidget` is status-only and no longer owns upload controls.
-- Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Возможные задачи`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
-- `Задачи` is a new-contract-only view: the parent tab keeps total count, and the subtab list must come from backend `status_counts` (`voicebot/session_tab_counts`) with no fallback to legacy `tasks_work_count` / `tasks_review_count`.
+- Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
+- `Задачи` is the unified session task surface: the parent tab keeps total count, and the subtab list must come from backend `status_counts` (`voicebot/session_tab_counts`) with no fallback to legacy `tasks_work_count` / `tasks_review_count`.
+- Inside `Задачи`, lifecycle subtabs are status-first (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) and show the per-status count inline in the label.
 - Frontend Voice task tabs must translate backend status labels back into canonical CRM status keys before filtering `CRMKanban`; label strings are not valid task-status filter inputs by themselves.
 - Voice and OperOps task displays must render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) rather than raw stored labels like `Progress 10` or `Review / Ready`.
 - `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.
-- `Транскрипция`, `Категоризация`, and `Возможные задачи` tabs now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
+- `Транскрипция`, `Категоризация`, and `Задачи` now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - WebRTC page `Done` stays enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, even without `pageSession` in the iframe URL.
@@ -189,13 +190,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Deleting the last active categorization row cascades deletion of the linked transcript segment with compensating rollback when log persistence fails.
 - Image attachments in categorization are rendered only in the Materials column; image-only blocks remain visible without image-as-text rows.
 - Session-scoped taskflow parity is now canonical across backend + Voice UI + mcp@voice:
-  - backend route `POST /api/voicebot/possible_tasks` exposes canonical `row_id` values,
+  - backend route `POST /api/voicebot/possible_tasks` exposes canonical `row_id` values as the mutable `DRAFT_10` baseline,
   - mutations emit `session_update.taskflow_refresh` flags for `possible_tasks` / `tasks` / `codex`,
-  - frontend consumes those hints with additive refresh tokens so `Возможные задачи`, `Задачи`, and `Codex` refresh without manual reload,
+  - frontend consumes those hints with additive refresh tokens so the unified `Задачи` surface (`Draft` subtab included) and `Codex` refresh without manual reload,
   - assistant workflow is fixed to `discuss -> preview -> apply -> verify`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
-- Session page shows `Возможные задачи` tab when `processors_data.CREATE_TASKS.data` is present and user has `PROJECTS.UPDATE`; the table uses compact design (no standalone status/project/AI columns), keeps `description`, and validates required fields inline.
+- Session page no longer has a separate `Возможные задачи` top tab; draft rows are rendered inside unified `Задачи` when the selected lifecycle subtab is `DRAFT_10`.
 - Possible tasks are persisted as master Mongo tasks in `automation_tasks` with `task_status=DRAFT_10`; session-local taskflow payloads keep only a synchronized projection for compatibility and realtime UI hydration.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.

@@ -351,7 +351,7 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
     const triggerSummarize = async (): Promise<void> => {
         if (!voiceBotSession?._id) return;
 
-        setSummarizeDisabledUntil(Date.now() + 3 * 60 * 1000);
+        setSummarizeDisabledUntil(Date.now() + 15 * 1000);
         patchUiState({ isSummarizing: true });
         messageApi.open({
             key: 'summarize',
@@ -370,6 +370,7 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                 duration: 4,
             });
         } catch (error) {
+            setSummarizeDisabledUntil(null);
             console.error('Ошибка при запуске Summarize:', error);
             messageApi.open({
                 key: 'summarize',

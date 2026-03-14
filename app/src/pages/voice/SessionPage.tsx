@@ -25,8 +25,6 @@ import CodexIssuesTable from '../../components/codex/CodexIssuesTable';
 import CustomPromptResult from '../../components/voice/CustomPromptResult';
 import Screenshort from '../../components/voice/Screenshort';
 import SessionLog from '../../components/voice/SessionLog';
-import { useCurrentUserPermissions } from '../../store/permissionsStore';
-import { PERMISSIONS } from '../../constants/permissions';
 import { TASK_STATUSES, type TaskStatusKey } from '../../constants/crm';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 
@@ -141,7 +139,6 @@ export default function SessionPage() {
     const { api_request } = useRequestStore();
     const materialTargetMessageId = useSessionsUIStore((state) => state.materialTargetMessageId);
     const clearMaterialTargetMessageId = useSessionsUIStore((state) => state.clearMaterialTargetMessageId);
-    const { hasPermission } = useCurrentUserPermissions();
     const [customPromptResult, setCustomPromptResult] = useState<unknown>(null);
     const [activeTab, setActiveTab] = useState('2');
     const [sessionTasksSubTab, setSessionTasksSubTab] = useState<string>('');
@@ -248,7 +245,6 @@ export default function SessionPage() {
         };
     }, [sessionId, addSessionTextChunk, addSessionImageChunk, materialTargetMessageId]);
 
-    const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
     const sessionTaskSourceRefs = useMemo(
         () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
         [sessionId, voiceBotSession]
@@ -271,6 +267,7 @@ export default function SessionPage() {
         () => sessionTaskTabs.find((entry) => entry.key === sessionTasksSubTab)?.taskStatuses ?? [],
         [sessionTaskTabs, sessionTasksSubTab]
     );
+    const isDraftSessionTaskSubTab = activeSessionTaskStatuses.includes('DRAFT_10');
     const transcriptionCount = useMemo(
         () => countVisibleTranscriptionMessages(voiceBotMessages),
         [voiceBotMessages]
@@ -279,7 +276,6 @@ export default function SessionPage() {
         () => countVisibleCategorizationGroups(voiceMesagesData),
         [voiceMesagesData]
     );
-    const possibleTasksCount = possibleTasks.length;
     const screenshortCount = sessionAttachments.length;
 
     const hasTranscriptionPending = useMemo(
@@ -387,18 +383,9 @@ export default function SessionPage() {
             label: renderTabLabel('Категоризация', categorizationCount, { processing: hasCategorizationPending }),
             children: <Categorization />,
         },
-        ...(canUpdateProjects
-            ? [
-                {
-                    key: 'tasks',
-                    label: renderTabLabel('Возможные задачи', possibleTasksCount, { processing: hasPossibleTasksPending }),
-                    children: <PossibleTasks />,
-                },
-            ]
-            : []),
         {
             key: 'operops_tasks',
-            label: renderTabLabel('Задачи', sessionOperOpsTasksCount),
+            label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending }),
             children: (
                 <div className="flex flex-col gap-3">
                     {sessionTaskTabs.length > 0 ? (
@@ -413,15 +400,19 @@ export default function SessionPage() {
                                     label: renderTabLabel(entry.label, entry.count),
                                 }))}
                             />
-                            <CRMKanban
-                                key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab || 'none'}`}
-                                filter={{
-                                    task_status: activeSessionTaskStatuses,
-                                    source_ref: sessionTaskSourceRefs,
-                                }}
-                                refreshToken={sessionTasksRefreshToken}
-                                columns={[...VOICE_SESSION_TASK_COLUMNS]}
-                            />
+                            {isDraftSessionTaskSubTab ? (
+                                <PossibleTasks />
+                            ) : (
+                                <CRMKanban
+                                    key={`voice-session-tasks-${sessionId ?? 'unknown'}-${sessionTasksSubTab || 'none'}`}
+                                    filter={{
+                                        task_status: activeSessionTaskStatuses,
+                                        source_ref: sessionTaskSourceRefs,
+                                    }}
+                                    refreshToken={sessionTasksRefreshToken}
+                                    columns={[...VOICE_SESSION_TASK_COLUMNS]}
+                                />
+                            )}
                         </>
                     ) : (
                         <div className="text-sm text-slate-500">Нет задач для этой сессии.</div>

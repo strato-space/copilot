@@ -10,8 +10,7 @@ describe('SessionPage tab counters and indicators contract', () => {
   it('renders compact count labels for all voice tabs except Log', () => {
     expect(source).toContain("label: renderTabLabel('Транскрипция', transcriptionCount");
     expect(source).toContain("label: renderTabLabel('Категоризация', categorizationCount");
-    expect(source).toContain("label: renderTabLabel('Возможные задачи', possibleTasksCount");
-    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount)");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending })");
     expect(source).toContain("label: renderTabLabel('Codex', sessionCodexCount)");
     expect(source).toContain("label: renderTabLabel('Screenshort', screenshortCount)");
     expect(source).toContain("label: renderTabLabel('Log', 0, { showCount: false })");
@@ -20,11 +19,10 @@ describe('SessionPage tab counters and indicators contract', () => {
     expect(source).not.toContain("label: 'Review'");
   });
 
-  it('marks only Transcription, Categorization, and Possible Tasks with processing dots', () => {
+  it('marks only Transcription, Categorization, and unified Tasks with processing dots', () => {
     expect(source).toContain('{ processing: hasTranscriptionPending }');
     expect(source).toContain('{ processing: hasCategorizationPending }');
-    expect(source).toContain('{ processing: hasPossibleTasksPending }');
-    expect(source).not.toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing:");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionOperOpsTasksCount, { processing: hasPossibleTasksPending })");
     expect(source).not.toContain("label: renderTabLabel('Codex', sessionCodexCount, { processing:");
     expect(source).not.toContain("label: renderTabLabel('Screenshort', screenshortCount, { processing:");
   });

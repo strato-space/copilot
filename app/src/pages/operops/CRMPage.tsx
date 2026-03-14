@@ -14,14 +14,14 @@ import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useRequestStore } from '../../store/requestStore';
 import { useMCPRequestStore } from '../../store/mcpRequestStore';
-import { TASK_STATUSES, type TaskStatusKey } from '../../constants/crm';
+import { TARGET_TASK_STATUS_KEYS, type TaskStatusKey } from '../../constants/crm';
 import { useCRMSocket } from '../../hooks/useCRMSocket';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
 import { parseCreateTasksMcpResult } from '../../utils/voicePossibleTasks';
 import type { Performer, Ticket } from '../../types/crm';
 import { resolveTaskProjectName, resolveTaskSourceInfo } from './taskPageUtils';
 import { buildVoiceBacklogGroups } from './voiceTabGrouping';
-import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
+import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTargetTaskStatusKey } from '../../utils/taskStatusSurface';
 
 interface VoiceSession {
     _id: string;
@@ -84,25 +84,11 @@ const normalizeVoiceTask = (raw: VoiceTask): VoiceTask => {
 
 type OperOpsStatusTabKey = 'draft' | 'ready' | 'in_progress' | 'review' | 'done' | 'archive' | 'codex';
 
-const DRAFT_STATUS_KEYS: TaskStatusKey[] = [
-    'NEW_0',
-    'NEW_10',
-    'NEW_20',
-    'NEW_30',
-    'NEW_40',
-    'DRAFT_10',
-    'PLANNED_10',
-    'PLANNED_20',
-];
-
-const READY_STATUS_KEYS: TaskStatusKey[] = ['BACKLOG_10', 'READY_10', 'PERIODIC'];
-
-const IN_PROGRESS_STATUS_KEYS: TaskStatusKey[] = ['PROGRESS_10', 'PROGRESS_20', 'PROGRESS_30', 'PROGRESS_40'];
-
-const REVIEW_STATUS_KEYS: TaskStatusKey[] = ['REVIEW_10', 'REVIEW_20'];
-
-const DONE_STATUS_KEYS: TaskStatusKey[] = ['AGREEMENT_10', 'AGREEMENT_20', 'DONE_10', 'DONE_20', 'DONE_30'];
-
+const DRAFT_STATUS_KEYS: TaskStatusKey[] = ['DRAFT_10'];
+const READY_STATUS_KEYS: TaskStatusKey[] = ['READY_10'];
+const IN_PROGRESS_STATUS_KEYS: TaskStatusKey[] = ['PROGRESS_10'];
+const REVIEW_STATUS_KEYS: TaskStatusKey[] = ['REVIEW_10'];
+const DONE_STATUS_KEYS: TaskStatusKey[] = ['DONE_10'];
 const ARCHIVE_STATUS_KEYS: TaskStatusKey[] = ['ARCHIVE'];
 
 const STATUS_TAB_KEYS: OperOpsStatusTabKey[] = ['draft', 'ready', 'in_progress', 'review', 'done', 'archive', 'codex'];
@@ -146,16 +132,7 @@ const STATUS_TAB_DEFINITIONS: Record<OperOpsStatusTabKey, StatusTabDefinition> =
     },
 };
 
-const ALL_STATUS_KEYS = Array.from(
-    new Set([
-        ...DRAFT_STATUS_KEYS,
-        ...READY_STATUS_KEYS,
-        ...IN_PROGRESS_STATUS_KEYS,
-        ...REVIEW_STATUS_KEYS,
-        ...DONE_STATUS_KEYS,
-        ...ARCHIVE_STATUS_KEYS,
-    ])
-) as TaskStatusKey[];
+const ALL_STATUS_KEYS = [...TARGET_TASK_STATUS_KEYS] as TaskStatusKey[];
 
 const STATUS_WIDGET_BUCKETS = {
     total: ALL_STATUS_KEYS,
@@ -166,13 +143,6 @@ const STATUS_WIDGET_BUCKETS = {
     done: DONE_STATUS_KEYS,
     archive: ARCHIVE_STATUS_KEYS,
 } as const;
-
-const STATUS_WIDGET_LABELS: Record<keyof typeof STATUS_WIDGET_BUCKETS, string[]> = Object.fromEntries(
-    Object.entries(STATUS_WIDGET_BUCKETS).map(([key, statusKeys]) => [
-        key,
-        statusKeys.map((status) => TASK_STATUSES[status]).filter(Boolean),
-    ])
-) as Record<keyof typeof STATUS_WIDGET_BUCKETS, string[]>;
 
 const normalizeTaskStatus = (value: unknown): string => coerceString(value)?.toLowerCase().replace(/[\s-]+/g, '_') ?? '';
 
@@ -483,8 +453,12 @@ const CRMPage = () => {
 
     const widgets = useMemo(() => {
         const counts: Record<string, number> = {};
-        for (const [widget, statuses] of Object.entries(STATUS_WIDGET_LABELS)) {
-            counts[widget] = _.reduce(tickets ?? [], (result, ticket) => (statuses.includes(ticket.task_status as string) ? result + 1 : result), 0);
+        for (const [widget, statusKeys] of Object.entries(STATUS_WIDGET_BUCKETS)) {
+            counts[widget] = _.reduce(
+                tickets ?? [],
+                (result, ticket) => (matchesTargetTaskStatusKeys(ticket.task_status, statusKeys as readonly TaskStatusKey[]) ? result + 1 : result),
+                0
+            );
         }
         return counts;
     }, [tickets]);
@@ -933,137 +907,7 @@ const CRMPage = () => {
                             </div>
                         </div>
                         <div className="py-3 sm:py-4" />
-                        {isDraftTab ? (
-                            <>
-                                <div className="flex flex-col gap-4">
-                                    <Card
-                                        title="Voice backlog"
-                                        className="rounded-2xl border border-[#E6EBF3]"
-                                        styles={{ body: { padding: 24 } }}
-                                    >
-                                        <div className="mb-4 flex flex-wrap items-center gap-2">
-                                            <Tag color="blue">Draft: {voiceBacklogSummary.taskCount}</Tag>
-                                            <Tag color="default">Групп: {voiceBacklogSummary.groupCount}</Tag>
-                                            <Tag color="processing">Сессий: {voiceBacklogSummary.sessionCount}</Tag>
-                                            <Tag color="warning">Orphan: {voiceBacklogSummary.orphanCount}</Tag>
-                                        </div>
-
-                                        {voiceBacklogGroups.length > 0 ? (
-                                            <Collapse
-                                                className="voice-backlog-collapse"
-                                                items={voiceBacklogGroups.map((group) => ({
-                                                    key: group.key,
-                                                    label: (
-                                                        <div className="flex flex-wrap items-center gap-3 pr-4">
-                                                            <div className="min-w-0 flex-1">
-                                                                <div className="truncate text-[15px] font-semibold text-[#111827]">{group.title}</div>
-                                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-[#667085]">
-                                                                    {renderRelationPill({
-                                                                        id: group.sourceReference,
-                                                                        href: group.sessionLink,
-                                                                        title: group.kind === 'orphan' ? 'Orphan voice scope' : 'Voice session',
-                                                                        status: group.kind === 'orphan' ? 'blocked' : 'open',
-                                                                    })}
-                                                                    {group.lastUpdatedAt ? (
-                                                                        <span>Updated: {formatSessionTimestamp(group.lastUpdatedAt)}</span>
-                                                                    ) : null}
-                                                                </div>
-                                                            </div>
-                                                            <Tag color={group.kind === 'orphan' ? 'gold' : 'blue'}>{group.taskCount} задач</Tag>
-                                                        </div>
-                                                    ),
-                                                    children: (
-                                                        <Card
-                                                            size="small"
-                                                            bordered={false}
-                                                            className="bg-[#F8FAFF]"
-                                                            bodyStyle={{ padding: 16 }}
-                                                        >
-                                                            <div className="mb-3 flex flex-wrap items-center gap-2">
-                                                                {group.projectNames.length > 0
-                                                                    ? group.projectNames.map((projectName) => (
-                                                                        <Tag key={`${group.key}-${projectName}`}>{projectName}</Tag>
-                                                                    ))
-                                                                    : <Tag>Без проекта</Tag>}
-                                                                {group.sessionName && group.sessionId ? <Tag color="cyan">{group.sessionName}</Tag> : null}
-                                                            </div>
-                                                            <Table
-                                                                columns={voiceBacklogColumns}
-                                                                dataSource={group.possibleTickets}
-                                                                rowKey={(record) => String(record._id ?? record.id ?? '')}
-                                                                pagination={false}
-                                                                size="small"
-                                                                scroll={{ x: 980 }}
-                                                            />
-                                                            {group.processedTickets.length > 0 ? (
-                                                                <div className="mt-4">
-                                                                    <Collapse
-                                                                        items={[
-                                                                            {
-                                                                                key: `${group.key}-processed`,
-                                                                                label: `Задачи (${group.processedTaskCount})`,
-                                                                                children: (
-                                                                                    <Table
-                                                                                        columns={voiceProcessedColumns}
-                                                                                        dataSource={group.processedTickets}
-                                                                                        rowKey={(record) => `processed-${String(record._id ?? record.id ?? '')}`}
-                                                                                        pagination={false}
-                                                                                        size="small"
-                                                                                        scroll={{ x: 820 }}
-                                                                                    />
-                                                                                ),
-                                                                            },
-                                                                        ]}
-                                                                    />
-                                                                </div>
-                                                            ) : null}
-                                                        </Card>
-                                                    ),
-                                                }))}
-                                            />
-                                        ) : (
-                                            <Empty description="DRAFT_10 voice tasks не найдены" />
-                                        )}
-                                    </Card>
-
-                                    <Card
-                                        title="Voice sessions"
-                                        className="rounded-2xl border border-[#E6EBF3]"
-                                        styles={{ body: { padding: 24 } }}
-                                    >
-                                        <Table
-                                            columns={voiceColumns}
-                                            dataSource={voiceSessions}
-                                            rowKey={(record) => String(record._id ?? '')}
-                                            loading={voiceLoading}
-                                            pagination={{ pageSize: 20 }}
-                                            expandable={{
-                                                expandedRowRender: (record) => {
-                                                    const tasks = (record?.agent_results?.create_tasks ?? []).map(normalizeVoiceTask);
-                                                    return (
-                                                        <Table
-                                                            columns={taskColumns}
-                                                            dataSource={tasks}
-                                                            rowKey={(task, idx) => task.id ?? task.task_id_from_ai ?? `${record._id}-${idx}`}
-                                                            pagination={false}
-                                                            size="small"
-                                                            locale={{ emptyText: 'Нет задач' }}
-                                                        />
-                                                    );
-                                                },
-                                                rowExpandable: (record) => (record?.agent_results?.create_tasks ?? []).length > 0,
-                                            }}
-                                            locale={{ emptyText: 'Нет сессий для CRM' }}
-                                        />
-                                    </Card>
-                                </div>
-                                <div className="py-3 sm:py-4" />
-                                <CRMKanban
-                                    key={`operops-${activeMainTab}`}
-                                    filter={crmFilter ?? { task_status: [] }}
-                                />
-                            </>
-                        ) : isCodexTab ? (
+                        {isCodexTab ? (
                             <div className="bg-white border border-[#E6EBF3] rounded-2xl p-6">
                                 <CodexIssuesTable />
                             </div>

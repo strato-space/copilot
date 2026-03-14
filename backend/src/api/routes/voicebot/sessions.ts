@@ -4991,7 +4991,6 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             {
                 is_deleted: { $ne: true },
                 codex_task: { $ne: true },
-                source_kind: { $ne: 'voice_possible_task' },
                 ...sessionScopedTaskMatch,
             },
             {

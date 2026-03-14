@@ -41,12 +41,12 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/voicebot/possible_tasks` | `POST` | Canonical read path for current session Possible Tasks. Prefers `automation_tasks` master rows in status `DRAFT_10`, falls back to compatibility projection only when master rows are absent. |
-| `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session Possible Tasks into `automation_tasks`, rewrite mutable `DRAFT_10` rows in place, sync compatibility projection, and return canonical saved `items`. |
-| `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected Possible Tasks into accepted tasks with `BACKLOG_10`, stamp acceptance metadata, and remove them from draft views without soft-deleting the task document. |
-| `/api/voicebot/delete_task_from_session` | `POST` | Remove a Possible Task from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
+| `/api/voicebot/possible_tasks` | `POST` | Canonical read path for the current session mutable `DRAFT_10` baseline. Serves the unified `Задачи` surface draft subtab and falls back to compatibility projection only when master rows are absent. |
+| `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session mutable `DRAFT_10` rows into `automation_tasks`, rewrite them in place, sync compatibility projection, and return canonical saved `items`. |
+| `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected `DRAFT_10` rows into accepted tasks with `READY_10`, stamp acceptance metadata, and remove them from draft views without soft-deleting the task document. |
+| `/api/voicebot/delete_task_from_session` | `POST` | Remove a draft baseline row from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
 | `/api/voicebot/codex_tasks` | `POST` | Return Codex/BD tasks linked to the current voice session. |
-| `/api/voicebot/session_tab_counts` | `POST` | Return lightweight `Задачи` + `Codex` counts for voice session tab badges; draft rows with `source_kind=voice_possible_task` are excluded from accepted-task counts. |
+| `/api/voicebot/session_tab_counts` | `POST` | Return lightweight `Задачи` + `Codex` counts for voice session tab badges; `status_counts` include `DRAFT_10` so the unified `Задачи` surface can render lifecycle subtabs directly from backend status buckets. |
 
 ## Session resolution contract
 - Canonical session APIs use fail-fast lookup semantics and return `404` when a session cannot be resolved in current operational scope.
@@ -112,16 +112,16 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - Voice session tabs render compact numeric badges for:
   - `Транскрипция`
   - `Категоризация`
-  - `Возможные задачи`
   - `Задачи`
   - `Codex`
   - `Screenshort`
 - `Log` intentionally has no count badge.
 - Session header upload is now owned by the top icon action row next to `Скачать Транскрипцию`; `SessionStatusWidget` is status-only.
 - Voice and OperOps task surfaces should render the target display labels `Draft / Ready / In Progress / Review / Done / Archive` instead of raw stored labels.
-- `Задачи` total + `Work / Review` counts are loaded through `/api/voicebot/session_tab_counts`.
+- `Задачи` total + lifecycle subtab counts are loaded through `/api/voicebot/session_tab_counts`.
+- The unified `Задачи` surface derives its lifecycle subtabs from backend `status_counts` and renders the count inline in each subtab label.
 - `Codex` badge is derived from the same `codex/issues` source + session `source_ref` filter as the `Codex` tab content.
-- `Транскрипция`, `Категоризация`, and `Возможные задачи` show a subtle green pulse dot while their stage is still pending:
+- `Транскрипция`, `Категоризация`, and `Задачи` show a subtle green pulse dot while their stage is still pending:
   - transcription pending = uploaded/new chunk not yet transcribed,
   - categorization pending = transcript exists but categorization is not complete,
   - possible tasks pending = transcript advanced beyond the last completed `CREATE_TASKS` run or `CREATE_TASKS` is currently processing.

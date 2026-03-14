@@ -259,7 +259,8 @@ Preferred engineering principles for this repo:
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
 - OperOps main task navigation is status-first:
   - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
-  - the `Draft` tab still renders orphan/session-grouped possible-task backlog above the CRM table as a presentation layer,
+  - lifecycle counts should be shown inline in those tab labels instead of duplicated summary widgets,
+  - the `Draft` tab is a normal status-first CRM surface; legacy voice backlog grouping is historical reference only,
   - accepted Voice tasks are treated as `Ready` work instead of a separate `Backlog` semantic bucket.
 
 ## Product Notes (VoiceBot)
@@ -305,11 +306,11 @@ Preferred engineering principles for this repo:
 - Transcription table rows now render inline image previews for image attachments (segmented and fallback row modes).
 - Web pasted images are uploaded to backend storage through `POST /api/voicebot/upload_attachment` (alias `/api/voicebot/attachment`) and persisted under `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Screenshort cards must keep canonical `https://...` URLs fully visible, while `data:image/...;base64,...` values are rendered in truncated preview form (`data:image/...;base64,...`) with Copy action preserving the full raw URL.
-- Session page should render `Возможные задачи` only when `processors_data.CREATE_TASKS.data` exists and user has `PROJECTS.UPDATE`; keep compact task-table contract (no standalone status/project/AI columns, keep `description`).
+- Session page should not expose a separate `Возможные задачи` top tab; draft rows belong to the unified `Задачи` surface under the `DRAFT_10` / `Draft` lifecycle subtab, keeping the compact task-table contract (no standalone status/project/AI columns, keep `description`).
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
 - Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
-  - list: `POST /api/voicebot/possible_tasks` (assistant-side wrappers: `session_possible_tasks`)
+  - list: `POST /api/voicebot/possible_tasks` (assistant-side wrappers: `session_possible_tasks`) as mutable `DRAFT_10` compatibility baseline
   - create regular: `create_session_tasks`
   - create codex: `create_session_codex_tasks`
   - delete row: `delete_session_possible_task`
@@ -342,6 +343,7 @@ Preferred engineering principles for this repo:
   - backend persists possible tasks into `automation_tasks` through `save_possible_tasks` / `process_possible_tasks`,
   - `process_possible_tasks` now promotes selected rows into `READY_10` while keeping draft rows in `DRAFT_10`,
   - selected rows leave draft views without being soft-deleted,
+  - the resulting UI semantics are unified under `Задачи` rather than a separate `Возможные задачи` tab,
   - the agent must not route execution through `StratoProject`.
 - Manual `Summarize` must not hard-fail just because a session has no `project_id` and no default `PMO` project exists; backend should continue with `project_id=null`, and the frontend should surface the backend error text instead of a raw `AxiosError`.
 - Voice session header top action row owns both `Скачать Транскрипцию` and `Загрузить аудио`; `SessionStatusWidget` is status-only and must not keep a second upload control.

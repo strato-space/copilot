@@ -73,3 +73,8 @@ export const getTaskStatusDisplayLabel = (taskStatus: unknown): string => {
     if (targetKey) return getTargetTaskStatusLabel(targetKey);
     return toText(taskStatus);
 };
+
+export const matchesTargetTaskStatusKeys = (taskStatus: unknown, targetKeys: readonly string[]): boolean => {
+    const targetKey = normalizeTargetTaskStatusKey(taskStatus);
+    return targetKey ? targetKeys.includes(targetKey) : false;
+};

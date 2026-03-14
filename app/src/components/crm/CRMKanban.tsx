@@ -46,7 +46,7 @@ import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
 import { TARGET_EDITABLE_TASK_STATUSES, TARGET_TASK_STATUS_LABELS, TARGET_EDITABLE_TASK_STATUS_KEYS, TASK_STATUSES } from '../../constants/crm';
-import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
+import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTargetTaskStatusKey } from '../../utils/taskStatusSurface';
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
 import { normalizeVoiceSessionSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
@@ -1310,11 +1310,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
         recalulateStatusesStat();
     }, [tickets, recalulateStatusesStat]);
 
-    const statusFilterLabels = statusFilter.map((status) => {
-        const key = status as keyof typeof TASK_STATUSES;
-        return key in TASK_STATUSES ? TASK_STATUSES[key] : null;
-    });
-    let filteredTickets = tickets.filter((record) => statusFilterLabels.includes(record.task_status as typeof statusFilterLabels[number]));
+    const selectedTargetStatusKeys = statusFilter
+        .map((status) => normalizeTargetTaskStatusKey(status))
+        .filter((status): status is NonNullable<typeof status> => Boolean(status));
+    let filteredTickets = tickets.filter((record) => matchesTargetTaskStatusKeys(record.task_status, selectedTargetStatusKeys));
     if (projectFilter && projectFilter.length > 0) {
         filteredTickets = filteredTickets.filter((record) =>
             projectFilter.includes(getProjectDisplayName(record))
