@@ -78,11 +78,10 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('deleted_count: result.modifiedCount > 0 ? 1 : 0');
   });
 
-  it('reads canonical possible tasks from automation_tasks master rows with session hydration fallback', () => {
+  it('reads canonical possible tasks only from automation_tasks master rows', () => {
     expect(source).toContain('buildVoicePossibleTaskMasterQuery');
     expect(source).toContain('normalizeVoicePossibleTaskDocForApi');
     expect(source).toContain('listPossibleTaskMasterDocs({ db, sessionId })');
-    expect(source).toContain('hydrateSessionPossibleTasksFromMaster');
     expect(source).toContain("reason: 'save_possible_tasks'");
   });
 

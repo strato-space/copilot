@@ -137,11 +137,10 @@ describe('Voicebot session_tab_counts route', () => {
     expect(response.body).toEqual({
       success: true,
       session_id: sessionId.toHexString(),
-      tasks_count: 12,
+      tasks_count: 5,
       codex_count: 3,
       status_counts: [
         { status: 'DRAFT_10', status_key: 'DRAFT_10', label: 'Draft', count: 2 },
-        { status: 'READY_10', status_key: 'READY_10', label: 'Ready', count: 7 },
         { status: 'REVIEW_10', status_key: 'REVIEW_10', label: 'Review', count: 3 },
       ],
     });

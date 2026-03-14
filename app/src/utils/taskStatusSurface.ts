@@ -28,42 +28,9 @@ export const resolveTaskStatusKey = (value: unknown): TaskStatusKey | null => {
 
 export const normalizeTargetTaskStatusKey = (taskStatus: unknown): TargetTaskStatusKey | null => {
     const statusKey = resolveTaskStatusKey(taskStatus);
-    if (!statusKey) return null;
-
-    switch (statusKey) {
-        case 'DRAFT_10':
-        case 'NEW_0':
-        case 'NEW_10':
-        case 'NEW_20':
-        case 'NEW_30':
-        case 'NEW_40':
-        case 'PLANNED_10':
-        case 'PLANNED_20':
-            return 'DRAFT_10';
-        case 'BACKLOG_10':
-        case 'READY_10':
-        case 'PERIODIC':
-            return 'READY_10';
-        case 'PROGRESS_0':
-        case 'PROGRESS_10':
-        case 'PROGRESS_20':
-        case 'PROGRESS_30':
-        case 'PROGRESS_40':
-            return 'PROGRESS_10';
-        case 'REVIEW_10':
-        case 'REVIEW_20':
-        case 'AGREEMENT_10':
-        case 'AGREEMENT_20':
-            return 'REVIEW_10';
-        case 'DONE_10':
-        case 'DONE_20':
-        case 'DONE_30':
-            return 'DONE_10';
-        case 'ARCHIVE':
-            return 'ARCHIVE';
-        default:
-            return null;
-    }
+    return statusKey && TARGET_TASK_STATUS_KEYS.includes(statusKey as TargetTaskStatusKey)
+        ? (statusKey as TargetTaskStatusKey)
+        : null;
 };
 
 export const getTargetTaskStatusLabel = (statusKey: TargetTaskStatusKey): string => TARGET_TASK_STATUS_LABELS[statusKey];

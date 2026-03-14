@@ -3,7 +3,7 @@ import { TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
 import { normalizeDateField, toIdString, toTaskReferenceList, toTaskText } from './sessionsSharedUtils.js';
 
 export const LEGACY_VOICE_DRAFT_STATUS = 'Backlog';
-export const ACTIVE_VOICE_DRAFT_STATUSES = [TASK_STATUSES.DRAFT_10, LEGACY_VOICE_DRAFT_STATUS] as const;
+export const ACTIVE_VOICE_DRAFT_STATUSES = [TASK_STATUSES.DRAFT_10] as const;
 
 export const VOICE_POSSIBLE_TASK_RELATION_TYPES = [
   'parent-child',
@@ -369,10 +369,7 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
     source_ref: toTaskText(record.source_ref),
     external_ref: toTaskText(record.external_ref),
     ...(record.source_data && typeof record.source_data === 'object' ? { source_data: record.source_data } : {}),
-    task_status:
-      toTaskText(record.task_status) === LEGACY_VOICE_DRAFT_STATUS || toTaskText(record.task_status) === TASK_STATUSES.NEW_0
-        ? TASK_STATUSES.DRAFT_10
-        : toTaskText(record.task_status),
+    task_status: toTaskText(record.task_status),
     created_at: normalizeDateField(record.created_at),
     updated_at: normalizeDateField(record.updated_at),
   };

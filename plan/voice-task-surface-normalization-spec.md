@@ -19,13 +19,13 @@
 - он остается главным semantic contract для этой wave;
 - для legacy/migration context дополнительно сохраняется [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md);
 - текущая production truth должна читаться через этот документ, deployed code и rollout notes in `bd`;
-- compatibility cleanup tails по старым `possible_tasks` surfaces и duplicate counters отдельно отслеживаются в execution epic `copilot-ojxy`.
+- strict cutover tails по historical `possible_tasks` projections и duplicate counters отдельно отслеживаются в execution epic `copilot-ojxy`.
 
 Базовый тезис:
 - `Возможные задачи` не являются отдельной storage-сущностью;
 - все task surfaces работают поверх одной коллекции `automation_tasks`;
 - различие между draft и accepted rows задается главным образом `task_status`;
-- но `voice.session_possible_tasks(session_id)` — это не просто отчетный фильтр, а **mutable draft baseline** со своим поведенческим контрактом;
+- `voice.session_possible_tasks(session_id)` — это canonical draft read path и он должен читать только strict `DRAFT_10` rows;
 - `source_kind` — вспомогательный provenance/runtime marker, а не главный semantic discriminator;
 - `codex_task` — отдельный тип taskflow, а не атрибут различения между draft и accepted rows;
 - `PERIODIC` в target ontology выводится из lifecycle dictionary и переносится в отдельную recurrence dimension.
@@ -155,7 +155,7 @@
 - `crm_tickets(session_id=...)` — accepted-task view над той же коллекцией;
 - `voicebot/codex_tasks` — codex-only **session-scoped** view над той же коллекцией;
 - OperOps `Codex` в целом не должен в этой спеke описываться как Mongo-only view над `automation_tasks`, потому что current product surface там backed by `bd` CLI / issue tracker, а не только общей task collection;
-- но `session_possible_tasks(session_id)` нельзя сводить к “тонкому фильтру” без поведенческого контракта.
+- `session_possible_tasks(session_id)` нельзя сводить к session payload fallback; он должен читаться только из canonical draft rows по `task_status = DRAFT_10`.
 
 ### 2.3 Контракт `voice.session_possible_tasks(session_id)`
 
@@ -173,14 +173,14 @@ Behavior-wise:
 - допускается in-place update существующих draft rows;
 - при совпадении scope должен переиспользоваться тот же `row_id/id`;
 - route участвует в dedupe semantics относительно уже materialized accepted tasks;
-- route может переиспользовать draft rows между сессиями, если это требуется текущим create-tasks contract;
+- route не должен подмешивать session-local compatibility payload (`processors_data.CREATE_TASKS.data`, `agent_results.create_tasks`) когда canonical draft rows отсутствуют;
 - это не mere reporting route и не should-be-treated-as “just another filtered list”.
 
 #### Split against accepted tasks
 
 В этой нормализации:
 - `voice.crm_tickets(session_id)` = accepted-only session task view
-- `voice.session_possible_tasks(session_id)` = mutable draft baseline
+- `voice.session_possible_tasks(session_id)` = strict canonical draft baseline
 
 ## 3. Ключи, stored values и labels
 
@@ -517,9 +517,9 @@ Filter:
   - `ARCHIVE`
 - label filter’а показывает count справа для соответствующего bucket;
 - parent counter у верхней вкладки `Задачи` равен сумме всех lifecycle buckets внутри неё, включая `Draft`;
-- during convergence, displayed `Draft` count и parent `Задачи` count не должны терять mutable draft-baseline rows даже если backend `status_counts` временно отстаёт от compatibility draft source for the same session;
+- `Draft` count и parent `Задачи` count должны вычисляться только по canonical exact-key buckets;
 - fixed lifecycle axis inside `Задачи` должна рендериться и при zero-state; empty state допустим только внутри выбранного lifecycle filter, а не вместо filter row;
-- `source_kind != voice_possible_task` допустим только как secondary integrity guard, но не как primary semantic discriminator accepted/draft split
+- filters должны ориентироваться строго на one field: canonical `task_status` / resolved status key; `source_kind` не должен использоваться как substitute filter for lifecycle state
 
 #### `Codex`
 
@@ -530,9 +530,8 @@ Filter:
 ### 7.4 Вывод
 
 Из этого следует:
-- отдельный `voicebot/possible_tasks` route может остаться как compatibility/view facade;
-- но эта спека считает его mutable draft-baseline route/facade over `automation_tasks`, а не отдельной ontology tab;
-- draft и accepted surfaces должны различаться status/filter semantics плюс mutable-baseline behavior, а не разной target-онтологией вкладок.
+- `voicebot/possible_tasks` / `voice.session_possible_tasks(session_id)` остаётся только как canonical draft read path;
+- draft и accepted surfaces должны различаться exact status/filter semantics, а не session-payload fallback, provenance hints или разной target-онтологией вкладок.
 
 ## 8. OperOps tab normalization
 
@@ -673,15 +672,14 @@ Special grouping допустима только как presentation layer:
 Новая спека закрепляет:
 
 - `voice.crm_tickets(session_id)` = accepted-only session task view
-- `voice.session_possible_tasks(session_id)` = mutable draft baseline
+- `voice.session_possible_tasks(session_id)` = strict canonical draft baseline
 
-### 10.3 Future direction
+### 10.3 Current strict contract
 
-В будущем можно ввести unified method, например:
-- `voice.session_tasks(session_id, include_drafts=true|false, include_codex=true|false)`
-
-Но это future simplification.  
-Сейчас удалять `session_possible_tasks` не требуется.
+Сейчас:
+- `voice.session_possible_tasks(session_id)` должен читать только canonical `DRAFT_10` rows;
+- `voice.crm_tickets(session_id)` должен читать только canonical accepted rows;
+- fallback к `processors_data.CREATE_TASKS.data` и `agent_results.create_tasks` не является частью target contract.
 
 ## 11. Контракт project binding для voice session
 
@@ -718,7 +716,7 @@ Voice session может войти в operational bucket только если:
 Целевая модель следующей волны:
 - отдельная вкладка `Возможные задачи` не нужна как самостоятельная target semantics;
 - draft rows показываются как обычный status filter `DRAFT_10` внутри общей task surface `Задачи`;
-- `voice.session_possible_tasks(session_id)` при этом сохраняется как mutable draft-baseline route;
+- `voice.session_possible_tasks(session_id)` при этом сохраняется только как strict canonical draft route;
 - `PERIODIC` уходит из target lifecycle ontology в отдельную recurrence dimension.
 - lifecycle filters внутри `Задачи` и OperOps используют одну и ту же status axis:
   - `Draft`
@@ -746,7 +744,7 @@ Voice session может войти в operational bucket только если:
 
 ### Session scope
 - `voice.crm_tickets(session_id)` возвращает только accepted rows
-- `voice.session_possible_tasks(session_id)` описан как mutable baseline, а не immutable projection
+- `voice.session_possible_tasks(session_id)` описан как strict canonical draft baseline без session-payload fallback
 
 ### Label / key / value wording
 - user-facing tables и reports показывают labels
@@ -782,7 +780,7 @@ Voice session может войти в operational bucket только если:
 ## 14. Assumptions
 
 - Production data normalization for this contract has landed.
-- UI/API convergence for the unified `Задачи` surface is in progress under `copilot-ojxy`.
+- UI/API convergence for the unified `Задачи` surface is in progress under `copilot-ojxy` и `copilot-pwok`.
 - [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md) now serves as legacy/as-built migration reference, not as the primary surface contract.
 - `copilot-kdqs` remains the explicit follow-up for eventual `voice.session_possible_tasks` deprecation after consumer migration.
 - Инвентарь recurring tasks был собран по live `automation_tasks`, где `is_deleted != true` и `task_status = Periodic`, на момент проверки 2026-03-14; отдельная recurrence migration still remains a dedicated cleanup step.
@@ -803,6 +801,7 @@ Voice session может войти в operational bucket только если:
 - ✅ `copilot-e5cj` — [voice][tasks] Render fixed lifecycle filters inside session `Задачи` even when all counts are zero
 - ✅ `copilot-7jdj` — [operops][ui] Remove duplicate lifecycle summary widgets once counts are shown inline on tabs
 - ✅ `copilot-krp8` — [voice][tasks] Keep session lifecycle filter order fixed instead of sparse `status_counts`-driven ordering
+- 🟡 `copilot-pwok` — [voice][data] Draft session view can display rows whose Mongo task_status is already READY_10
 - ⏳ `copilot-kdqs` — Deprecate `voice.session_possible_tasks` after unified session-task surface lands
 - ⏳ `copilot-oabx` — Fix pm2 agent restart path in `pm2-backend.sh` rollout
 
@@ -820,6 +819,7 @@ Voice session может войти в operational bucket только если:
 - `copilot-ojxy.1 -> copilot-e5cj`
 - `copilot-ojxy.1 -> copilot-krp8`
 - `copilot-ojxy.4 -> copilot-7jdj`
+- `copilot-ojxy -> copilot-pwok`
 - `copilot-sc1b -> copilot-kdqs`
 - `copilot-ds1z -> copilot-oabx`
 
@@ -827,9 +827,11 @@ Voice session может войти в operational bucket только если:
 
 `voice.session_possible_tasks(session_id)` не должен считаться вечным target endpoint.
 
-В рамках next-wave contract он остается допустимым как:
-- current mutable draft-baseline route;
-- compatibility facade для существующих consumers.
+В рамках current strict contract он остается допустимым только как:
+- canonical draft read path;
+- без session-payload fallback;
+- без legacy status coercion;
+- без provenance-based lifecycle substitution.
 
 Но следующий шаг после внедрения unified target semantics должен быть таким:
 
@@ -844,7 +846,7 @@ Voice session может войти в operational bucket только если:
    - session task surfaces;
    - любые internal integrations, читающие current route.
 
-3. Оставить `voice.session_possible_tasks(session_id)` как deprecated compatibility route на transition window.
+3. Оставить `voice.session_possible_tasks(session_id)` только как strict canonical draft route на transition window.
 
 4. Удалить route только после того, как:
    - replacement contract введен;

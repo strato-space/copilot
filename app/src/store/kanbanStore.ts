@@ -300,7 +300,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         lastTicketsFetchAt = now;
 
         try {
-            const response = await api_request<Ticket[]>('tickets', { satuses: statuses });
+            const response = await api_request<Ticket[]>('tickets', { statuses });
             const handleData = response.map((item) => ({ ...item }));
             set({ tickets: handleData, tickets_updated_at: Date.now() });
         } catch (e) {

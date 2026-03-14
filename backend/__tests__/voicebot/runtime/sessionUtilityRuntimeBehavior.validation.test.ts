@@ -863,7 +863,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.error).toBe('Session not found');
   });
 
-  it('possible_tasks returns canonical row_id values for canonical locator aliases', async () => {
+  it('possible_tasks returns an empty list when no canonical draft master rows exist', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -904,11 +904,7 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(response.body.items).toEqual([
-      expect.objectContaining({ row_id: 'row-a', id: 'row-a' }),
-      expect.objectContaining({ row_id: 'row-b', task_id_from_ai: 'row-b' }),
-      expect.objectContaining({ row_id: 'row-c' }),
-    ]);
+    expect(response.body.items).toEqual([]);
   });
 
   it('possible_tasks prefers automation_tasks master rows linked to the voice session', async () => {

@@ -993,14 +993,13 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         const normalized = normalizeSessionResponse(response);
         const sortedMessages = messageListUtils.sort(normalized.session_messages);
         const processed = transformVoiceBotMessagesToGroups(sortedMessages);
-        const fallbackPossibleTasks = extractPossibleTasksFromSession(normalized.voice_bot_session);
 
         set({
             voiceBotSession: normalized.voice_bot_session,
             voiceBotMessages: sortedMessages,
             voiceMesagesData: processed,
             sessionAttachments: normalized.session_attachments ?? buildSessionAttachmentsFromMessages(sortedMessages),
-            possibleTasks: fallbackPossibleTasks,
+            possibleTasks: [],
             possibleTasksLoadedAt: Date.now(),
             sessionLogEvents: [],
             socketToken: normalized.socket_token ?? null,
@@ -1236,11 +1235,10 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
 
             return items;
         } catch (error) {
-            const fallback = extractPossibleTasksFromSession(get().voiceBotSession);
             set((state) => {
                 if (state.currentSessionId !== normalizedSessionId) return state;
                 return {
-                    possibleTasks: fallback,
+                    possibleTasks: [],
                     possibleTasksLoadedAt: Date.now(),
                 };
             });
@@ -1250,7 +1248,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 message.error('Не удалось загрузить возможные задачи');
             }
 
-            return fallback;
+            return [];
         }
     },
 

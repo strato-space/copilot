@@ -254,7 +254,6 @@ export default function SessionPage() {
         () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
         [sessionId, voiceBotSession]
     );
-    const draftPossibleTasksCount = possibleTasks.length;
     const sessionTaskCountByStatus = useMemo(() => {
         const counts = new Map<TargetVoiceTaskSubtabKey, number>();
         for (const entry of sessionTaskStatusCounts) {
@@ -263,9 +262,8 @@ export default function SessionPage() {
             if (!isTargetVoiceTaskSubtabKey(resolvedKey)) continue;
             counts.set(resolvedKey, entry.count);
         }
-        counts.set('DRAFT_10', Math.max(counts.get('DRAFT_10') ?? 0, draftPossibleTasksCount));
         return counts;
-    }, [draftPossibleTasksCount, sessionTaskStatusCounts]);
+    }, [sessionTaskStatusCounts]);
     const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {
         return TARGET_VOICE_TASK_SUBTAB_KEYS.map((statusKey) => ({
             key: statusKey,

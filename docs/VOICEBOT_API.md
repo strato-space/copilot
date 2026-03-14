@@ -41,7 +41,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/voicebot/possible_tasks` | `POST` | Canonical read path for the current session mutable `DRAFT_10` baseline. Serves the unified `Задачи` surface draft subtab and falls back to compatibility projection only when master rows are absent. |
+| `/api/voicebot/possible_tasks` | `POST` | Canonical read path for the current session strict `DRAFT_10` draft baseline. Serves the unified `Задачи` surface draft subtab and does not fall back to session compatibility payloads. |
 | `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session mutable `DRAFT_10` rows into `automation_tasks`, rewrite them in place, sync compatibility projection, and return canonical saved `items`. |
 | `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected `DRAFT_10` rows into accepted tasks with `READY_10`, stamp acceptance metadata, and remove them from draft views without soft-deleting the task document. |
 | `/api/voicebot/delete_task_from_session` | `POST` | Remove a draft baseline row from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
@@ -121,7 +121,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - `Задачи` total + lifecycle subtab counts are loaded through `/api/voicebot/session_tab_counts`.
 - The unified `Задачи` surface derives its lifecycle subtabs from backend `status_counts` and renders the count inline in each subtab label.
 - The lifecycle subtab axis inside `Задачи` is fixed (`Draft / Ready / In Progress / Review / Done / Archive`) and remains visible even when all counts are zero.
-- The parent `Задачи` count must include `Draft`; during compatibility lag the UI may need to reconcile backend `status_counts` with the mutable `possible_tasks` baseline for the same session.
+- The parent `Задачи` count must include `Draft` and must be derived from the canonical exact-key lifecycle buckets only.
 - `Codex` badge is derived from the same `codex/issues` source + session `source_ref` filter as the `Codex` tab content.
 - `Транскрипция`, `Категоризация`, and `Задачи` show a subtle green pulse dot while their stage is still pending:
   - transcription pending = uploaded/new chunk not yet transcribed,

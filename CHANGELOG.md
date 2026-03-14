@@ -13,6 +13,7 @@
 - **23:13** The new `Задачи` subtab strip still undercounted drafts and could collapse into a zero-state mismatch: live `PossibleTasks` rows were visible in the `Draft` view while both the `Draft` badge and the parent `Задачи` badge could still show `0`.
 - **23:13** OperOps still had duplicate lifecycle navigation in practice: counts lived in the tab contract, but the old top summary-widget row remained rendered alongside the tabs.
 - **23:13** The task-surface spec and repo docs still lagged the latest beads state after the bug wave started, so `## 15. BD` / `## Status` and the current README/AGENTS/API notes did not mention the new bug-fix follow-ups.
+- **23:44** The strict status-first contract still leaked through compatibility code paths: Voice Draft could still be hydrated from session payloads, `/voicebot/possible_tasks` could still fall back to session blobs, and `/api/crm/tickets` plus status counters were still rebucketing legacy states instead of filtering by exact canonical keys only.
 
 ### FEATURE IMPLEMENTED
 - **02:04** Recast the Voice/OperOps surface-normalization document into an approved next-wave replacement contract with explicit `As Is` vs `To Be` sections, a mutable-baseline definition for `voice.session_possible_tasks`, an audited `PROGRESS_0 = Rejected` note, a full recurring-task inventory, and a deprecation path for the current draft route.
@@ -28,6 +29,7 @@
 - **23:13** Removed the duplicate OperOps lifecycle summary widgets and moved the lifecycle counters fully into the tab labels, matching the approved target contract.
 - **23:13** Updated the spec and repo docs to the current beads picture, including the new open bug follow-ups and the revised convergence-wave status line.
 - **23:21** Verified the exact production Voice session and OperOps pages through Chrome MCP, confirmed the lifecycle-axis/count fixes live, and closed the follow-up bugs plus `copilot-ojxy.4` in beads.
+- **23:44** Switched the runtime to a strict no-fallback mode for task surfaces: canonical Draft reads are `DRAFT_10` only, session/OperOps counters and filters use exact canonical keys only, and session payloads are no longer valid Draft read sources.
 
 ### CHANGES
 - **02:04** Rewrote `plan/voice-task-surface-normalization-spec.md` so it now documents the approved next-wave replacement contract, separates runtime truth from target semantics, moves `PERIODIC` into recurrence ontology, inventories all 10 current recurring tasks, records that live history contains no `PROGRESS_0 / Rejected` task usage, and scopes `voicebot/codex_tasks` separately from the broader `bd`-backed OperOps Codex surface.
@@ -43,6 +45,7 @@
 - **23:13** Updated `app/src/pages/operops/CRMPage.tsx` to remove the duplicate lifecycle widget row and keep lifecycle counts inline inside the main tab labels.
 - **23:13** Refreshed `app/__tests__/voice/{sessionPageTabCountersContract,sessionPageOperOpsTasksTabContract}.test.ts`, `app/__tests__/operops/crmPageCodexTabContract.test.ts`, `README.md`, `AGENTS.md`, `docs/VOICEBOT_API.md`, and `plan/voice-task-surface-normalization-spec.md` for the new zero-safe lifecycle-axis/count contract and the latest `bd` bug set (`copilot-e5cj`, `copilot-7jdj`, `copilot-krp8`).
 - **23:21** Updated `plan/voice-task-surface-normalization-spec.md` again so `## Status` and `## 15. BD` match the final bead state after live verification; closed `copilot-e5cj`, `copilot-7jdj`, `copilot-krp8`, and `copilot-ojxy.4`.
+- **23:44** Updated `backend/src/api/routes/voicebot/{sessions,possibleTasksMasterModel}.ts`, `backend/src/api/routes/crm/tickets.ts`, `backend/src/services/taskStatusSurface.ts`, `app/src/{pages/voice/SessionPage,pages/operops/CRMPage,store/voiceBotStore,store/kanbanStore,utils/taskStatusSurface}.ts`, and focused backend/frontend tests so task reads, counters, and filters now honor exact canonical keys only and no longer fall back to session compatibility payloads.
 
 ## 2026-03-13
 ### PROBLEM SOLVED

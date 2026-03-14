@@ -277,10 +277,19 @@ const normalizePerformer = async (db: Db, rawPerformer: unknown): Promise<Perfor
 router.post('/', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const statuses = (req.body.statuses ?? req.body.satuses) as string[];
+        const rawStatuses = Array.isArray(req.body.statuses) ? req.body.statuses as string[] : [];
+        const exactStatusValues = rawStatuses
+            .map((status) => {
+                if (typeof status !== 'string') return '';
+                const trimmed = status.trim();
+                if (!trimmed) return '';
+                return TASK_STATUSES[trimmed as keyof typeof TASK_STATUSES] ?? trimmed;
+            })
+            .filter(Boolean);
 
-        const archiveQuery =
-            statuses?.includes('ARCHIVE') ? {} : { task_status: { $ne: TASK_STATUSES.ARCHIVE } };
+        const taskStatusQuery = exactStatusValues.length > 0
+            ? { task_status: { $in: exactStatusValues } }
+            : { task_status: { $ne: TASK_STATUSES.ARCHIVE } };
 
         let data = await db
             .collection(COLLECTIONS.TASKS)
@@ -288,7 +297,7 @@ router.post('/', async (req: Request, res: Response) => {
                 {
                     $match: {
                         is_deleted: { $ne: true },
-                        ...archiveQuery,
+                        ...taskStatusQuery,
                     },
                 },
                 {

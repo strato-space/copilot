@@ -147,7 +147,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `Задачи` is the unified session task surface: the parent tab keeps total count, and the subtab list must come from backend `status_counts` (`voicebot/session_tab_counts`) with no fallback to legacy `tasks_work_count` / `tasks_review_count`.
 - Inside `Задачи`, lifecycle subtabs are status-first (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) and show the per-status count inline in the label.
 - The lifecycle subtab axis inside `Задачи` must remain visible even when every bucket count is zero; empty state belongs inside the selected lifecycle bucket, not instead of the lifecycle filter row.
-- The parent `Задачи` count must include all lifecycle buckets, including `Draft`; during compatibility lag it must not undercount draft rows already present in the mutable `possibleTasks` baseline.
+- The parent `Задачи` count must include all lifecycle buckets, including `Draft`, and it must be computed from the canonical exact-key lifecycle buckets only.
 - Frontend Voice task tabs must translate backend status labels back into canonical CRM status keys before filtering `CRMKanban`; label strings are not valid task-status filter inputs by themselves.
 - Voice and OperOps task displays must render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) rather than raw stored labels like `Progress 10` or `Review / Ready`.
 - `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.
@@ -194,14 +194,14 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Deleting the last active categorization row cascades deletion of the linked transcript segment with compensating rollback when log persistence fails.
 - Image attachments in categorization are rendered only in the Materials column; image-only blocks remain visible without image-as-text rows.
 - Session-scoped taskflow parity is now canonical across backend + Voice UI + mcp@voice:
-  - backend route `POST /api/voicebot/possible_tasks` exposes canonical `row_id` values as the mutable `DRAFT_10` baseline,
+  - backend route `POST /api/voicebot/possible_tasks` exposes canonical `row_id` values as the strict `DRAFT_10` draft baseline,
   - mutations emit `session_update.taskflow_refresh` flags for `possible_tasks` / `tasks` / `codex`,
-  - frontend consumes those hints with additive refresh tokens so the unified `Задачи` surface (`Draft` subtab included) and `Codex` refresh without manual reload,
+  - frontend consumes those hints with additive refresh tokens so the unified `Задачи` surface and `Codex` refresh without manual reload,
   - assistant workflow is fixed to `discuss -> preview -> apply -> verify`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page no longer has a separate `Возможные задачи` top tab; draft rows are rendered inside unified `Задачи` when the selected lifecycle subtab is `DRAFT_10`.
-- Possible tasks are persisted as master Mongo tasks in `automation_tasks` with `task_status=DRAFT_10`; session-local taskflow payloads keep only a synchronized projection for compatibility and realtime UI hydration.
+- Possible tasks are persisted as master Mongo tasks in `automation_tasks` with `task_status=DRAFT_10`; session-local taskflow payloads are not a valid Draft read source.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - Possible Tasks creation flow now emits structured submit diagnostics in browser console:

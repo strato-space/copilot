@@ -79,53 +79,14 @@ export const resolveTaskRecurrenceMode = (task: { task_status?: unknown; recurre
 
 export const normalizeTargetTaskStatusKey = ({
   task_status,
-  recurrence_mode,
 }: {
   task_status?: unknown;
   recurrence_mode?: unknown;
 }): TargetTaskStatusKey | null => {
   const statusKey = resolveTaskStatusKey(task_status);
-  const recurrenceMode = normalizeTaskRecurrenceMode(recurrence_mode);
-
-  if (statusKey == null) return null;
-
-  switch (statusKey) {
-    case 'DRAFT_10':
-    case 'NEW_0':
-    case 'NEW_10':
-    case 'NEW_20':
-    case 'NEW_30':
-    case 'NEW_40':
-    case 'PLANNED_10':
-    case 'PLANNED_20':
-      return 'DRAFT_10';
-    case 'BACKLOG_10':
-    case 'READY_10':
-      return 'READY_10';
-    case 'PERIODIC':
-      return 'READY_10';
-    case 'PROGRESS_10':
-    case 'PROGRESS_20':
-    case 'PROGRESS_30':
-    case 'PROGRESS_40':
-      return 'PROGRESS_10';
-    case 'REVIEW_10':
-    case 'REVIEW_20':
-    case 'AGREEMENT_10':
-    case 'AGREEMENT_20':
-      return 'REVIEW_10';
-    case 'DONE_10':
-    case 'DONE_20':
-    case 'DONE_30':
-      return 'DONE_10';
-    case 'ARCHIVE':
-      return 'ARCHIVE';
-    case 'PROGRESS_0':
-      // `Rejected` is legacy-only and should stay out of active work surfaces.
-      return 'ARCHIVE';
-    default:
-      return recurrenceMode === TASK_RECURRENCE_MODES.PERIODIC ? 'READY_10' : null;
-  }
+  return statusKey && TARGET_TASK_STATUS_KEYS.includes(statusKey as TargetTaskStatusKey)
+    ? (statusKey as TargetTaskStatusKey)
+    : null;
 };
 
 export const getTargetTaskStatusLabel = (statusKey: TargetTaskStatusKey): string => TARGET_TASK_STATUS_LABELS[statusKey];

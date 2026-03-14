@@ -61,7 +61,6 @@ import {
 } from './sessionsSharedUtils.js';
 import {
     ACTIVE_VOICE_DRAFT_STATUSES,
-    buildSessionCompatiblePossibleTaskRow,
     buildVoicePossibleTaskMasterDoc,
     buildVoicePossibleTaskMasterQuery,
     normalizeVoicePossibleTaskDocForApi,
@@ -86,7 +85,7 @@ import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { createBdIssue } from '../../../services/bdClient.js';
 import {
     getTargetTaskStatusLabel,
-    normalizeTargetTaskStatusKey,
+    resolveTaskStatusKey,
     TARGET_TASK_STATUS_KEYS,
     type TargetTaskStatusKey,
 } from '../../../services/taskStatusSurface.js';
@@ -1094,43 +1093,6 @@ const softDeletePossibleTaskMasterRows = async ({
             }
         );
     }
-};
-
-const hydrateSessionPossibleTasksFromMaster = async ({
-    db,
-    sessionId,
-    sessionRecord,
-}: {
-    db: Db;
-    sessionId: string;
-    sessionRecord: VoiceSessionRecord;
-}): Promise<VoiceSessionRecord> => {
-    const masterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
-    if (masterDocs.length === 0) {
-        return sessionRecord;
-    }
-
-    const masterRows = masterDocs
-        .map((doc) => buildSessionCompatiblePossibleTaskRow(doc))
-        .filter((row): row is Record<string, unknown> => row !== null);
-
-    const processorsData = sessionRecord.processors_data && typeof sessionRecord.processors_data === 'object'
-        ? { ...(sessionRecord.processors_data as Record<string, unknown>) }
-        : {};
-    const createTasksProcessor = processorsData.CREATE_TASKS && typeof processorsData.CREATE_TASKS === 'object'
-        ? { ...(processorsData.CREATE_TASKS as Record<string, unknown>) }
-        : {};
-
-    return {
-        ...sessionRecord,
-        processors_data: {
-            ...processorsData,
-            CREATE_TASKS: {
-                ...createTasksProcessor,
-                data: masterRows,
-            },
-        },
-    };
 };
 
 const buildProcessPossibleTasksPayload = ({
@@ -2285,11 +2247,7 @@ const getSession = async (req: Request, res: Response) => {
 
         // Get participants info
         let participants: VoiceSessionParticipant[] = [];
-        const sessionRecord = await hydrateSessionPossibleTasksFromMaster({
-            db,
-            sessionId: session_id,
-            sessionRecord: session as VoiceSessionRecord,
-        });
+        const sessionRecord = session as VoiceSessionRecord;
         const participantIds = toObjectIdArray(sessionRecord.participants);
         if (participantIds.length > 0) {
             participants = await db.collection(VOICEBOT_COLLECTIONS.PERSONS).find({
@@ -5021,8 +4979,10 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         ]);
 
         const groupedStatusCounts = sessionTasks.reduce((acc, task) => {
-            const targetStatusKey = normalizeTargetTaskStatusKey(task);
-            if (!targetStatusKey) return acc;
+            const statusKey = resolveTaskStatusKey(task.task_status);
+            if (!statusKey) return acc;
+            if (!TARGET_TASK_STATUS_KEYS.includes(statusKey as TargetTaskStatusKey)) return acc;
+            const targetStatusKey = statusKey as TargetTaskStatusKey;
             acc.set(targetStatusKey, (acc.get(targetStatusKey) ?? 0) + 1);
             return acc;
         }, new Map<TargetTaskStatusKey, number>());
@@ -5084,25 +5044,9 @@ router.post('/possible_tasks', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const masterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
-        const masterItems = masterDocs
+        const items = masterDocs
             .map((item) => normalizeVoicePossibleTaskDocForApi(item))
             .filter((item): item is Record<string, unknown> => item !== null);
-        const items = masterItems.length > 0
-            ? masterItems
-            : (() => {
-                const sessionRecord = session as Record<string, unknown>;
-                const processorsData = sessionRecord.processors_data && typeof sessionRecord.processors_data === 'object'
-                    ? sessionRecord.processors_data as Record<string, unknown>
-                    : null;
-                const createTasksData = processorsData?.CREATE_TASKS && typeof processorsData.CREATE_TASKS === 'object'
-                    ? processorsData.CREATE_TASKS as { data?: unknown[] }
-                    : null;
-                return Array.isArray(createTasksData?.data)
-                    ? createTasksData.data
-                .map((item) => normalizeSessionPossibleTaskForApi(item))
-                .filter((item): item is Record<string, unknown> => item !== null)
-                    : [];
-            })();
 
         return res.status(200).json({
             success: true,
