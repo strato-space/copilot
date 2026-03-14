@@ -27,6 +27,7 @@
 - **23:13** Fixed the zero-state/count drift in Voice `Задачи`: the lifecycle filter axis is now always rendered, `Draft` count can fall back to the mutable draft baseline, and the parent `Задачи` count is computed as the sum of all lifecycle buckets including `Draft`.
 - **23:13** Removed the duplicate OperOps lifecycle summary widgets and moved the lifecycle counters fully into the tab labels, matching the approved target contract.
 - **23:13** Updated the spec and repo docs to the current beads picture, including the new open bug follow-ups and the revised convergence-wave status line.
+- **23:21** Verified the exact production Voice session and OperOps pages through Chrome MCP, confirmed the lifecycle-axis/count fixes live, and closed the follow-up bugs plus `copilot-ojxy.4` in beads.
 
 ### CHANGES
 - **02:04** Rewrote `plan/voice-task-surface-normalization-spec.md` so it now documents the approved next-wave replacement contract, separates runtime truth from target semantics, moves `PERIODIC` into recurrence ontology, inventories all 10 current recurring tasks, records that live history contains no `PROGRESS_0 / Rejected` task usage, and scopes `voicebot/codex_tasks` separately from the broader `bd`-backed OperOps Codex surface.
@@ -41,6 +42,7 @@
 - **23:13** Updated `app/src/pages/voice/SessionPage.tsx` so fixed lifecycle subtabs are keyed by target status order, `Draft` count reconciles against the local mutable draft baseline, and the parent `Задачи` count is derived from the full lifecycle sum.
 - **23:13** Updated `app/src/pages/operops/CRMPage.tsx` to remove the duplicate lifecycle widget row and keep lifecycle counts inline inside the main tab labels.
 - **23:13** Refreshed `app/__tests__/voice/{sessionPageTabCountersContract,sessionPageOperOpsTasksTabContract}.test.ts`, `app/__tests__/operops/crmPageCodexTabContract.test.ts`, `README.md`, `AGENTS.md`, `docs/VOICEBOT_API.md`, and `plan/voice-task-surface-normalization-spec.md` for the new zero-safe lifecycle-axis/count contract and the latest `bd` bug set (`copilot-e5cj`, `copilot-7jdj`, `copilot-krp8`).
+- **23:21** Updated `plan/voice-task-surface-normalization-spec.md` again so `## Status` and `## 15. BD` match the final bead state after live verification; closed `copilot-e5cj`, `copilot-7jdj`, `copilot-krp8`, and `copilot-ojxy.4`.
 
 ## 2026-03-13
 ### PROBLEM SOLVED
