@@ -1409,8 +1409,14 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 session_id: sessionId,
             });
         } catch (error) {
+            const backendError = axios.isAxiosError(error)
+                ? (error.response?.data as { error?: unknown } | undefined)?.error
+                : null;
+            const backendErrorText = typeof backendError === 'string' ? backendError : '';
+            const fallbackError = error instanceof Error ? error.message : String(error);
+            const errorText = backendErrorText || fallbackError || 'Не удалось запустить Summarize';
             console.error('Ошибка при ручном запуске Summarize:', error);
-            throw error;
+            throw new Error(errorText);
         }
     },
 

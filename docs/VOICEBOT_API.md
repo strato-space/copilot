@@ -17,7 +17,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 | `/api/voicebot/session` | `POST` | Session details for one session (`session_id` / `session_oid`). |
 | `/api/voicebot/sessions` | `POST` | Session list with filters/pagination. |
 | `/api/voicebot/session_log` | `POST` | Session event log from `automation_voice_bot_session_log`. |
-| `/api/voicebot/trigger_session_ready_to_summarize` | `POST` | Ensure project (PMO fallback), write `notify_requested` log event with `session_ready_to_summarize`. |
+| `/api/voicebot/trigger_session_ready_to_summarize` | `POST` | Enqueue `session_ready_to_summarize`, write `notify_requested` log event, and only assign PMO when a default PMO project exists; missing PMO must not hard-fail the route. |
 
 ## Content attach/upload endpoints
 
@@ -94,7 +94,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - same-scope rows are rewritten in place by canonical `row_id/id`
   - duplicate suppression applies to materialized task space, not to mutable `DRAFT_10` baseline rows
 - `process_possible_tasks` is now non-destructive:
-  - selected rows materialize into `BACKLOG_10`,
+  - selected rows materialize into `READY_10`,
   - accepted rows retain `source_kind=voice_session` plus acceptance metadata,
   - cleanup removes them from draft views but must not soft-delete the materialized task document
 - Automatic runtime path:
@@ -117,6 +117,8 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - `Codex`
   - `Screenshort`
 - `Log` intentionally has no count badge.
+- Session header upload is now owned by the top icon action row next to `Скачать Транскрипцию`; `SessionStatusWidget` is status-only.
+- Voice and OperOps task surfaces should render the target display labels `Draft / Ready / In Progress / Review / Done / Archive` instead of raw stored labels.
 - `Задачи` total + `Work / Review` counts are loaded through `/api/voicebot/session_tab_counts`.
 - `Codex` badge is derived from the same `codex/issues` source + session `source_ref` filter as the `Codex` tab content.
 - `Транскрипция`, `Категоризация`, and `Возможные задачи` show a subtle green pulse dot while their stage is still pending:

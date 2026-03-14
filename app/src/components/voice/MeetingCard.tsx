@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { Button, Select, message, Input, Tooltip } from 'antd';
-import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, ProfileOutlined, RedoOutlined } from '@ant-design/icons';
+import { Button, Select, message, Input, Tooltip, Modal } from 'antd';
+import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, ProfileOutlined, RedoOutlined, UploadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
@@ -10,6 +10,7 @@ import { SESSION_ACCESS_LEVELS, SESSION_ACCESS_LEVELS_DESCRIPTIONS, SESSION_ACCE
 import AddParticipantModal from './AddParticipantModal';
 import AccessUsersModal from './AccessUsersModal';
 import CustomPromptModal from './CustomPromptModal';
+import AudioUploader from './AudioUploader';
 import { buildGroupedProjectOptions } from './projectSelectOptions';
 import { readActiveSessionIdFromEvent, readVoiceFabGlobals } from '../../utils/voiceFabSync';
 import type { SessionAccessLevel } from '../../constants/permissions';
@@ -100,6 +101,7 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
     const [fabSessionState, setFabSessionState] = useState('idle');
     const [fabActiveSessionId, setFabActiveSessionId] = useState('');
     const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
+    const [uploaderModalVisible, setUploaderModalVisible] = useState(false);
 
     const patchUiState = (patch: Partial<MeetingCardUiState>): void => {
         setUiState((prev) => ({ ...prev, ...patch }));
@@ -680,6 +682,17 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                                 <DownloadOutlined />
                             </button>
                         </Tooltip>
+
+                        <Tooltip title="Загрузить аудио">
+                            <button
+                                className="voice-meeting-icon-button is-success"
+                                onClick={() => setUploaderModalVisible(true)}
+                                disabled={Boolean(voiceBotSession?.is_deleted)}
+                                aria-label="Загрузить аудио"
+                            >
+                                <UploadOutlined />
+                            </button>
+                        </Tooltip>
                     </div>
                 </div>
 
@@ -903,6 +916,14 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                 onCancel={() => setCustomPromptModalVisible(false)}
                 onRun={handleRunCustomPrompt}
             />
+            <Modal
+                title="Загрузка аудио"
+                open={uploaderModalVisible}
+                onCancel={() => setUploaderModalVisible(false)}
+                footer={null}
+            >
+                <AudioUploader sessionId={voiceBotSession?._id ?? ''} onUploadComplete={() => setUploaderModalVisible(false)} />
+            </Modal>
         </>
     );
 }

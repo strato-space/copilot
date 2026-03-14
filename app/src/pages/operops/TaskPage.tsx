@@ -35,6 +35,7 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useAuthStore } from '../../store/authStore';
 import type { TaskAttachment, Ticket, Performer } from '../../types/crm';
+import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
 import {
     resolveCanonicalTaskId,
     resolveTaskCreator,
@@ -313,7 +314,7 @@ const TaskPage = () => {
             {/* Status and Priority */}
             <div className="mb-6 flex gap-2 flex-wrap">
                 <Tag color={getStatusColor(task.task_status)} className="text-sm py-1 px-3">
-                    {task.task_status ?? 'Unknown'}
+                    {getTaskStatusDisplayLabel(task.task_status) || 'Unknown'}
                 </Tag>
                 {task.priority && (
                     <Tag color="red" className="text-sm py-1 px-3">

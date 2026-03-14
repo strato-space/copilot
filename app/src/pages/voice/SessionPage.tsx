@@ -8,6 +8,7 @@ import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useRequestStore } from '../../store/requestStore';
 import { voicebotHttp } from '../../store/voicebotHttp';
 import { buildVoiceSessionTaskSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
+import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
 import {
     countVisibleCategorizationGroups,
     countVisibleTranscriptionMessages,
@@ -256,7 +257,7 @@ export default function SessionPage() {
         return sessionTaskStatusCounts
             .map((entry) => {
                 const resolvedKey = resolveSessionStatusKey(entry.status);
-                const label = String(entry.label || '').trim() || (resolvedKey ? TASK_STATUSES[resolvedKey] : entry.status);
+                const label = String(entry.label || '').trim() || getTaskStatusDisplayLabel(entry.status);
                 return {
                     key: (resolvedKey ?? entry.status) as string,
                     label,

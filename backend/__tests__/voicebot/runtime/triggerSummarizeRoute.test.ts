@@ -50,7 +50,7 @@ const extractQueryObjectId = (query: unknown): ObjectId | null => {
   return null;
 };
 
-const buildDbStub = ({ withProject }: { withProject: boolean }) => {
+const buildDbStub = ({ withProject, withPmoProject = true }: { withProject: boolean; withPmoProject?: boolean }) => {
   const sessionId = new ObjectId();
   const performerId = new ObjectId('507f1f77bcf86cd799439011');
   const pmoProjectId = new ObjectId();
@@ -90,12 +90,15 @@ const buildDbStub = ({ withProject }: { withProject: boolean }) => {
   };
 
   const projectsCollection: StubCollection = {
-    findOne: jest.fn(async () => ({
-      _id: pmoProjectId,
-      name: 'PMO',
-      is_active: true,
-      is_deleted: false,
-    })),
+    findOne: jest.fn(async () => {
+      if (!withPmoProject) return null;
+      return {
+        _id: pmoProjectId,
+        name: 'PMO',
+        is_active: true,
+        is_deleted: false,
+      };
+    }),
   };
 
   const sessionLogCollection: StubCollection = {
@@ -229,6 +232,42 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
       expect.objectContaining({ $set: expect.objectContaining({ project_id: expect.any(ObjectId) }) })
     );
     expect(fixture.sessionLogCollection.insertOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fail when session has no project and default PMO project is missing', async () => {
+    const fixture = buildDbStub({ withProject: false, withPmoProject: false });
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+    const addNotifyJobMock = jest.fn(async () => ({ id: 'notify-job-2' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.NOTIFIES]: {
+        add: addNotifyJobMock,
+      },
+    });
+
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/trigger_session_ready_to_summarize')
+      .send({ session_id: fixture.sessionId.toString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.project_assigned).toBe(false);
+    expect(response.body.project_id).toBeNull();
+    expect(response.body.notify_enqueued).toBe(true);
+
+    expect(fixture.sessionsCollection.updateOne).not.toHaveBeenCalled();
+    expect(addNotifyJobMock).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+      expect.objectContaining({
+        session_id: fixture.sessionId.toString(),
+        payload: { project_id: null },
+      }),
+      expect.objectContaining({ attempts: 1 })
+    );
+
+    const metadata = fixture.insertedLogs[0]?.metadata as Record<string, unknown>;
+    expect(metadata.notify_payload).toEqual({ project_id: null });
   });
 
   it('returns 400 for missing session_id', async () => {

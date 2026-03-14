@@ -45,7 +45,8 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
-import { TARGET_EDITABLE_TASK_STATUSES, TASK_STATUSES } from '../../constants/crm';
+import { TARGET_EDITABLE_TASK_STATUSES, TARGET_TASK_STATUS_LABELS, TARGET_EDITABLE_TASK_STATUS_KEYS, TASK_STATUSES } from '../../constants/crm';
+import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
 import { normalizeVoiceSessionSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
@@ -445,9 +446,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
     const statusOptions = useMemo(
         () =>
-            TARGET_EDITABLE_TASK_STATUSES.map((value) => ({
-                value,
-                label: value,
+            TARGET_EDITABLE_TASK_STATUS_KEYS.map((key, index) => ({
+                value: TARGET_EDITABLE_TASK_STATUSES[index],
+                label: TARGET_TASK_STATUS_LABELS[key],
             })),
         []
     );
@@ -1020,7 +1021,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                             setEditingColumn(record, 'task_status');
                         }}
                     >
-                        {record.task_status}
+                        {getTaskStatusDisplayLabel(record.task_status)}
                     </div>
                 );
             },

@@ -5743,16 +5743,18 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
                     ],
                 });
             }
-            if (!pmoProject || !pmoProject._id) {
-                return res.status(500).json({ error: 'Default project PMO not found' });
+            if (pmoProject?._id) {
+                await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+                    runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+                    { $set: { project_id: pmoProject._id, updated_at: new Date() } }
+                );
+                projectIdToUse = String(pmoProject._id);
+                projectAssigned = true;
+            } else {
+                logger.warn('trigger_session_ready_to_summarize: PMO default project not found, continuing without project', {
+                    session_id: sessionId,
+                });
             }
-
-            await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-                runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-                { $set: { project_id: pmoProject._id, updated_at: new Date() } }
-            );
-            projectIdToUse = String(pmoProject._id);
-            projectAssigned = true;
         }
 
         const actor = buildActorFromPerformer(performer);
@@ -5768,19 +5770,19 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
             action: { available: true, type: 'resend' },
             metadata: {
                 notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
-                notify_payload: { project_id: projectIdToUse },
+                notify_payload: { project_id: projectIdToUse || null },
                 source: 'manual_trigger',
             },
         });
         const notifyEnqueued = await enqueueVoicebotNotify({
             sessionId,
             event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
-            payload: { project_id: projectIdToUse },
+            payload: { project_id: projectIdToUse || null },
         });
 
         return res.status(200).json({
             success: true,
-            project_id: projectIdToUse,
+            project_id: projectIdToUse || null,
             project_assigned: projectAssigned,
             event_oid: logEvent?._id ? formatOid('evt', logEvent._id as ObjectId) : null,
             notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,

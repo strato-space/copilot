@@ -21,6 +21,7 @@ import { parseCreateTasksMcpResult } from '../../utils/voicePossibleTasks';
 import type { Performer, Ticket } from '../../types/crm';
 import { resolveTaskProjectName, resolveTaskSourceInfo } from './taskPageUtils';
 import { buildVoiceBacklogGroups } from './voiceTabGrouping';
+import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
 
 interface VoiceSession {
     _id: string;
@@ -663,7 +664,7 @@ const CRMPage = () => {
             title: 'Status',
             key: 'status',
             width: 140,
-            render: (_, record) => record.task_status || '—',
+            render: (_, record) => getTaskStatusDisplayLabel(record.task_status) || '—',
         },
         {
             title: 'Performer',
@@ -941,7 +942,7 @@ const CRMPage = () => {
                                         styles={{ body: { padding: 24 } }}
                                     >
                                         <div className="mb-4 flex flex-wrap items-center gap-2">
-                                            <Tag color="blue">DRAFT_10: {voiceBacklogSummary.taskCount}</Tag>
+                                            <Tag color="blue">Draft: {voiceBacklogSummary.taskCount}</Tag>
                                             <Tag color="default">Групп: {voiceBacklogSummary.groupCount}</Tag>
                                             <Tag color="processing">Сессий: {voiceBacklogSummary.sessionCount}</Tag>
                                             <Tag color="warning">Orphan: {voiceBacklogSummary.orphanCount}</Tag>

@@ -343,6 +343,9 @@ Preferred engineering principles for this repo:
   - `process_possible_tasks` now promotes selected rows into `READY_10` while keeping draft rows in `DRAFT_10`,
   - selected rows leave draft views without being soft-deleted,
   - the agent must not route execution through `StratoProject`.
+- Manual `Summarize` must not hard-fail just because a session has no `project_id` and no default `PMO` project exists; backend should continue with `project_id=null`, and the frontend should surface the backend error text instead of a raw `AxiosError`.
+- Voice session header top action row owns both `Скачать Транскрипцию` and `Загрузить аудио`; `SessionStatusWidget` is status-only and must not keep a second upload control.
+- Voice and OperOps task displays should render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) through the shared display-layer mapping rather than exposing raw stored labels such as `Progress 10` or `Review / Ready`.
 - Historical Voice status normalization is handled by `backend/scripts/voicebot-migrate-task-statuses.ts` (`npm run voice:migrate-task-statuses:{dry,apply}`), with optional `--session <session_id>` scoping for production cleanup.
 - Voice/OperOps accepted-task filtering must match `source_data.voice_sessions[].session_id` in addition to canonical session URL refs in `source_ref` / `external_ref`; otherwise repaired or migrated rows can disappear from session-scoped task views.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.

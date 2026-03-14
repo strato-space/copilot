@@ -122,6 +122,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - Voice session task counters normalize legacy stored statuses into the target lifecycle axis,
   - generic CRM status pickers now expose only the target editable subset (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`),
   - miniapp treats recurring work as lifecycle work plus recurring metadata instead of a standalone `Periodic` bucket.
+  - manual `Summarize` no longer hard-fails just because a session has no `project_id` and no default `PMO` project exists; backend continues with `project_id=null` and the frontend surfaces backend error text instead of a raw Axios wrapper.
 - Voice session `Задачи` count excludes draft rows with `source_kind = voice_possible_task`; the tab now reflects accepted tasks only.
 - Repaired materialized rows can be restored with:
   - `cd backend && npm run voice:repair:softdeleted-materialized:dry -- --session <session_id>`
@@ -139,9 +140,11 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Categorization table no longer renders `Src` and `Quick Summary` columns (`copilot-eejo`); phase-1 view is status + text + `Materials` with sortable order.
 - Session close initiation is REST-first: clients call `POST /api/voicebot/session_done` and fail fast on errors; websocket is used for server-originated realtime updates only (`session_status`, `session_update`, `new_message`, `message_update`).
 - Voice session header includes a `Tasks` action before `Summarize`; it generates possible tasks from current meeting context without waiting for session close.
+- Voice session header top action row now owns both `Скачать Транскрипцию` and `Загрузить аудио`; `SessionStatusWidget` is status-only and no longer owns upload controls.
 - Voice session tabs now show compact counts for `Транскрипция`, `Категоризация`, `Возможные задачи`, `Задачи`, `Codex`, and `Screenshort`; `Log` stays count-free.
 - `Задачи` is a new-contract-only view: the parent tab keeps total count, and the subtab list must come from backend `status_counts` (`voicebot/session_tab_counts`) with no fallback to legacy `tasks_work_count` / `tasks_review_count`.
 - Frontend Voice task tabs must translate backend status labels back into canonical CRM status keys before filtering `CRMKanban`; label strings are not valid task-status filter inputs by themselves.
+- Voice and OperOps task displays must render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) rather than raw stored labels like `Progress 10` or `Review / Ready`.
 - `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.
 - `Транскрипция`, `Категоризация`, and `Возможные задачи` tabs now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.

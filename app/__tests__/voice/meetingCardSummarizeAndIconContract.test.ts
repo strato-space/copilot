@@ -24,4 +24,16 @@ describe('MeetingCard summarize + circle icon alignment contract', () => {
     expect(source).toContain('icon={<span style={circleIconWrapperStyle}><ProfileOutlined');
     expect(source).toContain("icon={<span style={circleIconWrapperStyle}><span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span></span>}");
   });
+
+  it('moves upload audio into the top icon toolbar after download transcription', () => {
+    const idxDownload = source.indexOf('Tooltip title="Скачать Транскрипцию"');
+    const idxUpload = source.indexOf('Tooltip title="Загрузить аудио"');
+
+    expect(idxDownload).toBeGreaterThan(-1);
+    expect(idxUpload).toBeGreaterThan(idxDownload);
+    expect(source).toContain('aria-label="Загрузить аудио"');
+    expect(source).toContain('setUploaderModalVisible(true)');
+    expect(source).toContain('disabled={Boolean(voiceBotSession?.is_deleted)}');
+    expect(source).toContain('<AudioUploader sessionId={voiceBotSession?._id ?? \'\'} onUploadComplete={() => setUploaderModalVisible(false)} />');
+  });
 });

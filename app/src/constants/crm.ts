@@ -39,7 +39,7 @@ export const TASK_STATUSES = {
 export type TaskStatusKey = keyof typeof TASK_STATUSES;
 export type TaskStatusValue = (typeof TASK_STATUSES)[TaskStatusKey];
 
-export const TARGET_EDITABLE_TASK_STATUS_KEYS = [
+export const TARGET_TASK_STATUS_KEYS = [
     'DRAFT_10',
     'READY_10',
     'PROGRESS_10',
@@ -47,6 +47,17 @@ export const TARGET_EDITABLE_TASK_STATUS_KEYS = [
     'DONE_10',
     'ARCHIVE',
 ] as const satisfies readonly TaskStatusKey[];
+
+export const TARGET_TASK_STATUS_LABELS: Record<(typeof TARGET_TASK_STATUS_KEYS)[number], string> = {
+    DRAFT_10: 'Draft',
+    READY_10: 'Ready',
+    PROGRESS_10: 'In Progress',
+    REVIEW_10: 'Review',
+    DONE_10: 'Done',
+    ARCHIVE: 'Archive',
+};
+
+export const TARGET_EDITABLE_TASK_STATUS_KEYS = TARGET_TASK_STATUS_KEYS;
 
 export const TARGET_EDITABLE_TASK_STATUSES = TARGET_EDITABLE_TASK_STATUS_KEYS.map(
     (statusKey) => TASK_STATUSES[statusKey]

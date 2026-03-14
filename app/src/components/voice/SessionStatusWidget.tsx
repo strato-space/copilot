@@ -1,10 +1,5 @@
-import { useState } from 'react';
-import { Button, Modal, Tooltip } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
-
+import { Tooltip } from 'antd';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
-import AudioUploader from './AudioUploader';
-import type { VoiceBotSession } from '../../types/voice';
 
 interface StatusFlag {
     key: string;
@@ -23,7 +18,6 @@ const getProcessorStatus = (pdata?: Record<string, unknown>): { icon: string; co
 
 export default function SessionStatusWidget() {
     const voiceBotSession = useVoiceBotStore((state) => state.voiceBotSession);
-    const [uploaderModalVisible, setUploaderModalVisible] = useState(false);
 
     if (!voiceBotSession) return null;
 
@@ -97,26 +91,7 @@ export default function SessionStatusWidget() {
                         </div>
                     )}
                 </div>
-                <Button
-                    type="default"
-                    icon={<UploadOutlined />}
-                    className="voice-status-upload-button"
-                    onClick={() => setUploaderModalVisible(true)}
-                    disabled={Boolean(voiceBotSession.is_deleted)}
-                    size="middle"
-                >
-                    Загрузить аудио
-                </Button>
             </div>
-
-            <Modal
-                title="Загрузка аудио"
-                open={uploaderModalVisible}
-                onCancel={() => setUploaderModalVisible(false)}
-                footer={null}
-            >
-                <AudioUploader sessionId={voiceBotSession._id} onUploadComplete={() => setUploaderModalVisible(false)} />
-            </Modal>
         </div>
     );
 }
