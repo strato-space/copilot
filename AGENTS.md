@@ -73,7 +73,7 @@ Use these as non-negotiable implementation constraints derived from `origin/main
   - canonical generated ontology output is `ontology/typedb/schema/str-ontology.tql`;
   - editable source fragments are under `ontology/typedb/schema/fragments/*.tql`;
   - generated inventory and sampling artifacts live under `ontology/typedb/inventory_latest/*`,
-  - operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*,rollout:start,rollout:stop,rollout:clear-logs,rollout:status}`,
+  - operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:core:*,sync:enrich:*,sync:*,full:from-scratch:apply,rollout:start,rollout:stop,rollout:clear-logs,rollout:status}`,
   - rollout terms are ontology-distinct:
     - `cleanup_apply` = core hygiene pass for canonical AS-IS entities/required relations;
     - `historical_backfill` = enrichment pass for derived projections/support objects.
@@ -626,6 +626,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-15 22:03):
+  - Landed the staged ontology operator bundle for `copilot-8wn1`: repo/backend operator commands now expose `sync:core`, `sync:enrich`, and `full:from-scratch`, while the ingest engine and rollout chain distinguish cleanup hygiene from historical backfill and skip session-derived projections during focused cleanup.
+  - Added/accepted the checked-in performance artifact `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md` together with the new operator helpers `ontology/typedb/scripts/typedb-sync-chain.sh` and `ontology/typedb/scripts/typedb-full-from-scratch.sh`.
+  - `copilot-8wn1` remains `in_progress`; handoff analysis tasks `copilot-sdqt` and `copilot-b96r` stay open for restored optimization-bundle / stash reconciliation and are not treated as deploy blockers for this closeout.
+  - Validation passed: `cd backend && npm run build`, `cd backend && bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/tests/test_ingest_modes.py`, `cd backend && npm run ontology:typedb:sync:dry -- --limit 5`, and `cd backend && npm run ontology:typedb:full:from-scratch:apply -- --typedb-database str_opsportal_profile_smoke_close_session_20260315 --limit 1` (expected validate warnings under `--limit 1` sample load).
 - Close-session refresh (2026-03-15 10:38):
   - Closed `copilot-kvdp`: Codex tab issue IDs now expose the same copy affordance as other Codex surfaces; drawer-open and external-link behaviors remain intact, and the inline token layout was corrected after Chrome MCP verification showed the copy icon wrapping below the issue pill.
   - Closed `copilot-shdv`: `/api/crm/codex/issues` now falls back to direct JSONL parsing when `bd list` stays out-of-sync after failed `bd sync --import-only`, covering the observed `bufio.Scanner: token too long` recovery failure.

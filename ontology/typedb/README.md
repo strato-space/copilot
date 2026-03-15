@@ -22,6 +22,28 @@ This folder contains a first executable scaffold of the STR OpsPortal ontology i
 - Generated TQL output is built from `schema/fragments/*.tql` via `scripts/build-typedb-schema.py`.
 - Ontology operator scripts now auto-load `backend/.env.production` when shell env is absent, so `contract-check`, `domain-inventory`, `entity-sampling`, and `ingest` can be run directly from `copilot/backend` without manual Mongo export in normal prod-local workflows.
 
+## Cleanup Apply vs Historical Backfill (2026-03-15)
+
+These terms are now defined operationally and must not be used as synonyms.
+
+- `cleanup_apply`
+  - genus: data-hygiene operation;
+  - object: canonical AS-IS entities and the minimum required relations needed for current aggregate validation gates;
+  - current `copilot-8wn1` implementation: `automation_tasks` plus core `voice_session` / `project_has_voice_session` repair, with `--skip-session-derived-projections`.
+- `historical_backfill`
+  - genus: semantic enrichment operation;
+  - object: derived projections and support objects whose absence does not block the current hygiene objective;
+  - current rollout chain: runs only after cleanup+validate succeed.
+
+Why this distinction exists:
+
+- Treating cleanup and backfill as one kind of ingest was a category mistake.
+- Counterexample: rebuilding `mode_segment`, session processor runs, and summary bridge objects during `copilot-8wn1` cleanup made `automation_voice_bot_sessions` throughput collapse even though the cleanup validator only needed core `voice_session` state plus project linkage.
+- Minimal repair: cleanup now targets the proper object of the ticket, and backfill remains the place for broader semantic reconstruction.
+
+Current measured profile is versioned in:
+- `docs/ingest_performance_profile_2026-03-15.md`
+
 
 ## Schema Layout
 
@@ -174,6 +196,8 @@ These remain operational/runtime-facing or are intentionally replaced by object-
 
 - `scripts/typedb-ontology-ingest.py` - MongoDB -> TypeDB ingestion tool
 - `scripts/typedb-ontology-validate.py` - ontology validation checks
+- `scripts/typedb-sync-chain.sh` - staged incremental sync runner (`core` then `enrichment`, one watermark commit at the end)
+- `scripts/typedb-full-from-scratch.sh` - empty-DB full load runner with schema recreation and post-load validate
 - `scripts/typedb-ontology-domain-inventory.py` - distinct-value inventory for dictionary-like mapped fields
 - `scripts/typedb-ontology-entity-sampling.py` - Mongo-backed entity/document sampling for ontology verification and compact ontology examples
 - `scripts/run-typedb-python.sh` - helper launcher for ontology Python venv
@@ -183,6 +207,7 @@ These remain operational/runtime-facing or are intentionally replaced by object-
 - `mappings/mongodb_to_typedb_v1.yaml` - MongoDB to TypeDB mapping contract
 - `queries/validation_v1.tql` - validation and smoke-check queries
 - `docs/rollout_plan_v1.md` - phased implementation plan
+- `docs/ingest_performance_profile_2026-03-15.md` - measured cleanup throughput before/after the 2026-03-15 rollout tuning wave
 
 ## Scope of v1 scaffold
 
@@ -301,8 +326,13 @@ From `copilot/backend`:
 - `npm run ontology:typedb:entity-sampling`
 - `npm run ontology:typedb:ingest:dry`
 - `npm run ontology:typedb:ingest:apply -- --init-schema`
+- `npm run ontology:typedb:sync:core:dry`
+- `npm run ontology:typedb:sync:core:apply`
+- `npm run ontology:typedb:sync:enrich:dry`
+- `npm run ontology:typedb:sync:enrich:apply`
 - `npm run ontology:typedb:sync:dry`
 - `npm run ontology:typedb:sync:apply`
+- `npm run ontology:typedb:full:from-scratch:apply -- --typedb-database <bench_db>`
 - `npm run ontology:typedb:validate`
 
 ### Operator Runbook (Dev, Verified 2026-02-28)

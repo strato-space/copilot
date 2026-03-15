@@ -140,6 +140,14 @@ export const MONGO_INDEX_NAMES = {
   ID: '_id_',
 
   TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG: 'idx_tasks_is_deleted_task_status_runtime_tag',
+  PROJECTS_UPDATED_AT_ID: 'idx_projects_updated_at_id',
+  PROJECTS_CREATED_AT_ID: 'idx_projects_created_at_id',
+  TASKS_UPDATED_AT_ID: 'idx_tasks_updated_at_id',
+  TASKS_CREATED_AT_ID: 'idx_tasks_created_at_id',
+  VOICE_SESSIONS_UPDATED_AT_ID: 'idx_voice_sessions_updated_at_id',
+  VOICE_SESSIONS_CREATED_AT_ID: 'idx_voice_sessions_created_at_id',
+  VOICE_MESSAGES_UPDATED_AT_ID: 'idx_voice_messages_updated_at_id',
+  VOICE_MESSAGES_CREATED_AT_ID: 'idx_voice_messages_created_at_id',
   WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG: 'idx_work_hours_ticket_db_id_runtime_tag',
   PROJECT_PERFORMER_LINKS_PROJECT_PERFORMER_ACTIVE: 'idx_project_performer_links_project_performer_active',
   TELEGRAM_CHATS_CHAT_ID: 'idx_telegram_chats_chat_id',
@@ -161,12 +169,76 @@ export const MONGO_EXISTING_INDEX_NAMES_BY_COLLECTION: Record<string, readonly s
 
 export const MONGO_STARTUP_INDEXES = [
   {
+    collection: COLLECTIONS.PROJECTS,
+    name: MONGO_INDEX_NAMES.PROJECTS_UPDATED_AT_ID,
+    key: {
+      updated_at: 1,
+      _id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.PROJECTS,
+    name: MONGO_INDEX_NAMES.PROJECTS_CREATED_AT_ID,
+    key: {
+      created_at: 1,
+      _id: 1,
+    },
+  },
+  {
     collection: COLLECTIONS.TASKS,
     name: MONGO_INDEX_NAMES.TASKS_IS_DELETED_TASK_STATUS_RUNTIME_TAG,
     key: {
       is_deleted: 1,
       task_status: 1,
       runtime_tag: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.TASKS,
+    name: MONGO_INDEX_NAMES.TASKS_UPDATED_AT_ID,
+    key: {
+      updated_at: 1,
+      _id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.TASKS,
+    name: MONGO_INDEX_NAMES.TASKS_CREATED_AT_ID,
+    key: {
+      created_at: 1,
+      _id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.VOICE_BOT_SESSIONS,
+    name: MONGO_INDEX_NAMES.VOICE_SESSIONS_UPDATED_AT_ID,
+    key: {
+      updated_at: 1,
+      _id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.VOICE_BOT_SESSIONS,
+    name: MONGO_INDEX_NAMES.VOICE_SESSIONS_CREATED_AT_ID,
+    key: {
+      created_at: 1,
+      _id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.VOICE_BOT_MESSAGES,
+    name: MONGO_INDEX_NAMES.VOICE_MESSAGES_UPDATED_AT_ID,
+    key: {
+      updated_at: 1,
+      _id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.VOICE_BOT_MESSAGES,
+    name: MONGO_INDEX_NAMES.VOICE_MESSAGES_CREATED_AT_ID,
+    key: {
+      created_at: 1,
+      _id: 1,
     },
   },
   {

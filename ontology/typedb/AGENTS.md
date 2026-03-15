@@ -47,6 +47,12 @@ From `/home/strato-space/copilot/backend`:
 - `ontology:typedb:contract-check` — validate MongoDB documents against schema+mapping without TypeDB writes.
 - `ontology:typedb:ingest:*` — full scan / bootstrap path.
 - `ontology:typedb:sync:*` — incremental sync path using sync-state watermarks. Current safe scope is `automation_projects` + `automation_tasks` + `automation_voice_bot_sessions` + `automation_voice_bot_messages`.
+- rollout subclasses:
+  - `cleanup_apply` — a hygiene pass for canonical AS-IS entities and required relations only;
+  - `historical_backfill` — an enrichment pass for derived projections and broader historical materialization.
+- current operator rule:
+  - do not benchmark `cleanup_apply` and `historical_backfill` as one species of ingest;
+  - `copilot-8wn1` cleanup intentionally runs `automation_voice_bot_sessions` with `--skip-session-derived-projections`, because those projections belong to enrichment, not to the current hygiene objective.
 - Absence/tombstone semantics are documented in:
   - `ontology/typedb/docs/incremental_absence_policy_v1.md`
 - current collection-level rule:
@@ -83,6 +89,10 @@ If you changed only docs, state explicitly that runtime validation was skipped.
 
 ## Recent Updates
 
+- 2026-03-15: rollout ontology was normalized for `copilot-8wn1`:
+  - `cleanup_apply` and `historical_backfill` are now documented as different operation classes rather than one generic ingest bucket,
+  - focused cleanup apply uses `--skip-session-derived-projections` for `automation_voice_bot_sessions`,
+  - throughput profile and before/after measurements were recorded in `docs/ingest_performance_profile_2026-03-15.md`.
 - 2026-02-28: `copilot-gym6.*` runtime-parity wave completed for schema/mapping/validation/tooling:
   - added gap baseline `docs/runtime_contract_gap_matrix_v1.md`,
   - expanded OperOps/Codex task contract coverage in schema/mapping,

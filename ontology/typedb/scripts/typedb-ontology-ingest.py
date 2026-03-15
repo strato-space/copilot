@@ -7,8 +7,8 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 from typing import Any, Callable, Optional
 
 from bson import ObjectId
@@ -53,6 +53,8 @@ SUPPORTED_COLLECTIONS = [
 TYPEDB_SAFE_STRING_BYTES = 60_000
 VOICE_TRANSCRIPT_MAX_BYTES = 1_048_576
 VOICE_TRANSCRIPT_CHUNK_BYTES = 60_000
+TYPEDB_COMMIT_RETRY_ATTEMPTS = 3
+TYPEDB_COMMIT_RETRY_BASE_DELAY_SECONDS = 0.25
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 TYPEDB_ROOT_DIR = SCRIPT_DIR.parent
 COPILOT_ROOT_DIR = TYPEDB_ROOT_DIR.parent.parent
@@ -87,20 +89,91 @@ TOMBSTONE_RELATIONS: dict[str, set[str]] = {
     },
 }
 
+CACHED_BINARY_RELATIONS = {
+    "project_has_oper_task",
+    "project_has_voice_session",
+    "voice_session_has_message",
+}
+
+APPEND_ONLY_DERIVED_MESSAGE_ENTITIES = {
+    "object_event",
+    "voice_transcription",
+    "transcript_segment",
+    "voice_categorization_entry",
+    "file_descriptor",
+    "message_attachment",
+    "processing_run",
+    "task_draft",
+    "artifact_record",
+}
+
+APPEND_ONLY_DERIVED_MESSAGE_RELATIONS = {
+    "as_is_voice_message_maps_to_object_event",
+    "object_event_affects_mode_segment",
+    "voice_message_has_transcription",
+    "voice_transcription_has_transcript_segment",
+    "voice_message_has_categorization_entry",
+    "voice_message_has_file_descriptor",
+    "voice_message_has_attachment",
+    "voice_message_processed_by_run",
+    "processing_run_uses_processor_definition",
+    "processing_run_produces_task_draft",
+    "as_is_attachment_maps_to_artifact_record",
+    "voice_message_chunked_as_transcript_chunk",
+}
+
+VOICE_MESSAGE_CORE_ATTRS = {
+    "source_type",
+    "session_id",
+    "session_type",
+    "message_type",
+    "message_id",
+    "chat_id",
+    "speaker",
+    "file_id",
+    "file_hash",
+    "hash_sha256",
+    "file_unique_id",
+    "file_path",
+    "file_name",
+    "file_size",
+    "mime_type",
+    "duration",
+    "text",
+    "message_timestamp",
+    "timestamp",
+    "is_finalized",
+    "is_deleted",
+    "is_image_anchor",
+    "image_anchor_message_id",
+    "image_anchor_linked_at",
+    "to_transcribe",
+    "uploaded_by",
+    "user_id",
+    "username",
+    "runtime_tag",
+    "created_at",
+    "updated_at",
+}
+
 
 @dataclass
 class CliOptions:
     apply: bool
     init_schema: bool
     sync_mode: str
+    projection_scope: str
     run_id: str
     limit: Optional[int]
     collections: list[str]
     deadletter_path: pathlib.Path
     sync_state_path: pathlib.Path
     reset_sync_state: bool
+    skip_sync_state_write: bool
     heartbeat_docs: int
     heartbeat_seconds: int
+    skip_session_derived_projections: bool
+    assume_empty_db: bool
     typedb_addresses: list[str]
     typedb_primary_address: str
     typedb_username: str
@@ -137,6 +210,10 @@ class IngestContext:
     entity_relation_roles: dict[tuple[str, str], set[str]]
     sync_state: dict[str, Any]
     run_started_at: float
+    relation_role_cache: dict[tuple[str, str, str, Optional[str]], Optional[tuple[str, str]]] = field(default_factory=dict)
+    ensured_entity_keys: set[tuple[str, str, str]] = field(default_factory=set)
+    entity_updated_at_cache: dict[tuple[str, str], dict[str, datetime]] = field(default_factory=dict)
+    binary_relation_cache: dict[tuple[str, str, str, str, str], dict[str, set[str]]] = field(default_factory=dict)
 
 
 class DeadletterWriter:
@@ -180,6 +257,12 @@ def parse_args() -> argparse.Namespace:
         default="full",
         help="Choose full scan or incremental sync mode",
     )
+    parser.add_argument(
+        "--projection-scope",
+        choices=["full", "core", "derived"],
+        default="full",
+        help="Choose full semantic projection, core-only projection, or derived-only projection scope",
+    )
     parser.add_argument("--limit", type=int, default=None, help="Limit documents per collection")
     parser.add_argument(
         "--collections",
@@ -201,6 +284,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--reset-sync-state", action="store_true", help="Reset stored incremental sync state")
     parser.add_argument(
+        "--skip-sync-state-write",
+        action="store_true",
+        help="Do not persist sync-state updates at the end of the run",
+    )
+    parser.add_argument(
         "--heartbeat-docs",
         type=int,
         default=250,
@@ -211,6 +299,16 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=60,
         help="Emit heartbeat if N seconds elapsed since last collection heartbeat (0 disables time heartbeat)",
+    )
+    parser.add_argument(
+        "--skip-session-derived-projections",
+        action="store_true",
+        help="Skip derived session projections and support relations; keep core voice_session + project link only",
+    )
+    parser.add_argument(
+        "--assume-empty-db",
+        action="store_true",
+        help="Assume the target TypeDB database is empty and skip existence/reconcile checks for bulk append-only loads",
     )
     parser.add_argument("--typedb-addresses", type=str, default=None)
     parser.add_argument("--typedb-username", type=str, default=None)
@@ -312,14 +410,18 @@ def parse_options(args: argparse.Namespace) -> CliOptions:
         apply=bool(args.apply),
         init_schema=bool(args.init_schema),
         sync_mode=args.sync_mode,
+        projection_scope="core" if bool(args.skip_session_derived_projections) else args.projection_scope,
         run_id=(args.run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())).strip(),
         limit=args.limit,
         collections=collections,
         deadletter_path=pathlib.Path(args.deadletter).resolve(),
         sync_state_path=pathlib.Path(args.sync_state).resolve(),
         reset_sync_state=bool(args.reset_sync_state),
+        skip_sync_state_write=bool(args.skip_sync_state_write),
         heartbeat_docs=int(args.heartbeat_docs),
         heartbeat_seconds=int(args.heartbeat_seconds),
+        skip_session_derived_projections=bool(args.skip_session_derived_projections),
+        assume_empty_db=bool(args.assume_empty_db),
         typedb_addresses=addresses,
         typedb_primary_address=addresses[0],
         typedb_username=args.typedb_username or os.getenv("TYPEDB_USERNAME") or "admin",
@@ -721,17 +823,195 @@ def update_sync_state_for_doc(ctx: IngestContext, collection: str, doc: dict[str
         collection_state["last_seen_object_id"] = object_id
 
 
+def is_core_projection_scope(ctx: IngestContext) -> bool:
+    return ctx.options.projection_scope == "core"
+
+
+def is_derived_projection_scope(ctx: IngestContext) -> bool:
+    return ctx.options.projection_scope == "derived"
+
+
+def use_append_only_message_derived_path(ctx: IngestContext, entity_or_relation: str) -> bool:
+    if not is_derived_projection_scope(ctx):
+        return False
+    return (
+        entity_or_relation in APPEND_ONLY_DERIVED_MESSAGE_ENTITIES
+        or entity_or_relation in APPEND_ONLY_DERIVED_MESSAGE_RELATIONS
+    )
+
+
+def is_retryable_typedb_conflict(error: Exception) -> bool:
+    text = str(error)
+    return "[STC2]" in text or "isolation conflict" in text.lower()
+
+
 def execute_query_in_transaction(driver: Any, database: str, tx_type: TransactionType, query: str) -> None:
-    tx = driver.transaction(database, tx_type)
-    try:
-        tx.query(query).resolve()
-        tx.commit()
-    except Exception:
+    execute_queries_in_transaction(driver, database, tx_type, [query])
+
+
+def execute_queries_in_transaction(driver: Any, database: str, tx_type: TransactionType, queries: list[str]) -> None:
+    filtered_queries = [query.strip() for query in queries if isinstance(query, str) and query.strip()]
+    if not filtered_queries:
+        return
+    last_error: Optional[Exception] = None
+    for attempt in range(1, TYPEDB_COMMIT_RETRY_ATTEMPTS + 1):
+        tx = driver.transaction(database, tx_type)
         try:
-            tx.rollback()
-        except Exception as rollback_error:
-            print(f"[typedb-ontology-ingest] rollback warning: {rollback_error}", file=sys.stderr)
-        raise
+            for query in filtered_queries:
+                tx.query(query).resolve()
+            tx.commit()
+            return
+        except Exception as error:
+            last_error = error
+            try:
+                tx.rollback()
+            except Exception as rollback_error:
+                print(f"[typedb-ontology-ingest] rollback warning: {rollback_error}", file=sys.stderr)
+            if attempt >= TYPEDB_COMMIT_RETRY_ATTEMPTS or not is_retryable_typedb_conflict(error):
+                raise
+            delay = TYPEDB_COMMIT_RETRY_BASE_DELAY_SECONDS * attempt
+            print(
+                f"[typedb-ontology-ingest] commit_retry attempt={attempt} delay_s={delay:.2f} error={error}",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+        finally:
+            try:
+                tx.close()
+            except Exception as close_error:
+                print(f"[typedb-ontology-ingest] closeTransaction warning: {close_error}", file=sys.stderr)
+    if last_error is not None:
+        raise last_error
+
+
+def extract_first_value(answer: Any) -> Any:
+    if not answer.is_concept_rows():
+        return None
+    rows = list(answer.as_concept_rows().iterator)
+    if not rows:
+        return None
+
+    first_row = rows[0]
+    for column in list(first_row.column_names()):
+        concept = first_row.get(column)
+        if concept is None or not concept.is_value():
+            continue
+        value = concept.as_value()
+        if value.is_datetime():
+            return parse_iso_datetime(str(value.get_datetime()))
+        if value.is_datetime_tz():
+            return parse_iso_datetime(str(value.get_datetime_tz()))
+        if value.is_date():
+            return datetime.combine(value.get_date(), datetime.min.time())
+        if value.is_string():
+            return value.get_string()
+        if value.is_integer():
+            return value.get_integer()
+        if value.is_double():
+            return value.get_double()
+        if value.is_decimal():
+            return value.get_decimal()
+    return None
+
+
+def concept_value_to_python(concept: Any) -> Any:
+    if concept is None:
+        return None
+    if concept.is_attribute():
+        attribute = concept.as_attribute()
+        if attribute.is_datetime():
+            return parse_iso_datetime(str(attribute.get_datetime()))
+        if attribute.is_date():
+            return datetime.combine(attribute.get_date(), datetime.min.time())
+        if attribute.is_string():
+            return attribute.get_string()
+        if attribute.is_integer():
+            return attribute.get_integer()
+        if attribute.is_double():
+            return attribute.get_double()
+        if attribute.is_decimal():
+            return attribute.get_decimal()
+        if attribute.is_boolean():
+            return attribute.get_boolean()
+        return None
+    if not concept.is_value():
+        return None
+    value = concept.as_value()
+    if value.is_datetime():
+        return parse_iso_datetime(str(value.get_datetime()))
+    if value.is_datetime_tz():
+        return parse_iso_datetime(str(value.get_datetime_tz()))
+    if value.is_date():
+        return datetime.combine(value.get_date(), datetime.min.time())
+    if value.is_string():
+        return value.get_string()
+    if value.is_integer():
+        return value.get_integer()
+    if value.is_double():
+        return value.get_double()
+    if value.is_decimal():
+        return value.get_decimal()
+    return None
+
+
+def load_entity_updated_at_index(
+    driver: Any,
+    database: str,
+    *,
+    entity: str,
+    key_attr: str,
+) -> dict[str, datetime]:
+    tx = driver.transaction(database, TransactionType.READ)
+    try:
+        answer = tx.query(
+            f"match $e isa {entity}, has {key_attr} $key, has updated_at $updated_at;"
+        ).resolve()
+        if not answer.is_concept_rows():
+            return {}
+        result: dict[str, datetime] = {}
+        for row in answer.as_concept_rows().iterator:
+            key = concept_value_to_python(row.get("key"))
+            updated_at = concept_value_to_python(row.get("updated_at"))
+            if isinstance(key, str) and isinstance(updated_at, datetime):
+                result[key] = updated_at
+        return result
+    finally:
+        try:
+            tx.close()
+        except Exception as close_error:
+            print(f"[typedb-ontology-ingest] closeTransaction warning: {close_error}", file=sys.stderr)
+
+
+def load_binary_relation_index(
+    driver: Any,
+    database: str,
+    *,
+    relation_name: str,
+    left_role: str,
+    left_entity: str,
+    left_key_attr: str,
+    right_role: str,
+    right_entity: str,
+    right_key_attr: str,
+) -> dict[str, set[str]]:
+    tx = driver.transaction(database, TransactionType.READ)
+    try:
+        answer = tx.query(
+            f"match "
+            f"$rel ({left_role}: $left, {right_role}: $right) isa {relation_name}; "
+            f"$left isa {left_entity}, has {left_key_attr} $left_key; "
+            f"$right isa {right_entity}, has {right_key_attr} $right_key; "
+            f"get $left_key, $right_key;"
+        ).resolve()
+        if not answer.is_concept_rows():
+            return {}
+        result: dict[str, set[str]] = {}
+        for row in answer.as_concept_rows().iterator:
+            left_key = concept_value_to_python(row.get("left_key"))
+            right_key = concept_value_to_python(row.get("right_key"))
+            if isinstance(left_key, str) and isinstance(right_key, str):
+                result.setdefault(left_key, set()).add(right_key)
+        return result
     finally:
         try:
             tx.close()
@@ -758,6 +1038,125 @@ def query_has_rows(driver: Any, database: str, query: str) -> bool:
             print(f"[typedb-ontology-ingest] closeTransaction warning: {close_error}", file=sys.stderr)
 
 
+def query_first_value(driver: Any, database: str, query: str) -> Any:
+    tx = driver.transaction(database, TransactionType.READ)
+    try:
+        answer = tx.query(query).resolve()
+        return extract_first_value(answer)
+    finally:
+        try:
+            tx.close()
+        except Exception as close_error:
+            print(f"[typedb-ontology-ingest] closeTransaction warning: {close_error}", file=sys.stderr)
+
+
+def relation_pair_exists(
+    ctx: IngestContext,
+    *,
+    relation_name: str,
+    left_role: str,
+    left_entity: str,
+    left_key_attr: str,
+    left_key_value: str,
+    right_role: str,
+    right_entity: str,
+    right_key_attr: str,
+    right_key_value: str,
+) -> bool:
+    if relation_name not in CACHED_BINARY_RELATIONS:
+        return False
+    if not ctx.options.apply or ctx.typedb_driver is None or ctx.options.assume_empty_db:
+        return False
+    cache_key = (relation_name, left_role, left_key_attr, right_role, right_key_attr)
+    relation_index = ctx.binary_relation_cache.get(cache_key)
+    if relation_index is None:
+        relation_index = load_binary_relation_index(
+            ctx.typedb_driver,
+            ctx.options.typedb_database,
+            relation_name=relation_name,
+            left_role=left_role,
+            left_entity=left_entity,
+            left_key_attr=left_key_attr,
+            right_role=right_role,
+            right_entity=right_entity,
+            right_key_attr=right_key_attr,
+        )
+        ctx.binary_relation_cache[cache_key] = relation_index
+    return right_key_value in relation_index.get(left_key_value, set())
+
+
+def relation_owner_values_match(
+    ctx: IngestContext,
+    *,
+    relation_name: str,
+    left_role: str,
+    left_entity: str,
+    left_key_attr: str,
+    left_key_value: str,
+    right_role: str,
+    right_entity: str,
+    right_key_attr: str,
+    desired_values: set[str],
+) -> bool:
+    if relation_name not in CACHED_BINARY_RELATIONS:
+        return False
+    if not ctx.options.apply or ctx.typedb_driver is None or ctx.options.assume_empty_db:
+        return False
+    cache_key = (relation_name, left_role, left_key_attr, right_role, right_key_attr)
+    relation_index = ctx.binary_relation_cache.get(cache_key)
+    if relation_index is None:
+        relation_index = load_binary_relation_index(
+            ctx.typedb_driver,
+            ctx.options.typedb_database,
+            relation_name=relation_name,
+            left_role=left_role,
+            left_entity=left_entity,
+            left_key_attr=left_key_attr,
+            right_role=right_role,
+            right_entity=right_entity,
+            right_key_attr=right_key_attr,
+        )
+        ctx.binary_relation_cache[cache_key] = relation_index
+    current_values = relation_index.get(left_key_value, set())
+    return current_values == desired_values
+
+
+def remember_relation_pair(
+    ctx: IngestContext,
+    *,
+    relation_name: str,
+    left_role: str,
+    left_key_attr: str,
+    left_key_value: str,
+    right_role: str,
+    right_key_attr: str,
+    right_key_value: str,
+) -> None:
+    if relation_name not in CACHED_BINARY_RELATIONS:
+        return
+    cache_key = (relation_name, left_role, left_key_attr, right_role, right_key_attr)
+    relation_index = ctx.binary_relation_cache.setdefault(cache_key, {})
+    relation_index.setdefault(left_key_value, set()).add(right_key_value)
+
+
+def replace_relation_owner_values_cache(
+    ctx: IngestContext,
+    *,
+    relation_name: str,
+    left_role: str,
+    left_key_attr: str,
+    left_key_value: str,
+    right_role: str,
+    right_key_attr: str,
+    desired_values: set[str],
+) -> None:
+    if relation_name not in CACHED_BINARY_RELATIONS:
+        return
+    cache_key = (relation_name, left_role, left_key_attr, right_role, right_key_attr)
+    relation_index = ctx.binary_relation_cache.setdefault(cache_key, {})
+    relation_index[left_key_value] = set(desired_values)
+
+
 def delete_query_if_exists(driver: Any, database: str, match_query: str, delete_query: str) -> None:
     if not query_has_rows(driver, database, match_query):
         return
@@ -780,7 +1179,7 @@ def insert_query(
         stats.inserted += 1
         return True
 
-    if entity and key_attr and key_value:
+    if (not ctx.options.assume_empty_db) and entity and key_attr and key_value and not use_append_only_message_derived_path(ctx, entity):
         exists_query = (
             f"match $x isa {entity}, has {key_attr} {lit_string(key_value)}; "
             "limit 1;"
@@ -867,6 +1266,44 @@ def literal_for_attr_value(attr: str, attr_type: str, raw_value: Any) -> Optiona
     return None
 
 
+def get_datetime_attr_value(attr_specs: list[tuple[str, str, Any]], attr_name: str = "updated_at") -> Optional[datetime]:
+    for attr, attr_type, raw_value in attr_specs:
+        if attr != attr_name or attr_type != "datetime":
+            continue
+        return as_datetime(raw_value)
+    return None
+
+
+def entity_has_matching_updated_at(
+    ctx: IngestContext,
+    *,
+    entity: str,
+    key_attr: str,
+    key_value: str,
+    attr_specs: list[tuple[str, str, Any]],
+) -> bool:
+    if not ctx.options.apply or ctx.typedb_driver is None or ctx.options.assume_empty_db:
+        return False
+
+    desired_updated_at = get_datetime_attr_value(attr_specs, "updated_at")
+    if desired_updated_at is None:
+        return False
+
+    cache_key = (entity, key_attr)
+    existing_index = ctx.entity_updated_at_cache.get(cache_key)
+    if existing_index is None:
+        existing_index = load_entity_updated_at_index(
+            ctx.typedb_driver,
+            ctx.options.typedb_database,
+            entity=entity,
+            key_attr=key_attr,
+        )
+        ctx.entity_updated_at_cache[cache_key] = existing_index
+
+    existing_updated_at = existing_index.get(key_value)
+    return isinstance(existing_updated_at, datetime) and existing_updated_at == desired_updated_at
+
+
 def reconcile_owned_attribute(
     ctx: IngestContext,
     *,
@@ -877,6 +1314,8 @@ def reconcile_owned_attribute(
     desired_literal: Optional[str],
 ) -> None:
     if not ctx.options.apply or ctx.typedb_driver is None:
+        return
+    if ctx.options.assume_empty_db or use_append_only_message_derived_path(ctx, entity):
         return
     match_existing = (
         f"match $e isa {entity}, has {key_attr} {lit_string(key_value)}, has {attr} $v; limit 1;"
@@ -895,6 +1334,35 @@ def reconcile_owned_attribute(
     execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_query)
 
 
+def reconcile_owned_attributes_bulk(
+    ctx: IngestContext,
+    *,
+    entity: str,
+    key_attr: str,
+    key_value: str,
+    desired_attrs: list[tuple[str, Optional[str]]],
+) -> None:
+    if (
+        not ctx.options.apply
+        or ctx.typedb_driver is None
+        or ctx.options.assume_empty_db
+        or use_append_only_message_derived_path(ctx, entity)
+    ):
+        return
+    queries: list[str] = []
+    for attr, desired_literal in desired_attrs:
+        queries.append(
+            f"match $e isa {entity}, has {key_attr} {lit_string(key_value)}, has {attr} $v; "
+            f"delete has $v of $e;"
+        )
+        if desired_literal is not None:
+            queries.append(
+                f"match $e isa {entity}, has {key_attr} {lit_string(key_value)}; "
+                f"insert $e has {attr} {desired_literal};"
+            )
+    execute_queries_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, queries)
+
+
 def reconcile_relation(
     ctx: IngestContext,
     *,
@@ -909,6 +1377,23 @@ def reconcile_relation(
     owner_value: Optional[str | list[str]],
 ) -> None:
     if not ctx.options.apply or ctx.typedb_driver is None:
+        return
+    if ctx.options.assume_empty_db:
+        return
+
+    if use_append_only_message_derived_path(ctx, relation_name):
+        if owner_value is None:
+            return
+        owner_values = owner_value if isinstance(owner_value, list) else [owner_value]
+        normalized_values = [value for value in owner_values if isinstance(value, str) and value]
+        insert_queries: list[str] = []
+        for value in dict.fromkeys(normalized_values):
+            insert_queries.append(
+                f"match $e isa {source_entity}, has {source_key_attr} {lit_string(source_key_value)}; "
+                f"$o isa {owner_entity}, has {owner_by} {lit_string(value)}; "
+                f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
+            )
+        execute_queries_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_queries)
         return
 
     match_existing = (
@@ -927,13 +1412,14 @@ def reconcile_relation(
 
     owner_values = owner_value if isinstance(owner_value, list) else [owner_value]
     normalized_values = [value for value in owner_values if isinstance(value, str) and value]
+    insert_queries: list[str] = []
     for value in dict.fromkeys(normalized_values):
-        insert_relation = (
+        insert_queries.append(
             f"match $e isa {source_entity}, has {source_key_attr} {lit_string(source_key_value)}; "
             f"$o isa {owner_entity}, has {owner_by} {lit_string(value)}; "
             f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
         )
-        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_relation)
+    execute_queries_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_queries)
 
 
 def upsert_entity(
@@ -947,17 +1433,43 @@ def upsert_entity(
     if not ctx.options.apply or ctx.typedb_driver is None:
         return
 
+    if use_append_only_message_derived_path(ctx, entity):
+        fields = [f"insert $e isa {entity}", f"has {key_attr} {lit_string(key_value)}"]
+        for attr, attr_type, raw_value in attr_specs:
+            append_mapped_attr(fields, attr, attr_type, raw_value)
+        query = f"{', '.join(fields)};"
+        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, query)
+        return
+
+    if ctx.options.assume_empty_db:
+        fields = [f"insert $e isa {entity}", f"has {key_attr} {lit_string(key_value)}"]
+        for attr, attr_type, raw_value in attr_specs:
+            append_mapped_attr(fields, attr, attr_type, raw_value)
+        query = f"{', '.join(fields)};"
+        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, query)
+        return
+
     exists_query = f"match $x isa {entity}, has {key_attr} {lit_string(key_value)}; limit 1;"
     if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
-        for attr, attr_type, raw_value in attr_specs:
-            reconcile_owned_attribute(
-                ctx,
-                entity=entity,
-                key_attr=key_attr,
-                key_value=key_value,
-                attr=attr,
-                desired_literal=literal_for_attr_value(attr, attr_type, raw_value),
-            )
+        if entity_has_matching_updated_at(
+            ctx,
+            entity=entity,
+            key_attr=key_attr,
+            key_value=key_value,
+            attr_specs=attr_specs,
+        ):
+            return
+        desired_attrs = [
+            (attr, literal_for_attr_value(attr, attr_type, raw_value))
+            for attr, attr_type, raw_value in attr_specs
+        ]
+        reconcile_owned_attributes_bulk(
+            ctx,
+            entity=entity,
+            key_attr=key_attr,
+            key_value=key_value,
+            desired_attrs=desired_attrs,
+        )
         return
 
     fields = [f"insert $e isa {entity}", f"has {key_attr} {lit_string(key_value)}"]
@@ -1020,55 +1532,75 @@ def project_oper_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any
     status_name = as_string(doc.get("task_status")) or as_string(doc.get("status"))
     if status_name:
         status_id = status_name
-        upsert_entity(
-            ctx,
-            entity="status_dict",
-            key_attr="status_id",
-            key_value=status_id,
-            attr_specs=[
-                ("name", "string", status_name),
-                ("module_scope", "string", "oper_task"),
-            ],
-        )
-        reconcile_relation(
-            ctx,
-            relation_name="oper_task_has_status",
-            source_entity="oper_task",
-            source_key_attr="task_id",
-            source_key_value=task_id,
-            source_role="oper_task",
-            owner_entity="status_dict",
-            owner_by="status_id",
-            owner_role="task_status",
-            owner_value=status_id,
-        )
+        status_cache_key = ("status_dict", "status_id", status_id)
+        if status_cache_key not in ctx.ensured_entity_keys:
+            upsert_entity(
+                ctx,
+                entity="status_dict",
+                key_attr="status_id",
+                key_value=status_id,
+                attr_specs=[
+                    ("name", "string", status_name),
+                    ("module_scope", "string", "oper_task"),
+                ],
+            )
+            ctx.ensured_entity_keys.add(status_cache_key)
+        if ctx.options.apply and ctx.typedb_driver is not None:
+            exists_query = (
+                f"match $t isa oper_task, has task_id {lit_string(task_id)}; "
+                f"$s isa status_dict, has status_id {lit_string(status_id)}; "
+                f"$rel (oper_task: $t, task_status: $s) isa oper_task_has_status; limit 1;"
+            )
+            if not query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                reconcile_relation(
+                    ctx,
+                    relation_name="oper_task_has_status",
+                    source_entity="oper_task",
+                    source_key_attr="task_id",
+                    source_key_value=task_id,
+                    source_role="oper_task",
+                    owner_entity="status_dict",
+                    owner_by="status_id",
+                    owner_role="task_status",
+                    owner_value=status_id,
+                )
 
     priority_value = as_number(doc.get("priority"))
     if priority_value is not None:
         priority_rank = int(priority_value)
         priority_id = str(priority_rank)
-        upsert_entity(
-            ctx,
-            entity="priority_dict",
-            key_attr="priority_id",
-            key_value=priority_id,
-            attr_specs=[
-                ("name", "string", priority_id),
-                ("priority_rank", "integer", priority_rank),
-            ],
-        )
-        reconcile_relation(
-            ctx,
-            relation_name="oper_task_has_priority",
-            source_entity="oper_task",
-            source_key_attr="task_id",
-            source_key_value=task_id,
-            source_role="oper_task",
-            owner_entity="priority_dict",
-            owner_by="priority_id",
-            owner_role="task_priority",
-            owner_value=priority_id,
-        )
+        priority_cache_key = ("priority_dict", "priority_id", priority_id)
+        if priority_cache_key not in ctx.ensured_entity_keys:
+            upsert_entity(
+                ctx,
+                entity="priority_dict",
+                key_attr="priority_id",
+                key_value=priority_id,
+                attr_specs=[
+                    ("name", "string", priority_id),
+                    ("priority_rank", "integer", priority_rank),
+                ],
+            )
+            ctx.ensured_entity_keys.add(priority_cache_key)
+        if ctx.options.apply and ctx.typedb_driver is not None:
+            exists_query = (
+                f"match $t isa oper_task, has task_id {lit_string(task_id)}; "
+                f"$p isa priority_dict, has priority_id {lit_string(priority_id)}; "
+                f"$rel (oper_task: $t, task_priority: $p) isa oper_task_has_priority; limit 1;"
+            )
+            if not query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                reconcile_relation(
+                    ctx,
+                    relation_name="oper_task_has_priority",
+                    source_entity="oper_task",
+                    source_key_attr="task_id",
+                    source_key_value=task_id,
+                    source_role="oper_task",
+                    owner_entity="priority_dict",
+                    owner_by="priority_id",
+                    owner_role="task_priority",
+                    owner_value=priority_id,
+                )
 
 
 def project_target_task_view(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
@@ -1321,18 +1853,21 @@ def project_processor_definition(
     processor_kind: str,
 ) -> str:
     processor_id = f"{processor_scope}:{processor_name}"
-    upsert_entity(
-        ctx,
-        entity="processor_definition",
-        key_attr="processor_definition_id",
-        key_value=processor_id,
-        attr_specs=[
-            ("processor_name", "string", processor_name),
-            ("processor_scope", "string", processor_scope),
-            ("processor_kind", "string", processor_kind),
-            ("module_scope", "string", "voice"),
-        ],
-    )
+    processor_cache_key = ("processor_definition", "processor_definition_id", processor_id)
+    if processor_cache_key not in ctx.ensured_entity_keys:
+        upsert_entity(
+            ctx,
+            entity="processor_definition",
+            key_attr="processor_definition_id",
+            key_value=processor_id,
+            attr_specs=[
+                ("processor_name", "string", processor_name),
+                ("processor_scope", "string", processor_scope),
+                ("processor_kind", "string", processor_kind),
+                ("module_scope", "string", "voice"),
+            ],
+        )
+        ctx.ensured_entity_keys.add(processor_cache_key)
     return processor_id
 
 
@@ -1489,7 +2024,8 @@ def project_voice_session_processors(ctx: IngestContext, doc: dict[str, Any], se
         for index, row in enumerate(create_tasks_rows, start=1):
             if not isinstance(row, dict):
                 continue
-            task_draft_id = as_string(row.get("row_id")) or as_string(row.get("id")) or f"{session_id}:task-draft:{index:04d}"
+            task_draft_row_id = as_string(row.get("row_id")) or as_string(row.get("id")) or f"{index:04d}"
+            task_draft_id = f"{session_id}:task-draft:{task_draft_row_id}"
             upsert_entity(
                 ctx,
                 entity="task_draft",
@@ -1641,7 +2177,8 @@ def project_voice_message_categorization(ctx: IngestContext, doc: dict[str, Any]
 def project_voice_message_file_support(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
     has_descriptor = any(doc.get(field) is not None for field in ("file_id", "file_unique_id", "file_path", "file_name", "file_metadata"))
     if has_descriptor:
-        file_descriptor_id = as_string(doc.get("file_unique_id")) or as_string(doc.get("file_id")) or f"{message_id}:file"
+        raw_file_descriptor_id = as_string(doc.get("file_unique_id")) or as_string(doc.get("file_id")) or "file"
+        file_descriptor_id = f"{message_id}:file:{raw_file_descriptor_id}"
         upsert_entity(
             ctx,
             entity="file_descriptor",
@@ -1681,12 +2218,13 @@ def project_voice_message_file_support(ctx: IngestContext, doc: dict[str, Any], 
         return
     for index, attachment in enumerate(attachments, start=1):
         payload = attachment if isinstance(attachment, dict) else {"value": attachment}
-        attachment_id = (
+        raw_attachment_id = (
             as_string(payload.get("id"))
             or as_string(payload.get("file_id"))
             or as_string(payload.get("file_unique_id"))
-            or f"{message_id}:attachment:{index:04d}"
+            or f"{index:04d}"
         )
+        attachment_id = f"{message_id}:attachment:{raw_attachment_id}"
         upsert_entity(
             ctx,
             entity="message_attachment",
@@ -1747,6 +2285,85 @@ def project_voice_message_processors(ctx: IngestContext, doc: dict[str, Any], me
         )
 
 
+def build_voice_message_attr_specs(
+    doc: dict[str, Any],
+    *,
+    resolved_session_id: Optional[str],
+    summary_text: Optional[str],
+    projection_scope: str,
+) -> list[tuple[str, str, Any]]:
+    all_attr_specs: list[tuple[str, str, Any]] = [
+        ("source_type", "string", as_string(doc.get("source_type"))),
+        ("session_id", "string", resolved_session_id),
+        ("session_type", "string", as_string(doc.get("session_type"))),
+        ("message_type", "string", as_string(doc.get("message_type")) or as_string(doc.get("type"))),
+        ("message_id", "string", to_stringish(doc.get("message_id"))),
+        ("chat_id", "string", to_stringish(doc.get("chat_id"))),
+        ("speaker", "string", as_string(doc.get("speaker"))),
+        ("file_id", "string", as_string(doc.get("file_id"))),
+        ("file_hash", "string", as_string(doc.get("file_hash"))),
+        ("hash_sha256", "string", as_string(doc.get("hash_sha256"))),
+        ("file_unique_id", "string", as_string(doc.get("file_unique_id"))),
+        ("file_path", "string", as_string(doc.get("file_path"))),
+        ("file_name", "string", as_string(doc.get("file_name"))),
+        ("file_size", "double", as_number(doc.get("file_size"))),
+        ("mime_type", "string", as_string(doc.get("mime_type"))),
+        ("file_metadata", "string", to_capped_stringish(doc.get("file_metadata"))),
+        ("attachments", "string", to_capped_stringish(doc.get("attachments"))),
+        ("duration", "double", as_number(doc.get("duration"))),
+        ("text", "string", to_capped_stringish(doc.get("text"))),
+        ("message_timestamp", "double", as_number(doc.get("message_timestamp"))),
+        ("timestamp", "double", as_number(doc.get("timestamp"))),
+        ("transcribe_timestamp", "double", as_number(doc.get("transcribe_timestamp"))),
+        ("is_transcribed", "boolean", as_bool(doc.get("is_transcribed"))),
+        ("transcription_method", "string", as_string(doc.get("transcription_method"))),
+        ("transcription", "string", to_capped_stringish(doc.get("transcription"))),
+        ("transcription_text", "string", summary_text),
+        ("transcription_provider", "string", as_string(resolve_doc_path(doc, "transcription.provider"))),
+        ("transcription_model", "string", as_string(resolve_doc_path(doc, "transcription.model"))),
+        ("transcription_schema_version", "integer", as_number(resolve_doc_path(doc, "transcription.schema_version"))),
+        ("transcription_raw", "string", to_capped_stringish(doc.get("transcription_raw"))),
+        ("task", "string", as_string(doc.get("task"))),
+        ("categorization", "string", to_capped_stringish(doc.get("categorization"))),
+        ("categorization_timestamp", "double", as_number(doc.get("categorization_timestamp"))),
+        ("categorization_error", "string", as_string(doc.get("categorization_error"))),
+        ("categorization_error_message", "string", to_capped_stringish(doc.get("categorization_error_message"))),
+        ("categorization_error_timestamp", "datetime", as_datetime(doc.get("categorization_error_timestamp"))),
+        ("categorization_retry_reason", "string", as_string(doc.get("categorization_retry_reason"))),
+        ("categorization_next_attempt_at", "datetime", as_datetime(doc.get("categorization_next_attempt_at"))),
+        ("categorization_attempts", "integer", as_number(doc.get("categorization_attempts"))),
+        ("transcription_error", "string", as_string(doc.get("transcription_error"))),
+        ("transcription_error_context", "string", to_capped_stringish(doc.get("transcription_error_context"))),
+        ("error_message", "string", to_capped_stringish(doc.get("error_message"))),
+        ("error_message_id", "string", normalize_id(doc.get("error_message_id")) or to_stringish(doc.get("error_message_id"))),
+        ("error_timestamp", "datetime", as_datetime(doc.get("error_timestamp"))),
+        ("dedup_replaced_by", "string", normalize_id(doc.get("dedup_replaced_by")) or to_stringish(doc.get("dedup_replaced_by"))),
+        ("dedup_reason", "string", as_string(doc.get("dedup_reason"))),
+        ("processors_data", "string", to_capped_stringish(doc.get("processors_data"))),
+        ("summary", "string", summary_text),
+        ("is_finalized", "boolean", as_bool(doc.get("is_finalized"))),
+        ("is_deleted", "boolean", as_bool(doc.get("is_deleted"))),
+        ("is_image_anchor", "boolean", as_bool(doc.get("is_image_anchor"))),
+        ("image_anchor_message_id", "string", normalize_id(doc.get("image_anchor_message_id")) or to_stringish(doc.get("image_anchor_message_id"))),
+        ("image_anchor_linked_at", "datetime", as_datetime(doc.get("image_anchor_linked_at"))),
+        ("to_transcribe", "boolean", as_bool(doc.get("to_transcribe"))),
+        ("uploaded_by", "string", normalize_id(doc.get("uploaded_by"))),
+        ("user_id", "string", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id"))),
+        ("username", "string", as_string(doc.get("username"))),
+        ("runtime_tag", "string", as_string(doc.get("runtime_tag"))),
+        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+        ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+    ]
+
+    if projection_scope == "full":
+        return all_attr_specs
+    if projection_scope == "core":
+        return [spec for spec in all_attr_specs if spec[0] in VOICE_MESSAGE_CORE_ATTRS]
+    if projection_scope == "derived":
+        return [spec for spec in all_attr_specs if spec[0] not in VOICE_MESSAGE_CORE_ATTRS]
+    return all_attr_specs
+
+
 def reconcile_transcript_chunks(
     ctx: IngestContext,
     *,
@@ -1755,31 +2372,151 @@ def reconcile_transcript_chunks(
 ) -> None:
     if not ctx.options.apply or ctx.typedb_driver is None:
         return
-    match_existing = (
-        f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
-        f"$r isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); "
-        f"$c isa transcript_chunk, has transcript_chunk_id $cid; limit 1;"
-    )
-    delete_existing = (
-        f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
-        f"$r isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); "
-        f"$c isa transcript_chunk, has transcript_chunk_id $cid; "
-        f"delete $r; $c;"
-    )
-    delete_query_if_exists(ctx.typedb_driver, ctx.options.typedb_database, match_existing, delete_existing)
+    if not is_derived_projection_scope(ctx):
+        match_existing = (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$r isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); "
+            f"$c isa transcript_chunk, has transcript_chunk_id $cid; limit 1;"
+        )
+        delete_existing = (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$r isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); "
+            f"$c isa transcript_chunk, has transcript_chunk_id $cid; "
+            f"delete $r; $c;"
+        )
+        delete_query_if_exists(ctx.typedb_driver, ctx.options.typedb_database, match_existing, delete_existing)
 
+    chunk_queries: list[str] = []
+    relation_queries: list[str] = []
     for chunk_id, chunk_text in chunks:
-        insert_chunk = (
+        chunk_queries.append(
             f"insert $c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}, "
             f"has summary {lit_string(chunk_text)};"
         )
-        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_chunk)
-        insert_relation = (
+        relation_queries.append(
             f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
             f"$c isa transcript_chunk, has transcript_chunk_id {lit_string(chunk_id)}; "
             f"insert (voice_message: $m, transcript_chunk: $c) isa voice_message_chunked_as_transcript_chunk;"
         )
-        execute_query_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, insert_relation)
+    execute_queries_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, chunk_queries)
+    execute_queries_in_transaction(ctx.typedb_driver, ctx.options.typedb_database, TransactionType.WRITE, relation_queries)
+
+
+def delete_voice_message_derived_family(
+    ctx: IngestContext,
+    *,
+    voice_message_id: str,
+) -> None:
+    if not ctx.options.apply or ctx.typedb_driver is None:
+        return
+
+    object_event_id = voice_message_id
+    artifact_record_id = f"voice-message-attachment:{voice_message_id}"
+    transcription_id = f"{voice_message_id}:transcription"
+
+    delete_steps = [
+        (
+            f"match $event isa object_event, has object_event_id {lit_string(object_event_id)}; "
+            f"$rel isa object_event_affects_mode_segment, links (object_event: $event, affected_mode_segment: $seg); limit 1;",
+            f"match $event isa object_event, has object_event_id {lit_string(object_event_id)}; "
+            f"$rel isa object_event_affects_mode_segment, links (object_event: $event, affected_mode_segment: $seg); "
+            f"delete $rel;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$event isa object_event, has object_event_id {lit_string(object_event_id)}; "
+            f"$rel isa as_is_voice_message_maps_to_object_event, links (as_is_voice_message: $m, object_event: $event); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$event isa object_event, has object_event_id {lit_string(object_event_id)}; "
+            f"$rel isa as_is_voice_message_maps_to_object_event, links (as_is_voice_message: $m, object_event: $event); "
+            f"delete $rel; $event;",
+        ),
+        (
+            f"match $t isa voice_transcription, has voice_transcription_id {lit_string(transcription_id)}; "
+            f"$rel isa voice_transcription_has_transcript_segment, links (voice_transcription: $t, transcript_segment: $seg); limit 1;",
+            f"match $t isa voice_transcription, has voice_transcription_id {lit_string(transcription_id)}; "
+            f"$rel isa voice_transcription_has_transcript_segment, links (voice_transcription: $t, transcript_segment: $seg); "
+            f"delete $rel; $seg;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$t isa voice_transcription, has voice_transcription_id {lit_string(transcription_id)}; "
+            f"$rel isa voice_message_has_transcription, links (voice_message: $m, voice_transcription: $t); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$t isa voice_transcription, has voice_transcription_id {lit_string(transcription_id)}; "
+            f"$rel isa voice_message_has_transcription, links (voice_message: $m, voice_transcription: $t); "
+            f"delete $rel; $t;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_has_categorization_entry, "
+            f"links (voice_message: $m, voice_categorization_entry: $c); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_has_categorization_entry, "
+            f"links (voice_message: $m, voice_categorization_entry: $c); "
+            f"delete $rel; $c;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_has_file_descriptor, links (voice_message: $m, file_descriptor: $f); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_has_file_descriptor, links (voice_message: $m, file_descriptor: $f); "
+            f"delete $rel; $f;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_has_attachment, links (voice_message: $m, message_attachment: $a); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_has_attachment, links (voice_message: $m, message_attachment: $a); "
+            f"delete $rel; $a;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_chunked_as_transcript_chunk, links (voice_message: $m, transcript_chunk: $c); "
+            f"delete $rel; $c;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel_msg isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
+            f"$rel_td isa processing_run_produces_task_draft, links (processing_run: $r, task_draft: $d); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel_msg isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
+            f"$rel_td isa processing_run_produces_task_draft, links (processing_run: $r, task_draft: $d); "
+            f"delete $rel_td; $d;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel_msg isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
+            f"$rel_pd isa processing_run_uses_processor_definition, "
+            f"links (processing_run: $r, processor_definition: $pd); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel_msg isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
+            f"$rel_pd isa processing_run_uses_processor_definition, "
+            f"links (processing_run: $r, processor_definition: $pd); "
+            f"delete $rel_pd;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$rel isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
+            f"delete $rel; $r;",
+        ),
+        (
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$art isa artifact_record, has artifact_record_id {lit_string(artifact_record_id)}; "
+            f"$rel isa as_is_attachment_maps_to_artifact_record, links (as_is_attachment: $m, artifact_record: $art); limit 1;",
+            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
+            f"$art isa artifact_record, has artifact_record_id {lit_string(artifact_record_id)}; "
+            f"$rel isa as_is_attachment_maps_to_artifact_record, links (as_is_attachment: $m, artifact_record: $art); "
+            f"delete $rel; $art;",
+        ),
+    ]
+
+    for match_query, delete_query in delete_steps:
+        delete_query_if_exists(ctx.typedb_driver, ctx.options.typedb_database, match_query, delete_query)
 
 
 def insert_relation_query(
@@ -1796,7 +2533,7 @@ def insert_relation_query(
         stats.relations_inserted += 1
         return True
 
-    if exists_query is not None:
+    if (not ctx.options.assume_empty_db) and exists_query is not None:
         if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
             stats.relations_skipped += 1
             return False
@@ -1827,11 +2564,12 @@ def for_each_doc(
     ctx: IngestContext,
     collection: str,
     handler: Callable[[dict[str, Any], CollectionStats], None],
+    projection: Optional[dict[str, int]] = None,
 ) -> CollectionStats:
     stats = CollectionStats(collection=collection)
     stats.last_heartbeat_at = time.time()
     query = build_collection_query(ctx, collection)
-    cursor = ctx.db[collection].find(query).sort("_id", 1)
+    cursor = ctx.db[collection].find(query, projection).sort("_id", 1)
     if ctx.options.limit is not None:
         cursor = cursor.limit(ctx.options.limit)
 
@@ -1986,6 +2724,9 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
         and "automation_voice_bot_sessions" in INCREMENTAL_COLLECTIONS
         and ctx.typedb_driver is not None
     )
+    core_scope = is_core_projection_scope(ctx)
+    derived_scope = is_derived_projection_scope(ctx)
+    projection = build_voice_session_projection_fields(core_scope)
 
     def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
         doc_id = normalize_id(doc.get("_id"))
@@ -2066,18 +2807,34 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
             ("created_at", "datetime", as_datetime(doc.get("created_at"))),
         ]
 
-        if incremental_reconcile and ctx.typedb_driver is not None:
+        entity_matches = (
+            (not derived_scope)
+            and
+            ctx.options.apply
+            and ctx.typedb_driver is not None
+            and entity_has_matching_updated_at(
+                ctx,
+                entity="voice_session",
+                key_attr="voice_session_id",
+                key_value=doc_id,
+                attr_specs=attr_specs,
+            )
+        )
+
+        if (not derived_scope) and incremental_reconcile and ctx.typedb_driver is not None and not entity_matches:
             exists_query = f"match $x isa voice_session, has voice_session_id {lit_string(doc_id)}; limit 1;"
             if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
-                for attr, attr_type, raw_value in attr_specs:
-                    reconcile_owned_attribute(
-                        ctx,
-                        entity="voice_session",
-                        key_attr="voice_session_id",
-                        key_value=doc_id,
-                        attr=attr,
-                        desired_literal=literal_for_attr_value(attr, attr_type, raw_value),
-                    )
+                desired_attrs = [
+                    (attr, literal_for_attr_value(attr, attr_type, raw_value))
+                    for attr, attr_type, raw_value in attr_specs
+                ]
+                reconcile_owned_attributes_bulk(
+                    ctx,
+                    entity="voice_session",
+                    key_attr="voice_session_id",
+                    key_value=doc_id,
+                    desired_attrs=desired_attrs,
+                )
                 stats.skipped += 1
             else:
                 fields = ["insert $s isa voice_session", f"has voice_session_id {lit_string(doc_id)}"]
@@ -2095,7 +2852,7 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
                     key_attr="voice_session_id",
                     key_value=doc_id,
                 )
-        else:
+        elif (not derived_scope) and (not entity_matches):
             fields = ["insert $s isa voice_session", f"has voice_session_id {lit_string(doc_id)}"]
             for attr, attr_type, raw_value in attr_specs:
                 append_mapped_attr(fields, attr, attr_type, raw_value)
@@ -2111,54 +2868,63 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
                 key_attr="voice_session_id",
                 key_value=doc_id,
             )
-        project_mode_segment(ctx, doc, doc_id)
-        project_object_conclusion_from_session_summary(ctx, doc, doc_id)
-
         project_id = None if is_tombstoned_doc("automation_voice_bot_sessions", doc) else normalize_id(doc.get("project_id"))
         VOICE_SESSION_PROJECT_CACHE[doc_id] = project_id
-        project_voice_session_participants(ctx, doc, doc_id)
-        project_voice_session_processors(ctx, doc, doc_id)
-        if not project_id:
-            return
 
-        if incremental_reconcile:
-            reconcile_relation(
-                ctx,
-                relation_name="project_has_voice_session",
-                source_entity="voice_session",
-                source_key_attr="voice_session_id",
-                source_key_value=doc_id,
-                source_role="voice_session",
-                owner_entity="project",
-                owner_by="project_id",
-                owner_role="owner_project",
-                owner_value=project_id,
-            )
-            if project_id is None:
-                stats.relations_skipped += 1
+        if (not derived_scope) and project_id:
+            if incremental_reconcile:
+                exists_query = (
+                    f"match $s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
+                    f"$p isa project, has project_id {lit_string(project_id)}; "
+                    f"$rel (voice_session: $s, owner_project: $p) isa project_has_voice_session; limit 1;"
+                )
+                if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                    stats.relations_skipped += 1
+                else:
+                    reconcile_relation(
+                        ctx,
+                        relation_name="project_has_voice_session",
+                        source_entity="voice_session",
+                        source_key_attr="voice_session_id",
+                        source_key_value=doc_id,
+                        source_role="voice_session",
+                        owner_entity="project",
+                        owner_by="project_id",
+                        owner_role="owner_project",
+                        owner_value=project_id,
+                    )
+                    stats.relations_inserted += 1
             else:
-                stats.relations_inserted += 1
-        else:
-            relation_query = (
-                f"match $p isa project, has project_id {lit_string(project_id)}; "
-                f"$s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
-                "insert (owner_project: $p, voice_session: $s) isa project_has_voice_session;"
-            )
-            insert_relation_query(
-                ctx,
-                stats,
-                "automation_voice_bot_sessions",
-                doc_id,
-                relation_query,
-                {"voice_session_id": doc_id, "project_id": project_id},
-                exists_query=(
+                relation_query = (
                     f"match $p isa project, has project_id {lit_string(project_id)}; "
                     f"$s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
-                    "(owner_project: $p, voice_session: $s) isa project_has_voice_session; limit 1;"
-                ),
-            )
+                    "insert (owner_project: $p, voice_session: $s) isa project_has_voice_session;"
+                )
+                insert_relation_query(
+                    ctx,
+                    stats,
+                    "automation_voice_bot_sessions",
+                    doc_id,
+                    relation_query,
+                    {"voice_session_id": doc_id, "project_id": project_id},
+                    exists_query=(
+                        f"match $p isa project, has project_id {lit_string(project_id)}; "
+                        f"$s isa voice_session, has voice_session_id {lit_string(doc_id)}; "
+                        "(owner_project: $p, voice_session: $s) isa project_has_voice_session; limit 1;"
+                    ),
+                )
 
-    return for_each_doc(ctx, "automation_voice_bot_sessions", handler)
+        if core_scope:
+            if entity_matches:
+                stats.skipped += 1
+            return
+
+        project_mode_segment(ctx, doc, doc_id)
+        project_object_conclusion_from_session_summary(ctx, doc, doc_id)
+        project_voice_session_participants(ctx, doc, doc_id)
+        project_voice_session_processors(ctx, doc, doc_id)
+
+    return for_each_doc(ctx, "automation_voice_bot_sessions", handler, projection=projection)
 
 
 def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
@@ -2168,6 +2934,9 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
         and "automation_voice_bot_messages" in INCREMENTAL_COLLECTIONS
         and ctx.typedb_driver is not None
     )
+    core_scope = is_core_projection_scope(ctx)
+    derived_scope = is_derived_projection_scope(ctx)
+    projection = build_voice_message_projection_fields(core_scope)
 
     def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
         doc_id = normalize_id(doc.get("_id"))
@@ -2196,81 +2965,41 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
         )
         resolved_session_id = normalize_id(doc.get("session_id"))
 
-        attr_specs: list[tuple[str, str, Any]] = [
-            ("source_type", "string", as_string(doc.get("source_type"))),
-            ("session_id", "string", resolved_session_id),
-            ("session_type", "string", as_string(doc.get("session_type"))),
-            ("message_type", "string", as_string(doc.get("message_type")) or as_string(doc.get("type"))),
-            ("message_id", "string", to_stringish(doc.get("message_id"))),
-            ("chat_id", "string", to_stringish(doc.get("chat_id"))),
-            ("speaker", "string", as_string(doc.get("speaker"))),
-            ("file_id", "string", as_string(doc.get("file_id"))),
-            ("file_hash", "string", as_string(doc.get("file_hash"))),
-            ("hash_sha256", "string", as_string(doc.get("hash_sha256"))),
-            ("file_unique_id", "string", as_string(doc.get("file_unique_id"))),
-            ("file_path", "string", as_string(doc.get("file_path"))),
-            ("file_name", "string", as_string(doc.get("file_name"))),
-            ("file_size", "double", as_number(doc.get("file_size"))),
-            ("mime_type", "string", as_string(doc.get("mime_type"))),
-            ("file_metadata", "string", to_capped_stringish(doc.get("file_metadata"))),
-            ("attachments", "string", to_capped_stringish(doc.get("attachments"))),
-            ("duration", "double", as_number(doc.get("duration"))),
-            ("text", "string", to_capped_stringish(doc.get("text"))),
-            ("message_timestamp", "double", as_number(doc.get("message_timestamp"))),
-            ("timestamp", "double", as_number(doc.get("timestamp"))),
-            ("transcribe_timestamp", "double", as_number(doc.get("transcribe_timestamp"))),
-            ("is_transcribed", "boolean", as_bool(doc.get("is_transcribed"))),
-            ("transcription_method", "string", as_string(doc.get("transcription_method"))),
-            ("transcription", "string", to_capped_stringish(doc.get("transcription"))),
-            ("transcription_text", "string", summary_text),
-            ("transcription_provider", "string", as_string(resolve_doc_path(doc, "transcription.provider"))),
-            ("transcription_model", "string", as_string(resolve_doc_path(doc, "transcription.model"))),
-            ("transcription_schema_version", "integer", as_number(resolve_doc_path(doc, "transcription.schema_version"))),
-            ("transcription_raw", "string", to_capped_stringish(doc.get("transcription_raw"))),
-            ("task", "string", as_string(doc.get("task"))),
-            ("categorization", "string", to_capped_stringish(doc.get("categorization"))),
-            ("categorization_timestamp", "double", as_number(doc.get("categorization_timestamp"))),
-            ("categorization_error", "string", as_string(doc.get("categorization_error"))),
-            ("categorization_error_message", "string", to_capped_stringish(doc.get("categorization_error_message"))),
-            ("categorization_error_timestamp", "datetime", as_datetime(doc.get("categorization_error_timestamp"))),
-            ("categorization_retry_reason", "string", as_string(doc.get("categorization_retry_reason"))),
-            ("categorization_next_attempt_at", "datetime", as_datetime(doc.get("categorization_next_attempt_at"))),
-            ("categorization_attempts", "integer", as_number(doc.get("categorization_attempts"))),
-            ("transcription_error", "string", as_string(doc.get("transcription_error"))),
-            ("transcription_error_context", "string", to_capped_stringish(doc.get("transcription_error_context"))),
-            ("error_message", "string", to_capped_stringish(doc.get("error_message"))),
-            ("error_message_id", "string", normalize_id(doc.get("error_message_id")) or to_stringish(doc.get("error_message_id"))),
-            ("error_timestamp", "datetime", as_datetime(doc.get("error_timestamp"))),
-            ("dedup_replaced_by", "string", normalize_id(doc.get("dedup_replaced_by")) or to_stringish(doc.get("dedup_replaced_by"))),
-            ("dedup_reason", "string", as_string(doc.get("dedup_reason"))),
-            ("processors_data", "string", to_capped_stringish(doc.get("processors_data"))),
-            ("summary", "string", summary_text),
-            ("is_finalized", "boolean", as_bool(doc.get("is_finalized"))),
-            ("is_deleted", "boolean", as_bool(doc.get("is_deleted"))),
-            ("is_image_anchor", "boolean", as_bool(doc.get("is_image_anchor"))),
-            ("image_anchor_message_id", "string", normalize_id(doc.get("image_anchor_message_id")) or to_stringish(doc.get("image_anchor_message_id"))),
-            ("image_anchor_linked_at", "datetime", as_datetime(doc.get("image_anchor_linked_at"))),
-            ("to_transcribe", "boolean", as_bool(doc.get("to_transcribe"))),
-            ("uploaded_by", "string", normalize_id(doc.get("uploaded_by"))),
-            ("user_id", "string", normalize_id(doc.get("user_id")) or to_stringish(doc.get("user_id"))),
-            ("username", "string", as_string(doc.get("username"))),
-            ("runtime_tag", "string", as_string(doc.get("runtime_tag"))),
-            ("created_at", "datetime", as_datetime(doc.get("created_at"))),
-            ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
-        ]
+        attr_specs = build_voice_message_attr_specs(
+            doc,
+            resolved_session_id=resolved_session_id,
+            summary_text=summary_text,
+            projection_scope=ctx.options.projection_scope,
+        )
 
-        if incremental_reconcile and ctx.typedb_driver is not None:
+        entity_matches = (
+            (not derived_scope)
+            and
+            ctx.options.apply
+            and ctx.typedb_driver is not None
+            and entity_has_matching_updated_at(
+                ctx,
+                entity="voice_message",
+                key_attr="voice_message_id",
+                key_value=doc_id,
+                attr_specs=attr_specs,
+            )
+        )
+
+        if (not derived_scope) and incremental_reconcile and ctx.typedb_driver is not None and not entity_matches:
             exists_query = f"match $x isa voice_message, has voice_message_id {lit_string(doc_id)}; limit 1;"
             if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
-                for attr, attr_type, raw_value in attr_specs:
-                    reconcile_owned_attribute(
-                        ctx,
-                        entity="voice_message",
-                        key_attr="voice_message_id",
-                        key_value=doc_id,
-                        attr=attr,
-                        desired_literal=literal_for_attr_value(attr, attr_type, raw_value),
-                    )
+                desired_attrs = [
+                    (attr, literal_for_attr_value(attr, attr_type, raw_value))
+                    for attr, attr_type, raw_value in attr_specs
+                ]
+                reconcile_owned_attributes_bulk(
+                    ctx,
+                    entity="voice_message",
+                    key_attr="voice_message_id",
+                    key_value=doc_id,
+                    desired_attrs=desired_attrs,
+                )
                 stats.skipped += 1
             else:
                 fields = ["insert $m isa voice_message", f"has voice_message_id {lit_string(doc_id)}"]
@@ -2288,7 +3017,7 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                     key_attr="voice_message_id",
                     key_value=doc_id,
                 )
-        else:
+        elif (not derived_scope) and (not entity_matches):
             fields = ["insert $m isa voice_message", f"has voice_message_id {lit_string(doc_id)}"]
             for attr, attr_type, raw_value in attr_specs:
                 append_mapped_attr(fields, attr, attr_type, raw_value)
@@ -2304,6 +3033,63 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                 key_attr="voice_message_id",
                 key_value=doc_id,
             )
+        tombstoned = is_tombstoned_doc("automation_voice_bot_messages", doc)
+        session_id = None if tombstoned else resolved_session_id
+        if not session_id:
+            if core_scope:
+                if entity_matches:
+                    stats.skipped += 1
+                return
+        elif (not derived_scope) and incremental_reconcile:
+            exists_query = (
+                f"match $m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
+                f"$s isa voice_session, has voice_session_id {lit_string(session_id)}; "
+                f"$rel (voice_message: $m, voice_session: $s) isa voice_session_has_message; limit 1;"
+            )
+            if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                stats.relations_skipped += 1
+            else:
+                reconcile_relation(
+                    ctx,
+                    relation_name="voice_session_has_message",
+                    source_entity="voice_message",
+                    source_key_attr="voice_message_id",
+                    source_key_value=doc_id,
+                    source_role="voice_message",
+                    owner_entity="voice_session",
+                    owner_by="voice_session_id",
+                    owner_role="voice_session",
+                    owner_value=session_id,
+                )
+                stats.relations_inserted += 1
+        elif not derived_scope:
+            relation_query = (
+                f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
+                f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
+                "insert (voice_session: $s, voice_message: $m) isa voice_session_has_message;"
+            )
+            insert_relation_query(
+                ctx,
+                stats,
+                "automation_voice_bot_messages",
+                doc_id,
+                relation_query,
+                {"voice_message_id": doc_id, "voice_session_id": session_id},
+                exists_query=(
+                    f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
+                    f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
+                    "(voice_session: $s, voice_message: $m) isa voice_session_has_message; limit 1;"
+                ),
+            )
+
+        if core_scope:
+            if entity_matches:
+                stats.skipped += 1
+            return
+
+        if derived_scope and incremental_reconcile:
+            delete_voice_message_derived_family(ctx, voice_message_id=doc_id)
+
         project_object_event(ctx, doc, doc_id)
         project_voice_message_transcription(ctx, doc, doc_id)
         project_voice_message_categorization(ctx, doc, doc_id)
@@ -2324,7 +3110,6 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                 }
             )
 
-        tombstoned = is_tombstoned_doc("automation_voice_bot_messages", doc)
         chunk_pairs: list[tuple[str, str]] = []
         if (not tombstoned) and capped_transcript is not None and utf8_byte_length(capped_transcript) > TYPEDB_SAFE_STRING_BYTES:
             chunks = split_utf8_by_bytes(capped_transcript, VOICE_TRANSCRIPT_CHUNK_BYTES)
@@ -2378,48 +3163,7 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                     ),
                 )
 
-        session_id = None if tombstoned else resolved_session_id
-        if not session_id:
-            return
-
-        if incremental_reconcile:
-            reconcile_relation(
-                ctx,
-                relation_name="voice_session_has_message",
-                source_entity="voice_message",
-                source_key_attr="voice_message_id",
-                source_key_value=doc_id,
-                source_role="voice_message",
-                owner_entity="voice_session",
-                owner_by="voice_session_id",
-                owner_role="voice_session",
-                owner_value=session_id,
-            )
-            if session_id is None:
-                stats.relations_skipped += 1
-            else:
-                stats.relations_inserted += 1
-        else:
-            relation_query = (
-                f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
-                f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
-                "insert (voice_session: $s, voice_message: $m) isa voice_session_has_message;"
-            )
-            insert_relation_query(
-                ctx,
-                stats,
-                "automation_voice_bot_messages",
-                doc_id,
-                relation_query,
-                {"voice_message_id": doc_id, "voice_session_id": session_id},
-                exists_query=(
-                    f"match $s isa voice_session, has voice_session_id {lit_string(session_id)}; "
-                    f"$m isa voice_message, has voice_message_id {lit_string(doc_id)}; "
-                    "(voice_session: $s, voice_message: $m) isa voice_session_has_message; limit 1;"
-                ),
-            )
-
-    return for_each_doc(ctx, "automation_voice_bot_messages", handler)
+    return for_each_doc(ctx, "automation_voice_bot_messages", handler, projection=projection)
 
 
 def ingest_forecasts(ctx: IngestContext) -> CollectionStats:
@@ -2800,6 +3544,173 @@ def resolve_mapped_value(
     return None
 
 
+def build_mapping_projection_fields(
+    key_cfg: dict[str, Any],
+    attributes_cfg: dict[str, Any],
+    coalesce_cfg: dict[str, Any],
+    relations_cfg: Any,
+) -> dict[str, int]:
+    fields: dict[str, int] = {"_id": 1}
+
+    def add_path(path: Any) -> None:
+        if isinstance(path, str) and path.strip():
+            fields[path] = 1
+
+    add_path(key_cfg.get("from"))
+
+    if isinstance(attributes_cfg, dict):
+        for source_field in attributes_cfg.values():
+            add_path(source_field)
+
+    if isinstance(coalesce_cfg, dict):
+        for values in coalesce_cfg.values():
+            if isinstance(values, list):
+                for source_field in values:
+                    add_path(source_field)
+
+    if isinstance(relations_cfg, list):
+        for rel_cfg in relations_cfg:
+            if not isinstance(rel_cfg, dict):
+                continue
+            owner_lookup = rel_cfg.get("owner_lookup")
+            if not isinstance(owner_lookup, dict):
+                continue
+            add_path(owner_lookup.get("from"))
+
+    return fields
+
+
+def build_voice_session_projection_fields(core_scope: bool) -> dict[str, int]:
+    fields = {
+        "_id": 1,
+        "is_active": 1,
+        "session_source": 1,
+        "session_name": 1,
+        "session_type": 1,
+        "project_id": 1,
+        "chat_id": 1,
+        "user_id": 1,
+        "access_level": 1,
+        "done_count": 1,
+        "is_active:": 1,
+        "is_deleted": 1,
+        "is_messages_processed": 1,
+        "is_waiting": 1,
+        "is_corrupted": 1,
+        "is_postprocessing": 1,
+        "is_finished": 1,
+        "is_finalized": 1,
+        "to_finalize": 1,
+        "last_message_id": 1,
+        "last_message_timestamp": 1,
+        "last_voice_timestamp": 1,
+        "postprocessing_job_queued_timestamp": 1,
+        "title_generated_at": 1,
+        "title_generated_by": 1,
+        "finished_at": 1,
+        "done_at": 1,
+        "deleted_at": 1,
+        "deletion_reason": 1,
+        "pending_image_anchor_message_id": 1,
+        "pending_image_anchor_oid": 1,
+        "pending_image_anchor_created_at": 1,
+        "merged_into_session_id": 1,
+        "error_source": 1,
+        "transcription_error": 1,
+        "error_message": 1,
+        "error_message_id": 1,
+        "error_timestamp": 1,
+        "current_spreadsheet_file_id": 1,
+        "summary_md_text": 1,
+        "summary_saved_at": 1,
+        "summary_correlation_id": 1,
+        "runtime_tag": 1,
+        "updated_at": 1,
+        "created_at": 1,
+    }
+    if not core_scope:
+        fields.update(
+            {
+                "participants": 1,
+                "allowed_users": 1,
+                "processors": 1,
+                "session_processors": 1,
+                "processors_data": 1,
+                "status": 1,
+            }
+        )
+    return fields
+
+
+def build_voice_message_projection_fields(core_scope: bool) -> dict[str, int]:
+    fields = {
+        "_id": 1,
+        "source_type": 1,
+        "session_id": 1,
+        "session_type": 1,
+        "message_type": 1,
+        "type": 1,
+        "message_id": 1,
+        "chat_id": 1,
+        "speaker": 1,
+        "file_id": 1,
+        "file_hash": 1,
+        "hash_sha256": 1,
+        "file_unique_id": 1,
+        "file_path": 1,
+        "file_name": 1,
+        "file_size": 1,
+        "mime_type": 1,
+        "duration": 1,
+        "text": 1,
+        "message_timestamp": 1,
+        "timestamp": 1,
+        "is_finalized": 1,
+        "is_deleted": 1,
+        "is_image_anchor": 1,
+        "image_anchor_message_id": 1,
+        "image_anchor_linked_at": 1,
+        "to_transcribe": 1,
+        "uploaded_by": 1,
+        "user_id": 1,
+        "username": 1,
+        "runtime_tag": 1,
+        "created_at": 1,
+        "updated_at": 1,
+    }
+    if not core_scope:
+        fields.update(
+            {
+                "transcription_text": 1,
+                "transcription": 1,
+                "transcription_raw": 1,
+                "transcribe_timestamp": 1,
+                "is_transcribed": 1,
+                "transcription_method": 1,
+                "task": 1,
+                "categorization": 1,
+                "categorization_timestamp": 1,
+                "categorization_error": 1,
+                "categorization_error_message": 1,
+                "categorization_error_timestamp": 1,
+                "categorization_retry_reason": 1,
+                "categorization_next_attempt_at": 1,
+                "categorization_attempts": 1,
+                "transcription_error": 1,
+                "transcription_error_context": 1,
+                "error_message": 1,
+                "error_message_id": 1,
+                "error_timestamp": 1,
+                "dedup_replaced_by": 1,
+                "dedup_reason": 1,
+                "processors_data": 1,
+                "file_metadata": 1,
+                "attachments": 1,
+            }
+        )
+    return fields
+
+
 def resolve_relation_roles_for_entities(
     ctx: IngestContext,
     relation_name: str,
@@ -2807,33 +3718,48 @@ def resolve_relation_roles_for_entities(
     owner_entity: str,
     owner_role_hint: Optional[str],
 ) -> Optional[tuple[str, str]]:
+    cache_key = (relation_name, source_entity, owner_entity, owner_role_hint)
+    if cache_key in ctx.relation_role_cache:
+        return ctx.relation_role_cache[cache_key]
+
     source_roles = set(ctx.entity_relation_roles.get((source_entity, relation_name), set()))
     owner_roles = set(ctx.entity_relation_roles.get((owner_entity, relation_name), set()))
     declared_roles = list(ctx.relation_roles.get(relation_name, []))
 
     if len(source_roles) == 1 and len(owner_roles) == 1:
-        return next(iter(source_roles)), next(iter(owner_roles))
+        result = (next(iter(source_roles)), next(iter(owner_roles)))
+        ctx.relation_role_cache[cache_key] = result
+        return result
 
     if len(source_roles) == 1 and declared_roles:
         source_role = next(iter(source_roles))
         owner_role = next((role for role in declared_roles if role != source_role), None)
         if owner_role:
-            return source_role, owner_role
+            result = (source_role, owner_role)
+            ctx.relation_role_cache[cache_key] = result
+            return result
 
     if len(owner_roles) == 1 and declared_roles:
         owner_role = next(iter(owner_roles))
         source_role = next((role for role in declared_roles if role != owner_role), None)
         if source_role:
-            return source_role, owner_role
+            result = (source_role, owner_role)
+            ctx.relation_role_cache[cache_key] = result
+            return result
 
     if owner_role_hint and len(declared_roles) == 2 and owner_role_hint in declared_roles:
         source_role = next((role for role in declared_roles if role != owner_role_hint), None)
         if source_role:
-            return source_role, owner_role_hint
+            result = (source_role, owner_role_hint)
+            ctx.relation_role_cache[cache_key] = result
+            return result
 
     if len(declared_roles) == 2:
-        return declared_roles[0], declared_roles[1]
+        result = (declared_roles[0], declared_roles[1])
+        ctx.relation_role_cache[cache_key] = result
+        return result
 
+    ctx.relation_role_cache[cache_key] = None
     return None
 
 
@@ -2862,6 +3788,8 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
         and ctx.options.sync_mode == "incremental"
         and collection in INCREMENTAL_COLLECTIONS
     )
+    core_scope = is_core_projection_scope(ctx)
+    projection = build_mapping_projection_fields(key_cfg, attributes_cfg, coalesce_cfg, relations_cfg)
 
     def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
         source_id = build_key_from_mapping(doc, key_cfg)
@@ -2928,20 +3856,30 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
                 desired_attr_literals.append((attr, desired_literal))
                 append_mapped_attr(fields, attr, attr_type, raw_value)
 
-        if ctx.options.apply and ctx.typedb_driver is not None:
+        entity_matches = (
+            ctx.options.apply
+            and ctx.typedb_driver is not None
+            and entity_has_matching_updated_at(
+                ctx,
+                entity=target_entity,
+                key_attr=key_attr,
+                key_value=source_id,
+                attr_specs=attr_specs,
+            )
+        )
+
+        if ctx.options.apply and ctx.typedb_driver is not None and not entity_matches:
             exists_query = (
                 f"match $x isa {target_entity}, has {key_attr} {lit_string(source_id)}; limit 1;"
             )
             if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
-                for attr, desired_literal in desired_attr_literals:
-                    reconcile_owned_attribute(
-                        ctx,
-                        entity=target_entity,
-                        key_attr=key_attr,
-                        key_value=source_id,
-                        attr=attr,
-                        desired_literal=desired_literal,
-                    )
+                reconcile_owned_attributes_bulk(
+                    ctx,
+                    entity=target_entity,
+                    key_attr=key_attr,
+                    key_value=source_id,
+                    desired_attrs=desired_attr_literals,
+                )
                 stats.skipped += 1
             else:
                 query = f"{', '.join(fields)};"
@@ -2956,7 +3894,7 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
                     key_attr=key_attr,
                     key_value=source_id,
                 )
-        else:
+        elif not entity_matches:
             query = f"{', '.join(fields)};"
             insert_query(
                 ctx,
@@ -2972,6 +3910,11 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
 
         if collection == "automation_tasks":
             project_oper_task_status_and_priority(ctx, doc, source_id)
+
+        if core_scope and not isinstance(relations_cfg, list):
+            if entity_matches:
+                stats.skipped += 1
+            return
 
         if not isinstance(relations_cfg, list):
             return
@@ -3032,52 +3975,89 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
             source_role, owner_role = roles
 
             if incremental_reconcile:
+                desired_owner_values = owner_value if isinstance(owner_value, list) else [owner_value]
+                normalized_desired_values = {
+                    value for value in desired_owner_values if isinstance(value, str) and value
+                }
                 if is_tombstoned_doc(collection, doc) and relation_name in TOMBSTONE_RELATIONS.get(collection, set()):
                     owner_value = None
-                reconcile_relation(
-                    ctx,
-                    relation_name=relation_name,
-                    source_entity=target_entity,
-                    source_key_attr=key_attr,
-                    source_key_value=source_id,
-                    source_role=source_role,
-                    owner_entity=owner_entity,
-                    owner_by=owner_by,
-                    owner_role=owner_role,
-                    owner_value=owner_value,
-                )
+                    normalized_desired_values = set()
+                if len(normalized_desired_values) == 1:
+                    single_owner_value = next(iter(normalized_desired_values))
+                    exists_query = (
+                        f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
+                        f"$o isa {owner_entity}, has {owner_by} {lit_string(single_owner_value)}; "
+                        f"$rel ({source_role}: $e, {owner_role}: $o) isa {relation_name}; limit 1;"
+                    )
+                    if query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
+                        stats.relations_skipped += 1
+                        continue
+
                 if owner_value is None:
+                    reconcile_relation(
+                        ctx,
+                        relation_name=relation_name,
+                        source_entity=target_entity,
+                        source_key_attr=key_attr,
+                        source_key_value=source_id,
+                        source_role=source_role,
+                        owner_entity=owner_entity,
+                        owner_by=owner_by,
+                        owner_role=owner_role,
+                        owner_value=owner_value,
+                    )
                     stats.relations_skipped += 1
                 else:
-                    stats.relations_inserted += 1
+                    reconcile_relation(
+                        ctx,
+                        relation_name=relation_name,
+                        source_entity=target_entity,
+                        source_key_attr=key_attr,
+                        source_key_value=source_id,
+                        source_role=source_role,
+                        owner_entity=owner_entity,
+                        owner_by=owner_by,
+                        owner_role=owner_role,
+                        owner_value=owner_value,
+                    )
+                    if normalized_desired_values:
+                        stats.relations_inserted += len(normalized_desired_values)
+                    else:
+                        stats.relations_skipped += 1
             else:
-                relation_query = (
-                    f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
-                    f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
-                    f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
-                )
-                exists_query = (
-                    f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
-                    f"$o isa {owner_entity}, has {owner_by} {lit_string(owner_value)}; "
-                    f"({source_role}: $e, {owner_role}: $o) isa {relation_name}; limit 1;"
-                )
-                insert_relation_query(
-                    ctx,
-                    stats,
-                    collection,
-                    source_id,
-                    relation_query,
-                    {
-                        "source_id": source_id,
-                        "relation": relation_name,
-                        "owner_entity": owner_entity,
-                        "owner_by": owner_by,
-                        "owner_value": owner_value,
-                    },
-                    exists_query=exists_query,
-                )
+                owner_values = owner_value if isinstance(owner_value, list) else [owner_value]
+                normalized_owner_values = [value for value in owner_values if isinstance(value, str) and value]
+                for single_owner_value in dict.fromkeys(normalized_owner_values):
+                    relation_query = (
+                        f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
+                        f"$o isa {owner_entity}, has {owner_by} {lit_string(single_owner_value)}; "
+                        f"insert ({source_role}: $e, {owner_role}: $o) isa {relation_name};"
+                    )
+                    exists_query = (
+                        f"match $e isa {target_entity}, has {key_attr} {lit_string(source_id)}; "
+                        f"$o isa {owner_entity}, has {owner_by} {lit_string(single_owner_value)}; "
+                        f"({source_role}: $e, {owner_role}: $o) isa {relation_name}; limit 1;"
+                    )
+                    insert_relation_query(
+                        ctx,
+                        stats,
+                        collection,
+                        source_id,
+                        relation_query,
+                        {
+                            "source_id": source_id,
+                            "relation": relation_name,
+                            "owner_entity": owner_entity,
+                            "owner_by": owner_by,
+                            "owner_value": single_owner_value,
+                        },
+                        exists_query=exists_query,
+                    )
 
-    return for_each_doc(ctx, collection, handler)
+        if core_scope and entity_matches:
+            stats.skipped += 1
+
+    return for_each_doc(ctx, collection, handler, projection=projection)
 
 
 def init_typedb(options: CliOptions) -> Any:
@@ -3137,6 +4117,8 @@ def main() -> int:
         f"[typedb-ontology-ingest] mode={'apply' if options.apply else 'dry-run'} "
         f"run_id={options.run_id} "
         f"sync_mode={options.sync_mode} "
+        f"projection_scope={options.projection_scope} "
+        f"assume_empty_db={'true' if options.assume_empty_db else 'false'} "
         f"addresses={','.join(options.typedb_addresses)} db={options.typedb_database} "
         f"limit={options.limit if options.limit is not None else 'none'} "
         f"collections={','.join(options.collections)}"
@@ -3188,8 +4170,11 @@ def main() -> int:
         print_stats(stats)
         print(f"[typedb-ontology-ingest] deadletter={deadletter.path}")
         if options.apply:
-            save_sync_state(options.sync_state_path, ctx.sync_state)
-            print(f"[typedb-ontology-ingest] sync_state={options.sync_state_path}")
+            if options.skip_sync_state_write:
+                print(f"[typedb-ontology-ingest] sync_state_write=skipped path={options.sync_state_path}")
+            else:
+                save_sync_state(options.sync_state_path, ctx.sync_state)
+                print(f"[typedb-ontology-ingest] sync_state={options.sync_state_path}")
         return 0
     except Exception as error:
         print(f"[typedb-ontology-ingest] failed: {error}", file=sys.stderr)

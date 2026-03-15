@@ -2,6 +2,7 @@
 
 ## 2026-03-15
 ### PROBLEM SOLVED
+- **14:12** The ontology operator surface still exposed only the raw incremental alias and a monolithic full apply path, so there was no checked-in staged `core/enrichment` sync contract and no canonical full-from-scratch runner for benchmark DBs with schema recreation.
 - **13:59** Telegram close-session updates sent through `tgbot__send_bot_message` could still waste the first live attempt on preventable MarkdownV2 escaping mistakes, producing `Can't parse entities` style failures even when the content itself was correct.
 - **13:17** `AGENTS.md` still mixed constitutional instructions with a running session journal, and secondary taskflow plan files under `plan/` still looked like live working plans even after they had become historical references.
 - **13:17** Voice session header actions were visually inconsistent after `Tasks` and `Summarize` moved right: two actions rendered without the same bordered icon-button contract as the rest of the header cluster.
@@ -16,6 +17,7 @@
 - **02:16** Voice session taskflow still depended on a split naming model across repos, so even after the status-first rollout landed, assistant instructions, MCP docs, and actions examples could still reintroduce the removed draft alias as if it were the preferred path.
 
 ### FEATURE IMPLEMENTED
+- **14:12** Added staged ontology sync entrypoints and the first `voice_message` projection-scope split: operators now have explicit `sync:core`, `sync:enrich`, and `full:from-scratch` commands, Mongo startup indexes cover watermark scans for the incremental safe-scope roots, and the ingest engine supports `projection_scope`, deferred sync-state writes, and empty-DB append-only loads.
 - **13:59** Added a documented Telegram MarkdownV2 send discipline: executive updates must now be materialized and inspected as fully escaped payloads before the live `tgbot__send_bot_message` call.
 - **13:17** Cleaned the doc surface so `AGENTS.md` is again a normative instruction document, archived stale taskflow plan docs under `plan/archive/`, and kept only the current task-surface specs as active sources of truth.
 - **13:17** Unified the right-side Voice session header actions visually: `Tasks` and `Summarize` now use the same bordered icon-button styling as the other header actions and remain positioned before the custom prompt action.
@@ -30,6 +32,7 @@
 - **03:00** Completed the deprecation wave end-to-end: Copilot backend now serves draft reads through `POST /api/voicebot/session_tasks`, the old `POST /api/voicebot/possible_tasks` route is removed, active prompts/docs prefer the unified replacement surface, and prod deploy plus live MCP verification confirmed that the Voice `Задачи` tab still renders correctly.
 
 ### CHANGES
+- **14:12** Updated `backend/src/constants.ts`, `backend/package.json`, `ontology/typedb/scripts/{typedb-ontology-ingest,typedb-sync-chain,typedb-full-from-scratch}.sh`, `ontology/typedb/tests/test_ingest_modes.py`, and synced repo/ontology docs for the new staged sync operator contract; verified with Python unit tests, backend TypeScript build, staged sync dry-run smoke, and a `--limit 1` full-from-scratch scratch-DB smoke.
 - **13:59** Updated `AGENTS.md`, `README.md`, and `CHANGELOG.md` to record the Telegram MarkdownV2 close-session rule and closed `copilot-t1tu`.
 - **13:17** Updated `AGENTS.md`, `README.md`, `CHANGELOG.md`, `plan/voice-task-surface-normalization-spec.md`, and `plan/voice-operops-codex-taskflow-spec.md`; moved `plan/{live-possible-tasks-during-meeting-plan,mcp-voice-session-taskflow-plan}.md` into `plan/archive/*.legacy.md`, fixed stale status references, and closed `copilot-v9ba`, `copilot-1ssq`, `copilot-gwo0`, `copilot-ro0w`, and `copilot-eyr2`.
 - **13:17** Updated `backend/src/api/routes/crm/codex.ts`, `backend/__tests__/api/crmCodexRouteRuntime.test.ts`, and `ontology/typedb/scripts/typedb-ontology-contract-check.py`; verified with focused runtime test and local/prod route checks, then reloaded the live `copilot-x0xn` page successfully.

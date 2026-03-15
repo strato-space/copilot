@@ -8,6 +8,23 @@ Migration baseline: TypeDB `3.x` only (hard cutover), no TypeDB `2.x` compatibil
 Contract baseline for current sync wave (`copilot-gym6.*`):
 - `docs/runtime_contract_gap_matrix_v1.md`
 
+## Operational Kinds
+
+The rollout now distinguishes two kinds of ingest work:
+
+- `cleanup_apply`
+  - purpose: restore canonical AS-IS entities and mandatory relations required by the current validation objective;
+  - must be profiled against other cleanup runs only.
+- `historical_backfill`
+  - purpose: materialize broader historical and derived semantic projections after cleanup is already valid;
+  - must be profiled against other backfill runs only.
+
+Minimal repair after the 2026-03-15 `copilot-8wn1` tuning wave:
+
+- cleanup no longer rebuilds every session-derived projection by default;
+- for the focused cleanup pass, `automation_voice_bot_sessions` may run with `--skip-session-derived-projections`;
+- backfill remains the proper place for those higher-cost projections.
+
 ## Phase 0 - Environment
 
 1. Provision TypeDB (isolated env) and create database `str_opsportal_v1`.

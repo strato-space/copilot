@@ -74,7 +74,7 @@ run_rollout() {
   write_rollout_state "$run_id" "running" "cleanup_apply" "$session_name" "$cleanup_log" "$cleanup_deadletter" "$backfill_log" "$backfill_deadletter" "starting focused cleanup apply"
   {
     echo "[typedb-rollout-chain] run_id=${run_id} phase=8wn1_cleanup start=$(date -u +%FT%TZ)"
-    npm run ontology:typedb:ingest:apply -- --run-id "$run_id" --deadletter "$cleanup_deadletter" --collections automation_tasks,automation_voice_bot_sessions
+    npm run ontology:typedb:ingest:apply -- --run-id "$run_id" --deadletter "$cleanup_deadletter" --skip-session-derived-projections --collections automation_tasks,automation_voice_bot_sessions
   } 2>&1 | tee -a "$cleanup_log"
   local cleanup_exit=${PIPESTATUS[0]}
 
