@@ -1,12 +1,12 @@
 # Спецификация: нормализация task surfaces Voice и OperOps по статусам
 
 ## Status
-- Ticket line: ⚪Open 3  🟡In Progress 1  💤Deferred 0  ⛔Blocked 0  Closed 12
-- Plan status: approved target contract; production data aligned; convergence and bug-fix wave in progress.
+- Repo ticket line \(global, not scoped to this spec\): ⚪Open 3  🟡In Progress 1  💤Deferred 0  ⛔Blocked 0  Closed 12
+- Plan status: implemented contract; production data aligned; prod verification complete.
 - Canonical design epic: `copilot-cux2`
-- Current execution epic: `copilot-ojxy`
+- Completed execution epics: `copilot-ojxy`, `copilot-kdqs`
 
-**Статус документа**: approved target contract; production data aligned; UI/API convergence in progress
+**Статус документа**: implemented contract; production data aligned; prod verified
 **Дата**: 2026-03-14  
 **Основание**: текущий strict runtime-контракт, существующие routes `voicebot/session_tasks`, `voicebot/session_tab_counts`, `voice.crm_tickets(session_id=...)`, текущая OperOps CRM surface и закрепленные product notes в [AGENTS.md](/home/strato-space/copilot/AGENTS.md).
 
@@ -16,10 +16,10 @@
 
 Главный смысл документа:
 - он фиксирует replacement UX/status-surface semantics, которые были утверждены и уже легли в основную status model;
-- он остается главным semantic contract для этой wave;
+- он остается главным semantic contract для текущего runtime;
 - для legacy/migration context дополнительно сохраняется [voice-task-status-normalization-plan.legacy.md](/home/strato-space/copilot/plan/archive/voice-task-status-normalization-plan.legacy.md);
 - текущая production truth должна читаться через этот документ, deployed code и rollout notes in `bd`;
-- strict cutover tails по historical `possible_tasks` projections и duplicate counters отдельно отслеживаются в execution epic `copilot-ojxy`.
+- completed cutover/deprecation waves зафиксированы в `bd` и changelog.
 
 Базовый тезис:
 - `Возможные задачи` не являются отдельной storage-сущностью;
@@ -37,13 +37,12 @@
 Этот документ:
 - фиксирует `As Is` runtime/storage/UI semantics;
 - фиксирует `To Be` replacement contract;
-- задает migration direction для еще не закрытых хвостов;
-- отделяет уже-landed изменения от еще не доведенных follow-up шагов.
+- фиксирует уже-landed replacement outcome и его current runtime shape;
+- отделяет текущий contract от historical migration context.
 
 ### 1.2 Что документ не делает
 
 Этот документ:
-- не утверждает, что весь target behavior уже реализован;
 - не отменяет текущий продовый as-built contract;
 - не запускает кодовые изменения в этой волне;
 - не заменяет текущие smoke/recovery/runbook документы.

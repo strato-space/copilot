@@ -1,7 +1,7 @@
-# Plan: Full removal of `voice.session_possible_tasks`
+# Completed Reference: Full removal of `voice.session_possible_tasks`
 
 ## Status
-- Plan status: implemented
+- Plan status: implemented and verified
 - Parent issue: `copilot-kdqs`
 
 ## Goal

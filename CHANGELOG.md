@@ -13,6 +13,7 @@
 - **02:29** Updated `/home/tools/voice/src/lib/core.py`, `/home/tools/voice/src/mcp_voicebot/server.py`, and `/home/tools/voice/src/actions/main.py` to add `session_task_counts` / `session_tasks`, move draft reads onto `session_tasks(bucket="draft")`, and remove the deprecated `session_possible_tasks` MCP/action/client surface after replacement coverage was in place.
 - **02:29** Updated `/home/tools/voice/{AGENTS.md,README.md}` plus `/home/tools/voice/tests/unit/{api,mcp,actions}/*` so the unified read surface is the preferred contract and focused venv tests continue to pass.
 - **03:00** Updated `backend/src/api/routes/voicebot/sessions.ts`, `app/src/store/voiceBotStore.ts`, focused backend/app regression suites, `docs/VOICEBOT_API*.md`, `agents/README.md`, `agents/agent-cards/create_tasks.md`, and `plan/{voice-task-surface-normalization-spec.md,voice-session-possible-tasks-deprecation-plan.md}` to remove the deprecated backend alias, switch the frontend draft loader to `session_tasks`, mark the deprecation outcome as completed, and close `copilot-kdqs`, `.1`, `.2`, `.3`, and `.4` in beads.
+- **03:13** Finalized the spec wording after the closure wave: clarified that the top ticket line in `plan/voice-task-surface-normalization-spec.md` is repo-global rather than scope-local, switched the top-level status framing from `in progress` to `implemented/verified`, and marked the deprecation plan as a completed reference.
 
 ## 2026-03-14
 ### PROBLEM SOLVED
