@@ -486,8 +486,14 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         fetchDictionary,
 
         updateTicket: async (ticket, updateProps, opt) => {
+            const normalizedUpdateProps = {
+                ...updateProps,
+                ...(updateProps.task_status
+                    ? { task_status: TASK_STATUSES[updateProps.task_status as keyof typeof TASK_STATUSES] ?? updateProps.task_status }
+                    : {}),
+            };
             const updateObj = _.reduce(
-                Object.entries(updateProps),
+                Object.entries(normalizedUpdateProps),
                 (result, [prop, value]) => {
                     result[prop] = { $set: value };
                     return result;
@@ -497,11 +503,9 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
 
             const doneStatuses: string[] = [
                 TASK_STATUSES.DONE_10,
-                TASK_STATUSES.DONE_20,
-                TASK_STATUSES.DONE_30,
                 TASK_STATUSES.ARCHIVE,
             ];
-            if (updateProps.task_status && doneStatuses.includes(updateProps.task_status)) {
+            if (normalizedUpdateProps.task_status && doneStatuses.includes(normalizedUpdateProps.task_status)) {
                 updateObj.notifications = { $set: null };
             }
 
@@ -651,10 +655,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         },
 
         massiveChangeStatus: async (tickets, new_status) => {
+            const nextStoredStatus = TASK_STATUSES[new_status as keyof typeof TASK_STATUSES] ?? new_status;
             for (const ticket_id of tickets) {
                 const record_index = _.findIndex(get().tickets, (t) => t._id === ticket_id);
                 set((state) => ({
-                    tickets: update(state.tickets, { [record_index]: { task_status: { $set: new_status } } }),
+                    tickets: update(state.tickets, { [record_index]: { task_status: { $set: nextStoredStatus } } }),
                 }));
             }
             await api_request('tickets/bulk-change-status', { tickets, new_status });
@@ -790,24 +795,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             get().fetchDictionary();
             get().fetchTickets([
                 'DRAFT_10',
-                'BACKLOG_10',
-                'NEW_0',
-                'NEW_10',
-                'NEW_20',
-                'NEW_30',
-                'NEW_40',
-                'PLANNED_10',
-                'PLANNED_20',
                 'READY_10',
                 'PROGRESS_10',
-                'PROGRESS_20',
-                'PROGRESS_30',
-                'PROGRESS_40',
                 'REVIEW_10',
-                'REVIEW_20',
-                'AGREEMENT_10',
-                'AGREEMENT_20',
                 'DONE_10',
+                'ARCHIVE',
             ]);
         },
 

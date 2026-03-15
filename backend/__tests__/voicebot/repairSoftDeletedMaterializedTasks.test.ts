@@ -5,8 +5,9 @@ import {
   applySoftDeletedMaterializedTaskRepairPlan,
   buildSoftDeletedMaterializedTaskRepairQuery,
   collectSoftDeletedMaterializedTaskRepairPlan,
-} from '../../src/services/voicebot/repairSoftDeletedMaterializedTasks.js';
+} from '../../scripts/lib/voicebot/repairSoftDeletedMaterializedTasks.js';
 import { TASK_STATUSES } from '../../src/constants.js';
+import { LEGACY_SOFT_DELETED_REPAIR_SOURCE_STATUSES } from '../../scripts/lib/legacyTaskStatuses.js';
 
 describe('repairSoftDeletedMaterializedTasks', () => {
   beforeEach(() => {
@@ -24,13 +25,7 @@ describe('repairSoftDeletedMaterializedTasks', () => {
             source_kind: 'voice_session',
             task_status: expect.objectContaining({
               $in: expect.arrayContaining([
-                TASK_STATUSES.NEW_0,
-                TASK_STATUSES.DRAFT_10,
-                TASK_STATUSES.READY_10,
-                TASK_STATUSES.BACKLOG_10,
-                'Backlog',
-                'Ready',
-                'Draft',
+                ...LEGACY_SOFT_DELETED_REPAIR_SOURCE_STATUSES,
               ]),
             }),
           }),
@@ -51,8 +46,8 @@ describe('repairSoftDeletedMaterializedTasks', () => {
     const toArray = jest.fn(async () => [
       {
         _id: candidateId,
-        row_id: 'NEW_0-001',
-        id: 'new-0-001-03-12',
+        row_id: 'legacy-row-001',
+        id: 'legacy-row-001-03-12',
         name: 'Demo row',
         source_data: {
           session_id: '69b26496b771d8ccdee31f98',
@@ -75,8 +70,8 @@ describe('repairSoftDeletedMaterializedTasks', () => {
     expect(result).toEqual([
       {
         _id: candidateId,
-        row_id: 'NEW_0-001',
-        id: 'new-0-001-03-12',
+        row_id: 'legacy-row-001',
+        id: 'legacy-row-001-03-12',
         name: 'Demo row',
         session_id: '69b26496b771d8ccdee31f98',
       },
@@ -87,7 +82,7 @@ describe('repairSoftDeletedMaterializedTasks', () => {
     const candidateId = new ObjectId();
     const findOne = jest.fn(async () => ({
       _id: candidateId,
-      row_id: 'NEW_0-001',
+      row_id: 'legacy-row-001',
       created_at: '2026-03-12T07:51:49.050Z',
       updated_at: '2026-03-12T07:51:49.240Z',
       deleted_at: '2026-03-12T07:51:49.240Z',
@@ -104,8 +99,8 @@ describe('repairSoftDeletedMaterializedTasks', () => {
       candidates: [
         {
           _id: candidateId,
-          row_id: 'NEW_0-001',
-          id: 'new-0-001-03-12',
+          row_id: 'legacy-row-001',
+          id: 'legacy-row-001-03-12',
           name: 'Demo row',
           session_id: '69b26496b771d8ccdee31f98',
         },
@@ -121,7 +116,7 @@ describe('repairSoftDeletedMaterializedTasks', () => {
           deleted_at: null,
           task_status: TASK_STATUSES.READY_10,
           accepted_from_possible_task: true,
-          accepted_from_row_id: 'NEW_0-001',
+          accepted_from_row_id: 'legacy-row-001',
           accepted_by: '6863eab6a6d7b324e2df310a',
           accepted_by_name: 'Валерий Сысик',
         }),

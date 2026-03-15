@@ -7,12 +7,11 @@ describe('PossibleTasks post-create contract', () => {
   const componentSource = fs.readFileSync(componentPath, 'utf8');
   const storeSource = fs.readFileSync(storePath, 'utf8');
 
-  it('removes successfully created rows from possibleTasks using removed_row_ids with created_task_ids fallback', () => {
+  it('removes successfully created rows from the dedicated possibleTasks slice using created_task_ids only', () => {
     expect(storeSource.includes('response?.created_task_ids')).toBe(true);
-    expect(storeSource.includes('response?.removed_row_ids')).toBe(true);
-    expect(storeSource.includes('const removedRowIds = removedRowIdsRaw.length > 0 ? removedRowIdsRaw : createdTaskIds;')).toBe(true);
+    expect(storeSource.includes('const removedRowIds = createdTaskIds;')).toBe(true);
     expect(storeSource.includes('possibleTasks: filterPossibleTasksByLocators(state.possibleTasks, removedRowIds)')).toBe(true);
-    expect(storeSource.includes('voiceBotSession: removePossibleTasksFromSession(state.voiceBotSession, removedRowIds)')).toBe(true);
+    expect(storeSource.includes('voiceBotSession: removePossibleTasksFromSession')).toBe(false);
   });
 
   it('keeps only failed rows selected after partial validation errors', () => {

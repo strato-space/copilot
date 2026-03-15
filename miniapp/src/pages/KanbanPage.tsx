@@ -14,27 +14,21 @@ import { useKanban } from '../store/kanban';
 import constants from '../constants';
 
 const tabs: Record<string, string> = {
-    '1': 'Ready',
-    '2': 'In Progress',
-    '3': 'Review',
-    '4': 'Done',
+    '1': 'Draft',
+    '2': 'Ready',
+    '3': 'In Progress',
+    '4': 'Review',
+    '5': 'Done',
+    '6': 'Archive',
 };
 
 const statuses: Record<string, string[]> = {
+    Draft: [constants.task_statuses.DRAFT_10],
     Ready: [constants.task_statuses.READY_10],
-    'In Progress': [
-        constants.task_statuses.PROGRESS_10,
-        constants.task_statuses.PROGRESS_20,
-        constants.task_statuses.PROGRESS_30,
-        constants.task_statuses.PROGRESS_40,
-        constants.task_statuses.PERIODIC,
-    ],
-    Review: [constants.task_statuses.REVIEW_10, constants.task_statuses.REVIEW_20],
-    Done: [
-        constants.task_statuses.DONE_10,
-        constants.task_statuses.DONE_20,
-        constants.task_statuses.DONE_30,
-    ],
+    'In Progress': [constants.task_statuses.PROGRESS_10],
+    Review: [constants.task_statuses.REVIEW_10],
+    Done: [constants.task_statuses.DONE_10],
+    Archive: [constants.task_statuses.ARCHIVE],
 };
 
 const KanbanPage = () => {
@@ -80,7 +74,7 @@ const KanbanPage = () => {
             >
                 <Tabs
                     defaultActiveKey="2"
-                    items={['1', '2', '3', '4'].map((i) => ({
+                    items={['1', '2', '3', '4', '5', '6'].map((i) => ({
                         key: i,
                         label: tabs[i],
                         children: <TicketsList />,

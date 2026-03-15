@@ -8,7 +8,6 @@ import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../runtimeScope.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
 import {
   ACTIVE_VOICE_DRAFT_STATUSES,
-  buildSessionCompatiblePossibleTaskRow,
   buildVoicePossibleTaskMasterDoc,
   buildVoicePossibleTaskMasterQuery,
   collectVoicePossibleTaskLocatorKeys,
@@ -21,13 +20,6 @@ export const POSSIBLE_TASKS_REFRESH_MODE_VALUES = ['full_recompute', 'incrementa
 export type PossibleTasksRefreshMode = (typeof POSSIBLE_TASKS_REFRESH_MODE_VALUES)[number];
 
 const runtimeTaskQuery = (query: Record<string, unknown>) =>
-  mergeWithRuntimeFilter(query, {
-    field: 'runtime_tag',
-    familyMatch: IS_PROD_RUNTIME,
-    includeLegacyInProd: IS_PROD_RUNTIME,
-  });
-
-const runtimeSessionQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, {
     field: 'runtime_tag',
     familyMatch: IS_PROD_RUNTIME,
@@ -201,39 +193,6 @@ const buildPossibleTaskMasterAliasMap = (
   return aliasMap;
 };
 
-const syncSessionPossibleTaskCompatibilityData = async ({
-  db,
-  sessionId,
-  rows,
-}: {
-  db: Db;
-  sessionId: string;
-  rows: Array<Record<string, unknown>>;
-}): Promise<void> => {
-  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-    runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-    {
-      $set: {
-        'processors_data.CREATE_TASKS.data': rows,
-        'processors_data.CREATE_TASKS.task_ids': rows
-          .map((row) => resolveVoicePossibleTaskRowId({ rawTask: row, index: 0 }))
-          .filter(Boolean),
-        'processors_data.CREATE_TASKS.last_generator': 'create_tasks',
-        'processors_data.CREATE_TASKS.last_generated_at': new Date().toISOString(),
-        'processors_data.CREATE_TASKS.job_finished_timestamp': Date.now(),
-        'processors_data.CREATE_TASKS.is_processing': false,
-        'processors_data.CREATE_TASKS.is_processed': true,
-        updated_at: new Date(),
-      },
-      $unset: {
-        'processors_data.CREATE_TASKS.error': 1,
-        'processors_data.CREATE_TASKS.error_message': 1,
-        'processors_data.CREATE_TASKS.error_timestamp': 1,
-      },
-    }
-  );
-};
-
 const softDeletePossibleTaskMasterRows = async ({
   db,
   sessionId,
@@ -399,7 +358,6 @@ export const persistPossibleTasksForSession = async ({
   refreshMode?: PossibleTasksRefreshMode;
 }): Promise<{
   items: Array<Record<string, unknown>>;
-  rows: Array<Record<string, unknown>>;
   removedRowIds: string[];
 }> => {
   const incomingRowIds = taskItems
@@ -526,14 +484,9 @@ export const persistPossibleTasksForSession = async ({
   const refreshedItems = refreshedMasterDocs
     .map((item) => normalizeVoicePossibleTaskDocForApi(item))
     .filter((item): item is Record<string, unknown> => item !== null);
-  const refreshedRows = refreshedMasterDocs
-    .map((item) => buildSessionCompatiblePossibleTaskRow(item))
-    .filter((item): item is Record<string, unknown> => item !== null);
-  await syncSessionPossibleTaskCompatibilityData({ db, sessionId, rows: refreshedRows });
 
   return {
     items: refreshedItems,
-    rows: refreshedRows,
     removedRowIds: refreshMode === 'full_recompute' ? Array.from(new Set(staleRowIds)) : [],
   };
 };

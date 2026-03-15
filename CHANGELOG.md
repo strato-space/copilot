@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-03-15
+### PROBLEM SOLVED
+- **02:16** The strict task-surface runtime was already clean, but the final draft-read deprecation wave was still incomplete: `/home/tools/voice` continued to expose `session_possible_tasks`, Copilot backend still served `POST /api/voicebot/possible_tasks`, and active prompts/docs still mixed the old draft-read name with the new unified surface.
+- **02:16** Voice session taskflow still depended on a split naming model across repos, so even after the status-first rollout landed, assistant instructions, MCP docs, and actions examples could still reintroduce the removed draft alias as if it were the preferred path.
+
+### FEATURE IMPLEMENTED
+- **02:29** Landed the unified replacement read surface in `/home/tools/voice`: `session_task_counts(session_id)` plus `session_tasks(session_id, bucket, status_keys=None)` now cover draft, accepted lifecycle, and codex reads, while the old draft-read method was reduced and then removed from active MCP/client surfaces.
+- **03:00** Completed the deprecation wave end-to-end: Copilot backend now serves draft reads through `POST /api/voicebot/session_tasks`, the old `POST /api/voicebot/possible_tasks` route is removed, active prompts/docs prefer the unified replacement surface, and prod deploy plus live MCP verification confirmed that the Voice `Задачи` tab still renders correctly.
+
+### CHANGES
+- **02:29** Updated `/home/tools/voice/src/lib/core.py`, `/home/tools/voice/src/mcp_voicebot/server.py`, and `/home/tools/voice/src/actions/main.py` to add `session_task_counts` / `session_tasks`, move draft reads onto `session_tasks(bucket="draft")`, and remove the deprecated `session_possible_tasks` MCP/action/client surface after replacement coverage was in place.
+- **02:29** Updated `/home/tools/voice/{AGENTS.md,README.md}` plus `/home/tools/voice/tests/unit/{api,mcp,actions}/*` so the unified read surface is the preferred contract and focused venv tests continue to pass.
+- **03:00** Updated `backend/src/api/routes/voicebot/sessions.ts`, `app/src/store/voiceBotStore.ts`, focused backend/app regression suites, `docs/VOICEBOT_API*.md`, `agents/README.md`, `agents/agent-cards/create_tasks.md`, and `plan/{voice-task-surface-normalization-spec.md,voice-session-possible-tasks-deprecation-plan.md}` to remove the deprecated backend alias, switch the frontend draft loader to `session_tasks`, mark the deprecation outcome as completed, and close `copilot-kdqs`, `.1`, `.2`, `.3`, and `.4` in beads.
+
 ## 2026-03-14
 ### PROBLEM SOLVED
 - **02:04** The Voice/OperOps surface-normalization draft still read like a documentation overlay, so it mixed current runtime truth with next-wave target semantics and left key decisions (`mutable draft baseline`, `PERIODIC`, Voice tab replacement scope, Codex surface wording) underspecified.

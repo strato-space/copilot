@@ -14,7 +14,7 @@ import { AppError } from '../../middleware/error.js';
 import { normalizeTicketDbId } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
-import { TARGET_EDITABLE_TASK_STATUS_VALUES } from '../../../services/taskStatusSurface.js';
+import { TARGET_EDITABLE_TASK_STATUS_KEYS, isTaskStatusKey, toStoredTaskStatusValue } from '../../../services/taskStatusSurface.js';
 import {
     buildTaskAttachmentDownloadUrl,
     createTaskAttachmentFromUpload,
@@ -278,14 +278,14 @@ router.post('/', async (req: Request, res: Response) => {
     try {
         const db = getDb();
         const rawStatuses = Array.isArray(req.body.statuses) ? req.body.statuses as string[] : [];
-        const exactStatusValues = rawStatuses
-            .map((status) => {
-                if (typeof status !== 'string') return '';
-                const trimmed = status.trim();
-                if (!trimmed) return '';
-                return TASK_STATUSES[trimmed as keyof typeof TASK_STATUSES] ?? trimmed;
-            })
-            .filter(Boolean);
+        const statusKeys = rawStatuses
+            .map((status) => (isTaskStatusKey(status) ? status : null))
+            .filter((status): status is keyof typeof TASK_STATUSES => Boolean(status));
+        if (rawStatuses.length > 0 && statusKeys.length !== rawStatuses.length) {
+            res.status(400).json({ error: 'statuses must contain canonical task status keys only' });
+            return;
+        }
+        const exactStatusValues = statusKeys.map((statusKey) => toStoredTaskStatusValue(statusKey));
 
         const taskStatusQuery = exactStatusValues.length > 0
             ? { task_status: { $in: exactStatusValues } }
@@ -454,10 +454,14 @@ router.post('/update', async (req: Request, res: Response) => {
 
         if (
             Object.prototype.hasOwnProperty.call(updateProps, 'task_status') &&
-            !TARGET_EDITABLE_TASK_STATUS_VALUES.includes(updateProps.task_status as (typeof TARGET_EDITABLE_TASK_STATUS_VALUES)[number])
+            (!isTaskStatusKey(updateProps.task_status) ||
+                !TARGET_EDITABLE_TASK_STATUS_KEYS.includes(updateProps.task_status as (typeof TARGET_EDITABLE_TASK_STATUS_KEYS)[number]))
         ) {
             res.status(400).json({ error: 'task_status is not allowed for CRM mutation' });
             return;
+        }
+        if (Object.prototype.hasOwnProperty.call(updateProps, 'task_status') && isTaskStatusKey(updateProps.task_status)) {
+            updateProps.task_status = toStoredTaskStatusValue(updateProps.task_status);
         }
 
         // Sanitize description if present
@@ -810,17 +814,21 @@ router.post('/bulk-change-status', async (req: Request, res: Response) => {
     try {
         const db = getDb();
         const ticketIds = req.body.tickets as string[];
-        const newStatus = (req.body.status ?? req.body.new_status) as string;
+        const newStatusKey = (req.body.status ?? req.body.new_status) as string;
 
-        if (!ticketIds || !Array.isArray(ticketIds) || !newStatus) {
+        if (!ticketIds || !Array.isArray(ticketIds) || !newStatusKey) {
             res.status(400).json({ error: 'tickets array and status are required' });
             return;
         }
 
-        if (!TARGET_EDITABLE_TASK_STATUS_VALUES.includes(newStatus as (typeof TARGET_EDITABLE_TASK_STATUS_VALUES)[number])) {
+        if (
+            !isTaskStatusKey(newStatusKey) ||
+            !TARGET_EDITABLE_TASK_STATUS_KEYS.includes(newStatusKey as (typeof TARGET_EDITABLE_TASK_STATUS_KEYS)[number])
+        ) {
             res.status(400).json({ error: 'task_status is not allowed for CRM mutation' });
             return;
         }
+        const newStatus = toStoredTaskStatusValue(newStatusKey);
 
         const objectIds = ticketIds.map((id) => new ObjectId(id));
 

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
-import { COLLECTIONS } from '../../../constants.js';
+import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
 
 const router = Router();
 const logger = getLogger();
@@ -40,8 +40,62 @@ router.post('/sessions_in_crm', async (_req: Request, res: Response) => {
                 },
                 {
                     $addFields: {
+                        session_id_str: { $toString: '$_id' },
+                        session_ref: {
+                            $concat: [
+                                'https://copilot.stratospace.fun/voice/session/',
+                                { $toString: '$_id' },
+                            ],
+                        },
+                    },
+                },
+                {
+                    $lookup: {
+                        from: COLLECTIONS.TASKS,
+                        let: {
+                            sessionIdObj: '$_id',
+                            sessionIdStr: '$session_id_str',
+                            sessionRef: '$session_ref',
+                        },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [
+                                            { $ne: ['$is_deleted', true] },
+                                            { $ne: ['$codex_task', true] },
+                                            { $eq: ['$source', 'VOICE_BOT'] },
+                                            { $eq: ['$source_kind', 'voice_possible_task'] },
+                                            { $eq: ['$task_status', TASK_STATUSES.DRAFT_10] },
+                                            {
+                                                $or: [
+                                                    { $eq: ['$external_ref', '$$sessionRef'] },
+                                                    { $eq: ['$source_ref', '$$sessionRef'] },
+                                                    { $eq: ['$source_data.session_id', '$$sessionIdObj'] },
+                                                    { $eq: ['$source_data.session_id', '$$sessionIdStr'] },
+                                                    {
+                                                        $in: [
+                                                            '$$sessionIdStr',
+                                                            { $ifNull: ['$source_data.voice_sessions.session_id', []] },
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                },
+                            },
+                            { $count: 'count' },
+                        ],
+                        as: 'draft_task_counts',
+                    },
+                },
+                {
+                    $addFields: {
                         project: { $arrayElemAt: ['$project', 0] },
-                        tasks_count: { $size: { $ifNull: ['$agent_results.create_tasks', []] } },
+                        tasks_count: {
+                            $ifNull: [{ $arrayElemAt: ['$draft_task_counts.count', 0] }, 0],
+                        },
                     },
                 },
                 {
@@ -52,7 +106,6 @@ router.post('/sessions_in_crm', async (_req: Request, res: Response) => {
                         last_voice_timestamp: 1,
                         project: 1,
                         show_in_crm: 1,
-                        agent_results: 1,
                         tasks_count: 1,
                     },
                 },

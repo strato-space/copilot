@@ -10,7 +10,7 @@ import numberToWordsRu from 'number-to-words-ru';
 import { getDb } from '../../../../services/db.js';
 import { getLogger } from '../../../../utils/logger.js';
 import { normalizeTicketDbId } from '../../../../utils/crmMiniappShared.js';
-import { COLLECTIONS } from '../../../../constants.js';
+import { COLLECTIONS, TASK_STATUSES } from '../../../../constants.js';
 import { getGoogleAuth } from '../../../../services/google/sheets.js';
 
 dayjs.extend(customParseFormat);
@@ -141,14 +141,12 @@ router.post('/finances', async (req: Request, res: Response) => {
             group.totalWorkHours = group.works.reduce((sum, work) => sum + Number(work.work_hours ?? 0), 0);
             const history = group.ticket.task_status_history ?? [];
             const readyStatus = history.find(
-                (status) => status.new_value === 'Progress 10' || status.new_value === 'Ready'
+                (status) => status.new_value === TASK_STATUSES.PROGRESS_10 || status.new_value === TASK_STATUSES.READY_10
             );
             const doneStatus = history.find(
                 (status) =>
-                    status.new_value === 'Done' ||
-                    status.new_value === 'Complete' ||
-                    status.new_value === 'PostWork' ||
-                    status.new_value === 'Archive'
+                    status.new_value === TASK_STATUSES.DONE_10 ||
+                    status.new_value === TASK_STATUSES.ARCHIVE
             );
 
             const timeBetweenReadyAndDone =
@@ -158,10 +156,10 @@ router.post('/finances', async (req: Request, res: Response) => {
 
             group.timeBetweenReadyAndDone = timeBetweenReadyAndDone;
 
-            const reviewsCount = history.filter((status) => status.new_value === 'Review / Ready').length;
+            const reviewsCount = history.filter((status) => status.new_value === TASK_STATUSES.REVIEW_10).length;
             group.reviewsCount = timeBetweenReadyAndDone != null && reviewsCount > 0 ? reviewsCount : null;
 
-            const reviewStatus = history.find((status) => status.new_value === 'Review / Ready');
+            const reviewStatus = history.find((status) => status.new_value === TASK_STATUSES.REVIEW_10);
             const timeBetweenReadyAndReview =
                 readyStatus && reviewStatus
                     ? (reviewStatus.timestamp - readyStatus.timestamp) / (1000 * 60 * 60 * 24)

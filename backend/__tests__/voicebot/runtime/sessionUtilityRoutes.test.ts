@@ -12,7 +12,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("router.post('/process_possible_tasks'");
     expect(source).toContain("router.post('/codex_tasks'");
     expect(source).toContain("router.post('/session_tab_counts'");
-    expect(source).toContain("router.post('/possible_tasks'");
+    expect(source).toContain("router.post('/session_tasks'");
     expect(source).toContain("router.post('/delete_task_from_session'");
     expect(source).toContain("router.post('/task_types'");
     expect(source).toContain("router.post('/topics'");
@@ -39,10 +39,11 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('const issueId = await createBdIssue({');
   });
 
-  it('normalizes save_create_tasks payload into canonical task fields', () => {
-    expect(source).toContain('normalizeCreateTaskForStorage');
-    expect(source).toContain("'agent_results.create_tasks': normalizedTasks");
-    expect(source).toContain('name: toTaskText(rawTask.name)');
+  it('routes save_create_tasks through canonical possible-task persistence', () => {
+    expect(source).toContain("router.post('/save_create_tasks'");
+    expect(source).toContain('persistPossibleTasksForSession({');
+    expect(source).toContain("refreshMode: 'full_recompute'");
+    expect(source).toContain("saved_count: persisted.items.length");
   });
 
   it('publishes canonical session taskflow contract for MCP/client parity', () => {
@@ -52,7 +53,6 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("canonical_field: SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD");
     expect(source).toContain("compatibility_input_aliases: [...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS]");
     expect(source).toContain('delete_input_aliases: []');
-    expect(source).toContain("remove_from_possible_tasks: {");
     expect(source).toContain("operation_status: ['success', 'partial', 'failed']");
     expect(source).toContain("body: { error: 'runtime_mismatch' }");
     expect(source).toContain("canonical_route: {");
@@ -74,14 +74,15 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("reason: 'save_summary'");
     expect(source).toContain('summary: true');
     expect(source).toContain("return res.status(200).json({");
-    expect(source).toContain('matched_count: result.matchedCount');
-    expect(source).toContain('deleted_count: result.modifiedCount > 0 ? 1 : 0');
+    expect(source).toContain('matched_count: hadMatchingDraftRow ? 1 : 0');
+    expect(source).toContain('deleted_count: hadMatchingDraftRow ? 1 : 0');
   });
 
   it('reads canonical possible tasks only from automation_tasks master rows', () => {
     expect(source).toContain('buildVoicePossibleTaskMasterQuery');
     expect(source).toContain('normalizeVoicePossibleTaskDocForApi');
     expect(source).toContain('listPossibleTaskMasterDocs({ db, sessionId })');
+    expect(source).toContain("bucket === 'draft'");
     expect(source).toContain("reason: 'save_possible_tasks'");
   });
 

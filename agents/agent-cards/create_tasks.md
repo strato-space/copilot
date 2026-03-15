@@ -50,7 +50,8 @@ oneOf:
   - `project-name`
   - `routing-topic`
 - После metadata-fetch:
-  - ОБЯЗАТЕЛЬНО прочитай `voice.session_possible_tasks(session_id=session_id)`;
+  - ОБЯЗАТЕЛЬНО прочитай `voice.session_task_counts(session_id=session_id)`;
+  - ОБЯЗАТЕЛЬНО прочитай `voice.session_tasks(session_id=session_id, bucket="draft")`;
   - ОБЯЗАТЕЛЬНО прочитай `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")`;
   - если известен `project-id`, ОБЯЗАТЕЛЬНО прочитай `voice.project(project_id)`;
   - если известен `project-id`, ОБЯЗАТЕЛЬНО прочитай `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table")`.
@@ -66,7 +67,7 @@ oneOf:
 4. Дочитай `voice.project(project_id)`, если известен `project-id`.
 5. Дочитай existing possible tasks и existing materialized tasks этой сессии.
 6. Дочитай активные задачи проекта, если известен `project-id`.
-7. Считай `voice.session_possible_tasks(session_id=...)` mutable baseline для текущей сессии и верни полный желаемый набор `DRAFT_10` rows для этой сессии, а не только дельту.
+7. Считай `voice.session_tasks(session_id=..., bucket="draft")` mutable baseline для текущей сессии и верни полный желаемый набор `DRAFT_10` rows для этой сессии, а не только дельту.
 8. Выдели только executor-ready задачи.
 9. Удали явные дубли.
 10. Верни только канонический JSON-массив.
@@ -101,7 +102,7 @@ oneOf:
 - В текущем Mongo reality у existing possible tasks `project_id` и `performer_id` могут быть пустыми строками; не отбрасывай и не переоткрывай scope только из-за пустого `project_id` у historical `voice_possible_task`.
 
 Дедупликация и snapshot semantics:
-- `voice.session_possible_tasks(session_id=...)` — это НЕ immutable duplicates, а mutable baseline.
+- `voice.session_tasks(session_id=..., bucket="draft")` — это НЕ immutable duplicates, а mutable baseline.
 - Если задача уже есть в `DRAFT_10` и scope тот же, верни её с тем же `row_id/id`, но обнови формулировку при необходимости.
 - Если scope тот же, но задача уже материализована вне `DRAFT_10`, не возвращай её как новую Possible Task.
 - Если project_id известен и есть активная non-`DRAFT_10` задача с тем же смыслом, не возвращай дубликат.

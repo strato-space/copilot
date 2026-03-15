@@ -6,8 +6,12 @@ import {
   buildAcceptedVoiceTaskStatusMigrationQuery,
   buildVoiceDraftStatusMigrationQuery,
   previewVoiceTaskStatusMigration,
-} from '../../src/services/voicebot/migrateVoiceTaskStatuses.js';
+} from '../../scripts/lib/voicebot/migrateVoiceTaskStatuses.js';
 import { TASK_STATUSES } from '../../src/constants.js';
+import {
+  LEGACY_VOICE_ACCEPTED_SOURCE_STATUSES,
+  LEGACY_VOICE_DRAFT_SOURCE_STATUSES,
+} from '../../scripts/lib/legacyTaskStatuses.js';
 
 describe('migrateVoiceTaskStatuses', () => {
   it('builds draft and accepted queries with session scope', () => {
@@ -17,7 +21,7 @@ describe('migrateVoiceTaskStatuses', () => {
         source: 'VOICE_BOT',
         source_kind: 'voice_possible_task',
         task_status: expect.objectContaining({
-          $in: expect.arrayContaining(['Backlog', TASK_STATUSES.NEW_0]),
+          $in: expect.arrayContaining([...LEGACY_VOICE_DRAFT_SOURCE_STATUSES]),
         }),
         $or: expect.arrayContaining([
           expect.objectContaining({
@@ -31,7 +35,7 @@ describe('migrateVoiceTaskStatuses', () => {
         source: 'VOICE_BOT',
         source_kind: 'voice_session',
         task_status: expect.objectContaining({
-          $in: expect.arrayContaining(['Backlog', TASK_STATUSES.BACKLOG_10]),
+          $in: expect.arrayContaining([...LEGACY_VOICE_ACCEPTED_SOURCE_STATUSES]),
         }),
       })
     );

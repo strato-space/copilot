@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   applyVoiceTaskStatusMigration,
   previewVoiceTaskStatusMigration,
-} from '../src/services/voicebot/migrateVoiceTaskStatuses.js';
+} from './lib/voicebot/migrateVoiceTaskStatuses.js';
 
 const args = process.argv.slice(2);
 

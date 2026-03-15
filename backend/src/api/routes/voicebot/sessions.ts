@@ -149,16 +149,6 @@ export const SESSION_TASKFLOW_CONTRACT = {
         session_id: 'string',
         tickets: 'SessionTaskRow[]',
     },
-    remove_flags: {
-        remove_from_possible_tasks: {
-            type: 'boolean',
-            default: true,
-        },
-        remove_items: {
-            type: 'row_locator[]',
-            optional: true,
-        },
-    },
     mutation_result: {
         operation_status: ['success', 'partial', 'failed'],
         created_task_ids: 'string[]',
@@ -218,16 +208,6 @@ const sessionTaskRowLocatorInputSchema = z
 const createTicketsInputSchema = z.object({
     session_id: z.string().trim().min(1),
     tickets: z.array(sessionTaskRowLocatorInputSchema).min(1),
-    remove_from_possible_tasks: z.boolean().optional(),
-    remove_items: z
-        .array(
-            z.union([
-                z.string(),
-                z.number(),
-                sessionTaskRowLocatorInputSchema,
-            ])
-        )
-        .optional(),
 });
 
 const sessionCodexTasksInputSchema = z.object({
@@ -238,8 +218,10 @@ const sessionTabCountsInputSchema = z.object({
     session_id: z.string().trim().min(1),
 });
 
-const sessionPossibleTasksInputSchema = z.object({
+const sessionTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
+    bucket: z.enum(['draft', 'tasks', 'codex']),
+    status_keys: z.array(z.enum(TARGET_TASK_STATUS_KEYS as unknown as [TargetTaskStatusKey, ...TargetTaskStatusKey[]])).optional(),
 });
 
 const savePossibleTasksInputSchema = z
@@ -656,12 +638,6 @@ const resolveSessionTaskRowLocator = (
     };
 };
 
-const buildSessionTaskRowPullFilter = (rowIds: string[]): Record<string, unknown> => ({
-    $or: [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS].map((field) => ({
-        [field]: { $in: rowIds },
-    })),
-});
-
 const collectSessionTaskMutationLocatorKeys = (value: unknown): string[] => {
     if (!value || typeof value !== 'object') return [];
 
@@ -710,34 +686,6 @@ type CreateTicketsRejectedRow = {
     message: string;
     performer_id?: string;
     project_id?: string;
-};
-
-const normalizeCreateTaskForStorage = (
-    rawTask: Record<string, unknown>,
-    index: number,
-    defaultProjectId: string
-): Record<string, unknown> => {
-    const taskIdFromAi = toTaskText(rawTask.task_id_from_ai);
-    const id = toTaskText(rawTask.id) || taskIdFromAi || `task-${index + 1}`;
-    const relations = normalizeVoicePossibleTaskRelations(rawTask);
-    return {
-        row_id: id,
-        id,
-        name: toTaskText(rawTask.name) || `Задача ${index + 1}`,
-        description: toTaskText(rawTask.description),
-        priority: toTaskText(rawTask.priority) || 'P3',
-        priority_reason: toTaskText(rawTask.priority_reason),
-        performer_id: toTaskText(rawTask.performer_id),
-        project_id: toTaskText(rawTask.project_id) || defaultProjectId,
-        task_type_id: toTaskText(rawTask.task_type_id),
-        dialogue_tag: toTaskText(rawTask.dialogue_tag) || 'voice',
-        task_id_from_ai: taskIdFromAi,
-        dependencies_from_ai: Array.isArray(rawTask.dependencies_from_ai)
-            ? rawTask.dependencies_from_ai.map((entry) => toTaskText(entry)).filter(Boolean)
-            : [],
-        dialogue_reference: toTaskText(rawTask.dialogue_reference),
-        ...(relations.length > 0 ? { relations } : {}),
-    };
 };
 
 const buildPossibleTaskMasterRuntimeQuery = (sessionId: string): Record<string, unknown> => {
@@ -920,32 +868,6 @@ const buildPossibleTaskMasterAliasMap = (
         });
     });
     return aliasMap;
-};
-
-const syncSessionPossibleTaskCompatibilityData = async ({
-    db,
-    sessionId,
-    rows,
-}: {
-    db: Db;
-    sessionId: string;
-    rows: Array<Record<string, unknown>>;
-}): Promise<void> => {
-    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-        runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-        {
-            $set: {
-                'processors_data.CREATE_TASKS.data': rows,
-                'processors_data.CREATE_TASKS.task_ids': rows
-                    .map((row) => resolveSessionTaskRowLocator(row))
-                    .filter((item): item is { ok: true; row_id: string; source_fields: string[] } => item.ok)
-                    .map((item) => item.row_id),
-                'processors_data.CREATE_TASKS.last_generator': 'create_tasks',
-                'processors_data.CREATE_TASKS.last_generated_at': new Date().toISOString(),
-                updated_at: new Date(),
-            },
-        }
-    );
 };
 
 const softDeletePossibleTaskMasterRows = async ({
@@ -3190,7 +3112,7 @@ router.post('/update_dialogue_tag', async (req: Request, res: Response) => {
 
 /**
  * POST /sessions/save_create_tasks
- * Save create_tasks agent results into agent_results.create_tasks
+ * Persist create_tasks agent output into canonical DRAFT_10 task rows
  */
 router.post('/save_create_tasks', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
@@ -3205,50 +3127,50 @@ router.post('/save_create_tasks', async (req: Request, res: Response) => {
         if (!Array.isArray(tasks)) {
             return res.status(400).json({ error: 'tasks must be an array' });
         }
+        if (!ObjectId.isValid(session_id)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
 
-        const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
-            _id: new ObjectId(session_id),
-            is_deleted: { $ne: true },
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({
+            db,
+            performer,
+            sessionId: session_id,
         });
-
         if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
             return res.status(404).json({ error: 'Session not found' });
         }
-
-        const userPermissions = await PermissionManager.getUserPermissions(performer, db);
-        let hasAccess = false;
-
-        if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.UPDATE)) {
-            hasAccess = true;
-        } else if (userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.READ_OWN)) {
-            hasAccess = session.chat_id === Number(performer.telegram_id) ||
-                (session.user_id && performer._id.toString() === session.user_id.toString());
-        }
-
         if (!hasAccess) {
             return res.status(403).json({ error: 'Access denied to update this session' });
         }
 
-        const defaultProjectId = session.project_id ? String(session.project_id) : '';
-        const normalizedTasks = tasks.map((task, index) =>
-            normalizeCreateTaskForStorage(task as Record<string, unknown>, index, defaultProjectId)
-        );
+        const taskItems = tasks.map((task) => task as Record<string, unknown>);
+        const persisted = await persistPossibleTasksForSession({
+            db,
+            sessionId: session_id,
+            sessionName: String((session as Record<string, unknown>).session_name || ''),
+            defaultProjectId: session.project_id ? String(session.project_id) : '',
+            taskItems,
+            createdById: performer?._id?.toHexString?.() ?? '',
+            createdByName: String(performer?.real_name || performer?.name || '').trim(),
+            refreshMode: 'full_recompute',
+        });
 
-        const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(session_id) },
-            {
-                $set: {
-                    'agent_results.create_tasks': normalizedTasks,
-                    updated_at: new Date(),
-                },
-            }
-        );
+        emitSessionTaskflowRefreshHint({
+            req,
+            sessionId: session_id,
+            reason: 'save_possible_tasks',
+            possibleTasks: true,
+        });
 
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ error: 'Session not found' });
-        }
-
-        res.status(200).json({ success: true });
+        res.status(200).json({
+            success: true,
+            session_id,
+            saved_count: persisted.items.length,
+            items: persisted.items,
+        });
     } catch (error) {
         logger.error('Error in sessions/save_create_tasks:', error);
         res.status(500).json({ error: String(error) });
@@ -3983,9 +3905,63 @@ router.post('/in_crm', async (req: Request, res: Response) => {
             },
             {
                 $addFields: {
+                    session_id_str: { $toString: "$_id" },
+                    session_ref: {
+                        $concat: [
+                            "https://copilot.stratospace.fun/voice/session/",
+                            { $toString: "$_id" }
+                        ]
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: COLLECTIONS.TASKS,
+                    let: {
+                        sessionIdObj: "$_id",
+                        sessionIdStr: "$session_id_str",
+                        sessionRef: "$session_ref",
+                    },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $ne: ["$is_deleted", true] },
+                                        { $ne: ["$codex_task", true] },
+                                        { $eq: ["$source", "VOICE_BOT"] },
+                                        { $eq: ["$source_kind", "voice_possible_task"] },
+                                        { $eq: ["$task_status", TASK_STATUSES.DRAFT_10] },
+                                        {
+                                            $or: [
+                                                { $eq: ["$external_ref", "$$sessionRef"] },
+                                                { $eq: ["$source_ref", "$$sessionRef"] },
+                                                { $eq: ["$source_data.session_id", "$$sessionIdObj"] },
+                                                { $eq: ["$source_data.session_id", "$$sessionIdStr"] },
+                                                {
+                                                    $in: [
+                                                        "$$sessionIdStr",
+                                                        { $ifNull: ["$source_data.voice_sessions.session_id", []] },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                        { $count: "count" },
+                    ],
+                    as: "draft_task_counts",
+                }
+            },
+            {
+                $addFields: {
                     performer: { $arrayElemAt: ["$performer", 0] },
                     project: { $arrayElemAt: ["$project", 0] },
-                    tasks_count: { $size: { $ifNull: ["$agent_results.create_tasks", []] } }
+                    tasks_count: {
+                        $ifNull: [{ $arrayElemAt: ["$draft_task_counts.count", 0] }, 0]
+                    }
                 }
             },
             {
@@ -3996,7 +3972,6 @@ router.post('/in_crm', async (req: Request, res: Response) => {
                     last_voice_timestamp: 1,
                     project: 1,
                     show_in_crm: 1,
-                    agent_results: 1,
                     tasks_count: 1
                 }
             }
@@ -4011,7 +3986,7 @@ router.post('/in_crm', async (req: Request, res: Response) => {
 
 /**
  * POST /sessions/restart_create_tasks
- * Re-run create_tasks agent for a CRM session
+ * Clear canonical draft rows so create_tasks can be recomputed for a CRM session
  */
 router.post('/restart_create_tasks', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
@@ -4048,12 +4023,35 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Access denied to update this session" });
         }
 
-        // Clear previous agent results
-        await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(session_id) },
+        const canonicalExternalRef = voiceSessionUrlUtils.canonical(session_id);
+        await db.collection(COLLECTIONS.TASKS).updateMany(
+            mergeWithRuntimeFilter(
+                {
+                    is_deleted: { $ne: true },
+                    codex_task: { $ne: true },
+                    source: 'VOICE_BOT',
+                    source_kind: 'voice_possible_task',
+                    task_status: TASK_STATUSES.DRAFT_10,
+                    $or: [
+                        { external_ref: canonicalExternalRef },
+                        { source_ref: canonicalExternalRef },
+                        { 'source_data.session_id': new ObjectId(session_id) },
+                        { 'source_data.session_id': session_id },
+                        { 'source_data.voice_sessions.session_id': session_id },
+                    ],
+                },
+                {
+                    field: 'runtime_tag',
+                    familyMatch: IS_PROD_RUNTIME,
+                    includeLegacyInProd: IS_PROD_RUNTIME,
+                }
+            ),
             {
-                $unset: { 'agent_results.create_tasks': 1 },
-                $set: { updated_at: new Date() }
+                $set: {
+                    is_deleted: true,
+                    deleted_at: new Date(),
+                    updated_at: new Date(),
+                },
             }
         );
 
@@ -4070,47 +4068,6 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
     }
 });
 
-const parseExplicitRemoveRowIds = (
-    removeItems: Array<string | number | Record<string, unknown>>
-):
-    | { ok: true; rowIds: Set<string> }
-    | {
-        ok: false;
-        status: number;
-        body: Record<string, unknown>;
-    } => {
-    const rowIds = new Set<string>();
-    for (const [removeItemIndex, removeItem] of removeItems.entries()) {
-        const resolvedRemoveItem = resolveSessionTaskRowLocator(removeItem);
-        if (!resolvedRemoveItem.ok) {
-            if (resolvedRemoveItem.error_code === 'ambiguous_row_locator') {
-                return {
-                    ok: false,
-                    status: 409,
-                    body: {
-                        error: 'ambiguous_row_locator',
-                        error_code: 'ambiguous_row_locator',
-                        item_index: removeItemIndex,
-                        values: resolvedRemoveItem.values ?? [],
-                    },
-                };
-            }
-            return {
-                ok: false,
-                status: 400,
-                body: {
-                    error: 'remove_items[].row_id is required',
-                    error_code: 'missing_row_id',
-                    item_index: removeItemIndex,
-                },
-            };
-        }
-        rowIds.add(resolvedRemoveItem.row_id);
-    }
-
-    return { ok: true, rowIds };
-};
-
 const materializeSessionTickets = async ({
     req,
     db,
@@ -4119,8 +4076,6 @@ const materializeSessionTickets = async ({
     session,
     sessionId,
     tickets,
-    removeFromPossibleTasks,
-    explicitRemoveRowIds,
     refreshReason,
     targetTaskStatus,
 }: {
@@ -4131,8 +4086,6 @@ const materializeSessionTickets = async ({
     session: Record<string, unknown>;
     sessionId: string;
     tickets: Array<Record<string, unknown>>;
-    removeFromPossibleTasks: boolean;
-    explicitRemoveRowIds: Set<string>;
     refreshReason: 'create_tickets' | 'process_possible_tasks';
     targetTaskStatus: string;
 }): Promise<Record<string, unknown>> => {
@@ -4521,23 +4474,8 @@ const materializeSessionTickets = async ({
     }
 
     const createdTaskIdList = Array.from(createdTaskIds).filter(Boolean);
-    const removableRowIds = !removeFromPossibleTasks
-        ? []
-        : (
-            explicitRemoveRowIds.size > 0
-                ? createdTaskIdList.filter((rowId) => explicitRemoveRowIds.has(rowId))
-                : createdTaskIdList
-        );
+    const removableRowIds = createdTaskIdList;
     if (removableRowIds.length > 0) {
-        await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-            {
-                $pull: {
-                    'processors_data.CREATE_TASKS.data': buildSessionTaskRowPullFilter(removableRowIds),
-                },
-                $set: { updated_at: new Date() },
-            } as Record<string, unknown>
-        );
         await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: removableRowIds });
     }
 
@@ -4562,8 +4500,6 @@ const materializeSessionTickets = async ({
             operation_status: operationStatus,
             insertedCount,
             created_task_ids: createdTaskIdList,
-            remove_from_possible_tasks: removeFromPossibleTasks,
-            ...(removableRowIds.length > 0 ? { removed_row_ids: removableRowIds } : {}),
             ...(codexSyncErrors.length > 0 ? { codex_issue_sync_errors: codexSyncErrors } : {}),
             ...(rejectedRows.length > 0 ? { rejected_rows: rejectedRows } : {}),
         },
@@ -4582,11 +4518,6 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
         }
 
         const sessionId = parsedBody.data.session_id;
-        const removeFromPossibleTasks = parsedBody.data.remove_from_possible_tasks ?? true;
-        const explicitRemoveRowIdsResult = parseExplicitRemoveRowIds(parsedBody.data.remove_items ?? []);
-        if (!explicitRemoveRowIdsResult.ok) {
-            return res.status(explicitRemoveRowIdsResult.status).json(explicitRemoveRowIdsResult.body);
-        }
         if (!ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'Invalid session_id' });
         }
@@ -4607,8 +4538,6 @@ router.post('/create_tickets', async (req: Request, res: Response) => {
             session,
             sessionId,
             tickets: parsedBody.data.tickets as Array<Record<string, unknown>>,
-            removeFromPossibleTasks,
-            explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'create_tickets',
             targetTaskStatus: TASK_STATUSES.READY_10,
         });
@@ -4683,7 +4612,6 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
             session_id: sessionId,
             saved_count: persisted.items.length,
             items: persisted.items,
-            ...(persisted.removedRowIds.length > 0 ? { removed_row_ids: persisted.removedRowIds } : {}),
         });
     } catch (error) {
         logger.error('Error in save_possible_tasks:', error);
@@ -4703,11 +4631,6 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
         }
 
         const sessionId = parsedBody.data.session_id;
-        const removeFromPossibleTasks = parsedBody.data.remove_from_possible_tasks ?? true;
-        const explicitRemoveRowIdsResult = parseExplicitRemoveRowIds(parsedBody.data.remove_items ?? []);
-        if (!explicitRemoveRowIdsResult.ok) {
-            return res.status(explicitRemoveRowIdsResult.status).json(explicitRemoveRowIdsResult.body);
-        }
         if (!ObjectId.isValid(sessionId)) {
             return res.status(400).json({ error: 'Invalid session_id' });
         }
@@ -4743,8 +4666,6 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
             session,
             sessionId,
             tickets,
-            removeFromPossibleTasks,
-            explicitRemoveRowIds: explicitRemoveRowIdsResult.rowIds,
             refreshReason: 'process_possible_tasks',
             targetTaskStatus: TASK_STATUSES.READY_10,
         });
@@ -4916,6 +4837,36 @@ const buildSessionScopedTaskMatch = ({
     };
 };
 
+const listSessionScopedAcceptedTasks = async ({
+    db,
+    sessionId,
+    session,
+    statusKeys,
+}: {
+    db: Db;
+    sessionId: string;
+    session: Record<string, unknown>;
+    statusKeys: readonly TargetTaskStatusKey[];
+}): Promise<Array<Record<string, unknown>>> => {
+    const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
+    const statusValues = statusKeys.map((statusKey) => TASK_STATUSES[statusKey]);
+    const match = mergeWithRuntimeFilter(
+        {
+            is_deleted: { $ne: true },
+            codex_task: { $ne: true },
+            task_status: { $in: statusValues },
+            ...sessionScopedTaskMatch,
+        },
+        {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        }
+    );
+
+    return await db.collection(COLLECTIONS.TASKS).find(match).toArray() as Array<Record<string, unknown>>;
+};
+
 router.post('/session_tab_counts', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
@@ -5018,15 +4969,15 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
     }
 });
 
-router.post('/possible_tasks', async (req: Request, res: Response) => {
+router.post('/session_tasks', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
     const db = getDb();
 
     try {
-        const parsedBody = sessionPossibleTasksInputSchema.safeParse(req.body || {});
+        const parsedBody = sessionTasksInputSchema.safeParse(req.body || {});
         if (!parsedBody.success) {
-            return res.status(400).json({ error: 'session_id is required' });
+            return res.status(400).json({ error: 'session_id and bucket are required' });
         }
 
         const sessionId = parsedBody.data.session_id;
@@ -5043,18 +4994,71 @@ router.post('/possible_tasks', async (req: Request, res: Response) => {
         }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const masterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
-        const items = masterDocs
-            .map((item) => normalizeVoicePossibleTaskDocForApi(item))
-            .filter((item): item is Record<string, unknown> => item !== null);
+        const bucket = parsedBody.data.bucket;
+        if (bucket === 'draft') {
+            const masterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+            const items = masterDocs
+                .map((item) => normalizeVoicePossibleTaskDocForApi(item))
+                .filter((item): item is Record<string, unknown> => item !== null);
+
+            return res.status(200).json({
+                success: true,
+                session_id: sessionId,
+                bucket,
+                status_keys: ['DRAFT_10'],
+                items,
+                count: items.length,
+            });
+        }
+
+        if (bucket === 'codex') {
+            const externalRef = voiceSessionUrlUtils.canonical(sessionId);
+            const items = await db.collection(COLLECTIONS.TASKS).find(
+                mergeWithRuntimeFilter(
+                    {
+                        is_deleted: { $ne: true },
+                        codex_task: true,
+                        external_ref: externalRef,
+                    },
+                    {
+                        field: 'runtime_tag',
+                        familyMatch: IS_PROD_RUNTIME,
+                        includeLegacyInProd: IS_PROD_RUNTIME,
+                    }
+                )
+            ).toArray() as Array<Record<string, unknown>>;
+
+            return res.status(200).json({
+                success: true,
+                session_id: sessionId,
+                bucket,
+                status_keys: [],
+                items,
+                count: items.length,
+            });
+        }
+
+        const acceptedStatusKeys = (parsedBody.data.status_keys?.length
+            ? parsedBody.data.status_keys
+            : TARGET_TASK_STATUS_KEYS.filter((statusKey) => statusKey !== 'DRAFT_10')) as readonly TargetTaskStatusKey[];
+
+        const items = await listSessionScopedAcceptedTasks({
+            db,
+            sessionId,
+            session: session as Record<string, unknown>,
+            statusKeys: acceptedStatusKeys,
+        });
 
         return res.status(200).json({
             success: true,
             session_id: sessionId,
+            bucket,
+            status_keys: acceptedStatusKeys,
             items,
+            count: items.length,
         });
     } catch (error) {
-        logger.error('Error in possible_tasks:', error);
+        logger.error('Error in session_tasks:', error);
         return res.status(500).json({ error: String(error) });
     }
 });
@@ -5096,22 +5100,10 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
         }
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
-        const updatePayload: Record<string, unknown> = {
-            $pull: {
-                'processors_data.CREATE_TASKS.data': buildSessionTaskRowPullFilter([rowId]),
-            },
-            $set: { updated_at: new Date() },
-        };
-
-        const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-            updatePayload
-        );
+        const existingMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+        const existingAliasMap = buildPossibleTaskMasterAliasMap(existingMasterDocs);
+        const hadMatchingDraftRow = existingAliasMap.has(rowId);
         await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: [rowId] });
-
-        if (result.matchedCount === 0) {
-            return res.status(404).json({ error: 'Session not found' });
-        }
 
         emitSessionTaskflowRefreshHint({
             req,
@@ -5124,10 +5116,10 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
             success: true,
             operation_status: 'success',
             row_id: rowId,
-            matched_count: result.matchedCount,
-            modified_count: result.modifiedCount,
-            deleted_count: result.modifiedCount > 0 ? 1 : 0,
-            not_found: result.modifiedCount === 0,
+            matched_count: hadMatchingDraftRow ? 1 : 0,
+            modified_count: hadMatchingDraftRow ? 1 : 0,
+            deleted_count: hadMatchingDraftRow ? 1 : 0,
+            not_found: !hadMatchingDraftRow,
         });
     } catch (error) {
         logger.error('Error in delete_task_from_session:', error);

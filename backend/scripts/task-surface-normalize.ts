@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   applyTaskSurfaceNormalization,
   previewTaskSurfaceNormalization,
-} from '../src/services/taskSurfaceNormalization.js';
+} from './lib/taskSurfaceNormalization.js';
 
 const args = process.argv.slice(2);
 const hasFlag = (flag: string): boolean => args.includes(flag);
@@ -67,4 +67,3 @@ main().catch((error) => {
   console.error('[task-surface-normalize] failed:', error);
   process.exitCode = 1;
 });
-

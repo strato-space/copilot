@@ -679,7 +679,7 @@ const createCodexTaskFromPayload = async ({
     codex_task: true,
     codex_review_state: 'deferred',
     codex_review_due_at: deferredUntil,
-    task_status: TASK_STATUSES.NEW_10,
+    task_status: TASK_STATUSES.READY_10,
     task_status_history: [],
     last_status_update: now,
     status_update_checked: false,

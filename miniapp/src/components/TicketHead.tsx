@@ -10,7 +10,7 @@ interface TicketHeadProps {
 }
 
 const TicketHead = ({ ticket, isShownUpdatedAt = false, onClick }: TicketHeadProps) => {
-    const isRecurring = ticket.task_status === constants.task_statuses.PERIODIC || ticket.recurrence_mode === 'periodic';
+    const isRecurring = ticket.recurrence_mode === 'periodic';
     return (
         <div
             className="flex flex-col items-start justify-between gap-2 self-stretch border-b border-[#2b2b2b] px-4 py-2"

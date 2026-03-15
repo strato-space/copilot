@@ -2,7 +2,6 @@ import { ObjectId } from 'mongodb';
 import { TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
 import { normalizeDateField, toIdString, toTaskReferenceList, toTaskText } from './sessionsSharedUtils.js';
 
-export const LEGACY_VOICE_DRAFT_STATUS = 'Backlog';
 export const ACTIVE_VOICE_DRAFT_STATUSES = [TASK_STATUSES.DRAFT_10] as const;
 
 export const VOICE_POSSIBLE_TASK_RELATION_TYPES = [
@@ -372,27 +371,5 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
     task_status: toTaskText(record.task_status),
     created_at: normalizeDateField(record.created_at),
     updated_at: normalizeDateField(record.updated_at),
-  };
-};
-
-export const buildSessionCompatiblePossibleTaskRow = (value: unknown): Record<string, unknown> | null => {
-  const normalized = normalizeVoicePossibleTaskDocForApi(value);
-  if (!normalized) return null;
-  return {
-    row_id: normalized.row_id,
-    id: normalized.id,
-    name: normalized.name,
-    project: normalized.project,
-    description: normalized.description,
-    priority: normalized.priority,
-    priority_reason: normalized.priority_reason,
-    performer_id: normalized.performer_id,
-    project_id: normalized.project_id,
-    task_type_id: normalized.task_type_id,
-    dialogue_tag: normalized.dialogue_tag,
-    task_id_from_ai: normalized.task_id_from_ai,
-    dependencies_from_ai: normalized.dependencies_from_ai,
-    dialogue_reference: normalized.dialogue_reference,
-    relations: normalized.relations,
   };
 };

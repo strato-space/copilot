@@ -20,7 +20,6 @@ import { isPerformerSelectable } from '../../utils/performerLifecycle';
 import { parseCreateTasksMcpResult } from '../../utils/voicePossibleTasks';
 import type { Performer, Ticket } from '../../types/crm';
 import { resolveTaskProjectName, resolveTaskSourceInfo } from './taskPageUtils';
-import { buildVoiceBacklogGroups } from './voiceTabGrouping';
 import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTargetTaskStatusKey } from '../../utils/taskStatusSurface';
 
 interface VoiceSession {
@@ -543,18 +542,6 @@ const CRMPage = () => {
         return date.isValid() ? date.format('DD.MM.YYYY HH:mm') : '—';
     };
 
-    const voiceBacklogGroups = useMemo(
-        () => buildVoiceBacklogGroups({ tickets, voiceSessions, projectsData }),
-        [tickets, voiceSessions, projectsData]
-    );
-
-    const voiceBacklogSummary = useMemo(() => ({
-        taskCount: voiceBacklogGroups.reduce((sum, group) => sum + group.taskCount, 0),
-        groupCount: voiceBacklogGroups.length,
-        sessionCount: voiceBacklogGroups.filter((group) => group.kind === 'session').length,
-        orphanCount: voiceBacklogGroups.filter((group) => group.kind === 'orphan').length,
-    }), [voiceBacklogGroups]);
-
     const voiceBacklogColumns: TableColumnType<Ticket>[] = [
         {
             title: 'Задача',
@@ -690,7 +677,7 @@ const CRMPage = () => {
             key: 'tasks_count',
             width: 80,
             align: 'right',
-            render: (_, record) => record?.tasks_count ?? record?.agent_results?.create_tasks?.length ?? 0,
+            render: (_, record) => record?.tasks_count ?? 0,
         },
         {
             title: 'Действия',

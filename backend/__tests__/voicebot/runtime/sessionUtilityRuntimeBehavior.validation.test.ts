@@ -304,23 +304,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
 
     expect(insertManySpy).toHaveBeenCalledTimes(1);
-    expect(sessionUpdateOneSpy).toHaveBeenCalledTimes(1);
-    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        _id: sessionId,
-      }),
-      expect.objectContaining({
-        $pull: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': expect.objectContaining({
-            $or: expect.arrayContaining([
-              { row_id: { $in: ['valid-task'] } },
-              { id: { $in: ['valid-task'] } },
-              { task_id_from_ai: { $in: ['valid-task'] } },
-            ]),
-          }),
-        }),
-      })
-    );
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
     expect(emitSpy).toHaveBeenCalledWith(
       'session_update',
       expect.objectContaining({
@@ -707,7 +691,6 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.operation_status).toBe('success');
-    expect(response.body.remove_from_possible_tasks).toBe(false);
     expect(response.body.created_task_ids).toEqual(['valid-task']);
     expect(response.body.removed_row_ids).toBeUndefined();
     expect(insertManySpy).toHaveBeenCalledTimes(1);
@@ -802,24 +785,9 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.operation_status).toBe('success');
     expect(response.body.created_task_ids).toEqual(['row-1', 'row-2']);
-    expect(response.body.removed_row_ids).toEqual(['row-1']);
+    expect(response.body.removed_row_ids).toBeUndefined();
     expect(insertManySpy).toHaveBeenCalledTimes(1);
-    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        _id: sessionId,
-      }),
-      expect.objectContaining({
-        $pull: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': expect.objectContaining({
-            $or: expect.arrayContaining([
-              { row_id: { $in: ['row-1'] } },
-              { id: { $in: ['row-1'] } },
-              { task_id_from_ai: { $in: ['row-1'] } },
-            ]),
-          }),
-        }),
-      }),
-    );
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
   });
 
   it('create_tickets returns 404 when session is not found', async () => {
@@ -863,7 +831,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.error).toBe('Session not found');
   });
 
-  it('possible_tasks returns an empty list when no canonical draft master rows exist', async () => {
+  it('session_tasks(draft) returns an empty list when no canonical draft master rows exist', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -899,15 +867,15 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     const app = buildApp();
     const response = await request(app)
-      .post('/voicebot/possible_tasks')
-      .send({ session_id: sessionId.toHexString() });
+      .post('/voicebot/session_tasks')
+      .send({ session_id: sessionId.toHexString(), bucket: 'draft' });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.items).toEqual([]);
   });
 
-  it('possible_tasks prefers automation_tasks master rows linked to the voice session', async () => {
+  it('session_tasks(draft) prefers automation_tasks master rows linked to the voice session', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -969,8 +937,8 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     const app = buildApp();
     const response = await request(app)
-      .post('/voicebot/possible_tasks')
-      .send({ session_id: sessionId.toHexString() });
+      .post('/voicebot/session_tasks')
+      .send({ session_id: sessionId.toHexString(), bucket: 'draft' });
 
     expect(response.status).toBe(200);
     expect(response.body.items).toEqual([
@@ -1096,7 +1064,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.saved_count).toBe(1);
-    expect(response.body.removed_row_ids).toEqual(['stale-row']);
+    expect(response.body.removed_row_ids).toBeUndefined();
     expect(response.body.items).toEqual([
       expect.objectContaining({
         row_id: 'new-row',
@@ -1121,21 +1089,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       ])
     );
-    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: sessionId }),
-      expect.objectContaining({
-        $set: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': [
-            expect.objectContaining({
-              row_id: 'new-row',
-              id: 'new-row',
-              project: 'Saved project',
-              relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
-            }),
-          ],
-        }),
-      })
-    );
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
     expect(emitSpy).toHaveBeenCalledWith(
       'session_update',
       expect.objectContaining({
@@ -1311,17 +1265,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       })
     );
-    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: sessionId }),
-      expect.objectContaining({
-        $set: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': expect.arrayContaining([
-            expect.objectContaining({ row_id: 'stale-row' }),
-            expect.objectContaining({ row_id: 'new-row' }),
-          ]),
-        }),
-      })
-    );
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
   });
 
   it('save_possible_tasks treats task_id_from_ai as metadata when canonical row locator is present', async () => {
@@ -1423,23 +1367,10 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       ]),
     );
-    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: sessionId }),
-      expect.objectContaining({
-        $set: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': [
-            expect.objectContaining({
-              row_id: 'stable-row',
-              id: 'stable-row',
-              task_id_from_ai: 'T1',
-            }),
-          ],
-        }),
-      }),
-    );
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
   });
 
-  it('save_possible_tasks rewrites shared NEW_0 rows from another session in place and returns canonical items', async () => {
+  it('save_possible_tasks rewrites shared draft rows from another session in place and returns canonical items', async () => {
     const sessionId = new ObjectId();
     const otherSessionId = new ObjectId();
     const sharedTaskId = new ObjectId();
@@ -1611,23 +1542,10 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       }),
     );
-    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: sessionId }),
-      expect.objectContaining({
-        $set: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': [
-            expect.objectContaining({
-              row_id: 'shared-row',
-              id: 'shared-row',
-              name: 'Updated wording',
-            }),
-          ],
-        }),
-      }),
-    );
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
   });
 
-  it('save_possible_tasks rewrites shared NEW_0 rows from another session and reattaches current session', async () => {
+  it('save_possible_tasks rewrites shared draft rows from another session and reattaches current session', async () => {
     const sessionId = new ObjectId();
     const otherSessionId = new ObjectId();
     const performerMongoId = new ObjectId();
@@ -1787,20 +1705,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         session_name: 'Other session',
       }),
     ]);
-    expect(sessionUpdateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: sessionId }),
-      expect.objectContaining({
-        $set: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': [
-            expect.objectContaining({
-              row_id: 'shared-row',
-              name: 'Updated wording',
-              description: 'Updated description',
-            }),
-          ],
-        }),
-      }),
-    );
+    expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
   });
 
   it('process_possible_tasks materializes saved master rows into regular tasks', async () => {
@@ -1901,7 +1806,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.created_task_ids).toEqual(['stored-row']);
-    expect(response.body.removed_row_ids).toEqual(['stored-row']);
+    expect(response.body.removed_row_ids).toBeUndefined();
     expect(insertManySpy).not.toHaveBeenCalled();
     expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
     expect(taskUpdateOneSpy).toHaveBeenCalledWith(
@@ -2093,25 +1998,10 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.success).toBe(true);
     expect(response.body.row_id).toBe('legacy-row');
     expect(response.body.matched_count).toBe(1);
-    expect(response.body.modified_count).toBe(0);
-    expect(response.body.deleted_count).toBe(0);
-    expect(response.body.not_found).toBe(true);
-    expect(updateOneSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        _id: sessionId,
-      }),
-      expect.objectContaining({
-        $pull: expect.objectContaining({
-          'processors_data.CREATE_TASKS.data': expect.objectContaining({
-            $or: expect.arrayContaining([
-              { row_id: { $in: ['legacy-row'] } },
-              { id: { $in: ['legacy-row'] } },
-              { task_id_from_ai: { $in: ['legacy-row'] } },
-            ]),
-          }),
-        }),
-      }),
-    );
+    expect(response.body.modified_count).toBe(1);
+    expect(response.body.deleted_count).toBe(1);
+    expect(response.body.not_found).toBe(false);
+    expect(updateOneSpy).not.toHaveBeenCalled();
     expect(masterUpdateOneSpy).toHaveBeenCalledTimes(1);
     expect(emitSpy).toHaveBeenCalledWith(
       'session_update',

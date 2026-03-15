@@ -81,11 +81,11 @@ npm run test:e2e:shard:2of2
 
 The current Possible Tasks / `create_tasks` path is covered by:
 - backend runtime route/behavior suites around:
-  - `/api/voicebot/possible_tasks`
+  - `/api/voicebot/session_tab_counts`
+  - `/api/voicebot/session_tasks`
   - `/api/voicebot/save_possible_tasks`
   - `/api/voicebot/process_possible_tasks`
   - `/api/voicebot/delete_task_from_session`
-  - `/api/voicebot/session_tab_counts`
 - backend worker suites around:
   - `workerCreateTasksFromChunksHandler.test.ts`
   - `workerCreateTasksPostprocessingRealtime.test.ts`

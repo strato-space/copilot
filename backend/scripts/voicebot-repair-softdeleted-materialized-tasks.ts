@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   applySoftDeletedMaterializedTaskRepairPlan,
   collectSoftDeletedMaterializedTaskRepairPlan,
-} from '../src/services/voicebot/repairSoftDeletedMaterializedTasks.js';
+} from './lib/voicebot/repairSoftDeletedMaterializedTasks.js';
 
 const args = process.argv.slice(2);
 

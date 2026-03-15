@@ -1,3 +1,11 @@
+# Archived Legacy Reference
+
+This runbook is preserved only as a historical migration record.
+
+- It is not part of the current runtime contract.
+- Current task-surface contract: [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md).
+- `processors_data.CREATE_TASKS.data` below is legacy migration context only.
+
 # Voice CREATE_TASKS Legacy Schema Migration
 
 This runbook migrates historical `automation_voice_bot_sessions.processors_data.CREATE_TASKS.data` rows

@@ -8,7 +8,7 @@
 
 **Статус документа**: approved target contract; production data aligned; UI/API convergence in progress
 **Дата**: 2026-03-14  
-**Основание**: текущий runtime-контракт [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md), существующие routes `voicebot/possible_tasks`, `voicebot/session_tab_counts`, `voice.crm_tickets(session_id=...)`, `voice.session_possible_tasks(session_id)`, текущая OperOps CRM surface и закрепленные product notes в [AGENTS.md](/home/strato-space/copilot/AGENTS.md).
+**Основание**: текущий strict runtime-контракт, существующие routes `voicebot/session_tasks`, `voicebot/session_tab_counts`, `voice.crm_tickets(session_id=...)`, текущая OperOps CRM surface и закрепленные product notes в [AGENTS.md](/home/strato-space/copilot/AGENTS.md).
 
 ## Кратко
 
@@ -17,7 +17,7 @@
 Главный смысл документа:
 - он фиксирует replacement UX/status-surface semantics, которые были утверждены и уже легли в основную status model;
 - он остается главным semantic contract для этой wave;
-- для legacy/migration context дополнительно сохраняется [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md);
+- для legacy/migration context дополнительно сохраняется [voice-task-status-normalization-plan.legacy.md](/home/strato-space/copilot/plan/archive/voice-task-status-normalization-plan.legacy.md);
 - текущая production truth должна читаться через этот документ, deployed code и rollout notes in `bd`;
 - strict cutover tails по historical `possible_tasks` projections и duplicate counters отдельно отслеживаются в execution epic `copilot-ojxy`.
 
@@ -25,7 +25,7 @@
 - `Возможные задачи` не являются отдельной storage-сущностью;
 - все task surfaces работают поверх одной коллекции `automation_tasks`;
 - различие между draft и accepted rows задается главным образом `task_status`;
-- `voice.session_possible_tasks(session_id)` — это canonical draft read path и он должен читать только strict `DRAFT_10` rows;
+- `voice.session_tasks(session_id, bucket="draft")` — это canonical draft read path и он должен читать только strict `DRAFT_10` rows;
 - `source_kind` — вспомогательный provenance/runtime marker, а не главный semantic discriminator;
 - `codex_task` — отдельный тип taskflow, а не атрибут различения между draft и accepted rows;
 - `PERIODIC` в target ontology выводится из lifecycle dictionary и переносится в отдельную recurrence dimension.
@@ -56,7 +56,7 @@
   - текущий код в `app/`, `backend/`, `miniapp/`
   - rollout notes in `bd` (`copilot-sc1b`, `copilot-ds1z`, `copilot-ojxy`, `copilot-oabx`)
 - `Legacy / migration reference`:
-  - [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md)
+  - [voice-task-status-normalization-plan.legacy.md](/home/strato-space/copilot/plan/archive/voice-task-status-normalization-plan.legacy.md)
   - historical repo product notes where not yet updated
 
 ## 2. Единая модель задач
@@ -155,9 +155,9 @@
 - `crm_tickets(session_id=...)` — accepted-task view над той же коллекцией;
 - `voicebot/codex_tasks` — codex-only **session-scoped** view над той же коллекцией;
 - OperOps `Codex` в целом не должен в этой спеke описываться как Mongo-only view над `automation_tasks`, потому что current product surface там backed by `bd` CLI / issue tracker, а не только общей task collection;
-- `session_possible_tasks(session_id)` нельзя сводить к session payload fallback; он должен читаться только из canonical draft rows по `task_status = DRAFT_10`.
+- `session_tasks(session_id, bucket="draft")` нельзя сводить к session payload fallback; он должен читаться только из canonical draft rows по `task_status = DRAFT_10`.
 
-### 2.3 Контракт `voice.session_possible_tasks(session_id)`
+### 2.3 Контракт `voice.session_tasks(session_id, bucket="draft")`
 
 #### Storage semantics
 
@@ -168,19 +168,20 @@ Storage-wise:
 #### Behavioral semantics
 
 Behavior-wise:
-- это **mutable draft baseline** для текущей voice session;
+- это strict canonical draft route для текущей voice session;
 - route возвращает не immutable snapshot, а текущий канонический набор draft rows для этой сессии;
 - допускается in-place update существующих draft rows;
 - при совпадении scope должен переиспользоваться тот же `row_id/id`;
 - route участвует в dedupe semantics относительно уже materialized accepted tasks;
 - route не должен подмешивать session-local compatibility payload (`processors_data.CREATE_TASKS.data`, `agent_results.create_tasks`) когда canonical draft rows отсутствуют;
+- write-side compatibility projection в `processors_data.CREATE_TASKS.data` не является допустимой operational model и подлежит удалению;
 - это не mere reporting route и не should-be-treated-as “just another filtered list”.
 
 #### Split against accepted tasks
 
 В этой нормализации:
 - `voice.crm_tickets(session_id)` = accepted-only session task view
-- `voice.session_possible_tasks(session_id)` = strict canonical draft baseline
+- `voice.session_tasks(session_id, bucket="draft")` = strict canonical draft baseline
 
 ## 3. Ключи, stored values и labels
 
@@ -530,7 +531,7 @@ Filter:
 ### 7.4 Вывод
 
 Из этого следует:
-- `voicebot/possible_tasks` / `voice.session_possible_tasks(session_id)` остаётся только как canonical draft read path;
+- `voicebot/session_tasks(bucket="draft")` / `voice.session_tasks(session_id, bucket="draft")` остаётся canonical draft read path;
 - draft и accepted surfaces должны различаться exact status/filter semantics, а не session-payload fallback, provenance hints или разной target-онтологией вкладок.
 
 ## 8. OperOps tab normalization
@@ -615,31 +616,41 @@ Special grouping допустима только как presentation layer:
 
 Текущий miniapp backend задаёт отдельный performer-facing status surface.
 
-Сейчас miniapp отдает исполнителю только задачи со статусами:
+Сейчас нужно различать два слоя:
+
+1. Backend performer-facing canonical set:
 
 | Группа | Статусы |
 |---|---|
+| `Draft` | `DRAFT_10` |
 | `Ready` | `READY_10` |
-| `In Progress` | `PROGRESS_10`, `PROGRESS_20`, `PROGRESS_30`, `PROGRESS_40`, `PERIODIC` |
+| `In Progress` | `PROGRESS_10` |
 | `Review` | `REVIEW_10` |
-| `Done` | `DONE_10`, `DONE_20`, `DONE_30` |
+| `Done` | `DONE_10` |
+| `Archive` | `ARCHIVE` |
 
-То есть miniapp **не** является полным окном во весь словарь статусов.
+2. Текущая miniapp UI tab surface:
 
-Он не показывает:
+| Группа | Статусы |
+|---|---|
+| `Draft` | `DRAFT_10` |
+| `Ready` | `READY_10` |
+| `In Progress` | `PROGRESS_10` |
+| `Review` | `REVIEW_10` |
+| `Done` | `DONE_10` |
+| `Archive` | `ARCHIVE` |
+
+То есть:
+- backend performer-facing status contract уже canonical and strict;
+- текущий miniapp UI tab surface теперь выровнен к тому же six-status set.
+
+`/miniapp/tickets/set-status` сейчас принимает только canonical performer-facing keys:
 - `DRAFT_10`
-- `NEW_*`
-- `PLANNED_*`
-- `REVIEW_20`
-- `AGREEMENT_*`
-- `ARCHIVE`
-
-`/miniapp/tickets/set-status` сейчас принимает только performer-facing target subset:
-- `NEW_0`
 - `READY_10`
 - `PROGRESS_10`
 - `REVIEW_10`
 - `DONE_10`
+- `ARCHIVE`
 
 ### 9.2 Target-wave interpretation
 
@@ -648,7 +659,7 @@ Special grouping допустима только как presentation layer:
 - а не как “полный status-first CRM surface”
 
 Это означает:
-- current miniapp behavior остается As Is до implementation wave;
+- current miniapp behavior уже выровнен к canonical six-status performer surface;
 - target decision про lifecycle normalization не делает miniapp автоматически полным окном во весь словарь;
 - после выноса recurrence в отдельную dimension miniapp performer-work contract должен быть приведен в соответствие новой recurrence semantics.
 
@@ -664,20 +675,20 @@ Special grouping допустима только как presentation layer:
   - transcript + metadata
 - `voice.crm_tickets(session_id=...)`
   - accepted task view for a session
-- `voice.session_possible_tasks(session_id)`
-  - mutable draft baseline for a session
+- `voice.session_tasks(session_id, bucket="draft")`
+  - strict canonical draft route for a session
 
 ### 10.2 Нормализация mental model
 
 Новая спека закрепляет:
 
 - `voice.crm_tickets(session_id)` = accepted-only session task view
-- `voice.session_possible_tasks(session_id)` = strict canonical draft baseline
+- `voice.session_tasks(session_id, bucket="draft")` = strict canonical draft route
 
 ### 10.3 Current strict contract
 
 Сейчас:
-- `voice.session_possible_tasks(session_id)` должен читать только canonical `DRAFT_10` rows;
+- `voice.session_tasks(session_id, bucket="draft")` должен читать только canonical `DRAFT_10` rows;
 - `voice.crm_tickets(session_id)` должен читать только canonical accepted rows;
 - fallback к `processors_data.CREATE_TASKS.data` и `agent_results.create_tasks` не является частью target contract.
 
@@ -716,7 +727,7 @@ Voice session может войти в operational bucket только если:
 Целевая модель следующей волны:
 - отдельная вкладка `Возможные задачи` не нужна как самостоятельная target semantics;
 - draft rows показываются как обычный status filter `DRAFT_10` внутри общей task surface `Задачи`;
-- `voice.session_possible_tasks(session_id)` при этом сохраняется только как strict canonical draft route;
+- `voice.session_tasks(session_id, bucket="draft")` при этом сохраняется как strict canonical draft route;
 - `PERIODIC` уходит из target lifecycle ontology в отдельную recurrence dimension.
 - lifecycle filters внутри `Задачи` и OperOps используют одну и ту же status axis:
   - `Draft`
@@ -732,7 +743,7 @@ Voice session может войти в operational bucket только если:
 
 Потому что:
 - draft и accepted rows уже являются одной storage-сущностью;
-- различие draft/accepted в основном выражается статусом плюс mutable-baseline behavior draft surface;
+- различие draft/accepted выражается canonical `task_status` и session scope, а не compatibility payload;
 - отдельная draft tab semantics создает лишнее дублирование в target UI и API модели;
 - recurring commitments и lifecycle states — это разные виды вещей и не должны жить в одной статусной оси.
 
@@ -744,7 +755,7 @@ Voice session может войти в operational bucket только если:
 
 ### Session scope
 - `voice.crm_tickets(session_id)` возвращает только accepted rows
-- `voice.session_possible_tasks(session_id)` описан как strict canonical draft baseline без session-payload fallback
+- `voice.session_tasks(session_id, bucket="draft")` описан как strict canonical draft baseline без session-payload fallback
 
 ### Label / key / value wording
 - user-facing tables и reports показывают labels
@@ -780,9 +791,10 @@ Voice session может войти в operational bucket только если:
 ## 14. Assumptions
 
 - Production data normalization for this contract has landed.
-- UI/API convergence for the unified `Задачи` surface is in progress under `copilot-ojxy` и `copilot-pwok`.
-- [voice-task-status-normalization-plan.md](/home/strato-space/copilot/plan/voice-task-status-normalization-plan.md) now serves as legacy/as-built migration reference, not as the primary surface contract.
-- `copilot-kdqs` remains the explicit follow-up for eventual `voice.session_possible_tasks` deprecation after consumer migration.
+- Runtime read/filter contract for unified `Задачи` surface has landed locally and uses only canonical exact-key lifecycle filters.
+- Session-payload fallback and write-side compatibility projection (`processors_data.CREATE_TASKS.data`) are no longer valid runtime semantics for draft state.
+- Prod deploy and live verification for the unified `Задачи` surface and the `kdqs` deprecation wave are complete.
+- [voice-task-status-normalization-plan.legacy.md](/home/strato-space/copilot/plan/archive/voice-task-status-normalization-plan.legacy.md) now serves as legacy/as-built migration reference, not as the primary surface contract.
 - Инвентарь recurring tasks был собран по live `automation_tasks`, где `is_deleted != true` и `task_status = Periodic`, на момент проверки 2026-03-14; отдельная recurrence migration still remains a dedicated cleanup step.
 
 ## 15. BD
@@ -793,16 +805,20 @@ Voice session может войти в operational bucket только если:
 - ✅ `copilot-cux2.3` — T3 Update voice task surface normalization spec and BD tracking
 - ✅ `copilot-sc1b` — Implement next-wave Voice/OperOps task surface normalization contract
 - ✅ `copilot-ds1z` — Roll out task surface normalization data migration and runtime deploy
-- 🟡 `copilot-ojxy` — [voice][surface] Remove separate Possible Tasks surface and converge on status-filtered Tasks tab
+- ✅ `copilot-ojxy` — [voice][surface] Remove separate Possible Tasks surface and converge on status-filtered Tasks tab
 - ✅ `copilot-ojxy.1` — T1 Replace Voice session tabs with unified status filters inside `Задачи`
 - ✅ `copilot-ojxy.2` — T4 Migrate tests, docs, and MCP contracts for unified task surface
-- ⚪ `copilot-ojxy.3` — T2 Deprecate `voicebot/possible_tasks` and `voice.session_possible_tasks` to compatibility mode
+- ✅ `copilot-ojxy.3` — T2 Remove session-payload compatibility semantics and keep a strict canonical draft route until consumer deprecation
 - ✅ `copilot-ojxy.4` — T3 Normalize OperOps main tabs and remove duplicate status counters/views
 - ✅ `copilot-e5cj` — [voice][tasks] Render fixed lifecycle filters inside session `Задачи` even when all counts are zero
 - ✅ `copilot-7jdj` — [operops][ui] Remove duplicate lifecycle summary widgets once counts are shown inline on tabs
 - ✅ `copilot-krp8` — [voice][tasks] Keep session lifecycle filter order fixed instead of sparse `status_counts`-driven ordering
-- 🟡 `copilot-pwok` — [voice][data] Draft session view can display rows whose Mongo task_status is already READY_10
-- ⏳ `copilot-kdqs` — Deprecate `voice.session_possible_tasks` after unified session-task surface lands
+- ✅ `copilot-pwok` — [voice][data] Draft session view can display rows whose Mongo task_status is already READY_10
+- ✅ `copilot-kdqs` — Deprecate old draft read alias after unified session-task surface lands
+- ✅ `copilot-kdqs.1` — T1 Define unified `session_tasks` / `session_task_counts` replacement contract
+- ✅ `copilot-kdqs.2` — T2 Migrate `/home/tools/voice` consumers to the unified replacement surface
+- ✅ `copilot-kdqs.3` — T3 Migrate copilot prompts/docs to the unified replacement surface
+- ✅ `copilot-kdqs.4` — T4 Remove deprecated MCP/client method and backend `possible_tasks` route
 - ⏳ `copilot-oabx` — Fix pm2 agent restart path in `pm2-backend.sh` rollout
 
 ### DAG
@@ -821,39 +837,29 @@ Voice session может войти в operational bucket только если:
 - `copilot-ojxy.4 -> copilot-7jdj`
 - `copilot-ojxy -> copilot-pwok`
 - `copilot-sc1b -> copilot-kdqs`
+- `copilot-kdqs.1 -> copilot-kdqs`
+- `copilot-kdqs.2 -> copilot-kdqs`
+- `copilot-kdqs.3 -> copilot-kdqs`
+- `copilot-kdqs.4 -> copilot-kdqs`
 - `copilot-ds1z -> copilot-oabx`
 
-## 16. Future deprecation path: `voice.session_possible_tasks(session_id)`
+## 16. Deprecation outcome: `voice.session_possible_tasks(session_id)`
 
-`voice.session_possible_tasks(session_id)` не должен считаться вечным target endpoint.
+`voice.session_possible_tasks(session_id)` removed from active runtime/MCP surfaces in this wave.
 
-В рамках current strict contract он остается допустимым только как:
-- canonical draft read path;
-- без session-payload fallback;
-- без legacy status coercion;
-- без provenance-based lifecycle substitution.
+Concrete removal design is tracked in:
+- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
 
-Но следующий шаг после внедрения unified target semantics должен быть таким:
+Preferred replacement read surface:
+- `voice.session_task_counts(session_id)`
+- `voice.session_tasks(session_id, bucket, status_keys=None)`
 
-1. Спроектировать replacement contract, который покрывает:
-   - draft subset как mutable baseline;
-   - accepted subset;
-   - codex subset;
-   - row reuse / dedupe expectations.
+Result:
+- canonical draft reads now go through `voice.session_tasks(session_id, bucket="draft")`
+- counts go through `voice.session_task_counts(session_id)`
+- `/home/tools/voice` no longer exposes `session_possible_tasks`
+- copilot backend no longer exposes `POST /voicebot/possible_tasks`
+- live prod verification confirms the Voice UI still renders the unified `Задачи` surface correctly after the replacement
 
-2. Перевести consumers на replacement surface:
-   - MCP / agent contracts;
-   - session task surfaces;
-   - любые internal integrations, читающие current route.
-
-3. Оставить `voice.session_possible_tasks(session_id)` только как strict canonical draft route на transition window.
-
-4. Удалить route только после того, как:
-   - replacement contract введен;
-   - consumers мигрированы;
-   - mutable-baseline semantics сохранена;
-   - regression / smoke coverage подтверждает parity.
-
-Следовательно:
-- route не удаляется в этой волне;
-- но задачи на его deprecation и eventual removal должны считаться частью следующего cleanup / convergence wave.
+Historical design/rollout record:
+- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)

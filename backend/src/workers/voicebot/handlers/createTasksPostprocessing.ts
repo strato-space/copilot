@@ -94,7 +94,6 @@ const markCreateTasksNoData = async ({ sessionObjectId }: { sessionObjectId: Obj
         'processors_data.CREATE_TASKS.job_finished_timestamp': Date.now(),
         'processors_data.CREATE_TASKS.is_processing': false,
         'processors_data.CREATE_TASKS.is_processed': true,
-        'processors_data.CREATE_TASKS.data': [],
         updated_at: new Date(),
       },
       $unset: {

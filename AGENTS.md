@@ -33,7 +33,7 @@ These decisions are part of the current platform contract and must be preserved 
   - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
   - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted materialized rows must not be soft-deleted by possible-task cleanup,
-  - session `processors_data.CREATE_TASKS` is compatibility projection only.
+  - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads.
 
 ## Critical Interfaces To Preserve
 
@@ -313,7 +313,7 @@ Preferred engineering principles for this repo:
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
 - Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
-  - list: `POST /api/voicebot/possible_tasks` (assistant-side wrappers: `session_possible_tasks`) as strict canonical `DRAFT_10` draft baseline
+  - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'draft' }` as strict canonical `DRAFT_10` draft baseline
   - create regular: `create_session_tasks`
   - create codex: `create_session_codex_tasks`
   - delete row: `delete_session_possible_task`
@@ -333,7 +333,7 @@ Preferred engineering principles for this repo:
   - refresh tokens must increment additively so repeated hints remain concurrency-safe
 - `CREATE_TASKS` persistence in API/worker paths is strict canonical `id/name/description/priority/...`; runtime fallback for legacy human-title keys is disabled.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
-- Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and documented in `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md`.
+- Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md`.
 - `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
 - Session summary persistence is canonical:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
@@ -695,9 +695,9 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Added merge-session API/store scaffolding (`voicebot/sessions/merge`, `mergeSessions(...)`) with explicit confirmation phrase and merge-log collection constant (`automation_voice_bot_session_merge_log`).
 - Added TS transcribe Telegram transport recovery flow (`getFile` -> download -> persist `file_path` -> transcribe) and matching regression coverage in `workerTranscribeHandler` tests.
 - Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.
-- Added and activated `plan/voice-task-status-normalization-plan.md` as the current as-built status contract: the deployed Voice taskflow now uses `DRAFT_10` for drafts and `READY_10` for accepted materialized work, while legacy `BACKLOG_10` remains migration-only compatibility input.
+- Current Voice task surface/status contract is `plan/voice-task-surface-normalization-spec.md`: active runtime semantics use the canonical six lifecycle statuses only, while any deleted-status handling is isolated to migration tooling.
 - Added `plan/voice-session-task-edit-parity-spec.md` as the separate feature spec for making Voice session tab `Задачи` editing match OperOps `CRMKanban`.
-- Added `plan/voice-task-surface-normalization-spec.md` as the approved next-wave replacement contract for converging Voice and OperOps task surfaces under epic `copilot-cux2`; current production behavior still follows the as-built `plan/voice-task-status-normalization-plan.md` until rollout begins.
+- Added `plan/voice-task-surface-normalization-spec.md` as the active Voice/OperOps task-surface contract under epic `copilot-cux2`; the previous as-built status plan is archived at `plan/archive/voice-task-status-normalization-plan.legacy.md`.
 - Added `ontology/plan/mpic-process-review.md` as the current methodology critique for MPIC artifact-graph layering, authority boundaries, and generation preconditions.
 - Fixed sessions-list deleted-mode synchronization (`copilot-nhwu`): `SessionsListPage` now forces `fetchVoiceBotSessionsList` when `showDeletedSessions` diverges from `sessionsListIncludeDeleted`, and store loading guard allows `force=true` refresh while a previous list request is still active.
 - Added regression contract test `app/__tests__/voice/sessionsListIncludeDeletedSyncContract.test.ts` to lock forced include-deleted sync behavior.

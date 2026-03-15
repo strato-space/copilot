@@ -9,7 +9,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
-import { TASK_STATUSES, NOTION_TICKET_PRIORITIES } from '../../constants/crm';
+import { TARGET_TASK_STATUS_KEYS, NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
 import type { TaskAttachment, TaskType } from '../../types/crm';
 
@@ -116,7 +116,7 @@ const CRMCreateTicket = () => {
     );
 
     useEffect(() => {
-        if (projects.length === 0) fetchTickets(Object.keys(TASK_STATUSES));
+        if (projects.length === 0) fetchTickets([...TARGET_TASK_STATUS_KEYS]);
         form.resetFields();
         if (editingTicket?.project) {
             setEditTiketProject(editingTicket.project);

@@ -13,7 +13,12 @@ import type { Logger } from 'winston';
 import { COLLECTIONS, NOTIFICATIONS, TASK_CLASSES, TASK_STATUSES } from '../../constants.js';
 import { getRawDb } from '../../services/db.js';
 import { AppError } from '../../api/middleware/error.js';
-import { TARGET_PERFORMER_TASK_STATUS_VALUES } from '../../services/taskStatusSurface.js';
+import {
+    TARGET_PERFORMER_TASK_STATUS_VALUES,
+    TARGET_TASK_STATUS_KEYS,
+    isTaskStatusKey,
+    toStoredTaskStatusValue,
+} from '../../services/taskStatusSurface.js';
 import {
     buildWorkHoursLookupByTicketDbId,
     normalizeTicketDbId,
@@ -282,18 +287,12 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
                             $or: performerMatch,
                             task_status: {
                                 $in: [
-                                    TASK_STATUSES.BACKLOG_10,
+                                    TASK_STATUSES.DRAFT_10,
                                     TASK_STATUSES.READY_10,
                                     TASK_STATUSES.PROGRESS_10,
-                                    TASK_STATUSES.PROGRESS_20,
-                                    TASK_STATUSES.PROGRESS_30,
-                                    TASK_STATUSES.PROGRESS_40,
                                     TASK_STATUSES.REVIEW_10,
-                                    TASK_STATUSES.REVIEW_20,
                                     TASK_STATUSES.DONE_10,
-                                    TASK_STATUSES.DONE_20,
-                                    TASK_STATUSES.DONE_30,
-                                    TASK_STATUSES.PERIODIC,
+                                    TASK_STATUSES.ARCHIVE,
                                 ],
                             },
                         },
@@ -549,12 +548,17 @@ export const createMiniappRouter = ({ db, notificationQueue, logger, testData }:
         try {
             const now = Date.now();
             const ticketId = req.body.ticket as string;
-            const newTaskStatus = req.body.newStatus as string;
+            const newTaskStatusKey = req.body.newStatus as string;
 
-            if (!TARGET_PERFORMER_TASK_STATUS_VALUES.includes(newTaskStatus as (typeof TARGET_PERFORMER_TASK_STATUS_VALUES)[number])) {
+            if (
+                !isTaskStatusKey(newTaskStatusKey) ||
+                !TARGET_PERFORMER_TASK_STATUS_VALUES.includes(toStoredTaskStatusValue(newTaskStatusKey) as (typeof TARGET_PERFORMER_TASK_STATUS_VALUES)[number]) ||
+                !TARGET_TASK_STATUS_KEYS.includes(newTaskStatusKey as (typeof TARGET_TASK_STATUS_KEYS)[number])
+            ) {
                 res.status(500).json({ result: 'error' });
                 return;
             }
+            const newTaskStatus = toStoredTaskStatusValue(newTaskStatusKey);
 
             const ticket = await db.collection(COLLECTIONS.TASKS).findOne({ _id: new ObjectId(ticketId) });
             if (!ticket) {

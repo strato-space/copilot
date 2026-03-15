@@ -22,7 +22,7 @@ Use this as a fast guardrail before implementing anything:
   - master store is `automation_tasks` with draft status `DRAFT_10`,
   - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted rows must not be soft-deleted by possible-task cleanup,
-  - session `processors_data.CREATE_TASKS` is compatibility projection only, not the source of truth.
+  - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 
@@ -194,7 +194,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Deleting the last active categorization row cascades deletion of the linked transcript segment with compensating rollback when log persistence fails.
 - Image attachments in categorization are rendered only in the Materials column; image-only blocks remain visible without image-as-text rows.
 - Session-scoped taskflow parity is now canonical across backend + Voice UI + mcp@voice:
-  - backend route `POST /api/voicebot/possible_tasks` exposes canonical `row_id` values as the strict `DRAFT_10` draft baseline,
+  - backend route `POST /api/voicebot/session_tasks` exposes canonical draft/task/codex buckets, with draft reads served as `{ session_id, bucket: 'draft' }`,
   - mutations emit `session_update.taskflow_refresh` flags for `possible_tasks` / `tasks` / `codex`,
   - frontend consumes those hints with additive refresh tokens so the unified `Задачи` surface and `Codex` refresh without manual reload,
   - assistant workflow is fixed to `discuss -> preview -> apply -> verify`.
@@ -214,7 +214,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `create_selected.failed`
 - CREATE_TASKS payloads are normalized to canonical `id/name/description/priority/...` shape in both worker (`createTasksFromChunks`) and API utility (`save_create_tasks`) write paths.
 - Taskflow row-locator priority is canonical `row_id -> id -> task_id_from_ai`; `task_id_from_ai` remains a legacy fallback for mutation compatibility, not the primary row identity.
-- Historical CREATE_TASKS legacy payload migration runbook is documented in `docs/VOICEBOT_CREATE_TASKS_MIGRATION.md` (verify/apply/post-check + rollback).
+- Historical CREATE_TASKS legacy payload migration runbook is archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md` (verify/apply/post-check + rollback).
 - Categorization metadata signature is rendered once per message block footer (`source_file_name + HH:mm:ss`) instead of repeating per row; row focus uses blue selection only.
 - Categorization readability contract now uses larger typography in `Time/Audio/Text/Materials` columns for dense session review.
 - Session summary now has a canonical persistence path:
@@ -255,9 +255,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
 - Synced legacy planning references copied for context now live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
 - Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
-- Voice status normalization contract now lives in `plan/voice-task-status-normalization-plan.md` as an as-built document; current deployed runtime uses `DRAFT_10` for drafts and `READY_10` for accepted materialized Voice work, with legacy `BACKLOG_10` preserved as compatibility/migration input only.
+- Current Voice task surface contract lives in `plan/voice-task-surface-normalization-spec.md`; active runtime semantics use only the canonical six lifecycle statuses and strict status-key filtering.
 - Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
-- Status-first Voice/OperOps surface convergence now lives in `plan/voice-task-surface-normalization-spec.md` as the approved next-wave replacement contract; current production behavior remains governed by the as-built `plan/voice-task-status-normalization-plan.md` until rollout starts.
+- Status-first Voice/OperOps surface convergence now lives in `plan/voice-task-surface-normalization-spec.md` as the active contract; the old as-built Voice status plan is archived in `plan/archive/voice-task-status-normalization-plan.legacy.md`.
 - MPIC methodology review and artifact-graph corrections are documented in `ontology/plan/mpic-process-review.md`.
 
 

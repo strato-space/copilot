@@ -205,7 +205,7 @@ const OneTicket = () => {
         }
     };
 
-    const isRecurring = ticket.task_status === constants.task_statuses.PERIODIC || ticket.recurrence_mode === 'periodic';
+    const isRecurring = ticket.recurrence_mode === 'periodic';
 
     return (
         <>

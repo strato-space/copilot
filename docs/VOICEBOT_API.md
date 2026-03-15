@@ -41,8 +41,8 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/voicebot/possible_tasks` | `POST` | Canonical read path for the current session strict `DRAFT_10` draft baseline. Serves the unified `Задачи` surface draft subtab and does not fall back to session compatibility payloads. |
-| `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session mutable `DRAFT_10` rows into `automation_tasks`, rewrite them in place, sync compatibility projection, and return canonical saved `items`. |
+| `/api/voicebot/session_tasks` | `POST` | Unified read path for session task buckets. For draft reads use `{ session_id, bucket: \"draft\" }`; this serves the unified `Задачи` surface draft subtab from canonical `DRAFT_10` rows only. |
+| `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session `DRAFT_10` rows into `automation_tasks`, rewrite them in place, and return canonical saved `items`. |
 | `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected `DRAFT_10` rows into accepted tasks with `READY_10`, stamp acceptance metadata, and remove them from draft views without soft-deleting the task document. |
 | `/api/voicebot/delete_task_from_session` | `POST` | Remove a draft baseline row from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
 | `/api/voicebot/codex_tasks` | `POST` | Return Codex/BD tasks linked to the current voice session. |
@@ -87,12 +87,14 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - The prompt rehydrates context through MCP `voice`:
   - `voice.fetch(..., mode="transcript")`
   - `voice.project(project_id)`
-  - `voice.session_possible_tasks(...)`
+  - `voice.session_task_counts(...)`
+  - `voice.session_tasks(..., bucket="draft")`
   - `voice.crm_tickets(session_id=...)`
   - `voice.crm_tickets(project_id=...)`
 - `DRAFT_10` Possible Tasks are mutable:
   - same-scope rows are rewritten in place by canonical `row_id/id`
   - duplicate suppression applies to materialized task space, not to mutable `DRAFT_10` baseline rows
+  - `agent_results.create_tasks` is not part of the task-surface runtime contract; draft state lives only in canonical task rows
 - `process_possible_tasks` is now non-destructive:
   - selected rows materialize into `READY_10`,
   - accepted rows retain `source_kind=voice_session` plus acceptance metadata,
@@ -100,7 +102,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - Automatic runtime path:
   - every successful text transcription completion enqueues `POSTPROCESSORS.CREATE_TASKS`,
   - worker delegates to fast-agent `create_tasks`,
-  - refreshed possible-task rows are persisted to `automation_tasks` and synced into `processors_data.CREATE_TASKS` compatibility projection,
+  - refreshed possible-task rows are persisted to `automation_tasks`,
   - only after persistence does the worker enqueue websocket refresh via `session_update.taskflow_refresh.possible_tasks`,
   - runtime recompute is not gated by session close or categorization completion.
 - Manual categorization path:

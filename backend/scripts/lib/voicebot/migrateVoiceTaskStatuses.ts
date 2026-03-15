@@ -1,6 +1,10 @@
 import type { Db, Filter, UpdateFilter } from 'mongodb';
-import { COLLECTIONS, TASK_STATUSES } from '../../constants.js';
-import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
+import { COLLECTIONS, TASK_STATUSES } from '../../../src/constants.js';
+import { voiceSessionUrlUtils } from '../../../src/api/routes/voicebot/sessionUrlUtils.js';
+import {
+  LEGACY_VOICE_ACCEPTED_SOURCE_STATUSES,
+  LEGACY_VOICE_DRAFT_SOURCE_STATUSES,
+} from '../legacyTaskStatuses.js';
 
 export type VoiceTaskStatusMigrationResult = {
   draftsMatched: number;
@@ -26,7 +30,7 @@ export const buildVoiceDraftStatusMigrationQuery = (sessionId?: string): Filter<
   is_deleted: { $ne: true },
   source: 'VOICE_BOT',
   source_kind: 'voice_possible_task',
-  task_status: { $in: ['Backlog', TASK_STATUSES.NEW_0] },
+  task_status: { $in: [...LEGACY_VOICE_DRAFT_SOURCE_STATUSES] },
   ...buildSessionScope(sessionId),
 });
 
@@ -34,7 +38,7 @@ export const buildAcceptedVoiceTaskStatusMigrationQuery = (sessionId?: string): 
   is_deleted: { $ne: true },
   source: 'VOICE_BOT',
   source_kind: 'voice_session',
-  task_status: { $in: ['Backlog', TASK_STATUSES.BACKLOG_10] },
+  task_status: { $in: [...LEGACY_VOICE_ACCEPTED_SOURCE_STATUSES] },
   ...buildSessionScope(sessionId),
 });
 

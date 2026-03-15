@@ -93,13 +93,6 @@ describe('Voicebot session_tab_counts route', () => {
               toArray: async () => [
                 { task_status: TASK_STATUSES.DRAFT_10 },
                 { task_status: TASK_STATUSES.DRAFT_10 },
-                { task_status: TASK_STATUSES.BACKLOG_10 },
-                { task_status: TASK_STATUSES.BACKLOG_10 },
-                { task_status: TASK_STATUSES.BACKLOG_10 },
-                { task_status: TASK_STATUSES.BACKLOG_10 },
-                { task_status: TASK_STATUSES.BACKLOG_10 },
-                { task_status: TASK_STATUSES.BACKLOG_10 },
-                { task_status: TASK_STATUSES.BACKLOG_10 },
                 { task_status: TASK_STATUSES.REVIEW_10 },
                 { task_status: TASK_STATUSES.REVIEW_10 },
                 { task_status: TASK_STATUSES.REVIEW_10 },

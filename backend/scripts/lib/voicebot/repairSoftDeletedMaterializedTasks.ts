@@ -1,6 +1,9 @@
 import { ObjectId, type Db } from 'mongodb';
-import { COLLECTIONS, TASK_STATUSES } from '../../constants.js';
-import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
+import { COLLECTIONS, TASK_STATUSES } from '../../../src/constants.js';
+import { voiceSessionUrlUtils } from '../../../src/api/routes/voicebot/sessionUrlUtils.js';
+import {
+  LEGACY_SOFT_DELETED_REPAIR_SOURCE_STATUSES,
+} from '../legacyTaskStatuses.js';
 
 type RepairCandidateDoc = {
   _id: ObjectId;
@@ -73,12 +76,12 @@ export const buildSoftDeletedMaterializedTaskRepairQuery = ({
 }: {
   sessionId?: string;
 } = {}): Record<string, unknown> => {
-const baseQuery: Record<string, unknown> = {
+  const baseQuery: Record<string, unknown> = {
     is_deleted: true,
     codex_task: { $ne: true },
     source: 'VOICE_BOT',
     source_kind: 'voice_session',
-    task_status: { $in: [TASK_STATUSES.NEW_0, TASK_STATUSES.DRAFT_10, TASK_STATUSES.READY_10, TASK_STATUSES.BACKLOG_10, 'Backlog', 'Ready', 'Draft'] },
+    task_status: { $in: [...LEGACY_SOFT_DELETED_REPAIR_SOURCE_STATUSES] },
     performer_id: { $nin: ['', null] },
     project_id: { $nin: ['', null] },
     $or: [

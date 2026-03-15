@@ -45,8 +45,8 @@ import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useAuthStore } from '../../store/authStore';
-import { TARGET_EDITABLE_TASK_STATUSES, TARGET_TASK_STATUS_LABELS, TARGET_EDITABLE_TASK_STATUS_KEYS, TASK_STATUSES } from '../../constants/crm';
-import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTargetTaskStatusKey } from '../../utils/taskStatusSurface';
+import { TARGET_TASK_STATUS_LABELS, TARGET_EDITABLE_TASK_STATUS_KEYS, TASK_STATUSES } from '../../constants/crm';
+import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTargetTaskStatusKey, resolveTaskStatusKey } from '../../utils/taskStatusSurface';
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
 import { normalizeVoiceSessionSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
@@ -446,8 +446,8 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
     const statusOptions = useMemo(
         () =>
-            TARGET_EDITABLE_TASK_STATUS_KEYS.map((key, index) => ({
-                value: TARGET_EDITABLE_TASK_STATUSES[index],
+            TARGET_EDITABLE_TASK_STATUS_KEYS.map((key) => ({
+                value: key,
                 label: TARGET_TASK_STATUS_LABELS[key],
             })),
         []
@@ -985,7 +985,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                             <Select
                                 autoFocus
                                 defaultOpen
-                                value={record.task_status ?? null}
+                                value={resolveTaskStatusKey(record.task_status) ?? null}
                                 options={statusOptions}
                                 showSearch
                                 onChange={(value) =>

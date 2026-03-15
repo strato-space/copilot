@@ -99,10 +99,6 @@ export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
         messageApi: null,
         statusesFilter: [
             constants.task_statuses.PROGRESS_10,
-            constants.task_statuses.PROGRESS_20,
-            constants.task_statuses.PROGRESS_30,
-            constants.task_statuses.PROGRESS_40,
-            constants.task_statuses.PERIODIC,
         ],
         setStatusesFilter: (statuses) => set({ statusesFilter: statuses }),
         tickets: [],
@@ -148,7 +144,7 @@ export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
             }
 
             const updatedTickets = update(get().tickets, {
-                [recordIndex]: { task_status: { $set: newStatus } },
+                [recordIndex]: { task_status: { $set: (constants.task_statuses as Record<string, string>)[newStatus] ?? newStatus } },
             });
 
             set({
@@ -175,7 +171,7 @@ export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
             }
 
             const updatedTickets = update(get().tickets, {
-                [recordIndex]: { task_status: { $set: constants.task_statuses.NEW_0 } },
+                [recordIndex]: { task_status: { $set: constants.task_statuses.DRAFT_10 } },
             });
 
             set({ tickets: updatedTickets });
@@ -187,7 +183,7 @@ export const useKanban = create<MiniappKanbanStoreShape>((set, get) => {
 
             await api_request('tickets/set-status', {
                 ticket: ticket._id,
-                newStatus: constants.task_statuses.NEW_0,
+                newStatus: 'DRAFT_10',
             });
 
             await api_request('tickets/comment', values);

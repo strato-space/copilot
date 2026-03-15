@@ -1,6 +1,14 @@
 import { type Db, type Filter, ObjectId, type UpdateFilter } from 'mongodb';
-import { COLLECTIONS, TASK_RECURRENCE_MODES, TASK_STATUSES } from '../constants.js';
-import { normalizeTaskRecurrenceMode, normalizeTargetTaskStatusKey, type TargetTaskStatusKey } from './taskStatusSurface.js';
+import { COLLECTIONS, TASK_RECURRENCE_MODES, TASK_STATUSES } from '../../src/constants.js';
+import {
+  normalizeTaskRecurrenceMode,
+  normalizeTargetTaskStatusKey,
+  type TargetTaskStatusKey,
+} from '../../src/services/taskStatusSurface.js';
+import {
+  LEGACY_TASK_SURFACE_SOURCE_STATUSES,
+  isLegacyPeriodicTaskStatus,
+} from './legacyTaskStatuses.js';
 
 type TargetStatusUpdate = {
   task_status?: string;
@@ -22,26 +30,7 @@ type TaskSurfaceNormalizationDoc = {
 const buildNormalizationQuery = (): Filter<Record<string, unknown>> => ({
   is_deleted: { $ne: true },
   $or: [
-    { task_status: { $in: [
-      TASK_STATUSES.NEW_0,
-      TASK_STATUSES.NEW_10,
-      TASK_STATUSES.NEW_20,
-      TASK_STATUSES.NEW_30,
-      TASK_STATUSES.NEW_40,
-      TASK_STATUSES.PLANNED_10,
-      TASK_STATUSES.PLANNED_20,
-      TASK_STATUSES.BACKLOG_10,
-      TASK_STATUSES.PROGRESS_0,
-      TASK_STATUSES.PROGRESS_20,
-      TASK_STATUSES.PROGRESS_30,
-      TASK_STATUSES.PROGRESS_40,
-      TASK_STATUSES.REVIEW_20,
-      TASK_STATUSES.AGREEMENT_10,
-      TASK_STATUSES.AGREEMENT_20,
-      TASK_STATUSES.DONE_20,
-      TASK_STATUSES.DONE_30,
-      TASK_STATUSES.PERIODIC,
-    ] } },
+    { task_status: { $in: [...LEGACY_TASK_SURFACE_SOURCE_STATUSES] } },
     { recurrence_mode: { $exists: true, $ne: null } },
   ],
 });
@@ -54,7 +43,7 @@ const buildTargetUpdate = (doc: { task_status?: unknown; recurrence_mode?: unkno
 
   const targetStatus = toTargetTaskStatusValue(targetKey);
   const recurrenceMode = normalizeTaskRecurrenceMode(doc.recurrence_mode)
-    ?? (String(doc.task_status || '').trim() === TASK_STATUSES.PERIODIC ? TASK_RECURRENCE_MODES.PERIODIC : null);
+    ?? (isLegacyPeriodicTaskStatus(doc.task_status) ? TASK_RECURRENCE_MODES.PERIODIC : null);
 
   return {
     task_status: targetStatus,
@@ -84,7 +73,7 @@ export const previewTaskSurfaceNormalization = async ({
   for (const doc of docs) {
     const targetKey = normalizeTargetTaskStatusKey(doc);
     if (targetKey) perTargetStatus[targetKey] += 1;
-    if (String(doc.task_status || '').trim() === TASK_STATUSES.PERIODIC) periodicMatched += 1;
+    if (isLegacyPeriodicTaskStatus(doc.task_status)) periodicMatched += 1;
   }
 
   return {

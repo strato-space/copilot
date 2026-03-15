@@ -13,10 +13,11 @@ export const TARGET_TASK_STATUS_KEYS = [
   'DONE_10',
   'ARCHIVE',
 ] as const;
+export const TARGET_EDITABLE_TASK_STATUS_KEYS = TARGET_TASK_STATUS_KEYS;
 
 export type TargetTaskStatusKey = (typeof TARGET_TASK_STATUS_KEYS)[number];
 
-type TaskStatusKey = keyof typeof TASK_STATUSES;
+export type TaskStatusKey = keyof typeof TASK_STATUSES;
 
 const TASK_STATUS_KEY_SET = new Set<TaskStatusKey>(Object.keys(TASK_STATUSES) as TaskStatusKey[]);
 const TASK_STATUS_VALUE_TO_KEY = new Map<TaskStatus, TaskStatusKey>(
@@ -42,11 +43,12 @@ export const TARGET_EDITABLE_TASK_STATUS_VALUES = [
 ] as const;
 
 export const TARGET_PERFORMER_TASK_STATUS_VALUES = [
-  TASK_STATUSES.NEW_0,
+  TASK_STATUSES.DRAFT_10,
   TASK_STATUSES.READY_10,
   TASK_STATUSES.PROGRESS_10,
   TASK_STATUSES.REVIEW_10,
   TASK_STATUSES.DONE_10,
+  TASK_STATUSES.ARCHIVE,
 ] as const;
 
 const toText = (value: unknown): string => {
@@ -62,6 +64,13 @@ export const resolveTaskStatusKey = (value: unknown): TaskStatusKey | null => {
   return TASK_STATUS_VALUE_TO_KEY.get(raw as TaskStatus) ?? null;
 };
 
+export const isTaskStatusKey = (value: unknown): value is TaskStatusKey => {
+  const raw = toText(value);
+  return Boolean(raw) && TASK_STATUS_KEY_SET.has(raw as TaskStatusKey);
+};
+
+export const toStoredTaskStatusValue = (statusKey: TaskStatusKey): TaskStatus => TASK_STATUSES[statusKey];
+
 export const normalizeTaskRecurrenceMode = (value: unknown): TaskRecurrenceMode | null => {
   const raw = toText(value).toLowerCase();
   if (!raw) return null;
@@ -72,8 +81,7 @@ export const normalizeTaskRecurrenceMode = (value: unknown): TaskRecurrenceMode 
 export const resolveTaskRecurrenceMode = (task: { task_status?: unknown; recurrence_mode?: unknown }): TaskRecurrenceMode | null => {
   const explicitMode = normalizeTaskRecurrenceMode(task.recurrence_mode);
   if (explicitMode) return explicitMode;
-  const statusKey = resolveTaskStatusKey(task.task_status);
-  if (statusKey === 'PERIODIC') return TASK_RECURRENCE_MODES.PERIODIC;
+  if (toText(task.task_status).toLowerCase() === 'periodic') return TASK_RECURRENCE_MODES.PERIODIC;
   return null;
 };
 
