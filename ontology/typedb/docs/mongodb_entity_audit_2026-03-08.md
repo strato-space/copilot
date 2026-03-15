@@ -29,16 +29,18 @@ This note captures the latest Mongo-backed AS-IS ontology review using:
   - no longer mislabeled as `projects_access`
   - mapped as `project_participations`
 
-## Still open / next-wave candidates
+## Landed in `copilot-okfk` core voice/message wave
 
 ### `automation_voice_bot_sessions`
 
 - `participants`
-  - sampled values are person ids
-  - should likely become a relation to `person`
+  - now materialized as `voice_session_has_participant_person` when sampled values resolve to `person_id`
+  - raw `participants` payload remains as evidence / compatibility payload
 - `processors` / `session_processors`
-  - list-valued process vocabularies
-  - should likely move toward dictionary-backed or relation-backed semantics
+  - now split into:
+    - dictionary layer: `processor_definition`
+    - runtime layer: `processing_run`
+  - raw `processors`, `session_processors`, and `processors_data` remain as evidence payloads
 
 ### `automation_voice_bot_messages`
 
@@ -48,14 +50,27 @@ This note captures the latest Mongo-backed AS-IS ontology review using:
 - `processors_data`
 - `file_metadata`
 
-These are structurally rich payloads currently flattened into string/object payload attributes. They are acceptable as AS-IS placeholders, but they are strong candidates for richer support objects or bridge objects.
+These no longer rely only on flattened string/object payload attributes. The current ontology wave adds:
+
+- `voice_transcription`
+- `transcript_segment` linked via `voice_transcription_has_transcript_segment`
+- `voice_categorization_entry`
+- `file_descriptor`
+- `message_attachment`
+- `processing_run` linked to `voice_message`
+
+Raw Mongo payloads remain stored on the parent AS-IS entities as evidence/backfill, but they are no longer the only semantic surface.
 
 ### Google Drive duplicate identity surface
 
 - `automation_google_drive_projects_files`
 - `automation_google_drive_structure`
 
-There is overlap in artifact identity (`file_id` vs `id`) and project-scoped projection semantics. An explicit bridge may be needed if both surfaces remain first-class.
+This wave now materializes an explicit identity bridge:
+
+- `drive_project_file_indexes_drive_node`
+
+The broader question of when Drive files should also map directly to `artifact_record` stays explicitly deferred to follow-up audit work.
 
 ## Current operator policy
 

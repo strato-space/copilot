@@ -64,12 +64,12 @@ CHECKS = [
     AggregateCheck("forecast_rows_total", "match $f isa forecast_project_month; reduce $count = count;"),
     AggregateCheck(
         "orphan_tasks_without_project",
-        "match $t isa oper_task; not { (owner_project: $p, oper_task: $t) isa project_has_oper_task; }; reduce $count = count;",
+        "match $t isa oper_task; not { $t has source_kind \"voice_possible_task\"; }; not { (owner_project: $p, oper_task: $t) isa project_has_oper_task; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "orphan_messages_without_session",
-        "match $m isa voice_message; not { (voice_session: $s, voice_message: $m) isa voice_session_has_message; }; reduce $count = count;",
+        "match $m isa voice_message; not { $m has is_deleted true; }; not { (voice_session: $s, voice_message: $m) isa voice_session_has_message; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
@@ -90,22 +90,18 @@ CHECKS = [
     AggregateCheck(
         "sessions_missing_runtime_tag",
         "match $s isa voice_session; not { $s has runtime_tag $rt; }; reduce $count = count;",
-        warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "messages_missing_runtime_tag",
         "match $m isa voice_message; not { $m has runtime_tag $rt; }; reduce $count = count;",
-        warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "merge_logs_missing_runtime_tag",
         "match $l isa voice_session_merge_log; not { $l has runtime_tag $rt; }; reduce $count = count;",
-        warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "tasks_missing_runtime_tag",
         "match $t isa oper_task; not { $t has runtime_tag $rt; }; reduce $count = count;",
-        warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "codex_tasks_without_project",

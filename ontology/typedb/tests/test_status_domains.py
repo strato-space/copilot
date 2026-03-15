@@ -51,6 +51,8 @@ class StatusDomainsTest(unittest.TestCase):
         self.assertIn("owns activity_state,", finops)
         self.assertIn("entity cost_expense,", finops)
         self.assertIn("owns deletion_state,", finops)
+        self.assertNotIn("dfsdf", voice)
+        self.assertNotIn("sdfsdf", voice)
 
     def test_kernel_marks_inventory_fields_inline(self) -> None:
         text = KERNEL_ATTRS_PATH.read_text(encoding="utf-8")

@@ -134,15 +134,13 @@
     ],
     "values": [
       "\"Archive\"",
-      "\"Complete\"",
-      "\"Draft\"",
-      "\"Backlog\"",
       "\"Done\"",
-      "\"Review / Ready\"",
+      "\"Draft\"",
       "\"Ready\"",
-      "\"Periodic\"",
-      "\"Progress 10\"",
+      "\"Review / Ready\"",
+      "\"Backlog\"",
       "null",
+      "\"Progress 10\"",
       "\"Plan / Approval\"",
       "\"Plan / Performer\""
     ],
@@ -160,8 +158,8 @@
     ],
     "values": [
       "\"P3\"",
-      "\"🔥 P1 \"",
       "\"P2\"",
+      "\"🔥 P1 \"",
       "\"P7\"",
       "\"P5\"",
       "\"P4\"",
@@ -418,8 +416,8 @@
     "values": [
       "null",
       "\"voice\"",
-      "\"image\"",
       "\"text\"",
+      "\"image\"",
       "\"screenshot\""
     ],
     "classification": "likely enumerated/string-dictionary domain"

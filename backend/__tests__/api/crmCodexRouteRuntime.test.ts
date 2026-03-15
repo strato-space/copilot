@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
 import { PassThrough } from 'node:stream';
 
 import express from 'express';
@@ -78,6 +79,7 @@ describe('CRM codex route runtime behavior', () => {
     loggerInfoMock.mockReset();
     loggerWarnMock.mockReset();
     loggerErrorMock.mockReset();
+    jest.restoreAllMocks();
   });
 
   it('retries bd list after bd sync --import-only when out-of-sync is detected', async () => {
@@ -131,6 +133,37 @@ describe('CRM codex route runtime behavior', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2);
     const [, secondArgs] = spawnMock.mock.calls[1] as [string, string[]];
     expect(secondArgs).toEqual(['sync', '--import-only']);
+  });
+
+  it('falls back to direct JSONL parse when bd list stays out-of-sync after import-only sync failure', async () => {
+    jest.spyOn(fs, 'createReadStream').mockImplementation(() => {
+      const stream = new PassThrough();
+      queueMicrotask(() => {
+        stream.end([
+          JSON.stringify({ id: 'copilot-open', title: 'Open issue', status: 'open' }),
+          JSON.stringify({ id: 'copilot-closed', title: 'Closed issue', status: 'closed' }),
+        ].join('\n'));
+      });
+      return stream as unknown as fs.ReadStream;
+    });
+
+    queueSpawnPlans([
+      {
+        code: 1,
+        stdout: "Database out of sync with JSONL. Run 'bd sync --import-only' to fix.",
+      },
+      {
+        code: 1,
+        stderr: 'Error: importing: error reading JSONL: bufio.Scanner: token too long',
+      },
+    ]);
+
+    const app = buildApp();
+    const response = await request(app).post('/crm/codex/issues').send({ view: 'open', limit: 1000 });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([{ id: 'copilot-open', title: 'Open issue', status: 'open' }]);
+    expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 
   it('maps bd show not-found failures to 404', async () => {

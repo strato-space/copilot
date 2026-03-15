@@ -1,7 +1,7 @@
 # Voice Session Tasks: Edit Parity With OperOps CRM
 
 **Created**: 2026-03-12  
-**Status**: draft spec, implementation not started
+**Status**: implemented by shared `CRMKanban` reuse; no separate execution wave currently required
 
 ## Summary
 
@@ -152,3 +152,11 @@ If realtime refresh happens after save:
 - Voice `Задачи` should reuse existing task-edit logic, not fork it.
 - This spec covers accepted-task editing only.
 - Any required backend changes should be minimal and reuse current task update routes where possible.
+
+## Implementation items
+
+No mandatory implementation items are currently выделяются from this spec.
+
+Current engineering interpretation:
+- accepted-task edit parity is already achieved through embedded `CRMKanban` reuse in Voice session `Задачи`;
+- only new operator-reported parity regressions should reopen this track.

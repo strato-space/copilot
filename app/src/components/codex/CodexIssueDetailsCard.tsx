@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Card, Descriptions, Space, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const { Paragraph, Text } = Typography;
 
@@ -25,6 +27,12 @@ export interface CodexIssueDetails {
     title?: string;
     description?: string;
     notes?: string;
+    comments?: Array<{
+        id?: number | string;
+        author?: string;
+        text?: string;
+        created_at?: string;
+    }>;
     status?: string;
     priority?: number | string;
     issue_type?: string;
@@ -75,6 +83,56 @@ const toMultilineText = (value: unknown): string => {
     const source = toText(value);
     if (!source) return '';
     return normalizeEscapedNewLines(source);
+};
+
+const looksLikeMarkdown = (value: string): boolean => {
+    const normalized = value.trim();
+    if (!normalized) return false;
+    return (
+        /^#{1,6}\s/m.test(normalized) ||
+        /^>\s/m.test(normalized) ||
+        /^[-*+]\s/m.test(normalized) ||
+        /^\d+\.\s/m.test(normalized) ||
+        /```[\s\S]*```/m.test(normalized) ||
+        /`[^`]+`/.test(normalized) ||
+        /\[[^\]]+\]\([^)]+\)/.test(normalized) ||
+        /^\|.+\|\s*$/m.test(normalized) ||
+        /(\*\*|__)[^\n]+(\*\*|__)/.test(normalized)
+    );
+};
+
+const renderMarkdownOrText = (value: string): ReactNode => {
+    if (!value) return '—';
+    if (!looksLikeMarkdown(value)) {
+        return <Paragraph className="!mb-0 whitespace-pre-wrap">{value}</Paragraph>;
+    }
+    return (
+        <div className="prose prose-sm max-w-none">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+                    ul: ({ children }) => <ul className="mb-2 list-disc pl-5">{children}</ul>,
+                    ol: ({ children }) => <ol className="mb-2 list-decimal pl-5">{children}</ol>,
+                    li: ({ children }) => <li className="mb-1">{children}</li>,
+                    code: ({ children }) => <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px]">{children}</code>,
+                    pre: ({ children }) => <pre className="overflow-x-auto rounded bg-slate-100 p-3 text-[12px]">{children}</pre>,
+                    a: ({ href, children }) => (
+                        <a href={href} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+                            {children}
+                        </a>
+                    ),
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-slate-300 pl-3 text-slate-600">{children}</blockquote>,
+                    table: ({ children }) => <table className="mb-2 w-full border-collapse text-sm">{children}</table>,
+                    thead: ({ children }) => <thead className="bg-slate-50">{children}</thead>,
+                    th: ({ children }) => <th className="border border-slate-200 px-2 py-1 text-left">{children}</th>,
+                    td: ({ children }) => <td className="border border-slate-200 px-2 py-1 align-top">{children}</td>,
+                }}
+            >
+                {value}
+            </ReactMarkdown>
+        </div>
+    );
 };
 
 const toRelationshipItem = (value: unknown): CodexRelationshipItem | null => {
@@ -278,6 +336,20 @@ export default function CodexIssueDetailsCard({ issue, issueIdFallback, extra }:
     const labels = toTextList(issue.labels);
     const description = toMultilineText(issue.description);
     const notes = toMultilineText(issue.notes);
+    const comments = Array.isArray(issue.comments)
+        ? issue.comments
+            .map((comment, index) => {
+                const text = toMultilineText(comment?.text);
+                if (!text) return null;
+                return {
+                    key: toText(comment?.id) || `comment-${index}`,
+                    author: toText(comment?.author) || '—',
+                    createdAt: formatDateTime(comment?.created_at) || '—',
+                    text,
+                };
+            })
+            .filter(Boolean) as Array<{ key: string; author: string; createdAt: string; text: string }>
+        : [];
     const relationships = collectRelationships(issue);
 
     const metadataRows: Array<{ key: string; label: string; content: ReactNode }> = [];
@@ -349,13 +421,32 @@ export default function CodexIssueDetailsCard({ issue, issueIdFallback, extra }:
 
             <div className="mt-5">
                 <Text strong>Описание</Text>
-                <Paragraph className="!mb-0 whitespace-pre-wrap">{description || '—'}</Paragraph>
+                {renderMarkdownOrText(description)}
             </div>
 
             <div className="mt-5">
                 <Text strong>Notes</Text>
-                <Paragraph className="!mb-0 whitespace-pre-wrap">{notes || '—'}</Paragraph>
+                {renderMarkdownOrText(notes)}
             </div>
+
+            {comments.length > 0 ? (
+                <div className="mt-5">
+                    <Text strong>Comments</Text>
+                    <div className="mt-2 space-y-3">
+                        {comments.map((comment) => (
+                            <Card key={comment.key} size="small" bodyStyle={{ padding: 12 }}>
+                                <Space direction="vertical" size={4} className="w-full">
+                                    <Space size={8} wrap>
+                                        <Text strong>{comment.author}</Text>
+                                        <Text type="secondary">{comment.createdAt}</Text>
+                                    </Space>
+                                    {renderMarkdownOrText(comment.text)}
+                                </Space>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
 
             {extra ? <div className="mt-5">{extra}</div> : null}
         </Card>

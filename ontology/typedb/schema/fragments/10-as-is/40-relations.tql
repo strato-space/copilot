@@ -254,9 +254,21 @@ relation project_has_voice_session,
   relates owner_project,
   relates voice_session;
 
+relation voice_session_has_participant_person,
+  relates voice_session,
+  relates participant_person;
+
+relation voice_session_uses_processor_definition,
+  relates voice_session,
+  relates processor_definition;
+
 relation project_has_google_drive_file,
   relates owner_project,
   relates drive_project_file;
+
+relation drive_project_file_indexes_drive_node,
+  relates drive_project_file,
+  relates drive_node;
 
 relation project_has_voice_topic,
   relates owner_project,
@@ -269,6 +281,26 @@ relation mode_tag_selected_for_voice_session,
 relation voice_session_has_message,
   relates voice_session,
   relates voice_message;
+
+relation voice_message_has_transcription,
+  relates voice_message,
+  relates voice_transcription;
+
+relation voice_transcription_has_transcript_segment,
+  relates voice_transcription,
+  relates transcript_segment;
+
+relation voice_message_has_categorization_entry,
+  relates voice_message,
+  relates voice_categorization_entry;
+
+relation voice_message_has_file_descriptor,
+  relates voice_message,
+  relates file_descriptor;
+
+relation voice_message_has_attachment,
+  relates voice_message,
+  relates message_attachment;
 
 relation voice_session_has_topic,
   relates voice_session,
@@ -285,6 +317,14 @@ relation voice_message_chunked_as_transcript_chunk,
 relation voice_session_processed_by_run,
   relates voice_session,
   relates processing_run;
+
+relation voice_message_processed_by_run,
+  relates voice_message,
+  relates processing_run;
+
+relation processing_run_uses_processor_definition,
+  relates processing_run,
+  relates processor_definition;
 
 relation processing_run_produces_task_draft,
   relates processing_run,

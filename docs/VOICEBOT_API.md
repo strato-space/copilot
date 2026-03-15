@@ -91,6 +91,11 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - `voice.session_tasks(..., bucket="draft")`
   - `voice.crm_tickets(session_id=...)`
   - `voice.crm_tickets(project_id=...)`
+- MCP `voice.crm_tickets(...)` remains list-shaped by default. When a compact taskflow-style shape is preferable, use the MCP tool with `envelope=true` to get:
+  - `scope`
+  - `bucket`
+  - `count`
+  - `items`
 - `DRAFT_10` Possible Tasks are mutable:
   - same-scope rows are rewritten in place by canonical `row_id/id`
   - duplicate suppression applies to materialized task space, not to mutable `DRAFT_10` baseline rows

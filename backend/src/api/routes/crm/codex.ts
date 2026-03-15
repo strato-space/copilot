@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import readline from 'node:readline';
 import path from 'node:path';
 import { z } from 'zod';
 import { getLogger } from '../../../utils/logger.js';
@@ -40,6 +42,20 @@ type CommandResult = {
 type BdExecutionContext = {
   command: string;
   cwd: string;
+};
+
+const filterCodexIssuesByView = (
+  issues: Array<Record<string, unknown>>,
+  view: CodexIssuesView,
+  limit: number,
+): Array<Record<string, unknown>> => {
+  const filtered = issues.filter((issue) => {
+    const status = String(issue.status || '').trim().toLowerCase();
+    if (view === 'open') return status !== 'closed';
+    if (view === 'closed') return status === 'closed';
+    return true;
+  });
+  return limit > 0 ? filtered.slice(0, limit) : filtered;
 };
 
 const runCommand = async ({
@@ -109,6 +125,11 @@ const isBdOutOfSyncError = ({ stdout, stderr }: Pick<CommandResult, 'stdout' | '
   const haystack = `${stdout}\n${stderr}`.toLowerCase();
   return haystack.includes('database out of sync with jsonl')
     || haystack.includes('run \'bd sync --import-only\' to fix');
+};
+
+const isBdTokenTooLongError = ({ stdout, stderr }: Pick<CommandResult, 'stdout' | 'stderr'>): boolean => {
+  const haystack = `${stdout}\n${stderr}`.toLowerCase();
+  return haystack.includes('token too long') || haystack.includes('bufio.scanner');
 };
 
 const runBdCommandWithSyncRetry = async ({
@@ -216,6 +237,9 @@ const bdRuntime = {
       cwd: this.resolveRepoRootCwd(),
     };
   },
+  resolveIssuesJsonlPath(): string {
+    return path.join(this.resolveRepoRootCwd(), '.beads', 'issues.jsonl');
+  },
   resolveBdListArgs(view: CodexIssuesView, limit: number): string[] {
     const resolvedLimit = Math.max(0, Math.min(limit, MAX_LIMIT));
 
@@ -282,6 +306,25 @@ const bdRuntime = {
       || haystack.includes('unknown issue')
       || haystack.includes('does not exist');
   },
+  async loadIssuesFromJsonl(): Promise<Array<Record<string, unknown>>> {
+    const issuesPath = this.resolveIssuesJsonlPath();
+    const stream = fs.createReadStream(issuesPath, { encoding: 'utf8' });
+    const reader = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    const issues: Array<Record<string, unknown>> = [];
+
+    for await (const line of reader) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (this.isRecord(parsed)) issues.push(parsed);
+      } catch {
+        // Ignore malformed lines here; route will still surface best-effort data.
+      }
+    }
+
+    return issues;
+  },
 };
 
 /**
@@ -312,6 +355,22 @@ router.post('/issues', async (req: Request, res: Response) => {
   });
 
   if (result.timedOut || result.code !== 0) {
+    if (isBdOutOfSyncError(result)) {
+      logger.warn('[crm.codex.issues] falling back to direct JSONL parse after out-of-sync bd list failure', {
+        limit,
+        view,
+      });
+      const fallbackIssues = await bdRuntime.loadIssuesFromJsonl();
+      return res.status(200).json(filterCodexIssuesByView(fallbackIssues, view, limit));
+    }
+    if (isBdTokenTooLongError(result)) {
+      logger.warn('[crm.codex.issues] falling back to direct JSONL parse after bd token-too-long failure', {
+        limit,
+        view,
+      });
+      const fallbackIssues = await bdRuntime.loadIssuesFromJsonl();
+      return res.status(200).json(filterCodexIssuesByView(fallbackIssues, view, limit));
+    }
     logger.error('[crm.codex.issues] bd list failed', {
       code: result.code,
       signal: result.signal,
@@ -375,6 +434,16 @@ router.post('/issue', async (req: Request, res: Response) => {
   }
 
   if (result.code !== 0) {
+    if (isBdTokenTooLongError(result)) {
+      logger.warn('[crm.codex.issue] falling back to direct JSONL parse after bd token-too-long failure', {
+        issue_id: issueId,
+      });
+      const fallbackIssues = await bdRuntime.loadIssuesFromJsonl();
+      const issue = fallbackIssues.find((candidate) => String(candidate.id || '') === issueId) || null;
+      if (issue) {
+        return res.status(200).json(issue);
+      }
+    }
     if (bdRuntime.isBdShowNotFound(result)) {
       return res.status(404).json({ error: 'Issue not found' });
     }

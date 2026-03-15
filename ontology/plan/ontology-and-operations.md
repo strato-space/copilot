@@ -132,6 +132,14 @@ Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
   - `shared_memory`
 - [x] Remove `routing_item_template` and `routing_item_instance` from TO-BE core.
 - [x] Remove `artifact_memory_item` from TO-BE core in favor of `artifact_record`.
+- [x] Current Mongo-backed voice/message normalization uses first-class support objects around the AS-IS envelope:
+  - `voice_transcription`
+  - `voice_categorization_entry`
+  - `file_descriptor`
+  - `message_attachment`
+  - `processor_definition`
+  - `processing_run`
+  - `task_draft`
 
 ## Bridge Layer (`30-bridges`)
 - [x] Keep and refine:
@@ -150,11 +158,27 @@ Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
   - `project_context_card_binds_context_pack`
   - `context_pack_supports_mode_definition`
 - [x] Add bridge semantics for project-local overlay entities once the overlay contract is frozen.  `Overlay contract frozen in ontology/typedb/docs/context_boundary_rules_v1.md and ontology/typedb/docs/project_overlay_contract_v1.md`
+- [x] Materialize current Mongo identity bridges needed by the active voice/data wave:
+  - `voice_session_has_participant_person`
+  - `voice_session_uses_processor_definition`
+  - `voice_message_has_transcription`
+  - `voice_transcription_has_transcript_segment`
+  - `voice_message_has_categorization_entry`
+  - `voice_message_has_file_descriptor`
+  - `voice_message_has_attachment`
+  - `voice_message_processed_by_run`
+  - `processing_run_uses_processor_definition`
+  - `drive_project_file_indexes_drive_node`
 
 ## Operational Artifacts vs Semantic Truth
 - [x] `routing_item_template` semantics move into `project_context_card` / project config semantics.
 - [x] `routing_item_instance` remains orchestration/runtime support object.
 - [x] Document the exact boundary between `project_context_card` and runtime routing data.
+- [x] Keep raw Mongo voice payload envelopes (`participants`, `processors`, `session_processors`, `processors_data`, `transcription`, `categorization`, `attachments`, `file_metadata`) as evidence/backfill fields only when a first-class support object now exists for the same semantics.
+- [x] Split processor semantics into:
+  - dictionary semantics via `processor_definition`
+  - execution/runtime facts via `processing_run`
+- [x] Defer broader Drive -> `artifact_record` unification beyond the explicit `drive_project_file_indexes_drive_node` identity bridge.
 
 ## Output Contract Model
 - [x] Do not model output as one flat opaque contract.
@@ -245,3 +269,10 @@ Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
 - ✓ `copilot-u8wi` — [ontology] Contract-check signal cleanup and incremental delete semantics
 - ✓ `copilot-l5s9` — [ontology] Contract-check and incremental sync modes for TypeDB
 - ✓ `copilot-guys` — [ontology] Split TypeDB schema into AS-IS / TO-BE fragments and refresh against current MongoDB
+- ✓ `copilot-okfk` — [ontology] Next Mongo-backed wave after TOON migration
+- ✓ `copilot-0rzw` — [ontology] Normalize rich `voice_message` structure with first-class support objects
+- ✓ `copilot-c3ry` — [ontology] Model `voice_session.participants` as relation to `person`
+- ✓ `copilot-ppvu` — [ontology] Split processor dictionary semantics from runtime execution facts
+- ✓ `copilot-447w` — [ontology] Explicit drive identity bridge after core voice/message slices
+- ✓ `copilot-fpxm` — [ontology] Final rerun audit after ontology wave lands
+- ◌ `copilot-8wn1` — [ontology] Data hygiene cleanup after okfk validation rerun

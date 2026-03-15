@@ -13,7 +13,7 @@ attribute external_id, value string;
 attribute name, value string;
 # @toon inventory=inspect domain=dictionary max_values=50
 attribute status, value string;
-# @toon values: null | Archive | Backlog | Complete | Done | Periodic | Plan / Approval | Plan / Performer | Progress 10 | Ready | Review / Ready
+# @toon values: null | Archive | Backlog | Done | Draft | Plan / Approval | Plan / Performer | Progress 10 | Ready | Review / Ready
 
 # @toon inventory=inspect domain=state max_values=10
 attribute activity_state, value string;
@@ -66,6 +66,8 @@ attribute is_corrupted, value boolean;
 attribute is_postprocessing, value boolean;
 attribute is_finished, value boolean;
 attribute is_messages_processed, value boolean;
+attribute is_processed, value boolean;
+attribute is_processing, value boolean;
 attribute is_waiting, value boolean;
 attribute is_transcribed, value boolean;
 attribute is_finalized, value boolean;
@@ -80,6 +82,8 @@ attribute created_at, value datetime;
 attribute updated_at, value datetime;
 attribute started_at, value datetime;
 attribute ended_at, value datetime;
+attribute started_at_seconds, value double;
+attribute ended_at_seconds, value double;
 attribute decided_at, value datetime;
 attribute due_at, value datetime;
 attribute codex_review_due_at, value datetime;
@@ -120,7 +124,7 @@ attribute source_type, value string;
 
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute source_kind, value string;
-# @toon values: null | voice_possible_task | voice_session
+# @toon values: null | general_design_chat | performer_chat | project_chat | voice_possible_task | voice_session
 
 attribute chat_type, value string;
 attribute source_ref, value string;
@@ -218,7 +222,6 @@ attribute row_id, value string;
 attribute role_name, value string;
 # @toon values: null | MANAGER | PERFORMER | SUPER_ADMIN | VIEWER
 
-attribute role, value string;
 attribute roles, value string;
 attribute additional_roles, value string;
 attribute corporate_email, value string;
@@ -307,6 +310,10 @@ attribute allowed_users, value string;
 attribute processors, value string;
 attribute session_processors, value string;
 attribute processors_data, value string;
+attribute processor_name, value string;
+attribute processor_scope, value string;
+attribute processor_kind, value string;
+attribute job_queued_timestamp, value double;
 attribute current_spreadsheet_file_id, value string;
 attribute last_message_id, value string;
 attribute deletion_reason, value string;
@@ -327,34 +334,6 @@ attribute codex_review_approval_card_cancel_callback, value string;
 attribute summary_correlation_id, value string;
 attribute active_session_id, value string;
 attribute git_repo, value string;
-attribute project_context_card_id, value string;
-attribute agent_role_id, value string;
-attribute prompt_pipeline_id, value string;
-attribute mode_definition_id, value string;
-attribute mode_segment_id, value string;
-attribute interaction_scope_id, value string;
-attribute aggregation_window_id, value string;
-attribute context_pack_id, value string;
-attribute output_contract_id, value string;
-attribute promise_content_id, value string;
-attribute admissibility_gate_id, value string;
-attribute writeback_gate_id, value string;
-attribute artifact_record_id, value string;
-attribute artifact_patch_id, value string;
-attribute object_revision_id, value string;
-attribute object_event_id, value string;
-attribute object_note_id, value string;
-attribute object_conclusion_id, value string;
-attribute object_manifest_id, value string;
-attribute writeback_decision_id, value string;
-attribute review_annotation_id, value string;
-attribute access_policy_id, value string;
-attribute working_memory_id, value string;
-attribute session_memory_id, value string;
-attribute project_memory_id, value string;
-attribute shared_memory_id, value string;
-attribute context_bundle_id, value string;
-attribute target_task_view_id, value string;
 attribute title_generated_by, value string;
 attribute message_id, value string;
 attribute session_id, value string;
@@ -372,6 +351,10 @@ attribute transcription_chunks, value string;
 attribute transcription_raw, value string;
 attribute categorization, value string;
 attribute categorization_timestamp, value double;
+attribute segment_type, value string;
+attribute related_goal, value string;
+attribute certainty_level, value string;
+attribute topic_keywords, value string;
 attribute task, value string;
 attribute uploaded_by, value string;
 attribute username, value string;
@@ -408,6 +391,11 @@ attribute updated_source, value string;
 attribute fx_used, value string;
 attribute vendor, value string;
 attribute attachments, value string;
+attribute file_descriptor_id, value string;
+attribute message_attachment_id, value string;
+attribute voice_transcription_id, value string;
+attribute voice_categorization_entry_id, value string;
+attribute processor_definition_id, value string;
 attribute to_transcribe, value boolean;
 attribute is_image_anchor, value boolean;
 attribute channel_id, value string;
@@ -701,6 +689,7 @@ entity person,
   owns created_at,
   owns updated_at,
   plays transcript_segment_spoken_by_person:speaker_person,
+  plays voice_session_has_participant_person:participant_person,
   plays person_has_performer_profile:person,
   plays telegram_user_maps_to_person:linked_person;
 # --- </semantic-card> ---
@@ -807,7 +796,7 @@ entity project_performer_link,
   owns project_id,
   owns performer_id,
   owns person_id,
-  owns role,
+  owns membership_role,
   owns source,
   owns confidence,
   owns start_date,
@@ -965,7 +954,10 @@ entity transcript_segment,
   owns summary,
   owns started_at,
   owns ended_at,
+  owns started_at_seconds,
+  owns ended_at_seconds,
   plays dialog_has_transcript_segment:segment,
+  plays voice_transcription_has_transcript_segment:transcript_segment,
   plays transcript_segment_spoken_by_person:segment;
 # --- </semantic-card> ---
 
@@ -1486,11 +1478,6 @@ entity mode_skill_binding,
   owns runtime_tag,
   plays mode_tag_bound_skill_binding:skill_binding;
 
-# ---
-dfsdf
-sdfsdf
-a: b
-# ---
 entity voice_session,
   owns voice_session_id @key,
   owns project_id,
@@ -1544,6 +1531,8 @@ entity voice_session,
   owns created_at,
   owns updated_at,
   plays project_has_voice_session:voice_session,
+  plays voice_session_has_participant_person:voice_session,
+  plays voice_session_uses_processor_definition:voice_session,
   plays voice_session_sources_oper_task:source_voice_session,
   plays mode_tag_selected_for_voice_session:voice_session,
   plays voice_session_has_message:voice_session,
@@ -1619,9 +1608,82 @@ entity voice_message,
   owns created_at,
   owns updated_at,
   plays voice_session_has_message:voice_message,
+  plays voice_message_has_transcription:voice_message,
+  plays voice_message_has_categorization_entry:voice_message,
+  plays voice_message_has_file_descriptor:voice_message,
+  plays voice_message_has_attachment:voice_message,
+  plays voice_message_processed_by_run:voice_message,
   plays voice_message_chunked_as_transcript_chunk:voice_message,
   plays as_is_voice_message_maps_to_object_event:as_is_voice_message,
   plays as_is_attachment_maps_to_artifact_record:as_is_attachment;
+
+entity voice_transcription,
+  owns voice_transcription_id @key,
+  owns source_ref,
+  owns task,
+  owns duration,
+  owns summary,
+  owns transcription_provider,
+  owns transcription_model,
+  owns transcription_schema_version,
+  owns source_data,
+  owns created_at,
+  owns updated_at,
+  plays voice_message_has_transcription:voice_transcription,
+  plays voice_transcription_has_transcript_segment:voice_transcription;
+
+entity voice_categorization_entry,
+  owns voice_categorization_entry_id @key,
+  owns source_ref,
+  owns speaker,
+  owns summary,
+  owns related_goal,
+  owns segment_type,
+  owns certainty_level,
+  owns topic_keywords,
+  owns source_data,
+  owns created_at,
+  owns updated_at,
+  plays voice_message_has_categorization_entry:voice_categorization_entry;
+
+entity file_descriptor,
+  owns file_descriptor_id @key,
+  owns source_ref,
+  owns external_ref,
+  owns file_id,
+  owns file_unique_id,
+  owns file_path,
+  owns file_name,
+  owns file_size,
+  owns mime_type,
+  owns file_hash,
+  owns hash_sha256,
+  owns file_metadata,
+  owns created_at,
+  owns updated_at,
+  plays voice_message_has_file_descriptor:file_descriptor;
+
+entity message_attachment,
+  owns message_attachment_id @key,
+  owns source_ref,
+  owns external_ref,
+  owns file_name,
+  owns file_size,
+  owns mime_type,
+  owns order_index,
+  owns source_data,
+  owns created_at,
+  owns updated_at,
+  plays voice_message_has_attachment:message_attachment;
+
+entity processor_definition,
+  owns processor_definition_id @key,
+  owns processor_name,
+  owns processor_scope,
+  owns processor_kind,
+  owns module_scope,
+  plays voice_session_uses_processor_definition:processor_definition,
+  plays processing_run_uses_processor_definition:processor_definition;
 
 entity voice_topic,
   owns voice_topic_id @key,
@@ -1662,7 +1724,8 @@ entity drive_project_file,
   owns project_name,
   owns web_view_link,
   owns created_at,
-  plays project_has_google_drive_file:drive_project_file;
+  plays project_has_google_drive_file:drive_project_file,
+  plays drive_project_file_indexes_drive_node:drive_project_file;
 
 entity drive_event_channel,
   owns drive_event_channel_id @key,
@@ -1680,7 +1743,8 @@ entity drive_node,
   owns parent_node_id,
   owns date_indexed,
   owns is_folder,
-  owns mime_type;
+  owns mime_type,
+  plays drive_project_file_indexes_drive_node:drive_node;
 
 entity object_locator,
   owns object_locator_id @key,
@@ -1703,17 +1767,40 @@ entity transcript_chunk,
 entity processing_run,
   owns processing_run_id @key,
   owns status,
+  owns source_ref,
+  owns processor_name,
+  owns processor_scope,
+  owns is_processed,
+  owns is_processing,
+  owns is_finished,
+  owns job_queued_timestamp,
+  owns error_message,
+  owns metadata,
+  owns runtime_tag,
   owns started_at,
   owns ended_at,
   plays voice_session_processed_by_run:processing_run,
+  plays voice_message_processed_by_run:processing_run,
+  plays processing_run_uses_processor_definition:processing_run,
   plays processing_run_produces_task_draft:processing_run;
 
 entity task_draft,
   owns task_draft_id @key,
+  owns row_id,
   owns title,
   owns description,
   owns status,
+  owns priority,
   owns priority_rank,
+  owns priority_reason,
+  owns performer_id,
+  owns task_type_id,
+  owns task_type_name,
+  owns dialogue_reference,
+  owns dialogue_tag,
+  owns task_id_from_ai,
+  owns dependencies_from_ai,
+  owns source_data,
   plays processing_run_produces_task_draft:task_draft,
   plays task_draft_normalized_to_plan_item:task_draft;
 
@@ -2059,9 +2146,21 @@ relation project_has_voice_session,
   relates owner_project,
   relates voice_session;
 
+relation voice_session_has_participant_person,
+  relates voice_session,
+  relates participant_person;
+
+relation voice_session_uses_processor_definition,
+  relates voice_session,
+  relates processor_definition;
+
 relation project_has_google_drive_file,
   relates owner_project,
   relates drive_project_file;
+
+relation drive_project_file_indexes_drive_node,
+  relates drive_project_file,
+  relates drive_node;
 
 relation project_has_voice_topic,
   relates owner_project,
@@ -2074,6 +2173,26 @@ relation mode_tag_selected_for_voice_session,
 relation voice_session_has_message,
   relates voice_session,
   relates voice_message;
+
+relation voice_message_has_transcription,
+  relates voice_message,
+  relates voice_transcription;
+
+relation voice_transcription_has_transcript_segment,
+  relates voice_transcription,
+  relates transcript_segment;
+
+relation voice_message_has_categorization_entry,
+  relates voice_message,
+  relates voice_categorization_entry;
+
+relation voice_message_has_file_descriptor,
+  relates voice_message,
+  relates file_descriptor;
+
+relation voice_message_has_attachment,
+  relates voice_message,
+  relates message_attachment;
 
 relation voice_session_has_topic,
   relates voice_session,
@@ -2090,6 +2209,14 @@ relation voice_message_chunked_as_transcript_chunk,
 relation voice_session_processed_by_run,
   relates voice_session,
   relates processing_run;
+
+relation voice_message_processed_by_run,
+  relates voice_message,
+  relates processing_run;
+
+relation processing_run_uses_processor_definition,
+  relates processing_run,
+  relates processor_definition;
 
 relation processing_run_produces_task_draft,
   relates processing_run,

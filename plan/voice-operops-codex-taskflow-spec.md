@@ -1,8 +1,15 @@
 # Voice ↔ OperOps ↔ Codex: Unified Task Flow Spec
 
 ## Status
-Draft for согласование.  
-Реализация не начата.
+- Spec state: historical mixed reference
+- Runtime state: partially landed, partially superseded by newer task-surface specs
+- Current authoritative specs for task surfaces:
+  - [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md)
+  - [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+
+Engineering note:
+- task-surface sections in this document are no longer the source of truth;
+- keep this spec only as a broader Voice ↔ OperOps ↔ Codex design reference.
 
 ## Context
 Сейчас есть разрыв между:
@@ -185,6 +192,18 @@ Runtime note:
 4. В voice `Возможные задачи` -> создание задач -> видны во вкладке `Задачи`.
 5. `@task` и `Codex/Кодекс` сценарии создают codex issue и связывают его с voice сессией.
 6. Материалы привязываются к целевым строкам категоризации и отображаются в `Materials`.
+
+## Residual implementation items
+
+Only these items should still be considered implementation candidates from this document:
+
+1. `copilot-tmcu`
+   - local `codex_task` mirror / Codex tab reflectivity for tasks materialized from Voice with Codex performer
+
+Everything else in this spec should be treated as:
+- already implemented,
+- superseded by newer task-surface specs,
+- or requiring fresh re-scoping before execution.
 
 ## Additional backlog (2026-02-27)
 

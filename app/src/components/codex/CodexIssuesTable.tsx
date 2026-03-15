@@ -219,6 +219,7 @@ const isBlockedIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.sta
 const isClosedIssue = (issue: CodexIssue): boolean => normalizeStatus(issue.status) === 'closed';
 
 const OPER_OPS_TASK_LINK_LABEL = 'Открыть задачу в OperOps';
+const OPEN_CODEX_ISSUE_DETAILS_LABEL = 'Открыть подробности Codex задачи';
 
 export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAULT_LIMIT, refreshToken = 0 }: CodexIssuesTableProps) {
     const { api_request } = useRequestStore();
@@ -351,20 +352,35 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
                 render: (_value, record) => {
                     const issueId = resolveTaskId(record);
                     const link = resolveTaskLink(record);
+                    const canCopyIssueId = issueId !== '—';
                     return (
-                        <Space size={8}>
-                            <Button
-                                type="link"
-                                size="small"
-                                className="!h-auto !p-0"
-                                onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setSelectedKey(resolveTaskKey(record));
-                                }}
+                        <Space size={8} align="center" wrap={false}>
+                            <Text
+                                code
+                                copyable={canCopyIssueId ? { text: issueId } : false}
+                                onClick={(event) => event.stopPropagation()}
+                                className="!mb-0 !inline-flex items-center gap-1 whitespace-nowrap align-middle"
                             >
-                                <Text code>{issueId}</Text>
-                            </Button>
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className="cursor-pointer whitespace-nowrap"
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setSelectedKey(resolveTaskKey(record));
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setSelectedKey(resolveTaskKey(record));
+                                    }}
+                                    aria-label={OPEN_CODEX_ISSUE_DETAILS_LABEL}
+                                >
+                                    {issueId}
+                                </span>
+                            </Text>
                             {link ? (
                                 <Tooltip title={OPER_OPS_TASK_LINK_LABEL}>
                                     <a

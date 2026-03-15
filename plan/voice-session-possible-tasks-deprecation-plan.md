@@ -1,7 +1,8 @@
 # Completed Reference: Full removal of `voice.session_possible_tasks`
 
-## Status
-- Plan status: implemented and verified
+## Status ✅Closed
+- Task-surface deprecation ticket line: ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 5
+- Runtime state: implemented, deployed, live-verified
 - Parent issue: `copilot-kdqs`
 
 ## Goal

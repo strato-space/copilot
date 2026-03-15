@@ -47,7 +47,11 @@
     "ontology:typedb:sync:apply": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-ingest.py --apply --sync-mode incremental",
     "ontology:typedb:validate": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-validate.py",
     "ontology:typedb:domain-inventory": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-domain-inventory.py",
-    "ontology:typedb:entity-sampling": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-entity-sampling.py"
+    "ontology:typedb:entity-sampling": "PYTHONUNBUFFERED=1 bash ../ontology/typedb/scripts/run-typedb-python.sh ../ontology/typedb/scripts/typedb-ontology-entity-sampling.py",
+    "ontology:typedb:rollout:start": "bash ../ontology/typedb/scripts/typedb-rollout-chain.sh start",
+    "ontology:typedb:rollout:stop": "bash ../ontology/typedb/scripts/typedb-rollout-chain.sh stop",
+    "ontology:typedb:rollout:clear-logs": "bash ../ontology/typedb/scripts/typedb-rollout-chain.sh clear-logs",
+    "ontology:typedb:rollout:status": "bash ../ontology/typedb/scripts/typedb-rollout-status.sh"
   },
   "keywords": [],
   "author": "",

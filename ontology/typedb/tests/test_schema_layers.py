@@ -38,6 +38,9 @@ class SchemaLayersTest(unittest.TestCase):
         self.assertIn("relation as_is_voice_session_maps_to_mode_segment,", text)
         self.assertIn("relation as_is_voice_message_maps_to_object_event,", text)
         self.assertIn("relation as_is_summary_maps_to_object_conclusion,", text)
+        self.assertIn("relation voice_message_has_transcription,", text)
+        self.assertIn("relation voice_session_has_participant_person,", text)
+        self.assertIn("relation drive_project_file_indexes_drive_node,", text)
 
     def test_generated_schema_excludes_routing_items_from_to_be_core(self) -> None:
         _, text = build.build_outputs()

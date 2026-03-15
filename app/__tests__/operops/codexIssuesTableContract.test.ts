@@ -82,4 +82,12 @@ describe('OperOps Codex issues table contract', () => {
         expect(source).toContain('bd_dependencies: Array.isArray(record.dependencies) ? record.dependencies : []');
         expect(source).toContain('...(record.parent !== undefined ? { parent: record.parent, bd_parent: record.parent } : {}),');
     });
+
+    it('renders the issue column with the same copy affordance used on other Codex surfaces', () => {
+        expect(source).toContain("const OPEN_CODEX_ISSUE_DETAILS_LABEL = 'Открыть подробности Codex задачи';");
+        expect(source).toContain('copyable={canCopyIssueId ? { text: issueId } : false}');
+        expect(source).toContain('role="button"');
+        expect(source).toContain("if (event.key !== 'Enter' && event.key !== ' ') return;");
+        expect(source).toContain('aria-label={OPEN_CODEX_ISSUE_DETAILS_LABEL}');
+    });
 });

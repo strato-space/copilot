@@ -53,7 +53,25 @@ describe('OperOps Codex issue details card contract', () => {
         expect(source).toContain("value.replace(/\\\\r\\\\n/g, '\\n').replace(/\\\\n/g, '\\n').replace(/\\\\r/g, '\\r');");
         expect(source).toContain('const description = toMultilineText(issue.description);');
         expect(source).toContain('const notes = toMultilineText(issue.notes);');
-        expect(source).toContain('<Paragraph className="!mb-0 whitespace-pre-wrap">{description || \'—\'}</Paragraph>');
-        expect(source).toContain('<Paragraph className="!mb-0 whitespace-pre-wrap">{notes || \'—\'}</Paragraph>');
+        expect(source).toContain('{renderMarkdownOrText(description)}');
+        expect(source).toContain('{renderMarkdownOrText(notes)}');
+    });
+
+    it('renders bd comments when present on the issue payload', () => {
+        expect(source).toContain('comments?: Array<');
+        expect(source).toContain('const comments = Array.isArray(issue.comments)');
+        expect(source).toContain('<Text strong>Comments</Text>');
+        expect(source).toContain('<Text strong>{comment.author}</Text>');
+        expect(source).toContain('{renderMarkdownOrText(comment.text)}');
+    });
+
+    it('renders markdown when content looks like markdown and plain text otherwise', () => {
+        expect(source).toContain("import ReactMarkdown from 'react-markdown';");
+        expect(source).toContain("import remarkGfm from 'remark-gfm';");
+        expect(source).toContain('const looksLikeMarkdown = (value: string): boolean => {');
+        expect(source).toContain('if (!looksLikeMarkdown(value)) {');
+        expect(source).toContain('<Paragraph className="!mb-0 whitespace-pre-wrap">{value}</Paragraph>');
+        expect(source).toContain('<ReactMarkdown');
+        expect(source).toContain('remarkPlugins={[remarkGfm]}');
     });
 });

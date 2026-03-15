@@ -93,11 +93,14 @@ class CliOptions:
     apply: bool
     init_schema: bool
     sync_mode: str
+    run_id: str
     limit: Optional[int]
     collections: list[str]
     deadletter_path: pathlib.Path
     sync_state_path: pathlib.Path
     reset_sync_state: bool
+    heartbeat_docs: int
+    heartbeat_seconds: int
     typedb_addresses: list[str]
     typedb_primary_address: str
     typedb_username: str
@@ -118,6 +121,7 @@ class CollectionStats:
     relations_inserted: int = 0
     relation_failed: int = 0
     relations_skipped: int = 0
+    last_heartbeat_at: float = 0.0
 
 
 @dataclass
@@ -132,12 +136,14 @@ class IngestContext:
     relation_roles: dict[str, list[str]]
     entity_relation_roles: dict[tuple[str, str], set[str]]
     sync_state: dict[str, Any]
+    run_started_at: float
 
 
 class DeadletterWriter:
-    def __init__(self, path: pathlib.Path) -> None:
+    def __init__(self, path: pathlib.Path, run_id: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._path = path
+        self._run_id = run_id
         self._fp = path.open("a", encoding="utf-8")
 
     @property
@@ -145,7 +151,11 @@ class DeadletterWriter:
         return self._path
 
     def write(self, entry: dict[str, Any]) -> None:
-        payload = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **entry}
+        payload = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "run_id": self._run_id,
+            **entry,
+        }
         self._fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
         self._fp.flush()
 
@@ -158,6 +168,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Ingest MongoDB data into TypeDB ontology")
     parser.add_argument("--apply", action="store_true", help="Apply writes to TypeDB (default is dry-run)")
     parser.add_argument("--init-schema", action="store_true", help="Load schema before ingestion")
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Optional run identifier used for run-scoped logs/deadletters",
+    )
     parser.add_argument(
         "--sync-mode",
         choices=["full", "incremental"],
@@ -184,6 +200,18 @@ def parse_args() -> argparse.Namespace:
         help="Path to sync state JSON for incremental mode",
     )
     parser.add_argument("--reset-sync-state", action="store_true", help="Reset stored incremental sync state")
+    parser.add_argument(
+        "--heartbeat-docs",
+        type=int,
+        default=250,
+        help="Emit heartbeat every N scanned docs per collection (0 disables doc-count heartbeat)",
+    )
+    parser.add_argument(
+        "--heartbeat-seconds",
+        type=int,
+        default=60,
+        help="Emit heartbeat if N seconds elapsed since last collection heartbeat (0 disables time heartbeat)",
+    )
     parser.add_argument("--typedb-addresses", type=str, default=None)
     parser.add_argument("--typedb-username", type=str, default=None)
     parser.add_argument("--typedb-password", type=str, default=None)
@@ -255,6 +283,10 @@ def resolve_db_name() -> str:
 def parse_options(args: argparse.Namespace) -> CliOptions:
     if args.limit is not None and args.limit <= 0:
         raise ValueError(f"Invalid --limit value: {args.limit}")
+    if args.heartbeat_docs is not None and args.heartbeat_docs < 0:
+        raise ValueError(f"Invalid --heartbeat-docs value: {args.heartbeat_docs}")
+    if args.heartbeat_seconds is not None and args.heartbeat_seconds < 0:
+        raise ValueError(f"Invalid --heartbeat-seconds value: {args.heartbeat_seconds}")
 
     if args.collections:
         collections = [part.strip() for part in args.collections.split(",") if part.strip()]
@@ -280,11 +312,14 @@ def parse_options(args: argparse.Namespace) -> CliOptions:
         apply=bool(args.apply),
         init_schema=bool(args.init_schema),
         sync_mode=args.sync_mode,
+        run_id=(args.run_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())).strip(),
         limit=args.limit,
         collections=collections,
         deadletter_path=pathlib.Path(args.deadletter).resolve(),
         sync_state_path=pathlib.Path(args.sync_state).resolve(),
         reset_sync_state=bool(args.reset_sync_state),
+        heartbeat_docs=int(args.heartbeat_docs),
+        heartbeat_seconds=int(args.heartbeat_seconds),
         typedb_addresses=addresses,
         typedb_primary_address=addresses[0],
         typedb_username=args.typedb_username or os.getenv("TYPEDB_USERNAME") or "admin",
@@ -478,6 +513,19 @@ def as_datetime(value: Any) -> Optional[datetime]:
         if value.tzinfo is not None and value.utcoffset() is not None:
             return value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        numeric = float(value)
+        if numeric != numeric or numeric in (float("inf"), float("-inf")):
+            return None
+        # Treat large values as milliseconds since epoch; otherwise seconds.
+        if abs(numeric) >= 1_000_000_000_000:
+            numeric /= 1000.0
+        try:
+            return datetime.fromtimestamp(numeric, tz=timezone.utc).replace(tzinfo=None)
+        except (OverflowError, OSError, ValueError):
+            return None
     if isinstance(value, str):
         text = value.strip()
         if not text:
@@ -549,6 +597,8 @@ def canonical_voice_ref_to_session_id(value: Any) -> Optional[str]:
 LOOKUP_TRANSFORMS: dict[str, Callable[[Any], Optional[str]]] = {
     "canonical_voice_ref_to_session_id": canonical_voice_ref_to_session_id,
 }
+
+VOICE_SESSION_PROJECT_CACHE: dict[str, Optional[str]] = {}
 
 
 def apply_lookup_transform(name: Optional[str], value: Any) -> Any:
@@ -759,6 +809,36 @@ def insert_query(
             }
         )
         return False
+
+
+def emit_collection_heartbeat(
+    ctx: IngestContext,
+    stats: CollectionStats,
+    *,
+    force: bool = False,
+) -> None:
+    now = time.time()
+    should_emit = force
+    if not should_emit and ctx.options.heartbeat_docs > 0 and stats.scanned > 0:
+        should_emit = stats.scanned % ctx.options.heartbeat_docs == 0
+    if (
+        not should_emit
+        and ctx.options.heartbeat_seconds > 0
+        and stats.last_heartbeat_at > 0
+        and (now - stats.last_heartbeat_at) >= ctx.options.heartbeat_seconds
+    ):
+        should_emit = True
+    if not should_emit:
+        return
+    elapsed_ms = int((now - ctx.run_started_at) * 1000)
+    print(
+        f"[typedb-ontology-ingest] heartbeat run_id={ctx.options.run_id} "
+        f"collection={stats.collection} scanned={stats.scanned} "
+        f"inserted={stats.inserted} failed={stats.failed} skipped={stats.skipped} "
+        f"rel_inserted={stats.relations_inserted} rel_failed={stats.relation_failed} "
+        f"rel_skipped={stats.relations_skipped} elapsed_ms={elapsed_ms}"
+    )
+    stats.last_heartbeat_at = now
 
 
 def literal_for_attr_value(attr: str, attr_type: str, raw_value: Any) -> Optional[str]:
@@ -1170,7 +1250,7 @@ def project_artifact_record_from_attachment(ctx: IngestContext, doc: dict[str, A
     if not has_attachment:
         return
     artifact_id = f"voice-message-attachment:{message_id}"
-    project_id = normalize_id(doc.get("project_id"))
+    project_id = resolve_voice_session_project_id(ctx, normalize_id(doc.get("session_id")))
     attr_specs = [
         ("project_id", "string", project_id),
         ("source_type", "string", as_string(doc.get("source_type")) or "voice_message_attachment"),
@@ -1201,6 +1281,470 @@ def project_artifact_record_from_attachment(ctx: IngestContext, doc: dict[str, A
         owner_role="artifact_record",
         owner_value=artifact_id,
     )
+
+
+def resolve_voice_session_project_id(ctx: IngestContext, session_id: Optional[str]) -> Optional[str]:
+    if not session_id:
+        return None
+    cached = VOICE_SESSION_PROJECT_CACHE.get(session_id)
+    if cached is not None or session_id in VOICE_SESSION_PROJECT_CACHE:
+        return cached
+    doc: Optional[dict[str, Any]] = None
+    try:
+        doc = ctx.db["automation_voice_bot_sessions"].find_one({"_id": ObjectId(session_id)})
+    except Exception:
+        doc = None
+    if doc is None:
+        doc = ctx.db["automation_voice_bot_sessions"].find_one({"_id": session_id})
+    project_id = normalize_id((doc or {}).get("project_id"))
+    VOICE_SESSION_PROJECT_CACHE[session_id] = project_id
+    return project_id
+
+
+def processing_run_status_from_payload(payload: dict[str, Any]) -> str:
+    if as_bool(payload.get("is_processing")):
+        return "processing"
+    if as_bool(payload.get("is_finished")):
+        return "finished"
+    if as_bool(payload.get("is_processed")):
+        return "processed"
+    if as_string(payload.get("error_message")):
+        return "error"
+    return "unknown"
+
+
+def project_processor_definition(
+    ctx: IngestContext,
+    *,
+    processor_name: str,
+    processor_scope: str,
+    processor_kind: str,
+) -> str:
+    processor_id = f"{processor_scope}:{processor_name}"
+    upsert_entity(
+        ctx,
+        entity="processor_definition",
+        key_attr="processor_definition_id",
+        key_value=processor_id,
+        attr_specs=[
+            ("processor_name", "string", processor_name),
+            ("processor_scope", "string", processor_scope),
+            ("processor_kind", "string", processor_kind),
+            ("module_scope", "string", "voice"),
+        ],
+    )
+    return processor_id
+
+
+def project_processing_run(
+    ctx: IngestContext,
+    *,
+    owner_entity: str,
+    owner_key_attr: str,
+    owner_key_value: str,
+    owner_relation: str,
+    owner_role: str,
+    processor_name: str,
+    processor_scope: str,
+    processor_kind: str,
+    source_ref: str,
+    payload: dict[str, Any],
+    started_at: Optional[datetime] = None,
+    ended_at: Optional[datetime] = None,
+    runtime_tag: Optional[str] = None,
+) -> str:
+    run_id = f"{owner_key_value}:processor:{processor_scope}:{processor_name}"
+    processor_id = project_processor_definition(
+        ctx,
+        processor_name=processor_name,
+        processor_scope=processor_scope,
+        processor_kind=processor_kind,
+    )
+    upsert_entity(
+        ctx,
+        entity="processing_run",
+        key_attr="processing_run_id",
+        key_value=run_id,
+        attr_specs=[
+            ("status", "string", processing_run_status_from_payload(payload)),
+            ("source_ref", "string", source_ref),
+            ("processor_name", "string", processor_name),
+            ("processor_scope", "string", processor_scope),
+            ("is_processed", "boolean", as_bool(payload.get("is_processed"))),
+            ("is_processing", "boolean", as_bool(payload.get("is_processing"))),
+            ("is_finished", "boolean", as_bool(payload.get("is_finished"))),
+            ("job_queued_timestamp", "double", as_number(payload.get("job_queued_timestamp"))),
+            ("error_message", "string", to_capped_stringish(payload.get("error_message"))),
+            ("metadata", "string", to_capped_stringish(payload)),
+            ("runtime_tag", "string", runtime_tag),
+            ("started_at", "datetime", started_at),
+            ("ended_at", "datetime", ended_at),
+        ],
+    )
+    reconcile_relation(
+        ctx,
+        relation_name=owner_relation,
+        source_entity="processing_run",
+        source_key_attr="processing_run_id",
+        source_key_value=run_id,
+        source_role="processing_run",
+        owner_entity=owner_entity,
+        owner_by=owner_key_attr,
+        owner_role=owner_role,
+        owner_value=owner_key_value,
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="processing_run_uses_processor_definition",
+        source_entity="processing_run",
+        source_key_attr="processing_run_id",
+        source_key_value=run_id,
+        source_role="processing_run",
+        owner_entity="processor_definition",
+        owner_by="processor_definition_id",
+        owner_role="processor_definition",
+        owner_value=processor_id,
+    )
+    return run_id
+
+
+def project_voice_session_participants(ctx: IngestContext, doc: dict[str, Any], session_id: str) -> None:
+    participants = doc.get("participants")
+    if not isinstance(participants, list):
+        return
+    for participant in participants:
+        person_id = normalize_id(participant)
+        if not person_id:
+            continue
+        reconcile_relation(
+            ctx,
+            relation_name="voice_session_has_participant_person",
+            source_entity="voice_session",
+            source_key_attr="voice_session_id",
+            source_key_value=session_id,
+            source_role="voice_session",
+            owner_entity="person",
+            owner_by="person_id",
+            owner_role="participant_person",
+            owner_value=person_id,
+        )
+
+
+def project_voice_session_processors(ctx: IngestContext, doc: dict[str, Any], session_id: str) -> None:
+    runtime_tag = as_string(doc.get("runtime_tag"))
+    processor_names: set[str] = set()
+    for key in ("processors", "session_processors"):
+        values = doc.get(key)
+        if isinstance(values, list):
+            processor_names.update(as_string(value) for value in values if as_string(value))
+    processors_data = doc.get("processors_data")
+    if isinstance(processors_data, dict):
+        processor_names.update(key for key in processors_data.keys() if isinstance(key, str) and key.strip())
+
+    for processor_name in sorted(processor_names):
+        processor_id = project_processor_definition(
+            ctx,
+            processor_name=processor_name,
+            processor_scope="voice_session",
+            processor_kind="session-processor",
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="voice_session_uses_processor_definition",
+            source_entity="voice_session",
+            source_key_attr="voice_session_id",
+            source_key_value=session_id,
+            source_role="voice_session",
+            owner_entity="processor_definition",
+            owner_by="processor_definition_id",
+            owner_role="processor_definition",
+            owner_value=processor_id,
+        )
+
+    if not isinstance(processors_data, dict):
+        return
+
+    for processor_name, payload in processors_data.items():
+        if not isinstance(processor_name, str) or not processor_name.strip():
+            continue
+        run_id = project_processing_run(
+            ctx,
+            owner_entity="voice_session",
+            owner_key_attr="voice_session_id",
+            owner_key_value=session_id,
+            owner_relation="voice_session_processed_by_run",
+            owner_role="voice_session",
+            processor_name=processor_name,
+            processor_scope="voice_session",
+            processor_kind="session-run",
+            source_ref=session_id,
+            payload=payload if isinstance(payload, dict) else {"raw_payload": payload},
+            runtime_tag=runtime_tag,
+        )
+        if processor_name != "CREATE_TASKS":
+            continue
+        create_tasks_rows = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(create_tasks_rows, list):
+            continue
+        for index, row in enumerate(create_tasks_rows, start=1):
+            if not isinstance(row, dict):
+                continue
+            task_draft_id = as_string(row.get("row_id")) or as_string(row.get("id")) or f"{session_id}:task-draft:{index:04d}"
+            upsert_entity(
+                ctx,
+                entity="task_draft",
+                key_attr="task_draft_id",
+                key_value=task_draft_id,
+                attr_specs=[
+                    ("row_id", "string", as_string(row.get("row_id")) or as_string(row.get("id"))),
+                    ("title", "string", as_string(row.get("name"))),
+                    ("description", "string", to_capped_stringish(row.get("description"))),
+                    ("status", "string", "draft"),
+                    ("priority", "string", as_string(row.get("priority"))),
+                    ("priority_rank", "double", as_number(row.get("priority_rank"))),
+                    ("priority_reason", "string", to_capped_stringish(row.get("priority_reason"))),
+                    ("performer_id", "string", normalize_id(row.get("performer_id")) or as_string(row.get("performer_id"))),
+                    ("task_type_id", "string", normalize_id(row.get("task_type_id")) or as_string(row.get("task_type_id"))),
+                    ("task_type_name", "string", as_string(row.get("task_type_name"))),
+                    ("dialogue_reference", "string", to_capped_stringish(row.get("dialogue_reference"))),
+                    ("dialogue_tag", "string", as_string(row.get("dialogue_tag"))),
+                    ("task_id_from_ai", "string", as_string(row.get("task_id_from_ai"))),
+                    ("dependencies_from_ai", "string", to_capped_stringish(row.get("dependencies_from_ai"))),
+                    ("source_data", "string", to_capped_stringish(row)),
+                ],
+            )
+            reconcile_relation(
+                ctx,
+                relation_name="processing_run_produces_task_draft",
+                source_entity="processing_run",
+                source_key_attr="processing_run_id",
+                source_key_value=run_id,
+                source_role="processing_run",
+                owner_entity="task_draft",
+                owner_by="task_draft_id",
+                owner_role="task_draft",
+                owner_value=task_draft_id,
+            )
+
+
+def project_voice_message_transcription(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
+    transcription = doc.get("transcription")
+    transcription_payload = transcription if isinstance(transcription, dict) else {}
+    summary_text = as_string(doc.get("transcription_text")) or as_string(transcription_payload.get("text"))
+    if not transcription_payload and summary_text is None:
+        return
+
+    transcription_id = f"{message_id}:transcription"
+    upsert_entity(
+        ctx,
+        entity="voice_transcription",
+        key_attr="voice_transcription_id",
+        key_value=transcription_id,
+        attr_specs=[
+            ("source_ref", "string", message_id),
+            ("task", "string", as_string(transcription_payload.get("task")) or as_string(doc.get("task"))),
+            ("duration", "double", as_number(transcription_payload.get("duration_seconds")) or as_number(doc.get("duration"))),
+            ("summary", "string", to_capped_stringish(summary_text)),
+            ("transcription_provider", "string", as_string(transcription_payload.get("provider"))),
+            ("transcription_model", "string", as_string(transcription_payload.get("model"))),
+            ("transcription_schema_version", "integer", as_number(transcription_payload.get("schema_version"))),
+            ("source_data", "string", to_capped_stringish(transcription_payload or {"transcription_text": summary_text})),
+            ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+            ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+        ],
+    )
+    reconcile_relation(
+        ctx,
+        relation_name="voice_message_has_transcription",
+        source_entity="voice_message",
+        source_key_attr="voice_message_id",
+        source_key_value=message_id,
+        source_role="voice_message",
+        owner_entity="voice_transcription",
+        owner_by="voice_transcription_id",
+        owner_role="voice_transcription",
+        owner_value=transcription_id,
+    )
+
+    segments = transcription_payload.get("segments")
+    if not isinstance(segments, list):
+        return
+    for index, segment in enumerate(segments, start=1):
+        if not isinstance(segment, dict):
+            continue
+        segment_id = as_string(segment.get("id")) or f"{transcription_id}:segment:{index:04d}"
+        upsert_entity(
+            ctx,
+            entity="transcript_segment",
+            key_attr="segment_id",
+            key_value=segment_id,
+            attr_specs=[
+                ("summary", "string", to_capped_stringish(segment.get("text"))),
+                ("started_at_seconds", "double", as_number(segment.get("start"))),
+                ("ended_at_seconds", "double", as_number(segment.get("end"))),
+            ],
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="voice_transcription_has_transcript_segment",
+            source_entity="voice_transcription",
+            source_key_attr="voice_transcription_id",
+            source_key_value=transcription_id,
+            source_role="voice_transcription",
+            owner_entity="transcript_segment",
+            owner_by="segment_id",
+            owner_role="transcript_segment",
+            owner_value=segment_id,
+        )
+
+
+def project_voice_message_categorization(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
+    categorization = doc.get("categorization")
+    if not isinstance(categorization, list):
+        return
+    for index, entry in enumerate(categorization, start=1):
+        if not isinstance(entry, dict):
+            continue
+        entry_id = f"{message_id}:categorization:{index:04d}"
+        upsert_entity(
+            ctx,
+            entity="voice_categorization_entry",
+            key_attr="voice_categorization_entry_id",
+            key_value=entry_id,
+            attr_specs=[
+                ("source_ref", "string", message_id),
+                ("speaker", "string", as_string(entry.get("speaker"))),
+                ("summary", "string", to_capped_stringish(entry.get("text"))),
+                ("related_goal", "string", to_capped_stringish(entry.get("related_goal"))),
+                ("segment_type", "string", as_string(entry.get("segment_type"))),
+                ("certainty_level", "string", as_string(entry.get("certainty_level"))),
+                ("topic_keywords", "string", to_capped_stringish(entry.get("topic_keywords"))),
+                ("source_data", "string", to_capped_stringish(entry)),
+                ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+                ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+            ],
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="voice_message_has_categorization_entry",
+            source_entity="voice_message",
+            source_key_attr="voice_message_id",
+            source_key_value=message_id,
+            source_role="voice_message",
+            owner_entity="voice_categorization_entry",
+            owner_by="voice_categorization_entry_id",
+            owner_role="voice_categorization_entry",
+            owner_value=entry_id,
+        )
+
+
+def project_voice_message_file_support(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
+    has_descriptor = any(doc.get(field) is not None for field in ("file_id", "file_unique_id", "file_path", "file_name", "file_metadata"))
+    if has_descriptor:
+        file_descriptor_id = as_string(doc.get("file_unique_id")) or as_string(doc.get("file_id")) or f"{message_id}:file"
+        upsert_entity(
+            ctx,
+            entity="file_descriptor",
+            key_attr="file_descriptor_id",
+            key_value=file_descriptor_id,
+            attr_specs=[
+                ("source_ref", "string", message_id),
+                ("external_ref", "string", as_string(doc.get("file_path")) or as_string(doc.get("file_id"))),
+                ("file_id", "string", as_string(doc.get("file_id"))),
+                ("file_unique_id", "string", as_string(doc.get("file_unique_id"))),
+                ("file_path", "string", as_string(doc.get("file_path"))),
+                ("file_name", "string", as_string(doc.get("file_name"))),
+                ("file_size", "double", as_number(doc.get("file_size"))),
+                ("mime_type", "string", as_string(doc.get("mime_type"))),
+                ("file_hash", "string", as_string(doc.get("file_hash"))),
+                ("hash_sha256", "string", as_string(doc.get("hash_sha256"))),
+                ("file_metadata", "string", to_capped_stringish(doc.get("file_metadata"))),
+                ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+                ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+            ],
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="voice_message_has_file_descriptor",
+            source_entity="voice_message",
+            source_key_attr="voice_message_id",
+            source_key_value=message_id,
+            source_role="voice_message",
+            owner_entity="file_descriptor",
+            owner_by="file_descriptor_id",
+            owner_role="file_descriptor",
+            owner_value=file_descriptor_id,
+        )
+
+    attachments = doc.get("attachments")
+    if not isinstance(attachments, list):
+        return
+    for index, attachment in enumerate(attachments, start=1):
+        payload = attachment if isinstance(attachment, dict) else {"value": attachment}
+        attachment_id = (
+            as_string(payload.get("id"))
+            or as_string(payload.get("file_id"))
+            or as_string(payload.get("file_unique_id"))
+            or f"{message_id}:attachment:{index:04d}"
+        )
+        upsert_entity(
+            ctx,
+            entity="message_attachment",
+            key_attr="message_attachment_id",
+            key_value=attachment_id,
+            attr_specs=[
+                ("source_ref", "string", message_id),
+                ("external_ref", "string", as_string(payload.get("file_path")) or as_string(payload.get("url")) or as_string(payload.get("file_id"))),
+                ("file_name", "string", as_string(payload.get("file_name")) or as_string(payload.get("name"))),
+                ("file_size", "double", as_number(payload.get("file_size")) or as_number(payload.get("size"))),
+                ("mime_type", "string", as_string(payload.get("mime_type"))),
+                ("order_index", "integer", index),
+                ("source_data", "string", to_capped_stringish(payload)),
+                ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+                ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+            ],
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="voice_message_has_attachment",
+            source_entity="voice_message",
+            source_key_attr="voice_message_id",
+            source_key_value=message_id,
+            source_role="voice_message",
+            owner_entity="message_attachment",
+            owner_by="message_attachment_id",
+            owner_role="message_attachment",
+            owner_value=attachment_id,
+        )
+
+
+def project_voice_message_processors(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
+    processors_data = doc.get("processors_data")
+    if not isinstance(processors_data, dict):
+        return
+    runtime_tag = as_string(doc.get("runtime_tag"))
+    timestamp_by_processor = {
+        "transcription": as_datetime(doc.get("transcribe_timestamp")),
+        "categorization": as_datetime(doc.get("categorization_timestamp")),
+    }
+    for processor_name, payload in processors_data.items():
+        if not isinstance(processor_name, str) or not processor_name.strip():
+            continue
+        project_processing_run(
+            ctx,
+            owner_entity="voice_message",
+            owner_key_attr="voice_message_id",
+            owner_key_value=message_id,
+            owner_relation="voice_message_processed_by_run",
+            owner_role="voice_message",
+            processor_name=processor_name,
+            processor_scope="voice_message",
+            processor_kind="message-run",
+            source_ref=message_id,
+            payload=payload if isinstance(payload, dict) else {"raw_payload": payload},
+            ended_at=timestamp_by_processor.get(processor_name),
+            runtime_tag=runtime_tag,
+        )
 
 
 def reconcile_transcript_chunks(
@@ -1285,6 +1829,7 @@ def for_each_doc(
     handler: Callable[[dict[str, Any], CollectionStats], None],
 ) -> CollectionStats:
     stats = CollectionStats(collection=collection)
+    stats.last_heartbeat_at = time.time()
     query = build_collection_query(ctx, collection)
     cursor = ctx.db[collection].find(query).sort("_id", 1)
     if ctx.options.limit is not None:
@@ -1295,13 +1840,9 @@ def for_each_doc(
         stats.scanned += 1
         handler(doc, stats)
         update_sync_state_for_doc(ctx, collection, doc)
+        emit_collection_heartbeat(ctx, stats)
 
-        if stats.scanned % 500 == 0:
-            print(
-                f"[typedb-ontology-ingest] {collection}: scanned={stats.scanned} "
-                f"inserted={stats.inserted} failed={stats.failed}"
-            )
-
+    emit_collection_heartbeat(ctx, stats, force=True)
     return stats
 
 
@@ -1574,6 +2115,9 @@ def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
         project_object_conclusion_from_session_summary(ctx, doc, doc_id)
 
         project_id = None if is_tombstoned_doc("automation_voice_bot_sessions", doc) else normalize_id(doc.get("project_id"))
+        VOICE_SESSION_PROJECT_CACHE[doc_id] = project_id
+        project_voice_session_participants(ctx, doc, doc_id)
+        project_voice_session_processors(ctx, doc, doc_id)
         if not project_id:
             return
 
@@ -1761,6 +2305,10 @@ def ingest_voice_messages(ctx: IngestContext) -> CollectionStats:
                 key_value=doc_id,
             )
         project_object_event(ctx, doc, doc_id)
+        project_voice_message_transcription(ctx, doc, doc_id)
+        project_voice_message_categorization(ctx, doc, doc_id)
+        project_voice_message_file_support(ctx, doc, doc_id)
+        project_voice_message_processors(ctx, doc, doc_id)
         project_artifact_record_from_attachment(ctx, doc, doc_id)
 
         if raw_transcript is not None and capped_transcript is not None and raw_transcript != capped_transcript:
@@ -2332,6 +2880,7 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
         fields = [f"insert $e isa {target_entity}", f"has {key_attr} {lit_string(source_id)}"]
         owned_attrs = ctx.entity_owned_attrs.get(target_entity, set())
         desired_attr_literals: list[tuple[str, Optional[str]]] = []
+        attr_specs: list[tuple[str, str, Any]] = []
         if isinstance(attributes_cfg, dict):
             for attr, source_field in attributes_cfg.items():
                 if not isinstance(attr, str) or not isinstance(source_field, str):
@@ -2375,10 +2924,11 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
                     desired_literal = lit_datetime(dt) if dt is not None else None
                 else:
                     desired_literal = None
+                attr_specs.append((attr, attr_type, raw_value))
                 desired_attr_literals.append((attr, desired_literal))
                 append_mapped_attr(fields, attr, attr_type, raw_value)
 
-        if incremental_reconcile and ctx.typedb_driver is not None:
+        if ctx.options.apply and ctx.typedb_driver is not None:
             exists_query = (
                 f"match $x isa {target_entity}, has {key_attr} {lit_string(source_id)}; limit 1;"
             )
@@ -2585,13 +3135,14 @@ def main() -> int:
 
     print(
         f"[typedb-ontology-ingest] mode={'apply' if options.apply else 'dry-run'} "
+        f"run_id={options.run_id} "
         f"sync_mode={options.sync_mode} "
         f"addresses={','.join(options.typedb_addresses)} db={options.typedb_database} "
         f"limit={options.limit if options.limit is not None else 'none'} "
         f"collections={','.join(options.collections)}"
     )
 
-    deadletter = DeadletterWriter(options.deadletter_path)
+    deadletter = DeadletterWriter(options.deadletter_path, options.run_id)
     sync_state = load_sync_state(options.sync_state_path, reset=options.reset_sync_state)
     mongo_client = MongoClient(resolve_mongo_uri())
     typedb_driver = None
@@ -2613,6 +3164,7 @@ def main() -> int:
             relation_roles=relation_roles,
             entity_relation_roles=entity_relation_roles,
             sync_state=sync_state,
+            run_started_at=time.time(),
         )
         stats: list[CollectionStats] = []
 

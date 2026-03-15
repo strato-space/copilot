@@ -190,6 +190,21 @@ match
 get $s, $summary_md_text;
 count;
 
+# 9.8 Session participant and processor normalization spot checks
+match
+  (voice_session: $s, participant_person: $p) isa voice_session_has_participant_person;
+  $s has voice_session_id $session_id;
+  $p has person_id $person_id;
+get $session_id, $person_id;
+limit 50;
+
+match
+  (voice_session: $s, processor_definition: $pd) isa voice_session_uses_processor_definition;
+  $s has voice_session_id $session_id;
+  $pd has processor_definition_id $processor_definition_id;
+get $session_id, $processor_definition_id;
+limit 50;
+
 # 10) OperTask/Codex runtime-contract checks
 # 10.1 VoiceSession -> OperTask links (spot-check)
 match
@@ -260,6 +275,36 @@ match
   not { $t has row_id $row_id; };
 get $t;
 count;
+
+# 10.10 Voice message support-object spot checks
+match
+  (voice_message: $m, voice_transcription: $vt) isa voice_message_has_transcription;
+  $m has voice_message_id $message_id;
+  $vt has voice_transcription_id $transcription_id;
+get $message_id, $transcription_id;
+limit 50;
+
+match
+  (voice_message: $m, voice_categorization_entry: $ce) isa voice_message_has_categorization_entry;
+  $m has voice_message_id $message_id;
+  $ce has voice_categorization_entry_id $entry_id;
+get $message_id, $entry_id;
+limit 50;
+
+match
+  (voice_message: $m, processing_run: $r) isa voice_message_processed_by_run;
+  $m has voice_message_id $message_id;
+  $r has processing_run_id $run_id;
+get $message_id, $run_id;
+limit 50;
+
+# 10.11 Drive identity bridge spot-check
+match
+  (drive_project_file: $f, drive_node: $n) isa drive_project_file_indexes_drive_node;
+  $f has drive_project_file_id $drive_project_file_id;
+  $n has drive_node_id $drive_node_id;
+get $drive_project_file_id, $drive_node_id;
+limit 50;
 
 # 11) Source boundary note
 # Validation here covers MongoDB-ingested ontology entities.

@@ -591,6 +591,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-15 10:38):
+  - Closed `copilot-kvdp`: Codex tab issue IDs now expose the same copy affordance as other Codex surfaces; drawer-open and external-link behaviors remain intact, and the inline token layout was corrected after Chrome MCP verification showed the copy icon wrapping below the issue pill.
+  - Closed `copilot-shdv`: `/api/crm/codex/issues` now falls back to direct JSONL parsing when `bd list` stays out-of-sync after failed `bd sync --import-only`, covering the observed `bufio.Scanner: token too long` recovery failure.
+  - Closed `copilot-tpra` as not planned for implementation.
+  - Validation passed: `cd app && npm run build`, `cd app && npx jest __tests__/operops/codexIssuesTableContract.test.ts __tests__/operops/crmPageCodexTabContract.test.ts __tests__/voice/sessionPageCodexTabContract.test.ts --runInBand`, `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/api/crmCodexRouteRuntime.test.ts`, and `cd backend && npm run build`.
 - Close-session refresh (2026-03-04 12:22):
   - Closed `copilot-w8l0` epic (`copilot-w8l0.1`..`copilot-w8l0.3`) for quota-recovery realtime parity: `tickets_prepared` delivery no longer depends on explicit `socket_id` and uses session-room fallback by default.
   - Updated socket events contract to support array payload pass-through for `tickets_prepared`, so client listeners receive task arrays unchanged.

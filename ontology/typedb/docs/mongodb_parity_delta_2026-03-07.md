@@ -68,16 +68,19 @@ Observed in recent Mongo docs:
 - `task`
 
 Current status:
-- these are not represented as first-class schema fields
-- they are only partially preserved via generic string blobs (`transcription`, `processors_data`, etc.)
+- this delta is now partially resolved by first-class support objects:
+  - `voice_transcription`
+  - `transcript_segment`
+  - `voice_categorization_entry`
+  - `processing_run`
+  - `file_descriptor`
+  - `message_attachment`
+- raw envelopes (`transcription`, `categorization`, `processors_data`, `file_metadata`, `attachments`) remain preserved as evidence payloads on the AS-IS parent entities
 
-Required next-step change:
-- decide which of these become first-class ontology attributes vs remain opaque blobs
-- likely candidates for first-class modeling:
-  - `categorization_timestamp`
-  - `transcription provider/model/schema version`
-- likely keep opaque for now:
-  - `transcription_raw`
+Current policy:
+- first-class where the nested structure is stable and query-worthy
+- opaque/evidence-preserving where replay/debug lineage still matters
+- `transcription_raw` remains evidence-only for now
 
 ### 4. possible-task canonicality checks
 
@@ -105,3 +108,8 @@ Interpretation:
   - routing/config sources
 
 This affects governance and context-assembly work more than raw mapping.
+
+## Follow-up still intentionally deferred
+
+- direct Drive file -> `artifact_record` projection remains deferred
+- broader non-voice processor families in historical/orphan payloads remain evidence-only until they become active operational surfaces again

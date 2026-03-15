@@ -72,7 +72,6 @@ collections:
     attributes:
       name: name
       activity_state: is_active
-      project_groups_ids: projects_ids
       client_id: customer
       updated_at: updated_at
       created_at: created_at
@@ -83,6 +82,12 @@ collections:
           entity: client
           by: client_id
           from: customer
+      - relation: project_group_has_project
+        owner_role: linked_project
+        owner_lookup:
+          entity: project
+          by: project_id
+          from: projects_ids
 
   - collection: automation_task_types
     target_entity: task_type
@@ -174,7 +179,6 @@ collections:
       name: name
       contacts_payload: contacts
       project_participations: projects
-      performer_id: performer_id
       updated_at: updated_at
       created_at: created_at
     relations:
@@ -243,7 +247,7 @@ collections:
       project_id: project_id
       performer_id: performer_id
       person_id: person_id
-      role: role
+      membership_role: role
       source: source
       confidence: confidence
       start_date: start_date
@@ -483,6 +487,21 @@ collections:
           entity: project
           by: project_id
           from: project_id
+      - relation: voice_session_has_participant_person
+        owner_role: voice_session
+        owner_lookup:
+          entity: person
+          by: person_id
+          from: participants
+    derived_projections:
+      - projector: voice_session_processor_dictionary_and_runs
+        inputs:
+          - processors
+          - session_processors
+          - processors_data
+      - projector: voice_session_create_tasks_drafts
+        inputs:
+          - processors_data.CREATE_TASKS.data
 
   - collection: automation_voice_bot_messages
     target_entity: voice_message
@@ -556,6 +575,22 @@ collections:
           entity: voice_session
           by: voice_session_id
           from: session_id
+    derived_projections:
+      - projector: voice_message_transcription_support_objects
+        inputs:
+          - transcription
+          - transcription.segments
+      - projector: voice_message_categorization_entries
+        inputs:
+          - categorization
+      - projector: voice_message_file_and_attachment_support
+        inputs:
+          - file_id
+          - file_metadata
+          - attachments
+      - projector: voice_message_processor_runs
+        inputs:
+          - processors_data
 
   - collection: automation_voice_bot_topics
     target_entity: voice_topic
@@ -696,6 +731,12 @@ collections:
           entity: project
           by: project_id
           from: project_id
+      - relation: drive_project_file_indexes_drive_node
+        owner_role: drive_project_file
+        owner_lookup:
+          entity: drive_node
+          by: node_id
+          from: file_id
 
   - collection: automation_google_drive_events_channels
     target_entity: drive_event_channel

@@ -139,6 +139,7 @@ entity person,
   owns created_at,
   owns updated_at,
   plays transcript_segment_spoken_by_person:speaker_person,
+  plays voice_session_has_participant_person:participant_person,
   plays person_has_performer_profile:person,
   plays telegram_user_maps_to_person:linked_person;
 # --- </semantic-card> ---
@@ -245,7 +246,7 @@ entity project_performer_link,
   owns project_id,
   owns performer_id,
   owns person_id,
-  owns role,
+  owns membership_role,
   owns source,
   owns confidence,
   owns start_date,
@@ -403,7 +404,10 @@ entity transcript_segment,
   owns summary,
   owns started_at,
   owns ended_at,
+  owns started_at_seconds,
+  owns ended_at_seconds,
   plays dialog_has_transcript_segment:segment,
+  plays voice_transcription_has_transcript_segment:transcript_segment,
   plays transcript_segment_spoken_by_person:segment;
 # --- </semantic-card> ---
 

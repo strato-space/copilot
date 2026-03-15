@@ -1,7 +1,8 @@
 # Спецификация: нормализация task surfaces Voice и OperOps по статусам
 
-## Status
-- Repo ticket line \(global, not scoped to this spec\): ⚪Open 3  🟡In Progress 1  💤Deferred 0  ⛔Blocked 0  Closed 12
+## Status ✅Closed
+
+- Task-surface ticket line: ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 20
 - Plan status: implemented contract; production data aligned; prod verification complete.
 - Canonical design epic: `copilot-cux2`
 - Completed execution epics: `copilot-ojxy`, `copilot-kdqs`
