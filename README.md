@@ -284,7 +284,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
 - PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...` and inherits the model from `agents/fastagent.config.yaml`.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
-- `create_tasks` card no longer hardcodes model; runtime default is currently `codexspark` unless CLI/PM2 overrides it.
+- Backend `create_tasks` quota recovery is now self-healed server-side: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, then retries the MCP call once.
+- The offline session-title utility `backend/scripts/voicebot-generate-session-titles.ts` uses the same quota-recovery rule and therefore avoids no-op agent restarts when the auth file is already up to date.
+- `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml` and is currently `codexplan` unless CLI/PM2 overrides it.
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
@@ -305,6 +307,15 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Required tool names in agent cards:
   - `generate_session_title` (`agents/agent-cards/generate_session_title.md`)
   - `create_tasks` (`agents/agent-cards/create_tasks.md`)
+- Historical web-upload audio recovery note: when old `source_type=web` voice messages still point to missing relative `uploads/audio/sessions/<session_id>/<file>.webm` files, first check `/home/strato-space/voicebot/uploads/audio/sessions/<session_id>/` on `p2` before declaring the source irrecoverable.
+
+### Ontology rollout supervision
+- Canonical operator commands now include:
+  - `cd backend && npm run ontology:typedb:rollout:start`
+  - `cd backend && npm run ontology:typedb:rollout:stop`
+  - `cd backend && npm run ontology:typedb:rollout:clear-logs`
+  - `cd backend && npm run ontology:typedb:rollout:status`
+- The rollout path writes run-scoped cleanup/backfill logs and deadletters under `ontology/typedb/logs/` and keeps a single active rollout state file there.
 
 ## Miniapp notes
 - Miniapp frontend sources live in `miniapp/src/` and build to `miniapp/dist`.

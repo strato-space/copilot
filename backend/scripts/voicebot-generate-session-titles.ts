@@ -7,6 +7,7 @@ import { VOICEBOT_COLLECTIONS } from '../src/constants.js';
 import { connectDb, closeDb, getRawDb } from '../src/services/db.js';
 import { MCPProxyClient } from '../src/services/mcp/proxyClient.js';
 import { buildCategorizationCleanupPayload, generateSegmentOid } from '../src/api/routes/voicebot/messageHelpers.js';
+import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from '../src/services/voicebot/agentsRuntimeRecovery.js';
 
 type VoiceBotMessageDoc = Record<string, unknown> & {
   _id?: ObjectId;
@@ -217,20 +218,42 @@ const classifyGeneratedTitleError = (title: string): string | null => {
 };
 
 const generateSessionTitle = async (mcpClient: MCPProxyClient, sessionId: string, messageText: string): Promise<string> => {
-  const session = await mcpClient.initializeSession();
+  const callOnce = async (): Promise<string> => {
+    const session = await mcpClient.initializeSession();
+    try {
+      const result = await mcpClient.callTool(
+        'generate_session_title',
+        { message: messageText },
+        session.sessionId,
+        { timeout: 120_000 }
+      );
+      if (!result.success) throw new Error(result.error || 'generate_session_title_failed');
+      const title = extractGeneratedTitle(result.data);
+      if (!title) throw new Error(`generate_session_title_empty:${sessionId}`);
+      return title;
+    } finally {
+      await mcpClient.closeSession(session.sessionId).catch(() => undefined);
+    }
+  };
+
   try {
-    const result = await mcpClient.callTool(
-      'generate_session_title',
-      { message: messageText },
-      session.sessionId,
-      { timeout: 120_000 }
-    );
-    if (!result.success) throw new Error(result.error || 'generate_session_title_failed');
-    const title = extractGeneratedTitle(result.data);
-    if (!title) throw new Error(`generate_session_title_empty:${sessionId}`);
-    return title;
-  } finally {
-    await mcpClient.closeSession(session.sessionId).catch(() => undefined);
+    const title = await callOnce();
+    if (!isAgentsQuotaFailure(title)) {
+      return title;
+    }
+    const recovered = await attemptAgentsQuotaRecovery({ reason: title });
+    if (!recovered) return title;
+    return await callOnce();
+  } catch (error) {
+    if (!isAgentsQuotaFailure(error)) {
+      throw error;
+    }
+    const reason = error instanceof Error ? error.message : String(error);
+    const recovered = await attemptAgentsQuotaRecovery({ reason });
+    if (!recovered) {
+      throw error;
+    }
+    return await callOnce();
   }
 };
 

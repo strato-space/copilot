@@ -73,7 +73,7 @@ Use these as non-negotiable implementation constraints derived from `origin/main
   - canonical generated ontology output is `ontology/typedb/schema/str-ontology.tql`;
   - editable source fragments are under `ontology/typedb/schema/fragments/*.tql`;
   - generated inventory and sampling artifacts live under `ontology/typedb/inventory_latest/*`,
-  - operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`,
+  - operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*,rollout:start,rollout:stop,rollout:clear-logs,rollout:status}`,
   - architecture / roadmap source is `ontology/plan/ontology-and-operations.md`.
   - `copilot` ontology is the common kernel; project-local ontologies must extend it rather than fork it.
   - semantic markdown (`SemanticCards`) is a required companion surface for key ontology objects and should live in project-local AFS plus the platform glossary.
@@ -194,6 +194,7 @@ Preferred engineering principles for this repo:
 - Preferred target is loopback `http://127.0.0.1:8722` (bind `copilot-agent-services` to localhost only; do not expose `:8722` publicly).
 - Agents PM2 runtime is canonical via `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex`; `create_tasks` card must not hardcode model override.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
+- Backend quota self-heal for `create_tasks` is canonical: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once via `agents/pm2-agents.sh`, then retries the MCP call once.
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
@@ -335,6 +336,7 @@ Preferred engineering principles for this repo:
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md`.
 - `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
+- The offline title-generation utility `backend/scripts/voicebot-generate-session-titles.ts` now uses the same quota-recovery rule and compare-before-copy guard as backend `create_tasks`.
 - Session summary persistence is canonical:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
   - route emits realtime `session_update.taskflow_refresh.summary`,
@@ -348,6 +350,7 @@ Preferred engineering principles for this repo:
   - selected rows leave draft views without being soft-deleted,
   - the resulting UI semantics are unified under `Задачи` rather than a separate `Возможные задачи` tab,
   - session payload fallback is not a valid Draft read path,
+  - backend-side quota recovery now avoids no-op agent restarts by comparing auth files before copying/restarting,
   - the agent must not route execution through `StratoProject`.
 - Manual `Summarize` must not hard-fail just because a session has no `project_id` and no default `PMO` project exists; backend should continue with `project_id=null`, and the frontend should surface the backend error text instead of a raw `AxiosError`.
 - Voice session header top action row owns both `Скачать Транскрипцию` and `Загрузить аудио`; `SessionStatusWidget` is status-only and must not keep a second upload control.

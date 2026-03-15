@@ -1,6 +1,7 @@
 import { getLogger } from '../../utils/logger.js';
 import { MCPProxyClient } from '../mcp/proxyClient.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
+import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from './agentsRuntimeRecovery.js';
 
 const logger = getLogger();
 
@@ -187,41 +188,53 @@ export const runCreateTasksAgent = async ({
   rawText?: string;
 }): Promise<Array<Record<string, unknown>>> => {
   const mcpServerUrl = resolveAgentsMcpServerUrl();
-  const mcpClient = new MCPProxyClient(mcpServerUrl);
-  const session = await mcpClient.initializeSession();
   const canonicalSessionUrl = voiceSessionUrlUtils.canonical(sessionId);
+  const envelope =
+    rawText && rawText.trim().length > 0
+      ? {
+          mode: 'raw_text',
+          raw_text: rawText.trim(),
+          session_url: canonicalSessionUrl,
+          project_id: projectId || '',
+        }
+      : {
+          mode: 'session_id',
+          session_id: sessionId,
+          session_url: canonicalSessionUrl,
+          project_id: projectId || '',
+        };
+
+  const executeAgentCall = async (): Promise<Array<Record<string, unknown>>> => {
+    const mcpClient = new MCPProxyClient(mcpServerUrl);
+    const session = await mcpClient.initializeSession();
+    try {
+      const result = await mcpClient.callTool(
+        'create_tasks',
+        {
+          message: JSON.stringify(envelope),
+          session_id: sessionId,
+        },
+        session.sessionId,
+        { timeout: 15 * 60 * 1000 }
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'create_tasks_mcp_failed');
+      }
+
+      return parseCreateTasksAgentResult(result.data, projectId || '');
+    } finally {
+      await mcpClient.closeSession(session.sessionId).catch((error) => {
+        logger.warn('[voicebot-worker] create_tasks agent session close failed', {
+          session_id: sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+  };
 
   try {
-    const envelope =
-      rawText && rawText.trim().length > 0
-        ? {
-            mode: 'raw_text',
-            raw_text: rawText.trim(),
-            session_url: canonicalSessionUrl,
-            project_id: projectId || '',
-          }
-        : {
-            mode: 'session_id',
-            session_id: sessionId,
-            session_url: canonicalSessionUrl,
-            project_id: projectId || '',
-          };
-
-    const result = await mcpClient.callTool(
-      'create_tasks',
-      {
-        message: JSON.stringify(envelope),
-        session_id: sessionId,
-      },
-      session.sessionId,
-      { timeout: 15 * 60 * 1000 }
-    );
-
-    if (!result.success) {
-      throw new Error(result.error || 'create_tasks_mcp_failed');
-    }
-
-    const tasks = parseCreateTasksAgentResult(result.data, projectId || '');
+    const tasks = await executeAgentCall();
     logger.info('[voicebot-worker] create_tasks agent completed', {
       session_id: sessionId,
       tasks_count: tasks.length,
@@ -229,12 +242,29 @@ export const runCreateTasksAgent = async ({
       mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
     });
     return tasks;
-  } finally {
-    await mcpClient.closeSession(session.sessionId).catch((error) => {
-      logger.warn('[voicebot-worker] create_tasks agent session close failed', {
-        session_id: sessionId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+  } catch (error) {
+    if (!isAgentsQuotaFailure(error)) {
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const recovered = await attemptAgentsQuotaRecovery({ reason: errorMessage });
+    if (!recovered) {
+      throw error;
+    }
+
+    logger.warn('[voicebot-worker] create_tasks agent retrying after quota recovery', {
+      session_id: sessionId,
+      mcp_server: mcpServerUrl,
     });
+
+    const tasks = await executeAgentCall();
+    logger.info('[voicebot-worker] create_tasks agent completed after quota recovery', {
+      session_id: sessionId,
+      tasks_count: tasks.length,
+      mcp_server: mcpServerUrl,
+      mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
+    });
+    return tasks;
   }
 };

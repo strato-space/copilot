@@ -46,7 +46,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 
 ## Runtime Notes
 
-- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `codexspark`.
+- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `codexplan`.
 - Preferred `create_tasks` input is a compact structured envelope with modes `raw_text`, `session_id`, or `session_url`.
 - A plain string is still treated as legacy `raw_text` input for backward compatibility.
 - Session-backed task extraction enriches context directly through MCP `voice`.
