@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button, Select, message, Input, Tooltip, Modal } from 'antd';
-import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, ProfileOutlined, RedoOutlined, UploadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, ProfileOutlined, RedoOutlined, UploadOutlined, LoadingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
@@ -625,33 +625,40 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                                 />
                             </Tooltip>
 
-                            <Tooltip title="Tasks">
-                                <Button
-                                    type="text"
-                                    shape="circle"
-                                    style={circleIconButtonStyle}
-                                    icon={<span style={circleIconWrapperStyle}><ProfileOutlined style={{ color: '#0f766e', fontSize: 16 }} /></span>}
-                                    loading={uiState.isCreatingTasks}
-                                    onClick={triggerTasks}
-                                    disabled={!voiceBotSession?._id || uiState.isCreatingTasks}
-                                />
-                            </Tooltip>
-
-                            <Tooltip title="Summarize">
-                                <Button
-                                    type="text"
-                                    shape="circle"
-                                    style={circleIconButtonStyle}
-                                    icon={<span style={circleIconWrapperStyle}><span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span></span>}
-                                    loading={uiState.isSummarizing}
-                                    onClick={triggerSummarize}
-                                    disabled={!voiceBotSession?._id || uiState.isSummarizing || isSummarizeCooldownActive}
-                                />
-                            </Tooltip>
                         </div>
                     </div>
 
                     <div className="voice-meeting-header-actions">
+                        <Tooltip title="Tasks">
+                            <button
+                                className="voice-meeting-icon-button"
+                                onClick={triggerTasks}
+                                disabled={!voiceBotSession?._id || uiState.isCreatingTasks}
+                                aria-label="Tasks"
+                            >
+                                {uiState.isCreatingTasks ? (
+                                    <LoadingOutlined spin />
+                                ) : (
+                                    <ProfileOutlined style={{ color: '#0f766e', fontSize: 16 }} />
+                                )}
+                            </button>
+                        </Tooltip>
+
+                        <Tooltip title="Summarize">
+                            <button
+                                className="voice-meeting-icon-button"
+                                onClick={triggerSummarize}
+                                disabled={!voiceBotSession?._id || uiState.isSummarizing || isSummarizeCooldownActive}
+                                aria-label="Summarize"
+                            >
+                                {uiState.isSummarizing ? (
+                                    <LoadingOutlined spin />
+                                ) : (
+                                    <span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span>
+                                )}
+                            </button>
+                        </Tooltip>
+
                         <Tooltip title="Запустить произвольный промпт">
                             <button className="voice-meeting-icon-button" onClick={() => setCustomPromptModalVisible(true)}>
                                 <MoreOutlined />

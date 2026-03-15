@@ -16,14 +16,18 @@ describe('MeetingCard summarize + circle icon alignment contract', () => {
 
   it('uses centered icon wrappers for circle session-header action buttons', () => {
     const shapeMatches = source.match(/shape=\"circle\"/g) ?? [];
-    expect(shapeMatches.length).toBeGreaterThanOrEqual(4);
+    expect(shapeMatches.length).toBeGreaterThanOrEqual(2);
 
     expect(source).toContain('const circleIconWrapperStyle: CSSProperties = {');
     expect(source).toContain('const circleIconButtonStyle: CSSProperties = {');
     expect(source).toContain('icon={<span style={circleIconWrapperStyle}><EditOutlined');
     expect(source).toContain('icon={<span style={circleIconWrapperStyle}><RobotOutlined');
-    expect(source).toContain('icon={<span style={circleIconWrapperStyle}><ProfileOutlined');
-    expect(source).toContain("icon={<span style={circleIconWrapperStyle}><span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span></span>}");
+    expect(source).toContain('aria-label="Tasks"');
+    expect(source).toContain('aria-label="Summarize"');
+    expect(source).toContain('className="voice-meeting-icon-button"');
+    expect(source).toContain('<LoadingOutlined spin />');
+    expect(source).toContain("<ProfileOutlined style={{ color: '#0f766e', fontSize: 16 }} />");
+    expect(source).toContain("<span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span>");
   });
 
   it('moves upload audio into the top icon toolbar after download transcription', () => {
