@@ -54,7 +54,7 @@
 - `Current runtime truth`:
   - этот файл
   - текущий код в `app/`, `backend/`, `miniapp/`
-  - rollout notes in `bd` (`copilot-sc1b`, `copilot-ds1z`, `copilot-ojxy`, `copilot-oabx`)
+  - rollout notes in `bd` (`copilot-sc1b`, `copilot-ds1z`, `copilot-ojxy`)
 - `Legacy / migration reference`:
   - [voice-task-status-normalization-plan.legacy.md](/home/strato-space/copilot/plan/archive/voice-task-status-normalization-plan.legacy.md)
   - historical repo product notes where not yet updated
@@ -819,7 +819,7 @@ Voice session может войти в operational bucket только если:
 - ✅ `copilot-kdqs.2` — T2 Migrate `/home/tools/voice` consumers to the unified replacement surface
 - ✅ `copilot-kdqs.3` — T3 Migrate copilot prompts/docs to the unified replacement surface
 - ✅ `copilot-kdqs.4` — T4 Remove deprecated MCP/client method and backend `possible_tasks` route
-- ⏳ `copilot-oabx` — Fix pm2 agent restart path in `pm2-backend.sh` rollout
+- ✅ `copilot-oabx` — Fix pm2 agent restart path in `pm2-backend.sh` rollout
 
 ### DAG
 
@@ -841,7 +841,6 @@ Voice session может войти в operational bucket только если:
 - `copilot-kdqs.2 -> copilot-kdqs`
 - `copilot-kdqs.3 -> copilot-kdqs`
 - `copilot-kdqs.4 -> copilot-kdqs`
-- `copilot-ds1z -> copilot-oabx`
 
 ## 16. Deprecation outcome: `voice.session_possible_tasks(session_id)`
 

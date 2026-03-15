@@ -1,11 +1,19 @@
-# Plan: Live Possible Tasks During Meeting
+# Historical Reference: Live Possible Tasks During Meeting
 
 **Generated**: 2026-03-06
 
 ## Status
 - Ticket line: ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  Closed 10
-- Plan status: implementation completed and validated.
+- Plan status: historical completed reference; superseded by current task-surface specs.
 - Canonical epic: `copilot-6d9d`
+
+Current task-surface source of truth:
+- [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md)
+- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+
+Engineering note:
+- this document preserves the earlier live-possible-tasks planning context only;
+- draft status and route semantics described below are not the active runtime contract anymore.
 
 ## BD Tracking
 - Epic: `copilot-6d9d` — https://copilot.stratospace.fun/operops/codex/task/copilot-6d9d

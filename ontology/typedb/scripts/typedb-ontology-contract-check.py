@@ -9,6 +9,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Optional
 
 from pymongo import MongoClient
@@ -125,6 +126,11 @@ def main() -> int:
         relation_roles,
         entity_relation_roles,
     ) = ingest.parse_schema_metadata(schema_path)
+    relation_ctx = SimpleNamespace(
+        entity_relation_roles=entity_relation_roles,
+        relation_roles=relation_roles,
+        relation_role_cache={},
+    )
 
     if args.collections:
         collections = [c.strip() for c in args.collections.split(',') if c.strip()]
@@ -183,7 +189,7 @@ def main() -> int:
             if isinstance(owner_transform, str) and owner_transform not in ingest.LOOKUP_TRANSFORMS:
                 add_issue(issues, 'ERROR', collection, 'unknown_lookup_transform', f'lookup transform {owner_transform!r} is not implemented', seen, args.sample_errors, counters)
             roles = ingest.resolve_relation_roles_for_entities(
-                ctx=type('Ctx', (), {'entity_relation_roles': entity_relation_roles, 'relation_roles': relation_roles})(),
+                ctx=relation_ctx,
                 relation_name=relation_name,
                 source_entity=target_entity,
                 owner_entity=owner_entity if isinstance(owner_entity, str) else '',

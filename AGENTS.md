@@ -74,7 +74,13 @@ Use these as non-negotiable implementation constraints derived from `origin/main
   - editable source fragments are under `ontology/typedb/schema/fragments/*.tql`;
   - generated inventory and sampling artifacts live under `ontology/typedb/inventory_latest/*`,
   - operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*,rollout:start,rollout:stop,rollout:clear-logs,rollout:status}`,
+  - rollout terms are ontology-distinct:
+    - `cleanup_apply` = core hygiene pass for canonical AS-IS entities/required relations;
+    - `historical_backfill` = enrichment pass for derived projections/support objects.
+  - do not collapse cleanup and backfill into one benchmark class; compare like with like.
+  - `copilot-8wn1` cleanup apply currently runs with `--skip-session-derived-projections` by design; the skipped projections belong to backfill, not to the hygiene objective.
   - architecture / roadmap source is `ontology/plan/ontology-and-operations.md`.
+  - performance notes for the 2026-03-15 rollout tuning live in `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md`.
   - `copilot` ontology is the common kernel; project-local ontologies must extend it rather than fork it.
   - semantic markdown (`SemanticCards`) is a required companion surface for key ontology objects and should live in project-local AFS plus the platform glossary.
 
@@ -258,6 +264,7 @@ Preferred engineering principles for this repo:
 - OperOps Codex details card now uses a shared issue-id token renderer (`link + copy`) for `Issue ID` and `Relationships`, and relationship rows include status pictograms (`open/in_progress/blocked/deferred/closed/fallback`).
 - OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
+- Single-issue OperOps Codex loads must tolerate `bd` out-of-sync recovery failures the same way list loads do: if `bd show` reports stale JSONL and `bd sync --import-only` fails with `bufio.Scanner: token too long`, the backend should fall back to direct `.beads/issues.jsonl` parsing instead of returning `502`.
 - OperOps main task navigation is status-first:
   - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
   - lifecycle counts should be shown inline in those tab labels instead of duplicated summary widgets,
@@ -354,6 +361,7 @@ Preferred engineering principles for this repo:
   - the agent must not route execution through `StratoProject`.
 - Manual `Summarize` must not hard-fail just because a session has no `project_id` and no default `PMO` project exists; backend should continue with `project_id=null`, and the frontend should surface the backend error text instead of a raw `AxiosError`.
 - Voice session header top action row owns both `Скачать Транскрипцию` and `Загрузить аудио`; `SessionStatusWidget` is status-only and must not keep a second upload control.
+- `Tasks` and `Summarize` are session/header actions and belong in the right header action cluster before `Запустить произвольный промпт`; they are not recording controls and should not live inside the left `New / Rec / Cut / Pause / Done` strip.
 - Voice and OperOps task displays should render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) through the shared display-layer mapping rather than exposing raw stored labels such as `Progress 10` or `Review / Ready`.
 - Historical Voice status normalization is handled by `backend/scripts/voicebot-migrate-task-statuses.ts` (`npm run voice:migrate-task-statuses:{dry,apply}`), with optional `--session <session_id>` scoping for production cleanup.
 - Voice/OperOps accepted-task filtering must match `source_data.voice_sessions[].session_id` in addition to canonical session URL refs in `source_ref` / `external_ref`; otherwise repaired or migrated rows can disappear from session-scoped task views.
@@ -554,6 +562,8 @@ Notes:
 ### Important Rules
 
 - ✅ Use bd for ALL task tracking
+- ✅ Before any task that changes project artifacts, ensure there is a bd issue covering that work
+- ✅ Treat project artifacts broadly: code, documentation, tests, configs, scripts, migrations, generated project artifacts, and any checked-in file changes all require a bd issue
 - ✅ Always use `--json` flag for programmatic use
 - ✅ Link discovered work with `discovered-from` dependencies
 - ✅ Check `bd ready` before asking "what should I work on?"
@@ -564,6 +574,19 @@ Notes:
 - ❌ Do NOT create synthetic temporary issues in bd (for example `tmp-*`, `*parse-check*`), including `--ephemeral` probe issues
 
 For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help`.
+
+### Artifact Change Rule
+
+- If a task will modify any repository artifact, do not start from implicit context alone; create or claim the corresponding `bd` issue first.
+- “Artifact change” includes:
+  - source code
+  - tests
+  - documentation
+  - configs/env examples
+  - scripts/runbooks
+  - schemas/migrations
+  - checked-in generated artifacts
+- If the user asks for a direct file change and no suitable issue exists yet, create a focused `bd` task before editing.
 
 <!-- END BEADS INTEGRATION -->
 

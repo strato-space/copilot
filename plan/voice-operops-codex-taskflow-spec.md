@@ -11,6 +11,18 @@ Engineering note:
 - task-surface sections in this document are no longer the source of truth;
 - keep this spec only as a broader Voice ↔ OperOps ↔ Codex design reference.
 
+## Residual implementation items
+
+Only these items should still be considered implementation candidates from this document:
+
+1. `copilot-tmcu`
+   - local `codex_task` mirror / Codex tab reflectivity for tasks materialized from Voice with Codex performer
+
+Everything else in this spec should be treated as:
+- already implemented,
+- superseded by newer task-surface specs,
+- or requiring fresh re-scoping before execution.
+
 ## Context
 Сейчас есть разрыв между:
 - задачами, созданными из Voice сессий (`Возможные задачи`);
@@ -192,18 +204,6 @@ Runtime note:
 4. В voice `Возможные задачи` -> создание задач -> видны во вкладке `Задачи`.
 5. `@task` и `Codex/Кодекс` сценарии создают codex issue и связывают его с voice сессией.
 6. Материалы привязываются к целевым строкам категоризации и отображаются в `Materials`.
-
-## Residual implementation items
-
-Only these items should still be considered implementation candidates from this document:
-
-1. `copilot-tmcu`
-   - local `codex_task` mirror / Codex tab reflectivity for tasks materialized from Voice with Codex performer
-
-Everything else in this spec should be treated as:
-- already implemented,
-- superseded by newer task-surface specs,
-- or requiring fresh re-scoping before execution.
 
 ## Additional backlog (2026-02-27)
 

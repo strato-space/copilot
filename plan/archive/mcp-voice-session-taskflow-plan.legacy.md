@@ -1,6 +1,16 @@
-# Plan: mcp@voice Session-Scoped Taskflow Parity (Possible Tasks / Tasks / Codex)
+# Historical Reference: mcp@voice Session-Scoped Taskflow Parity (Possible Tasks / Tasks / Codex)
 
 **Generated**: 2026-03-03
+
+## Status
+- Spec state: historical superseded reference
+- Current task-surface source of truth:
+  - [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md)
+  - [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+
+Engineering note:
+- this document preserves the earlier MCP/session-taskflow planning context only;
+- removed routes and session-payload draft semantics described below are not the active runtime contract anymore.
 
 ## Overview
 Deliver assistant-side task management parity with Voice UI (`Возможные задачи`, `Задачи`, `Codex`) using `session_id`-scoped MCP tools.
@@ -317,7 +327,7 @@ T10 ─────────────────────────�
 ### T10: Cross-repo rollout sequencing and rollback gates
 - **depends_on**: []
 - **location**:
-  - `/home/strato-space/copilot/plan/mcp-voice-session-taskflow-plan.md`
+  - `/home/strato-space/copilot/plan/archive/mcp-voice-session-taskflow-plan.legacy.md`
   - `/home/tools/voice/README.md`
 - **description**:
   - Define deployment order to avoid production breakage:
@@ -343,7 +353,7 @@ T10 ─────────────────────────�
   - Added the stage-safe deployment order and per-stage compatibility/rollback gates for backend -> client -> MCP -> Actions -> frontend.
   - Added explicit cross-reference requirements between this plan section and `/home/tools/voice/README.md`.
 - **files edited/created**:
-  - `/home/strato-space/copilot/plan/mcp-voice-session-taskflow-plan.md`
+  - `/home/strato-space/copilot/plan/archive/mcp-voice-session-taskflow-plan.legacy.md`
   - `/home/tools/voice/README.md`
 
 ### T11: Documentation + assistant usage runbook

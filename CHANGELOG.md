@@ -2,6 +2,10 @@
 
 ## 2026-03-15
 ### PROBLEM SOLVED
+- **13:17** `AGENTS.md` still mixed constitutional instructions with a running session journal, and secondary taskflow plan files under `plan/` still looked like live working plans even after they had become historical references.
+- **13:17** Voice session header actions were visually inconsistent after `Tasks` and `Summarize` moved right: two actions rendered without the same bordered icon-button contract as the rest of the header cluster.
+- **13:17** `/api/crm/codex/issue` still returned `502` on valid issues like `copilot-x0xn` when `bd show` detected out-of-sync JSONL and `bd sync --import-only` failed with `bufio.Scanner: token too long`, even though direct JSONL fallback was already the correct recovery path.
+- **13:03** The new supervised ontology rollout still treated cleanup and historical backfill as if they were one species of ingest, which was a category mistake: operators could measure the wrong thing, and `automation_voice_bot_sessions` cleanup kept paying for high-cost derived session projections that were not required by the `copilot-8wn1` hygiene objective.
 - **11:44** Backend `create_tasks` could still fail indefinitely on quota-class MCP errors, because recovery remained a manual operator procedure: even when fresh Codex auth was already available on disk, the backend would not self-heal, and repeated retries risked pointless agent restarts.
 - **11:44** Historical web-upload voice sessions with missing local `webm` files still blocked the last unnamed-session cleanup wave, because recovery surfaces on old Voice hosts were unknown and the batch state of zero-transcription file sessions had not been audited.
 - **11:44** Ontology replay supervision still relied on stale detached-launcher archaeology instead of one canonical rollout surface, so operators could not distinguish current deadletters from old noise or safely restart a clean run.
@@ -11,6 +15,10 @@
 - **02:16** Voice session taskflow still depended on a split naming model across repos, so even after the status-first rollout landed, assistant instructions, MCP docs, and actions examples could still reintroduce the removed draft alias as if it were the preferred path.
 
 ### FEATURE IMPLEMENTED
+- **13:17** Cleaned the doc surface so `AGENTS.md` is again a normative instruction document, archived stale taskflow plan docs under `plan/archive/`, and kept only the current task-surface specs as active sources of truth.
+- **13:17** Unified the right-side Voice session header actions visually: `Tasks` and `Summarize` now use the same bordered icon-button styling as the other header actions and remain positioned before the custom prompt action.
+- **13:17** Extended the single-issue Codex backend route with the same JSONL fallback resilience as the list route and verified `copilot-x0xn` live after redeploy.
+- **13:03** Normalized the ontology rollout contract: `cleanup_apply` is now documented and executed as a core hygiene pass, `historical_backfill` remains the enrichment pass, and focused cleanup now skips session-derived projections that belong to backfill rather than to the current validation target.
 - **11:44** Added backend-side quota self-heal for `create_tasks`: on quota-class MCP failures the backend now compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, recreates the MCP session, and retries the tool call once.
 - **11:44** Finished the unnamed-session cleanup wave end-to-end: recovered missing historical `webm` files from `p2` old Voice storage, replayed transcription/categorization for the affected sessions, reused the same quota-recovery guard in the session-title utility, and reduced unnamed active voice sessions in Mongo to `0`.
 - **11:44** Landed canonical ontology rollout supervision: backend operator surface now exposes `ontology:typedb:rollout:{start,stop,clear-logs,status}`, writes run-scoped cleanup/backfill logs and deadletters, and enforces a single active supervised rollout instead of ad hoc detached shells.
@@ -20,6 +28,10 @@
 - **03:00** Completed the deprecation wave end-to-end: Copilot backend now serves draft reads through `POST /api/voicebot/session_tasks`, the old `POST /api/voicebot/possible_tasks` route is removed, active prompts/docs prefer the unified replacement surface, and prod deploy plus live MCP verification confirmed that the Voice `Задачи` tab still renders correctly.
 
 ### CHANGES
+- **13:17** Updated `AGENTS.md`, `README.md`, `CHANGELOG.md`, `plan/voice-task-surface-normalization-spec.md`, and `plan/voice-operops-codex-taskflow-spec.md`; moved `plan/{live-possible-tasks-during-meeting-plan,mcp-voice-session-taskflow-plan}.md` into `plan/archive/*.legacy.md`, fixed stale status references, and closed `copilot-v9ba`, `copilot-1ssq`, `copilot-gwo0`, `copilot-ro0w`, and `copilot-eyr2`.
+- **13:17** Updated `backend/src/api/routes/crm/codex.ts`, `backend/__tests__/api/crmCodexRouteRuntime.test.ts`, and `ontology/typedb/scripts/typedb-ontology-contract-check.py`; verified with focused runtime test and local/prod route checks, then reloaded the live `copilot-x0xn` page successfully.
+- **13:17** Updated `app/src/components/voice/MeetingCard.tsx`, `app/__tests__/voice/{meetingCardTasksButtonContract,meetingCardSummarizeAndIconContract}.test.ts`; validated with focused Jest and `cd app && npm run build`, then pushed commit `d0753d7`.
+- **13:03** Updated `ontology/typedb/scripts/typedb-ontology-ingest.py`, `ontology/typedb/scripts/typedb-rollout-chain.sh`, `ontology/typedb/tests/test_ingest_modes.py`, `ontology/typedb/{README.md,AGENTS.md,docs/rollout_plan_v1.md}`, repo docs `README.md` and `AGENTS.md`, and added `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md`; verified cleanup+validate throughput on run `20260315T100242Z` (`automation_tasks=1639.2552 docs/s`, `automation_voice_bot_sessions=151.5289 docs/s`) before historical backfill continued.
 - **11:44** Added `backend/src/services/voicebot/agentsRuntimeRecovery.ts`, updated `backend/src/services/voicebot/createTasksAgent.ts`, added focused tests `backend/__tests__/services/voicebot/{agentsRuntimeRecovery,createTasksAgentRecovery}.test.ts`, rebuilt backend, restarted `copilot-backend-{prod,local,dev}`, restarted `copilot-agent-services`, and updated `copilot-ub03` with the live mitigation state.
 - **11:44** Updated `backend/scripts/voicebot-generate-session-titles.ts` to use the same compare-before-copy quota recovery path, recovered three missing `webm` files from `p2:/home/strato-space/voicebot/uploads/audio/sessions/*`, replayed direct worker transcription/categorization for the affected sessions, refreshed `output/copilot-7wbb-generated-session-titles.md`, and finished the naming wave for `copilot-7wbb`.
 - **11:44** Added `ontology/typedb/scripts/{typedb-rollout-lib,typedb-rollout-chain,typedb-rollout-status}.sh`, updated `backend/package.json`, refined `ontology/typedb/scripts/typedb-ontology-ingest.py`, updated `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`, created/advanced beads issues `copilot-peg8*`, `copilot-4380`, and `copilot-qtk0`, and verified fresh contract-checks plus run-scoped deadletter behavior on the new rollout surface.
@@ -274,7 +286,7 @@
   - updated `app/src/components/voice/MeetingCard.tsx`, `app/src/store/voiceBotStore.ts`, `app/src/utils/voicePossibleTasks.ts`, `app/src/components/voice/PossibleTasks.tsx`, and `app/src/pages/voice/SessionPage.tsx`,
   - added `app/src/pages/operops/voiceTabGrouping.ts` and redesigned the `Voice` tab in `app/src/pages/operops/CRMPage.tsx` around orphan/session-grouped `NEW_0` tasks.
 - **12:03** Planning/docs:
-  - added `plan/live-possible-tasks-during-meeting-plan.md`,
+  - added `plan/archive/live-possible-tasks-during-meeting-plan.legacy.md`,
   - updated `docs/RUNTIME_TAG_DEPRECATION_PLAN_2026-03-04.md` with BD status/traceability formatting.
 - **12:03** Attachment/taskflow robustness:
   - updated `backend/src/services/taskAttachments.ts` to decode UTF-8 filenames exposed as latin1 mojibake by multipart parsing,
@@ -448,7 +460,7 @@
   - updated contracts in `app/__tests__/voice/*` and `app/__tests__/operops/*`.
 - **12:28** Documentation:
   - updated `AGENTS.md` and `README.md`;
-  - added/updated plan artifact `plan/mcp-voice-session-taskflow-plan.md`.
+  - added/updated plan artifact `plan/archive/mcp-voice-session-taskflow-plan.legacy.md`.
 - **13:55** Backend:
   - updated `backend/src/services/voicebot/voicebotDoneNotify.ts` to derive `metadata.source` from the actual close/worker path;
   - expanded `backend/__tests__/voicebot/notify/doneNotifyService.test.ts` for REST and queue source labels.

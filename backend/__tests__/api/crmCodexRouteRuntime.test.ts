@@ -113,7 +113,15 @@ describe('CRM codex route runtime behavior', () => {
     expect(thirdArgs).toEqual(['--no-daemon', 'list', '--json', '--limit', '5']);
   });
 
-  it('returns 502 when out-of-sync sync-recovery fails for bd show', async () => {
+  it('falls back to direct JSONL parse when out-of-sync sync-recovery fails for bd show', async () => {
+    jest.spyOn(fs, 'createReadStream').mockImplementation(() => {
+      const stream = new PassThrough();
+      queueMicrotask(() => {
+        stream.end(JSON.stringify({ id: 'copilot-x0xn', title: 'Recovered issue', status: 'closed' }) + '\n');
+      });
+      return stream as unknown as fs.ReadStream;
+    });
+
     queueSpawnPlans([
       {
         code: 1,
@@ -121,15 +129,15 @@ describe('CRM codex route runtime behavior', () => {
       },
       {
         code: 1,
-        stderr: 'sync failed',
+        stderr: 'Error: importing: error reading JSONL: bufio.Scanner: token too long',
       },
     ]);
 
     const app = buildApp();
-    const response = await request(app).post('/crm/codex/issue').send({ id: 'copilot-missing' });
+    const response = await request(app).post('/crm/codex/issue').send({ id: 'copilot-x0xn' });
 
-    expect(response.status).toBe(502);
-    expect(response.body).toEqual({ error: 'Failed to load Codex issue from bd show' });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ id: 'copilot-x0xn', title: 'Recovered issue', status: 'closed' });
     expect(spawnMock).toHaveBeenCalledTimes(2);
     const [, secondArgs] = spawnMock.mock.calls[1] as [string, string[]];
     expect(secondArgs).toEqual(['sync', '--import-only']);

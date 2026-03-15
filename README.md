@@ -89,6 +89,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
 - Codex issue IDs now use one token renderer across `Issue ID` and `Relationships` (blue link + copy action); relationship rows also show status pictograms (`open`, `in_progress`, `blocked`, `deferred`, `closed`, fallback).
+- Single-issue OperOps Codex loads now share the JSONL fallback path with the list route: when `bd show` reports out-of-sync JSONL and `bd sync --import-only` fails with `bufio.Scanner: token too long`, `/api/crm/codex/issue` falls back to direct `.beads/issues.jsonl` parsing instead of returning `502`.
 - Codex relationship groups are normalized in details card as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency reading.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
 - OperOps main task navigation is status-first:
@@ -308,6 +309,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `generate_session_title` (`agents/agent-cards/generate_session_title.md`)
   - `create_tasks` (`agents/agent-cards/create_tasks.md`)
 - Historical web-upload audio recovery note: when old `source_type=web` voice messages still point to missing relative `uploads/audio/sessions/<session_id>/<file>.webm` files, first check `/home/strato-space/voicebot/uploads/audio/sessions/<session_id>/` on `p2` before declaring the source irrecoverable.
+- Voice session header action ownership is explicit: `Tasks` and `Summarize` belong to the right header action cluster before the custom-prompt action, not to the left recording-control strip.
 
 ### Ontology rollout supervision
 - Canonical operator commands now include:
@@ -316,6 +318,14 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `cd backend && npm run ontology:typedb:rollout:clear-logs`
   - `cd backend && npm run ontology:typedb:rollout:status`
 - The rollout path writes run-scoped cleanup/backfill logs and deadletters under `ontology/typedb/logs/` and keeps a single active rollout state file there.
+- Operator terms are not interchangeable:
+  - `cleanup_apply`
+    - a data-hygiene pass ordered to restore canonical AS-IS core entities and mandatory relations for current validation gates;
+    - for the `copilot-8wn1` cleanup wave this intentionally skips high-cost derived session projections via `--skip-session-derived-projections`.
+  - `historical_backfill`
+    - a semantic enrichment pass ordered to rebuild broader historical projections and support objects after cleanup+validate succeeds.
+- Do not treat cleanup throughput as a proxy for backfill throughput; they are different operation classes with different objects and costs.
+- Current profiling baseline and post-patch measurements are versioned in `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md`.
 
 ## Miniapp notes
 - Miniapp frontend sources live in `miniapp/src/` and build to `miniapp/dist`.

@@ -434,6 +434,16 @@ router.post('/issue', async (req: Request, res: Response) => {
   }
 
   if (result.code !== 0) {
+    if (isBdOutOfSyncError(result)) {
+      logger.warn('[crm.codex.issue] falling back to direct JSONL parse after out-of-sync bd show failure', {
+        issue_id: issueId,
+      });
+      const fallbackIssues = await bdRuntime.loadIssuesFromJsonl();
+      const issue = fallbackIssues.find((candidate) => String(candidate.id || '') === issueId) || null;
+      if (issue) {
+        return res.status(200).json(issue);
+      }
+    }
     if (isBdTokenTooLongError(result)) {
       logger.warn('[crm.codex.issue] falling back to direct JSONL parse after bd token-too-long failure', {
         issue_id: issueId,
