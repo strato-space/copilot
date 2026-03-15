@@ -2,6 +2,7 @@
 
 ## 2026-03-15
 ### PROBLEM SOLVED
+- **13:59** Telegram close-session updates sent through `tgbot__send_bot_message` could still waste the first live attempt on preventable MarkdownV2 escaping mistakes, producing `Can't parse entities` style failures even when the content itself was correct.
 - **13:17** `AGENTS.md` still mixed constitutional instructions with a running session journal, and secondary taskflow plan files under `plan/` still looked like live working plans even after they had become historical references.
 - **13:17** Voice session header actions were visually inconsistent after `Tasks` and `Summarize` moved right: two actions rendered without the same bordered icon-button contract as the rest of the header cluster.
 - **13:17** `/api/crm/codex/issue` still returned `502` on valid issues like `copilot-x0xn` when `bd show` detected out-of-sync JSONL and `bd sync --import-only` failed with `bufio.Scanner: token too long`, even though direct JSONL fallback was already the correct recovery path.
@@ -15,6 +16,7 @@
 - **02:16** Voice session taskflow still depended on a split naming model across repos, so even after the status-first rollout landed, assistant instructions, MCP docs, and actions examples could still reintroduce the removed draft alias as if it were the preferred path.
 
 ### FEATURE IMPLEMENTED
+- **13:59** Added a documented Telegram MarkdownV2 send discipline: executive updates must now be materialized and inspected as fully escaped payloads before the live `tgbot__send_bot_message` call.
 - **13:17** Cleaned the doc surface so `AGENTS.md` is again a normative instruction document, archived stale taskflow plan docs under `plan/archive/`, and kept only the current task-surface specs as active sources of truth.
 - **13:17** Unified the right-side Voice session header actions visually: `Tasks` and `Summarize` now use the same bordered icon-button styling as the other header actions and remain positioned before the custom prompt action.
 - **13:17** Extended the single-issue Codex backend route with the same JSONL fallback resilience as the list route and verified `copilot-x0xn` live after redeploy.
@@ -28,6 +30,7 @@
 - **03:00** Completed the deprecation wave end-to-end: Copilot backend now serves draft reads through `POST /api/voicebot/session_tasks`, the old `POST /api/voicebot/possible_tasks` route is removed, active prompts/docs prefer the unified replacement surface, and prod deploy plus live MCP verification confirmed that the Voice `Задачи` tab still renders correctly.
 
 ### CHANGES
+- **13:59** Updated `AGENTS.md`, `README.md`, and `CHANGELOG.md` to record the Telegram MarkdownV2 close-session rule and closed `copilot-t1tu`.
 - **13:17** Updated `AGENTS.md`, `README.md`, `CHANGELOG.md`, `plan/voice-task-surface-normalization-spec.md`, and `plan/voice-operops-codex-taskflow-spec.md`; moved `plan/{live-possible-tasks-during-meeting-plan,mcp-voice-session-taskflow-plan}.md` into `plan/archive/*.legacy.md`, fixed stale status references, and closed `copilot-v9ba`, `copilot-1ssq`, `copilot-gwo0`, `copilot-ro0w`, and `copilot-eyr2`.
 - **13:17** Updated `backend/src/api/routes/crm/codex.ts`, `backend/__tests__/api/crmCodexRouteRuntime.test.ts`, and `ontology/typedb/scripts/typedb-ontology-contract-check.py`; verified with focused runtime test and local/prod route checks, then reloaded the live `copilot-x0xn` page successfully.
 - **13:17** Updated `app/src/components/voice/MeetingCard.tsx`, `app/__tests__/voice/{meetingCardTasksButtonContract,meetingCardSummarizeAndIconContract}.test.ts`; validated with focused Jest and `cd app && npm run build`, then pushed commit `d0753d7`.

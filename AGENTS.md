@@ -588,6 +588,15 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
   - checked-in generated artifacts
 - If the user asks for a direct file change and no suitable issue exists yet, create a focused `bd` task before editing.
 
+### Telegram MarkdownV2 Rule
+
+- When sending Telegram messages through `tgbot__send_bot_message` with `parse_mode=MARKDOWNV2`, do not send the first draft directly from ad hoc inline text.
+- First materialize the message as a fully escaped payload (prefer a local temp file or a clearly inspectable local string), then verify the final escaped text before calling the tool.
+- Treat Telegram MarkdownV2 as a strict output format, not a forgiving renderer:
+  - escape all dynamic text,
+  - especially `>`, `_`, `*`, `[`, `]`, `(`, `)`, `-`, `.`, `!`, and backslashes.
+- Goal: avoid repeated live-send failures such as “Can\\'t parse entities” caused by first-draft escaping mistakes.
+
 <!-- END BEADS INTEGRATION -->
 
 ## Landing the Plane (Session Completion)

@@ -391,6 +391,10 @@ bd sync
 
 See `AGENTS.md` for the full workflow (including `bd doctor` guidance).
 
+## Telegram closeout messages
+- When sending executive updates through `tgbot__send_bot_message` with `parse_mode=MARKDOWNV2`, first materialize the payload as a fully escaped local string or temp-file draft, then inspect the final escaped text before the live send.
+- Treat Telegram MarkdownV2 as a strict output contract, not a forgiving renderer: escape dynamic text, especially `>`, `_`, `*`, `[`, `]`, `(`, `)`, `-`, `.`, `!`, and backslashes, to avoid first-send failures such as `Can't parse entities`.
+
 ## Authentication
 - Backend proxies Voicebot auth via `/api/try_login` and `/api/auth/me`; set `VOICEBOT_API_URL` in the backend environment.
 - Frontend auth checks call `https://voice.stratospace.fun/auth/me` by default; override with `VITE_VOICEBOT_BASE_URL` if needed.
