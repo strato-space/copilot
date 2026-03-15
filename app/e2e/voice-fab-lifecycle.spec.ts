@@ -567,3 +567,90 @@ test.describe('Voice FAB lifecycle parity', () => {
     expect(sessions).toHaveLength(0);
   });
 });
+
+test.describe('Voice FAB paused done runtime behavior', () => {
+  test('@unauth double-clicking paused FAB closes the session instead of resuming recording', async ({ page }) => {
+    let activateCalls = 0;
+    let closePayload: Record<string, unknown> | null = null;
+
+    await page.addInitScript(({ sessionId }) => {
+      window.localStorage.setItem('VOICEBOT_AUTH_TOKEN', 'playwright-auth-token');
+      window.localStorage.setItem('VOICEBOT_ACTIVE_SESSION_ID', sessionId);
+      window.localStorage.setItem('VOICEBOT_STATE', 'paused');
+      window.localStorage.setItem('VOICEBOT_PAUSED_HINT', '1');
+      window.localStorage.setItem('VOICEBOT_API_URL', `${window.location.origin}/api`);
+    }, { sessionId: SESSION_ID });
+
+    await page.route('**/api/auth/me**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            user: {
+              id: '507f1f77bcf86cd799439099',
+              email: 'test@stratospace.fun',
+              role: 'ADMIN',
+              permissions: [],
+            },
+          },
+        }),
+      });
+    });
+    await page.route('**/api/voicebot/projects', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route('**/api/voicebot/activate_session', async (route) => {
+      activateCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, session_id: SESSION_ID }),
+      });
+    });
+    await page.route('**/api/voicebot/sessions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            _id: SESSION_ID,
+            session_name: 'Paused FAB Session',
+            is_active: true,
+            access_level: 'private',
+            participants: [],
+            allowed_users: [],
+            created_at: '2026-03-15T07:00:00.000Z',
+          },
+        ]),
+      });
+    });
+    await page.route('**/api/voicebot/session_done', async (route) => {
+      closePayload = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+
+    await page.goto('/webrtc/index.html', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => undefined);
+
+    const fabWrap = page.locator('#fab-wrap');
+    const fabButton = page.locator('#fab-call');
+
+    await expect(fabWrap).toHaveAttribute('data-state', 'paused');
+    await expect(fabButton).toBeVisible();
+
+    await fabButton.dblclick();
+
+    await expect.poll(() => closePayload?.session_id).toBe(SESSION_ID);
+    await expect.poll(() => activateCalls).toBe(0);
+    await expect(fabWrap).toHaveAttribute('data-state', 'idle');
+  });
+});
