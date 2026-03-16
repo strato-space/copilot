@@ -195,6 +195,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session-scoped taskflow parity is now canonical across backend + Voice UI + mcp@voice:
   - backend route `POST /api/voicebot/session_tasks` exposes canonical draft/task/codex buckets, with draft reads served as `{ session_id, bucket: 'draft' }`,
   - mutations emit `session_update.taskflow_refresh` flags for `possible_tasks` / `tasks` / `codex`,
+  - possible-task saves can carry `refresh_correlation_id` and `refresh_clicked_at_ms`; backend persists/logs these values and echoes them in `session_update.taskflow_refresh` for end-to-end latency diagnostics,
   - frontend consumes those hints with additive refresh tokens so the unified `Задачи` surface and `Codex` refresh without manual reload,
   - assistant workflow is fixed to `discuss -> preview -> apply -> verify`.
 - Voice message grouping links image-anchor rows to the next transcription block and suppresses duplicate standalone anchor groups; transcription rows now show inline image previews when image attachments are present.
@@ -460,6 +461,10 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-16 22:02):
+  - Added taskflow refresh correlation telemetry for live possible-task saves: the frontend now forwards optional click metadata (`refresh_correlation_id`, `refresh_clicked_at_ms`) through `createPossibleTasksForSession` into `save_possible_tasks`, and backend socket hints/logs now preserve this metadata end-to-end.
+  - Updated docs/contracts (`CHANGELOG.md`, `README.md`, `AGENTS.md`) for the correlation-aware refresh semantics; no behavior rollback or fallback paths were introduced.
+  - Validation passed: `cd app && npm run build`, `cd backend && npm run build`.
 - Close-session refresh (2026-03-15 22:03):
   - Landed the staged ontology operator bundle for `copilot-8wn1`: repo/backend operator commands now expose `sync:core`, `sync:enrich`, and `full:from-scratch`, while the ingest engine and rollout chain distinguish cleanup hygiene from historical backfill and skip session-derived projections during focused cleanup.
   - Added/accepted the checked-in performance artifact `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md` together with the new operator helpers `ontology/typedb/scripts/typedb-sync-chain.sh` and `ontology/typedb/scripts/typedb-full-from-scratch.sh`.

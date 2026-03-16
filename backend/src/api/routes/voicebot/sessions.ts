@@ -233,6 +233,8 @@ const savePossibleTasksInputSchema = z
         tasks: z.array(z.object({}).passthrough()).optional(),
         items: z.array(z.object({}).passthrough()).optional(),
         refresh_mode: z.enum(POSSIBLE_TASKS_REFRESH_MODE_VALUES).optional(),
+        refresh_correlation_id: z.string().trim().min(1).optional(),
+        refresh_clicked_at_ms: z.number().finite().optional(),
     })
     .superRefine((value, ctx) => {
         const tasks = Array.isArray(value.tasks) ? value.tasks : (Array.isArray(value.items) ? value.items : []);
@@ -1776,6 +1778,8 @@ const emitSessionTaskflowRefreshHint = ({
     possibleTasks = false,
     tasks = false,
     codex = false,
+    correlationId,
+    clickedAtMs,
 }: {
     req: Request;
     sessionId: string;
@@ -1783,6 +1787,8 @@ const emitSessionTaskflowRefreshHint = ({
     possibleTasks?: boolean;
     tasks?: boolean;
     codex?: boolean;
+    correlationId?: string;
+    clickedAtMs?: number;
 }): void => {
     if (!possibleTasks && !tasks && !codex) return;
 
@@ -1792,6 +1798,21 @@ const emitSessionTaskflowRefreshHint = ({
     const room = getVoicebotSessionRoom(sessionId);
     const namespace = io.of('/voicebot');
     const updatedAt = new Date().toISOString();
+    const e2eFromClickMs = typeof clickedAtMs === 'number' && Number.isFinite(clickedAtMs)
+        ? Date.now() - clickedAtMs
+        : null;
+
+    logger.info('[voicebot.sessions] taskflow_refresh_emit', {
+        session_id: sessionId,
+        reason,
+        correlation_id: correlationId || null,
+        clicked_at_ms: typeof clickedAtMs === 'number' && Number.isFinite(clickedAtMs) ? clickedAtMs : null,
+        e2e_from_click_ms: e2eFromClickMs,
+        updated_at: updatedAt,
+        possible_tasks: possibleTasks,
+        tasks,
+        codex,
+    });
 
     namespace.to(room).emit('session_update', {
         _id: sessionId,
@@ -1802,6 +1823,8 @@ const emitSessionTaskflowRefreshHint = ({
             possible_tasks: possibleTasks,
             tasks,
             codex,
+            correlation_id: correlationId,
+            clicked_at_ms: clickedAtMs,
             updated_at: updatedAt,
         },
     });
@@ -4579,6 +4602,16 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
         const taskItems = (Array.isArray(parsedBody.data.tasks) ? parsedBody.data.tasks : (parsedBody.data.items ?? []))
             .map((rawTask) => rawTask as Record<string, unknown>);
         const refreshMode = parsedBody.data.refresh_mode ?? 'full_recompute';
+        const refreshCorrelationId = parsedBody.data.refresh_correlation_id;
+        const refreshClickedAtMs = parsedBody.data.refresh_clicked_at_ms;
+
+        logger.info('[voicebot.sessions] save_possible_tasks_received', {
+            session_id: sessionId,
+            refresh_mode: refreshMode,
+            refresh_correlation_id: refreshCorrelationId || null,
+            refresh_clicked_at_ms: typeof refreshClickedAtMs === 'number' && Number.isFinite(refreshClickedAtMs) ? refreshClickedAtMs : null,
+            task_items_count: taskItems.length,
+        });
 
         for (const [taskIndex, task] of taskItems.entries()) {
             const resolvedRowLocator = resolveSessionTaskRowLocator(task);
@@ -4603,12 +4636,31 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
             refreshMode,
         });
 
-        emitSessionTaskflowRefreshHint({
+        logger.info('[voicebot.sessions] save_possible_tasks_persisted', {
+            session_id: sessionId,
+            refresh_mode: refreshMode,
+            refresh_correlation_id: refreshCorrelationId || null,
+            refresh_clicked_at_ms: typeof refreshClickedAtMs === 'number' && Number.isFinite(refreshClickedAtMs) ? refreshClickedAtMs : null,
+            persisted_items_count: persisted.items.length,
+            removed_row_ids_count: persisted.removedRowIds.length,
+            e2e_from_click_ms: typeof refreshClickedAtMs === 'number' && Number.isFinite(refreshClickedAtMs)
+                ? Date.now() - refreshClickedAtMs
+                : null,
+        });
+
+        const refreshHintArgs: Parameters<typeof emitSessionTaskflowRefreshHint>[0] = {
             req,
             sessionId,
             reason: 'save_possible_tasks',
             possibleTasks: true,
-        });
+        };
+        if (refreshCorrelationId) {
+            refreshHintArgs.correlationId = refreshCorrelationId;
+        }
+        if (typeof refreshClickedAtMs === 'number' && Number.isFinite(refreshClickedAtMs)) {
+            refreshHintArgs.clickedAtMs = refreshClickedAtMs;
+        }
+        emitSessionTaskflowRefreshHint(refreshHintArgs);
 
         return res.status(200).json({
             success: true,

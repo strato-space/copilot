@@ -6,12 +6,14 @@
 - **10:57** The page could briefly flash a misleading `Задачи 0` badge before `session_tab_counts` returned the authoritative count.
 - **10:57** Live Mongo still contained current legacy task-status values from the spec elimination table (`Backlog`, `Plan / Approval`, `Plan / Performer`, etc.), plus `Ready` rows with no performer and `null`/missing `task_status` rows.
 - **10:57** Agent auth recovery still treated `agents/.codex/auth.json` sync and `fastagent.config.yaml` model selection as unrelated steps, even though `codexspark` is valid only for one specific account.
+- **22:02** Possible-task refresh telemetry could not be correlated end-to-end from the UI click to backend websocket hint delivery, so operators had no deterministic latency trace for `save_possible_tasks` refresh runs.
 
 ### FEATURE IMPLEMENTED
 - **10:57** Added a temporary `Unknown` task bucket so session-scoped Mongo rows never disappear from `Задачи`; the `Unknown` subtab is shown only when its count is non-zero.
 - **10:57** Hid the top-level `Задачи` count until live `session_tab_counts` resolves, removing the false `0` flash on initial render.
 - **10:57** Normalized the current Mongo `task_status` field onto the target lifecycle axis without rewriting any status history: legacy status values were migrated, `Ready` rows without performers were returned to `Draft`, and `null`/missing current statuses were normalized to `Draft`.
 - **10:57** Extended agent recovery so auth sync also enforces account-aware model fallback: the spark-enabled account gets `codexspark`, all other accounts get `codexplan`.
+- **22:02** Added correlation-aware possible-task refresh signaling: frontend now passes optional `refresh_correlation_id` / `refresh_clicked_at_ms`, and backend logs plus `session_update.taskflow_refresh` echo these fields for traceable latency diagnostics.
 
 ### CHANGES
 - **10:57** Updated `backend/src/api/routes/voicebot/sessions.ts`, `app/src/pages/voice/SessionPage.tsx`, and `app/src/components/crm/CRMKanban.tsx` so session counts emit `UNKNOWN`, `Unknown` renders only when present, session-scoped rows stay visible, and the top-level `Задачи` badge waits for real counts.
@@ -19,6 +21,7 @@
 - **10:57** Removed checked-in legacy task-status cleanup tooling from `backend/scripts/{voicebot-migrate-task-statuses,task-surface-normalize,voicebot-repair-softdeleted-materialized-tasks}.ts` and their helper/test files after the live cleanup wave completed.
 - **10:57** Applied live Mongo cleanup to the current `task_status` field only: migrated residual legacy labels onto the target axis, moved `91` `Ready` rows without performers back to `Draft`, and moved `4` `null`/missing current statuses to `Draft`.
 - **10:57** Updated `backend/src/services/voicebot/agentsRuntimeRecovery.ts` and focused recovery tests so `/root/.codex/auth.json -> agents/.codex/auth.json` sync also rewrites `agents/fastagent.config.yaml` based on `tokens.account_id`, forcing `codexspark` for account `d72d46e8-41f3-47c1-ba22-98c52b3f6448` and `codexplan` for all others.
+- **22:02** Updated `app/src/store/voiceBotStore.ts` to thread optional refresh telemetry (`refresh_correlation_id`, `refresh_clicked_at_ms`) through `createPossibleTasksForSession -> saveSessionPossibleTasks`; updated `backend/src/api/routes/voicebot/sessions.ts` Zod contracts, persistence logs, and `emitSessionTaskflowRefreshHint` payload/logging to include correlation and click timing fields.
 
 ## 2026-03-15
 ### PROBLEM SOLVED

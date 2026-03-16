@@ -342,6 +342,7 @@ Preferred engineering principles for this repo:
 - Canonical taskflow row locator priority is `row_id -> id -> task_id_from_ai`; `task_id_from_ai` is legacy fallback metadata, not the primary mutation identity.
 - Realtime refresh contract is fixed:
   - backend emits `session_update.taskflow_refresh` with per-list flags `possible_tasks/tasks/codex/summary`
+  - `save_possible_tasks` may include optional `refresh_correlation_id` and `refresh_clicked_at_ms`, and backend refresh hints must pass these fields through unchanged for end-to-end diagnostics
   - frontend consumes the hint without full-page reload
   - refresh tokens must increment additively so repeated hints remain concurrency-safe
 - `CREATE_TASKS` persistence in API/worker paths is strict canonical `id/name/description/priority/...`; runtime fallback for legacy human-title keys is disabled.
@@ -634,6 +635,10 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-16 22:02):
+  - Added correlation-aware possible-task refresh telemetry across frontend and backend: `createPossibleTasksForSession` now forwards optional `refresh_correlation_id` / `refresh_clicked_at_ms`, and `session_update.taskflow_refresh` includes the same fields for deterministic click-to-refresh latency tracing.
+  - Updated route-level logging in `POST /api/voicebot/save_possible_tasks` and the socket refresh emitter to log/emit correlation metadata without changing the existing taskflow mutation semantics.
+  - Validation passed: `cd app && npm run build`, `cd backend && npm run build`.
 - Close-session refresh (2026-03-15 22:03):
   - Landed the staged ontology operator bundle for `copilot-8wn1`: repo/backend operator commands now expose `sync:core`, `sync:enrich`, and `full:from-scratch`, while the ingest engine and rollout chain distinguish cleanup hygiene from historical backfill and skip session-derived projections during focused cleanup.
   - Added/accepted the checked-in performance artifact `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md` together with the new operator helpers `ontology/typedb/scripts/typedb-sync-chain.sh` and `ontology/typedb/scripts/typedb-full-from-scratch.sh`.

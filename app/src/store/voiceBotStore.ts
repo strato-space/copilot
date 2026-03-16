@@ -106,12 +106,20 @@ interface VoiceBotSessionCrudActionsSlice {
 interface VoiceBotSessionProcessingActionsSlice {
     sendSessionToCrm: (sessionId: string) => Promise<boolean>;
     sendSessionToCrmWithMcp: (sessionId: string) => Promise<void>;
-    createPossibleTasksForSession: (sessionId: string) => Promise<{ requestId: string; tasks: VoicePossibleTask[] }>;
+    createPossibleTasksForSession: (
+        sessionId: string,
+        options?: { refreshCorrelationId?: string; refreshClickedAtMs?: number }
+    ) => Promise<{ requestId: string; tasks: VoicePossibleTask[] }>;
     fetchSessionPossibleTasks: (sessionId: string, options?: { silent?: boolean }) => Promise<VoicePossibleTask[]>;
     saveSessionPossibleTasks: (
         sessionId: string,
         tasks: Array<Record<string, unknown>> | VoicePossibleTask[],
-        options?: { silent?: boolean; refreshMode?: 'full_recompute' | 'incremental_refresh' }
+        options?: {
+            silent?: boolean;
+            refreshMode?: 'full_recompute' | 'incremental_refresh';
+            refreshCorrelationId?: string;
+            refreshClickedAtMs?: number;
+        }
     ) => Promise<VoicePossibleTask[]>;
     triggerSessionReadyToSummarize: (sessionId: string) => Promise<Record<string, unknown>>;
     saveSessionSummary: (
@@ -1225,6 +1233,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                     session_id: normalizedSessionId,
                     tasks: normalizedTasks,
                     refresh_mode: options?.refreshMode ?? 'full_recompute',
+                    refresh_correlation_id: options?.refreshCorrelationId,
+                    refresh_clicked_at_ms: options?.refreshClickedAtMs,
                 },
                 Boolean(options?.silent)
             );
@@ -1251,7 +1261,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         return canonicalTasks;
     },
 
-    createPossibleTasksForSession: async (sessionId) => {
+    createPossibleTasksForSession: async (sessionId, options) => {
         const normalizedSessionId = String(sessionId || '').trim();
         if (!normalizedSessionId) {
             throw new Error('session_id is required');
@@ -1300,6 +1310,12 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         if (!result || result.status !== 'complete') {
             throw new Error(result?.error ?? 'Не удалось завершить обработку');
         }
+        console.info('[voice.tasks] mcp_completed', {
+            session_id: normalizedSessionId,
+            correlation_id: options?.refreshCorrelationId || null,
+            clicked_at_ms: options?.refreshClickedAtMs || null,
+            request_id: requestId,
+        });
 
         const final = result.result as { isError?: boolean; content?: Array<{ text?: string }>; error?: string } | undefined;
         if (final?.isError) {
@@ -1341,6 +1357,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         const savedTasks = await get().saveSessionPossibleTasks(normalizedSessionId, tasks, {
             silent: true,
             refreshMode: 'incremental_refresh',
+            ...(options?.refreshCorrelationId ? { refreshCorrelationId: options.refreshCorrelationId } : {}),
+            ...(typeof options?.refreshClickedAtMs === 'number' ? { refreshClickedAtMs: options.refreshClickedAtMs } : {}),
         });
         return {
             requestId,
