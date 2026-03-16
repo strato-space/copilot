@@ -96,6 +96,7 @@ describe('Voicebot session_tab_counts route', () => {
                 { task_status: TASK_STATUSES.REVIEW_10 },
                 { task_status: TASK_STATUSES.REVIEW_10 },
                 { task_status: TASK_STATUSES.REVIEW_10 },
+                { task_status: 'Unexpected status' },
               ],
             })),
           };
@@ -130,11 +131,12 @@ describe('Voicebot session_tab_counts route', () => {
     expect(response.body).toEqual({
       success: true,
       session_id: sessionId.toHexString(),
-      tasks_count: 5,
+      tasks_count: 6,
       codex_count: 3,
       status_counts: [
         { status: 'DRAFT_10', status_key: 'DRAFT_10', label: 'Draft', count: 2 },
         { status: 'REVIEW_10', status_key: 'REVIEW_10', label: 'Review', count: 3 },
+        { status: 'UNKNOWN', status_key: 'UNKNOWN', label: 'Unknown', count: 1 },
       ],
     });
 

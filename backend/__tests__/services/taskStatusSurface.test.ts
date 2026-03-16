@@ -23,26 +23,20 @@ describe('taskStatusSurface', () => {
     expect(normalizeTargetTaskStatusKey({ task_status: TASK_STATUSES.REVIEW_10 })).toBe('REVIEW_10');
     expect(normalizeTargetTaskStatusKey({ task_status: TASK_STATUSES.DONE_10 })).toBe('DONE_10');
     expect(normalizeTargetTaskStatusKey({ task_status: TASK_STATUSES.ARCHIVE })).toBe('ARCHIVE');
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Legacy / Backlog' })).toBeNull();
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Plan / Approval' })).toBeNull();
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Backlog' })).toBeNull();
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Progress 50' })).toBeNull();
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Review / Implement' })).toBeNull();
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Upload / Delivery' })).toBeNull();
-    expect(normalizeTargetTaskStatusKey({ task_status: 'PostWork' })).toBeNull();
+    expect(normalizeTargetTaskStatusKey({ task_status: 'Unexpected status' })).toBeNull();
+    expect(normalizeTargetTaskStatusKey({ task_status: 'Legacy custom status' })).toBeNull();
   });
 
-  it('treats periodic work as recurrence metadata but does not map it into the active lifecycle axis', () => {
-    expect(resolveTaskRecurrenceMode({ task_status: 'Periodic' })).toBe(TASK_RECURRENCE_MODES.PERIODIC);
+  it('treats recurrence only as explicit recurrence metadata', () => {
+    expect(resolveTaskRecurrenceMode({ task_status: 'Unexpected status' })).toBeNull();
     expect(resolveTaskRecurrenceMode({ task_status: TASK_STATUSES.READY_10, recurrence_mode: TASK_RECURRENCE_MODES.PERIODIC })).toBe(
       TASK_RECURRENCE_MODES.PERIODIC
     );
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Periodic' })).toBeNull();
     expect(normalizeTargetTaskStatusKey({ task_status: TASK_STATUSES.READY_10, recurrence_mode: TASK_RECURRENCE_MODES.PERIODIC })).toBe('READY_10');
   });
 
-  it('keeps legacy rejected rows out of active work by excluding non-canonical reject-like labels from the target lifecycle axis', () => {
-    expect(normalizeTargetTaskStatusKey({ task_status: 'Rejected' })).toBeNull();
+  it('keeps unknown rows out of active work by excluding non-canonical labels from the target lifecycle axis', () => {
+    expect(normalizeTargetTaskStatusKey({ task_status: 'Out-of-band status' })).toBeNull();
   });
 
   it('returns target labels for normalized lifecycle keys', () => {

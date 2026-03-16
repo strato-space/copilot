@@ -198,9 +198,14 @@ Preferred engineering principles for this repo:
 - View in browser: `https://copilot-dev.stratospace.fun` (nginx serves `app/dist`).
 - `VITE_AGENTS_API_URL` must use plain HTTP for `:8722` (fast-agent runs without TLS); using `https://` can fail with `ERR_SSL_PACKET_LENGTH_TOO_LONG`.
 - Preferred target is loopback `http://127.0.0.1:8722` (bind `copilot-agent-services` to localhost only; do not expose `:8722` publicly).
-- Agents PM2 runtime is canonical via `uv run --directory /home/strato-space/copilot/agents fast-agent serve ... --model codex`; `create_tasks` card must not hardcode model override.
+- Agents PM2 runtime is canonical via `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...`; model selection is config-driven through `agents/fastagent.config.yaml`, and `create_tasks` card must not hardcode model override.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend quota self-heal for `create_tasks` is canonical: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once via `agents/pm2-agents.sh`, then retries the MCP call once.
+- Auth sync and model sync are coupled:
+  - source auth account lives in `/root/.codex/auth.json`
+  - runtime auth copy lives in `agents/.codex/auth.json`
+  - `tokens.account_id = d72d46e8-41f3-47c1-ba22-98c52b3f6448` forces `default_model: codexspark`
+  - every other account forces `default_model: codexplan`
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
@@ -363,7 +368,10 @@ Preferred engineering principles for this repo:
 - Voice session header top action row owns both `Скачать Транскрипцию` and `Загрузить аудио`; `SessionStatusWidget` is status-only and must not keep a second upload control.
 - `Tasks` and `Summarize` are session/header actions and belong in the right header action cluster before `Запустить произвольный промпт`; they are not recording controls and should not live inside the left `New / Rec / Cut / Pause / Done` strip.
 - Voice and OperOps task displays should render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) through the shared display-layer mapping rather than exposing raw stored labels such as `Progress 10` or `Review / Ready`.
-- Historical Voice status normalization is handled by `backend/scripts/voicebot-migrate-task-statuses.ts` (`npm run voice:migrate-task-statuses:{dry,apply}`), with optional `--session <session_id>` scoping for production cleanup.
+- Historical Voice/CRM legacy status values from the task-surface spec have already been cleaned out of the live `task_status` field in Mongo; the checked-in migration helpers were removed after the cleanup wave completed.
+- If a session-scoped non-codex task row somehow lands outside the target task-status axis again, backend must expose it through a temporary `Unknown` bucket instead of dropping it from `Задачи`.
+- The `Unknown` subtab is visible only when `count > 0`; otherwise the fixed lifecycle axis remains `Draft / Ready / In Progress / Review / Done / Archive`.
+- The top-level `Задачи` badge must not render a placeholder `0` before `session_tab_counts` resolves.
 - Voice/OperOps accepted-task filtering must match `source_data.voice_sessions[].session_id` in addition to canonical session URL refs in `source_ref` / `external_ref`; otherwise repaired or migrated rows can disappear from session-scoped task views.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.

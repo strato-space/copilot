@@ -7,7 +7,8 @@ describe('SessionPage OperOps tasks tab contract', () => {
 
   it("renders unified 'Задачи' tab with status-driven content for the current session", () => {
     expect(source).toContain("key: 'operops_tasks'");
-    expect(source).toContain("label: renderTabLabel('Задачи', sessionTasksTotalCount, { processing: hasPossibleTasksPending })");
+    expect(source).toContain("label: renderTabLabel('Задачи', sessionTasksTotalCount, {");
+    expect(source).toContain("showCount: sessionOperOpsTasksCount !== null");
     expect(source).toContain('const isDraftSessionTaskSubTab = activeSessionTaskStatuses.includes(\'DRAFT_10\');');
     expect(source).toContain('<PossibleTasks />');
     expect(source).toContain('<CRMKanban');
@@ -24,11 +25,14 @@ describe('SessionPage OperOps tasks tab contract', () => {
 
     expect(idxTasks).toBeGreaterThanOrEqual(0);
     expect(idxScreenshort).toBeGreaterThan(idxTasks);
-    expect(source).toContain('const TARGET_VOICE_TASK_SUBTAB_KEYS = [...TARGET_TASK_STATUS_KEYS] as TargetVoiceTaskSubtabKey[];');
-    expect(source).toContain('const isTargetVoiceTaskSubtabKey = (value: TaskStatusKey): value is TargetVoiceTaskSubtabKey =>');
+    expect(source).toContain("const VOICE_SESSION_UNKNOWN_STATUS_KEY = 'UNKNOWN' as const;");
+    expect(source).toContain('const VOICE_SESSION_TASK_SUBTAB_KEYS = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSION_UNKNOWN_STATUS_KEY] as const;');
+    expect(source).toContain("const VOICE_SESSION_UNKNOWN_STATUS_LABEL = 'Unknown' as const;");
     expect(source).toContain('const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {');
-    expect(source).toContain('TARGET_VOICE_TASK_SUBTAB_KEYS.map((statusKey) => ({');
-    expect(source).toContain("label: TARGET_TASK_STATUS_LABELS[statusKey]");
+    expect(source).toContain('return VOICE_SESSION_TASK_SUBTAB_KEYS');
+    expect(source).toContain('.map((statusKey) => ({');
+    expect(source).toContain("label: statusKey === VOICE_SESSION_UNKNOWN_STATUS_KEY ? VOICE_SESSION_UNKNOWN_STATUS_LABEL : TARGET_TASK_STATUS_LABELS[statusKey]");
+    expect(source).toContain(".filter((entry) => entry.key !== VOICE_SESSION_UNKNOWN_STATUS_KEY || entry.count > 0)");
     expect(source).toContain("label: renderTabLabel(entry.label, entry.count)");
     expect(source).toContain('const sessionTasksTotalCount = useMemo(');
     expect(source).toContain('task_status: activeSessionTaskStatuses');

@@ -5,7 +5,7 @@ const callToolMock = jest.fn();
 const closeSessionMock = jest.fn();
 const quotaRecoveryMock = jest.fn();
 
-jest.mock('../../../src/services/mcp/proxyClient.js', () => ({
+jest.unstable_mockModule('../../../src/services/mcp/proxyClient.js', () => ({
   MCPProxyClient: jest.fn().mockImplementation(() => ({
     initializeSession: initializeSessionMock,
     callTool: callToolMock,
@@ -13,7 +13,7 @@ jest.mock('../../../src/services/mcp/proxyClient.js', () => ({
   })),
 }));
 
-jest.mock('../../../src/services/voicebot/agentsRuntimeRecovery.js', () => ({
+jest.unstable_mockModule('../../../src/services/voicebot/agentsRuntimeRecovery.js', () => ({
   attemptAgentsQuotaRecovery: quotaRecoveryMock,
   isAgentsQuotaFailure: (value: unknown) => {
     const text = value instanceof Error ? value.message : String(value || '');
@@ -21,7 +21,7 @@ jest.mock('../../../src/services/voicebot/agentsRuntimeRecovery.js', () => ({
   },
 }));
 
-import { runCreateTasksAgent } from '../../../src/services/voicebot/createTasksAgent.js';
+const { runCreateTasksAgent } = await import('../../../src/services/voicebot/createTasksAgent.js');
 
 describe('runCreateTasksAgent quota fallback', () => {
   beforeEach(() => {
@@ -113,4 +113,3 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(callToolMock).toHaveBeenCalledTimes(1);
   });
 });
-

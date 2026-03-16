@@ -244,13 +244,18 @@ const CRMKanban = (props: CRMKanbanProps) => {
         return projectDataName || getProjectByValue(record.project_id)?.name || getProjectByValue(record.project)?.name || record.project || '—';
     }, [getProjectByValue]);
 
+    const effectiveStatusFilter = props.filter.task_status ?? statusFilter;
+
+    const requestedStatusFilter = useMemo(() => {
+        const nextStatusFilter = effectiveStatusFilter;
+        return nextStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN') ? [] : nextStatusFilter;
+    }, [effectiveStatusFilter]);
+
     useEffect(() => {
         if (isAuth) {
-            if (tickets.length < 1) {
-                fetchTickets(props.filter.task_status ?? []);
-            }
+            void fetchTickets(requestedStatusFilter);
         }
-    }, [isAuth, tickets.length, props.filter.task_status, fetchTickets]);
+    }, [isAuth, requestedStatusFilter, fetchTickets]);
 
     const lastRefreshTokenRef = useRef<number>(props.refreshToken ?? 0);
 
@@ -259,8 +264,8 @@ const CRMKanban = (props: CRMKanbanProps) => {
         const nextRefreshToken = props.refreshToken ?? 0;
         if (nextRefreshToken <= 0 || nextRefreshToken === lastRefreshTokenRef.current) return;
         lastRefreshTokenRef.current = nextRefreshToken;
-        void fetchTickets(props.filter.task_status ?? []);
-    }, [isAuth, props.refreshToken, props.filter.task_status, fetchTickets]);
+        void fetchTickets(requestedStatusFilter);
+    }, [isAuth, props.refreshToken, requestedStatusFilter, fetchTickets]);
 
     useEffect(() => {
         const nextStatusFilter = props.filter.task_status ?? [];
@@ -1310,10 +1315,17 @@ const CRMKanban = (props: CRMKanbanProps) => {
         recalulateStatusesStat();
     }, [tickets, recalulateStatusesStat]);
 
-    const selectedTargetStatusKeys = statusFilter
+    const hasUnknownStatusFilter = effectiveStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN');
+    const selectedTargetStatusKeys = effectiveStatusFilter
+        .filter((status) => String(status || '').trim() !== 'UNKNOWN')
         .map((status) => normalizeTargetTaskStatusKey(status))
         .filter((status): status is NonNullable<typeof status> => Boolean(status));
-    let filteredTickets = tickets.filter((record) => matchesTargetTaskStatusKeys(record.task_status, selectedTargetStatusKeys));
+    let filteredTickets = tickets.filter((record) => {
+        const matchesKnownStatus = matchesTargetTaskStatusKeys(record.task_status, selectedTargetStatusKeys);
+        if (matchesKnownStatus) return true;
+        if (!hasUnknownStatusFilter) return false;
+        return normalizeTargetTaskStatusKey(record.task_status) === null;
+    });
     if (projectFilter && projectFilter.length > 0) {
         filteredTickets = filteredTickets.filter((record) =>
             projectFilter.includes(getProjectDisplayName(record))

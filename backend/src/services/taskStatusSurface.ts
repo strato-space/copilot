@@ -80,9 +80,7 @@ export const normalizeTaskRecurrenceMode = (value: unknown): TaskRecurrenceMode 
 
 export const resolveTaskRecurrenceMode = (task: { task_status?: unknown; recurrence_mode?: unknown }): TaskRecurrenceMode | null => {
   const explicitMode = normalizeTaskRecurrenceMode(task.recurrence_mode);
-  if (explicitMode) return explicitMode;
-  if (toText(task.task_status).toLowerCase() === 'periodic') return TASK_RECURRENCE_MODES.PERIODIC;
-  return null;
+  return explicitMode;
 };
 
 export const normalizeTargetTaskStatusKey = ({

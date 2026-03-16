@@ -218,10 +218,13 @@ const sessionTabCountsInputSchema = z.object({
     session_id: z.string().trim().min(1),
 });
 
+const VOICE_SESSION_UNKNOWN_STATUS_KEY = 'UNKNOWN' as const;
+const VOICE_SESSION_TASK_STATUS_KEYS = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSION_UNKNOWN_STATUS_KEY] as const;
+
 const sessionTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
     bucket: z.enum(['draft', 'tasks', 'codex']),
-    status_keys: z.array(z.enum(TARGET_TASK_STATUS_KEYS as unknown as [TargetTaskStatusKey, ...TargetTaskStatusKey[]])).optional(),
+    status_keys: z.array(z.enum(VOICE_SESSION_TASK_STATUS_KEYS)).optional(),
 });
 
 const savePossibleTasksInputSchema = z
@@ -4763,6 +4766,18 @@ const CANONICAL_TASK_STATUS_ORDER = [...TARGET_TASK_STATUS_KEYS];
 const CANONICAL_TASK_STATUS_ORDER_INDEX = new Map(
   CANONICAL_TASK_STATUS_ORDER.map((status, index) => [status, index])
 );
+const VOICE_SESSION_TASK_STATUS_ORDER = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSION_UNKNOWN_STATUS_KEY] as const;
+const VOICE_SESSION_TASK_STATUS_ORDER_INDEX = new Map(
+  VOICE_SESSION_TASK_STATUS_ORDER.map((status, index) => [status, index])
+);
+
+const normalizeVoiceSessionTaskBucketKey = (taskStatus: unknown): TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY => {
+    const statusKey = resolveTaskStatusKey(taskStatus);
+    if (statusKey && TARGET_TASK_STATUS_KEYS.includes(statusKey as TargetTaskStatusKey)) {
+        return statusKey as TargetTaskStatusKey;
+    }
+    return VOICE_SESSION_UNKNOWN_STATUS_KEY;
+};
 
 const normalizeSessionScopedSourceRefs = (values: unknown[]): string[] => {
     const normalizeValue = (value: unknown): string => toTaskText(value).replace(/\/+$/, '');
@@ -4846,15 +4861,19 @@ const listSessionScopedAcceptedTasks = async ({
     db: Db;
     sessionId: string;
     session: Record<string, unknown>;
-    statusKeys: readonly TargetTaskStatusKey[];
+    statusKeys: readonly (TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY)[];
 }): Promise<Array<Record<string, unknown>>> => {
     const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
-    const statusValues = statusKeys.map((statusKey) => TASK_STATUSES[statusKey]);
-    const match = mergeWithRuntimeFilter(
+    const includeUnknown = statusKeys.includes(VOICE_SESSION_UNKNOWN_STATUS_KEY);
+    const knownStatusKeys = statusKeys.filter(
+        (statusKey): statusKey is TargetTaskStatusKey => statusKey !== VOICE_SESSION_UNKNOWN_STATUS_KEY
+    );
+    const statusValues = knownStatusKeys.map((statusKey) => TASK_STATUSES[statusKey]);
+
+    const baseMatch = mergeWithRuntimeFilter(
         {
             is_deleted: { $ne: true },
             codex_task: { $ne: true },
-            task_status: { $in: statusValues },
             ...sessionScopedTaskMatch,
         },
         {
@@ -4864,7 +4883,16 @@ const listSessionScopedAcceptedTasks = async ({
         }
     );
 
-    return await db.collection(COLLECTIONS.TASKS).find(match).toArray() as Array<Record<string, unknown>>;
+    if (!includeUnknown) {
+        return await db.collection(COLLECTIONS.TASKS).find({
+            ...baseMatch,
+            task_status: { $in: statusValues },
+        }).toArray() as Array<Record<string, unknown>>;
+    }
+
+    const items = await db.collection(COLLECTIONS.TASKS).find(baseMatch).toArray() as Array<Record<string, unknown>>;
+    const selectedStatusSet = new Set<string>(statusKeys);
+    return items.filter((task) => selectedStatusSet.has(normalizeVoiceSessionTaskBucketKey(task.task_status)));
 };
 
 router.post('/session_tab_counts', async (req: Request, res: Response) => {
@@ -4930,25 +4958,22 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         ]);
 
         const groupedStatusCounts = sessionTasks.reduce((acc, task) => {
-            const statusKey = resolveTaskStatusKey(task.task_status);
-            if (!statusKey) return acc;
-            if (!TARGET_TASK_STATUS_KEYS.includes(statusKey as TargetTaskStatusKey)) return acc;
-            const targetStatusKey = statusKey as TargetTaskStatusKey;
-            acc.set(targetStatusKey, (acc.get(targetStatusKey) ?? 0) + 1);
+            const statusKey = normalizeVoiceSessionTaskBucketKey(task.task_status);
+            acc.set(statusKey, (acc.get(statusKey) ?? 0) + 1);
             return acc;
-        }, new Map<TargetTaskStatusKey, number>());
+        }, new Map<TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY, number>());
 
         const status_counts = Array.from(groupedStatusCounts.entries())
             .map(([statusKey, count]) => ({
                 status: statusKey,
                 status_key: statusKey,
-                label: getTargetTaskStatusLabel(statusKey),
+                label: statusKey === VOICE_SESSION_UNKNOWN_STATUS_KEY ? 'Unknown' : getTargetTaskStatusLabel(statusKey),
                 count,
             }))
             .filter((entry) => entry.count > 0)
             .sort((left, right) => {
-                const leftIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(left.status_key);
-                const rightIndex = CANONICAL_TASK_STATUS_ORDER_INDEX.get(right.status_key);
+                const leftIndex = VOICE_SESSION_TASK_STATUS_ORDER_INDEX.get(left.status_key);
+                const rightIndex = VOICE_SESSION_TASK_STATUS_ORDER_INDEX.get(right.status_key);
                 if (leftIndex != null && rightIndex != null) return leftIndex - rightIndex;
                 if (leftIndex != null) return -1;
                 if (rightIndex != null) return 1;
@@ -5040,7 +5065,7 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
 
         const acceptedStatusKeys = (parsedBody.data.status_keys?.length
             ? parsedBody.data.status_keys
-            : TARGET_TASK_STATUS_KEYS.filter((statusKey) => statusKey !== 'DRAFT_10')) as readonly TargetTaskStatusKey[];
+            : [...TARGET_TASK_STATUS_KEYS.filter((statusKey) => statusKey !== 'DRAFT_10'), VOICE_SESSION_UNKNOWN_STATUS_KEY]) as readonly (TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY)[];
 
         const items = await listSessionScopedAcceptedTasks({
             db,

@@ -542,7 +542,7 @@ const CRMPage = () => {
         return date.isValid() ? date.format('DD.MM.YYYY HH:mm') : '—';
     };
 
-    const voiceBacklogColumns: TableColumnType<Ticket>[] = [
+    const voiceSessionTaskColumns: TableColumnType<Ticket>[] = [
         {
             title: 'Задача',
             key: 'task',

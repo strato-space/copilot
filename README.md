@@ -130,9 +130,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Repaired materialized rows can be restored with:
   - `cd backend && npm run voice:repair:softdeleted-materialized:dry -- --session <session_id>`
   - `cd backend && npm run voice:repair:softdeleted-materialized:apply -- --session <session_id>`
-- Historical Voice status normalization can be migrated with:
-  - `cd backend && npm run voice:migrate-task-statuses:dry [-- --session <session_id>]`
-  - `cd backend && npm run voice:migrate-task-statuses:apply [-- --session <session_id>]`
+- Legacy Voice/CRM status cleanup has now been applied directly in Mongo for the current status field only; the checked-in one-off migration helpers were removed after the live cleanup wave completed.
 - Voice/OperOps session task matching must also honor `source_data.voice_sessions[].session_id`, not only canonical session URLs in `source_ref` / `external_ref`, so accepted tasks remain visible after status migration and repair.
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
@@ -287,7 +285,12 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend `create_tasks` quota recovery is now self-healed server-side: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, then retries the MCP call once.
 - The offline session-title utility `backend/scripts/voicebot-generate-session-titles.ts` uses the same quota-recovery rule and therefore avoids no-op agent restarts when the auth file is already up to date.
-- `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml` and is currently `codexplan` unless CLI/PM2 overrides it.
+- `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml`.
+- Auth sync and model sync are now coupled:
+  - source of truth: `/root/.codex/auth.json`
+  - runtime copy: `agents/.codex/auth.json`
+  - if `tokens.account_id == d72d46e8-41f3-47c1-ba22-98c52b3f6448`, set `default_model: codexspark`
+  - otherwise set `default_model: codexplan`
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
@@ -310,6 +313,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `create_tasks` (`agents/agent-cards/create_tasks.md`)
 - Historical web-upload audio recovery note: when old `source_type=web` voice messages still point to missing relative `uploads/audio/sessions/<session_id>/<file>.webm` files, first check `/home/strato-space/voicebot/uploads/audio/sessions/<session_id>/` on `p2` before declaring the source irrecoverable.
 - Voice session header action ownership is explicit: `Tasks` and `Summarize` belong to the right header action cluster before the custom-prompt action, not to the left recording-control strip.
+- If session-scoped Mongo task rows still fall outside the target task-status axis, they surface in a temporary `Unknown` subtab instead of disappearing; that subtab is rendered only when its count is greater than `0`.
+- The top-level `Задачи` badge must wait for live `session_tab_counts` before rendering a count, so the page does not flash a misleading `0` during initial load.
 
 ### Ontology rollout supervision
 - Canonical operator commands now include:

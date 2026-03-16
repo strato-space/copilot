@@ -56,14 +56,18 @@ type VoiceSessionTaskTab = {
     key: string;
     label: string;
     count: number;
-    taskStatuses: TaskStatusKey[];
+    taskStatuses: string[];
 };
 
 type TargetVoiceTaskSubtabKey = (typeof TARGET_TASK_STATUS_KEYS)[number];
+type VoiceSessionTaskSubtabKey = TargetVoiceTaskSubtabKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY;
 
 const TARGET_VOICE_TASK_SUBTAB_KEYS = [...TARGET_TASK_STATUS_KEYS] as TargetVoiceTaskSubtabKey[];
-const isTargetVoiceTaskSubtabKey = (value: TaskStatusKey): value is TargetVoiceTaskSubtabKey =>
-    TARGET_VOICE_TASK_SUBTAB_KEYS.includes(value as TargetVoiceTaskSubtabKey);
+const VOICE_SESSION_UNKNOWN_STATUS_KEY = 'UNKNOWN' as const;
+const VOICE_SESSION_TASK_SUBTAB_KEYS = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSION_UNKNOWN_STATUS_KEY] as const;
+const VOICE_SESSION_UNKNOWN_STATUS_LABEL = 'Unknown' as const;
+const isVoiceSessionTaskSubtabKey = (value: string): value is VoiceSessionTaskSubtabKey =>
+    (VOICE_SESSION_TASK_SUBTAB_KEYS as readonly string[]).includes(value);
 
 const TASK_STATUS_LABEL_TO_KEY: Record<string, TaskStatusKey> = Object.entries(TASK_STATUSES).reduce(
     (acc, [key, label]) => {
@@ -75,8 +79,9 @@ const TASK_STATUS_LABEL_TO_KEY: Record<string, TaskStatusKey> = Object.entries(T
 
 const isTaskStatusKey = (value: string): value is TaskStatusKey => value in TASK_STATUSES;
 
-const resolveSessionStatusKey = (rawStatus: string): TaskStatusKey | undefined => {
+const resolveSessionStatusKey = (rawStatus: string): VoiceSessionTaskSubtabKey | undefined => {
     if (!rawStatus) return undefined;
+    if (rawStatus === VOICE_SESSION_UNKNOWN_STATUS_KEY) return VOICE_SESSION_UNKNOWN_STATUS_KEY;
     if (isTaskStatusKey(rawStatus)) return rawStatus;
     return TASK_STATUS_LABEL_TO_KEY[rawStatus];
 };
@@ -149,7 +154,7 @@ export default function SessionPage() {
     const [sessionTasksSubTab, setSessionTasksSubTab] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [sessionOperOpsTasksCount, setSessionOperOpsTasksCount] = useState(0);
+    const [sessionOperOpsTasksCount, setSessionOperOpsTasksCount] = useState<number | null>(null);
     const [sessionTaskStatusCounts, setSessionTaskStatusCounts] = useState<VoiceSessionTaskStatusCount[]>([]);
     const [sessionCodexCount, setSessionCodexCount] = useState(0);
 
@@ -255,26 +260,27 @@ export default function SessionPage() {
         [sessionId, voiceBotSession]
     );
     const sessionTaskCountByStatus = useMemo(() => {
-        const counts = new Map<TargetVoiceTaskSubtabKey, number>();
+        const counts = new Map<VoiceSessionTaskSubtabKey, number>();
         for (const entry of sessionTaskStatusCounts) {
             const resolvedKey = resolveSessionStatusKey(entry.status);
             if (!resolvedKey) continue;
-            if (!isTargetVoiceTaskSubtabKey(resolvedKey)) continue;
             counts.set(resolvedKey, entry.count);
         }
         return counts;
     }, [sessionTaskStatusCounts]);
     const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {
-        return TARGET_VOICE_TASK_SUBTAB_KEYS.map((statusKey) => ({
-            key: statusKey,
-            label: TARGET_TASK_STATUS_LABELS[statusKey],
-            count: sessionTaskCountByStatus.get(statusKey) ?? 0,
-            taskStatuses: [statusKey],
-        }));
+        return VOICE_SESSION_TASK_SUBTAB_KEYS
+            .map((statusKey) => ({
+                key: statusKey,
+                label: statusKey === VOICE_SESSION_UNKNOWN_STATUS_KEY ? VOICE_SESSION_UNKNOWN_STATUS_LABEL : TARGET_TASK_STATUS_LABELS[statusKey],
+                count: sessionTaskCountByStatus.get(statusKey) ?? 0,
+                taskStatuses: [statusKey],
+            }))
+            .filter((entry) => entry.key !== VOICE_SESSION_UNKNOWN_STATUS_KEY || entry.count > 0);
     }, [sessionTaskCountByStatus]);
     const sessionTasksTotalCount = useMemo(
-        () => sessionTaskTabs.reduce((sum, entry) => sum + entry.count, 0),
-        [sessionTaskTabs]
+        () => (sessionOperOpsTasksCount === null ? 0 : sessionTaskTabs.reduce((sum, entry) => sum + entry.count, 0)),
+        [sessionOperOpsTasksCount, sessionTaskTabs]
     );
     const activeSessionTaskStatuses = useMemo(
         () => sessionTaskTabs.find((entry) => entry.key === sessionTasksSubTab)?.taskStatuses ?? [],
@@ -307,7 +313,7 @@ export default function SessionPage() {
     useEffect(() => {
         let disposed = false;
         if (!sessionId) {
-            setSessionOperOpsTasksCount(0);
+            setSessionOperOpsTasksCount(null);
             setSessionTaskStatusCounts([]);
             setSessionCodexCount(0);
             return;
@@ -345,7 +351,7 @@ export default function SessionPage() {
                 if (disposed) return;
                 console.error('Failed to refresh voice tab counters:', error);
                 setSessionCodexCount(0);
-                setSessionOperOpsTasksCount(0);
+                setSessionOperOpsTasksCount(null);
                 setSessionTaskStatusCounts([]);
             }
         };
@@ -392,7 +398,10 @@ export default function SessionPage() {
         },
         {
             key: 'operops_tasks',
-            label: renderTabLabel('Задачи', sessionTasksTotalCount, { processing: hasPossibleTasksPending }),
+            label: renderTabLabel('Задачи', sessionTasksTotalCount, {
+                processing: hasPossibleTasksPending,
+                showCount: sessionOperOpsTasksCount !== null,
+            }),
             children: (
                 <div className="flex flex-col gap-3">
                     <>

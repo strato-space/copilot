@@ -10,10 +10,7 @@ describe('task status surface label mapping', () => {
     expect(getTaskStatusDisplayLabel('Review / Ready')).toBe('Review');
     expect(getTaskStatusDisplayLabel('Done')).toBe('Done');
     expect(getTaskStatusDisplayLabel('Archive')).toBe('Archive');
-    expect(getTaskStatusDisplayLabel('Backlog')).toBe('Backlog');
-    expect(getTaskStatusDisplayLabel('Progress 25')).toBe('Progress 25');
-    expect(getTaskStatusDisplayLabel('Review / Implement')).toBe('Review / Implement');
-    expect(getTaskStatusDisplayLabel('Upload / Deadline')).toBe('Upload / Deadline');
-    expect(getTaskStatusDisplayLabel('Complete')).toBe('Complete');
+    expect(getTaskStatusDisplayLabel('Unexpected status')).toBe('Unexpected status');
+    expect(getTaskStatusDisplayLabel('Unknown bucket')).toBe('Unknown bucket');
   });
 });

@@ -107,6 +107,9 @@ These runs were measured against the shared `str_opsportal_v1` database, so they
 | `20260315T161830Z` | `automation_voice_bot_messages` scanned milestone after core/derived attr split | `250 rows at elapsed_ms=121071` |
 | `20260315T163438Z` | `automation_voice_bot_messages` scanned milestone after attr split + derived-family delete/rebuild path | `5500 rows at elapsed_ms=933590` |
 | `20260315T165229Z` | `automation_tasks` core complete before repeated `STC2` retries exhausted | `4225 rows / 68417 ms` |
+| `20260315T161830Z` | `automation_voice_bot_messages` core milestone after attr split | `250 rows at elapsed_ms=121071` |
+| `20260315T163438Z` | `automation_voice_bot_messages` core milestone after attr split + append-only derived staging | `5500 rows at elapsed_ms=933590` |
+| `20260315T165229Z` | `automation_tasks` core complete after Mongo-side projection work | `4225 rows / 68417 ms` |
 
 Interpretation:
 
@@ -156,3 +159,22 @@ Current benchmark status:
 
 - isolated full-from-scratch benchmarking is now operationally unblocked at smoke level
 - one full no-limit rerun is still needed to replace the failed-at-`766.13s` figure with a clean final wall-clock
+
+### Attempt 4: long isolated rerun after duplicate-key fixes
+
+Bench DB: `str_opsportal_profile_bench_full_20260315`
+
+This rerun passed the earlier duplicate-key blockers and progressed far beyond the first failed attempt.
+
+| Observation | Value |
+| --- | --- |
+| `automation_tasks` full load complete | `4226 rows / 209649 ms` |
+| `automation_work_hours` full load complete | `4632 rows / 250720 ms` |
+| `automation_voice_bot_sessions` full load complete | `1997 rows / 182276 ms` |
+| `automation_voice_bot_messages` progress before manual stop | `2000 rows at elapsed_ms=1140930` |
+
+Interpretation:
+
+- the isolated full rerun is no longer blocked by immediate duplicate derived keys;
+- the current full wall-clock is now dominated by real collection volume, especially `automation_work_hours` and `automation_voice_bot_messages`;
+- a final uninterrupted no-limit rerun is still required if one canonical full wall-clock number is needed, but the benchmark is now operationally meaningful rather than broken on early key collisions.
