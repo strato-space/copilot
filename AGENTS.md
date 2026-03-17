@@ -201,6 +201,7 @@ Preferred engineering principles for this repo:
 - Agents PM2 runtime is canonical via `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...`; model selection is config-driven through `agents/fastagent.config.yaml`, and `create_tasks` card must not hardcode model override.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend quota self-heal for `create_tasks` is canonical: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once via `agents/pm2-agents.sh`, then retries the MCP call once.
+- Backend quota self-heal retry must wait for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart; immediate retries before readiness are a known `ECONNREFUSED` race.
 - Auth sync and model sync are coupled:
   - source auth account lives in `/root/.codex/auth.json`
   - runtime auth copy lives in `agents/.codex/auth.json`

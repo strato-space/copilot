@@ -285,6 +285,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...` and inherits the model from `agents/fastagent.config.yaml`.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend `create_tasks` quota recovery is now self-healed server-side: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, then retries the MCP call once.
+- Backend `create_tasks` quota recovery retry waits for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart to avoid immediate `ECONNREFUSED` races.
 - The offline session-title utility `backend/scripts/voicebot-generate-session-titles.ts` uses the same quota-recovery rule and therefore avoids no-op agent restarts when the auth file is already up to date.
 - `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml`.
 - Runtime key drift baseline for OpenAI-backed services is tracked in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (live PM2 `OPENAI_API_KEY` mask, `backend/.env.production` value, and agents Codex OAuth account/model mode).

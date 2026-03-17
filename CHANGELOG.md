@@ -3,16 +3,19 @@
 ## 2026-03-17
 ### PROBLEM SOLVED
 - **11:50** The Voice session-page `Tasks` button still bypassed backend quota recovery because it called MCP `create_tasks` directly from the browser; when the active agents runtime stayed pinned to a quota-exhausted Codex account, operators could keep hitting `usage_limit_reached` without triggering the auth/model switch logic that already existed server-side.
+- **12:13** Backend `create_tasks` quota recovery could restart `copilot-agent-services`, but the immediate retry path could still fail with `ECONNREFUSED` while local MCP startup was still in progress.
 - **22:01** OpenAI runtime credential routing was operationally fragmented across PM2 process env, `backend/.env.production`, and agents Codex OAuth state, so incident response could not rely on one canonical audit snapshot.
 
 ### FEATURE IMPLEMENTED
 - **11:50** Routed the session-page `Tasks` button through a backend generation path so live task refresh now inherits the same `runCreateTasksAgent(...)` quota recovery, auth sync, and model fallback rules as the server-side `create_tasks` flow.
+- **12:13** Added readiness-gated quota recovery: backend retries now wait for local agents MCP endpoint availability after restart before continuing the `create_tasks` retry branch.
 - **22:01** Added a single runtime-state memo plus repo-level guardrail links so operators can verify OpenAI key source drift and agents account/model mode in one place.
 
 ### CHANGES
 - **11:50** Added `POST /api/voicebot/generate_possible_tasks` in `backend/src/api/routes/voicebot/sessions.ts`; the route resolves session access, calls `runCreateTasksAgent({ sessionId, projectId })`, persists canonical draft rows through `persistPossibleTasksForSession(..., refreshMode='full_recompute')`, and emits the existing `session_update.taskflow_refresh` hint.
 - **11:50** Updated `app/src/store/voiceBotStore.ts` so `createPossibleTasksForSession` now calls the backend route and consumes canonical `items` from the response instead of performing browser-side MCP `create_tasks` execution and payload parsing.
 - **11:50** Added `backend/__tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts`, refreshed `backend/__tests__/voicebot/runtime/sessionUtilityRoutes.test.ts`, and updated `app/__tests__/voice/{possibleTasksSaveCanonicalItemsContract,meetingCardTasksButtonContract}.test.ts`; validation passed with targeted Jest plus `cd backend && npm run build` and `cd app && npm run build`.
+- **12:13** Updated `backend/src/services/voicebot/agentsRuntimeRecovery.ts` with post-restart MCP readiness polling, refreshed `backend/__tests__/services/voicebot/agentsRuntimeRecovery.test.ts`, and aligned runtime model state in `agents/fastagent.config.yaml` after account switch to `codexplan`.
 - **22:01** Added `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` with current runtime masks, registry alias mapping, and reproducible verification commands for PM2/env/auth state.
 - **22:01** Updated `AGENTS.md` and `README.md` to reference the runtime-state memo and register `agents/agent-cards/CompanyCreator.md` as the reserved company-creation card scaffold.
 
