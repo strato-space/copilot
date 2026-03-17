@@ -23,12 +23,20 @@ const {
 } = await import('../../../src/services/voicebot/agentsRuntimeRecovery.js');
 
 describe('attemptAgentsQuotaRecovery', () => {
+  const fetchMock = jest.fn();
+
   beforeEach(() => {
     readFileMock.mockReset();
     copyFileMock.mockReset();
     mkdirMock.mockReset();
     writeFileMock.mockReset();
     execFileMock.mockReset();
+    fetchMock.mockReset();
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      writable: true,
+      value: fetchMock,
+    });
     resetAgentsQuotaRecoveryStateForTests();
   });
 
@@ -61,6 +69,10 @@ describe('attemptAgentsQuotaRecovery', () => {
       cb(null, 'restarted', '');
       return {} as never;
     });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
 
     const recovered = await attemptAgentsQuotaRecovery({
       reason: 'status=429 usage_limit_reached',
@@ -84,6 +96,10 @@ describe('attemptAgentsQuotaRecovery', () => {
       cb(null, 'restarted', '');
       return {} as never;
     });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
 
     const recovered = await attemptAgentsQuotaRecovery({
       reason: 'manual-auth-sync',
@@ -97,5 +113,37 @@ describe('attemptAgentsQuotaRecovery', () => {
       'utf8'
     );
     expect(execFileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns false when agents restart completes but MCP readiness never comes back', async () => {
+    readFileMock
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'stale-account' } })))
+      .mockResolvedValueOnce(Buffer.from('default_model: codexplan\n'));
+    mkdirMock.mockResolvedValue(undefined);
+    copyFileMock.mockResolvedValue(undefined);
+    writeFileMock.mockResolvedValue(undefined);
+    execFileMock.mockImplementation((_file: string, _args: string[], _opts: Record<string, unknown>, cb: (error: Error | null, stdout?: string, stderr?: string) => void) => {
+      cb(null, 'restarted', '');
+      return {} as never;
+    });
+    fetchMock.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:8722'));
+
+    let tick = 300_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => {
+      tick += 10_000;
+      return tick;
+    });
+
+    const recovered = await attemptAgentsQuotaRecovery({
+      reason: 'status=429 usage_limit_reached',
+    });
+
+    nowSpy.mockRestore();
+
+    expect(recovered).toBe(false);
+    expect(copyFileMock).toHaveBeenCalledTimes(1);
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalled();
   });
 });

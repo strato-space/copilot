@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { getLogger } from '../../utils/logger.js';
 
@@ -13,6 +14,9 @@ const FASTAGENT_CONFIG_PATH = '/home/strato-space/copilot/agents/fastagent.confi
 const AGENTS_DIR = '/home/strato-space/copilot/agents';
 const AGENTS_PM2_SCRIPT = resolve(AGENTS_DIR, 'pm2-agents.sh');
 const RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
+const AGENTS_READY_TIMEOUT_MS = 30_000;
+const AGENTS_READY_POLL_INTERVAL_MS = 500;
+const AGENTS_READY_REQUEST_TIMEOUT_MS = 2_000;
 const CODEXSPARK_ACCOUNT_ID = 'd72d46e8-41f3-47c1-ba22-98c52b3f6448';
 const DEFAULT_MODEL_SPARK = 'codexspark';
 const DEFAULT_MODEL_PLAN = 'codexplan';
@@ -72,6 +76,50 @@ const writeDefaultModel = (configText: string, defaultModel: string): string => 
   return `${configText}${suffix}default_model: ${defaultModel}\n`;
 };
 
+const resolveAgentsMcpReadyUrl = (): string => {
+  const base = String(
+    process.env.VOICEBOT_AGENTS_MCP_URL ||
+      process.env.AGENTS_MCP_URL ||
+      'http://127.0.0.1:8722'
+  ).trim();
+
+  try {
+    return new URL('/mcp', base).toString();
+  } catch {
+    return 'http://127.0.0.1:8722/mcp';
+  }
+};
+
+const waitForAgentsMcpReady = async (): Promise<{ readyUrl: string; elapsedMs: number }> => {
+  const readyUrl = resolveAgentsMcpReadyUrl();
+  const startedAt = Date.now();
+  let lastError = '';
+
+  while (Date.now() - startedAt < AGENTS_READY_TIMEOUT_MS) {
+    try {
+      const response = await fetch(readyUrl, {
+        method: 'GET',
+        signal: AbortSignal.timeout(AGENTS_READY_REQUEST_TIMEOUT_MS),
+      });
+      if (response.ok) {
+        return {
+          readyUrl,
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      lastError = `status=${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+
+    await delay(AGENTS_READY_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    `agents_mcp_not_ready timeout=${AGENTS_READY_TIMEOUT_MS} url=${readyUrl} last_error=${lastError || 'unknown'}`
+  );
+};
+
 export const isAgentsQuotaFailure = (value: unknown): boolean => {
   const text = toErrorText(value).toLowerCase();
   if (!text) return false;
@@ -127,6 +175,7 @@ const performRecovery = async (reason: string): Promise<boolean> => {
     cwd: AGENTS_DIR,
     timeout: 120_000,
   });
+  const readiness = await waitForAgentsMcpReady();
   logger.warn('[voicebot.agents] quota recovery executed', {
     reason,
     auth_source: SOURCE_AUTH_JSON,
@@ -136,6 +185,8 @@ const performRecovery = async (reason: string): Promise<boolean> => {
     auth_updated: shouldUpdateAuth,
     model_updated: shouldUpdateModel,
     restart_script: AGENTS_PM2_SCRIPT,
+    ready_url: readiness.readyUrl,
+    ready_elapsed_ms: readiness.elapsedMs,
     stdout: toSingleLine(stdout || ''),
     stderr: toSingleLine(stderr || ''),
   });
