@@ -15,4 +15,9 @@ describe('possible tasks save canonical items contract', () => {
     expect(source).toContain('if (responseTasks.length > 0) {');
     expect(source).toContain('canonicalTasks = responseTasks;');
   });
+
+  it('routes session-page task generation through backend instead of direct browser MCP create_tasks', () => {
+    expect(source).toContain("'voicebot/generate_possible_tasks'");
+    expect(source).toContain('requestId: typeof responseRecord?.request_id === \'string\'');
+  });
 });

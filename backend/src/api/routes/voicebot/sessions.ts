@@ -94,6 +94,7 @@ import {
     POSSIBLE_TASKS_REFRESH_MODE_VALUES,
     type PossibleTasksRefreshMode,
 } from '../../../services/voicebot/persistPossibleTasks.js';
+import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
 
 // NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -115,6 +116,11 @@ const createSessionInputSchema = z.object({
     session_type: z.string().trim().optional().nullable(),
     project_id: z.string().trim().optional().nullable(),
     chat_id: z.union([z.string(), z.number()]).optional().nullable(),
+});
+const generatePossibleTasksInputSchema = z.object({
+    session_id: z.string().trim().min(1),
+    refresh_correlation_id: z.string().trim().min(1).optional(),
+    refresh_clicked_at_ms: z.number().finite().optional(),
 });
 const SESSION_SUMMARY_MAX_CHARS = 20_000;
 const VOICE_SESSION_SUMMARY_FIELD = 'summary_md_text' as const;
@@ -4670,6 +4676,96 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
         });
     } catch (error) {
         logger.error('Error in save_possible_tasks:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = generatePossibleTasksInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'session_id is required' });
+        }
+
+        const sessionId = parsedBody.data.session_id;
+        if (!ObjectId.isValid(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session_id' });
+        }
+
+        const { session, hasAccess, runtimeMismatch } = await sessionAccessUtils.resolve({
+            db,
+            performer,
+            sessionId,
+        });
+        if (!session) {
+            if (runtimeMismatch) {
+                return res.status(409).json({ error: 'runtime_mismatch' });
+            }
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Access denied to update this session' });
+        }
+
+        logger.info('[voicebot.sessions] generate_possible_tasks_started', {
+            session_id: sessionId,
+            correlation_id: parsedBody.data.refresh_correlation_id || null,
+            clicked_at_ms:
+                typeof parsedBody.data.refresh_clicked_at_ms === 'number'
+                    ? parsedBody.data.refresh_clicked_at_ms
+                    : null,
+        });
+
+        const generatedTasks = await runCreateTasksAgent({
+            sessionId,
+            projectId: session.project_id ? String(session.project_id) : '',
+        });
+
+        const persisted = await persistPossibleTasksForSession({
+            db,
+            sessionId,
+            sessionName: String((session as Record<string, unknown>).session_name || ''),
+            defaultProjectId: session.project_id ? String(session.project_id) : '',
+            taskItems: generatedTasks,
+            createdById: performer?._id?.toHexString?.() ?? '',
+            createdByName: String(performer?.real_name || performer?.name || '').trim(),
+            refreshMode: 'full_recompute',
+        });
+
+        logger.info('[voicebot.sessions] generate_possible_tasks_completed', {
+            session_id: sessionId,
+            generated_count: generatedTasks.length,
+            saved_count: persisted.items.length,
+        });
+
+        const refreshHintArgs: Parameters<typeof emitSessionTaskflowRefreshHint>[0] = {
+            req,
+            sessionId,
+            reason: 'save_possible_tasks',
+            possibleTasks: true,
+        };
+        if (parsedBody.data.refresh_correlation_id) {
+            refreshHintArgs.correlationId = parsedBody.data.refresh_correlation_id;
+        }
+        if (typeof parsedBody.data.refresh_clicked_at_ms === 'number') {
+            refreshHintArgs.clickedAtMs = parsedBody.data.refresh_clicked_at_ms;
+        }
+        emitSessionTaskflowRefreshHint(refreshHintArgs);
+
+        return res.status(200).json({
+            success: true,
+            request_id: randomUUID(),
+            session_id: sessionId,
+            generated_count: generatedTasks.length,
+            saved_count: persisted.items.length,
+            items: persisted.items,
+        });
+    } catch (error) {
+        logger.error('Error in generate_possible_tasks:', error);
         return res.status(500).json({ error: String(error) });
     }
 });

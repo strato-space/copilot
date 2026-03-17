@@ -356,9 +356,10 @@ Preferred engineering principles for this repo:
   - frontend Summary panel binds to canonical session fields and supports edit/save/conflict states.
 - Live meeting possible-task generation is canonical:
   - session header exposes `Tasks` before `Summarize`,
-  - frontend calls MCP tool `create_tasks` with a structured JSON envelope serialized into `message`,
+  - session-page `Tasks` button calls backend `POST /api/voicebot/generate_possible_tasks`,
+  - backend delegates generation to `runCreateTasksAgent(...)`, so server-side quota recovery and auth/model sync rules apply to this UI path,
   - the agent may enrich context through MCP `voice` and `gsh`,
-  - backend persists possible tasks into `automation_tasks` through `save_possible_tasks` / `process_possible_tasks`,
+  - backend persists possible tasks into `automation_tasks` through `generate_possible_tasks` / `save_possible_tasks` / `process_possible_tasks`,
   - `process_possible_tasks` now promotes selected rows into `READY_10` while keeping draft rows in `DRAFT_10`,
   - selected rows leave draft views without being soft-deleted,
   - the resulting UI semantics are unified under `Задачи` rather than a separate `Возможные задачи` tab,
@@ -639,6 +640,10 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
   - Added correlation-aware possible-task refresh telemetry across frontend and backend: `createPossibleTasksForSession` now forwards optional `refresh_correlation_id` / `refresh_clicked_at_ms`, and `session_update.taskflow_refresh` includes the same fields for deterministic click-to-refresh latency tracing.
   - Updated route-level logging in `POST /api/voicebot/save_possible_tasks` and the socket refresh emitter to log/emit correlation metadata without changing the existing taskflow mutation semantics.
   - Validation passed: `cd app && npm run build`, `cd backend && npm run build`.
+- Close-session refresh (2026-03-17 11:50):
+  - Closed `copilot-zv40` locally: session-page `Tasks` no longer calls browser-side MCP `create_tasks`; it now goes through backend `POST /api/voicebot/generate_possible_tasks`, which runs `runCreateTasksAgent(...)`, persists canonical draft rows, and benefits from the existing `agentsRuntimeRecovery` quota fallback.
+  - Updated backend/frontend contract tests so the session-page path is asserted against the backend route instead of direct MCP payload parsing.
+  - Validation passed: `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts __tests__/voicebot/runtime/sessionUtilityRoutes.test.ts`, `cd app && npx jest --runInBand __tests__/voice/possibleTasksSaveCanonicalItemsContract.test.ts __tests__/voice/meetingCardTasksButtonContract.test.ts`, `cd backend && npm run build`, `cd app && npm run build`.
 - Close-session refresh (2026-03-15 22:03):
   - Landed the staged ontology operator bundle for `copilot-8wn1`: repo/backend operator commands now expose `sync:core`, `sync:enrich`, and `full:from-scratch`, while the ingest engine and rollout chain distinguish cleanup hygiene from historical backfill and skip session-derived projections during focused cleanup.
   - Added/accepted the checked-in performance artifact `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md` together with the new operator helpers `ontology/typedb/scripts/typedb-sync-chain.sh` and `ontology/typedb/scripts/typedb-full-from-scratch.sh`.

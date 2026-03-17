@@ -8,6 +8,7 @@ describe('Voicebot utility routes parity contract', () => {
 
   it('keeps utility endpoints required by voicebot parity', () => {
     expect(source).toContain("router.post('/create_tickets'");
+    expect(source).toContain("router.post('/generate_possible_tasks'");
     expect(source).toContain("router.post('/save_possible_tasks'");
     expect(source).toContain("router.post('/process_possible_tasks'");
     expect(source).toContain("router.post('/codex_tasks'");
@@ -41,6 +42,8 @@ describe('Voicebot utility routes parity contract', () => {
 
   it('routes save_create_tasks through canonical possible-task persistence', () => {
     expect(source).toContain("router.post('/save_create_tasks'");
+    expect(source).toContain("router.post('/generate_possible_tasks'");
+    expect(source).toContain('runCreateTasksAgent({');
     expect(source).toContain('persistPossibleTasksForSession({');
     expect(source).toContain("refreshMode: 'full_recompute'");
     expect(source).toContain("saved_count: persisted.items.length");

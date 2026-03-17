@@ -299,6 +299,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.
+  - Session-page `Tasks` button in `/voice/session/:id` now calls backend `POST /api/voicebot/generate_possible_tasks`, which delegates to backend `runCreateTasksAgent(...)`, persists canonical draft rows, and inherits server-side quota recovery before returning refreshed items.
   - successful transcript completion in TS worker runtime auto-enqueues `CREATE_TASKS`, persists refreshed `DRAFT_10` master rows into `automation_tasks`, and only then emits `session_update.taskflow_refresh.possible_tasks` to all open viewers of the session.
   - live/manual possible-task refresh can use `refresh_mode=incremental_refresh`, which preserves unmatched existing candidate rows as stale instead of deleting them immediately; `full_recompute` stays the explicit destructive mode.
 - Frontend MCP endpoint resolution order:
@@ -465,6 +466,10 @@ Rule for updates:
   - Added taskflow refresh correlation telemetry for live possible-task saves: the frontend now forwards optional click metadata (`refresh_correlation_id`, `refresh_clicked_at_ms`) through `createPossibleTasksForSession` into `save_possible_tasks`, and backend socket hints/logs now preserve this metadata end-to-end.
   - Updated docs/contracts (`CHANGELOG.md`, `README.md`, `AGENTS.md`) for the correlation-aware refresh semantics; no behavior rollback or fallback paths were introduced.
   - Validation passed: `cd app && npm run build`, `cd backend && npm run build`.
+- Close-session refresh (2026-03-17 11:50):
+  - Closed the session-page `Tasks` quota-recovery gap tracked by `copilot-zv40`: the button no longer depends on browser-side MCP `create_tasks`, and instead uses backend `POST /api/voicebot/generate_possible_tasks`, which routes through `runCreateTasksAgent(...)`, persists canonical items, and inherits server-side agent auth/model recovery.
+  - Added focused backend/frontend regression coverage for the new route and updated source-contract tests to assert the backend path instead of direct browser MCP parsing.
+  - Validation passed: `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts __tests__/voicebot/runtime/sessionUtilityRoutes.test.ts`, `cd app && npx jest --runInBand __tests__/voice/possibleTasksSaveCanonicalItemsContract.test.ts __tests__/voice/meetingCardTasksButtonContract.test.ts`, `cd backend && npm run build`, `cd app && npm run build`.
 - Close-session refresh (2026-03-15 22:03):
   - Landed the staged ontology operator bundle for `copilot-8wn1`: repo/backend operator commands now expose `sync:core`, `sync:enrich`, and `full:from-scratch`, while the ingest engine and rollout chain distinguish cleanup hygiene from historical backfill and skip session-derived projections during focused cleanup.
   - Added/accepted the checked-in performance artifact `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md` together with the new operator helpers `ontology/typedb/scripts/typedb-sync-chain.sh` and `ontology/typedb/scripts/typedb-full-from-scratch.sh`.

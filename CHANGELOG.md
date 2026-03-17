@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-17
+### PROBLEM SOLVED
+- **11:50** The Voice session-page `Tasks` button still bypassed backend quota recovery because it called MCP `create_tasks` directly from the browser; when the active agents runtime stayed pinned to a quota-exhausted Codex account, operators could keep hitting `usage_limit_reached` without triggering the auth/model switch logic that already existed server-side.
+
+### FEATURE IMPLEMENTED
+- **11:50** Routed the session-page `Tasks` button through a backend generation path so live task refresh now inherits the same `runCreateTasksAgent(...)` quota recovery, auth sync, and model fallback rules as the server-side `create_tasks` flow.
+
+### CHANGES
+- **11:50** Added `POST /api/voicebot/generate_possible_tasks` in `backend/src/api/routes/voicebot/sessions.ts`; the route resolves session access, calls `runCreateTasksAgent({ sessionId, projectId })`, persists canonical draft rows through `persistPossibleTasksForSession(..., refreshMode='full_recompute')`, and emits the existing `session_update.taskflow_refresh` hint.
+- **11:50** Updated `app/src/store/voiceBotStore.ts` so `createPossibleTasksForSession` now calls the backend route and consumes canonical `items` from the response instead of performing browser-side MCP `create_tasks` execution and payload parsing.
+- **11:50** Added `backend/__tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts`, refreshed `backend/__tests__/voicebot/runtime/sessionUtilityRoutes.test.ts`, and updated `app/__tests__/voice/{possibleTasksSaveCanonicalItemsContract,meetingCardTasksButtonContract}.test.ts`; validation passed with targeted Jest plus `cd backend && npm run build` and `cd app && npm run build`.
+
 ## 2026-03-16
 ### PROBLEM SOLVED
 - **10:57** Voice session `Задачи` could still hide real Mongo rows when their current `task_status` fell outside the approved target axis, so a session could show `Задачи 0` or an empty lifecycle strip even though task rows physically existed.

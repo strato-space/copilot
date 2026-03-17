@@ -40,11 +40,9 @@ import {
     VoiceTaskCreateValidationError,
 } from '../utils/voiceTaskCreation';
 import {
-    buildCreateTasksRequestArgs,
     buildTranscriptionText,
     collectPossibleTaskLocators,
     filterPossibleTasksByLocators,
-    parseCreateTasksMcpResult,
     parsePossibleTasksResponse,
 } from '../utils/voicePossibleTasks';
 import { voicebotRuntimeConfig } from './voicebotRuntimeConfig';
@@ -1266,102 +1264,35 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         if (!normalizedSessionId) {
             throw new Error('session_id is required');
         }
-
-        const { connectionState, sendMCPCall, waitForCompletion, waitForConnected } = useMCPRequestStore.getState();
-        if (connectionState !== 'connected') {
-            const connected = await waitForConnected(5000);
-            if (!connected) {
-                throw new Error(
-                    connectionState === 'connecting'
-                        ? 'Соединение с MCP устанавливается, попробуйте еще раз'
-                        : 'Нет соединения с MCP'
-                );
+        const response = await voicebotHttp.request<unknown>(
+            'voicebot/generate_possible_tasks',
+            {
+                session_id: normalizedSessionId,
+                refresh_correlation_id: options?.refreshCorrelationId,
+                refresh_clicked_at_ms: options?.refreshClickedAtMs,
             }
-        }
+        );
+        const responseRecord =
+            response && typeof response === 'object'
+                ? response as Record<string, unknown>
+                : null;
+        const savedTasks = parsePossibleTasksResponse(
+            responseRecord?.items ?? responseRecord,
+            String(get().voiceBotSession?.project_id || '').trim()
+        );
 
-        const agentsMcpServerUrl = voicebotRuntimeConfig.resolveAgentsMcpServerUrl();
-        if (!agentsMcpServerUrl) {
-            throw new Error('Не настроен MCP URL агента');
-        }
-
-        const activeSessionId = String(get().currentSessionId || '').trim();
-        const stateSession = get().voiceBotSession;
-        const sessionData = activeSessionId === normalizedSessionId && stateSession
-            ? {
-                voice_bot_session: stateSession,
-                session_messages: get().voiceBotMessages,
-                session_attachments: get().sessionAttachments,
-                socket_token: get().socketToken,
-                socket_port: get().socketPort,
-            }
-            : await get().getSessionData(normalizedSessionId);
-
-        const args = buildCreateTasksRequestArgs({
-            session: sessionData.voice_bot_session,
-            messages: sessionData.session_messages,
+        set((state) => {
+            if (state.currentSessionId !== normalizedSessionId) return state;
+            return {
+                possibleTasks: savedTasks,
+                possibleTasksLoadedAt: Date.now(),
+            };
         });
 
-        if (!args.message.trim()) {
-            throw new Error('Нет текста для обработки агентом');
-        }
-
-        const requestId = sendMCPCall(agentsMcpServerUrl, 'create_tasks', args, false);
-        const result = await waitForCompletion(requestId, 15 * 60 * 1000);
-        if (!result || result.status !== 'complete') {
-            throw new Error(result?.error ?? 'Не удалось завершить обработку');
-        }
-        console.info('[voice.tasks] mcp_completed', {
-            session_id: normalizedSessionId,
-            correlation_id: options?.refreshCorrelationId || null,
-            clicked_at_ms: options?.refreshClickedAtMs || null,
-            request_id: requestId,
-        });
-
-        const final = result.result as { isError?: boolean; content?: Array<{ text?: string }>; error?: string } | undefined;
-        if (final?.isError) {
-            const errorText = final.content?.[0]?.text || final.error || 'Ошибка обработки';
-            console.error('[create_tasks] MCP returned error payload', {
-                session_id: normalizedSessionId,
-                request_id: requestId,
-                final,
-            });
-            throw new Error(errorText);
-        }
-
-        let tasks: VoicePossibleTask[] = [];
-        try {
-            tasks = parseCreateTasksMcpResult(final, String(sessionData.voice_bot_session?.project_id || '').trim());
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            if (errorMessage.startsWith('Ошибка модели в create_tasks:')) {
-                throw new Error(errorMessage);
-            }
-            console.error('[create_tasks] invalid MCP result format', {
-                session_id: normalizedSessionId,
-                request_id: requestId,
-                error: errorMessage,
-                final,
-            });
-            throw new Error(`Некорректный ответ create_tasks: ${errorMessage}`);
-        }
-
-        if (!Array.isArray(tasks)) {
-            console.error('[create_tasks] parsed tasks payload is not an array', {
-                session_id: normalizedSessionId,
-                request_id: requestId,
-                tasks,
-            });
-            throw new Error('Некорректный ответ create_tasks: ожидался JSON-массив задач');
-        }
-
-        const savedTasks = await get().saveSessionPossibleTasks(normalizedSessionId, tasks, {
-            silent: true,
-            refreshMode: 'incremental_refresh',
-            ...(options?.refreshCorrelationId ? { refreshCorrelationId: options.refreshCorrelationId } : {}),
-            ...(typeof options?.refreshClickedAtMs === 'number' ? { refreshClickedAtMs: options.refreshClickedAtMs } : {}),
-        });
         return {
-            requestId,
+            requestId: typeof responseRecord?.request_id === 'string' && responseRecord.request_id.trim()
+                ? responseRecord.request_id.trim()
+                : `backend:${normalizedSessionId}`,
             tasks: savedTasks,
         };
     },
