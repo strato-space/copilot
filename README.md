@@ -287,11 +287,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Backend `create_tasks` quota recovery is now self-healed server-side: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, then retries the MCP call once.
 - The offline session-title utility `backend/scripts/voicebot-generate-session-titles.ts` uses the same quota-recovery rule and therefore avoids no-op agent restarts when the auth file is already up to date.
 - `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml`.
+- Runtime key drift baseline for OpenAI-backed services is tracked in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (live PM2 `OPENAI_API_KEY` mask, `backend/.env.production` value, and agents Codex OAuth account/model mode).
 - Auth sync and model sync are now coupled:
   - source of truth: `/root/.codex/auth.json`
   - runtime copy: `agents/.codex/auth.json`
   - if `tokens.account_id == d72d46e8-41f3-47c1-ba22-98c52b3f6448`, set `default_model: codexspark`
   - otherwise set `default_model: codexplan`
+- Reserved scaffold for company-creation card lives in `agents/agent-cards/CompanyCreator.md`; keep workflow prompt contract updates in that file when the card is enabled.
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.

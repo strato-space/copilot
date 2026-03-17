@@ -206,6 +206,7 @@ Preferred engineering principles for this repo:
   - runtime auth copy lives in `agents/.codex/auth.json`
   - `tokens.account_id = d72d46e8-41f3-47c1-ba22-98c52b3f6448` forces `default_model: codexspark`
   - every other account forces `default_model: codexplan`
+- Runtime key drift baseline for OpenAI-backed production services is documented in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (PM2 runtime mask vs `backend/.env.production` value vs agents Codex OAuth mode).
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
@@ -213,6 +214,7 @@ Preferred engineering principles for this repo:
 - Backend code lives in `backend/src/`.
 - Figma indexing code lives in `figma/src/`.
 - Agents code lives in `agents/`.
+- Agent-card scaffold `agents/agent-cards/CompanyCreator.md` is reserved for the company-creation workflow; keep card-level prompt contract changes there when enabling it.
 - Do not store build artifacts outside module directories.
 - For `app/`, keep only TypeScript/TSX sources and avoid JS duplicates.
 - Use `.env` files for environment-specific configuration; do not commit secrets.
