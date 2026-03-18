@@ -17,7 +17,7 @@ jest.unstable_mockModule('../../../src/services/voicebot/agentsRuntimeRecovery.j
   attemptAgentsQuotaRecovery: quotaRecoveryMock,
   isAgentsQuotaFailure: (value: unknown) => {
     const text = value instanceof Error ? value.message : String(value || '');
-    return /quota|usage_limit_reached|status=429|insufficient_quota/i.test(text);
+    return /quota|usage_limit_reached|status=429|insufficient_quota|status=401|401 unauthorized|invalid openai api key|configured openai api key was rejected/i.test(text);
   },
 }));
 
@@ -111,5 +111,61 @@ describe('runCreateTasksAgent quota fallback', () => {
 
     expect(quotaRecoveryMock).toHaveBeenCalledTimes(1);
     expect(callToolMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('restarts agent runtime and retries once after invalid-auth failure', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'first-session' })
+      .mockResolvedValueOnce({ sessionId: 'second-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: 'Error executing tool create_tasks: Invalid OpenAI API key The configured OpenAI API key was rejected.',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify([
+                {
+                  id: 'TASK-2',
+                  row_id: 'TASK-2',
+                  name: 'Recovered after auth refresh',
+                  description: 'Created after invalid-auth recovery',
+                  priority: 'P2',
+                },
+              ]),
+            },
+          ],
+        },
+      });
+    quotaRecoveryMock.mockResolvedValue(true);
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-2',
+      projectId: 'proj-2',
+    });
+
+    expect(quotaRecoveryMock).toHaveBeenCalledTimes(1);
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    expect(closeSessionMock).toHaveBeenCalledTimes(2);
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        id: 'TASK-2',
+        row_id: 'TASK-2',
+        name: 'Recovered after auth refresh',
+        project_id: 'proj-2',
+      }),
+    ]);
   });
 });

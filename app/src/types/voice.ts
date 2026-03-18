@@ -72,6 +72,14 @@ export interface VoicePossibleTask {
     source_ref?: string;
     external_ref?: string;
     source_data?: Record<string, unknown>;
+    discussion_count?: number;
+    discussion_sessions?: Array<{
+        session_id: string;
+        session_name?: string;
+        project_id?: string;
+        created_at?: string;
+        role?: string;
+    }>;
 }
 
 export interface VoiceBotMessage {

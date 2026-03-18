@@ -64,8 +64,7 @@ router.post('/sessions_in_crm', async (_req: Request, res: Response) => {
                                         $and: [
                                             { $ne: ['$is_deleted', true] },
                                             { $ne: ['$codex_task', true] },
-                                            { $eq: ['$source', 'VOICE_BOT'] },
-                                            { $eq: ['$source_kind', 'voice_possible_task'] },
+                                            { $ne: ['$source_data.refresh_state', 'stale'] },
                                             { $eq: ['$task_status', TASK_STATUSES.DRAFT_10] },
                                             {
                                                 $or: [

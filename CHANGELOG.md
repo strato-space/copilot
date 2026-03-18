@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-03-18
+### PROBLEM SOLVED
+- **09:38** Voice `create_tasks` recovery still treated invalid OpenAI auth (`401`, rejected key) as a hard failure, so task generation could stay broken until an operator manually refreshed the agents runtime.
+- **10:09** Production deploys restarted the backend and miniapp services but could leave the TypeScript voicebot worker and Telegram bot on stale code, creating split-runtime behavior after backend releases.
+- **15:56** The live Voice draft baseline still relied on `source_kind` and stale-row compatibility markers, so duplicate/stale draft rows could leak into session reads and status counts instead of exposing one canonical `DRAFT_10` view.
+- **16:10** Voice-linked task discussion history was stored only implicitly, so operators could not see from the UI how many sessions had re-discussed a task or open the linked sessions from the OperOps task page.
+- **16:19** CRM comments were under-normalized: ticket reads did not join `automation_comments`, add-comment writes accepted inconsistent identifiers, and session-aware discussion metadata could not be stored/replayed deterministically.
+- **19:22** The ontology/spec layer still lacked a checked-in contract that separated draft-task recompute from non-draft discussion relink/comment analysis, leaving the repeated-discussion model implicit across runtime and planning artifacts.
+
+### FEATURE IMPLEMENTED
+- **09:38** Extended agents-runtime recovery so `create_tasks` retries now treat invalid-key / `401` auth failures as recoverable runtime drift, using the same auth refresh and retry path as quota-class failures.
+- **10:09** Extended the documented production PM2 deploy helper so `./scripts/pm2-backend.sh prod` also restarts `copilot-voicebot-workers-prod` and `copilot-voicebot-tgbot-prod` when those runtimes exist.
+- **15:56** Normalized the Voice draft read model onto session-linked `DRAFT_10` tasks: draft rows are deduped by row lineage, missing rows leave the live baseline instead of lingering as operational `stale` entries, and accepted/session-count reads ignore stale compatibility rows.
+- **16:10** Added `discussion_sessions[]` / `discussion_count` as first-class Voice-task payload fields and surfaced them in both Voice `Possible Tasks` and the OperOps task detail page.
+- **16:19** Normalized CRM ticket comment reads/writes so task pages can load comments directly from Mongo aggregation and session-driven discussion notes can be written with canonical task ids plus discussion metadata.
+- **19:22** Added a checked-in planning pack for the next Voice discussion wave: dual-stream ontology, draft-vs-non-draft discussion routing, and task-surface normalization follow-up specs.
+
+### CHANGES
+- **09:38** Updated `backend/src/services/voicebot/{agentsRuntimeRecovery,createTasksAgent}.ts` and focused recovery tests so `Invalid OpenAI API key`, rejected-key, and `401 unauthorized` failures enter the existing auth/runtime recovery flow before one retry.
+- **10:09** Updated `scripts/pm2-backend.sh` so production deploys restart backend + miniapp as before, then also restart `copilot-voicebot-workers-prod` and `copilot-voicebot-tgbot-prod` through `scripts/pm2-voicebot-cutover.ecosystem.config.js` when present.
+- **15:56** Updated `backend/src/api/routes/voicebot/{possibleTasksMasterModel,sessions}.ts`, `backend/src/services/voicebot/persistPossibleTasks.ts`, `backend/src/api/routes/crm/voicebot.ts`, and Voice runtime tests so draft reads come from session-linked `DRAFT_10` task docs, row duplicates collapse onto one visible entry, `discussion_sessions[]` is normalized, and stale compatibility rows are excluded from accepted/session-count reads.
+- **16:10** Updated `app/src/{components/voice/PossibleTasks.tsx,pages/operops/TaskPage.tsx,store/kanbanStore.ts,types/{crm,voice}.ts,utils/voicePossibleTasks.ts}` so Voice tasks expose discussion counts, OperOps task detail shows a `Discussed in Sessions` timeline, and frontend comment writes use the normalized backend payload.
+- **16:19** Updated `backend/src/api/routes/crm/tickets.ts` plus new contract tests `app/__tests__/operops/taskCommentsPayloadContract.test.ts` and `backend/__tests__/api/crmTicketCommentsContract.test.ts`; ticket reads now join `comments_list`, add-comment resolves `ticket_id/ticket_db_id/ticket_public_id`, and comment writes support `comment_kind`, `source_session_id`, `discussion_session_id`, and `dialogue_reference`.
+- **19:22** Added `plan/{voice-dual-stream-ontology,voice-non-draft-discussion-analyzer-contract,voice-task-session-discussion-linking-spec,voice-task-surface-normalization-spec-2}.md` and accepted `methodology/index.md` as the current local methodology scratchpad for ongoing delivery/process notes.
+
 ## 2026-03-17
 ### PROBLEM SOLVED
 - **11:50** The Voice session-page `Tasks` button still bypassed backend quota recovery because it called MCP `create_tasks` directly from the browser; when the active agents runtime stayed pinned to a quota-exhausted Codex account, operators could keep hitting `usage_limit_reached` without triggering the auth/model switch logic that already existed server-side.

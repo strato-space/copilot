@@ -14,6 +14,13 @@ export const VOICE_POSSIBLE_TASK_RELATION_TYPES = [
 
 export type VoicePossibleTaskRelationType = (typeof VOICE_POSSIBLE_TASK_RELATION_TYPES)[number];
 export type VoicePossibleTaskRelationRole = 'parent' | 'child';
+export type VoiceTaskDiscussionSession = {
+  session_id: string;
+  session_name?: string;
+  project_id?: string;
+  created_at?: string;
+  role?: string;
+};
 
 export type VoicePossibleTaskRelation = {
   id: string;
@@ -194,6 +201,46 @@ const buildParentRelationView = (relations: VoicePossibleTaskRelation[]): Record
   };
 };
 
+const normalizeDiscussionSessionEntry = (value: unknown): VoiceTaskDiscussionSession | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const sessionId = toTaskText(record.session_id);
+  if (!sessionId) return null;
+
+  const sessionName = toTaskText(record.session_name);
+  const projectId = toTaskText(record.project_id);
+  const createdAt = toTaskText(record.created_at);
+  const role = toTaskText(record.role);
+
+  return {
+    session_id: sessionId,
+    ...(sessionName ? { session_name: sessionName } : {}),
+    ...(projectId ? { project_id: projectId } : {}),
+    ...(createdAt ? { created_at: createdAt } : {}),
+    ...(role ? { role } : {}),
+  };
+};
+
+export const normalizeVoiceTaskDiscussionSessions = (value: unknown): VoiceTaskDiscussionSession[] => {
+  if (!Array.isArray(value)) return [];
+  const bySessionId = new Map<string, VoiceTaskDiscussionSession>();
+  value.forEach((entry) => {
+    const normalized = normalizeDiscussionSessionEntry(entry);
+    if (!normalized) return;
+    if (!bySessionId.has(normalized.session_id)) {
+      bySessionId.set(normalized.session_id, normalized);
+      return;
+    }
+
+    const current = bySessionId.get(normalized.session_id)!;
+    bySessionId.set(normalized.session_id, {
+      ...current,
+      ...normalized,
+    });
+  });
+  return Array.from(bySessionId.values());
+};
+
 export const resolveVoicePossibleTaskRowId = ({
   rawTask,
   index,
@@ -235,8 +282,6 @@ export const buildVoicePossibleTaskMasterQuery = ({
   is_deleted: { $ne: true },
   codex_task: { $ne: true },
   task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
-  source: 'VOICE_BOT',
-  source_kind: 'voice_possible_task',
   $or: [
     { external_ref: externalRef },
     { source_ref: externalRef },
@@ -292,6 +337,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
       role: 'primary',
     },
   ];
+  const discussionSessions = normalizeVoiceTaskDiscussionSessions(voiceSessions);
 
   return {
     row_id: rowId,
@@ -322,6 +368,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
     external_ref: externalRef,
     type_class: TASK_CLASSES.TASK,
     is_deleted: false,
+    discussion_sessions: discussionSessions,
     source_data: {
       session_id: sessionId,
       ...(sessionName ? { session_name: sessionName } : {}),
@@ -347,6 +394,14 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
   const projectId = toMaybeStringId(record.project_id);
   const performerId = toMaybeStringId(record.performer_id);
   const taskTypeId = toMaybeStringId(record.task_type_id);
+  const sourceData = record.source_data && typeof record.source_data === 'object'
+    ? record.source_data as Record<string, unknown>
+    : null;
+  const discussionSessions = normalizeVoiceTaskDiscussionSessions(
+    Array.isArray(record.discussion_sessions)
+      ? record.discussion_sessions
+      : (sourceData?.voice_sessions as unknown[] | undefined) ?? []
+  );
 
   return {
     ...(record._id != null ? { _id: toMaybeStringId(record._id) } : {}),
@@ -367,7 +422,8 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
     relations,
     source_ref: toTaskText(record.source_ref),
     external_ref: toTaskText(record.external_ref),
-    ...(record.source_data && typeof record.source_data === 'object' ? { source_data: record.source_data } : {}),
+    ...(sourceData ? { source_data: sourceData } : {}),
+    ...(discussionSessions.length > 0 ? { discussion_sessions: discussionSessions, discussion_count: discussionSessions.length } : {}),
     task_status: toTaskText(record.task_status),
     created_at: normalizeDateField(record.created_at),
     updated_at: normalizeDateField(record.updated_at),

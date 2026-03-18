@@ -587,6 +587,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             const comment = {
                 comment: comment_text,
                 created_at: Date.now(),
+                comment_kind: 'manual',
                 author: null,
             };
             const record_index = _.findIndex(get().tickets, (t) => t.id === ticket.id);
@@ -602,7 +603,13 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
                     tickets: update(state.tickets, { [record_index]: { comments_list: { $push: [comment] } } }),
                 }));
             }
-            await api_request('tickets/add-comment', { ticket: ticket._id, comment_text }, { silent: true });
+            await api_request('tickets/add-comment', {
+                ticket_id: ticket._id,
+                comment: {
+                    comment: comment_text,
+                    comment_kind: 'manual',
+                },
+            }, { silent: true });
         },
 
         uploadTicketAttachment: async (file, ticketId) => {

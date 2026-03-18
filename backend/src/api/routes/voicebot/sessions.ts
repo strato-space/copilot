@@ -65,6 +65,8 @@ import {
     buildVoicePossibleTaskMasterQuery,
     normalizeVoicePossibleTaskDocForApi,
     normalizeVoicePossibleTaskRelations,
+    normalizeVoiceTaskDiscussionSessions,
+    resolveVoicePossibleTaskRowId,
 } from './possibleTasksMasterModel.js';
 import {
   buildActorFromPerformer,
@@ -4061,8 +4063,6 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
                 {
                     is_deleted: { $ne: true },
                     codex_task: { $ne: true },
-                    source: 'VOICE_BOT',
-                    source_kind: 'voice_possible_task',
                     task_status: TASK_STATUSES.DRAFT_10,
                     $or: [
                         { external_ref: canonicalExternalRef },
@@ -4167,9 +4167,10 @@ const materializeSessionTickets = async ({
         const incomingSourceData = ticket.source_data && typeof ticket.source_data === 'object'
             ? ticket.source_data as Record<string, unknown>
             : {};
-        const incomingVoiceSessions = Array.isArray(incomingSourceData.voice_sessions)
-            ? incomingSourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
-            : [];
+        const incomingVoiceSessions = normalizeVoiceTaskDiscussionSessions([
+            ...(Array.isArray(ticket.discussion_sessions) ? ticket.discussion_sessions : []),
+            ...(Array.isArray(incomingSourceData.voice_sessions) ? incomingSourceData.voice_sessions : []),
+        ]);
         const mergedVoiceSessions = incomingVoiceSessions.length > 0
             ? incomingVoiceSessions
             : [
@@ -4181,6 +4182,7 @@ const materializeSessionTickets = async ({
                     role: 'primary',
                 },
             ];
+        const discussionSessions = normalizeVoiceTaskDiscussionSessions(mergedVoiceSessions);
 
         const pushRejectedRow = (
             field: CreateTicketsRejectedField,
@@ -4351,11 +4353,12 @@ const materializeSessionTickets = async ({
                 source_kind: 'voice_session',
                 source_ref: canonicalExternalRef,
                 external_ref: canonicalExternalRef,
+                    discussion_sessions: discussionSessions,
                     source_data: {
                         ...incomingSourceData,
                         session_name: toTaskText(incomingSourceData.session_name) || String((session as Record<string, unknown>).session_name || ''),
                         session_id: toTaskText(incomingSourceData.session_id) || sessionId,
-                        voice_sessions: mergedVoiceSessions,
+                        voice_sessions: discussionSessions,
                     },
                     ...(isAcceptedFromPossibleTask
                         ? {
@@ -4919,6 +4922,71 @@ const VOICE_SESSION_TASK_STATUS_ORDER_INDEX = new Map(
   VOICE_SESSION_TASK_STATUS_ORDER.map((status, index) => [status, index])
 );
 
+const isStaleVoicePossibleTaskRow = (value: unknown): boolean => {
+    if (!value || typeof value !== 'object') return false;
+    const record = value as Record<string, unknown>;
+    const sourceData = record.source_data && typeof record.source_data === 'object'
+        ? record.source_data as Record<string, unknown>
+        : {};
+    return toTaskText(sourceData.refresh_state) === 'stale';
+};
+
+const draftRowRank = (value: unknown): number => {
+    return isStaleVoicePossibleTaskRow(value) ? 0 : 1;
+};
+
+const draftRowTimestamp = (value: unknown): number => {
+    if (!value || typeof value !== 'object') return 0;
+    const record = value as Record<string, unknown>;
+    const updatedAt = normalizeDateField(record.updated_at);
+    if (typeof updatedAt === 'string' || typeof updatedAt === 'number') return Date.parse(String(updatedAt)) || 0;
+    const createdAt = normalizeDateField(record.created_at);
+    if (typeof createdAt === 'string' || typeof createdAt === 'number') return Date.parse(String(createdAt)) || 0;
+    return 0;
+};
+
+const readDraftRowId = (value: unknown): string => {
+    if (!value || typeof value !== 'object') return '';
+    const record = value as Record<string, unknown>;
+    return (
+        toTaskText(record.row_id) ||
+        toTaskText(record.id) ||
+        toTaskText(record.task_id_from_ai) ||
+        toIdString(record._id) ||
+        ''
+    );
+};
+
+const collapseVisibleDraftRows = <T extends Record<string, unknown>>(items: T[]): T[] => {
+    const byRowId = new Map<string, T>();
+    for (const item of items) {
+        const rowId = readDraftRowId(item);
+        const current = byRowId.get(rowId);
+        if (!current) {
+            byRowId.set(rowId, item);
+            continue;
+        }
+
+        const currentRank = draftRowRank(current);
+        const nextRank = draftRowRank(item);
+        if (nextRank > currentRank) {
+            byRowId.set(rowId, item);
+            continue;
+        }
+        if (nextRank === currentRank && draftRowTimestamp(item) >= draftRowTimestamp(current)) {
+            byRowId.set(rowId, item);
+        }
+    }
+
+    return Array.from(byRowId.values()).sort((left, right) => {
+        const createdLeft = draftRowTimestamp(left);
+        const createdRight = draftRowTimestamp(right);
+        if (createdLeft !== createdRight) return createdLeft - createdRight;
+        return readDraftRowId(left)
+            .localeCompare(readDraftRowId(right), 'ru');
+    });
+};
+
 const normalizeVoiceSessionTaskBucketKey = (taskStatus: unknown): TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY => {
     const statusKey = resolveTaskStatusKey(taskStatus);
     if (statusKey && TARGET_TASK_STATUS_KEYS.includes(statusKey as TargetTaskStatusKey)) {
@@ -5022,7 +5090,10 @@ const listSessionScopedAcceptedTasks = async ({
         {
             is_deleted: { $ne: true },
             codex_task: { $ne: true },
-            ...sessionScopedTaskMatch,
+            $and: [
+                sessionScopedTaskMatch,
+                { 'source_data.refresh_state': { $ne: 'stale' } },
+            ],
         },
         {
             field: 'runtime_tag',
@@ -5041,6 +5112,47 @@ const listSessionScopedAcceptedTasks = async ({
     const items = await db.collection(COLLECTIONS.TASKS).find(baseMatch).toArray() as Array<Record<string, unknown>>;
     const selectedStatusSet = new Set<string>(statusKeys);
     return items.filter((task) => selectedStatusSet.has(normalizeVoiceSessionTaskBucketKey(task.task_status)));
+};
+
+const listSessionScopedDraftTasks = async ({
+    db,
+    sessionId,
+    session,
+}: {
+    db: Db;
+    sessionId: string;
+    session: Record<string, unknown>;
+}): Promise<Array<Record<string, unknown>>> => {
+    const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
+    const cursor = db.collection(COLLECTIONS.TASKS).find(
+        mergeWithRuntimeFilter(
+            {
+                is_deleted: { $ne: true },
+                codex_task: { $ne: true },
+                task_status: TASK_STATUSES.DRAFT_10,
+                ...sessionScopedTaskMatch,
+            },
+            {
+                field: 'runtime_tag',
+                familyMatch: IS_PROD_RUNTIME,
+                includeLegacyInProd: IS_PROD_RUNTIME,
+            }
+        )
+    ) as {
+        sort?: (value: Record<string, unknown>) => { toArray?: () => Promise<Array<Record<string, unknown>>> };
+        toArray?: () => Promise<Array<Record<string, unknown>>>;
+    };
+
+    if (typeof cursor.sort === 'function') {
+        const sortedCursor = cursor.sort({ created_at: 1, _id: 1 });
+        if (sortedCursor && typeof sortedCursor.toArray === 'function') {
+            return await sortedCursor.toArray();
+        }
+    }
+    if (typeof cursor.toArray === 'function') {
+        return await cursor.toArray();
+    }
+    return [];
 };
 
 router.post('/session_tab_counts', async (req: Request, res: Response) => {
@@ -5074,10 +5186,13 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
 
         const nonCodexSessionTaskMatch = mergeWithRuntimeFilter(
             {
-                is_deleted: { $ne: true },
-                codex_task: { $ne: true },
-                ...sessionScopedTaskMatch,
-            },
+            is_deleted: { $ne: true },
+            codex_task: { $ne: true },
+            $and: [
+                sessionScopedTaskMatch,
+                { 'source_data.refresh_state': { $ne: 'stale' } },
+            ],
+        },
             {
                 field: 'runtime_tag',
                 familyMatch: IS_PROD_RUNTIME,
@@ -5087,7 +5202,7 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
 
         const [sessionTasks, codex_count] = await Promise.all([
             db.collection(COLLECTIONS.TASKS)
-                .find(nonCodexSessionTaskMatch, { projection: { task_status: 1, recurrence_mode: 1 } })
+                .find(nonCodexSessionTaskMatch, { projection: { task_status: 1, recurrence_mode: 1, row_id: 1, id: 1, source_kind: 1, source_data: 1, created_at: 1, updated_at: 1 } })
                 .toArray() as Promise<Array<{ task_status?: unknown; recurrence_mode?: unknown }>>,
             db.collection(COLLECTIONS.TASKS).countDocuments(
                 mergeWithRuntimeFilter(
@@ -5105,7 +5220,13 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             ),
         ]);
 
-        const groupedStatusCounts = sessionTasks.reduce((acc, task) => {
+        const visibleDraftTasks = collapseVisibleDraftRows(
+            sessionTasks.filter((task) => normalizeVoiceSessionTaskBucketKey(task.task_status) === 'DRAFT_10') as Array<Record<string, unknown>>
+        );
+        const nonDraftTasks = sessionTasks.filter((task) => normalizeVoiceSessionTaskBucketKey(task.task_status) !== 'DRAFT_10');
+        const visibleSessionTasks = [...visibleDraftTasks, ...nonDraftTasks];
+
+        const groupedStatusCounts = visibleSessionTasks.reduce((acc, task) => {
             const statusKey = normalizeVoiceSessionTaskBucketKey(task.task_status);
             acc.set(statusKey, (acc.get(statusKey) ?? 0) + 1);
             return acc;
@@ -5169,8 +5290,12 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
 
         const bucket = parsedBody.data.bucket;
         if (bucket === 'draft') {
-            const masterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
-            const items = masterDocs
+            const draftDocs = await listSessionScopedDraftTasks({
+                db,
+                sessionId,
+                session: session as Record<string, unknown>,
+            });
+            const items = collapseVisibleDraftRows(draftDocs)
                 .map((item) => normalizeVoicePossibleTaskDocForApi(item))
                 .filter((item): item is Record<string, unknown> => item !== null);
 

@@ -33,7 +33,8 @@ These decisions are part of the current platform contract and must be preserved 
   - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
   - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted materialized rows must not be soft-deleted by possible-task cleanup,
-  - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads.
+  - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
+  - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate.
 
 ## Critical Interfaces To Preserve
 
@@ -174,7 +175,7 @@ Preferred engineering principles for this repo:
 - Preferred (PM2): `./scripts/pm2-backend.sh <dev|prod|local>` from repo root.
   - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` and `copilot-miniapp-backend-dev`, then starts agents via `agents/pm2-agents.sh` when available.
   - `local`: builds `app` with `build-local`, `miniapp` with `build-dev`, builds backend, starts `copilot-backend-local` and `copilot-miniapp-backend-local`, then starts agents when available.
-  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` and `copilot-miniapp-backend-prod`, then starts agents when available.
+  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` and `copilot-miniapp-backend-prod`, then starts agents when available; when `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` already exist, the same script restarts those VoiceBot runtimes too.
 - Validate environment files before startup: `./scripts/check-envs.sh`.
 - Frontend build (manual): `cd app && npm install && npm run build` (outputs to `app/dist`).
 - Miniapp build (manual): `cd miniapp && npm install && npm run build` (outputs to `miniapp/dist`).
@@ -202,6 +203,7 @@ Preferred engineering principles for this repo:
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend quota self-heal for `create_tasks` is canonical: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once via `agents/pm2-agents.sh`, then retries the MCP call once.
 - Backend quota self-heal retry must wait for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart; immediate retries before readiness are a known `ECONNREFUSED` race.
+- Invalid-key / `401 unauthorized` failures in agent-backed `create_tasks` are treated as the same recoverable auth/runtime drift class as quota-style failures.
 - Auth sync and model sync are coupled:
   - source auth account lives in `/root/.codex/auth.json`
   - runtime auth copy lives in `agents/.codex/auth.json`
@@ -261,6 +263,7 @@ Preferred engineering principles for this repo:
 - CRM performer filtering must be identifier-compatible (`_id` and legacy `id`), and project labels must resolve via `project_data`/`project_id`/`project` fallback chain.
 - Ticket create/update diagnostics should log normalized `project/project_id/performer` payload values to speed up CRM incident triage.
 - CRM work-hours joins are canonical on `ticket_db_id` (`automation_tasks._id`) across CRM routes, miniapp routes, and reporting services; `ticket_id` remains migration-only input and must be normalized before writes.
+- CRM task comments are canonical through `automation_comments`: ticket reads aggregate `comments_list`, and `POST /api/crm/tickets/add-comment` must resolve canonical task ids plus optional session-aware metadata (`comment_kind`, `source_session_id`, `discussion_session_id`, `dialogue_reference`).
 - Task attachments are canonical across CRM and Miniapp tickets:
   - CRM routes: `POST /api/crm/tickets/upload-attachment`, `GET /api/crm/tickets/attachment/:ticket_id/:attachment_id`, `POST /api/crm/tickets/delete-attachment`,
   - Miniapp routes: `POST /tickets/upload-attachment`, `GET /tickets/attachment/:ticket_id/:attachment_id`,
@@ -273,6 +276,7 @@ Preferred engineering principles for this repo:
 - OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
 - Single-issue OperOps Codex loads must tolerate `bd` out-of-sync recovery failures the same way list loads do: if `bd show` reports stale JSONL and `bd sync --import-only` fails with `bufio.Scanner: token too long`, the backend should fall back to direct `.beads/issues.jsonl` parsing instead of returning `502`.
+- Voice-linked task payloads may include `discussion_sessions[]` / `discussion_count`; OperOps `TaskPage` should expose those links as a `Discussed in Sessions` timeline instead of hiding multi-session discussion context.
 - OperOps main task navigation is status-first:
   - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
   - lifecycle counts should be shown inline in those tab labels instead of duplicated summary widgets,
@@ -328,6 +332,7 @@ Preferred engineering principles for this repo:
 - The parent `Задачи` count must include all lifecycle buckets, including `Draft`, and it must be computed from the canonical exact-key lifecycle buckets only.
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
 - Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
+- Draft read semantics are canonical on session-linked `DRAFT_10` task docs: session APIs must dedupe by row lineage, surface `discussion_sessions[]` / `discussion_count`, and treat `source_kind` plus stale refresh markers as compatibility metadata only.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
   - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'draft' }` as strict canonical `DRAFT_10` draft baseline
   - create regular: `create_session_tasks`
@@ -378,6 +383,7 @@ Preferred engineering principles for this repo:
 - The `Unknown` subtab is visible only when `count > 0`; otherwise the fixed lifecycle axis remains `Draft / Ready / In Progress / Review / Done / Archive`.
 - The top-level `Задачи` badge must not render a placeholder `0` before `session_tab_counts` resolves.
 - Voice/OperOps accepted-task filtering must match `source_data.voice_sessions[].session_id` in addition to canonical session URL refs in `source_ref` / `external_ref`; otherwise repaired or migrated rows can disappear from session-scoped task views.
+- Accepted-task reads and `session_tab_counts` must ignore stale compatibility rows (`source_data.refresh_state='stale'`) so live status counts and non-draft task views stay aligned with the canonical draft baseline.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
@@ -452,6 +458,8 @@ MCP_SESSION_TIMEOUT=1800000
 - These three docs are maintained from closed `bd list --all` issues and use status legend `[v] / [x] / [~]`.
 - Required references include `docs/voicebot-plan-sync/implementation-draft-v1.md` and the session-level transcript versioning/event-log specs (`edit-event-log-plan.md`, `gpt-4o-transcribe-diarize-plan.md`).
 - Copied planning references for local copilot workflow also live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
+- Current discussion-linking / ontology follow-up specs also live in `plan/voice-{dual-stream-ontology,task-session-discussion-linking-spec,non-draft-discussion-analyzer-contract,task-surface-normalization-spec-2}.md`.
+- Local methodology/process scratchpad lives in `methodology/index.md`.
 - Close-session outcomes for voice migration work must always be reflected in `AGENTS.md`, `README.md`, and `CHANGELOG.md` with matching BD evidence.
 - Frontend migration execution log is maintained in `docs/MERGING_FRONTENDS_VOICEBOT.PLAN.md`; keep it synchronized with current open/closed `bd` issues.
 

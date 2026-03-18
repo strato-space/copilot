@@ -37,6 +37,7 @@ type TaskRow = {
   task_id_from_ai: string;
   dependencies_from_ai: string[];
   dialogue_reference: string;
+  discussion_count: number;
 };
 
 type TaskRowView = TaskRow & {
@@ -87,6 +88,7 @@ const REQUIRED_FIELD_LABELS: Record<keyof TaskRow, string> = {
   task_id_from_ai: 'task_id',
   dependencies_from_ai: 'зависимости',
   dialogue_reference: 'референс',
+  discussion_count: 'обсуждения',
 };
 
 const getMissingFields = (task: TaskRow): Array<keyof TaskRow> =>
@@ -101,6 +103,9 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
   const priority = toText(raw.priority) || 'P3';
   const priorityReason = toText(raw.priority_reason);
   const dialogueReference = toText(raw.dialogue_reference);
+  const discussionCount = typeof raw.discussion_count === 'number' && Number.isFinite(raw.discussion_count)
+    ? raw.discussion_count
+    : (Array.isArray(raw.discussion_sessions) ? raw.discussion_sessions.length : 0);
 
   return {
     row_id: rowId,
@@ -116,6 +121,7 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
     task_id_from_ai: taskIdFromAi,
     dependencies_from_ai: parseDependencies(raw.dependencies_from_ai),
     dialogue_reference: dialogueReference,
+    discussion_count: discussionCount,
   };
 };
 
@@ -654,6 +660,17 @@ function PossibleTasksSessionScope() {
                   onChange={(event) => setDraftValue(record.row_id, 'description', event.target.value)}
                 />
               </div>
+            ),
+          },
+          {
+            title: 'Обс.',
+            dataIndex: 'discussion_count',
+            width: 92,
+            align: 'center',
+            render: (_value, record) => (
+              <Tag color={record.discussion_count > 1 ? 'processing' : 'default'}>
+                {record.discussion_count || 1}
+              </Tag>
             ),
           },
           {

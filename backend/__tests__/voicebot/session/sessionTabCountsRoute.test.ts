@@ -15,6 +15,7 @@ const requirePermissionMock = jest.fn(
 
 const tasksCountDocumentsMock = jest.fn();
 const tasksAggregateMock = jest.fn();
+const tasksFindMock = jest.fn();
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -68,6 +69,7 @@ describe('Voicebot session_tab_counts route', () => {
     requirePermissionMock.mockClear();
     tasksCountDocumentsMock.mockReset();
     tasksAggregateMock.mockReset();
+    tasksFindMock.mockReset();
 
     const sessionDoc = {
       _id: sessionId,
@@ -89,10 +91,10 @@ describe('Voicebot session_tab_counts route', () => {
           return {
             countDocuments: tasksCountDocumentsMock,
             aggregate: tasksAggregateMock,
-            find: jest.fn(() => ({
+            find: tasksFindMock.mockImplementation(() => ({
               toArray: async () => [
-                { task_status: TASK_STATUSES.DRAFT_10 },
-                { task_status: TASK_STATUSES.DRAFT_10 },
+                { row_id: 'draft-1', task_status: TASK_STATUSES.DRAFT_10, source_kind: 'voice_possible_task', source_data: { refresh_state: 'active' } },
+                { row_id: 'draft-2', task_status: TASK_STATUSES.DRAFT_10, source_kind: 'voice_possible_task', source_data: { refresh_state: 'active' } },
                 { task_status: TASK_STATUSES.REVIEW_10 },
                 { task_status: TASK_STATUSES.REVIEW_10 },
                 { task_status: TASK_STATUSES.REVIEW_10 },
@@ -148,5 +150,7 @@ describe('Voicebot session_tab_counts route', () => {
         external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
       })
     );
+    const tasksFindFilter = tasksFindMock.mock.calls[0]?.[0];
+    expect(JSON.stringify(tasksFindFilter || {})).toContain('"source_data.refresh_state":{"$ne":"stale"}');
   });
 });

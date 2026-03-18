@@ -129,7 +129,11 @@ export const isAgentsQuotaFailure = (value: unknown): boolean => {
     /quota/.test(text) ||
     /billing/.test(text) ||
     /payment/.test(text) ||
-    /status=429/.test(text)
+    /status=429/.test(text) ||
+    /invalid openai api key/.test(text) ||
+    /configured openai api key was rejected/.test(text) ||
+    /status=401/.test(text) ||
+    /401 unauthorized/.test(text)
   );
 };
 

@@ -1,4 +1,4 @@
-import { createElement, type ReactNode, useEffect, useState } from 'react';
+import { createElement, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Spin,
@@ -36,6 +36,7 @@ import { useCRMStore } from '../../store/crmStore';
 import { useAuthStore } from '../../store/authStore';
 import type { TaskAttachment, Ticket, Performer } from '../../types/crm';
 import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
+import { CANONICAL_VOICE_SESSION_URL_BASE } from '../../utils/voiceSessionTaskSource';
 import {
     resolveCanonicalTaskId,
     resolveTaskCreator,
@@ -256,6 +257,31 @@ const TaskPage = () => {
     const safeTaskDescription = sanitizeTaskDescriptionHtml(task.description);
     const safeTaskDescriptionNodes = renderSanitizedHtml(safeTaskDescription);
     const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+    const discussionSessions = useMemo(() => {
+        const sourceData = task.source_data && typeof task.source_data === 'object'
+            ? task.source_data as Record<string, unknown>
+            : {};
+        const rawItems = Array.isArray(task.discussion_sessions)
+            ? task.discussion_sessions
+            : (Array.isArray(sourceData.voice_sessions) ? sourceData.voice_sessions : []);
+        const bySessionId = new Map<string, { session_id: string; session_name?: string; created_at?: string }>();
+        rawItems.forEach((entry) => {
+            if (!entry || typeof entry !== 'object') return;
+            const record = entry as Record<string, unknown>;
+            const sessionId = typeof record.session_id === 'string' ? record.session_id.trim() : '';
+            if (!sessionId || bySessionId.has(sessionId)) return;
+            bySessionId.set(sessionId, {
+                session_id: sessionId,
+                ...(typeof record.session_name === 'string' && record.session_name.trim()
+                    ? { session_name: record.session_name.trim() }
+                    : {}),
+                ...(typeof record.created_at === 'string' && record.created_at.trim()
+                    ? { created_at: record.created_at.trim() }
+                    : {}),
+            });
+        });
+        return Array.from(bySessionId.values());
+    }, [task]);
 
     const formatFileSize = (size: number): string => {
         if (!Number.isFinite(size) || size <= 0) return '0 B';
@@ -527,6 +553,41 @@ const TaskPage = () => {
                             />
                         ) : (
                             <Empty description="No comments yet" />
+                        )}
+                    </Card>
+
+                    <Card
+                        title={
+                            <div className="flex items-center justify-between">
+                                <span>Discussed in Sessions</span>
+                                <Tag color="processing">{discussionSessions.length}</Tag>
+                            </div>
+                        }
+                        bordered={false}
+                    >
+                        {discussionSessions.length > 0 ? (
+                            <Timeline
+                                items={discussionSessions.map((entry) => ({
+                                    color: 'blue',
+                                    children: (
+                                        <div className="flex flex-col gap-1">
+                                            <a
+                                                href={`${CANONICAL_VOICE_SESSION_URL_BASE}/${encodeURIComponent(entry.session_id)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <Text strong>{entry.session_name || entry.session_id}</Text>
+                                            </a>
+                                            <Text type="secondary">{entry.session_id}</Text>
+                                            {entry.created_at ? (
+                                                <Text type="secondary">{dayjs(entry.created_at).format('DD.MM.YYYY HH:mm')}</Text>
+                                            ) : null}
+                                        </div>
+                                    ),
+                                }))}
+                            />
+                        ) : (
+                            <Empty description="No linked sessions yet" />
                         )}
                     </Card>
                 </div>

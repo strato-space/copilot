@@ -48,6 +48,7 @@ MINI_BUILD_SCRIPT="build"
 PM2_NAME="copilot-backend-prod"
 PM2_MINI_NAME="copilot-miniapp-backend-prod"
 PM2_ECOSYSTEM="$ROOT_DIR/scripts/pm2-backend.ecosystem.config.js"
+VOICEBOT_PM2_ECOSYSTEM="$ROOT_DIR/scripts/pm2-voicebot-cutover.ecosystem.config.js"
 
 if [[ "$MODE" == "dev" ]]; then
   APP_BUILD_SCRIPT="build-dev"
@@ -90,4 +91,12 @@ if [[ -f "$AGENTS_SCRIPT" ]]; then
   ( cd "$ROOT_DIR/agents" && "$AGENTS_SCRIPT" start )
 else
   echo "Agents script not found: $AGENTS_SCRIPT" >&2
+fi
+
+if [[ "$MODE" == "prod" && -f "$VOICEBOT_PM2_ECOSYSTEM" ]]; then
+  for VOICEBOT_PM2_NAME in copilot-voicebot-workers-prod copilot-voicebot-tgbot-prod; do
+    if pm2 describe "$VOICEBOT_PM2_NAME" >/dev/null 2>&1; then
+      pm2 restart "$VOICEBOT_PM2_ECOSYSTEM" --only "$VOICEBOT_PM2_NAME" --update-env
+    fi
+  done
 fi

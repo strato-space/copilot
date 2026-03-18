@@ -84,6 +84,32 @@ describe('attemptAgentsQuotaRecovery', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1);
   });
 
+  it('treats invalid-auth reasons as recoverable input', async () => {
+    readFileMock
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'stale-account' } })))
+      .mockResolvedValueOnce(Buffer.from('default_model: codexplan\n'));
+    mkdirMock.mockResolvedValue(undefined);
+    copyFileMock.mockResolvedValue(undefined);
+    writeFileMock.mockResolvedValue(undefined);
+    execFileMock.mockImplementation((_file: string, _args: string[], _opts: Record<string, unknown>, cb: (error: Error | null, stdout?: string, stderr?: string) => void) => {
+      cb(null, 'restarted', '');
+      return {} as never;
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
+
+    const recovered = await attemptAgentsQuotaRecovery({
+      reason: 'Error executing tool create_tasks: Invalid OpenAI API key. The configured OpenAI API key was rejected. status=401',
+    });
+
+    expect(recovered).toBe(true);
+    expect(copyFileMock).toHaveBeenCalledTimes(1);
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+  });
+
   it('updates fast-agent default_model and restarts even when auth bytes are unchanged', async () => {
     readFileMock
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'd72d46e8-41f3-47c1-ba22-98c52b3f6448' } })))

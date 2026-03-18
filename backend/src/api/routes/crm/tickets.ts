@@ -175,6 +175,31 @@ const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
     },
 });
 
+const buildCommentsLookupByTicket = (): Record<string, unknown> => ({
+    $lookup: {
+        from: COLLECTIONS.COMMENTS,
+        let: {
+            taskDbId: { $toString: '$_id' },
+            taskPublicId: '$id',
+        },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $or: [
+                            { $eq: ['$ticket_id', '$$taskDbId'] },
+                            { $eq: ['$ticket_db_id', '$$taskDbId'] },
+                            { $eq: ['$ticket_public_id', '$$taskPublicId'] },
+                        ],
+                    },
+                },
+            },
+            { $sort: { created_at: 1, _id: 1 } },
+        ],
+        as: 'comments_list',
+    },
+});
+
 const aggregateTicketByMatch = async ({
     db,
     matchCondition,
@@ -189,6 +214,9 @@ const aggregateTicketByMatch = async ({
             { $sort: { updated_at: -1, created_at: -1, _id: -1 } },
             {
                 ...buildWorkHoursLookupByTicketDbId(),
+            },
+            {
+                ...buildCommentsLookupByTicket(),
             },
             {
                 $lookup: {
@@ -302,6 +330,9 @@ router.post('/', async (req: Request, res: Response) => {
                 },
                 {
                     ...buildWorkHoursLookupByTicketDbId(),
+                },
+                {
+                    ...buildCommentsLookupByTicket(),
                 },
                 {
                     $lookup: {
@@ -856,24 +887,55 @@ router.post('/bulk-change-status', async (req: Request, res: Response) => {
 router.post('/add-comment', async (req: Request, res: Response) => {
     try {
         const db = getDb();
-        const ticketId = req.body.ticket_id as string;
-        const comment = req.body.comment as Record<string, unknown>;
+        const rawTicketId = toNonEmptyString(req.body.ticket_id) ?? toNonEmptyString(req.body.ticket) ?? toNonEmptyString(req.body.task_id);
+        const rawCommentPayload =
+            (req.body.comment && typeof req.body.comment === 'object' ? req.body.comment : null) as Record<string, unknown> | null;
+        const commentText =
+            toNonEmptyString(rawCommentPayload?.comment) ??
+            toNonEmptyString(req.body.comment_text) ??
+            (typeof req.body.comment === 'string' ? toNonEmptyString(req.body.comment) : undefined);
 
-        if (!ticketId || !comment) {
+        if (!rawTicketId || !commentText) {
             res.status(400).json({ error: 'ticket_id and comment are required' });
             return;
         }
 
+        const ticket = await findTicketByAnyIdentifier(db, rawTicketId);
+        if (!ticket) {
+            res.status(404).json({ error: 'Ticket not found' });
+            return;
+        }
+        const ticketObjectId = resolveTicketObjectId(ticket);
+        if (!ticketObjectId) {
+            res.status(400).json({ error: 'Ticket has invalid _id' });
+            return;
+        }
+
         const now = Date.now();
+        const actor = resolveRequestActor(req);
         const newComment = {
-            ...comment,
-            ticket_id: ticketId,
+            comment: commentText,
+            ticket_id: ticketObjectId.toHexString(),
+            ticket_db_id: ticketObjectId.toHexString(),
+            ticket_public_id: toLogString((ticket as Record<string, unknown>).id) ?? rawTicketId,
             created_at: now,
+            ...(actor.id || actor.name
+                ? {
+                    author: {
+                        ...(actor.id ? { _id: actor.id } : {}),
+                        ...(actor.name ? { name: actor.name, real_name: actor.name } : {}),
+                    },
+                }
+                : {}),
+            ...(toNonEmptyString(rawCommentPayload?.source_session_id) ? { source_session_id: toNonEmptyString(rawCommentPayload?.source_session_id) } : {}),
+            ...(toNonEmptyString(rawCommentPayload?.discussion_session_id) ? { discussion_session_id: toNonEmptyString(rawCommentPayload?.discussion_session_id) } : {}),
+            ...(toNonEmptyString(rawCommentPayload?.dialogue_reference) ? { dialogue_reference: toNonEmptyString(rawCommentPayload?.dialogue_reference) } : {}),
+            comment_kind: toNonEmptyString(rawCommentPayload?.comment_kind) ?? 'manual',
         };
 
         const dbRes = await db.collection(COLLECTIONS.COMMENTS).insertOne(newComment);
 
-        res.status(200).json({ db_op_result: dbRes });
+        res.status(200).json({ db_op_result: dbRes, comment: { ...newComment, _id: dbRes.insertedId } });
     } catch (error) {
         logger.error('Error adding comment:', error);
         res.status(500).json({ error: String(error) });

@@ -98,6 +98,11 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(insertedDocs[0]?.task_status).toBe(TASK_STATUSES.READY_10);
     expect(insertedDocs[0]?.source_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
     expect((insertedDocs[0]?.source_data as Record<string, unknown>)?.session_id).toBe(sessionId.toHexString());
+    expect(insertedDocs[0]?.discussion_sessions).toEqual([
+      expect.objectContaining({
+        session_id: sessionId.toHexString(),
+      }),
+    ]);
   });
 
   it('create_tickets keeps valid rows and reports rejected invalid performer ids', async () => {
@@ -906,7 +911,17 @@ describe('Voicebot utility routes runtime behavior', () => {
             source_kind: 'voice_session',
             source_ref: sessionId.toHexString(),
             external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
-            source_data: { session_id: sessionId, row_id: 'master-row' },
+            source_data: {
+              session_id: sessionId.toHexString(),
+              row_id: 'master-row',
+              voice_sessions: [
+                {
+                  session_id: sessionId.toHexString(),
+                  created_at: new Date('2026-03-18T07:00:00.000Z').toISOString(),
+                  role: 'primary',
+                },
+              ],
+            },
           },
         ],
       }),
@@ -941,17 +956,210 @@ describe('Voicebot utility routes runtime behavior', () => {
       .send({ session_id: sessionId.toHexString(), bucket: 'draft' });
 
     expect(response.status).toBe(200);
+    expect(response.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'master-row',
+          id: 'master-row',
+          name: 'Master row',
+          project: 'Master project',
+          task_status: TASK_STATUSES.DRAFT_10,
+          discussion_count: 1,
+          discussion_sessions: [
+            expect.objectContaining({
+              session_id: sessionId.toHexString(),
+            }),
+          ],
+        }),
+      ])
+    );
+    expect(response.body.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'legacy-row' })])
+    );
+  });
+
+  it('session_tasks(accepted) excludes stale voice possible-task rows from Unknown visibility', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime accepted session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+    }));
+
+    const tasksFind = jest.fn((filter: Record<string, unknown>) => ({
+      toArray: async () => {
+        const filterJson = JSON.stringify(filter);
+        if (!filterJson.includes('"source_data.refresh_state":{"$ne":"stale"}')) {
+          return [
+            {
+              _id: new ObjectId(),
+              row_id: 'stale-backlog',
+              id: 'stale-backlog',
+              name: 'Stale backlog row',
+              task_status: 'Backlog',
+              source: 'VOICE_BOT',
+              source_kind: 'voice_possible_task',
+              source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+              source_data: {
+                session_id: sessionId.toHexString(),
+                refresh_state: 'stale',
+              },
+            },
+          ];
+        }
+
+        return [
+          {
+            _id: new ObjectId(),
+            row_id: 'ready-row',
+            id: 'ready-row',
+            name: 'Visible row',
+            task_status: TASK_STATUSES.READY_10,
+            source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+          },
+        ];
+      },
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: tasksFind,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({ session_id: sessionId.toHexString(), bucket: 'tasks' });
+
+    expect(response.status).toBe(200);
     expect(response.body.items).toEqual([
       expect.objectContaining({
-        row_id: 'master-row',
-        id: 'master-row',
-        name: 'Master row',
-        project: 'Master project',
-        task_status: TASK_STATUSES.DRAFT_10,
+        row_id: 'ready-row',
+        task_status: TASK_STATUSES.READY_10,
       }),
     ]);
     expect(response.body.items).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ row_id: 'legacy-row' })])
+      expect.arrayContaining([expect.objectContaining({ row_id: 'stale-backlog' })])
+    );
+  });
+
+  it('session_tasks(draft) keeps a stale row visible only when no active row with the same row_id exists', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime draft merge session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: new ObjectId(),
+            row_id: 'row-a',
+            id: 'row-a',
+            name: 'Active row A',
+            task_status: TASK_STATUSES.DRAFT_10,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_possible_task',
+            source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: { session_id: sessionId.toHexString(), row_id: 'row-a', refresh_state: 'active' },
+            created_at: new Date('2026-03-18T07:00:00.000Z'),
+            updated_at: new Date('2026-03-18T07:00:00.000Z'),
+          },
+          {
+            _id: new ObjectId(),
+            row_id: 'row-a',
+            id: 'row-a',
+            name: 'Stale duplicate A',
+            task_status: TASK_STATUSES.DRAFT_10,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_possible_task',
+            source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: { session_id: sessionId.toHexString(), row_id: 'row-a', refresh_state: 'stale' },
+            created_at: new Date('2026-03-18T06:00:00.000Z'),
+            updated_at: new Date('2026-03-18T06:00:00.000Z'),
+          },
+          {
+            _id: new ObjectId(),
+            row_id: 'row-b',
+            id: 'row-b',
+            name: 'Stale fallback B',
+            task_status: TASK_STATUSES.DRAFT_10,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_possible_task',
+            source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: { session_id: sessionId.toHexString(), row_id: 'row-b', refresh_state: 'stale' },
+            created_at: new Date('2026-03-18T06:30:00.000Z'),
+            updated_at: new Date('2026-03-18T06:30:00.000Z'),
+          },
+        ],
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({ session_id: sessionId.toHexString(), bucket: 'draft' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.items).toHaveLength(2);
+    expect(response.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'row-b', name: 'Stale fallback B' }),
+        expect.objectContaining({ row_id: 'row-a', name: 'Active row A' }),
+      ])
+    );
+    expect(response.body.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'Stale duplicate A' })])
     );
   });
 
@@ -1071,6 +1279,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         id: 'new-row',
         name: 'Saved row',
         project: 'Saved project',
+        discussion_count: 1,
         relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
       }),
     ]);
@@ -1083,6 +1292,11 @@ describe('Voicebot utility routes runtime behavior', () => {
           name: 'Saved row',
           project: 'Saved project',
           task_status: TASK_STATUSES.DRAFT_10,
+          discussion_sessions: [
+            expect.objectContaining({
+              session_id: sessionId.toHexString(),
+            }),
+          ],
           relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
           source_kind: 'voice_possible_task',
           source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
@@ -1103,7 +1317,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
-  it('save_possible_tasks incremental_refresh preserves stale rows instead of deleting them', async () => {
+  it('save_possible_tasks incremental_refresh reconciles absent rows out of the live draft baseline', async () => {
     const sessionId = new ObjectId();
     const performerMongoId = new ObjectId();
     const projectId = new ObjectId();
@@ -1149,7 +1363,7 @@ describe('Voicebot utility routes runtime behavior', () => {
             return [];
           }
           if (filterJson.includes(sessionId.toHexString())) {
-            return masterDocs;
+            return masterDocs.filter((doc) => doc.is_deleted !== true);
           }
           return [];
         },
@@ -1241,29 +1455,21 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.removed_row_ids).toBeUndefined();
-    expect(response.body.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ row_id: 'new-row', name: 'Fresh row' }),
-        expect.objectContaining({
-          row_id: 'stale-row',
-          name: 'Stale row',
-          source_data: expect.objectContaining({
-            refresh_state: 'stale',
-            last_refresh_mode: 'incremental_refresh',
-          }),
-        }),
-      ])
-    );
+    expect(insertManySpy).toHaveBeenCalledTimes(1);
     expect(tasksUpdateOneSpy).toHaveBeenCalledWith(
       expect.objectContaining({ _id: staleMasterId }),
       expect.objectContaining({
         $set: expect.objectContaining({
-          source_data: expect.objectContaining({
-            refresh_state: 'stale',
-            last_refresh_mode: 'incremental_refresh',
-          }),
+          is_deleted: true,
+          deleted_at: expect.any(Date),
+          updated_at: expect.any(Date),
         }),
       })
+    );
+    expect(insertManySpy).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'new-row', name: 'Fresh row' }),
+      ])
     );
     expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
   });

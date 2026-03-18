@@ -22,7 +22,8 @@ Use this as a fast guardrail before implementing anything:
   - master store is `automation_tasks` with draft status `DRAFT_10`,
   - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted rows must not be soft-deleted by possible-task cleanup,
-  - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads.
+  - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
+  - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 
@@ -76,6 +77,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OperOps project create/edit flow now uses dedicated routes `/operops/projects-tree/new` and `/operops/projects-tree/:projectId`; `ProjectsTree` navigates there instead of reopening inline project modals.
 - CRM project display/filtering should resolve project name from `project_data`/`project_id`/`project`; performer filter must handle mixed `_id` and legacy `id` values.
 - CRM work-hours linkage is canonical by `ticket_db_id` (`automation_tasks._id`) across CRM API, Miniapp routes, and reporting services; legacy `ticket_id` is tolerated only as migration input.
+- Task comments are canonical through `automation_comments`: ticket reads aggregate `comments_list`, and `POST /api/crm/tickets/add-comment` now resolves canonical task ids plus optional session-aware metadata (`comment_kind`, `source_session_id`, `discussion_session_id`, `dialogue_reference`).
 - Task attachments are shared between CRM and Miniapp tickets:
   - CRM endpoints: `POST /api/crm/tickets/upload-attachment`, `GET /api/crm/tickets/attachment/:ticket_id/:attachment_id`, `POST /api/crm/tickets/delete-attachment`.
   - Miniapp endpoints: `POST /tickets/upload-attachment`, `GET /tickets/attachment/:ticket_id/:attachment_id`.
@@ -85,6 +87,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Short-link generation/collision/route-resolution contract is documented in `docs/OPEROPS_TASK_SHORT_LINKS.md`.
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
 - OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
+- Voice-linked task payloads may include `discussion_sessions[]` / `discussion_count`; the OperOps task page renders those links as a `Discussed in Sessions` timeline.
 - Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing), so Source->Voice navigation keeps task visibility consistent.
 - Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
@@ -117,10 +120,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Categorization updates are now delivered via websocket `message_update` events (no page refresh required): processor workers push `SEND_TO_SOCKET` jobs, backend consumes them and broadcasts to `voicebot:session:<session_id>`.
 - `CREATE_TASKS` realtime delivery is Mongo-first and session-room based: workers persist refreshed Possible Tasks first, then enqueue `session_update.taskflow_refresh.possible_tasks` so all viewers refresh from canonical backend state.
 - `Possible Tasks` recompute is driven by successful transcript chunks; it is no longer tied to session completion or to categorization completion.
+- Voice draft reads now come from session-linked `DRAFT_10` task docs, dedupe by row lineage, and surface `discussion_sessions[]` / `discussion_count` for repeated-discussion visibility.
 - `process_possible_tasks` is now non-destructive:
   - selected rows materialize into `READY_10`,
   - accepted rows keep `source_kind = voice_session`,
   - cleanup removes them from draft views but must not soft-delete the materialized task document.
+- Draft reconcile no longer keeps an operational stale baseline: rows absent from the current desired set leave the live draft surface, while accepted-task/session-count reads ignore stale compatibility rows if any still exist.
+- Voice task discussion linkage is visible in UI: `Possible Tasks` shows discussion count, and OperOps `TaskPage` links back to the related Voice sessions.
 - Target task-surface normalization is now partially landed in runtime:
   - Voice session task counters normalize legacy stored statuses into the target lifecycle axis,
   - generic CRM status pickers now expose only the target editable subset (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`),
@@ -258,6 +264,12 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Current Voice task surface contract lives in `plan/voice-task-surface-normalization-spec.md`; active runtime semantics use only the canonical six lifecycle statuses and strict status-key filtering.
 - Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
 - Status-first Voice/OperOps surface convergence now lives in `plan/voice-task-surface-normalization-spec.md` as the active contract; the old as-built Voice status plan is archived in `plan/archive/voice-task-status-normalization-plan.legacy.md`.
+- Discussion-linking / ontology follow-up specs for the current Voice task wave live in:
+  - `plan/voice-dual-stream-ontology.md`
+  - `plan/voice-task-session-discussion-linking-spec.md`
+  - `plan/voice-non-draft-discussion-analyzer-contract.md`
+  - `plan/voice-task-surface-normalization-spec-2.md`
+- Local delivery/process scratchpad lives in `methodology/index.md`.
 - MPIC methodology review and artifact-graph corrections are documented in `ontology/plan/mpic-process-review.md`.
 
 
@@ -286,6 +298,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend `create_tasks` quota recovery is now self-healed server-side: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, then retries the MCP call once.
 - Backend `create_tasks` quota recovery retry waits for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart to avoid immediate `ECONNREFUSED` races.
+- The same recovery path now treats invalid-key / `401 unauthorized` agent-runtime failures as recoverable auth drift for one automatic retry.
 - The offline session-title utility `backend/scripts/voicebot-generate-session-titles.ts` uses the same quota-recovery rule and therefore avoids no-op agent restarts when the auth file is already up to date.
 - `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml`.
 - Runtime key drift baseline for OpenAI-backed services is tracked in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (live PM2 `OPENAI_API_KEY` mask, `backend/.env.production` value, and agents Codex OAuth account/model mode).
@@ -394,6 +407,7 @@ For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port
 - Manual Figma module flow:
   - `cd figma && npm install && npm run build`
   - `cd figma && ./scripts/pm2-figma.sh dev start`
+- Production deploy path is `./scripts/pm2-backend.sh prod`; it now restarts `copilot-backend-prod`, `copilot-miniapp-backend-prod`, agents, and the production VoiceBot worker/TG bot runtimes when those PM2 services already exist.
 
 ## Repository Sync (bd)
 This repo uses `bd` (Beads) and the `beads-sync` branch to keep repository metadata consistent.

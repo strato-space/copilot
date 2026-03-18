@@ -58,6 +58,10 @@ export interface Comment {
     _id?: string;
     comment: string;
     created_at: number;
+    comment_kind?: string;
+    source_session_id?: string;
+    discussion_session_id?: string;
+    dialogue_reference?: string;
     author?: {
         _id?: string;
         name?: string;
@@ -129,6 +133,14 @@ export interface Ticket {
     source_kind?: string;
     source_ref?: string;
     external_ref?: string;
+    discussion_count?: number;
+    discussion_sessions?: Array<{
+        session_id: string;
+        session_name?: string;
+        project_id?: string;
+        created_at?: string;
+        role?: string;
+    }>;
 }
 
 // Tree structures

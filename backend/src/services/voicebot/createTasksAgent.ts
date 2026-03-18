@@ -96,7 +96,10 @@ const extractAgentError = (raw: string): string => {
     /fast-agent-error/i.test(singleLine) ||
     /responses request failed for model/i.test(singleLine) ||
     /openai request failed for model/i.test(singleLine) ||
-    /insufficient_quota/i.test(singleLine)
+    /insufficient_quota/i.test(singleLine) ||
+    /invalid openai api key/i.test(singleLine) ||
+    /configured openai api key was rejected/i.test(singleLine) ||
+    /401 unauthorized/i.test(singleLine)
   ) {
     return singleLine;
   }

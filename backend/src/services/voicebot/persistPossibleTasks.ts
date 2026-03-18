@@ -12,6 +12,7 @@ import {
   buildVoicePossibleTaskMasterQuery,
   collectVoicePossibleTaskLocatorKeys,
   normalizeVoicePossibleTaskDocForApi,
+  normalizeVoiceTaskDiscussionSessions,
   resolveVoicePossibleTaskRowId,
 } from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { toIdString, toTaskText } from '../../api/routes/voicebot/sessionsSharedUtils.js';
@@ -125,15 +126,13 @@ const buildProjectScopedPossibleTaskRuntimeQuery = ({
     is_deleted: { $ne: true },
     codex_task: { $ne: true },
     task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
-    source: 'VOICE_BOT',
-    source_kind: 'voice_possible_task',
     project_id: projectId,
     $or: [
       { row_id: { $in: rowIds } },
       { id: { $in: rowIds } },
       { 'source_data.row_id': { $in: rowIds } },
     ],
-  });
+});
 
 const listPossibleTaskSaveMatchDocs = async ({
   db,
@@ -193,6 +192,15 @@ const buildPossibleTaskMasterAliasMap = (
   return aliasMap;
 };
 
+const collectExistingDiscussionSessions = (doc: Record<string, unknown>): Array<Record<string, unknown>> => {
+  const direct = Array.isArray(doc.discussion_sessions) ? doc.discussion_sessions : [];
+  const sourceData = doc.source_data && typeof doc.source_data === 'object'
+    ? doc.source_data as Record<string, unknown>
+    : {};
+  const voiceSessions = Array.isArray(sourceData.voice_sessions) ? sourceData.voice_sessions : [];
+  return [...direct, ...voiceSessions].filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object');
+};
+
 const softDeletePossibleTaskMasterRows = async ({
   db,
   sessionId,
@@ -237,9 +245,7 @@ const softDeletePossibleTaskMasterRows = async ({
     const sourceData = doc.source_data && typeof doc.source_data === 'object'
       ? (doc.source_data as Record<string, unknown>)
       : {};
-    const voiceSessions = Array.isArray(sourceData.voice_sessions)
-      ? sourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
-      : [];
+    const voiceSessions = normalizeVoiceTaskDiscussionSessions(collectExistingDiscussionSessions(doc));
     const remainingVoiceSessions = voiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId);
 
     if (remainingVoiceSessions.length > 0) {
@@ -250,6 +256,7 @@ const softDeletePossibleTaskMasterRows = async ({
           $set: {
             source_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
             external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
+            discussion_sessions: remainingVoiceSessions,
             'source_data.session_id': toTaskText(nextPrimary.session_id),
             'source_data.session_name': toTaskText(nextPrimary.session_name),
             'source_data.voice_sessions': remainingVoiceSessions,
@@ -326,12 +333,14 @@ const markPossibleTaskMasterRowsStale = async ({
         $set: {
           source_data: {
             ...sourceData,
-            refresh_state: 'stale',
-            stale_since: toTaskText(sourceData.stale_since) || staleAt.toISOString(),
-            superseded_at: staleAt.toISOString(),
             last_refresh_mode: 'incremental_refresh',
           },
           updated_at: staleAt,
+        },
+        $unset: {
+          'source_data.refresh_state': 1,
+          'source_data.stale_since': 1,
+          'source_data.superseded_at': 1,
         },
       }
     );
@@ -401,9 +410,7 @@ export const persistPossibleTasksForSession = async ({
       last_refresh_mode: _ignoredLastRefreshMode,
       ...persistedSourceData
     } = existingSourceData;
-    const existingVoiceSessions = Array.isArray(existingSourceData.voice_sessions)
-      ? existingSourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
-      : [];
+    const existingVoiceSessions = normalizeVoiceTaskDiscussionSessions(collectExistingDiscussionSessions(existingDoc ?? {} as Record<string, unknown>));
     const existingCurrentSessionLink = existingVoiceSessions.find((entry) => toTaskText(entry.session_id) === sessionId);
     const currentSessionLink = {
       ...(existingCurrentSessionLink ?? {}),
@@ -417,6 +424,7 @@ export const persistPossibleTasksForSession = async ({
       currentSessionLink,
       ...existingVoiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId),
     ];
+    const discussionSessions = normalizeVoiceTaskDiscussionSessions(mergedVoiceSessions);
 
     const nextDoc = {
       ...buildVoicePossibleTaskMasterDoc({
@@ -441,10 +449,10 @@ export const persistPossibleTasksForSession = async ({
         ...(sessionName ? { session_name: sessionName } : {}),
         voice_task_kind: 'possible_task',
         row_id: canonicalRowId,
-        voice_sessions: mergedVoiceSessions,
-        refresh_state: 'active',
+        voice_sessions: discussionSessions,
         last_refresh_mode: refreshMode,
       },
+      discussion_sessions: discussionSessions,
     };
 
     if (existingDoc?._id instanceof ObjectId) {
@@ -474,11 +482,7 @@ export const persistPossibleTasksForSession = async ({
   const staleRowIds = existingSessionDocs
     .filter((doc) => !collectVoicePossibleTaskLocatorKeys(doc).some((key) => nextSessionRowIds.has(key)))
     .flatMap((doc) => collectVoicePossibleTaskLocatorKeys(doc));
-  if (refreshMode === 'incremental_refresh') {
-    await markPossibleTaskMasterRowsStale({ db, sessionId, rowIds: staleRowIds, staleAt: now });
-  } else {
-    await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
-  }
+  await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
 
   const refreshedMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
   const refreshedItems = refreshedMasterDocs
@@ -487,6 +491,6 @@ export const persistPossibleTasksForSession = async ({
 
   return {
     items: refreshedItems,
-    removedRowIds: refreshMode === 'full_recompute' ? Array.from(new Set(staleRowIds)) : [],
+    removedRowIds: Array.from(new Set(staleRowIds)),
   };
 };

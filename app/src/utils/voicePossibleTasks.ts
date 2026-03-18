@@ -76,6 +76,15 @@ export const normalizePossibleTask = (
   const taskIdFromAi = toText(record.task_id_from_ai);
   const id = toText(record.id) || taskIdFromAi || `task-${index + 1}`;
   const row_id = toText(record.row_id) || id;
+  const discussionSessions = Array.isArray(record.discussion_sessions)
+    ? record.discussion_sessions as Array<{
+        session_id: string;
+        session_name?: string;
+        project_id?: string;
+        created_at?: string;
+        role?: string;
+      }>
+    : null;
 
   return {
     ...(toText(record._id) ? { _id: toText(record._id) } : {}),
@@ -97,6 +106,8 @@ export const normalizePossibleTask = (
     ...(toText(record.source_ref) ? { source_ref: toText(record.source_ref) } : {}),
     ...(toText(record.external_ref) ? { external_ref: toText(record.external_ref) } : {}),
     ...(record.source_data && typeof record.source_data === 'object' ? { source_data: record.source_data as Record<string, unknown> } : {}),
+    ...(typeof record.discussion_count === 'number' && Number.isFinite(record.discussion_count) ? { discussion_count: record.discussion_count } : {}),
+    ...(discussionSessions ? { discussion_sessions: discussionSessions } : {}),
   };
 };
 
