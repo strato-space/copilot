@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-19
+### PROBLEM SOLVED
+- **22:02** Routine host cleanup still had no checked-in repo guardrail for `/root/.codex/sessions`, so session history could be removed accidentally during disk-pressure maintenance.
+- **22:02** The active Voice task-surface specs still left room to misread `session_tasks(bucket="tasks")` as compatible with draft fallback semantics, even though `DRAFT_10` leakage there is a backend/client bug rather than accepted behavior.
+- **22:02** The checked-in Fast-Agent config no longer matched the current account-aware auth/model mapping, so a fresh runtime sync could fall back to `codexplan` even when the active auth account requires `codexspark`.
+
+### FEATURE IMPLEMENTED
+- **22:02** Added a repo-level host-maintenance guardrail that preserves `/root/.codex/sessions` unless a task explicitly requests purging that path.
+- **22:02** Promoted the accepted-only session-task bucket semantics into the checked-in Voice task-surface specs, including explicit classification of `copilot-f6z4` as a contract violation.
+- **22:02** Realigned the checked-in Fast-Agent default model to `codexspark` for the current auth-account mapping.
+
+### CHANGES
+- **22:02** Updated `AGENTS.md` and `README.md` so the repo instructions now record the `/root/.codex/sessions` cleanup guardrail and the accepted-only `POST /api/voicebot/session_tasks` `{ session_id, bucket: 'tasks' }` contract.
+- **22:02** Updated `plan/voice-task-surface-normalization-spec.md` and `plan/voice-task-surface-normalization-spec-2.md` to define `voice.session_tasks(session_id, bucket="tasks")` as an accepted-only bucket and mark any `DRAFT_10` rows there as bug `copilot-f6z4`.
+- **22:02** Updated `agents/fastagent.config.yaml` so the checked-in runtime default model is `codexspark`, consistent with the repo’s documented account-aware auth/model sync rule.
+
 ## 2026-03-18
 ### PROBLEM SOLVED
 - **09:38** Voice `create_tasks` recovery still treated invalid OpenAI auth (`401`, rejected key) as a hard failure, so task generation could stay broken until an operator manually refreshed the agents runtime.

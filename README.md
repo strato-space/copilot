@@ -23,7 +23,8 @@ Use this as a fast guardrail before implementing anything:
   - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted rows must not be soft-deleted by possible-task cleanup,
   - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
-  - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate.
+  - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
+  - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'tasks' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 
@@ -408,6 +409,9 @@ For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port
   - `cd figma && npm install && npm run build`
   - `cd figma && ./scripts/pm2-figma.sh dev start`
 - Production deploy path is `./scripts/pm2-backend.sh prod`; it now restarts `copilot-backend-prod`, `copilot-miniapp-backend-prod`, agents, and the production VoiceBot worker/TG bot runtimes when those PM2 services already exist.
+
+## Host maintenance
+- Do not delete or prune `/root/.codex/sessions` during routine disk cleanup; treat it as retained session history unless the cleanup task explicitly targets that path.
 
 ## Repository Sync (bd)
 This repo uses `bd` (Beads) and the `beads-sync` branch to keep repository metadata consistent.

@@ -6,6 +6,7 @@
 - Plan status: implemented contract; production data aligned; prod verification complete.
 - Canonical design epic: `copilot-cux2`
 - Completed execution epics: `copilot-ojxy`, `copilot-kdqs`
+- Known follow-up bug: `copilot-f6z4` (`session_tasks(bucket='tasks')` leaking `DRAFT_10` rows on session-scoped path is a contract violation, not accepted behavior)
 
 **Статус документа**: implemented contract; production data aligned; prod verified
 **Дата**: 2026-03-14  
@@ -153,9 +154,12 @@
 Отсюда следует:
 - `possible_tasks` не является отдельной storage-сущностью;
 - `crm_tickets(session_id=...)` — accepted-task view над той же коллекцией;
+- `session_tasks(session_id, bucket="tasks")` — session-scoped accepted-only task view над той же коллекцией;
 - `voicebot/codex_tasks` — codex-only **session-scoped** view над той же коллекцией;
 - OperOps `Codex` в целом не должен в этой спеke описываться как Mongo-only view над `automation_tasks`, потому что current product surface там backed by `bd` CLI / issue tracker, а не только общей task collection;
 - `session_tasks(session_id, bucket="draft")` нельзя сводить к session payload fallback; он должен читаться только из canonical draft rows по `task_status = DRAFT_10`.
+- `session_tasks(session_id, bucket="tasks")` не должен возвращать `DRAFT_10`;
+- если accepted rows для session отсутствуют, `session_tasks(session_id, bucket="tasks")` должен возвращать пустой список, а не fallback to draft rows.
 
 ### 2.3 Контракт `voice.session_tasks(session_id, bucket="draft")`
 
@@ -182,6 +186,46 @@ Behavior-wise:
 В этой нормализации:
 - `voice.crm_tickets(session_id)` = accepted-only session task view
 - `voice.session_tasks(session_id, bucket="draft")` = strict canonical draft baseline
+
+### 2.4 Контракт `voice.session_tasks(session_id, bucket="tasks")`
+
+#### Storage semantics
+
+Storage-wise:
+- это accepted-only session-scoped view над `automation_tasks`;
+- bucket читает только non-draft lifecycle rows, уже принятые вне mutable draft baseline.
+
+#### Behavioral semantics
+
+Behavior-wise:
+- это strict canonical accepted bucket для текущей voice session;
+- route может возвращать только accepted lifecycle rows, связанных с данной session;
+- bucket не должен fallback’иться в draft rows, session payload compatibility data или другие provenance-based substitutes;
+- если accepted rows отсутствуют, route должен возвращать `[]`;
+- bucket не должен дублировать `bucket="draft"` ни по составу rows, ни по lifecycle semantics.
+
+#### Allowed status keys
+
+Для `bucket="tasks"` допустимы только:
+- `READY_10`
+- `PROGRESS_10`
+- `REVIEW_10`
+- `DONE_10`
+- `ARCHIVE`
+
+#### Forbidden status keys
+
+Для `bucket="tasks"` недопустимы:
+- `DRAFT_10`
+- любые legacy draft/new aliases, нормализуемые в `DRAFT_10`
+
+#### Known contract violation
+
+Observed runtime bug:
+- `copilot-f6z4`
+- symptom: `session_tasks(bucket="tasks")` on session-scoped path may leak `DRAFT_10` rows
+- classification: implementation bug / contract violation
+- status: must be fixed in backend/client path; spec does not permit this behavior
 
 ## 3. Ключи, stored values и labels
 
@@ -532,6 +576,8 @@ Filter:
 
 Из этого следует:
 - `voicebot/session_tasks(bucket="draft")` / `voice.session_tasks(session_id, bucket="draft")` остаётся canonical draft read path;
+- `voicebot/session_tasks(bucket="tasks")` / `voice.session_tasks(session_id, bucket="tasks")` — canonical accepted-only session task bucket;
+- появление `DRAFT_10` inside `bucket="tasks"` является contract violation, а не допустимым compatibility mode;
 - draft и accepted surfaces должны различаться exact status/filter semantics, а не session-payload fallback, provenance hints или разной target-онтологией вкладок.
 
 ## 8. OperOps tab normalization
@@ -674,22 +720,27 @@ Special grouping допустима только как presentation layer:
 - `voice.fetch(session_id, mode="transcript")`
   - transcript + metadata
 - `voice.crm_tickets(session_id=...)`
-  - accepted task view for a session
+  - broader accepted/session-linked reporting surface
 - `voice.session_tasks(session_id, bucket="draft")`
   - strict canonical draft route for a session
+- `voice.session_tasks(session_id, bucket="tasks")`
+  - strict canonical accepted-only session task bucket
 
 ### 10.2 Нормализация mental model
 
 Новая спека закрепляет:
 
-- `voice.crm_tickets(session_id)` = accepted-only session task view
 - `voice.session_tasks(session_id, bucket="draft")` = strict canonical draft route
+- `voice.session_tasks(session_id, bucket="tasks")` = strict canonical accepted-only session task bucket
+- `voice.crm_tickets(session_id)` = secondary accepted/session-linked reporting surface
 
 ### 10.3 Current strict contract
 
 Сейчас:
 - `voice.session_tasks(session_id, bucket="draft")` должен читать только canonical `DRAFT_10` rows;
-- `voice.crm_tickets(session_id)` должен читать только canonical accepted rows;
+- `voice.session_tasks(session_id, bucket="tasks")` должен читать только accepted rows (`READY_10`, `PROGRESS_10`, `REVIEW_10`, `DONE_10`, `ARCHIVE`);
+- `voice.session_tasks(session_id, bucket="tasks")` не должен возвращать `DRAFT_10`;
+- `voice.crm_tickets(session_id)` должен читать только canonical accepted/session-linked rows как reporting surface;
 - fallback к `processors_data.CREATE_TASKS.data` и `agent_results.create_tasks` не является частью target contract.
 
 ## 11. Контракт project binding для voice session
@@ -756,6 +807,8 @@ Voice session может войти в operational bucket только если:
 ### Session scope
 - `voice.crm_tickets(session_id)` возвращает только accepted rows
 - `voice.session_tasks(session_id, bucket="draft")` описан как strict canonical draft baseline без session-payload fallback
+- `voice.session_tasks(session_id, bucket="tasks")` описан как strict accepted-only bucket и не может возвращать `DRAFT_10`
+- если `bucket="tasks"` возвращает `DRAFT_10`, это bug (`copilot-f6z4`), а не допустимый compatibility path
 
 ### Label / key / value wording
 - user-facing tables и reports показывают labels

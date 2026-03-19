@@ -119,6 +119,16 @@ Behavior:
 - returns normalized draft rows,
 - includes `discussion_sessions[]` and `discussion_count`.
 
+### `voice.session_tasks(session_id, bucket="tasks")`
+This route/tool is the canonical accepted-only session task surface.
+
+Behavior:
+- reads only non-draft accepted lifecycle rows linked to the session,
+- may return only accepted lifecycle keys such as `READY_10`, `PROGRESS_10`, `REVIEW_10`, `DONE_10`, `ARCHIVE`,
+- must not return `DRAFT_10`,
+- returns `[]` when the session has no accepted linked tasks,
+- `DRAFT_10` rows appearing in `bucket="tasks"` are a contract violation / bug (`copilot-f6z4`), not accepted compatibility behavior.
+
 ### `voice.session_task_counts(session_id)`
 Task counts must be computed from the same task-plane view:
 - Draft counts from canonical session-linked `DRAFT_10` rows,

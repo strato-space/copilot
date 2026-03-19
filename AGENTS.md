@@ -182,6 +182,10 @@ Preferred engineering principles for this repo:
 - Backend build (manual): `cd backend && npm install && npm run build` then `npm run start` to serve on port 3002.
 - Figma module build (manual): `cd figma && npm install && npm run build`.
 
+## Host Maintenance Notes
+
+- Disk cleanup guardrail: do **not** delete or prune `/root/.codex/sessions` during routine free-space cleanup. Treat it as retained session history unless the user gives an explicit purge instruction for that path.
+
 ### Service Execution Rules
 - All long-running services (backend, miniapp backend, agents) MUST be started via PM2, NEVER using Vite dev server directly.
 - Before starting a service, rebuild it with the appropriate mode for the target environment:
@@ -333,6 +337,7 @@ Preferred engineering principles for this repo:
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
 - Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
 - Draft read semantics are canonical on session-linked `DRAFT_10` task docs: session APIs must dedupe by row lineage, surface `discussion_sessions[]` / `discussion_count`, and treat `source_kind` plus stale refresh markers as compatibility metadata only.
+- Accepted session-task reads are canonical on `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'tasks' }`: the bucket is accepted-only, may return only non-draft lifecycle rows, and `DRAFT_10` leakage there is a contract violation (`copilot-f6z4`), not compatibility behavior.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
   - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'draft' }` as strict canonical `DRAFT_10` draft baseline
   - create regular: `create_session_tasks`
