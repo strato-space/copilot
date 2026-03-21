@@ -206,7 +206,7 @@ Preferred engineering principles for this repo:
 - View in browser: `https://copilot-dev.stratospace.fun` (nginx serves `app/dist`).
 - `VITE_AGENTS_API_URL` must use plain HTTP for `:8722` (fast-agent runs without TLS); using `https://` can fail with `ERR_SSL_PACKET_LENGTH_TOO_LONG`.
 - Preferred target is loopback `http://127.0.0.1:8722` (bind `copilot-agent-services` to localhost only; do not expose `:8722` publicly).
-- Agents PM2 runtime is canonical via `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...`; model selection is config-driven through `agents/fastagent.config.yaml`, and `create_tasks` card must not hardcode model override.
+- Agents PM2 runtime is canonical via the repo-local bootstrap `uv run --directory /home/strato-space/copilot/agents python run_fast_agent.py serve ...`; model selection remains config-driven through `agents/fastagent.config.yaml`, `create_tasks` card must not hardcode model override, and the bootstrap is where repo-local runtime model registrations/profiling hooks live.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend quota self-heal for `create_tasks` is canonical: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once via `agents/pm2-agents.sh`, then retries the MCP call once.
 - Backend quota self-heal retry must wait for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart; immediate retries before readiness are a known `ECONNREFUSED` race.
@@ -214,7 +214,7 @@ Preferred engineering principles for this repo:
 - Auth sync and model sync are coupled:
   - source auth account lives in `/root/.codex/auth.json`
   - runtime auth copy lives in `agents/.codex/auth.json`
-  - `tokens.account_id = d72d46e8-41f3-47c1-ba22-98c52b3f6448` forces `default_model: codexspark`
+  - `tokens.account_id` in `{d72d46e8-41f3-47c1-ba22-98c52b3f6448, 4e0cfe6a-0bb7-4b6b-86c3-74a477572e49}` forces `default_model: codexspark`
   - every other account forces `default_model: codexplan`
 - Runtime key drift baseline for OpenAI-backed production services is documented in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (PM2 runtime mask vs `backend/.env.production` value vs agents Codex OAuth mode).
 
@@ -340,9 +340,17 @@ Preferred engineering principles for this repo:
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
 - Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
 - Draft read semantics are canonical on session-linked `DRAFT_10` task docs: session APIs must dedupe by row lineage, surface `discussion_sessions[]` / `discussion_count`, and treat `source_kind` plus stale refresh markers as compatibility metadata only.
+- Draft visibility horizon is an operational read/workqueue policy, not a second lifecycle:
+  - `DRAFT_10` storage truth remains canonical and full-history by default,
+  - callers may pass `draft_horizon_days` to bound voice-derived Draft reads/workqueues by recency of the linked voice-discussion window,
+  - draft recency must not be keyed off `task.updated_at`; use linked session discussion timestamps instead,
+  - for session-scoped Draft reads, the window is evaluated in both directions around the current session against the task's linked discussion range (`first_linked_session_at .. last_linked_session_at`),
+  - if `draft_horizon_days` is omitted, Draft reads remain unbounded,
+  - `include_older_drafts=true` overrides the horizon for explicit historical drilldown,
+  - `READY_10+` remains full-history regardless of any Draft horizon policy.
 - Accepted session-task reads are canonical on `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'tasks' }`: the bucket is accepted-only, may return only non-draft lifecycle rows, and `DRAFT_10` leakage there is a contract violation (`copilot-f6z4`), not compatibility behavior.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
-  - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'draft' }` as strict canonical `DRAFT_10` draft baseline
+  - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'draft' }` as strict canonical `DRAFT_10` draft baseline; optional `draft_horizon_days` / `include_older_drafts` tune visibility policy without changing storage truth
   - create regular: `create_session_tasks`
   - create codex: `create_session_codex_tasks`
   - delete row: `delete_session_possible_task`
@@ -684,7 +692,7 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Close-session refresh (2026-03-03 13:37):
   - Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`) for Voice session-done REST parity: `tools/voice` close wrappers now use backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout, fail-fast semantics (no client fallback to the legacy alias), and no automatic retry.
   - Completed targeted parity validation (`71` voice tests passed), a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21`; observed downstream `CREATE_TASKS` refresh (`5 -> 15` items), new `done_at`, and notify events.
-  - Added execution evidence to `plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md` and closed the epic in `bd`.
+  - Added execution evidence to `tmp/voice-investigation-artifacts/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md` and closed the epic in `bd`.
   - Registered follow-up bug `copilot-q5cc`: session-log source metadata still reports legacy socket origin for REST-initiated `actions@voice` closes.
 - Close-session refresh (2026-03-02 22:03):
   - Closed `copilot-7r94` epic (`copilot-7r94.1`..`copilot-7r94.11`): completed Voice categorization UX/API cleanup including stable row identity, row-level actions, materials-only rendering, typed edit/delete routes, realtime mutation emits, and cascade transcript deletion for last-row removal.

@@ -35,22 +35,22 @@ class StatusDomainsTest(unittest.TestCase):
         finops = FINOPS_SCHEMA.read_text(encoding="utf-8")
 
         self.assertIn("entity client,", core)
-        self.assertIn("owns activity_state,", core)
+        self.assertIn('owns activity_state @values("active", "inactive", "unknown"),', core)
         self.assertIn("entity project,", core)
-        self.assertIn("owns activity_state,", core)
+        self.assertIn('owns activity_state @values("active", "inactive", "unknown"),', core)
         self.assertIn("entity person,", core)
         self.assertNotIn("entity person,\n  owns person_id @key,\n  owns name,\n  owns status,", core)
 
         self.assertIn("entity voice_session,", voice)
-        self.assertIn("owns activity_state,", voice)
+        self.assertIn('owns activity_state @values("active", "inactive", "unknown"),', voice)
         self.assertIn("entity history_step,", voice)
-        self.assertIn("owns event_status,", voice)
+        self.assertIn('owns event_status @values("pending", "queued", "done", "error", "unknown"),', voice)
         self.assertNotIn("entity voice_message,\n  owns voice_message_id @key,\n  owns session_id,\n  owns source_type,\n  owns status,", voice)
 
         self.assertIn("entity cost_category,", finops)
-        self.assertIn("owns activity_state,", finops)
+        self.assertIn('owns activity_state @values("active", "inactive", "unknown"),', finops)
         self.assertIn("entity cost_expense,", finops)
-        self.assertIn("owns deletion_state,", finops)
+        self.assertIn('owns deletion_state @values("present", "deleted", "unknown"),', finops)
         self.assertNotIn("dfsdf", voice)
         self.assertNotIn("sdfsdf", voice)
 

@@ -41,12 +41,12 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/voicebot/session_tasks` | `POST` | Unified read path for session task buckets. For draft reads use `{ session_id, bucket: \"draft\" }`; this serves the unified `Задачи` surface draft subtab from canonical `DRAFT_10` rows only. |
+| `/api/voicebot/session_tasks` | `POST` | Unified read path for session task buckets. For draft reads use `{ session_id, bucket: \"draft\" }`; optional `draft_horizon_days` / `include_older_drafts` bound voice-derived Draft visibility by linked discussion window without changing storage truth. |
 | `/api/voicebot/save_possible_tasks` | `POST` | Persist current-session `DRAFT_10` rows into `automation_tasks`, rewrite them in place, and return canonical saved `items`. |
 | `/api/voicebot/process_possible_tasks` | `POST` | Materialize selected `DRAFT_10` rows into accepted tasks with `READY_10`, stamp acceptance metadata, and remove them from draft views without soft-deleting the task document. |
 | `/api/voicebot/delete_task_from_session` | `POST` | Remove a draft baseline row from the current session snapshot; shared rows are unlinked from this session first and soft-deleted only when no linked sessions remain. |
 | `/api/voicebot/codex_tasks` | `POST` | Return Codex/BD tasks linked to the current voice session. |
-| `/api/voicebot/session_tab_counts` | `POST` | Return lightweight `Задачи` + `Codex` counts for voice session tab badges; `status_counts` include `DRAFT_10` so the unified `Задачи` surface can render lifecycle subtabs directly from backend status buckets. |
+| `/api/voicebot/session_tab_counts` | `POST` | Return lightweight `Задачи` + `Codex` counts for voice session tab badges; optional `draft_horizon_days` / `include_older_drafts` apply the same Draft visibility law used by `session_tasks(bucket='draft')`. |
 
 ## Session resolution contract
 - Canonical session APIs use fail-fast lookup semantics and return `404` when a session cannot be resolved in current operational scope.
@@ -91,6 +91,12 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - `voice.session_tasks(..., bucket="draft")`
   - `voice.crm_tickets(session_id=...)`
   - `voice.crm_tickets(project_id=...)`
+- For session-centric agents like `create_tasks`, project-wide `voice.crm_tickets(project_id=...)` should be bounded by `from_date` / `to_date` when session timing is available; unbounded project CRM is fallback-only.
+- For voice-derived draft reads, callers may optionally pass:
+  - `draft_horizon_days`
+  - `include_older_drafts`
+- If omitted, canonical `DRAFT_10` draft baseline remains unbounded.
+- For session-local Draft reads the horizon is evaluated against the task's linked discussion window in both directions around the current session; for global workqueues the horizon is now-based.
 - MCP `voice.crm_tickets(...)` remains list-shaped by default. When a compact taskflow-style shape is preferable, use the MCP tool with `envelope=true` to get:
   - `scope`
   - `bucket`

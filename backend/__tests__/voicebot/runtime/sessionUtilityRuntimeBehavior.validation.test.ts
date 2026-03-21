@@ -934,6 +934,9 @@ describe('Voicebot utility routes runtime behavior', () => {
             find: masterFind,
           };
         }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
         return buildDefaultCollection();
       },
     };
@@ -1129,6 +1132,9 @@ describe('Voicebot utility routes runtime behavior', () => {
             find: masterFind,
           };
         }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
         return buildDefaultCollection();
       },
     };
@@ -1161,6 +1167,119 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.items).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'Stale duplicate A' })])
     );
+  });
+
+  it('session_tasks(draft) keeps session-local linked drafts visible inside the task discussion window even with draft_horizon_days', async () => {
+    const sessionId = new ObjectId();
+    const oldIso = new Date('2025-01-01T00:00:00.000Z').toISOString();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Old runtime draft session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      created_at: oldIso,
+      last_voice_timestamp: oldIso,
+    }));
+
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: new ObjectId(),
+            row_id: 'old-row',
+            id: 'old-row',
+            name: 'Old linked draft',
+            task_status: TASK_STATUSES.DRAFT_10,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_possible_task',
+            source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: {
+              session_id: sessionId.toHexString(),
+              row_id: 'old-row',
+              voice_sessions: [
+                {
+                  session_id: sessionId.toHexString(),
+                  created_at: oldIso,
+                  role: 'primary',
+                },
+              ],
+            },
+            created_at: new Date(oldIso),
+            updated_at: new Date(oldIso),
+          },
+        ],
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return { find: masterFind };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionFindOne,
+            find: () => ({
+              toArray: async () => [
+                {
+                  _id: sessionId,
+                  created_at: oldIso,
+                  last_voice_timestamp: oldIso,
+                },
+              ],
+            }),
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+
+    const horizonResponse = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({ session_id: sessionId.toHexString(), bucket: 'draft', draft_horizon_days: 30 });
+
+    expect(horizonResponse.status).toBe(200);
+    expect(horizonResponse.body.items).toEqual([
+      expect.objectContaining({
+        row_id: 'old-row',
+        name: 'Old linked draft',
+        task_status: TASK_STATUSES.DRAFT_10,
+      }),
+    ]);
+
+    const overrideResponse = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        bucket: 'draft',
+        draft_horizon_days: 30,
+        include_older_drafts: true,
+      });
+
+    expect(overrideResponse.status).toBe(200);
+    expect(overrideResponse.body.items).toEqual([
+      expect.objectContaining({
+        row_id: 'old-row',
+        name: 'Old linked draft',
+        task_status: TASK_STATUSES.DRAFT_10,
+      }),
+    ]);
   });
 
   it('save_possible_tasks stores master rows in automation_tasks and syncs session compatibility data', async () => {

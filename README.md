@@ -297,18 +297,23 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 
 ### Voice agents integration (frontend -> agents)
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
-- PM2 runtime launches agents through `uv run --directory /home/strato-space/copilot/agents fast-agent serve ...` and inherits the model from `agents/fastagent.config.yaml`.
+- PM2 runtime launches agents through the repo-local bootstrap `uv run --directory /home/strato-space/copilot/agents python run_fast_agent.py serve ...`; the bootstrap owns repo-local runtime model registrations/profiling hooks while the default model still comes from `agents/fastagent.config.yaml`.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend `create_tasks` quota recovery is now self-healed server-side: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, then retries the MCP call once.
 - Backend `create_tasks` quota recovery retry waits for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart to avoid immediate `ECONNREFUSED` races.
 - The same recovery path now treats invalid-key / `401 unauthorized` agent-runtime failures as recoverable auth drift for one automatic retry.
 - The offline session-title utility `backend/scripts/voicebot-generate-session-titles.ts` uses the same quota-recovery rule and therefore avoids no-op agent restarts when the auth file is already up to date.
 - `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml`.
+- Voice draft visibility is now caller-policy driven:
+  - `POST /api/voicebot/session_tasks` and `POST /api/voicebot/session_tab_counts` accept optional `draft_horizon_days` / `include_older_drafts`
+  - if omitted, `DRAFT_10` remains the full canonical baseline
+  - for session-local reads the horizon is evaluated against the task's linked discussion window in both directions around the current session
+- Current create_tasks overflow / payload investigation notebook lives in `docs/CREATE_TASKS_CONTEXT_OVERFLOW_PROFILING_2026-03-21.md`; temporary voice investigation artifacts were moved out of `plan/` into `tmp/voice-investigation-artifacts/`.
 - Runtime key drift baseline for OpenAI-backed services is tracked in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (live PM2 `OPENAI_API_KEY` mask, `backend/.env.production` value, and agents Codex OAuth account/model mode).
 - Auth sync and model sync are now coupled:
   - source of truth: `/root/.codex/auth.json`
   - runtime copy: `agents/.codex/auth.json`
-  - if `tokens.account_id == d72d46e8-41f3-47c1-ba22-98c52b3f6448`, set `default_model: codexspark`
+  - if `tokens.account_id` is one of `d72d46e8-41f3-47c1-ba22-98c52b3f6448` or `4e0cfe6a-0bb7-4b6b-86c3-74a477572e49`, set `default_model: codexspark`
   - otherwise set `default_model: codexplan`
 - Reserved scaffold for company-creation card lives in `agents/agent-cards/CompanyCreator.md`; keep workflow prompt contract updates in that file when the card is enabled.
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
@@ -518,7 +523,7 @@ Rule for updates:
   - Closed `copilot-7b9y` epic (`copilot-7b9y.1`..`copilot-7b9y.10`) and completed Voice session-done REST parity for `mcp@voice` and `actions@voice`.
   - `tools/voice` now closes sessions through backend REST `POST /api/voicebot/session_done` with explicit `5s` timeout and no automatic retry.
   - Validation passed: `71` targeted voice tests, a disposable close smoke, and a real `actions@voice` re-close of session `69a527c14b07162c36957e21`; downstream `CREATE_TASKS` refreshed (`5 -> 15`), `done_at` advanced, and notify events were emitted.
-  - Added execution evidence to `plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md`.
+  - Added execution evidence to `tmp/voice-investigation-artifacts/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md`.
 - Close-session refresh (2026-03-02 22:03):
   - Closed `copilot-7r94` epic (`copilot-7r94.1`..`copilot-7r94.11`) and delivered Voice categorization cleanup: stable row identities, no processing column, materials-only rendering, typed edit/delete APIs, realtime mutation events, and last-row cascade transcript deletion.
   - Closed `copilot-j54y`: Codex relationship IDs now match Issue-ID behavior (`link + copy`) with status pictograms; shared Codex status tabs now include `In Progress` and `Blocked`.

@@ -141,6 +141,37 @@ describe('attemptAgentsQuotaRecovery', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1);
   });
 
+  it('selects codexspark for the current root auth account used by slava pro auth', async () => {
+    readFileMock
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: '4e0cfe6a-0bb7-4b6b-86c3-74a477572e49' } })))
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: '4e0cfe6a-0bb7-4b6b-86c3-74a477572e49' } })))
+      .mockResolvedValueOnce(Buffer.from('default_model: codexplan\n'));
+    mkdirMock.mockResolvedValue(undefined);
+    copyFileMock.mockResolvedValue(undefined);
+    writeFileMock.mockResolvedValue(undefined);
+    execFileMock.mockImplementation((_file: string, _args: string[], _opts: Record<string, unknown>, cb: (error: Error | null, stdout?: string, stderr?: string) => void) => {
+      cb(null, 'restarted', '');
+      return {} as never;
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+    });
+
+    const recovered = await attemptAgentsQuotaRecovery({
+      reason: 'manual-auth-sync',
+    });
+
+    expect(recovered).toBe(true);
+    expect(copyFileMock).not.toHaveBeenCalled();
+    expect(writeFileMock).toHaveBeenCalledWith(
+      '/home/strato-space/copilot/agents/fastagent.config.yaml',
+      'default_model: codexspark',
+      'utf8'
+    );
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+  });
+
   it('returns false when agents restart completes but MCP readiness never comes back', async () => {
     readFileMock
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))

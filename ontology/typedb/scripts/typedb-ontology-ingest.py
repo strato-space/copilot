@@ -1576,7 +1576,7 @@ def project_project_context_card(ctx: IngestContext, doc: dict[str, Any], projec
 def project_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
     status_name = as_string(doc.get("task_status")) or as_string(doc.get("status"))
     if status_name:
-        status_id = status_name
+        status_id = normalize_target_task_status_key(status_name)
         status_cache_key = ("status_dict", "status_id", status_id)
         if status_cache_key not in ctx.ensured_entity_keys:
             upsert_entity(
@@ -1585,7 +1585,7 @@ def project_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any], ta
                 key_attr="status_id",
                 key_value=status_id,
                 attr_specs=[
-                    ("name", "string", status_name),
+                    ("name", "string", status_id),
                     ("module_scope", "string", "task"),
                 ],
             )
@@ -2663,7 +2663,7 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             )
             return
 
-        status = as_string(doc.get("task_status")) or as_string(doc.get("status")) or "unknown"
+        status = normalize_target_task_status_key(doc.get("task_status") or doc.get("status"))
         fields = ["insert $t isa task", f"has task_id {lit_string(doc_id)}"]
         append_string_attr(fields, "title", as_string(doc.get("name")))
         append_string_attr(fields, "description", as_string(doc.get("description")))

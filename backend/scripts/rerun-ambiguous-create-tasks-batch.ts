@@ -172,6 +172,7 @@ async function main(): Promise<void> {
           runCreateTasksAgent({
             sessionId,
             projectId: session.project_id ? String(session.project_id) : '',
+            db,
           }),
           PER_SESSION_TIMEOUT_MS,
           'create_tasks_agent'

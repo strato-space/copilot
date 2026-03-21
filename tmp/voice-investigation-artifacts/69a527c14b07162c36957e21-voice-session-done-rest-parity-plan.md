@@ -93,7 +93,7 @@ T1 ── T2 ── T3 ── T4 ──┬── T5 ──┐
   - `/home/strato-space/copilot/backend/src/api/routes/voicebot/sessions.ts`
   - `/home/strato-space/copilot/backend/__tests__/voicebot/runtime/sessionUtilityRoutes.test.ts`
   - `/home/strato-space/copilot/backend/__tests__/voicebot/session/sessionDoneRoute.test.ts`
-  - `/home/strato-space/copilot/plan/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md`
+  - `/home/strato-space/copilot/tmp/voice-investigation-artifacts/69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md`
 
 ### T2: Add client-level tests that codify the new transport contract first
 - **depends_on**: [T1]

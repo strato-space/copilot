@@ -98,6 +98,16 @@ The current Possible Tasks / `create_tasks` path is covered by:
   - MCP reconnect / request-failure handling
   - voice session tab counters / processing dots
 
+Draft visibility policy coverage:
+- `draftRecencyPolicy.test.ts` covers:
+  - missing horizon => full baseline
+  - session recency anchor selection
+  - voice-derived draft detection
+  - linked discussion window semantics
+- runtime session route coverage now includes:
+  - `session_tasks(bucket='draft', draft_horizon_days=...)`
+  - `include_older_drafts=true` override
+
 ## Notes
 
 - `make tests` is not a repository contract in this repo; use module-level commands (`backend npm run test:parallel-safe`, `backend npm run test:serialized`, `app npm test`, `app npm run build`) instead.

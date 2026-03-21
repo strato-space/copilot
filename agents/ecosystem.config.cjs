@@ -32,7 +32,8 @@ module.exports = {
             args: [
                 'run',
                 '--directory', __dirname,
-                'fast-agent',
+                'python',
+                'run_fast_agent.py',
                 'serve',
                 '--config-path', 'fastagent.config.yaml',
                 '--agent-cards', 'agent-cards',

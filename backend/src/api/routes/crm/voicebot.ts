@@ -1,7 +1,12 @@
 import { Router, type Request, type Response } from 'express';
+import { ObjectId } from 'mongodb';
 import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
 import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
+import {
+    filterVoiceDerivedDraftsByRecency,
+    parseDraftHorizonDays,
+} from '../../../services/draftRecencyPolicy.js';
 
 const router = Router();
 const logger = getLogger();
@@ -21,6 +26,7 @@ const getVoicebotUrl = (): string => {
 router.post('/sessions_in_crm', async (_req: Request, res: Response) => {
     try {
         const db = getDb();
+        const draftHorizonDays = parseDraftHorizonDays((_req.body as Record<string, unknown> | undefined)?.draft_horizon_days);
         const sessions = await db
             .collection(COLLECTIONS.VOICE_BOT_SESSIONS)
             .aggregate([
@@ -111,7 +117,41 @@ router.post('/sessions_in_crm', async (_req: Request, res: Response) => {
             ])
             .toArray();
 
-        res.status(200).json(sessions);
+        const normalized = draftHorizonDays
+            ? await Promise.all(
+                sessions.map(async (session) => {
+                    const record = session as Record<string, unknown>;
+                    const sessionId = record._id?.toString?.() || '';
+                    if (!sessionId) return session;
+                    const canonicalRef = `https://copilot.stratospace.fun/voice/session/${sessionId}`;
+                    const sessionObjectId = ObjectId.isValid(sessionId) ? new ObjectId(sessionId) : null;
+                    const draftTasks = await db.collection(COLLECTIONS.TASKS).find({
+                        is_deleted: { $ne: true },
+                        codex_task: { $ne: true },
+                        task_status: TASK_STATUSES.DRAFT_10,
+                        $or: [
+                            { external_ref: canonicalRef },
+                            { source_ref: canonicalRef },
+                            ...(sessionObjectId ? [{ 'source_data.session_id': sessionObjectId }] : []),
+                            { 'source_data.session_id': sessionId },
+                            { 'source_data.voice_sessions.session_id': sessionId },
+                        ],
+                    }).toArray() as Array<Record<string, unknown>>;
+
+                    const visibleDrafts = await filterVoiceDerivedDraftsByRecency({
+                        db,
+                        tasks: draftTasks,
+                        draftHorizonDays,
+                    });
+                    return {
+                        ...record,
+                        tasks_count: visibleDrafts.length,
+                    };
+                })
+            )
+            : sessions;
+
+        res.status(200).json(normalized);
     } catch (error) {
         logger.error('Voicebot sessions_in_crm error', { error });
         res.status(500).json({ error: 'Failed to load voicebot sessions' });

@@ -97,6 +97,11 @@ import {
     type PossibleTasksRefreshMode,
 } from '../../../services/voicebot/persistPossibleTasks.js';
 import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
+import {
+    filterVoiceDerivedDraftsByRecency,
+    parseDraftHorizonDays,
+    parseIncludeOlderDrafts,
+} from '../../../services/draftRecencyPolicy.js';
 
 // NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -224,6 +229,8 @@ const sessionCodexTasksInputSchema = z.object({
 
 const sessionTabCountsInputSchema = z.object({
     session_id: z.string().trim().min(1),
+    include_older_drafts: z.union([z.boolean(), z.number(), z.string()]).optional(),
+    draft_horizon_days: z.union([z.number(), z.string()]).optional(),
 });
 
 const VOICE_SESSION_UNKNOWN_STATUS_KEY = 'UNKNOWN' as const;
@@ -233,6 +240,8 @@ const sessionTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
     bucket: z.enum(['draft', 'tasks', 'codex']),
     status_keys: z.array(z.enum(VOICE_SESSION_TASK_STATUS_KEYS)).optional(),
+    include_older_drafts: z.union([z.boolean(), z.number(), z.string()]).optional(),
+    draft_horizon_days: z.union([z.number(), z.string()]).optional(),
 });
 
 const savePossibleTasksInputSchema = z
@@ -5117,12 +5126,18 @@ const listSessionScopedAcceptedTasks = async ({
 const listSessionScopedDraftTasks = async ({
     db,
     sessionId,
-    session,
+    includeOlderDrafts,
+    draftHorizonDays,
 }: {
     db: Db;
     sessionId: string;
-    session: Record<string, unknown>;
+    includeOlderDrafts?: boolean;
+    draftHorizonDays?: number | null;
 }): Promise<Array<Record<string, unknown>>> => {
+    const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+        { _id: new ObjectId(sessionId), is_deleted: { $ne: true } }
+    ) as Record<string, unknown> | null;
+    if (!session) return [];
     const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
     const cursor = db.collection(COLLECTIONS.TASKS).find(
         mergeWithRuntimeFilter(
@@ -5146,11 +5161,25 @@ const listSessionScopedDraftTasks = async ({
     if (typeof cursor.sort === 'function') {
         const sortedCursor = cursor.sort({ created_at: 1, _id: 1 });
         if (sortedCursor && typeof sortedCursor.toArray === 'function') {
-            return await sortedCursor.toArray();
+            const docs = await sortedCursor.toArray();
+            return await filterVoiceDerivedDraftsByRecency({
+                db,
+                tasks: docs,
+                includeOlderDrafts,
+                draftHorizonDays,
+                referenceSession: session,
+            });
         }
     }
     if (typeof cursor.toArray === 'function') {
-        return await cursor.toArray();
+        const docs = await cursor.toArray();
+        return await filterVoiceDerivedDraftsByRecency({
+            db,
+            tasks: docs,
+            includeOlderDrafts,
+            draftHorizonDays,
+            referenceSession: session,
+        });
     }
     return [];
 };
@@ -5181,6 +5210,8 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const sessionRecord = session as Record<string, unknown>;
+        const includeOlderDrafts = parseIncludeOlderDrafts(parsedBody.data.include_older_drafts);
+        const draftHorizonDays = parseDraftHorizonDays(parsedBody.data.draft_horizon_days);
         const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: sessionRecord });
         const externalRef = voiceSessionUrlUtils.canonical(sessionId);
 
@@ -5220,9 +5251,17 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             ),
         ]);
 
-        const visibleDraftTasks = collapseVisibleDraftRows(
-            sessionTasks.filter((task) => normalizeVoiceSessionTaskBucketKey(task.task_status) === 'DRAFT_10') as Array<Record<string, unknown>>
-        );
+        const draftTasksForSession = sessionTasks.filter(
+            (task) => normalizeVoiceSessionTaskBucketKey(task.task_status) === 'DRAFT_10'
+        ) as Array<Record<string, unknown>>;
+        const recencyFilteredDraftTasks = await filterVoiceDerivedDraftsByRecency({
+            db,
+            tasks: draftTasksForSession,
+            includeOlderDrafts,
+            draftHorizonDays,
+            referenceSession: sessionRecord,
+        });
+        const visibleDraftTasks = collapseVisibleDraftRows(recencyFilteredDraftTasks);
         const nonDraftTasks = sessionTasks.filter((task) => normalizeVoiceSessionTaskBucketKey(task.task_status) !== 'DRAFT_10');
         const visibleSessionTasks = [...visibleDraftTasks, ...nonDraftTasks];
 
@@ -5289,11 +5328,14 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const bucket = parsedBody.data.bucket;
+        const includeOlderDrafts = parseIncludeOlderDrafts(parsedBody.data.include_older_drafts);
+        const draftHorizonDays = parseDraftHorizonDays(parsedBody.data.draft_horizon_days);
         if (bucket === 'draft') {
             const draftDocs = await listSessionScopedDraftTasks({
                 db,
                 sessionId,
-                session: session as Record<string, unknown>,
+                includeOlderDrafts,
+                draftHorizonDays,
             });
             const items = collapseVisibleDraftRows(draftDocs)
                 .map((item) => normalizeVoicePossibleTaskDocForApi(item))

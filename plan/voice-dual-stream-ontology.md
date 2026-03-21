@@ -30,7 +30,7 @@ Production emphasis:
 - `task` is the one central task-plane object;
 - task/session/chunk traceability must survive materialization into DB objects;
 - result and acceptance objects are mandatory parts of the production model, not optional prose add-ons.
-- ближайший production loop: `voice -> task intake -> executor routing -> agent/human launch -> execution -> human verification/update`.
+- ближайший production loop: `voice -> draft task intake -> context enrichment -> human approval -> executor routing -> agent/human launch -> execution -> result artifact -> verification/update`.
 
 ## Term Normalization / Glossary
 
@@ -38,6 +38,8 @@ Production emphasis:
 
 - `task` — первичная операционная сущность работы. Это действие / deliverable, связанное с проектом, контекстом, исполнителем, критериями приемки и результирующим артефактом.
 - `draft task` — не отдельная сущность, а `task` в каноническом lifecycle state `DRAFT_10`. Это состояние формулировки, а не другой ontological kind.
+- `draft_recency_horizon` — derived operational read/workqueue policy for voice-derived `task[DRAFT_10]`. Это не новая сущность и не новый lifecycle state. Если параметр не задан, Draft reads остаются full baseline.
+- `discussion_window` — derived time range `[first_linked_session_at, last_linked_session_at]` over the voice sessions linked to one task. Для global Draft workqueue practically главным anchor служит `last_linked_session_at`; для session-local views window must be evaluated in both directions around the current session against this linked range. Это по-прежнему derived policy datum, не новая сущность.
 - `ready+ task` — тот же `task` в lifecycle `READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE`. Это уже принятый execution object.
 - `task_context_card` — не отдельная сущность, а название task-local structured surface. Это атрибутивный/реляционный состав внутри `task`, достаточный для coding agent execution без полного перечитывания session.
 - `task_type` / `task_classification` — типизация задачи (`ui`, `document`, `spec`, `research`, `audit`, и т.д.). Это classification dimension of `task`, а не отдельный work object.
@@ -68,6 +70,9 @@ Production emphasis:
 - `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или другой target object.
 - `coding_agent` — first-class исполняющий tool/system для coding work. Концептуально это non-human performer/executor. Он задаётся как запускаемый CLI/agent surface с путём к исполняемому файлу, аргументами запуска и ссылками на role/pipeline cards. Типовые экземпляры: `fast-agent`, `codex cli`.
 - `task_intake_pool` — стадия/поверхность, в которой входящие задачи существуют как `task[DRAFT_10]` до routing на исполнителя.
+- `active_draft_window` — caller-provided operational slice of voice-derived `task[DRAFT_10]` bounded by recency of the linked discussion window. Это policy surface, не ontology object.
+- `context_enrichment` — стадия сборки достаточного task-local execution context: project/product materials, duplicate checks, object locators, expected result, acceptance criteria, routing basis. Это стадия процесса, а не новая first-class сущность.
+- `human approval` — санкция на то, что draft-formulation и minimum launch context достаточны для routing/launch. Это не то же самое, что acceptance результата.
 - `executor_routing` — first-class decision object перелива входящих задач от intake pool к human performer, coding agent или смешанному контуру.
 - `task_execution_run` — отдельный execution object одного запуска задачи; не `processing_run`.
 - `seed_context_base` — внешний исходный контекст для bootstrap executor layer; в ближайшем цикле это прежде всего `DevFigma / FigmaFlow` плюс project/dialogue context.
@@ -117,9 +122,52 @@ This document explicitly follows the architecture choices articulated by Valery 
 - acceptance criteria and measurable outcomes are first-class enough to deserve explicit ontology slots; otherwise “result produced” and “result accepted” collapse into one vague notion.
 - project/product confusion must be avoided: the project is not the produced product, and the produced product is not the producing system.
 - executor layer must arise above the task plane: incoming tasks should enter a common intake surface, then be routed to human performers, coding agents, or a mixed contour.
+- Draft queue breadth may be bounded by caller-provided recency policy without changing the ontology of `task[DRAFT_10]`; omitted policy means full Draft baseline.
+- Draft recency must not be keyed off `task.updated_at`, because recount/writeback can artificially “rejuvenate” an old task row; the correct anchor is linked discussion recency.
 - task routing should use explicit task segmentation between role/executor families rather than one flat undifferentiated queue.
 - `DevFigma / FigmaFlow` should serve as the near-term seed context for roles, skills, process templates, and artifact families when bootstrapping the executor layer.
 - the near-term validation path is practical rather than abstract: current `FigmaFlow lowres` and two real microprojects (`mriya2` hotels and real estate) are expected to validate task connection, routing, and execution.
+
+## First-Wave Goal And Normalized Mechanics
+
+### Goal
+Ближайшая цель этой волны не в том, чтобы “ещё лучше извлекать backlog items”, а в том, чтобы:
+- materialize из `voice_session` execution-ready `task[DRAFT_10]`;
+- обогатить их до minimum launch context;
+- провести human approval;
+- довести часть задач до `artifact_record` и `acceptance_evaluation`.
+
+Если этот цикл не доходит до produced-and-reviewed result, то ontology тривиализируется до “ещё одного канала генерации задач”, а это уже не тот предмет.
+
+### Ontological repair
+Чатовая формулировка “`processing_run = запуск`” онтологически неверна.
+
+Это **categorical failure**, а не просто неудачное имя:
+- `processing_run` относится к processing/extraction layer над `voice_session` / `voice_message`;
+- `task_execution_run` относится к execution layer над `task`.
+
+Concrete counterexample:
+- один `processing_run` может породить несколько `task[DRAFT_10]`;
+- каждая из этих задач может получить свой собственный `task_execution_run`;
+- следовательно, “запуск обработки” и “запуск исполнения задачи” не один и тот же род объекта.
+
+### Normalized mechanics
+1. из `voice_session` система materialize draft tasks;
+1a. caller may optionally apply `draft_recency_horizon` to bound the active Draft workqueue; if omitted, Draft storage truth remains fully visible;
+2. затем идёт `context_enrichment`: подтягиваются project/product materials, проверяются дубли, собираются `object_locator`, `evidence_link`, `acceptance_criterion`, `routing_basis`, `expected result`;
+3. человек утверждает не только сам draft, но и sufficiency собранного execution context;
+4. затем строится `executor_routing` к human performer, `coding_agent` или mixed contour;
+5. launch materialize как `task_execution_run`;
+6. produced result materialize как `artifact_record`;
+7. итоговая приемка materialize как `acceptance_evaluation`.
+
+### Historical prior art
+Ближайший historical analogue этой механики — агент `PM-03-RequestsTask`:
+`request -> formulation/decomposition -> duplicate check -> verification -> assignment`.
+
+Текущая ontology обобщает этот паттерн:
+- от CRM-only task creation
+- к `task -> executor_routing -> task_execution_run -> artifact_record -> acceptance_evaluation`.
 
 ## Ontological Discipline
 
@@ -197,7 +245,7 @@ entity task,
   owns row_id,
   owns title,
   owns description,
-  owns status @values("Draft", "Ready", "Progress 10", "Review / Ready", "Done", "Archive", "unknown"),
+  owns status @values("DRAFT_10", "READY_10", "PROGRESS_10", "REVIEW_10", "DONE_10", "ARCHIVE", "UNKNOWN"),
   owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
   owns performer_id,
   owns source_kind,
@@ -860,6 +908,7 @@ Target task projection note:
 ### TO-BE task-local execution context
 
 `task_context_card` остаётся только именем для task-local structured surface.
+Этот surface должен materialize на стадии `context_enrichment` до routing/launch, а human approval подтверждает, что minimum launch context собран.
 На уровне аннотированного TQL это не отдельная сущность, а прямой task-local relation bundle вокруг `target_task_view`:
 - `target_task_view -> task_family`
 - `target_task_view -> object_locator`

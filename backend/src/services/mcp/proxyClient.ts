@@ -25,6 +25,25 @@ export interface MCPCallResult {
     error?: string;
 }
 
+const measureSerializedPayload = (value: unknown): {
+    jsonChars: number;
+    jsonBytes: number;
+} => {
+    try {
+        const serialized = JSON.stringify(value);
+        return {
+            jsonChars: serialized.length,
+            jsonBytes: Buffer.byteLength(serialized, 'utf8'),
+        };
+    } catch {
+        const fallback = String(value ?? '');
+        return {
+            jsonChars: fallback.length,
+            jsonBytes: Buffer.byteLength(fallback, 'utf8'),
+        };
+    }
+};
+
 /**
  * MCP Proxy Client - Full Implementation
  */
@@ -148,7 +167,19 @@ export class MCPProxyClient {
                 }
             );
 
+            const topLevelRecord =
+                result && typeof result === 'object' ? (result as Record<string, unknown>) : null;
+            const topLevelContent = Array.isArray(topLevelRecord?.content) ? topLevelRecord.content : [];
+            const payloadMetrics = measureSerializedPayload(result);
+
             logger.info(`✅ MCP tool call completed: ${tool}`);
+            logger.info('MCP tool outer result profiling', {
+                tool,
+                result_json_chars: payloadMetrics.jsonChars,
+                result_json_bytes: payloadMetrics.jsonBytes,
+                top_level_content_count: topLevelContent.length,
+                top_level_is_error: topLevelRecord?.isError === true,
+            });
 
             return {
                 success: true,

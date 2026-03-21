@@ -25,6 +25,11 @@ import {
     removeTaskAttachmentFile,
     resolveTaskAttachmentAbsolutePath,
 } from '../../../services/taskAttachments.js';
+import {
+    filterVoiceDerivedDraftsByRecency,
+    parseDraftHorizonDays,
+    parseIncludeOlderDrafts,
+} from '../../../services/draftRecencyPolicy.js';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(isSameOrAfter);
@@ -306,6 +311,8 @@ router.post('/', async (req: Request, res: Response) => {
     try {
         const db = getDb();
         const rawStatuses = Array.isArray(req.body.statuses) ? req.body.statuses as string[] : [];
+        const includeOlderDrafts = parseIncludeOlderDrafts(req.body?.include_older_drafts);
+        const draftHorizonDays = parseDraftHorizonDays(req.body?.draft_horizon_days);
         const statusKeys = rawStatuses
             .map((status) => (isTaskStatusKey(status) ? status : null))
             .filter((status): status is keyof typeof TASK_STATUSES => Boolean(status));
@@ -344,6 +351,15 @@ router.post('/', async (req: Request, res: Response) => {
                 },
             ])
             .toArray();
+
+        if (draftHorizonDays) {
+            data = await filterVoiceDerivedDraftsByRecency({
+                db,
+                tasks: data as Array<Record<string, unknown>>,
+                includeOlderDrafts,
+                draftHorizonDays,
+            });
+        }
 
         // Get project groups and customers for enrichment
         const projectGroups = await db.collection(COLLECTIONS.PROJECT_GROUPS).find().toArray();

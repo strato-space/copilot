@@ -135,6 +135,7 @@ export const handleCreateTasksFromChunksJob = async (
     const tasks = await runCreateTasksAgent({
       sessionId: session_id,
       projectId: toProjectId(session.project_id),
+      db,
       ...(chunkTexts.length > 0 ? { rawText: chunkTexts.join('\n\n') } : {}),
     });
 

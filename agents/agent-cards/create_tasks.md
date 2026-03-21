@@ -22,11 +22,17 @@ oneOf:
   - mode: raw_text
     raw_text: string
     session_url?: string
+    draft_horizon_days?: int
+    include_older_drafts?: boolean
   - mode: session_id
     session_id: string
     session_url?: string
+    draft_horizon_days?: int
+    include_older_drafts?: boolean
   - mode: session_url
     session_url: string
+    draft_horizon_days?: int
+    include_older_drafts?: boolean
 ```
 
 Нормализация входа:
@@ -37,6 +43,7 @@ oneOf:
   - иначе трактуй ввод как `mode: raw_text`.
 - Если известен `session_id`, первым действием ОБЯЗАТЕЛЬНО вызови `voice.fetch(id=session_id, mode="transcript")`.
 - Если пришёл `session_url`, извлеки `session_id` и первым действием ОБЯЗАТЕЛЬНО вызови `voice.fetch(id=session_id, mode="transcript")`.
+- Если известен `session_id`, ДО project-wide CRM enrichment постарайся получить lightweight session timing через `voice.search(session_id=session_id, limit=1)` или equivalent session lookup, чтобы bounded project CRM reads были привязаны ко времени текущей discussion.
 
 Использование MCP:
 - Работай напрямую через MCP `voice`.
@@ -54,7 +61,12 @@ oneOf:
   - ОБЯЗАТЕЛЬНО прочитай `voice.session_tasks(session_id=session_id, bucket="draft")`;
   - ОБЯЗАТЕЛЬНО прочитай `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")`;
   - если известен `project-id`, ОБЯЗАТЕЛЬНО прочитай `voice.project(project_id)`;
-  - если известен `project-id`, ОБЯЗАТЕЛЬНО прочитай `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table")`.
+  - если известен `project-id`, старайся НЕ читать весь project-wide CRM без границ:
+    - если известны timestamps текущей discussion/session, читай `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table", from_date=..., to_date=...)` в bounded окне вокруг этой discussion;
+    - practical default: использовать окно порядка `-30d .. +30d` вокруг текущей session/discussion, если нет более точного interval;
+    - только если timestamps недоступны, допускается unbounded fallback.
+  - если во входном envelope переданы `draft_horizon_days` или `include_older_drafts`, протяни эти параметры в `voice.session_task_counts(...)` и `voice.session_tasks(..., bucket="draft")`;
+  - если эти параметры не переданы, не придумывай default и используй полный canonical draft baseline.
   - Считай нормальным, что `voice.project(project_id)` может вернуть sparse project card: отсутствие `git_repo`, `design_files`, `drive_folder_id`, `board_id` или backlog refs не означает ошибку и не должно блокировать генерацию задач.
 - Если любой MCP-источник вернул rows/tasks с `is_deleted=true` или непустым `deleted_at`, считай такие rows/tasks удалёнными и полностью исключай их из duplicate suppression и active context.
 - Короткое правило: исключай удалённые rows/tasks из active context и duplicate suppression.
@@ -64,13 +76,14 @@ oneOf:
 1. Нормализуй envelope.
 2. Получи transcript через `voice.fetch(...)`, если известен `session_id`.
 3. Собери metadata context из transcript.
-4. Дочитай `voice.project(project_id)`, если известен `project-id`.
-5. Дочитай existing possible tasks и existing materialized tasks этой сессии.
-6. Дочитай активные задачи проекта, если известен `project-id`.
-7. Считай `voice.session_tasks(session_id=..., bucket="draft")` mutable baseline для текущей сессии и верни полный желаемый набор `DRAFT_10` rows для этой сессии, а не только дельту.
-8. Выдели только executor-ready задачи.
-9. Удали явные дубли.
-10. Верни только канонический JSON-массив.
+4. Получи lightweight session timing context, если доступно.
+5. Дочитай `voice.project(project_id)`, если известен `project-id`.
+6. Дочитай existing possible tasks и existing materialized tasks этой сессии.
+7. Дочитай активные задачи проекта, если известен `project-id`, prefer bounded-by-date CRM window.
+8. Считай `voice.session_tasks(session_id=..., bucket="draft")` mutable baseline для текущей сессии и верни полный желаемый набор `DRAFT_10` rows для этой сессии, а не только дельту.
+9. Выдели только executor-ready задачи.
+10. Удали явные дубли.
+11. Верни только канонический JSON-массив.
 
 Формат ответа:
 - Только валидный JSON-массив объектов.
@@ -103,6 +116,7 @@ oneOf:
 
 Дедупликация и snapshot semantics:
 - `voice.session_tasks(session_id=..., bucket="draft")` — это НЕ immutable duplicates, а mutable baseline.
+- `draft_horizon_days` / `include_older_drafts` — caller policy for draft visibility, а не новая ontology самой задачи.
 - Если задача уже есть в `DRAFT_10` и scope тот же, верни её с тем же `row_id/id`, но обнови формулировку при необходимости.
 - Если scope тот же, но задача уже материализована вне `DRAFT_10`, не возвращай её как новую Possible Task.
 - Если project_id известен и есть активная non-`DRAFT_10` задача с тем же смыслом, не возвращай дубликат.

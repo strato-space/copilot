@@ -42,11 +42,24 @@ uv run --directory "$(pwd)" fast-agent serve \
   --port 8722
 ```
 
+Repo-local bootstrap variant:
+
+```bash
+uv run --directory "$(pwd)" python run_fast_agent.py serve \
+  --config-path fastagent.config.yaml \
+  --agent-cards agent-cards \
+  --name copilot-agent-services \
+  --transport http \
+  --host 127.0.0.1 \
+  --port 8722
+```
+
 Security note: keep the agent service bound to loopback (`127.0.0.1`) and access it through backend proxy/SSH tunnel when needed.
 
 ## Runtime Notes
 
-- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `codexplan`.
+- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `codexspark`.
+- `run_fast_agent.py` is the repo-local bootstrap entrypoint for runtime model registrations. It currently registers `gpt-5.4` as a large-window Codex model (`context_window=950000`) without patching site-packages directly.
 - Preferred `create_tasks` input is a compact structured envelope with modes `raw_text`, `session_id`, or `session_url`.
 - A plain string is still treated as legacy `raw_text` input for backward compatibility.
 - Session-backed task extraction enriches context directly through MCP `voice`.

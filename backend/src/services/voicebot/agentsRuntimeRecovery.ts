@@ -17,7 +17,10 @@ const RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 const AGENTS_READY_TIMEOUT_MS = 30_000;
 const AGENTS_READY_POLL_INTERVAL_MS = 500;
 const AGENTS_READY_REQUEST_TIMEOUT_MS = 2_000;
-const CODEXSPARK_ACCOUNT_ID = 'd72d46e8-41f3-47c1-ba22-98c52b3f6448';
+const CODEXSPARK_ACCOUNT_IDS = new Set([
+  'd72d46e8-41f3-47c1-ba22-98c52b3f6448',
+  '4e0cfe6a-0bb7-4b6b-86c3-74a477572e49',
+]);
 const DEFAULT_MODEL_SPARK = 'codexspark';
 const DEFAULT_MODEL_PLAN = 'codexplan';
 
@@ -57,7 +60,7 @@ const resolveDesiredDefaultModel = (authBytes: Buffer): string => {
       parsed.accountId ??
       ''
     ).trim();
-    return accountId === CODEXSPARK_ACCOUNT_ID ? DEFAULT_MODEL_SPARK : DEFAULT_MODEL_PLAN;
+    return CODEXSPARK_ACCOUNT_IDS.has(accountId) ? DEFAULT_MODEL_SPARK : DEFAULT_MODEL_PLAN;
   } catch {
     return DEFAULT_MODEL_PLAN;
   }

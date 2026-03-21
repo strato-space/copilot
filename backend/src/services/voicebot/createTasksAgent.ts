@@ -2,6 +2,10 @@ import { getLogger } from '../../utils/logger.js';
 import { MCPProxyClient } from '../mcp/proxyClient.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
 import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from './agentsRuntimeRecovery.js';
+import { getDb } from '../db.js';
+import { VOICEBOT_COLLECTIONS } from '../../constants.js';
+import { ObjectId, type Db } from 'mongodb';
+import { randomUUID } from 'node:crypto';
 
 const logger = getLogger();
 
@@ -13,6 +17,16 @@ const resolveAgentsMcpServerUrl = (): string =>
       process.env.AGENTS_MCP_URL ||
       'http://127.0.0.1:8722'
   ).trim();
+
+const REDUCED_CONTEXT_MAX_CHARS = 12000;
+const REDUCED_CONTEXT_SUMMARY_MAX_CHARS = 4000;
+const REDUCED_CONTEXT_MESSAGE_MAX_CHARS = 1200;
+const REDUCED_CONTEXT_MAX_MESSAGES = 8;
+
+const measureTextPayload = (value: string): { chars: number; bytes: number } => ({
+  chars: value.length,
+  bytes: Buffer.byteLength(value, 'utf8'),
+});
 
 const asRecord = (value: unknown): UnknownRecord | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -107,6 +121,97 @@ const extractAgentError = (raw: string): string => {
   return '';
 };
 
+const isContextLengthFailure = (error: unknown): boolean => {
+  const text = error instanceof Error ? error.message : String(error);
+  return /context_length_exceeded/i.test(text);
+};
+
+const clipText = (value: string, limit: number): string => {
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, Math.max(0, limit - 1)).trim()}…`;
+};
+
+const resolveDbForFallback = (db?: Db): Db | null => {
+  if (db) return db;
+  try {
+    return getDb();
+  } catch {
+    return null;
+  }
+};
+
+const buildReducedCreateTasksRawText = async ({
+  db,
+  sessionId,
+}: {
+  db: Db;
+  sessionId: string;
+}): Promise<string | null> => {
+  if (!ObjectId.isValid(sessionId)) {
+    return null;
+  }
+
+  const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+    { _id: new ObjectId(sessionId) },
+    {
+      projection: {
+        _id: 1,
+        session_name: 1,
+        project_id: 1,
+        summary_md_text: 1,
+      },
+    }
+  );
+
+  const summary = toText((session as Record<string, unknown> | null)?.summary_md_text);
+  const messageDocs = await db
+    .collection(VOICEBOT_COLLECTIONS.MESSAGES)
+    .find(
+      {
+        session_id: sessionId,
+        is_deleted: { $ne: true },
+      },
+      {
+        projection: {
+          _id: 1,
+          message_timestamp: 1,
+          transcription_text: 1,
+          text: 1,
+        },
+      }
+    )
+    .sort({ message_timestamp: -1, _id: -1 })
+    .limit(REDUCED_CONTEXT_MAX_MESSAGES)
+    .toArray();
+
+  const messageSnippets = messageDocs
+    .map((doc) => {
+      const text = toText((doc as Record<string, unknown>).transcription_text) || toText((doc as Record<string, unknown>).text);
+      if (!text) return '';
+      const timestamp = toText((doc as Record<string, unknown>).message_timestamp);
+      return `- ${timestamp || 'message'}: ${clipText(text, REDUCED_CONTEXT_MESSAGE_MAX_CHARS)}`;
+    })
+    .filter(Boolean);
+
+  if (!summary && messageSnippets.length === 0) {
+    return null;
+  }
+
+  const sessionName = toText((session as Record<string, unknown> | null)?.session_name) || sessionId;
+  const projectId = toText((session as Record<string, unknown> | null)?.project_id);
+  const blocks = [
+    `Reduced create_tasks context for session ${sessionId}.`,
+    `Session name: ${sessionName}`,
+    ...(projectId ? [`Project id: ${projectId}`] : []),
+    ...(summary ? [`Summary:\n${clipText(summary, REDUCED_CONTEXT_SUMMARY_MAX_CHARS)}`] : []),
+    ...(messageSnippets.length > 0 ? [`Recent transcript excerpts:\n${messageSnippets.join('\n')}`] : []),
+    'Generate only clearly supported executor-ready tasks from this reduced context.',
+  ];
+
+  return clipText(blocks.join('\n\n'), REDUCED_CONTEXT_MAX_CHARS);
+};
+
 const parseTasksJson = (raw: string, defaultProjectId = ''): Array<Record<string, unknown>> => {
   const direct = raw.trim();
   if (!direct) return [];
@@ -185,18 +290,21 @@ export const runCreateTasksAgent = async ({
   sessionId,
   projectId,
   rawText,
+  db,
 }: {
   sessionId: string;
   projectId?: string;
   rawText?: string;
+  db?: Db;
 }): Promise<Array<Record<string, unknown>>> => {
   const mcpServerUrl = resolveAgentsMcpServerUrl();
   const canonicalSessionUrl = voiceSessionUrlUtils.canonical(sessionId);
-  const envelope =
-    rawText && rawText.trim().length > 0
+  const profileRunId = randomUUID();
+  const buildEnvelope = (text?: string) =>
+    text && text.trim().length > 0
       ? {
           mode: 'raw_text',
-          raw_text: rawText.trim(),
+          raw_text: text.trim(),
           session_url: canonicalSessionUrl,
           project_id: projectId || '',
         }
@@ -207,15 +315,26 @@ export const runCreateTasksAgent = async ({
           project_id: projectId || '',
         };
 
-  const executeAgentCall = async (): Promise<Array<Record<string, unknown>>> => {
+  const executeAgentCall = async (envelope: Record<string, unknown>): Promise<Array<Record<string, unknown>>> => {
     const mcpClient = new MCPProxyClient(mcpServerUrl);
     const session = await mcpClient.initializeSession();
+    const serializedEnvelope = JSON.stringify(envelope);
+    const envelopeMetrics = measureTextPayload(serializedEnvelope);
     try {
+      logger.info('[voicebot-worker] create_tasks agent run started', {
+        profile_run_id: profileRunId,
+        session_id: sessionId,
+        mcp_server: mcpServerUrl,
+        mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
+        envelope_chars: envelopeMetrics.chars,
+        envelope_bytes: envelopeMetrics.bytes,
+      });
       const result = await mcpClient.callTool(
         'create_tasks',
         {
-          message: JSON.stringify(envelope),
+          message: serializedEnvelope,
           session_id: sessionId,
+          profile_run_id: profileRunId,
         },
         session.sessionId,
         { timeout: 15 * 60 * 1000 }
@@ -237,8 +356,9 @@ export const runCreateTasksAgent = async ({
   };
 
   try {
-    const tasks = await executeAgentCall();
+    const tasks = await executeAgentCall(buildEnvelope(rawText));
     logger.info('[voicebot-worker] create_tasks agent completed', {
+      profile_run_id: profileRunId,
       session_id: sessionId,
       tasks_count: tasks.length,
       mcp_server: mcpServerUrl,
@@ -247,6 +367,31 @@ export const runCreateTasksAgent = async ({
     return tasks;
   } catch (error) {
     if (!isAgentsQuotaFailure(error)) {
+      if (isContextLengthFailure(error) && !(rawText && rawText.trim().length > 0)) {
+        const fallbackDb = resolveDbForFallback(db);
+        if (!fallbackDb) throw error;
+        const reducedRawText = await buildReducedCreateTasksRawText({
+          db: fallbackDb,
+          sessionId,
+        });
+        if (!reducedRawText) throw error;
+        logger.warn('[voicebot-worker] create_tasks agent retrying with reduced context', {
+          profile_run_id: profileRunId,
+          session_id: sessionId,
+          mcp_server: mcpServerUrl,
+          reduced_chars: reducedRawText.length,
+          reduced_bytes: Buffer.byteLength(reducedRawText, 'utf8'),
+        });
+        const tasks = await executeAgentCall(buildEnvelope(reducedRawText));
+        logger.info('[voicebot-worker] create_tasks agent completed with reduced context', {
+          profile_run_id: profileRunId,
+          session_id: sessionId,
+          tasks_count: tasks.length,
+          mcp_server: mcpServerUrl,
+          mode: 'raw_text_reduced',
+        });
+        return tasks;
+      }
       throw error;
     }
 
@@ -257,12 +402,14 @@ export const runCreateTasksAgent = async ({
     }
 
     logger.warn('[voicebot-worker] create_tasks agent retrying after quota recovery', {
+      profile_run_id: profileRunId,
       session_id: sessionId,
       mcp_server: mcpServerUrl,
     });
 
-    const tasks = await executeAgentCall();
+    const tasks = await executeAgentCall(buildEnvelope(rawText));
     logger.info('[voicebot-worker] create_tasks agent completed after quota recovery', {
+      profile_run_id: profileRunId,
       session_id: sessionId,
       tasks_count: tasks.length,
       mcp_server: mcpServerUrl,
