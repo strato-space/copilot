@@ -25,6 +25,8 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 - Avoid changing IDs/attribute semantics silently; record intent in `docs/rollout_plan_v1.md`.
 - Edit TQL fragments first, then rebuild the generated schema.
 - Keep rich semantic comments directly in the annotated TQL fragments.
+- For enum-like direct-write fields, prefer owner-level `@values(...)` constraints in TypeDB over ad hoc app-only validation.
+- Preserve canonical normalization rules in ingest for `target_task_view` status/priority before tightening DB constraints further.
 - If operator workflow changes, update:
   - `ontology/typedb/README.md`
   - repo root `CHANGELOG.md`
@@ -96,7 +98,7 @@ If you changed only docs, state explicitly that runtime validation was skipped.
 - 2026-02-28: `copilot-gym6.*` runtime-parity wave completed for schema/mapping/validation/tooling:
   - added gap baseline `docs/runtime_contract_gap_matrix_v1.md`,
   - expanded OperOps/Codex task contract coverage in schema/mapping,
-  - added `voice_session_sources_oper_task` relation and mapping path,
+  - added `voice_session_sources_task` relation and mapping path,
   - refreshed validation queries with OperTask/Codex checks.
 - 2026-02-28: `typedb-ontology-validate.py` anchor checks were made TypeDB 3 inference-safe (no direct variable reuse across different attribute labels).
 - 2026-02-28: `typedb-ontology-ingest.py` now ingests `automation_tasks` through generic mapping-driven path to reduce YAML/script drift.

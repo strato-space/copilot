@@ -27,6 +27,8 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - `typedb` AS-IS layer explicitly separates `person` and `performer_profile`; do not collapse `automation_persons` and `automation_performers` into one ontology object.
 - Kernel TQL attributes with `# @toon inventory=inspect ...` are the source of truth for dictionary-like field inspection and generated inline domain values in `str-ontology.tql`.
 - Ontology-specific implementation plans live under `ontology/plan/`.
+- Direct TypeDB write discipline now includes DB-side owner-level `@values(...)` constraints for task/task-view status and priority plus key TO-BE execution objects.
+- Executor-layer kernel vocabulary is now active in the ontology surface: `coding_agent`, `task_family`, `executor_role`, `executor_routing`, and `task_execution_run`.
 
 ## Key Rules
 
@@ -46,7 +48,7 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - Ontology sync wave `copilot-gym6.1`..`copilot-gym6.5` delivered a runtime-parity baseline for Voice/OperOps/Codex:
   - gap matrix source-of-truth: `typedb/docs/runtime_contract_gap_matrix_v1.md`,
   - schema extended for Codex/task lineage + deferred review fields + `project.git_repo`,
-  - new relation `voice_session_sources_oper_task` introduced for session-origin task linkage.
+  - new relation `voice_session_sources_task` introduced for session-origin task linkage.
 - MongoDB -> TypeDB mapping contract now includes expanded `automation_tasks` Codex/runtime fields and `automation_projects.git_repo`.
 - Validation artifacts were refreshed:
   - `typedb/queries/validation_v1.tql` includes task/codex quality gates (lineage, deferred due-at, project git_repo, runtime-tag counters),
@@ -80,7 +82,7 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - Schema contract updates:
   - `voice_session` now owns summary persistence fields (`summary_md_text`, `summary_saved_at`).
   - `forecast_project_month` now owns full forecast payload used by backend (`source_type`, `forecast_hours`, `forecast_cost_rub`, `rate_rub_per_hour_snapshot`, `fx_used`, `comment`, `updated_by`, `updated_source`, `updated_at`).
-  - alignment fixes for mapping-owned fields in `project_group`, `person`, `oper_task`, `cost_category`, `fx_monthly`.
+  - alignment fixes for mapping-owned fields in `project_group`, `person`, `task`, `cost_category`, `fx_monthly`.
 - Mapping contract updates:
   - `automation_voice_bot_sessions` now maps `summary_md_text` and `summary_saved_at`.
   - `automation_tasks` coalesce extended for `issue_type <- issue_type|type`.

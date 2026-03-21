@@ -1,0 +1,331 @@
+2026-03-21 06:50:05 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:50:05 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 06:50:05 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:50:05 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:51:40 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:51:40 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 06:51:40 [[32minfo[39m]: [voicebot-worker] create_tasks agent completed {"service":"copilot-backend","session_id":"699e823570e6008285f90106","tasks_count":5,"mcp_server":"http://127.0.0.1:8722","mode":"session_id"}
+2026-03-21 06:51:41 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:51:41 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 06:51:41 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:51:41 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:53:10 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:53:10 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 06:53:10 [[32minfo[39m]: [voicebot-worker] create_tasks agent completed {"service":"copilot-backend","session_id":"69a1524f8bd9d61756043592","tasks_count":8,"mcp_server":"http://127.0.0.1:8722","mode":"session_id"}
+2026-03-21 06:53:11 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:53:11 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 06:53:11 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:53:11 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:54:42 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:54:42 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 06:54:42 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"6996ae012835b2811da9b9ca","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."}
+2026-03-21 06:54:42 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:54:42 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 06:54:42 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:54:42 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:56:43 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:56:43 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 06:56:43 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"69942fc3f4275d74287986db","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."}
+2026-03-21 06:56:43 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:56:43 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 06:56:43 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:56:43 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:58:39 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 06:58:39 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 06:58:39 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"69944cf9f4275d7428798716","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."}
+2026-03-21 06:58:39 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:58:39 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 06:58:39 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 06:58:39 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:00:15 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:00:15 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:00:15 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"699573005d85620dd7ebb434","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."}
+2026-03-21 07:00:15 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:00:15 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:00:15 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:00:15 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:01:43 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:01:43 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:01:43 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"699e7de070e6008285f900f0","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: string_above_max_length) (status=400): Error code: 400 - {'error': {'message': \"Invalid 'input[14].output': string too long. Expected a string with maximum length 10485760, but got a string with length 112823... See fast-agent-error for additional details."}
+2026-03-21 07:01:43 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:01:43 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:01:43 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:01:43 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:04:39 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:04:39 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:04:39 [[32minfo[39m]: [voicebot-worker] create_tasks agent completed {"service":"copilot-backend","session_id":"69a11c953d4b4ccb9eb4de3b","tasks_count":15,"mcp_server":"http://127.0.0.1:8722","mode":"session_id"}
+2026-03-21 07:04:40 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:04:40 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:04:40 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:04:40 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:09:36 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:09:36 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:09:36 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"69a50eb64b07162c36957e08","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."}
+2026-03-21 07:09:36 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:09:36 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:09:36 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:09:36 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:12:30 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:12:30 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:12:30 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"69a686e17f377b054f83d41b","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: string_above_max_length) (status=400): Error code: 400 - {'error': {'message': \"Invalid 'input[14].output': string too long. Expected a string with maximum length 10485760, but got a string with length 112823... See fast-agent-error for additional details."}
+2026-03-21 07:12:30 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:12:30 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:12:30 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:12:30 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:14:30 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:14:30 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:14:30 [[32minfo[39m]: [voicebot-worker] create_tasks agent completed {"service":"copilot-backend","session_id":"69b296d2b8f72e772e8e2d34","tasks_count":16,"mcp_server":"http://127.0.0.1:8722","mode":"session_id"}
+2026-03-21 07:14:31 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:14:31 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:14:31 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:14:31 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:16:20 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:16:20 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:16:20 [[33mwarn[39m]: [voicebot-worker] rerun ambiguous batch session failed {"service":"copilot-backend","session_id":"69a7cb2002566a3e76d2dc11","error":"create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."}
+2026-03-21 07:16:20 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:16:20 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:16:20 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:16:20 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:18:24 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:18:24 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:18:24 [[32minfo[39m]: [voicebot-worker] create_tasks agent completed {"service":"copilot-backend","session_id":"69aa59158863fc916ec11e80","tasks_count":4,"mcp_server":"http://127.0.0.1:8722","mode":"session_id"}
+2026-03-21 07:18:25 [[32minfo[39m]: 🔧 Initializing MCP client for http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:18:25 [[32minfo[39m]: 📡 Connecting to http://127.0.0.1:8722/mcp via Streamable HTTP... {"service":"copilot-backend"}
+2026-03-21 07:18:25 [[32minfo[39m]: ✅ MCP client connected to http://127.0.0.1:8722 {"service":"copilot-backend"}
+2026-03-21 07:18:25 [[32minfo[39m]: 🔧 Calling MCP tool: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:20:12 [[32minfo[39m]: ✅ MCP tool call completed: create_tasks {"service":"copilot-backend"}
+2026-03-21 07:20:12 [[32minfo[39m]: 🔒 MCP session closed {"service":"copilot-backend"}
+2026-03-21 07:20:12 [[32minfo[39m]: [voicebot-worker] create_tasks agent completed {"service":"copilot-backend","session_id":"6996dacdff0189e621a4cc13","tasks_count":6,"mcp_server":"http://127.0.0.1:8722","mode":"session_id"}
+[
+  {
+    "session_id": "699e823570e6008285f90106",
+    "session_name": "Комменты по мейдике",
+    "payload_count": 17,
+    "generated_count": 5,
+    "draft_count": 5,
+    "accepted_overlap_count": 0,
+    "uncovered_keys": [
+      "add_server_capacity",
+      "hire_content_generator",
+      "fill_configurable_pipelines",
+      "improve_task_registration_flow",
+      "add_warning_on_task_execution",
+      "migrate_to_new_server",
+      "T6",
+      "automate_evening_task_processing",
+      "T7",
+      "resolve_session_split_conflict",
+      "T8",
+      "auto_stop_on_conflict",
+      "T9",
+      "stop_voicebot_on_prod",
+      "T10",
+      "remove_node_modules_folder",
+      "T11",
+      "setup_networked_mcp_for_figma",
+      "T12",
+      "add_project_chat_mapping",
+      "T13",
+      "integrate_codex_with_telegram",
+      "T14",
+      "add_copilot_telegram_bot",
+      "T15",
+      "fix_and_update_figma_plugin_repo",
+      "T16",
+      "implement_task_reformulation",
+      "T17"
+    ],
+    "clearable": false,
+    "status": "needs_manual_review"
+  },
+  {
+    "session_id": "69a1524f8bd9d61756043592",
+    "session_name": "Оптимизация договоров и стратегии продаж в IT-проектах",
+    "payload_count": 19,
+    "generated_count": 8,
+    "draft_count": 8,
+    "accepted_overlap_count": 0,
+    "uncovered_keys": [
+      "contracts_pressure_tools",
+      "T1",
+      "direct_sales_model_analysis",
+      "T2",
+      "salary_fund_setup",
+      "T3",
+      "devs_team_sales_decision",
+      "T4",
+      "access_to_users_request",
+      "T5",
+      "rms_audit_and_contract",
+      "T6",
+      "project_stage_automation",
+      "T7",
+      "user_testing_process",
+      "T8",
+      "front_sync_calls_process",
+      "T9",
+      "user_access_process_any_project",
+      "T10",
+      "new_role_analytic",
+      "T11",
+      "slidecast_quality_control",
+      "T12",
+      "interactive_prototype_presentation",
+      "T13",
+      "media_generation_market_entry",
+      "T14",
+      "confi_sales_support",
+      "T15",
+      "sales_funnel_development",
+      "T16",
+      "likeauto_resume_relaunch",
+      "T17",
+      "eu_clients_comms_adaptation",
+      "T18"
+    ],
+    "clearable": false,
+    "status": "needs_manual_review"
+  },
+  {
+    "session_id": "6996ae012835b2811da9b9ca",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "69942fc3f4275d74287986db",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "69944cf9f4275d7428798716",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "699573005d85620dd7ebb434",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "699e7de070e6008285f900f0",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: string_above_max_length) (status=400): Error code: 400 - {'error': {'message': \"Invalid 'input[14].output': string too long. Expected a string with maximum length 10485760, but got a string with length 112823... See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "69a11c953d4b4ccb9eb4de3b",
+    "session_name": "Оптимизация договорных отношений и рост прибыльности проектов",
+    "payload_count": 14,
+    "generated_count": 15,
+    "draft_count": 15,
+    "accepted_overlap_count": 0,
+    "uncovered_keys": [
+      "contract_formalization_titan",
+      "evaluate_direct_sales_to_client",
+      "mpicker_access_and_roadmap",
+      "audit_and_observation_rms",
+      "test_stage_integration",
+      "regular_front_calls",
+      "direct_user_access",
+      "role_analyst_implementation",
+      "mpicker_storyboard_process",
+      "presentation_case_studies",
+      "media_generation_pipeline",
+      "confy_sales_risk_analysis",
+      "sales_process_reboot",
+      "ops_automation"
+    ],
+    "clearable": false,
+    "status": "needs_manual_review"
+  },
+  {
+    "session_id": "69a50eb64b07162c36957e08",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "69a686e17f377b054f83d41b",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: string_above_max_length) (status=400): Error code: 400 - {'error': {'message': \"Invalid 'input[14].output': string too long. Expected a string with maximum length 10485760, but got a string with length 112823... See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "69b296d2b8f72e772e8e2d34",
+    "session_name": "LikeAuto: Редизайн фотоотчетов и витрины: согласование объема и сроков",
+    "payload_count": 17,
+    "generated_count": 16,
+    "draft_count": 31,
+    "accepted_overlap_count": 0,
+    "uncovered_keys": [
+      "69b296d2b8f72e772e8e2d34-pt-007",
+      "NEW_0-007"
+    ],
+    "clearable": false,
+    "status": "needs_manual_review"
+  },
+  {
+    "session_id": "69a7cb2002566a3e76d2dc11",
+    "status": "needs_manual_review",
+    "error": "create_tasks_agent_error: codexresponses request failed for model 'gpt-5.3-codex-spark' (code: context_length_exceeded): Your input exceeds the context window of this model. Please adjust your input and try again. See fast-agent-error for additional details."
+  },
+  {
+    "session_id": "69aa59158863fc916ec11e80",
+    "session_name": "Апрельский план: коннекты и запуск продаж",
+    "payload_count": 11,
+    "generated_count": 4,
+    "draft_count": 4,
+    "accepted_overlap_count": 0,
+    "uncovered_keys": [
+      "prepare_sales_by_end_of_month",
+      "clarify_which_tech_tasks_remain",
+      "reschedule_or_confirm_calls",
+      "define_final_results_for_engineering_work",
+      "plan_next_week_sales_calls",
+      "T5",
+      "return_to_offers_and_shift_from_engineering",
+      "T6",
+      "finalize_offer_presentation",
+      "T7",
+      "establish_connectors_with_integrators",
+      "T8",
+      "set_up_sales_funnel_bot",
+      "T9",
+      "design_multiple_sales_funnels",
+      "T10",
+      "define_project_stop_points",
+      "T11"
+    ],
+    "clearable": false,
+    "status": "needs_manual_review"
+  },
+  {
+    "session_id": "6996dacdff0189e621a4cc13",
+    "session_name": "Test Session",
+    "payload_count": 10,
+    "generated_count": 6,
+    "draft_count": 6,
+    "accepted_overlap_count": 0,
+    "uncovered_keys": [
+      "bug_session_not_ending_on_done",
+      "T1",
+      "ui_transcription_upload_chunks_btn",
+      "T2",
+      "feature_remove_duplicates_transcription",
+      "T3",
+      "ui_sort_transcription_direction",
+      "T4",
+      "bug_transcription_chunks_not_refreshing",
+      "T5",
+      "infra_check_services_after_server_restart",
+      "T6",
+      "feature_dual_channel_recording",
+      "T7",
+      "feature_multiuser_session_recording",
+      "T8",
+      "feature_upload_status_indicator",
+      "T9",
+      "feature_autotask_generation_on_session_end",
+      "T10"
+    ],
+    "clearable": false,
+    "status": "needs_manual_review"
+  }
+]

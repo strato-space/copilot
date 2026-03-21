@@ -26,7 +26,7 @@ relation as_is_voice_session_maps_to_mode_segment,
   relates mode_segment;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="as_is_oper_task_maps_to_target_task_view"> ---
+# --- <semantic-card id="as_is_task_maps_to_target_task_view"> ---
 # kind: projection-bridge
 # fpf_basis:
 #   - A.6.9 U.CrossContextSamenessDisambiguation
@@ -34,8 +34,8 @@ relation as_is_voice_session_maps_to_mode_segment,
 # what: Maps an operational task row to target task semantics.
 # not: Not a materialization command.
 # why: Provides stable task semantics above runtime rows.
-relation as_is_oper_task_maps_to_target_task_view,
-  relates as_is_oper_task,
+relation as_is_task_maps_to_target_task_view,
+  relates as_is_task,
   relates target_task_view;
 # --- </semantic-card> ---
 

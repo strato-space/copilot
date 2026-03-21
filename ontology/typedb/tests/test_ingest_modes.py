@@ -124,6 +124,25 @@ class IngestHelpersTest(unittest.TestCase):
         self.assertIn("relation as_is_project_maps_to_project_context_card,", text)
         self.assertIn("relation as_is_voice_session_maps_to_mode_segment,", text)
 
+    def test_normalize_target_task_status_key_maps_labels_to_canonical_keys(self) -> None:
+        self.assertEqual(ingest.normalize_target_task_status_key("Draft"), "DRAFT_10")
+        self.assertEqual(ingest.normalize_target_task_status_key("Ready"), "READY_10")
+        self.assertEqual(ingest.normalize_target_task_status_key("Progress 10"), "PROGRESS_10")
+        self.assertEqual(ingest.normalize_target_task_status_key("Review / Ready"), "REVIEW_10")
+        self.assertEqual(ingest.normalize_target_task_status_key("Done"), "DONE_10")
+        self.assertEqual(ingest.normalize_target_task_status_key("Archive"), "ARCHIVE")
+        self.assertEqual(ingest.normalize_target_task_status_key("DRAFT_10"), "DRAFT_10")
+        self.assertEqual(ingest.normalize_target_task_status_key("weird"), "UNKNOWN")
+        self.assertEqual(ingest.normalize_target_task_status_key(None), "UNKNOWN")
+
+    def test_normalize_target_task_priority_maps_raw_labels_to_canonical_values(self) -> None:
+        self.assertEqual(ingest.normalize_target_task_priority("🔥 P1 "), "P1")
+        self.assertEqual(ingest.normalize_target_task_priority("🔥 P1"), "P1")
+        self.assertEqual(ingest.normalize_target_task_priority("P2"), "P2")
+        self.assertEqual(ingest.normalize_target_task_priority("P7"), "P7")
+        self.assertEqual(ingest.normalize_target_task_priority("weird"), "UNKNOWN")
+        self.assertEqual(ingest.normalize_target_task_priority(None), "UNKNOWN")
+
     def test_entity_has_matching_updated_at_returns_true_for_equal_timestamp(self) -> None:
         ctx = DummyCtx("full", {"collections": {}}, apply=True)
         original = ingest.load_entity_updated_at_index
@@ -131,7 +150,7 @@ class IngestHelpersTest(unittest.TestCase):
             ingest.load_entity_updated_at_index = lambda *args, **kwargs: {"task-1": datetime(2026, 3, 15, 7, 0, 0)}
             matched = ingest.entity_has_matching_updated_at(
                 ctx,
-                entity="oper_task",
+                entity="task",
                 key_attr="task_id",
                 key_value="task-1",
                 attr_specs=[("updated_at", "datetime", "2026-03-15T07:00:00Z")],
@@ -144,7 +163,7 @@ class IngestHelpersTest(unittest.TestCase):
         ctx = DummyCtx("full", {"collections": {}}, apply=True)
         matched = ingest.entity_has_matching_updated_at(
             ctx,
-            entity="oper_task",
+            entity="task",
             key_attr="task_id",
             key_value="task-1",
             attr_specs=[("created_at", "datetime", "2026-03-15T07:00:00Z")],

@@ -75,6 +75,7 @@ Ontology uses a dual surface:
 - `20-to-be` now models object-bound target semantics aligned with Mode Engine and FPF, not generic memory buckets.
 - `30-bridges` now expresses AS-IS -> TO-BE semantic translation for projects, sessions, tasks, object history, and semantic artifacts.
 - These layers are for reasoning and traceability only; they are not a runtime CRUD source of truth.
+- DB-side owner-level `@values(...)` constraints are now part of the schema contract for `task`, `target_task_view`, and key TO-BE execution/process/product status carriers.
 
 ## Current TO-BE Semantic Core
 
@@ -109,6 +110,12 @@ The current `20-to-be` layer defines:
   - `access_policy`
 - task semantics:
   - `target_task_view`
+- executor-layer semantics:
+  - `coding_agent`
+  - `task_family`
+  - `executor_role`
+  - `executor_routing`
+  - `task_execution_run`
 - typed memory classifications:
   - `working_memory`
   - `session_memory`
@@ -118,7 +125,7 @@ The current `20-to-be` layer defines:
 The current `30-bridges` layer defines bridge families such as:
 - `as_is_project_maps_to_project_context_card`
 - `as_is_voice_session_maps_to_mode_segment`
-- `as_is_oper_task_maps_to_target_task_view`
+- `as_is_task_maps_to_target_task_view`
 - `as_is_possible_task_maps_to_target_task_view`
 - `as_is_voice_message_maps_to_object_event`
 - `as_is_summary_maps_to_object_conclusion`
@@ -157,8 +164,8 @@ These remain operational/runtime-facing or are intentionally replaced by object-
 - Added cross-artifact gap baseline: `docs/runtime_contract_gap_matrix_v1.md` (runtime contract -> ontology coverage -> required change).
 - Extended `schema/str-ontology.tql` for OperOps/Codex task lifecycle:
   - `project` now owns `git_repo`,
-  - `oper_task` includes source lineage (`source_ref`, `external_ref`, `source_kind`, `source_data`), Codex review lifecycle fields, and `runtime_tag`,
-  - new relation `voice_session_sources_oper_task` links session-origin tasks.
+  - `task` includes source lineage (`source_ref`, `external_ref`, `source_kind`, `source_data`), Codex review lifecycle fields, and `runtime_tag`,
+  - new relation `voice_session_sources_task` links session-origin tasks.
 - Updated `mappings/mongodb_to_typedb_v1.yaml`:
   - mapped `automation_projects.git_repo`,
   - expanded `automation_tasks` mapping with Codex/runtime fields and session-link relation.
@@ -173,7 +180,7 @@ These remain operational/runtime-facing or are intentionally replaced by object-
 - Schema alignment completed for mapping-owned fields that previously were silently skipped:
   - `project_group`: `project_groups_ids`, `client_id`
   - `person`: `performer_id`
-  - `oper_task`: `is_deleted`
+  - `task`: `is_deleted`
   - `forecast_project_month`: `source_type`, `forecast_hours`, `forecast_cost_rub`, `rate_rub_per_hour_snapshot`, `fx_used`, `comment`, `updated_by`, `updated_source`, `updated_at`
   - `cost_category`: `created_by`, `updated_by`
   - `fx_monthly`: `source`, `created_by`, `created_at`
@@ -226,7 +233,7 @@ Current live split:
   - used for `client`, `legacy_client`, `project`, `project_group`, `cost_category`, `voice_session`
 - `status`
   - workflow/task status alphabet
-  - kept for `oper_task`
+  - kept for `task`
 - `event_status`
   - process/event lifecycle
   - used for `history_step`
@@ -282,7 +289,7 @@ Explicit linkage:
 - `person_has_performer_profile`
 
 Performer-backed relations terminate on `performer_profile`:
-- `oper_task_assigned_to_performer_profile`
+- `task_assigned_to_performer_profile`
 - `performer_profile_creates_work_log`
 - `performer_profile_has_legacy_finance_expense`
 - `performer_profile_maps_to_employee`

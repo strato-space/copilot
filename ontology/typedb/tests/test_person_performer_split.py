@@ -29,8 +29,8 @@ class PersonPerformerSplitTest(unittest.TestCase):
         self.assertEqual(person_relations["person_has_performer_profile"]["owner_lookup"]["by"], "performer_profile_id")
 
         task_relations = {rel["relation"]: rel for rel in by_collection["automation_tasks"].get("relations", [])}
-        self.assertIn("oper_task_assigned_to_performer_profile", task_relations)
-        self.assertEqual(task_relations["oper_task_assigned_to_performer_profile"]["owner_lookup"]["entity"], "performer_profile")
+        self.assertIn("task_assigned_to_performer_profile", task_relations)
+        self.assertEqual(task_relations["task_assigned_to_performer_profile"]["owner_lookup"]["entity"], "performer_profile")
 
         work_relations = {rel["relation"]: rel for rel in by_collection["automation_work_hours"].get("relations", [])}
         self.assertIn("performer_profile_creates_work_log", work_relations)
@@ -48,12 +48,12 @@ class PersonPerformerSplitTest(unittest.TestCase):
         self.assertIn('entity performer_profile,', core)
         self.assertIn('owns performer_profile_id @key,', core)
         self.assertIn('relation person_has_performer_profile,', rels)
-        self.assertIn('relation oper_task_assigned_to_performer_profile,', rels)
+        self.assertIn('relation task_assigned_to_performer_profile,', rels)
         self.assertIn('relation performer_profile_creates_work_log,', rels)
         self.assertIn('relation performer_profile_maps_to_employee,', rels)
         self.assertIn('relation performer_profile_has_legacy_finance_expense,', rels)
 
-        self.assertIn('plays oper_task_assigned_to_performer_profile:assignee_performer_profile,', core)
+        self.assertIn('plays task_assigned_to_performer_profile:assignee_performer_profile,', core)
         self.assertIn('plays person_has_performer_profile:person,', core)
         self.assertIn('plays performer_profile_maps_to_employee:target_employee,', finops)
 

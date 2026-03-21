@@ -87,7 +87,7 @@ entity project,
   plays client_owns_project:owned_project,
   plays project_group_has_project:linked_project,
   plays project_has_project_link:owner_project,
-  plays project_has_oper_task:owner_project,
+  plays project_has_task:owner_project,
   plays project_has_voice_session:owner_project,
   plays project_has_epic_task:owner_project,
   plays project_has_google_drive_file:owner_project,
@@ -183,7 +183,8 @@ entity performer_profile,
   owns payments_settings,
   plays person_has_performer_profile:performer_profile,
   plays telegram_user_maps_to_performer_profile:linked_performer_profile,
-  plays oper_task_assigned_to_performer_profile:assignee_performer_profile,
+  plays task_assigned_to_performer_profile:assignee_performer_profile,
+  plays performer_profile_enacts_executor_role:performer_profile,
   plays project_performer_link_binds_performer_profile:linked_performer_profile,
   plays performer_profile_maps_to_employee:source_performer_profile,
   plays performer_profile_creates_work_log:author_performer_profile,
@@ -299,7 +300,7 @@ entity status_dict,
   owns name,
   owns module_scope,
   owns order_index,
-  plays oper_task_has_status:task_status;
+  plays task_has_status:task_status;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="priority_dict"> ---
@@ -314,7 +315,7 @@ entity priority_dict,
   owns priority_id @key,
   owns name,
   owns priority_rank,
-  plays oper_task_has_priority:task_priority;
+  plays task_has_priority:task_priority;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="task_type"> ---
@@ -328,7 +329,7 @@ entity priority_dict,
 entity task_type,
   owns task_type_id @key,
   owns name,
-  plays oper_task_classified_as_task_type:task_type;
+  plays task_classified_as_task_type:task_type;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="task_type_tree"> ---
@@ -349,7 +350,7 @@ entity task_type_tree,
   owns roles,
   owns parent_type_id,
   owns task_id,
-  plays task_type_tree_classifies_oper_task:task_type_tree;
+  plays task_type_tree_classifies_task:task_type_tree;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="voice_context_item"> ---
@@ -370,7 +371,7 @@ entity voice_context_item,
   plays project_has_voice_context_item:context_item,
   plays dialog_represented_by_context_item:context_item,
   plays agreement_evidenced_by_context_item:context_item,
-  plays oper_task_evidenced_by_context_item:context_item;
+  plays task_evidenced_by_context_item:context_item;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="dialog"> ---
@@ -428,10 +429,10 @@ entity agreement,
   owns decided_at,
   plays dialog_yields_agreement:agreement,
   plays agreement_evidenced_by_context_item:agreement,
-  plays agreement_creates_oper_task:agreement;
+  plays agreement_creates_task:agreement;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="oper_task"> ---
+# --- <semantic-card id="task"> ---
 # kind: task-record
 # fpf_basis:
 #   - U.BoundedContext
@@ -440,103 +441,268 @@ entity agreement,
 # what: Operational task record from Mongo runtime.
 # not: Not the normalized target task view.
 # why: Acts as the main AS-IS source for task projection.
-entity oper_task,
+# field task_id: canonical Mongo document identity for the task row.
+# field project_id: owning project identifier used for project/task binding.
+# field external_id: public or external-facing task identifier when present.
+# field old_id: legacy historical task identifier kept for compatibility.
+# field project_ref: raw project reference text copied from runtime payloads.
+# field row_id: canonical row locator for draft/task reconcile and dedupe.
+# field type_class: coarse task class used by runtime grouping and logic.
+# field title: primary human-readable task title.
+# field description: main task body/acceptance-oriented formulation text.
+# field status: stored task lifecycle label as persisted in Mongo.
+# field last_status: previous stored lifecycle label when runtime tracks transitions.
+# field last_status_update: timestamp of latest lifecycle change.
+# field status_history: legacy/general status history payload.
+# field task_status_history: task-specific lifecycle transition history payload.
+# field priority: stored task priority label/value.
+# field due_at: planned due date or deadline timestamp.
+# field priority_rank: numeric priority rank for sorting/comparison.
+# field task_type_name: raw human-readable task type label.
+# field task_type_id: referenced task-type dictionary identifier.
+# field sprint: sprint/batch label when task is assigned to one.
+# field shipment_date: planned shipment/release date when tracked.
+# field score_min_hours: lower effort estimate bound in hours.
+# field score_max_hours: upper effort estimate bound in hours.
+# field planned_time: explicit planned effort budget.
+# field performer: raw performer display label.
+# field performer_id: performer profile identifier responsible for execution.
+# field epic_task_id: parent epic identifier when task belongs to one.
+# field notion_url: linked Notion artifact URL when present.
+# field notion_board_id: linked Notion board identifier when present.
+# field status_update_checked: runtime marker that status-sync/check pass was completed.
+# field comments_list: embedded legacy comments payload.
+# field dashboard_comment: compact dashboard-specific comment text.
+# field order_index: manual/display ordering index.
+# field source: source system/family marker for lineage.
+# field source_kind: provenance subtype such as voice/session origin marker.
+# field source_ref: primary source reference used for task/session lineage joins.
+# field external_ref: secondary external source reference used for lineage joins.
+# field source_data: raw structured lineage/context payload kept for compatibility.
+# field dialogue_reference: quoted transcript/dialogue fragment explaining why task exists.
+# field dialogue_tag: analyzer/runtime tag for discussion slice or task class.
+# field dependencies: normalized dependency payload.
+# field dependencies_from_ai: analyzer-emitted dependency identifiers.
+# field labels: freeform labels/tags attached to the task.
+# field notes: extra operator/runtime notes bound to the task.
+# field issue_type: issue/task subtype label when runtime provides one.
+# field assignee: raw assignee label kept for compatibility.
+# field owner: raw owner label kept for compatibility.
+# field created_by: creator identifier.
+# field created_by_name: creator display name.
+# field created_by_performer_id: creator performer-profile identifier.
+# field task_id_from_ai: analyzer-emitted task identifier used as compatibility metadata.
+# field priority_reason: explanation of why the chosen priority was assigned.
+# field codex_task: marks the row as a Codex-issued taskflow row.
+# field codex_review_state: deferred-review lifecycle marker for Codex flow.
+# field codex_review_due_at: next due timestamp for Codex review handling.
+# field codex_review_summary: generated Codex review summary text.
+# field codex_review_summary_source: provenance of the summary content.
+# field codex_review_summary_issue_id: linked issue identifier for review summary lineage.
+# field codex_review_summary_processing: processing-state marker for review summary generation.
+# field codex_review_summary_attempts: retry counter for summary generation.
+# field codex_review_summary_job_id: async job identifier for summary generation.
+# field codex_review_summary_started_at: summary generation start timestamp.
+# field codex_review_summary_generated_at: summary generation completion timestamp.
+# field codex_review_summary_next_attempt_at: scheduled next retry timestamp.
+# field codex_review_summary_last_error_code: latest review-summary error code.
+# field codex_review_summary_last_error_message: latest review-summary error message.
+# field codex_review_summary_last_runner_error: latest runner-level error payload.
+# field codex_review_summary_last_error_at: timestamp of latest summary-generation error.
+# field codex_review_summary_finished_at: terminal timestamp for summary pipeline.
+# field codex_review_summary_note_marker: marker used when syncing summary note back.
+# field codex_review_summary_note_synced_at: timestamp when summary note sync completed.
+# field codex_review_summary_note_appended: flag that summary note append happened.
+# field codex_review_approval_card_sent_at: timestamp when approval card was sent.
+# field codex_review_approval_card_chat_id: target chat identifier for approval card.
+# field codex_review_approval_card_thread_id: target thread/topic identifier for approval card.
+# field codex_review_approval_card_message_id: sent approval card message identifier.
+# field codex_review_approval_card_start_callback: callback token for approval start action.
+# field codex_review_approval_card_cancel_callback: callback token for approval cancel action.
+# field runtime_tag: legacy runtime isolation tag kept for compatibility/transition.
+# field is_deleted: soft-delete flag.
+# field stop_comment_parsing: flag disabling automatic comment parsing for this task.
+# field created_at: creation timestamp.
+# field updated_at: last update timestamp.
+entity task,
+  # canonical Mongo row identity from automation_tasks._id
   owns task_id @key,
+  # bound project identifier used by task/project routing and reporting
   owns project_id,
+  # public/external task id shown in UI when present
   owns external_id,
+  # older legacy task id retained for historical compatibility
   owns old_id,
+  # legacy project label fallback from raw task rows
   owns project_ref,
+  # canonical draft/taskflow row locator reused across refreshes
   owns row_id,
+  # broad class of work (task/spec/research/etc) used by runtime prompts and UI
   owns type_class,
+  # primary task title / short actionable name
   owns title,
+  # main task body / execution description
   owns description,
-  owns status,
+  # raw stored lifecycle label from Mongo task_status
+  owns status @values("Draft", "Ready", "Progress 10", "Review / Ready", "Done", "Archive", "unknown"),
+  # previous stored lifecycle label when tracked separately
   owns last_status,
+  # timestamp of the latest lifecycle change
   owns last_status_update,
+  # legacy status-history payload from raw storage
   owns status_history,
+  # structured lifecycle transition history payload
   owns task_status_history,
-  owns priority,
+  # raw priority label/value from runtime task rows
+  owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
+  # task deadline / due timestamp
   owns due_at,
+  # normalized numeric priority rank when available
   owns priority_rank,
+  # legacy task-type label from raw rows
   owns task_type_name,
+  # canonical task-type dictionary id
   owns task_type_id,
+  # sprint label/id used by planning surfaces
   owns sprint,
+  # planned shipment/delivery date
   owns shipment_date,
+  # lower estimate bound in hours
   owns score_min_hours,
+  # upper estimate bound in hours
   owns score_max_hours,
+  # explicit planned work time in hours
   owns planned_time,
+  # legacy assignee label/name from raw task rows
   owns performer,
+  # canonical performer profile id used for assignment
   owns performer_id,
+  # linked epic identifier when the task belongs to an epic
   owns epic_task_id,
+  # external Notion page URL for the task
   owns notion_url,
+  # external Notion board/database id
   owns notion_board_id,
+  # runtime flag that status update was explicitly reviewed/acknowledged
   owns status_update_checked,
+  # embedded/historical comments cache mirrored on the task row
   owns comments_list,
+  # dashboard-facing summary/comment field
   owns dashboard_comment,
+  # kanban/manual ordering index
   owns order_index,
+  # producing subsystem label (VOICE_BOT, etc)
   owns source,
+  # provenance kind such as voice_possible_task or voice_session
   owns source_kind,
+  # primary source/session reference used for lineage
   owns source_ref,
+  # external canonical source reference used by session/task joins
   owns external_ref,
+  # normalized JSON payload with lineage and compatibility metadata
   owns source_data,
+  # transcript excerpt / phrase that evidences why the task exists
   owns dialogue_reference,
+  # dialogue/task tag used by voice taskflow
   owns dialogue_tag,
+  # structured dependency payload from storage/runtime
   owns dependencies,
+  # dependency ids suggested by AI extraction
   owns dependencies_from_ai,
+  # freeform labels/tags attached to the task
   owns labels,
+  # extra notes not normalized into stronger fields
   owns notes,
+  # issue category/classification for mixed task/issue surfaces
   owns issue_type,
-  owns type_class,
+  # legacy assignee label retained for compatibility
   owns assignee,
+  # owner label/id retained from raw task rows
   owns owner,
+  # creator id
   owns created_by,
+  # creator display name
   owns created_by_name,
+  # creator performer profile id
   owns created_by_performer_id,
+  # AI-generated stable candidate id used as fallback locator
   owns task_id_from_ai,
+  # rationale for assigned priority
   owns priority_reason,
+  # marks Codex-managed taskflow rows
   owns codex_task,
+  # current Codex deferred-review state
   owns codex_review_state,
+  # due-at for deferred Codex review
   owns codex_review_due_at,
+  # generated Codex review summary text
   owns codex_review_summary,
+  # source label of the generated review summary
   owns codex_review_summary_source,
+  # linked issue/task id mentioned by review summary
   owns codex_review_summary_issue_id,
+  # processing flag for review summary generation
   owns codex_review_summary_processing,
+  # retry attempt counter for review summary generation
   owns codex_review_summary_attempts,
+  # background job id for summary generation
   owns codex_review_summary_job_id,
+  # timestamp when summary generation started
   owns codex_review_summary_started_at,
+  # timestamp when summary was generated
   owns codex_review_summary_generated_at,
+  # next retry timestamp for deferred summary generation
   owns codex_review_summary_next_attempt_at,
+  # last structured error code from summary generation
   owns codex_review_summary_last_error_code,
+  # last human-readable error message from summary generation
   owns codex_review_summary_last_error_message,
+  # last runner/internal error payload
   owns codex_review_summary_last_runner_error,
+  # timestamp of last summary-generation error
   owns codex_review_summary_last_error_at,
+  # timestamp when summary generation finished
   owns codex_review_summary_finished_at,
+  # marker showing whether review note was appended
   owns codex_review_summary_note_marker,
+  # timestamp when review note sync completed
   owns codex_review_summary_note_synced_at,
+  # flag whether review note append succeeded
   owns codex_review_summary_note_appended,
+  # timestamp when approval card was sent
   owns codex_review_approval_card_sent_at,
+  # Telegram chat id for approval card delivery
   owns codex_review_approval_card_chat_id,
+  # Telegram thread/topic id for approval card delivery
   owns codex_review_approval_card_thread_id,
+  # Telegram message id of the approval card
   owns codex_review_approval_card_message_id,
+  # callback token/action for approval-card start
   owns codex_review_approval_card_start_callback,
+  # callback token/action for approval-card cancel
   owns codex_review_approval_card_cancel_callback,
+  # legacy runtime family marker kept for historical rows only
   owns runtime_tag,
+  # soft-delete flag
   owns is_deleted,
+  # legacy flag that comment parsing should stop for this task
   owns stop_comment_parsing,
+  # creation timestamp
   owns created_at,
+  # last update timestamp
   owns updated_at,
-  plays project_has_oper_task:oper_task,
-  plays voice_session_sources_oper_task:sourced_oper_task,
-  plays oper_task_classified_as_task_type:oper_task,
-  plays task_type_tree_classifies_oper_task:oper_task,
-  plays oper_task_has_work_log:oper_task,
-  plays agreement_creates_oper_task:oper_task,
-  plays oper_task_evidenced_by_context_item:oper_task,
-  plays oper_task_has_status:oper_task,
-  plays oper_task_has_priority:oper_task,
-  plays oper_task_assigned_to_performer_profile:oper_task,
-  plays patch_operation_mutates_oper_task:oper_task,
-  plays as_is_oper_task_maps_to_target_task_view:as_is_oper_task,
+  plays project_has_task:task,
+  plays voice_session_sources_task:sourced_task,
+  plays task_classified_as_task_type:task,
+  plays task_type_tree_classifies_task:task,
+  plays task_has_work_log:task,
+  plays agreement_creates_task:task,
+  plays task_evidenced_by_context_item:task,
+  plays task_has_status:task,
+  plays task_has_priority:task,
+  plays task_assigned_to_performer_profile:task,
+  plays patch_operation_mutates_task:task,
+  plays as_is_task_maps_to_target_task_view:as_is_task,
   plays as_is_possible_task_maps_to_target_task_view:as_is_possible_task;
 # --- </semantic-card> ---
 
@@ -581,7 +747,7 @@ entity work_log,
   owns edited_at,
   owns raw_date,
   owns result_link,
-  plays oper_task_has_work_log:work_log,
+  plays task_has_work_log:work_log,
   plays performer_profile_creates_work_log:work_log;
 # --- </semantic-card> ---
 

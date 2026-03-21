@@ -27,6 +27,8 @@ Scope: `/home/strato-space/copilot/ontology`
 - Treat `ontology/typedb/schema/fragments/*.tql` as editable source of truth and `ontology/typedb/schema/str-ontology.tql` as the generated artifact.
 - Treat `copilot` ontology as kernel/common layer for all project-local ontology overlays.
 - Keep project-local SemanticCards aligned with ontology changes whenever object semantics change.
+- Keep DB-side owner-level `@values(...)` constraints intact for task/task-view status and priority; do not reintroduce unconstrained raw-label writes.
+- Treat executor-layer objects (`task_family`, `executor_role`, `executor_routing`, `task_execution_run`) as active kernel vocabulary, not speculative prose-only terms.
 - If schema/mapping changes affect runtime assumptions, update:
   - `/home/strato-space/copilot/AGENTS.md`
   - `/home/strato-space/copilot/README.md`
@@ -48,7 +50,7 @@ Run ontology tooling via backend npm aliases (stable operator contract):
 - 2026-02-28: `copilot-gym6.1`..`copilot-gym6.5` completed ontology runtime-parity wave:
   - gap matrix baseline added: `ontology/typedb/docs/runtime_contract_gap_matrix_v1.md`,
   - schema + mapping extended for Codex/task lineage, deferred review lifecycle, `project.git_repo`, and task runtime tagging,
-  - `voice_session_sources_oper_task` relation added and mapped from `automation_tasks.source_ref`.
+  - `voice_session_sources_task` relation added and mapped from `automation_tasks.source_ref`.
 - 2026-02-28: Validation pack/tooling refreshed for TypeDB 3 compatibility:
   - `ontology/typedb/queries/validation_v1.tql` now covers task/codex quality gates,
   - `ontology/typedb/scripts/typedb-ontology-validate.py` anchor checks were rewritten to avoid incompatible attribute-type joins (`pending_image_anchor_message_id` vs `voice_message_id`).

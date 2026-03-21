@@ -61,11 +61,11 @@ SPARSE_OPTIONAL_FIELDS: dict[str, set[str]] = {
 }
 
 SPARSE_OPTIONAL_RELATION_LOOKUPS: dict[str, set[str]] = {
-    "automation_task_types_tree": {"task_type_tree_classifies_oper_task <- task_id"},
+    "automation_task_types_tree": {"task_type_tree_classifies_task <- task_id"},
     "automation_tasks": {
-        "oper_task_assigned_to_performer_profile <- performer_id",
-        "oper_task_classified_as_task_type <- task_type_id",
-        "voice_session_sources_oper_task <- source_ref",
+        "task_assigned_to_performer_profile <- performer_id",
+        "task_classified_as_task_type <- task_type_id",
+        "voice_session_sources_task <- source_ref",
     },
     "finops_expense_operations": {"project_has_cost_expense <- project_id"},
 }

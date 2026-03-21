@@ -75,10 +75,10 @@ INCREMENTAL_COLLECTIONS = {
 
 TOMBSTONE_RELATIONS: dict[str, set[str]] = {
     "automation_tasks": {
-        "project_has_oper_task",
-        "voice_session_sources_oper_task",
-        "oper_task_classified_as_task_type",
-        "oper_task_assigned_to_person",
+        "project_has_task",
+        "voice_session_sources_task",
+        "task_classified_as_task_type",
+        "task_assigned_to_performer_profile",
     },
     "automation_voice_bot_sessions": {
         "project_has_voice_session",
@@ -90,7 +90,7 @@ TOMBSTONE_RELATIONS: dict[str, set[str]] = {
 }
 
 CACHED_BINARY_RELATIONS = {
-    "project_has_oper_task",
+    "project_has_task",
     "project_has_voice_session",
     "voice_session_has_message",
 }
@@ -103,7 +103,6 @@ APPEND_ONLY_DERIVED_MESSAGE_ENTITIES = {
     "file_descriptor",
     "message_attachment",
     "processing_run",
-    "task_draft",
     "artifact_record",
 }
 
@@ -117,7 +116,6 @@ APPEND_ONLY_DERIVED_MESSAGE_RELATIONS = {
     "voice_message_has_attachment",
     "voice_message_processed_by_run",
     "processing_run_uses_processor_definition",
-    "processing_run_produces_task_draft",
     "as_is_attachment_maps_to_artifact_record",
     "voice_message_chunked_as_transcript_chunk",
 }
@@ -503,6 +501,53 @@ def normalize_deletion_state_from_bool(value: Any) -> str:
     if bool_value is None:
         return "unknown"
     return "deleted" if bool_value else "present"
+
+
+TARGET_TASK_STATUS_KEY_BY_VALUE: dict[str, str] = {
+    "Draft": "DRAFT_10",
+    "Ready": "READY_10",
+    "Progress 10": "PROGRESS_10",
+    "Review / Ready": "REVIEW_10",
+    "Done": "DONE_10",
+    "Archive": "ARCHIVE",
+}
+TARGET_TASK_STATUS_KEYS: set[str] = {
+    "DRAFT_10",
+    "READY_10",
+    "PROGRESS_10",
+    "REVIEW_10",
+    "DONE_10",
+    "ARCHIVE",
+}
+
+
+def normalize_target_task_status_key(value: Any) -> str:
+    raw = as_string(value)
+    if not raw:
+        return "UNKNOWN"
+    if raw in TARGET_TASK_STATUS_KEYS:
+        return raw
+    return TARGET_TASK_STATUS_KEY_BY_VALUE.get(raw, "UNKNOWN")
+
+
+TARGET_TASK_PRIORITY_BY_VALUE: dict[str, str] = {
+    "P1": "P1",
+    "🔥 P1": "P1",
+    "🔥 P1 ": "P1",
+    "P2": "P2",
+    "P3": "P3",
+    "P4": "P4",
+    "P5": "P5",
+    "P6": "P6",
+    "P7": "P7",
+}
+
+
+def normalize_target_task_priority(value: Any) -> str:
+    raw = as_string(value)
+    if not raw:
+        return "UNKNOWN"
+    return TARGET_TASK_PRIORITY_BY_VALUE.get(raw, "UNKNOWN")
 
 
 def utf8_byte_length(value: str) -> int:
@@ -1528,7 +1573,7 @@ def project_project_context_card(ctx: IngestContext, doc: dict[str, Any], projec
     )
 
 
-def project_oper_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
+def project_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
     status_name = as_string(doc.get("task_status")) or as_string(doc.get("status"))
     if status_name:
         status_id = status_name
@@ -1541,24 +1586,24 @@ def project_oper_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any
                 key_value=status_id,
                 attr_specs=[
                     ("name", "string", status_name),
-                    ("module_scope", "string", "oper_task"),
+                    ("module_scope", "string", "task"),
                 ],
             )
             ctx.ensured_entity_keys.add(status_cache_key)
         if ctx.options.apply and ctx.typedb_driver is not None:
             exists_query = (
-                f"match $t isa oper_task, has task_id {lit_string(task_id)}; "
+                f"match $t isa task, has task_id {lit_string(task_id)}; "
                 f"$s isa status_dict, has status_id {lit_string(status_id)}; "
-                f"$rel (oper_task: $t, task_status: $s) isa oper_task_has_status; limit 1;"
+                f"$rel (task: $t, task_status: $s) isa task_has_status; limit 1;"
             )
             if not query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
                 reconcile_relation(
                     ctx,
-                    relation_name="oper_task_has_status",
-                    source_entity="oper_task",
+                    relation_name="task_has_status",
+                    source_entity="task",
                     source_key_attr="task_id",
                     source_key_value=task_id,
-                    source_role="oper_task",
+                    source_role="task",
                     owner_entity="status_dict",
                     owner_by="status_id",
                     owner_role="task_status",
@@ -1584,18 +1629,18 @@ def project_oper_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any
             ctx.ensured_entity_keys.add(priority_cache_key)
         if ctx.options.apply and ctx.typedb_driver is not None:
             exists_query = (
-                f"match $t isa oper_task, has task_id {lit_string(task_id)}; "
+                f"match $t isa task, has task_id {lit_string(task_id)}; "
                 f"$p isa priority_dict, has priority_id {lit_string(priority_id)}; "
-                f"$rel (oper_task: $t, task_priority: $p) isa oper_task_has_priority; limit 1;"
+                f"$rel (task: $t, task_priority: $p) isa task_has_priority; limit 1;"
             )
             if not query_has_rows(ctx.typedb_driver, ctx.options.typedb_database, exists_query):
                 reconcile_relation(
                     ctx,
-                    relation_name="oper_task_has_priority",
-                    source_entity="oper_task",
+                    relation_name="task_has_priority",
+                    source_entity="task",
                     source_key_attr="task_id",
                     source_key_value=task_id,
-                    source_role="oper_task",
+                    source_role="task",
                     owner_entity="priority_dict",
                     owner_by="priority_id",
                     owner_role="task_priority",
@@ -1610,8 +1655,8 @@ def project_target_task_view(ctx: IngestContext, doc: dict[str, Any], task_id: s
         ("title", "string", as_string(doc.get("name"))),
         ("summary", "string", as_string(doc.get("description"))),
         ("description", "string", as_string(doc.get("description"))),
-        ("status", "string", as_string(doc.get("task_status")) or as_string(doc.get("status")) or "unknown"),
-        ("priority", "string", to_stringish(doc.get("priority"))),
+        ("status", "string", normalize_target_task_status_key(doc.get("task_status") or doc.get("status"))),
+        ("priority", "string", normalize_target_task_priority(doc.get("priority"))),
         ("created_at", "datetime", as_datetime(doc.get("created_at"))),
         ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
     ]
@@ -1624,11 +1669,11 @@ def project_target_task_view(ctx: IngestContext, doc: dict[str, Any], task_id: s
     )
     reconcile_relation(
         ctx,
-        relation_name="as_is_oper_task_maps_to_target_task_view",
-        source_entity="oper_task",
+        relation_name="as_is_task_maps_to_target_task_view",
+        source_entity="task",
         source_key_attr="task_id",
         source_key_value=task_id,
-        source_role="as_is_oper_task",
+        source_role="as_is_task",
         owner_entity="target_task_view",
         owner_by="target_task_view_id",
         owner_role="target_task_view",
@@ -1638,7 +1683,7 @@ def project_target_task_view(ctx: IngestContext, doc: dict[str, Any], task_id: s
         reconcile_relation(
             ctx,
             relation_name="as_is_possible_task_maps_to_target_task_view",
-            source_entity="oper_task",
+            source_entity="task",
             source_key_attr="task_id",
             source_key_value=task_id,
             source_role="as_is_possible_task",
@@ -2021,48 +2066,6 @@ def project_voice_session_processors(ctx: IngestContext, doc: dict[str, Any], se
         create_tasks_rows = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(create_tasks_rows, list):
             continue
-        for index, row in enumerate(create_tasks_rows, start=1):
-            if not isinstance(row, dict):
-                continue
-            task_draft_row_id = as_string(row.get("row_id")) or as_string(row.get("id")) or f"{index:04d}"
-            task_draft_id = f"{session_id}:task-draft:{task_draft_row_id}"
-            upsert_entity(
-                ctx,
-                entity="task_draft",
-                key_attr="task_draft_id",
-                key_value=task_draft_id,
-                attr_specs=[
-                    ("row_id", "string", as_string(row.get("row_id")) or as_string(row.get("id"))),
-                    ("title", "string", as_string(row.get("name"))),
-                    ("description", "string", to_capped_stringish(row.get("description"))),
-                    ("status", "string", "draft"),
-                    ("priority", "string", as_string(row.get("priority"))),
-                    ("priority_rank", "double", as_number(row.get("priority_rank"))),
-                    ("priority_reason", "string", to_capped_stringish(row.get("priority_reason"))),
-                    ("performer_id", "string", normalize_id(row.get("performer_id")) or as_string(row.get("performer_id"))),
-                    ("task_type_id", "string", normalize_id(row.get("task_type_id")) or as_string(row.get("task_type_id"))),
-                    ("task_type_name", "string", as_string(row.get("task_type_name"))),
-                    ("dialogue_reference", "string", to_capped_stringish(row.get("dialogue_reference"))),
-                    ("dialogue_tag", "string", as_string(row.get("dialogue_tag"))),
-                    ("task_id_from_ai", "string", as_string(row.get("task_id_from_ai"))),
-                    ("dependencies_from_ai", "string", to_capped_stringish(row.get("dependencies_from_ai"))),
-                    ("source_data", "string", to_capped_stringish(row)),
-                ],
-            )
-            reconcile_relation(
-                ctx,
-                relation_name="processing_run_produces_task_draft",
-                source_entity="processing_run",
-                source_key_attr="processing_run_id",
-                source_key_value=run_id,
-                source_role="processing_run",
-                owner_entity="task_draft",
-                owner_by="task_draft_id",
-                owner_role="task_draft",
-                owner_value=task_draft_id,
-            )
-
-
 def project_voice_message_transcription(ctx: IngestContext, doc: dict[str, Any], message_id: str) -> None:
     transcription = doc.get("transcription")
     transcription_payload = transcription if isinstance(transcription, dict) else {}
@@ -2480,15 +2483,6 @@ def delete_voice_message_derived_family(
         (
             f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
             f"$rel_msg isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
-            f"$rel_td isa processing_run_produces_task_draft, links (processing_run: $r, task_draft: $d); limit 1;",
-            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
-            f"$rel_msg isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
-            f"$rel_td isa processing_run_produces_task_draft, links (processing_run: $r, task_draft: $d); "
-            f"delete $rel_td; $d;",
-        ),
-        (
-            f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
-            f"$rel_msg isa voice_message_processed_by_run, links (voice_message: $m, processing_run: $r); "
             f"$rel_pd isa processing_run_uses_processor_definition, "
             f"links (processing_run: $r, processor_definition: $pd); limit 1;",
             f"match $m isa voice_message, has voice_message_id {lit_string(voice_message_id)}; "
@@ -2670,10 +2664,11 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             return
 
         status = as_string(doc.get("task_status")) or as_string(doc.get("status")) or "unknown"
-        fields = ["insert $t isa oper_task", f"has task_id {lit_string(doc_id)}"]
+        fields = ["insert $t isa task", f"has task_id {lit_string(doc_id)}"]
         append_string_attr(fields, "title", as_string(doc.get("name")))
         append_string_attr(fields, "description", as_string(doc.get("description")))
         append_string_attr(fields, "status", status)
+        append_string_attr(fields, "priority", normalize_target_task_priority(doc.get("priority")))
         append_number_attr(fields, "priority_rank", as_number(doc.get("priority")))
         append_string_attr(fields, "project_id", normalize_id(doc.get("project_id")))
         query = f"{', '.join(fields)};"
@@ -2684,12 +2679,12 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             doc_id,
             query,
             {"_id": doc_id},
-            entity="oper_task",
+            entity="task",
             key_attr="task_id",
             key_value=doc_id,
         )
         project_target_task_view(ctx, doc, doc_id)
-        project_oper_task_status_and_priority(ctx, doc, doc_id)
+        project_task_status_and_priority(ctx, doc, doc_id)
 
         project_id = None if is_tombstoned_doc("automation_tasks", doc) else normalize_id(doc.get("project_id"))
         if not project_id:
@@ -2697,8 +2692,8 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
 
         relation_query = (
             f"match $p isa project, has project_id {lit_string(project_id)}; "
-            f"$t isa oper_task, has task_id {lit_string(doc_id)}; "
-            "insert (owner_project: $p, oper_task: $t) isa project_has_oper_task;"
+            f"$t isa task, has task_id {lit_string(doc_id)}; "
+            "insert (owner_project: $p, task: $t) isa project_has_task;"
         )
         insert_relation_query(
             ctx,
@@ -2709,8 +2704,8 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             {"task_id": doc_id, "project_id": project_id},
             exists_query=(
                 f"match $p isa project, has project_id {lit_string(project_id)}; "
-                f"$t isa oper_task, has task_id {lit_string(doc_id)}; "
-                "(owner_project: $p, oper_task: $t) isa project_has_oper_task; limit 1;"
+                f"$t isa task, has task_id {lit_string(doc_id)}; "
+                "(owner_project: $p, task: $t) isa project_has_task; limit 1;"
             ),
         )
 
@@ -3909,7 +3904,7 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
             )
 
         if collection == "automation_tasks":
-            project_oper_task_status_and_priority(ctx, doc, source_id)
+            project_task_status_and_priority(ctx, doc, source_id)
 
         if core_scope and not isinstance(relations_cfg, list):
             if entity_matches:

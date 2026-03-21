@@ -56,7 +56,7 @@ def parse_typedb_addresses(raw: str) -> list[str]:
 
 CHECKS = [
     AggregateCheck("projects_total", "match $p isa project; reduce $count = count;"),
-    AggregateCheck("tasks_total", "match $t isa oper_task; reduce $count = count;"),
+    AggregateCheck("tasks_total", "match $t isa task; reduce $count = count;"),
     AggregateCheck("voice_sessions_total", "match $s isa voice_session; reduce $count = count;"),
     AggregateCheck("voice_messages_total", "match $m isa voice_message; reduce $count = count;"),
     AggregateCheck("voice_history_steps_total", "match $h isa history_step; reduce $count = count;"),
@@ -64,7 +64,7 @@ CHECKS = [
     AggregateCheck("forecast_rows_total", "match $f isa forecast_project_month; reduce $count = count;"),
     AggregateCheck(
         "orphan_tasks_without_project",
-        "match $t isa oper_task; not { $t has source_kind \"voice_possible_task\"; }; not { (owner_project: $p, oper_task: $t) isa project_has_oper_task; }; reduce $count = count;",
+        "match $t isa task; not { $t has source_kind \"voice_possible_task\"; }; not { (owner_project: $p, task: $t) isa project_has_task; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
@@ -101,36 +101,36 @@ CHECKS = [
     ),
     AggregateCheck(
         "tasks_missing_runtime_tag",
-        "match $t isa oper_task; not { $t has runtime_tag $rt; }; reduce $count = count;",
+        "match $t isa task; not { $t has runtime_tag $rt; }; reduce $count = count;",
     ),
     AggregateCheck(
         "codex_tasks_without_project",
-        "match $t isa oper_task, has codex_task true; not { (owner_project: $p, oper_task: $t) isa project_has_oper_task; }; reduce $count = count;",
+        "match $t isa task, has codex_task true; not { (owner_project: $p, task: $t) isa project_has_task; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "tasks_with_source_ref_without_voice_session_link",
-        "match $t isa oper_task, has source_ref $ref; not { (source_voice_session: $s, sourced_oper_task: $t) isa voice_session_sources_oper_task; }; reduce $count = count;",
+        "match $t isa task, has source_ref $ref; not { (source_voice_session: $s, sourced_task: $t) isa voice_session_sources_task; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "codex_tasks_without_session_reference",
-        "match $t isa oper_task, has codex_task true; not { $t has source_ref $source_ref; }; not { $t has external_ref $external_ref; }; reduce $count = count;",
+        "match $t isa task, has codex_task true; not { $t has source_ref $source_ref; }; not { $t has external_ref $external_ref; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "codex_deferred_without_due_at",
-        "match $t isa oper_task, has codex_review_state \"deferred\"; not { $t has codex_review_due_at $due; }; reduce $count = count;",
+        "match $t isa task, has codex_review_state \"deferred\"; not { $t has codex_review_due_at $due; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "codex_summary_generated_without_text",
-        "match $t isa oper_task, has codex_review_summary_generated_at $generated_at; not { $t has codex_review_summary $summary; }; reduce $count = count;",
+        "match $t isa task, has codex_review_summary_generated_at $generated_at; not { $t has codex_review_summary $summary; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
         "codex_tasks_without_project_git_repo",
-        "match $t isa oper_task, has codex_task true; (owner_project: $p, oper_task: $t) isa project_has_oper_task; not { $p has git_repo $repo; }; reduce $count = count;",
+        "match $t isa task, has codex_task true; (owner_project: $p, task: $t) isa project_has_task; not { $p has git_repo $repo; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(

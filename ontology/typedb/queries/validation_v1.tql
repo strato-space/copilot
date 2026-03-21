@@ -8,7 +8,7 @@ get $p;
 count;
 
 match
-  $t isa oper_task;
+  $t isa task;
 get $t;
 count;
 
@@ -19,7 +19,7 @@ count;
 
 # 2) Project -> Task links
 match
-  $rel (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+  $rel (owner_project: $p, task: $t) isa project_has_task;
   $p has project_id $project_id;
   $t has task_id $task_id;
 get $project_id, $task_id;
@@ -51,11 +51,11 @@ get $category_name, $expense_id;
 limit 50;
 
 # 6) High-risk orphan checks (should return 0)
-# 6.1 OperTask without Project relation
+# 6.1 Task without Project relation
 match
-  $t isa oper_task;
+  $t isa task;
   not {
-    (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+    (owner_project: $p, task: $t) isa project_has_task;
   };
 get $t;
 count;
@@ -80,7 +80,7 @@ count;
 
 # 7) Spot-check status domain normalization
 match
-  $t isa oper_task, has status $status;
+  $t isa task, has status $status;
 get $status;
 limit 20;
 
@@ -205,10 +205,10 @@ match
 get $session_id, $processor_definition_id;
 limit 50;
 
-# 10) OperTask/Codex runtime-contract checks
-# 10.1 VoiceSession -> OperTask links (spot-check)
+# 10) Task/Codex runtime-contract checks
+# 10.1 VoiceSession -> Task links (spot-check)
 match
-  $rel (source_voice_session: $s, sourced_oper_task: $t) isa voice_session_sources_oper_task;
+  $rel (source_voice_session: $s, sourced_task: $t) isa voice_session_sources_task;
   $s has voice_session_id $session_id;
   $t has task_id $task_id;
 get $session_id, $task_id;
@@ -216,25 +216,25 @@ limit 50;
 
 # 10.2 Codex tasks must stay linked to a project
 match
-  $t isa oper_task, has codex_task true;
+  $t isa task, has codex_task true;
   not {
-    (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+    (owner_project: $p, task: $t) isa project_has_task;
   };
 get $t;
 count;
 
 # 10.3 Tasks with source_kind=voice_session should have VoiceSession relation materialized
 match
-  $t isa oper_task, has source_kind "voice_session", has source_ref $source_ref;
+  $t isa task, has source_kind "voice_session", has source_ref $source_ref;
   not {
-    (source_voice_session: $s, sourced_oper_task: $t) isa voice_session_sources_oper_task;
+    (source_voice_session: $s, sourced_task: $t) isa voice_session_sources_task;
   };
 get $t, $source_ref;
 limit 50;
 
 # 10.4 Codex task lineage requires at least one session reference (source_ref or external_ref)
 match
-  $t isa oper_task, has codex_task true;
+  $t isa task, has codex_task true;
   not { $t has source_ref $source_ref; };
   not { $t has external_ref $external_ref; };
 get $t;
@@ -242,36 +242,36 @@ count;
 
 # 10.5 Deferred review contract: state=deferred should include due_at
 match
-  $t isa oper_task, has codex_review_state "deferred";
+  $t isa task, has codex_review_state "deferred";
   not { $t has codex_review_due_at $due_at; };
 get $t;
 count;
 
 # 10.6 Deferred review summary contract: generated summary must include summary text
 match
-  $t isa oper_task, has codex_review_summary_generated_at $generated_at;
+  $t isa task, has codex_review_summary_generated_at $generated_at;
   not { $t has codex_review_summary $summary; };
 get $t, $generated_at;
 count;
 
 # 10.7 Codex project readiness: linked project should have git_repo
 match
-  $t isa oper_task, has codex_task true;
-  (owner_project: $p, oper_task: $t) isa project_has_oper_task;
+  $t isa task, has codex_task true;
+  (owner_project: $p, task: $t) isa project_has_task;
   not { $p has git_repo $git_repo; };
 get $t, $p;
 count;
 
 # 10.8 Runtime-tag completeness counters for runtime-scoped task collection
 match
-  $t isa oper_task;
+  $t isa task;
   not { $t has runtime_tag $runtime_tag; };
 get $t;
 count;
 
 # 10.9 Possible task canonical locator: voice_possible_task must have row_id
 match
-  $t isa oper_task, has source_kind "voice_possible_task";
+  $t isa task, has source_kind "voice_possible_task";
   not { $t has row_id $row_id; };
 get $t;
 count;

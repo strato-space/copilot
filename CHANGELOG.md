@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-03-21
+### PROBLEM SOLVED
+- **09:10** The ontology/spec wave still left one critical implementation gap: task/execution surfaces were described as if direct LLM writes to TypeDB were desirable, but task/task-view `status` and `priority` were not yet constrained on the DB side, so invalid raw labels could still leak into the write path.
+- **09:10** The executor-layer rollout remained only partially formalized: `coding_agent` existed, but `task_family`, `executor_role`, `executor_routing`, and `task_execution_run` were not all present as exact ontology objects/relations, which left the next implementation wave underspecified.
+- **09:10** Residual ambiguous-session rerun accounting was incomplete: batches `2` and `3` had only noisy MCP logs instead of structured outcomes, so the remaining migration tail could not be summarized deterministically.
+
+### FEATURE IMPLEMENTED
+- **09:10** Added DB-side owner-level `@values(...)` constraints for `task.status`, `task.priority`, `target_task_view.status`, `target_task_view.priority`, and the key TO-BE execution/process/product status carriers, making direct TypeDB writes materially safer.
+- **09:10** Normalized the `target_task_view` projection to canonical lifecycle keys and canonical `P1..P7` priorities before writing into TypeDB, while keeping the raw Mongo task row as the AS-IS source object.
+- **09:10** Landed the first executor-layer ontology surface end-to-end: `task_family`, `executor_role`, `executor_routing`, and `task_execution_run` now exist in the TypeDB semantic core and in the checked-in production specs.
+- **09:10** Closed residual rerun accounting for ambiguous CREATE_TASKS batches: batch `1` and `4` remain manual-review buckets, while batches `2` and `3` are now classified as deterministic `timed_out` MCP buckets with structured reports.
+
+### CHANGES
+- **09:10** Updated `ontology/typedb/schema/fragments/{10-as-is/10-entities-core,20-to-be/10-semantic-core}.tql`, `ontology/typedb/scripts/typedb-ontology-ingest.py`, and focused ontology tests so task/task-view status/priority are normalized and constrained at the DB layer.
+- **09:10** Extended the ontology kernel ids/attrs plus semantic-core relations for executor-layer objects (`task_family`, `executor_role`, `executor_routing`, `task_execution_run`) and aligned `plan/voice-dual-stream-ontology.md` plus `/home/strato-space/y-tasks-sandbox/OperOps/OperOps - Voice2Task.md` to the same exact labels.
+- **09:10** Normalized Mongo priority noise in `automation_tasks` by rewriting legacy `🔥 P1` variants to canonical `P1`, then re-ran ontology verification (`build`, `test`, `contract-check`) successfully.
+- **09:10** Updated `backend/scripts/rerun-ambiguous-create-tasks-batch.ts` with timeout-aware reporting and wrote structured results to `plan/ambiguous_batch_{2,3}_report.json`; final accounting is `batch1 manual_review=14`, `batch2 timed_out=14`, `batch3 timed_out=14`, `batch4 manual_review=12`.
+
 ## 2026-03-19
 ### PROBLEM SOLVED
 - **22:02** Routine host cleanup still had no checked-in repo guardrail for `/root/.codex/sessions`, so session history could be removed accidentally during disk-pressure maintenance.

@@ -1,0 +1,6 @@
+{
+  "command_run": "npx tsx scripts/rerun-ambiguous-create-tasks-batch.ts --apply 69a8143d4572b3db568b9a79 69aaa5b6bb4114f74964dab4 6996d9169bce3264e9851c1c 69a82c204572b3db568b9a85 69a3e0fe4b07162c36957dad 69a51d4b4b07162c36957e15 69a6d9cf26d804a03327004d 69a6f90d1c018d01aa12c183 69982f411da4fda3b24b9895 69a18ae78bd9d617560435d9 69a24e4605c9941fabcd3e2f 69b8ee938a877bdbe0263879",
+  "cleared_count": 0,
+  "needs_manual_review_count": 12,
+  "files_changed": ["/home/strato-space/copilot/plan/ambiguous_batch_4_report.json"]
+}

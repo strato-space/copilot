@@ -30,7 +30,11 @@ class SchemaLayersTest(unittest.TestCase):
         self.assertIn("entity project_context_card,", text)
         self.assertIn("entity mode_definition,", text)
         self.assertIn("entity object_revision,", text)
-        self.assertIn("entity working_memory,", text)
+        self.assertIn("entity coding_agent,", text)
+        self.assertIn("entity task_family,", text)
+        self.assertIn("entity executor_role,", text)
+        self.assertIn("entity executor_routing,", text)
+        self.assertIn("entity task_execution_run,", text)
 
     def test_generated_schema_contains_object_bound_bridge_relations(self) -> None:
         _, text = build.build_outputs()
@@ -41,6 +45,11 @@ class SchemaLayersTest(unittest.TestCase):
         self.assertIn("relation voice_message_has_transcription,", text)
         self.assertIn("relation voice_session_has_participant_person,", text)
         self.assertIn("relation drive_project_file_indexes_drive_node,", text)
+        self.assertIn("relation target_task_view_classified_as_task_family,", text)
+        self.assertIn("relation executor_routing_targets_target_task_view,", text)
+        self.assertIn("relation executor_routing_launches_task_execution_run,", text)
+        self.assertIn("relation task_execution_run_executes_target_task_view,", text)
+        self.assertIn("relation task_execution_run_produces_artifact_record,", text)
 
     def test_generated_schema_excludes_routing_items_from_to_be_core(self) -> None:
         _, text = build.build_outputs()
@@ -101,6 +110,17 @@ class SchemaLayersTest(unittest.TestCase):
     def test_generated_tql_header_points_to_tql_fragments(self) -> None:
         _, text = build.build_outputs()
         self.assertIn("# Generated from ontology/typedb/schema/fragments/*.tql", text)
+
+    def test_to_be_status_owner_constraints_use_values_annotations(self) -> None:
+        _, text = build.build_outputs()
+        self.assertIn('owns status @values("Draft", "Ready", "Progress 10", "Review / Ready", "Done", "Archive", "unknown"),', text)
+        self.assertIn('owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),', text)
+        self.assertIn('owns status @values("DRAFT_10", "READY_10", "PROGRESS_10", "REVIEW_10", "DONE_10", "ARCHIVE", "UNKNOWN"),', text)
+        self.assertIn('owns status @values("enabled", "disabled", "degraded", "retired"),', text)
+        self.assertIn('owns status @values("draft", "active", "satisfied", "superseded", "cancelled"),', text)
+        self.assertIn('owns status @values("proposed", "accepted", "rejected", "superseded"),', text)
+        self.assertIn('owns status @values("pending", "approved", "rejected", "executed", "superseded"),', text)
+        self.assertIn('owns status @values("queued", "running", "succeeded", "failed", "cancelled"),', text)
 
 
 if __name__ == "__main__":

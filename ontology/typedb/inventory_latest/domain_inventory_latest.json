@@ -51,7 +51,7 @@
       },
       {
         "collection": "automation_tasks",
-        "target_entity": "oper_task",
+        "target_entity": "task",
         "source_field": "type_class"
       }
     ],
@@ -108,7 +108,7 @@
       },
       {
         "collection": "automation_tasks",
-        "target_entity": "oper_task",
+        "target_entity": "task",
         "source_field": "source_kind"
       }
     ],
@@ -128,21 +128,17 @@
     "collections": [
       {
         "collection": "automation_tasks",
-        "target_entity": "oper_task",
+        "target_entity": "task",
         "source_field": "task_status"
       }
     ],
     "values": [
       "\"Archive\"",
-      "\"Done\"",
       "\"Draft\"",
+      "\"Done\"",
       "\"Ready\"",
       "\"Review / Ready\"",
-      "\"Backlog\"",
-      "null",
-      "\"Progress 10\"",
-      "\"Plan / Approval\"",
-      "\"Plan / Performer\""
+      "\"Progress 10\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },
@@ -152,21 +148,22 @@
     "collections": [
       {
         "collection": "automation_tasks",
-        "target_entity": "oper_task",
+        "target_entity": "task",
         "source_field": "priority"
       }
     ],
     "values": [
-      "\"P3\"",
       "\"P2\"",
+      "\"P3\"",
       "\"🔥 P1 \"",
       "\"P7\"",
       "\"P5\"",
+      "\"🔥 P1\"",
       "\"P4\"",
       "\"\"",
       "null",
-      "\"🔥 P1\"",
-      "\"P6\""
+      "\"P6\"",
+      "\"P1\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },
@@ -176,7 +173,7 @@
     "collections": [
       {
         "collection": "automation_tasks",
-        "target_entity": "oper_task",
+        "target_entity": "task",
         "source_field": "task_type"
       }
     ],
@@ -308,15 +305,15 @@
     "collections": [
       {
         "collection": "automation_tasks",
-        "target_entity": "oper_task",
+        "target_entity": "task",
         "source_field": "dialogue_tag"
       }
     ],
     "values": [
       "null",
       "\"voice\"",
-      "\"call\"",
-      "\"chat\""
+      "\"chat\"",
+      "\"call\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },
@@ -326,7 +323,7 @@
     "collections": [
       {
         "collection": "automation_tasks",
-        "target_entity": "oper_task",
+        "target_entity": "task",
         "source_field": "issue_type"
       }
     ],
@@ -357,8 +354,8 @@
     ],
     "values": [
       "null",
-      "\"web\"",
       "\"telegram\"",
+      "\"web\"",
       "\"T&M\"",
       "\"Fix\""
     ],

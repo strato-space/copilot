@@ -42,48 +42,48 @@ relation agreement_evidenced_by_context_item,
   relates agreement,
   relates context_item;
 
-relation agreement_creates_oper_task,
+relation agreement_creates_task,
   relates agreement,
-  relates oper_task;
+  relates task;
 
-relation project_has_oper_task,
+relation project_has_task,
   relates owner_project,
-  relates oper_task;
+  relates task;
 
-relation voice_session_sources_oper_task,
+relation voice_session_sources_task,
   relates source_voice_session,
-  relates sourced_oper_task;
+  relates sourced_task;
 
-relation oper_task_classified_as_task_type,
-  relates oper_task,
+relation task_classified_as_task_type,
+  relates task,
   relates task_type;
 
-relation task_type_tree_classifies_oper_task,
+relation task_type_tree_classifies_task,
   relates task_type_tree,
-  relates oper_task;
+  relates task;
 
-relation oper_task_evidenced_by_context_item,
-  relates oper_task,
+relation task_evidenced_by_context_item,
+  relates task,
   relates context_item;
 
-relation oper_task_has_status,
-  relates oper_task,
+relation task_has_status,
+  relates task,
   relates task_status;
 
-relation oper_task_has_priority,
-  relates oper_task,
+relation task_has_priority,
+  relates task,
   relates task_priority;
 
-relation oper_task_assigned_to_performer_profile,
-  relates oper_task,
+relation task_assigned_to_performer_profile,
+  relates task,
   relates assignee_performer_profile;
 
 relation project_has_epic_task,
   relates owner_project,
   relates epic_task;
 
-relation oper_task_has_work_log,
-  relates oper_task,
+relation task_has_work_log,
+  relates task,
   relates work_log;
 
 relation performer_profile_creates_work_log,
@@ -326,14 +326,6 @@ relation processing_run_uses_processor_definition,
   relates processing_run,
   relates processor_definition;
 
-relation processing_run_produces_task_draft,
-  relates processing_run,
-  relates task_draft;
-
-relation task_draft_normalized_to_plan_item,
-  relates task_draft,
-  relates plan_item;
-
 relation patch_contains_operation,
   relates patch,
   relates patch_operation;
@@ -342,9 +334,9 @@ relation patch_attempted_as_apply_attempt,
   relates patch,
   relates apply_attempt;
 
-relation patch_operation_mutates_oper_task,
+relation patch_operation_mutates_task,
   relates patch_operation,
-  relates oper_task;
+  relates task;
 
 relation voice_session_has_history_step,
   relates voice_session,

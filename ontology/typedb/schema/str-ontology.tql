@@ -13,7 +13,7 @@ attribute external_id, value string;
 attribute name, value string;
 # @toon inventory=inspect domain=dictionary max_values=50
 attribute status, value string;
-# @toon values: null | Archive | Backlog | Done | Draft | Plan / Approval | Plan / Performer | Progress 10 | Ready | Review / Ready
+# @toon values: Archive | Done | Draft | Progress 10 | Ready | Review / Ready
 
 # @toon inventory=inspect domain=state max_values=10
 attribute activity_state, value string;
@@ -253,7 +253,7 @@ attribute performer, value string;
 attribute legacy_finance_income_type_ref, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute priority, value string;
-# @toon values: null |  | P2 | P3 | P4 | P5 | P6 | P7 | 🔥 P1
+# @toon values: null |  | P1 | P2 | P3 | P4 | P5 | P6 | P7 | 🔥 P1
 
 attribute start_date, value string;
 attribute end_date, value string;
@@ -355,7 +355,7 @@ attribute segment_type, value string;
 attribute related_goal, value string;
 attribute certainty_level, value string;
 attribute topic_keywords, value string;
-attribute task, value string;
+attribute task_text, value string;
 attribute uploaded_by, value string;
 attribute username, value string;
 attribute text, value string;
@@ -411,6 +411,17 @@ attribute parent_collection, value string;
 attribute parent_id, value string;
 attribute parent_prefix, value string;
 attribute path, value string;
+attribute executable_path, value string;
+attribute working_directory, value string;
+attribute cli_arguments, value string;
+attribute selected_executor_kind, value string;
+attribute selected_executor_ref, value string;
+attribute routing_basis, value string;
+attribute approval_state, value string;
+attribute launch_state, value string;
+attribute executor_kind, value string;
+attribute executor_ref, value string;
+attribute result_ref, value string;
 attribute log_id, value string;
 attribute operation_id, value string;
 attribute before_payload, value string;
@@ -472,12 +483,11 @@ attribute voice_topic_id, value string;
 attribute tg_voice_session_id, value string;
 attribute drive_project_file_id, value string;
 attribute object_locator_id, value string;
+attribute coding_agent_id, value string;
 attribute drive_event_channel_id, value string;
 attribute drive_node_id, value string;
 attribute transcript_chunk_id, value string;
 attribute processing_run_id, value string;
-attribute task_draft_id, value string;
-attribute plan_item_id, value string;
 attribute patch_id, value string;
 attribute patch_operation_id, value string;
 attribute apply_attempt_id, value string;
@@ -508,13 +518,19 @@ attribute object_event_id, value string;
 attribute object_note_id, value string;
 attribute object_conclusion_id, value string;
 attribute object_manifest_id, value string;
+attribute change_proposal_id, value string;
 attribute writeback_decision_id, value string;
 attribute review_annotation_id, value string;
 attribute access_policy_id, value string;
-attribute working_memory_id, value string;
-attribute session_memory_id, value string;
-attribute project_memory_id, value string;
-attribute shared_memory_id, value string;
+attribute system_of_interest_id, value string;
+attribute producing_system_id, value string;
+attribute task_family_id, value string;
+attribute executor_role_id, value string;
+attribute executor_routing_id, value string;
+attribute task_execution_run_id, value string;
+attribute acceptance_criterion_id, value string;
+attribute acceptance_evaluation_id, value string;
+attribute evidence_link_id, value string;
 # --- </kernel.attributes-and-ids> ---
 
 # --- <kernel.object-bound-ids> ---
@@ -536,13 +552,20 @@ attribute object_event_id, value string;
 attribute object_note_id, value string;
 attribute object_conclusion_id, value string;
 attribute object_manifest_id, value string;
+attribute change_proposal_id, value string;
 attribute writeback_decision_id, value string;
 attribute review_annotation_id, value string;
 attribute access_policy_id, value string;
-attribute working_memory_id, value string;
-attribute session_memory_id, value string;
-attribute project_memory_id, value string;
-attribute shared_memory_id, value string;
+attribute system_of_interest_id, value string;
+attribute producing_system_id, value string;
+attribute coding_agent_id, value string;
+attribute task_family_id, value string;
+attribute executor_role_id, value string;
+attribute executor_routing_id, value string;
+attribute task_execution_run_id, value string;
+attribute acceptance_criterion_id, value string;
+attribute acceptance_evaluation_id, value string;
+attribute evidence_link_id, value string;
 # --- </kernel.object-bound-ids> ---
 # --- </kernel> ---
 
@@ -637,7 +660,7 @@ entity project,
   plays client_owns_project:owned_project,
   plays project_group_has_project:linked_project,
   plays project_has_project_link:owner_project,
-  plays project_has_oper_task:owner_project,
+  plays project_has_task:owner_project,
   plays project_has_voice_session:owner_project,
   plays project_has_epic_task:owner_project,
   plays project_has_google_drive_file:owner_project,
@@ -733,7 +756,8 @@ entity performer_profile,
   owns payments_settings,
   plays person_has_performer_profile:performer_profile,
   plays telegram_user_maps_to_performer_profile:linked_performer_profile,
-  plays oper_task_assigned_to_performer_profile:assignee_performer_profile,
+  plays task_assigned_to_performer_profile:assignee_performer_profile,
+  plays performer_profile_enacts_executor_role:performer_profile,
   plays project_performer_link_binds_performer_profile:linked_performer_profile,
   plays performer_profile_maps_to_employee:source_performer_profile,
   plays performer_profile_creates_work_log:author_performer_profile,
@@ -849,7 +873,7 @@ entity status_dict,
   owns name,
   owns module_scope,
   owns order_index,
-  plays oper_task_has_status:task_status;
+  plays task_has_status:task_status;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="priority_dict"> ---
@@ -864,7 +888,7 @@ entity priority_dict,
   owns priority_id @key,
   owns name,
   owns priority_rank,
-  plays oper_task_has_priority:task_priority;
+  plays task_has_priority:task_priority;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="task_type"> ---
@@ -878,7 +902,7 @@ entity priority_dict,
 entity task_type,
   owns task_type_id @key,
   owns name,
-  plays oper_task_classified_as_task_type:task_type;
+  plays task_classified_as_task_type:task_type;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="task_type_tree"> ---
@@ -899,7 +923,7 @@ entity task_type_tree,
   owns roles,
   owns parent_type_id,
   owns task_id,
-  plays task_type_tree_classifies_oper_task:task_type_tree;
+  plays task_type_tree_classifies_task:task_type_tree;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="voice_context_item"> ---
@@ -920,7 +944,7 @@ entity voice_context_item,
   plays project_has_voice_context_item:context_item,
   plays dialog_represented_by_context_item:context_item,
   plays agreement_evidenced_by_context_item:context_item,
-  plays oper_task_evidenced_by_context_item:context_item;
+  plays task_evidenced_by_context_item:context_item;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="dialog"> ---
@@ -978,10 +1002,10 @@ entity agreement,
   owns decided_at,
   plays dialog_yields_agreement:agreement,
   plays agreement_evidenced_by_context_item:agreement,
-  plays agreement_creates_oper_task:agreement;
+  plays agreement_creates_task:agreement;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="oper_task"> ---
+# --- <semantic-card id="task"> ---
 # kind: task-record
 # fpf_basis:
 #   - U.BoundedContext
@@ -990,103 +1014,268 @@ entity agreement,
 # what: Operational task record from Mongo runtime.
 # not: Not the normalized target task view.
 # why: Acts as the main AS-IS source for task projection.
-entity oper_task,
+# field task_id: canonical Mongo document identity for the task row.
+# field project_id: owning project identifier used for project/task binding.
+# field external_id: public or external-facing task identifier when present.
+# field old_id: legacy historical task identifier kept for compatibility.
+# field project_ref: raw project reference text copied from runtime payloads.
+# field row_id: canonical row locator for draft/task reconcile and dedupe.
+# field type_class: coarse task class used by runtime grouping and logic.
+# field title: primary human-readable task title.
+# field description: main task body/acceptance-oriented formulation text.
+# field status: stored task lifecycle label as persisted in Mongo.
+# field last_status: previous stored lifecycle label when runtime tracks transitions.
+# field last_status_update: timestamp of latest lifecycle change.
+# field status_history: legacy/general status history payload.
+# field task_status_history: task-specific lifecycle transition history payload.
+# field priority: stored task priority label/value.
+# field due_at: planned due date or deadline timestamp.
+# field priority_rank: numeric priority rank for sorting/comparison.
+# field task_type_name: raw human-readable task type label.
+# field task_type_id: referenced task-type dictionary identifier.
+# field sprint: sprint/batch label when task is assigned to one.
+# field shipment_date: planned shipment/release date when tracked.
+# field score_min_hours: lower effort estimate bound in hours.
+# field score_max_hours: upper effort estimate bound in hours.
+# field planned_time: explicit planned effort budget.
+# field performer: raw performer display label.
+# field performer_id: performer profile identifier responsible for execution.
+# field epic_task_id: parent epic identifier when task belongs to one.
+# field notion_url: linked Notion artifact URL when present.
+# field notion_board_id: linked Notion board identifier when present.
+# field status_update_checked: runtime marker that status-sync/check pass was completed.
+# field comments_list: embedded legacy comments payload.
+# field dashboard_comment: compact dashboard-specific comment text.
+# field order_index: manual/display ordering index.
+# field source: source system/family marker for lineage.
+# field source_kind: provenance subtype such as voice/session origin marker.
+# field source_ref: primary source reference used for task/session lineage joins.
+# field external_ref: secondary external source reference used for lineage joins.
+# field source_data: raw structured lineage/context payload kept for compatibility.
+# field dialogue_reference: quoted transcript/dialogue fragment explaining why task exists.
+# field dialogue_tag: analyzer/runtime tag for discussion slice or task class.
+# field dependencies: normalized dependency payload.
+# field dependencies_from_ai: analyzer-emitted dependency identifiers.
+# field labels: freeform labels/tags attached to the task.
+# field notes: extra operator/runtime notes bound to the task.
+# field issue_type: issue/task subtype label when runtime provides one.
+# field assignee: raw assignee label kept for compatibility.
+# field owner: raw owner label kept for compatibility.
+# field created_by: creator identifier.
+# field created_by_name: creator display name.
+# field created_by_performer_id: creator performer-profile identifier.
+# field task_id_from_ai: analyzer-emitted task identifier used as compatibility metadata.
+# field priority_reason: explanation of why the chosen priority was assigned.
+# field codex_task: marks the row as a Codex-issued taskflow row.
+# field codex_review_state: deferred-review lifecycle marker for Codex flow.
+# field codex_review_due_at: next due timestamp for Codex review handling.
+# field codex_review_summary: generated Codex review summary text.
+# field codex_review_summary_source: provenance of the summary content.
+# field codex_review_summary_issue_id: linked issue identifier for review summary lineage.
+# field codex_review_summary_processing: processing-state marker for review summary generation.
+# field codex_review_summary_attempts: retry counter for summary generation.
+# field codex_review_summary_job_id: async job identifier for summary generation.
+# field codex_review_summary_started_at: summary generation start timestamp.
+# field codex_review_summary_generated_at: summary generation completion timestamp.
+# field codex_review_summary_next_attempt_at: scheduled next retry timestamp.
+# field codex_review_summary_last_error_code: latest review-summary error code.
+# field codex_review_summary_last_error_message: latest review-summary error message.
+# field codex_review_summary_last_runner_error: latest runner-level error payload.
+# field codex_review_summary_last_error_at: timestamp of latest summary-generation error.
+# field codex_review_summary_finished_at: terminal timestamp for summary pipeline.
+# field codex_review_summary_note_marker: marker used when syncing summary note back.
+# field codex_review_summary_note_synced_at: timestamp when summary note sync completed.
+# field codex_review_summary_note_appended: flag that summary note append happened.
+# field codex_review_approval_card_sent_at: timestamp when approval card was sent.
+# field codex_review_approval_card_chat_id: target chat identifier for approval card.
+# field codex_review_approval_card_thread_id: target thread/topic identifier for approval card.
+# field codex_review_approval_card_message_id: sent approval card message identifier.
+# field codex_review_approval_card_start_callback: callback token for approval start action.
+# field codex_review_approval_card_cancel_callback: callback token for approval cancel action.
+# field runtime_tag: legacy runtime isolation tag kept for compatibility/transition.
+# field is_deleted: soft-delete flag.
+# field stop_comment_parsing: flag disabling automatic comment parsing for this task.
+# field created_at: creation timestamp.
+# field updated_at: last update timestamp.
+entity task,
+  # canonical Mongo row identity from automation_tasks._id
   owns task_id @key,
+  # bound project identifier used by task/project routing and reporting
   owns project_id,
+  # public/external task id shown in UI when present
   owns external_id,
+  # older legacy task id retained for historical compatibility
   owns old_id,
+  # legacy project label fallback from raw task rows
   owns project_ref,
+  # canonical draft/taskflow row locator reused across refreshes
   owns row_id,
+  # broad class of work (task/spec/research/etc) used by runtime prompts and UI
   owns type_class,
+  # primary task title / short actionable name
   owns title,
+  # main task body / execution description
   owns description,
-  owns status,
+  # raw stored lifecycle label from Mongo task_status
+  owns status @values("Draft", "Ready", "Progress 10", "Review / Ready", "Done", "Archive", "unknown"),
+  # previous stored lifecycle label when tracked separately
   owns last_status,
+  # timestamp of the latest lifecycle change
   owns last_status_update,
+  # legacy status-history payload from raw storage
   owns status_history,
+  # structured lifecycle transition history payload
   owns task_status_history,
-  owns priority,
+  # raw priority label/value from runtime task rows
+  owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
+  # task deadline / due timestamp
   owns due_at,
+  # normalized numeric priority rank when available
   owns priority_rank,
+  # legacy task-type label from raw rows
   owns task_type_name,
+  # canonical task-type dictionary id
   owns task_type_id,
+  # sprint label/id used by planning surfaces
   owns sprint,
+  # planned shipment/delivery date
   owns shipment_date,
+  # lower estimate bound in hours
   owns score_min_hours,
+  # upper estimate bound in hours
   owns score_max_hours,
+  # explicit planned work time in hours
   owns planned_time,
+  # legacy assignee label/name from raw task rows
   owns performer,
+  # canonical performer profile id used for assignment
   owns performer_id,
+  # linked epic identifier when the task belongs to an epic
   owns epic_task_id,
+  # external Notion page URL for the task
   owns notion_url,
+  # external Notion board/database id
   owns notion_board_id,
+  # runtime flag that status update was explicitly reviewed/acknowledged
   owns status_update_checked,
+  # embedded/historical comments cache mirrored on the task row
   owns comments_list,
+  # dashboard-facing summary/comment field
   owns dashboard_comment,
+  # kanban/manual ordering index
   owns order_index,
+  # producing subsystem label (VOICE_BOT, etc)
   owns source,
+  # provenance kind such as voice_possible_task or voice_session
   owns source_kind,
+  # primary source/session reference used for lineage
   owns source_ref,
+  # external canonical source reference used by session/task joins
   owns external_ref,
+  # normalized JSON payload with lineage and compatibility metadata
   owns source_data,
+  # transcript excerpt / phrase that evidences why the task exists
   owns dialogue_reference,
+  # dialogue/task tag used by voice taskflow
   owns dialogue_tag,
+  # structured dependency payload from storage/runtime
   owns dependencies,
+  # dependency ids suggested by AI extraction
   owns dependencies_from_ai,
+  # freeform labels/tags attached to the task
   owns labels,
+  # extra notes not normalized into stronger fields
   owns notes,
+  # issue category/classification for mixed task/issue surfaces
   owns issue_type,
-  owns type_class,
+  # legacy assignee label retained for compatibility
   owns assignee,
+  # owner label/id retained from raw task rows
   owns owner,
+  # creator id
   owns created_by,
+  # creator display name
   owns created_by_name,
+  # creator performer profile id
   owns created_by_performer_id,
+  # AI-generated stable candidate id used as fallback locator
   owns task_id_from_ai,
+  # rationale for assigned priority
   owns priority_reason,
+  # marks Codex-managed taskflow rows
   owns codex_task,
+  # current Codex deferred-review state
   owns codex_review_state,
+  # due-at for deferred Codex review
   owns codex_review_due_at,
+  # generated Codex review summary text
   owns codex_review_summary,
+  # source label of the generated review summary
   owns codex_review_summary_source,
+  # linked issue/task id mentioned by review summary
   owns codex_review_summary_issue_id,
+  # processing flag for review summary generation
   owns codex_review_summary_processing,
+  # retry attempt counter for review summary generation
   owns codex_review_summary_attempts,
+  # background job id for summary generation
   owns codex_review_summary_job_id,
+  # timestamp when summary generation started
   owns codex_review_summary_started_at,
+  # timestamp when summary was generated
   owns codex_review_summary_generated_at,
+  # next retry timestamp for deferred summary generation
   owns codex_review_summary_next_attempt_at,
+  # last structured error code from summary generation
   owns codex_review_summary_last_error_code,
+  # last human-readable error message from summary generation
   owns codex_review_summary_last_error_message,
+  # last runner/internal error payload
   owns codex_review_summary_last_runner_error,
+  # timestamp of last summary-generation error
   owns codex_review_summary_last_error_at,
+  # timestamp when summary generation finished
   owns codex_review_summary_finished_at,
+  # marker showing whether review note was appended
   owns codex_review_summary_note_marker,
+  # timestamp when review note sync completed
   owns codex_review_summary_note_synced_at,
+  # flag whether review note append succeeded
   owns codex_review_summary_note_appended,
+  # timestamp when approval card was sent
   owns codex_review_approval_card_sent_at,
+  # Telegram chat id for approval card delivery
   owns codex_review_approval_card_chat_id,
+  # Telegram thread/topic id for approval card delivery
   owns codex_review_approval_card_thread_id,
+  # Telegram message id of the approval card
   owns codex_review_approval_card_message_id,
+  # callback token/action for approval-card start
   owns codex_review_approval_card_start_callback,
+  # callback token/action for approval-card cancel
   owns codex_review_approval_card_cancel_callback,
+  # legacy runtime family marker kept for historical rows only
   owns runtime_tag,
+  # soft-delete flag
   owns is_deleted,
+  # legacy flag that comment parsing should stop for this task
   owns stop_comment_parsing,
+  # creation timestamp
   owns created_at,
+  # last update timestamp
   owns updated_at,
-  plays project_has_oper_task:oper_task,
-  plays voice_session_sources_oper_task:sourced_oper_task,
-  plays oper_task_classified_as_task_type:oper_task,
-  plays task_type_tree_classifies_oper_task:oper_task,
-  plays oper_task_has_work_log:oper_task,
-  plays agreement_creates_oper_task:oper_task,
-  plays oper_task_evidenced_by_context_item:oper_task,
-  plays oper_task_has_status:oper_task,
-  plays oper_task_has_priority:oper_task,
-  plays oper_task_assigned_to_performer_profile:oper_task,
-  plays patch_operation_mutates_oper_task:oper_task,
-  plays as_is_oper_task_maps_to_target_task_view:as_is_oper_task,
+  plays project_has_task:task,
+  plays voice_session_sources_task:sourced_task,
+  plays task_classified_as_task_type:task,
+  plays task_type_tree_classifies_task:task,
+  plays task_has_work_log:task,
+  plays agreement_creates_task:task,
+  plays task_evidenced_by_context_item:task,
+  plays task_has_status:task,
+  plays task_has_priority:task,
+  plays task_assigned_to_performer_profile:task,
+  plays patch_operation_mutates_task:task,
+  plays as_is_task_maps_to_target_task_view:as_is_task,
   plays as_is_possible_task_maps_to_target_task_view:as_is_possible_task;
 # --- </semantic-card> ---
 
@@ -1131,7 +1320,7 @@ entity work_log,
   owns edited_at,
   owns raw_date,
   owns result_link,
-  plays oper_task_has_work_log:work_log,
+  plays task_has_work_log:work_log,
   plays performer_profile_creates_work_log:work_log;
 # --- </semantic-card> ---
 
@@ -1533,7 +1722,7 @@ entity voice_session,
   plays project_has_voice_session:voice_session,
   plays voice_session_has_participant_person:voice_session,
   plays voice_session_uses_processor_definition:voice_session,
-  plays voice_session_sources_oper_task:source_voice_session,
+  plays voice_session_sources_task:source_voice_session,
   plays mode_tag_selected_for_voice_session:voice_session,
   plays voice_session_has_message:voice_session,
   plays voice_session_has_topic:voice_session,
@@ -1579,7 +1768,7 @@ entity voice_message,
   owns transcription_model,
   owns transcription_schema_version,
   owns transcription_raw,
-  owns task,
+  owns task_text,
   owns categorization,
   owns categorization_error,
   owns categorization_error_message,
@@ -1620,7 +1809,7 @@ entity voice_message,
 entity voice_transcription,
   owns voice_transcription_id @key,
   owns source_ref,
-  owns task,
+  owns task_text,
   owns duration,
   owns summary,
   owns transcription_provider,
@@ -1755,7 +1944,8 @@ entity object_locator,
   owns parent_prefix,
   owns path,
   owns created_at,
-  owns updated_at;
+  owns updated_at,
+  plays target_task_view_targets_object_locator:object_locator;
 
 entity transcript_chunk,
   owns transcript_chunk_id @key,
@@ -1781,35 +1971,7 @@ entity processing_run,
   owns ended_at,
   plays voice_session_processed_by_run:processing_run,
   plays voice_message_processed_by_run:processing_run,
-  plays processing_run_uses_processor_definition:processing_run,
-  plays processing_run_produces_task_draft:processing_run;
-
-entity task_draft,
-  owns task_draft_id @key,
-  owns row_id,
-  owns title,
-  owns description,
-  owns status,
-  owns priority,
-  owns priority_rank,
-  owns priority_reason,
-  owns performer_id,
-  owns task_type_id,
-  owns task_type_name,
-  owns dialogue_reference,
-  owns dialogue_tag,
-  owns task_id_from_ai,
-  owns dependencies_from_ai,
-  owns source_data,
-  plays processing_run_produces_task_draft:task_draft,
-  plays task_draft_normalized_to_plan_item:task_draft;
-
-entity plan_item,
-  owns plan_item_id @key,
-  owns status,
-  owns priority_rank,
-  owns due_at,
-  plays task_draft_normalized_to_plan_item:plan_item;
+  plays processing_run_uses_processor_definition:processing_run;
 
 entity patch,
   owns patch_id @key,
@@ -1822,7 +1984,7 @@ entity patch_operation,
   owns patch_operation_id @key,
   owns status,
   plays patch_contains_operation:patch_operation,
-  plays patch_operation_mutates_oper_task:patch_operation;
+  plays patch_operation_mutates_task:patch_operation;
 
 entity apply_attempt,
   owns apply_attempt_id @key,
@@ -1934,48 +2096,48 @@ relation agreement_evidenced_by_context_item,
   relates agreement,
   relates context_item;
 
-relation agreement_creates_oper_task,
+relation agreement_creates_task,
   relates agreement,
-  relates oper_task;
+  relates task;
 
-relation project_has_oper_task,
+relation project_has_task,
   relates owner_project,
-  relates oper_task;
+  relates task;
 
-relation voice_session_sources_oper_task,
+relation voice_session_sources_task,
   relates source_voice_session,
-  relates sourced_oper_task;
+  relates sourced_task;
 
-relation oper_task_classified_as_task_type,
-  relates oper_task,
+relation task_classified_as_task_type,
+  relates task,
   relates task_type;
 
-relation task_type_tree_classifies_oper_task,
+relation task_type_tree_classifies_task,
   relates task_type_tree,
-  relates oper_task;
+  relates task;
 
-relation oper_task_evidenced_by_context_item,
-  relates oper_task,
+relation task_evidenced_by_context_item,
+  relates task,
   relates context_item;
 
-relation oper_task_has_status,
-  relates oper_task,
+relation task_has_status,
+  relates task,
   relates task_status;
 
-relation oper_task_has_priority,
-  relates oper_task,
+relation task_has_priority,
+  relates task,
   relates task_priority;
 
-relation oper_task_assigned_to_performer_profile,
-  relates oper_task,
+relation task_assigned_to_performer_profile,
+  relates task,
   relates assignee_performer_profile;
 
 relation project_has_epic_task,
   relates owner_project,
   relates epic_task;
 
-relation oper_task_has_work_log,
-  relates oper_task,
+relation task_has_work_log,
+  relates task,
   relates work_log;
 
 relation performer_profile_creates_work_log,
@@ -2218,14 +2380,6 @@ relation processing_run_uses_processor_definition,
   relates processing_run,
   relates processor_definition;
 
-relation processing_run_produces_task_draft,
-  relates processing_run,
-  relates task_draft;
-
-relation task_draft_normalized_to_plan_item,
-  relates task_draft,
-  relates plan_item;
-
 relation patch_contains_operation,
   relates patch,
   relates patch_operation;
@@ -2234,9 +2388,9 @@ relation patch_attempted_as_apply_attempt,
   relates patch,
   relates apply_attempt;
 
-relation patch_operation_mutates_oper_task,
+relation patch_operation_mutates_task,
   relates patch_operation,
-  relates oper_task;
+  relates task;
 
 relation voice_session_has_history_step,
   relates voice_session,
@@ -2274,15 +2428,57 @@ entity project_context_card,
   owns project_id,
   owns name,
   owns summary,
-  owns status,
+  owns status @values("draft", "active", "superseded", "retired"),
   owns created_at,
   owns updated_at,
   plays project_context_card_describes_project:project_context_card,
+  plays project_context_card_concerns_system_of_interest:project_context_card,
+  plays project_context_card_within_producing_system:project_context_card,
   plays project_context_card_binds_context_pack:project_context_card,
   plays object_revision_revises_project_context_card:revised_project_context_card,
   plays object_note_attaches_to_project_context_card:noted_project_context_card,
-  plays object_conclusion_applies_to_project_context_card:concluded_project_context_card,
-  plays project_memory_scopes_project_context_card:scoped_project_context_card;
+  plays object_conclusion_applies_to_project_context_card:concluded_project_context_card;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="system_of_interest"> ---
+# kind: system-of-interest
+# fpf_basis:
+#   - A.1 U.Entity
+#   - A.6.3 U.EpistemicViewing
+# scope: BC.ProductWorld
+# what: The thing being changed, described, or evaluated on the product side.
+# not: Not the producing system and not the project container.
+# why: Prevents product claims from collapsing into project-management objects.
+entity system_of_interest,
+  owns system_of_interest_id @key,
+  owns name,
+  owns summary,
+  owns status @values("identified", "active", "superseded", "retired"),
+  owns created_at,
+  owns updated_at,
+  plays project_context_card_concerns_system_of_interest:system_of_interest,
+  plays goal_product_targets_system_of_interest:system_of_interest,
+  plays target_task_view_changes_system_of_interest:changed_system_of_interest;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="producing_system"> ---
+# kind: producing-system
+# fpf_basis:
+#   - A.1 U.System
+# scope: BC.ProcessWorld
+# what: The socio-technical system that executes tasks and produces outputs.
+# not: Not the product/system being changed.
+# why: Separates the producer from the object of change.
+entity producing_system,
+  owns producing_system_id @key,
+  owns name,
+  owns summary,
+  owns status @values("identified", "active", "degraded", "retired"),
+  owns created_at,
+  owns updated_at,
+  plays project_context_card_within_producing_system:producing_system,
+  plays goal_process_targets_producing_system:producing_system,
+  plays target_task_view_executed_by_producing_system:executing_producing_system;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="agent_role"> ---
@@ -2299,7 +2495,7 @@ entity agent_role,
   owns name,
   owns description,
   owns role_name,
-  owns status,
+  owns status @values("draft", "active", "superseded", "retired"),
   owns created_at,
   owns updated_at,
   plays agent_role_executes_prompt_pipeline:agent_role;
@@ -2319,10 +2515,78 @@ entity prompt_pipeline,
   owns description,
   owns source_ref,
   owns module_scope,
-  owns status,
+  owns status @values("draft", "active", "superseded", "retired"),
   owns created_at,
   owns updated_at,
   plays agent_role_executes_prompt_pipeline:prompt_pipeline;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="coding_agent"> ---
+# kind: coding-agent
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+#   - A.2.2 U.Capability
+# scope: BC.AgentWorld
+# what: Executable CLI/agent surface used to perform coding work.
+# not: Not a role taxonomy, not a prompt definition, and not a single run occurrence.
+# why: Separates durable execution surfaces from roles, prompts, and runtime events.
+entity coding_agent,
+  owns coding_agent_id @key,
+  owns name,
+  owns summary,
+  owns executable_path,
+  owns cli_arguments,
+  owns working_directory,
+  owns source_ref,
+  owns status @values("enabled", "disabled", "degraded", "retired"),
+  owns created_at,
+  owns updated_at,
+  plays coding_agent_enacts_agent_role:coding_agent,
+  plays coding_agent_uses_prompt_pipeline:coding_agent,
+  plays coding_agent_enacts_executor_role:coding_agent,
+  plays coding_agent_supports_task_family:coding_agent,
+  plays target_task_view_recommended_for_coding_agent:recommended_coding_agent;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="executor_role"> ---
+# kind: executor-role
+# fpf_basis:
+#   - A.2 Role Taxonomy
+# scope: BC.AgentWorld
+# what: Capability-side role used for routing tasks to human or machine executors.
+# not: Not the task family and not a concrete executor instance.
+# why: Keeps executor capability semantics separate from task classification.
+entity executor_role,
+  owns executor_role_id @key,
+  owns name,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired"),
+  owns created_at,
+  owns updated_at,
+  plays coding_agent_enacts_executor_role:executor_role,
+  plays performer_profile_enacts_executor_role:executor_role,
+  plays task_family_eligible_for_executor_role:eligible_executor_role;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="task_family"> ---
+# kind: task-family
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.TaskWorld
+# what: Practical task classification family used for routing and capability matching.
+# not: Not the executor role and not the task itself.
+# why: Keeps task segmentation explicit for routing and bootstrap agent specialization.
+entity task_family,
+  owns task_family_id @key,
+  owns name,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired"),
+  owns created_at,
+  owns updated_at,
+  plays target_task_view_classified_as_task_family:task_family,
+  plays coding_agent_supports_task_family:supported_task_family,
+  plays task_family_eligible_for_executor_role:task_family,
+  plays executor_routing_classifies_task_family:task_family;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="mode_definition"> ---
@@ -2369,7 +2633,6 @@ entity mode_segment,
   plays context_bundle_assembles_mode_segment:mode_segment,
   plays object_revision_revises_mode_segment:revised_mode_segment,
   plays object_event_affects_mode_segment:affected_mode_segment,
-  plays session_memory_scopes_mode_segment:scoped_mode_segment,
   plays as_is_voice_session_maps_to_mode_segment:mode_segment;
 # --- </semantic-card> ---
 
@@ -2430,8 +2693,7 @@ entity context_pack,
   owns updated_at,
   plays mode_segment_uses_context_pack:context_pack,
   plays context_pack_supports_mode_definition:context_pack,
-  plays project_context_card_binds_context_pack:bound_context_pack,
-  plays shared_memory_supports_context_pack:supported_context_pack;
+  plays project_context_card_binds_context_pack:bound_context_pack;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="output_contract"> ---
@@ -2535,6 +2797,8 @@ entity artifact_record,
   plays artifact_record_supports_project:artifact_record,
   plays artifact_patch_updates_artifact_record:artifact_record,
   plays output_contract_targets_artifact_record:artifact_record,
+  plays target_task_view_produces_artifact_record:produced_artifact_record,
+  plays task_execution_run_produces_artifact_record:produced_artifact_record,
   plays object_revision_revises_artifact_record:revised_artifact_record,
   plays object_event_affects_artifact_record:affected_artifact_record,
   plays object_note_attaches_to_artifact_record:noted_artifact_record,
@@ -2585,8 +2849,7 @@ entity context_bundle,
   plays context_bundle_assembles_task:context_bundle,
   plays context_bundle_realizes_output_contract:context_bundle,
   plays object_manifest_assembled_for_context_bundle:context_bundle,
-  plays access_policy_governs_context_bundle:context_bundle,
-  plays working_memory_scopes_context_bundle:scoped_context_bundle;
+  plays access_policy_governs_context_bundle:context_bundle;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="target_task_view"> ---
@@ -2603,17 +2866,213 @@ entity target_task_view,
   owns title,
   owns summary,
   owns description,
-  owns status,
-  owns priority,
+  owns status @values("DRAFT_10", "READY_10", "PROGRESS_10", "REVIEW_10", "DONE_10", "ARCHIVE", "UNKNOWN"),
+  owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
+  owns codex_task,
   owns created_at,
   owns updated_at,
   plays context_bundle_assembles_task:assembled_task,
+  plays target_task_view_classified_as_task_family:target_task_view,
+  plays target_task_view_changes_system_of_interest:target_task_view,
+  plays target_task_view_executed_by_producing_system:target_task_view,
+  plays target_task_view_targets_object_locator:target_task_view,
+  plays target_task_view_cites_evidence_link:target_task_view,
+  plays target_task_view_recommended_for_coding_agent:target_task_view,
+  plays target_task_view_must_satisfy_acceptance_criterion:target_task_view,
+  plays target_task_view_produces_artifact_record:target_task_view,
+  plays executor_routing_targets_target_task_view:routed_target_task_view,
+  plays task_execution_run_executes_target_task_view:executed_target_task_view,
   plays object_revision_revises_target_task_view:revised_target_task_view,
   plays object_event_affects_target_task_view:affected_target_task_view,
   plays object_note_attaches_to_target_task_view:noted_target_task_view,
   plays object_conclusion_applies_to_target_task_view:concluded_target_task_view,
-  plays as_is_oper_task_maps_to_target_task_view:target_task_view,
+  plays as_is_task_maps_to_target_task_view:target_task_view,
   plays as_is_possible_task_maps_to_target_task_view:target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="executor_routing"> ---
+# kind: executor-routing
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+#   - C.Agent-Tools-CAL
+# scope: BC.TaskWorld
+# what: Durable routing decision from one task to an executor contour.
+# not: Not the execution run itself and not a generic UI suggestion.
+# why: Makes routing proposals and approvals explicit and auditable.
+entity executor_routing,
+  owns executor_routing_id @key,
+  owns selected_executor_kind @values("human", "coding_agent", "mixed"),
+  owns selected_executor_ref,
+  owns routing_basis,
+  owns approval_state @values("pending", "approved", "rejected", "superseded"),
+  owns launch_state @values("not_ready", "ready", "launched", "failed", "cancelled"),
+  owns summary,
+  owns status @values("proposed", "approved", "rejected", "launched", "superseded"),
+  owns created_at,
+  owns updated_at,
+  plays executor_routing_targets_target_task_view:executor_routing,
+  plays executor_routing_classifies_task_family:executor_routing,
+  plays executor_routing_launches_task_execution_run:executor_routing;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="task_execution_run"> ---
+# kind: task-execution-run
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+#   - A.2.9 U.SpeechAct
+# scope: BC.TaskWorld
+# what: One execution occurrence of one task by one executor contour.
+# not: Not a voice processing run and not a routing proposal.
+# why: Separates task execution from extraction/runtime processing.
+entity task_execution_run,
+  owns task_execution_run_id @key,
+  owns executor_kind @values("human", "coding_agent", "mixed"),
+  owns executor_ref,
+  owns result_ref,
+  owns source_ref,
+  owns summary,
+  owns status @values("queued", "running", "succeeded", "failed", "cancelled"),
+  owns started_at,
+  owns ended_at,
+  owns created_at,
+  owns updated_at,
+  plays executor_routing_launches_task_execution_run:launched_task_execution_run,
+  plays task_execution_run_executes_target_task_view:task_execution_run,
+  plays task_execution_run_produces_artifact_record:task_execution_run;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_process"> ---
+# kind: process-goal
+# fpf_basis:
+#   - A.1 U.Entity
+# scope: BC.ProcessWorld
+# what: Desired outcome of the producing system or delivery process.
+# not: Not a product requirement and not a task.
+# why: Separates process outcomes from product outcomes.
+entity goal_process,
+  owns goal_process_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "satisfied", "superseded", "cancelled"),
+  owns created_at,
+  owns updated_at,
+  plays goal_process_targets_producing_system:goal_process,
+  plays goal_process_decomposes_to_target_task_view:goal_process,
+  plays goal_process_measured_by_kpi:goal_process;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_product"> ---
+# kind: product-goal
+# fpf_basis:
+#   - A.1 U.Entity
+# scope: BC.ProductWorld
+# what: Desired product outcome for the system of interest.
+# not: Not a task and not a process outcome.
+# why: Separates product telos from delivery work.
+entity goal_product,
+  owns goal_product_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "satisfied", "superseded", "cancelled"),
+  owns created_at,
+  owns updated_at,
+  plays goal_product_targets_system_of_interest:goal_product,
+  plays business_need_drives_goal_product:goal_product,
+  plays goal_product_decomposes_to_requirement:goal_product,
+  plays goal_product_measured_by_kpi:goal_product;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="business_need"> ---
+# kind: business-need
+# fpf_basis:
+#   - A.1 U.Entity
+# scope: BC.ProductWorld
+# what: The initiating problem/opportunity that justifies the work.
+# not: Not a requirement and not a task.
+# why: Keeps justification distinct from implementation.
+entity business_need,
+  owns business_need_id @key,
+  owns title,
+  owns summary,
+  owns status @values("identified", "active", "satisfied", "superseded", "cancelled"),
+  owns created_at,
+  owns updated_at,
+  plays business_need_drives_goal_product:business_need;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="requirement"> ---
+# kind: requirement
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+# scope: BC.ProductWorld
+# what: A condition/property the system of interest must satisfy.
+# not: Not a task and not a business need.
+# why: Makes product obligations explicit.
+entity requirement,
+  owns requirement_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "approved", "satisfied", "superseded", "cancelled"),
+  owns created_at,
+  owns updated_at,
+  plays goal_product_decomposes_to_requirement:requirement,
+  plays target_task_view_satisfies_requirement:satisfied_requirement;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="acceptance_criterion"> ---
+# kind: acceptance-criterion
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+# scope: BC.ArtifactWorld
+# what: A typed criterion against which a produced result is accepted or rejected.
+# not: Not the result itself and not the evaluation event.
+# why: Separates the standard of acceptance from the artifact and verdict.
+entity acceptance_criterion,
+  owns acceptance_criterion_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired"),
+  owns created_at,
+  owns updated_at,
+  plays target_task_view_must_satisfy_acceptance_criterion:acceptance_criterion,
+  plays acceptance_evaluation_checks_acceptance_criterion:acceptance_criterion;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="acceptance_evaluation"> ---
+# kind: acceptance-evaluation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: One acceptance verdict over one produced artifact against one criterion.
+# not: Not the criterion and not the artifact itself.
+# why: Separates acceptance judgment from both artifact and rule.
+entity acceptance_evaluation,
+  owns acceptance_evaluation_id @key,
+  owns summary,
+  owns status @values("pending", "passed", "failed", "waived"),
+  owns created_at,
+  owns updated_at,
+  plays acceptance_evaluation_checks_acceptance_criterion:acceptance_evaluation,
+  plays acceptance_evaluation_evaluates_artifact_record:acceptance_evaluation;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="evidence_link"> ---
+# kind: evidence-link
+# fpf_basis:
+#   - A.10 EvidenceGraph Referring
+# scope: BC.TraceWorld
+# what: Normalized evidence carrier for a quote/span/source that justifies a task.
+# not: Not the task/session link itself.
+# why: Keeps quoted evidence first-class without inflating session membership into an entity.
+entity evidence_link,
+  owns evidence_link_id @key,
+  owns source_ref,
+  owns summary,
+  owns description,
+  owns status,
+  owns created_at,
+  owns updated_at,
+  plays target_task_view_cites_evidence_link:evidence_link;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="object_revision"> ---
@@ -2723,6 +3182,28 @@ entity object_manifest,
 # --- </semantic-card> ---
 
 # --- <semantic-card id="writeback_decision"> ---
+# --- <semantic-card id="change_proposal"> ---
+# kind: change-proposal
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+#   - A.2.8 U.Commitment
+# scope: BC.ArtifactWorld
+# what: Proposed mutation to an object before approval.
+# not: Not the approved writeback order and not the patch itself.
+# why: Separates proposed change intent from approval and execution.
+entity change_proposal,
+  owns change_proposal_id @key,
+  owns source_ref,
+  owns summary,
+  owns description,
+  owns status @values("proposed", "accepted", "rejected", "superseded"),
+  owns created_at,
+  owns updated_at,
+  plays change_proposal_targets_target_task_view:change_proposal,
+  plays writeback_decision_accepts_change_proposal:change_proposal;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="writeback_decision"> ---
 # kind: review-decision
 # fpf_basis:
 #   - A.2.8 U.Commitment
@@ -2735,9 +3216,10 @@ entity writeback_decision,
   owns writeback_decision_id @key,
   owns source_ref,
   owns summary,
-  owns status,
+  owns status @values("pending", "approved", "rejected", "executed", "superseded"),
   owns created_at,
   owns updated_at,
+  plays writeback_decision_accepts_change_proposal:writeback_decision,
   plays writeback_decision_writes_object_note:writeback_decision,
   plays review_annotation_approves_writeback:writeback_decision;
 # --- </semantic-card> ---
@@ -2753,7 +3235,7 @@ entity writeback_decision,
 entity review_annotation,
   owns review_annotation_id @key,
   owns comment,
-  owns status,
+  owns status @values("commented", "approved", "rejected", "superseded"),
   owns created_at,
   owns updated_at,
   plays review_annotation_approves_writeback:review_annotation;
@@ -2777,80 +3259,6 @@ entity access_policy,
   plays access_policy_governs_context_bundle:access_policy;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="working_memory"> ---
-# kind: memory-classification
-# fpf_basis:
-#   - U.BoundedContext
-# scope: BC.ModeEngineWorld
-# what: Short-horizon object-scoped memory semantics.
-# not: Not a global memory store.
-# why: Encodes in-the-moment context scope from Mode Engine.
-entity working_memory,
-  owns working_memory_id @key,
-  owns source_ref,
-  owns summary,
-  owns status,
-  owns created_at,
-  owns updated_at,
-  plays working_memory_scopes_context_bundle:working_memory;
-# --- </semantic-card> ---
-
-# --- <semantic-card id="session_memory"> ---
-# kind: memory-classification
-# fpf_basis:
-#   - U.BoundedContext
-# scope: BC.ModeEngineWorld
-# what: Session-bounded object-scoped memory semantics.
-# not: Not project memory.
-# why: Encodes reusable context within one session lifecycle.
-entity session_memory,
-  owns session_memory_id @key,
-  owns session_id,
-  owns source_ref,
-  owns summary,
-  owns status,
-  owns created_at,
-  owns updated_at,
-  plays session_memory_scopes_mode_segment:session_memory;
-# --- </semantic-card> ---
-
-# --- <semantic-card id="project_memory"> ---
-# kind: memory-classification
-# fpf_basis:
-#   - U.BoundedContext
-# scope: BC.ProjectWorld
-# what: Long-lived project-bound memory semantics.
-# not: Not shared cross-project memory.
-# why: Captures durable project context as an object-scoped layer.
-entity project_memory,
-  owns project_memory_id @key,
-  owns project_id,
-  owns source_ref,
-  owns summary,
-  owns status,
-  owns created_at,
-  owns updated_at,
-  plays project_memory_scopes_project_context_card:project_memory;
-# --- </semantic-card> ---
-
-# --- <semantic-card id="shared_memory"> ---
-# kind: memory-classification
-# fpf_basis:
-#   - A.6.9 U.CrossContextSamenessDisambiguation
-# scope: BC.ProjectWorld
-# what: Explicitly shared/domain memory semantics.
-# not: Not default project memory.
-# why: Prevents implicit context leakage across projects.
-entity shared_memory,
-  owns shared_memory_id @key,
-  owns source_ref,
-  owns summary,
-  owns status,
-  owns created_at,
-  owns updated_at,
-  plays shared_memory_supports_context_pack:shared_memory;
-# --- </semantic-card> ---
-
 # --- <semantic-card id="project_context_card_describes_project"> ---
 # kind: projection-relation
 # fpf_basis:
@@ -2865,6 +3273,32 @@ relation project_context_card_describes_project,
   relates described_project;
 # --- </semantic-card> ---
 
+# --- <semantic-card id="project_context_card_concerns_system_of_interest"> ---
+# kind: projection-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProductWorld
+# what: Links a project context card to the system of interest it concerns.
+# not: Not project ownership.
+# why: Prevents project/product conflation.
+relation project_context_card_concerns_system_of_interest,
+  relates project_context_card,
+  relates system_of_interest;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="project_context_card_within_producing_system"> ---
+# kind: projection-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProcessWorld
+# what: Links a project context card to the producing system within which work happens.
+# not: Not the product/system being changed.
+# why: Makes the producer explicit.
+relation project_context_card_within_producing_system,
+  relates project_context_card,
+  relates producing_system;
+# --- </semantic-card> ---
+
 # --- <semantic-card id="agent_role_executes_prompt_pipeline"> ---
 # kind: workflow-relation
 # fpf_basis:
@@ -2877,6 +3311,84 @@ relation project_context_card_describes_project,
 relation agent_role_executes_prompt_pipeline,
   relates agent_role,
   relates prompt_pipeline;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="coding_agent_enacts_agent_role"> ---
+# kind: execution-relation
+# fpf_basis:
+#   - A.2 Role Taxonomy
+# scope: BC.AgentWorld
+# what: Links a coding agent runtime surface to the role it enacts.
+# not: Not a prompt binding and not a task assignment.
+# why: Separates executable agent identity from role taxonomy.
+relation coding_agent_enacts_agent_role,
+  relates coding_agent,
+  relates agent_role;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="coding_agent_uses_prompt_pipeline"> ---
+# kind: execution-relation
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+# scope: BC.AgentWorld
+# what: Links a coding agent runtime surface to the prompt pipeline it uses.
+# not: Not a single run occurrence.
+# why: Makes agent invocation semantics explicit and queryable.
+relation coding_agent_uses_prompt_pipeline,
+  relates coding_agent,
+  relates prompt_pipeline;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="coding_agent_enacts_executor_role"> ---
+# kind: execution-relation
+# fpf_basis:
+#   - A.2 Role Taxonomy
+# scope: BC.AgentWorld
+# what: Links a coding agent to the executor role it can enact.
+# not: Not a prompt binding.
+# why: Separates executor capability role from tool identity.
+relation coding_agent_enacts_executor_role,
+  relates coding_agent,
+  relates executor_role;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="performer_profile_enacts_executor_role"> ---
+# kind: execution-relation
+# fpf_basis:
+#   - A.2 Role Taxonomy
+# scope: BC.AgentWorld
+# what: Links a human performer profile to the executor role it can enact.
+# not: Not a payroll or project-membership relation.
+# why: Allows routing to use the same capability-side axis for humans and agents.
+relation performer_profile_enacts_executor_role,
+  relates performer_profile,
+  relates executor_role;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="coding_agent_supports_task_family"> ---
+# kind: capability-relation
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+# scope: BC.TaskWorld
+# what: Declares that a coding agent supports a given task family.
+# not: Not a concrete routing decision.
+# why: Makes capability matching explicit for executor routing.
+relation coding_agent_supports_task_family,
+  relates coding_agent,
+  relates supported_task_family;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="task_family_eligible_for_executor_role"> ---
+# kind: capability-relation
+# fpf_basis:
+#   - A.2 Role Taxonomy
+# scope: BC.TaskWorld
+# what: Declares that a task family is eligible for a given executor role.
+# not: Not a specific executor assignment.
+# why: Separates family-level routing policy from concrete executor selection.
+relation task_family_eligible_for_executor_role,
+  relates task_family,
+  relates eligible_executor_role;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="mode_segment_uses_mode_definition"> ---
@@ -3023,6 +3535,33 @@ relation artifact_patch_updates_artifact_record,
   relates artifact_record;
 # --- </semantic-card> ---
 
+# --- <semantic-card id="change_proposal_targets_target_task_view"> ---
+# kind: proposal-relation
+# fpf_basis:
+#   - A.6.5 U.RelationSlotDiscipline
+# scope: BC.TaskWorld
+# what: Links a change proposal to the task view it intends to mutate.
+# not: Not approval and not execution.
+# why: Keeps proposal target explicit before approval.
+relation change_proposal_targets_target_task_view,
+  relates change_proposal,
+  relates proposed_target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="writeback_decision_accepts_change_proposal"> ---
+# kind: approval-relation
+# fpf_basis:
+#   - A.2.8 U.Commitment
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Links an approved writeback decision to the proposal it accepts.
+# not: Not the patch itself.
+# why: Separates proposal from approval in the audit chain.
+relation writeback_decision_accepts_change_proposal,
+  relates writeback_decision,
+  relates change_proposal;
+# --- </semantic-card> ---
+
 # --- <semantic-card id="context_bundle_assembles_project"> ---
 # kind: context-relation
 # fpf_basis:
@@ -3034,6 +3573,305 @@ relation artifact_patch_updates_artifact_record,
 relation context_bundle_assembles_project,
   relates context_bundle,
   relates assembled_project;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_changes_system_of_interest"> ---
+# kind: task-product-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProductWorld
+# what: Links a task view to the system of interest it changes or targets.
+# not: Not execution ownership.
+# why: Makes the product-side referent explicit.
+relation target_task_view_changes_system_of_interest,
+  relates target_task_view,
+  relates changed_system_of_interest;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_executed_by_producing_system"> ---
+# kind: task-process-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProcessWorld
+# what: Links a task view to the producing system that executes it.
+# not: Not the product target.
+# why: Makes the producer explicit.
+relation target_task_view_executed_by_producing_system,
+  relates target_task_view,
+  relates executing_producing_system;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_process_targets_producing_system"> ---
+# kind: process-goal-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProcessWorld
+# what: Links a process goal to the producing system it is about.
+# not: Not a task decomposition.
+# why: Keeps process goals bound to the producer.
+relation goal_process_targets_producing_system,
+  relates goal_process,
+  relates producing_system;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_product_targets_system_of_interest"> ---
+# kind: product-goal-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProductWorld
+# what: Links a product goal to the system of interest it is about.
+# not: Not a requirement decomposition.
+# why: Keeps product goals bound to the thing being changed.
+relation goal_product_targets_system_of_interest,
+  relates goal_product,
+  relates system_of_interest;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="business_need_drives_goal_product"> ---
+# kind: product-justification-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProductWorld
+# what: Links a business need to the product goal it drives.
+# not: Not a task relation.
+# why: Keeps product justification explicit.
+relation business_need_drives_goal_product,
+  relates business_need,
+  relates goal_product;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_product_decomposes_to_requirement"> ---
+# kind: product-decomposition-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProductWorld
+# what: Links a product goal to a requirement that decomposes it.
+# not: Not process/task decomposition.
+# why: Keeps requirement structure explicit.
+relation goal_product_decomposes_to_requirement,
+  relates goal_product,
+  relates requirement;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_process_decomposes_to_target_task_view"> ---
+# kind: process-decomposition-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProcessWorld
+# what: Links a process goal to a task view that realizes part of it.
+# not: Not product decomposition.
+# why: Makes task decomposition process-bound.
+relation goal_process_decomposes_to_target_task_view,
+  relates goal_process,
+  relates target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_satisfies_requirement"> ---
+# kind: cross-stream-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.ProductWorld
+# what: Links a task view to the requirement it satisfies.
+# not: Not goal decomposition.
+# why: Connects execution to product obligation.
+relation target_task_view_satisfies_requirement,
+  relates target_task_view,
+  relates satisfied_requirement;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_must_satisfy_acceptance_criterion"> ---
+# kind: acceptance-relation
+# fpf_basis:
+#   - A.2.3 U.PromiseContent
+# scope: BC.ArtifactWorld
+# what: Links a task view to the acceptance criterion governing its result.
+# not: Not the verdict itself.
+# why: Makes acceptance obligations explicit.
+relation target_task_view_must_satisfy_acceptance_criterion,
+  relates target_task_view,
+  relates acceptance_criterion;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_targets_object_locator"> ---
+# --- <semantic-card id="target_task_view_classified_as_task_family"> ---
+# kind: classification-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.TaskWorld
+# what: Classifies a task view into a practical task family.
+# not: Not an executor selection.
+# why: Makes task segmentation explicit for routing.
+relation target_task_view_classified_as_task_family,
+  relates target_task_view,
+  relates task_family;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="executor_routing_targets_target_task_view"> ---
+# kind: routing-relation
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+# scope: BC.TaskWorld
+# what: Links a routing decision to the target task view it routes.
+# not: Not the execution run itself.
+# why: Makes task-to-routing lineage explicit.
+relation executor_routing_targets_target_task_view,
+  relates executor_routing,
+  relates routed_target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="executor_routing_classifies_task_family"> ---
+# kind: routing-relation
+# fpf_basis:
+#   - U.BoundedContext
+# scope: BC.TaskWorld
+# what: Records the task family used as routing basis.
+# not: Not the executor identity.
+# why: Preserves routing classification rationale.
+relation executor_routing_classifies_task_family,
+  relates executor_routing,
+  relates task_family;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="executor_routing_launches_task_execution_run"> ---
+# kind: routing-relation
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+# scope: BC.TaskWorld
+# what: Links an approved routing decision to the execution run it launched.
+# not: Not the task itself.
+# why: Preserves routing-to-execution auditability.
+relation executor_routing_launches_task_execution_run,
+  relates executor_routing,
+  relates launched_task_execution_run;
+# --- </semantic-card> ---
+
+# kind: context-relation
+# fpf_basis:
+#   - A.10 EvidenceGraph Referring
+# scope: BC.TaskWorld
+# what: Links a task view to an object locator representing what should be changed.
+# not: Not evidence and not acceptance.
+# why: Makes object-of-application explicit without minting a second task companion entity.
+relation target_task_view_targets_object_locator,
+  relates target_task_view,
+  relates object_locator;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_cites_evidence_link"> ---
+# kind: trace-relation
+# fpf_basis:
+#   - A.10 EvidenceGraph Referring
+# scope: BC.TraceWorld
+# what: Links a task view to normalized quoted evidence.
+# not: Not the discussion relation itself.
+# why: Keeps evidence explicit as part of the task-local execution surface.
+relation target_task_view_cites_evidence_link,
+  relates target_task_view,
+  relates evidence_link;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_recommended_for_coding_agent"> ---
+# kind: execution-relation
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+# scope: BC.TaskWorld
+# what: Recommends a coding agent runtime surface for executing a task view.
+# not: Not the assignment event and not the role taxonomy.
+# why: Keeps preferred execution tooling explicit at the task surface.
+relation target_task_view_recommended_for_coding_agent,
+  relates target_task_view,
+  relates recommended_coding_agent;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="target_task_view_produces_artifact_record"> ---
+# kind: artifact-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Links a task view to the durable artifact record it produces.
+# not: Not the acceptance verdict and not a generic project artifact listing.
+# why: Keeps execution output directly traceable to the task that produced it.
+relation target_task_view_produces_artifact_record,
+  relates target_task_view,
+  relates produced_artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="task_execution_run_executes_target_task_view"> ---
+# kind: execution-relation
+# fpf_basis:
+#   - C.Agent-Tools-CAL
+# scope: BC.TaskWorld
+# what: Links a task execution run to the task view it executes.
+# not: Not a voice processing run.
+# why: Keeps execution lineage distinct from extraction lineage.
+relation task_execution_run_executes_target_task_view,
+  relates task_execution_run,
+  relates executed_target_task_view;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="task_execution_run_produces_artifact_record"> ---
+# kind: execution-relation
+# fpf_basis:
+#   - E.17 U.MultiViewDescribing
+# scope: BC.ArtifactWorld
+# what: Links a task execution run to the artifact record it produced.
+# not: Not the acceptance verdict.
+# why: Makes executor output traceable at run level.
+relation task_execution_run_produces_artifact_record,
+  relates task_execution_run,
+  relates produced_artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="acceptance_evaluation_checks_acceptance_criterion"> ---
+# kind: acceptance-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Links an acceptance evaluation to the criterion it applies.
+# not: Not the artifact being evaluated.
+# why: Keeps criterion and verdict distinct.
+relation acceptance_evaluation_checks_acceptance_criterion,
+  relates acceptance_evaluation,
+  relates acceptance_criterion;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="acceptance_evaluation_evaluates_artifact_record"> ---
+# kind: acceptance-relation
+# fpf_basis:
+#   - A.2.9 U.SpeechAct
+# scope: BC.ArtifactWorld
+# what: Links an acceptance evaluation to the artifact record it evaluates.
+# not: Not the criterion itself.
+# why: Makes result acceptance explicit.
+relation acceptance_evaluation_evaluates_artifact_record,
+  relates acceptance_evaluation,
+  relates artifact_record;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_process_measured_by_kpi"> ---
+# kind: measurement-relation
+# fpf_basis:
+#   - A.17 CHR-NORM
+# scope: BC.ProcessWorld
+# what: Links a process goal to a KPI that measures it.
+# not: Not a KPI observation.
+# why: Makes process measurement explicit.
+relation goal_process_measured_by_kpi,
+  relates goal_process,
+  relates kpi;
+# --- </semantic-card> ---
+
+# --- <semantic-card id="goal_product_measured_by_kpi"> ---
+# kind: measurement-relation
+# fpf_basis:
+#   - A.17 CHR-NORM
+# scope: BC.ProductWorld
+# what: Links a product goal to a KPI that measures it.
+# not: Not a KPI observation.
+# why: Makes product measurement explicit.
+relation goal_product_measured_by_kpi,
+  relates goal_product,
+  relates kpi;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="context_bundle_assembles_mode_segment"> ---
@@ -3256,58 +4094,6 @@ relation object_manifest_describes_artifact_record,
   relates object_manifest,
   relates manifested_artifact_record;
 # --- </semantic-card> ---
-
-# --- <semantic-card id="working_memory_scopes_context_bundle"> ---
-# kind: memory-relation
-# fpf_basis:
-#   - U.BoundedContext
-# scope: BC.ModeEngineWorld
-# what: Links working-memory classification to one context bundle.
-# not: Not a generic memory bucket.
-# why: Makes memory mode object-bound.
-relation working_memory_scopes_context_bundle,
-  relates working_memory,
-  relates scoped_context_bundle;
-# --- </semantic-card> ---
-
-# --- <semantic-card id="session_memory_scopes_mode_segment"> ---
-# kind: memory-relation
-# fpf_basis:
-#   - U.BoundedContext
-# scope: BC.ModeEngineWorld
-# what: Links session-memory classification to one mode segment.
-# not: Not project memory.
-# why: Makes session memory explicit.
-relation session_memory_scopes_mode_segment,
-  relates session_memory,
-  relates scoped_mode_segment;
-# --- </semantic-card> ---
-
-# --- <semantic-card id="project_memory_scopes_project_context_card"> ---
-# kind: memory-relation
-# fpf_basis:
-#   - U.BoundedContext
-# scope: BC.ProjectWorld
-# what: Links project-memory classification to one project context card.
-# not: Not shared memory.
-# why: Makes project memory explicit.
-relation project_memory_scopes_project_context_card,
-  relates project_memory,
-  relates scoped_project_context_card;
-# --- </semantic-card> ---
-
-# --- <semantic-card id="shared_memory_supports_context_pack"> ---
-# kind: memory-relation
-# fpf_basis:
-#   - A.6.9 U.CrossContextSamenessDisambiguation
-# scope: BC.ProjectWorld
-# what: Links shared-memory classification to a context pack.
-# not: Not implicit cross-project leakage.
-# why: Makes shared memory explicit and policy-aware.
-relation shared_memory_supports_context_pack,
-  relates shared_memory,
-  relates supported_context_pack;
-# --- </semantic-card> ---
 # --- </to-be.semantic-core> ---
 # --- </to_be> ---
 
@@ -3341,7 +4127,7 @@ relation as_is_voice_session_maps_to_mode_segment,
   relates mode_segment;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="as_is_oper_task_maps_to_target_task_view"> ---
+# --- <semantic-card id="as_is_task_maps_to_target_task_view"> ---
 # kind: projection-bridge
 # fpf_basis:
 #   - A.6.9 U.CrossContextSamenessDisambiguation
@@ -3349,8 +4135,8 @@ relation as_is_voice_session_maps_to_mode_segment,
 # what: Maps an operational task row to target task semantics.
 # not: Not a materialization command.
 # why: Provides stable task semantics above runtime rows.
-relation as_is_oper_task_maps_to_target_task_view,
-  relates as_is_oper_task,
+relation as_is_task_maps_to_target_task_view,
+  relates as_is_task,
   relates target_task_view;
 # --- </semantic-card> ---
 

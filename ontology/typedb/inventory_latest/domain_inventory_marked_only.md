@@ -55,7 +55,7 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - value: `"RUB"` count=`10`
   - value: `null` count=`8`
 
-## automation_tasks -> oper_task
+## automation_tasks -> task
 - `status` <- `task_status`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain

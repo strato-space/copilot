@@ -3,14 +3,19 @@
 ## Status ⚪Open
 
 - Task-surface ticket line: ⚪Open 1  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 0
-- Plan status: ontology draft rewritten to cover OperOps sandbox and current copilot ontology; downstream specs still need alignment.
+- Plan status: ontology draft rewritten to cover OperOps sandbox and current copilot ontology; Mongo/task-plane parity snapshot folded in; downstream specs still need alignment.
 - Canonical ontology ticket: `copilot-ua6e`
 
 **Статус документа**: rewritten ontology draft open; downstream spec alignment pending
-**Дата**: 2026-03-18  
-**Основание**: three-way reconciliation across `/home/strato-space/y-tasks-sandbox/OperOps`, current voice/task specs in `copilot/plan`, and the current semantic kernel under `copilot/ontology`.
+**Дата**: 2026-03-21
+**Основание**: three-way reconciliation across `/home/strato-space/y-tasks-sandbox/OperOps`, current voice/task specs in `copilot/plan`, the current semantic kernel under `copilot/ontology`, and live Mongo recheck against `automation_tasks` / `automation_voice_bot_sessions` on 2026-03-21.
 
 ## Purpose
+Роль этого файла:
+- это производственная спека с упором на то, какие объекты, связи и статусные домены должны создаваться и поддерживаться в базе;
+- это companion document к `OperOps - Voice2Task.md`, который описывает бизнесово-операционный и UX/process contract;
+- здесь primary concern не экранный UX, а production-facing object model для Mongo/ontology/runtime.
+
 Зафиксировать каноническую ontology для voice sessions / voice dialogs в заказной разработке так, чтобы один документ одновременно покрывал:
 - conceptual model из `OperOps` sandbox;
 - semantic kernel и relation model из `copilot/ontology`;
@@ -21,17 +26,109 @@
 2. Как эти сущности связаны между собой?
 3. Какие слои нельзя смешивать без category mistake?
 
-## Greek-Scholastic Normalization
+Production emphasis:
+- `task` is the one central task-plane object;
+- task/session/chunk traceability must survive materialization into DB objects;
+- result and acceptance objects are mandatory parts of the production model, not optional prose add-ons.
+- ближайший production loop: `voice -> task intake -> executor routing -> agent/human launch -> execution -> human verification/update`.
 
-### Terms
-- **Voice session / voice dialog**: bounded communication event, из которого извлекаются смысловые объекты и operational outputs.
-- **Runtime/process ontology**: сущности записи, обработки, сегментации, маршрутизации и аудита.
-- **Management ontology**: сущности проектного управления и продуктового определения.
-- **Entity kind**: вид сущности.
-- **Action kind**: операция над сущностью.
-- **Topic**: тематическая классификация; не task, не requirement и не lifecycle status.
-- **Necessity**: модальность обязательности результата для успеха проекта.
-- **Knowledge state**: модальность знания о результате и способе его достижения.
+## Term Normalization / Glossary
+
+### Нормализация терминов
+
+- `task` — первичная операционная сущность работы. Это действие / deliverable, связанное с проектом, контекстом, исполнителем, критериями приемки и результирующим артефактом.
+- `draft task` — не отдельная сущность, а `task` в каноническом lifecycle state `DRAFT_10`. Это состояние формулировки, а не другой ontological kind.
+- `ready+ task` — тот же `task` в lifecycle `READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE`. Это уже принятый execution object.
+- `task_context_card` — не отдельная сущность, а название task-local structured surface. Это атрибутивный/реляционный состав внутри `task`, достаточный для coding agent execution без полного перечитывания session.
+- `task_type` / `task_classification` — типизация задачи (`ui`, `document`, `spec`, `research`, `audit`, и т.д.). Это classification dimension of `task`, а не отдельный work object.
+- `task_family` — practical routing classification layer поверх `task_type`: позволяет различать задачи между executor families и использовать это в routing.
+- `executor_role` — capability-side role ось для human/machine executors. Это не task family и не concrete executor instance.
+- `voice_session` — ограниченное событие обсуждения, из которого извлекаются задачи, цели, доказательства и обновления контекста.
+- `processing_run` — событие исполнения одного обработчика над одним session/message scope. Это occurrence процесса, а не приказ и не пользовательское решение.
+- `change_proposal` — предложение изменить сущность до approval. Для LLM/AI это более точный термин, чем `change_request`, потому что речь идёт о proposed mutation, а не о санкционированном запросе.
+- `writeback_decision` — утвержденное решение на применение изменения. Это санкция на запись, а не само исполнение.
+- `patch` — конкретная дельта / change-set, применяемая к объекту после approval.
+- `codex_task` — не отдельная сущность, а task-plane признак того, что данный `task` принадлежит Codex-oriented taskflow/review pipeline.
+- `goal_process` — целевое состояние процесса / delivery outcome.
+- `goal_product` — целевое состояние продукта / product outcome.
+- `business_need` — бизнес-импульс, проблема или возможность, ради которой вообще стартует изменение.
+- `system_of_interest` — система интереса: объект, который продуктно описывается, меняется или оценивается. Это closest FPF-aligned analogue to `describedEntity`.
+- `producing_system` — производящая система: socio-technical system, которая исполняет задачи, производит артефакты и изменяет систему интереса.
+- `project` — управленческий/операционный контур внутри producing system. Проект не тождественен системе интереса.
+- `issue` — текущая проблема, уже влияющая на достижение цели.
+- `risk` — будущая неопределенная угроза или возможность.
+- `constraint` — уже заданное ограничение, которое сужает решение или исполнение.
+- `acceptance_criterion` — типизированное условие приемки, по которому решается, принят ли результат задачи.
+- `acceptance_evaluation` — событие/запись оценки результата against `acceptance_criterion`, производящее verdict.
+- `kpi` — измеримый показатель результата или процесса.
+- `kpi_observation` — наблюденное измерение одного KPI в одном observation event.
+- `artifact_record` — canonical DB-side объект результата/артефакта.
+- `result_artifact` — human-facing alias для `artifact_record` в business/process prose, а не второй ontology object.
+- `evidence_link` — нормализованный носитель цитаты/таймкода/ссылки на сообщение или сегмент, которым обосновывается задача.
+- `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или другой target object.
+- `coding_agent` — first-class исполняющий tool/system для coding work. Концептуально это non-human performer/executor. Он задаётся как запускаемый CLI/agent surface с путём к исполняемому файлу, аргументами запуска и ссылками на role/pipeline cards. Типовые экземпляры: `fast-agent`, `codex cli`.
+- `task_intake_pool` — стадия/поверхность, в которой входящие задачи существуют как `task[DRAFT_10]` до routing на исполнителя.
+- `executor_routing` — first-class decision object перелива входящих задач от intake pool к human performer, coding agent или смешанному контуру.
+- `task_execution_run` — отдельный execution object одного запуска задачи; не `processing_run`.
+- `seed_context_base` — внешний исходный контекст для bootstrap executor layer; в ближайшем цикле это прежде всего `DevFigma / FigmaFlow` плюс project/dialogue context.
+- `discussion linkage` — отношение многие-ко-многим `task <-> voice_session`; одна задача может обсуждаться во многих сессиях. Это relation-only contract, пока самой связи не требуется отдельная lifecycle/state semantics.
+
+Sandbox vocabulary retirement:
+- нормализованная цепочка такова: `change_proposal -> writeback_decision -> patch -> history_step`;
+- `codex_task` остаётся task-plane subtype marker, а не отдельным entity kind.
+
+FPF-aligned referent split:
+- product-side claims (`goal_product`, `requirement`, часть `business_need`) описывают прежде всего `system_of_interest`;
+- process-side claims (`task`, `goal_process`, `issue`, `risk`, `constraint`) описывают прежде всего `producing_system`;
+- `project` не должен поглощать ни `system_of_interest`, ни `producing_system`: он управляет работой, но не исчерпывает ни объект изменения, ни систему производства.
+
+## Entity Coverage Markers
+
+- `[mom]` - есть в MongoDB, есть в `ontology/typedb/schema/fragments/10-as-is`, есть в `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
+- `[-o-]` - есть только в ontology (`ontology/`)
+- `[ ]` - новая сущность, пока нигде нет
+
+Пометки ставятся только для object/table families. Поля, relation names и прочие non-entity identifiers не размечаются.
+
+## Verified Mongo / Ontology Parity Snapshot (2026-03-21)
+
+- live collection counts at recheck time: `automation_tasks=5573`, `automation_voice_bot_sessions=2060`, `automation_voice_bot_messages=13230`, `automation_comments=2229`;
+- current voice-origin task slice in Mongo after payload-to-draft migration: `source_kind=voice_possible_task -> 1611 Draft rows`, `source_kind missing -> 5 Draft rows`, `source_kind=voice_session -> 33 accepted rows` (`Ready=25`, `Progress 10=4`, `Review / Ready=4`);
+- live task-plane rows already exist in MongoDB and the exact AS-IS ontology entity is `task`;
+- historical docs/runtime may still mention retired draft/projection labels, but canonical normalization collapses them into `task` plus lifecycle/projection semantics rather than a second task family;
+- raw Mongo stores compatibility status labels (`Draft`, `Ready`, `Progress 10`, `Review / Ready`, `Done`, `Archive`), while API/spec semantics continue to speak in lifecycle keys (`DRAFT_10`, `READY_10`, ...);
+- raw session linkage is universally recoverable from `source_ref` / `external_ref` / `source_data.voice_sessions[]`;
+- direct `discussion_sessions[]` is only partially materialized in raw Mongo today (`1211/1616` Draft rows), and `discussion_count` is read-derived rather than a separately stored field;
+- current accepted voice rows do not universally persist direct `discussion_sessions[]`; accepted session lineage still rides mostly on `source_ref` / `external_ref` / `source_data.voice_sessions[]` plus acceptance lineage fields;
+- `5` accepted voice rows still carry legacy `source_data.refresh_state="stale"` payload residue, while live draft rows no longer do;
+- no active sessions currently retain historical `processors_data.CREATE_TASKS.data`; remaining payload residue sits on `78` non-active / historical sessions and no longer participates in normal runtime draft semantics;
+- `automation_comments` has active rows, but live Mongo currently shows `0` populated voice-linkage fields (`source_session_id`, `discussion_session_id`, `dialogue_reference`), so comment linkage remains contract-level/future-populated rather than already-universal storage truth;
+- no live draft rows remain with `source_data.refresh_state="stale"`, but compatibility linkage fields still exist and are still consumed by read paths.
+
+## Architectural Choices From Session History
+
+This document explicitly follows the architecture choices articulated by Valery Pavlovitch in the 2026-03-19 session history:
+- `task` is the central operational object; tasks exist to produce results and artifacts, not to be an isolated backlog surface;
+- `Draft` tasks are mutable, while `Ready+` tasks trend toward execution-ready immutability with acceptance criteria and artifact/result traceability;
+- one task may be discussed in multiple voice sessions; session lineage should therefore be many-to-many, not single-primary forever;
+- traceability must stay continuous: `VoiceSession -> Processing Run -> Task[DRAFT_10|...] -> Project Context -> Result Artifact`;
+- destructive and bulk task mutations stay human-in-the-loop through `Preview -> Confirm -> HistoryStep / UNDO`;
+- process-vs-product decomposition must remain explicit so execution objects are not collapsed into requirement objects.
+- acceptance criteria and measurable outcomes are first-class enough to deserve explicit ontology slots; otherwise “result produced” and “result accepted” collapse into one vague notion.
+- project/product confusion must be avoided: the project is not the produced product, and the produced product is not the producing system.
+- executor layer must arise above the task plane: incoming tasks should enter a common intake surface, then be routed to human performers, coding agents, or a mixed contour.
+- task routing should use explicit task segmentation between role/executor families rather than one flat undifferentiated queue.
+- `DevFigma / FigmaFlow` should serve as the near-term seed context for roles, skills, process templates, and artifact families when bootstrapping the executor layer.
+- the near-term validation path is practical rather than abstract: current `FigmaFlow lowres` and two real microprojects (`mriya2` hotels and real estate) are expected to validate task connection, routing, and execution.
+
+## Ontological Discipline
+
+Определения терминов вынесены в `Term normalization / Glossary` выше.
+Ниже фиксируются не новые определения, а правила онтологической дисциплины:
+- не смешивать сущность, её состояние, её описание и её носитель;
+- не смешивать объект изменения, решение на изменение, исполнение изменения и след изменения;
+- не смешивать процессную цель, продуктную цель, требование, ограничение, риск и уже возникшую проблему;
+- не смешивать produced result, acceptance criterion и measured KPI.
 
 ### Core ontological claim
 Разговор в заказной разработке нельзя редуцировать ни:
@@ -55,36 +152,77 @@
 Это слой того, **как** разговор существует в системе.
 
 Canonical entities:
-- `voice_session`
-- `voice_message`
-- `transcript_segment`
-- `chunk`
-- `mode`
-- `mode_segment`
-- `processing_run`
-- `marker`
-- `command`
+- `[mom]` `voice_message`
+- `[mom]` `voice_session`
+- `[-o-]` `mode_segment`
+- `[-o-]` `processing_run`
+- `[-o-]` `transcript_segment`
+- `[ ]` `chunk`
+- `[ ]` `marker`
+- `[ ]` `mode`
 
 Role in OperOps sandbox:
-- `VoiceSession`, `Chunk`, `Mode`, `Processing Run`, `Mode Segment`, `Marker`, `Command`
+- `VoiceSession`, `Chunk`, `Mode`, `Processing Run`, `Mode Segment`, `Marker`, review/apply actions
 
 Role in current `copilot/ontology`:
-- `voice_session`
-- `voice_message`
-- `voice_transcription`
-- `voice_categorization_entry`
-- `voice_topic`
-- `processing_run`
-- `plan_item`
-- `mode_segment`
-- `interaction_scope`
-- `aggregation_window`
-- `processor_definition`
+- `[mom]` `voice_message`
+- `[mom]` `voice_session`
+- `[mom]` `voice_topic`
+- `[-o-]` `aggregation_window`
+- `[-o-]` `interaction_scope`
+- `[-o-]` `mode_segment`
+- `[-o-]` `processing_run`
+- `[-o-]` `processor_definition`
+- `[-o-]` `voice_transcription`
+- `[-o-]` `voice_categorization_entry`
+
+Exact task-plane support already present in current ontology:
+- `[mom]` `task`
+- `[-o-]` `target_task_view`
+
+Direct AS-IS task definition:
+- current TQL definition lives in [`ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql`](../ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql)
+
+Quoted definition:
+
+```tql
+# ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql
+# kind: task-record
+# what: Operational task record from Mongo runtime.
+# not: Not the normalized target task view.
+# why: Acts as the main AS-IS source for task projection.
+entity task,
+  owns task_id @key,
+  owns project_id,
+  owns row_id,
+  owns title,
+  owns description,
+  owns status @values("Draft", "Ready", "Progress 10", "Review / Ready", "Done", "Archive", "unknown"),
+  owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
+  owns performer_id,
+  owns source_kind,
+  owns source_ref,
+  owns external_ref,
+  owns source_data,
+  owns dialogue_reference,
+  owns dialogue_tag,
+  owns task_id_from_ai,
+  owns priority_reason,
+  owns codex_task,
+  owns is_deleted,
+  owns created_at,
+  owns updated_at;
+```
+
+`codex_task` linkage semantics:
+- ontologically it is an attribute of `task`, not a second task entity;
+- semantically it marks that the task belongs to Codex-oriented taskflow/review handling;
+- it remains orthogonal to draft-vs-accepted lifecycle: a task can be `codex_task=true` without changing the essence of being `task`.
 
 Historical note:
-- legacy runtime/docs may still mention `task_draft`,
-- but canonical ontology treats it as `task` with `task_lifecycle_state = DRAFT_10`,
-- not as a separate entity kind.
+- legacy runtime/docs may still mention retired draft/projection labels,
+- but canonical ontology treats draftness as `task` with `task_lifecycle_state = DRAFT_10`,
+- and does not preserve those labels as first-class entity kinds.
 
 Canonical state rule:
 - `task_lifecycle_state` is the persisted/canonical task-state axis.
@@ -99,30 +237,37 @@ Minimal relations:
 - processing run may update existing `task` rows in `DRAFT_10`
 - processing run may reuse existing `DRAFT_10` tasks and link them to the current session when reused
 - that same task may later transition into `READY_10` and later lifecycle states
-- commands and markers operate on outputs of a run
+- markers annotate outputs of a run
+- task mutations are normalized through `change_proposal`, `writeback_decision`, and `patch`, not through a separate command-entity kind.
 
 ### Layer 2. Evidence / Trace Ontology
 Это слой того, **чем обосновывается извлечённый смысл**.
 
 Canonical entities:
-- `dialogue_reference`
-- `voice_message`
-- `transcript_segment`
-- `evidence_link`
+- `[mom]` `voice_message`
+- `[-o-]` `transcript_segment`
+- `[ ]` `evidence_link`
+
+Support field:
+- `dialogue_reference` — current field-level evidence carrier, not a first-class evidence entity
 
 Role in OperOps sandbox:
 - chunk/timecode provenance
 - traceability `VoiceSession -> Processing Run -> Task[DRAFT_10|...] -> Project Context`
 
 Role in current `copilot/ontology`:
-- `voice_message`
-- `voice_transcription`
+- `[mom]` `voice_message`
+- `[-o-]` `voice_transcription`
 - `voice_transcription_has_transcript_segment`
 - `as_is_voice_message_maps_to_object_event`
 
 Minimal relations:
 - execution/product entities may be evidenced by message/segment
 - any durable mutation should retain at least one evidence link back to a session/message/segment
+
+Current parity note:
+- `dialogue_reference` is still a field, not a first-class evidence entity;
+- session discussion linkage is not yet a first-class ontology relation in AS-IS and is currently carried operationally by `source_ref` / `external_ref` / `source_data.voice_sessions[]` plus partial `discussion_sessions[]`.
 
 ### Layer 3. Status Domain Ontology
 Это слой того, **какие статусы допустимы и в каком домене они живут**.
@@ -136,6 +281,7 @@ Key rule:
 - there is no one universal status alphabet.
 - `task_review_state` is a UI-local overlay, not a canonical persisted task domain.
 - `task_lifecycle_state` is canonical for persisted task state.
+- generic `status` in TO-BE snippets is a shared storage slot name, not a claim that all entities use one common status dictionary.
 
 Examples from OperOps / copilot:
 - session processing states:
@@ -154,51 +300,69 @@ Examples from OperOps / copilot:
   - `new` maps conceptually to `DRAFT_10`
   - `plan` maps conceptually to accepted execution-ready task state, canonically `READY_10`
 
-### Layer 4. Context / Memory Ontology
-Это слой того, **откуда берётся знание** для анализа и решений.
+AS-IS dictionary note:
+- current runtime already has `status_dict` with `module_scope`, but this is an AS-IS operational dictionary rather than a fully normalized TO-BE status-domain model.
+- therefore `status_dict` is evidence that statuses are already scoped, not evidence for one universal alphabet.
+
+Minimal TO-BE interpretation rule:
+- `task` / `target_task_view`: interpret `status` as `task_lifecycle_state`
+- `voice_session`: interpret `status` as `session_processing_state`
+- `processing_run`, `change_proposal`, `writeback_decision`, `acceptance_evaluation`, `review_annotation`, `object_event`: interpret `status` as `event_status` or review/proposal event state
+- `coding_agent`: interpret `status` as availability/activity state of the executable agent surface
+- `goal_process`, `goal_product`, `business_need`, `requirement`, `issue`, `risk`, `constraint`: interpret `status` as local domain state, not as task lifecycle
+
+Minimal-schema enforcement choice:
+- for direct LLM/coding-agent writes into TypeDB, TO-BE entities use owner-level `@values(...)` constraints on `owns status`;
+- this keeps one string carrier while still enforcing per-entity allowed status lists at DB level;
+- `target_task_view` now normalizes raw Mongo labels into canonical lifecycle keys during projection and is constrained in TypeDB via owner-level `@values(...)` on those keys plus `UNKNOWN` fallback.
+
+### Layer 4. Context Ontology
+Это слой того, **какой typed context доступен для анализа и решений**.
 
 Canonical entities:
-- `project`
-- `project_card`
-- `context_pack`
-- `working_memory`
-- `session_memory`
-- `project_memory`
-- `shared_memory`
+- `[mom]` `project`
+- `[-o-]` `context_pack`
+- `[ ]` `producing_system`
+- `[ ]` `system_of_interest`
+- `[ ]` `project_card`
 
 Role in OperOps sandbox / mode engine:
 - `Project`
 - `Project Card`
 - `Context Packs`
-- `WM / SM / PM`
 
 Role in current `copilot/ontology`:
-- `project_context_card`
-- `context_pack`
-- `working_memory`
-- `session_memory`
-- `project_memory`
-- `shared_memory`
+- `[-o-]` `project_context_card`
+- `[-o-]` `context_pack`
 
 Minimal relations:
 - project owns project card
 - project binds context packs
 - mode/segment may use context packs
-- session updates session memory
-- project aggregates project memory
+- project frames work inside the producing system
+- product-side descriptions should point to the system of interest, not to the project by default
+
+Greek-scholastic correction:
+- if `working_memory` / `session_memory` / `project_memory` / `shared_memory` are only untyped notes, treating them as first-class ontology entities is a categorical failure;
+- minimal repair is to demote them to implementation/index containers unless and until their contents are typed into canonical classes such as `task`, `business_need`, `issue`, `risk`, `constraint`, `goal_process`, `goal_product`, `requirement`.
+
+Greek-scholastic repair:
+- `working_memory`, `session_memory`, `project_memory`, `shared_memory` are not retained as first-class ontology entities;
+- they were category mistakes insofar as they named note buckets / storage containers rather than typed objects;
+- if implementation still needs retrieval scope, cache, or prompt assembly containers, those belong to implementation or index layer, not to first-class domain ontology.
 
 ### Layer 5. Artifact / Audit Ontology
 Это слой того, **как фиксируются результаты и изменения**.
 
 Canonical entities:
-- `artifact`
-- `patch`
-- `history_step`
-- `object_note`
-- `object_conclusion`
-- `object_manifest`
-- `writeback_decision`
-- `review_annotation`
+- `[mom]` `history_step`
+- `[-o-]` `object_conclusion`
+- `[-o-]` `object_manifest`
+- `[-o-]` `object_note`
+- `[-o-]` `patch`
+- `[-o-]` `writeback_decision`
+- `[-o-]` `review_annotation`
+- `[ ]` `artifact`
 
 Role in OperOps sandbox:
 - `Artifact`
@@ -207,15 +371,15 @@ Role in OperOps sandbox:
 - Preview / Confirm / Undo discipline
 
 Role in current `copilot/ontology`:
-- `artifact_record`
-- `artifact_patch`
-- `object_revision`
-- `object_event`
-- `object_note`
-- `object_conclusion`
-- `object_manifest`
-- `writeback_decision`
-- `review_annotation`
+- `[-o-]` `artifact_record`
+- `[-o-]` `artifact_patch`
+- `[-o-]` `object_revision`
+- `[-o-]` `object_event`
+- `[-o-]` `object_note`
+- `[-o-]` `object_conclusion`
+- `[-o-]` `object_manifest`
+- `[-o-]` `writeback_decision`
+- `[-o-]` `review_annotation`
 
 Minimal relations:
 - artifacts are patched
@@ -223,14 +387,43 @@ Minimal relations:
 - writeback decisions govern durable mutations
 - notes/conclusions/manifests are object-bound, never free-floating memory
 
+### Layer 5.5 Outcome / Acceptance / Measurement Ontology
+Это слой того, **какой результат произведён, по каким критериям он принимается и как он измеряется**.
+
+Canonical entities:
+- `[ ]` `acceptance_evaluation`
+- `[mom]` `artifact_record`
+- `[mom]` `kpi`
+- `[mom]` `kpi_observation`
+- `[mom]` `kpi_trigger_event`
+- `[ ]` `acceptance_criterion`
+
+Role in current `copilot/ontology`:
+- `[mom]` `artifact_record`
+- `[mom]` `kpi`
+- `[mom]` `kpi_observation`
+- `[mom]` `kpi_trigger_event`
+
+Greek-scholastic note:
+- this layer is needed because `task`, `result`, `acceptance`, and `measurement` are not the same kind of thing;
+- otherwise the model collapses “do work”, “produce artifact”, “pass acceptance”, and “improve KPI” into one undifferentiated task blob.
+
+Minimal relations:
+- `task -> produces -> artifact_record`
+- `task -> must_satisfy -> acceptance_criterion`
+- `acceptance_evaluation -> checks -> acceptance_criterion`
+- `acceptance_evaluation -> evaluates -> artifact_record`
+- `goal_process | goal_product -> measured_by -> kpi`
+- `kpi -> observed_as -> kpi_observation`
+
 ### Layer 6. Registry / Configuration Ontology
 Это слой того, **какие правила и словари управляют runtime без переписывания онтологии руками**.
 
 Canonical entities:
-- `bot_command_registry`
-- `skills_registry`
-- `user_profile`
-- `identity_map`
+- `[ ]` `bot_command_registry`
+- `[ ]` `skills_registry`
+- `[ ]` `user_profile`
+- `[ ]` `identity_map`
 
 Role in OperOps sandbox:
 - `bot_commands`
@@ -242,14 +435,17 @@ Minimal relations:
 - user profile conditions command interpretation
 - skills registry governs agent behavior by user/chat/project scope
 - command registry governs available commands and aliases
+- seed context base is materialized into context packs, role/skill registries, and executor routing defaults rather than kept as one free-form blob
 
 ### Layer 7. Actor / Authority Ontology
 Это слой того, **кто говорит, кто принимает решения и кто исполняет**.
 
 Canonical entities:
-- `actor`
-- `role`
-- `authority_scope`
+- `[ ]` `actor`
+- `[ ]` `coding_agent`
+- `[ ]` `executor_role`
+- `[ ]` `role`
+- `[ ]` `authority_scope`
 
 Role in OperOps sandbox:
 - `Admin`
@@ -259,47 +455,91 @@ Role in OperOps sandbox:
 - agent roles
 
 Role in current `copilot/ontology`:
-- `person`
-- `performer_profile`
-- `agent_role`
-- `access_policy`
+- `[mom]` `person`
+- `[mom]` `performer_profile`
+- `[-o-]` `agent_role`
+- `[-o-]` `access_policy`
 
 Minimal relations:
 - actor participates in session
 - actor may own/approve/comment/update entities
+- conceptually, coding_agent is a non-human performer/executor
+- exact TQL currently keeps coding_agent separate from AS-IS `performer_profile`, because `performer_profile` already carries human HR/auth/payroll semantics
+- executor capability matching runs on `task_family x executor_role`, not on one overloaded mixed field
+- coding_agent enacts agent_role and uses prompt_pipeline
+- coding_agent and performer_profile may each enact one or more executor roles
+- `task[DRAFT_10]` functions as intake pool object before executor routing
+- executor routing uses task segmentation by role/task family plus available executor capabilities
+- task may be routed either to `performer_profile` or to `coding_agent`, with human approval before launch
+- task-local execution context may recommend one or more coding agents
 - performer/assignee semantics must stay distinct from generic participant semantics
 
-### Layer 8. Management Ontology: Execution Stream
-Это слой **кто что делает и что мешает**.
+### Layer 7.5. Executor / Launch Ontology
+Это слой того, **как задача переходит от intake к конкретному исполнению**.
 
 Canonical entities:
-- `task`
-- `issue`
-- `risk`
-- `constraint`
-- `goal_execution`
+- `[ ]` `task_family`
+- `[ ]` `executor_routing`
+- `[ ]` `task_execution_run`
+
+Meaning:
+- `task_family`: practical routing classification for tasks
+- `executor_routing`: durable decision object routing one task toward one executor contour
+- `task_execution_run`: one concrete run of task execution by one executor contour
+
+Minimal relations:
+- `target_task_view -> classified_as -> task_family`
+- `executor_routing -> targets -> target_task_view`
+- `executor_routing -> classifies -> task_family`
+- `executor_routing -> launches -> task_execution_run`
+- `task_execution_run -> executes -> target_task_view`
+- `task_execution_run -> produces -> artifact_record`
+
+Key discipline:
+- `executor_routing` is not a UI-only suggestion and not the execution run itself;
+- `task_execution_run` is not `processing_run`;
+- `task_family` is not `executor_role`.
+
+### Layer 8. Management Ontology: Process / Delivery Stream
+Это PMBOK/SWEBOK-совместимый слой **кто что делает, что мешает, и какого process outcome мы добиваемся**.
+
+Canonical entities:
+- `[mom]` `task`
+- `[ ]` `constraint`
+- `[ ]` `issue`
+- `[ ]` `risk`
+- `[ ]` `goal_process`
 
 Meaning:
 - `task`: действие / deliverable
 - `issue`: уже возникшая проблема
 - `risk`: будущая неопределённая угроза/возможность
 - `constraint`: ограничение исполнения
-- `goal_execution`: целевое состояние исполнения/проекта
+- `goal_process`: целевое состояние выполнения / delivery process / execution outcome
 
-### Layer 9. Management Ontology: Product / Requirement Stream
-Это слой **что должно быть изготовлено и какими свойствами**.
+Role in current `copilot/ontology` / task bridge:
+- `[mom]` `task`
+- `[-o-]` `target_task_view`
+
+Exact current-state note:
+- one primary storage entity now exists: `automation_tasks -> task`,
+- historical draft/projection labels are legacy bridge/support vocabulary, not a second task storage family,
+- this matches the architectural choice that task semantics should converge to one first-class operational entity.
+
+### Layer 9. Management Ontology: Product Stream
+Это PMBOK/SWEBOK-совместимый слой **что должно быть изготовлено и какими продуктными свойствами / business drivers оно обусловлено**.
 
 Canonical entities:
-- `business_need`
-- `goal_product`
-- `requirement`
-- `constraint`
+- `[ ]` `business_need`
+- `[ ]` `constraint`
+- `[ ]` `goal_product`
+- `[ ]` `requirement`
 
 Meaning:
 - `business_need`: почему вообще нужен проект/изменение
+- `constraint`: ограничение решения или исполнения; это shared entity across process/product, а не две разные сущности
 - `goal_product`: целевое состояние продукта/решения
 - `requirement`: что решение должно обеспечивать
-- `constraint`: ограничение решения
 
 ### Layer 10. Cross-Cutting Classification
 Это не отдельные management objects, а classification layer.
@@ -314,20 +554,442 @@ Meaning:
 - `discussion_sessions[]` = relation between entity and voice sessions where it was discussed
 - `discussion_count` = derived property from `discussion_sessions[]`
 
+Current parity note:
+- in live Mongo/API this classification family is currently hybrid;
+- `discussion_sessions[]` is a normalized read/output field,
+- raw storage still relies universally on `source_data.voice_sessions[]`,
+- `discussion_count` is derived on read and is not a first-class stored ontology object today.
+
+AS IS / TO BE linkage rule:
+- AS IS: one primary session carrier still lives in `source_ref` / `external_ref`, with multi-session compatibility carried in `source_data.voice_sessions[]` and partial top-level `discussion_sessions[]`;
+- TO BE: `task -> discussed_in -> voice_session` becomes the first-class many-to-many task/session linkage, with message/chunk evidence attached separately;
+- decision: `discussion_link` itself is not promoted to a first-class entity at this stage, because the link currently has no independent lifecycle/approval/state semantics of its own;
+- migration implication: historical session payloads in `processors_data.CREATE_TASKS.data` must be materialized into canonical `DRAFT_10` task docs, after which the payload is legacy history only.
+
 ### Layer 11. Decision / Assumption Ontology
 Это слой того, **какие решения уже приняты и какие предпосылки приняты временно**.
 
 Canonical entities:
-- `decision`
-- `assumption`
-- `open_question`
+- `[ ]` `decision`
+- `[ ]` `assumption`
+- `[ ]` `open_question`
 
 Rationale:
 - в OperOps sandbox есть сильный акцент на review, ambiguity gates, open questions, project-card decisions;
 - без этих сущностей часть voice-discussion смысла снова будет насильно сведена к task/requirement.
 
-## Why `pain_point` is not canonical
-`pain_point` не является canonical class в этой ontology.
+## TQL-Oriented Canonical Contract
+
+Этот раздел фиксирует сущности в максимально структурном виде, близком к аннотированному TQL.
+Цель: чтобы было понятно не только *что существует*, но и *какие атрибуты и связи мы обязуемся определять*.
+
+### AS-IS exact entity: `task`
+
+```tql
+# what: primary operational work object
+# scope: BC.TaskWorld
+entity task,
+  owns task_id @key,
+  owns project_id,
+  owns row_id,
+  owns title,
+  owns description,
+  owns status,
+  owns priority,
+  owns performer_id,
+  owns source_kind,
+  owns source_ref,
+  owns external_ref,
+  owns source_data,
+  owns dialogue_reference,
+  owns dialogue_tag,
+  owns task_id_from_ai,
+  owns priority_reason,
+  owns created_at,
+  owns updated_at,
+  plays project_has_task:task,
+  plays voice_session_sources_task:sourced_task;
+```
+
+### AS-IS exact entity: `voice_session`
+
+```tql
+# what: bounded discussion event
+# scope: BC.VoiceWorld
+entity voice_session,
+  owns voice_session_id @key,
+  owns project_id,
+  owns session_name,
+  owns session_type,
+  owns access_level,
+  owns participants,
+  owns processors,
+  owns session_processors,
+  owns processors_data,
+  owns last_voice_timestamp,
+  owns done_at,
+  owns summary_md_text,
+  owns created_at,
+  owns updated_at,
+  plays project_has_voice_session:voice_session,
+  plays voice_session_has_message:voice_session,
+  plays voice_session_processed_by_run:voice_session,
+  plays voice_session_sources_task:source_voice_session;
+```
+
+### AS-IS exact entity: `processing_run`
+
+```tql
+# what: one execution occurrence of one processor over one session/message scope
+# scope: BC.VoiceWorld
+entity processing_run,
+  owns processing_run_id @key,
+  owns source_ref,
+  owns processor_name,
+  owns processor_scope,
+  owns processor_kind,
+  owns status,
+  owns started_at,
+  owns ended_at,
+  plays voice_session_processed_by_run:processing_run,
+  plays voice_message_processed_by_run:processing_run,
+  plays processing_run_uses_processor_definition:processing_run;
+```
+
+### TO-BE first-class process/product referents
+
+```tql
+# what: system being changed / described / evaluated
+entity system_of_interest,
+  owns system_of_interest_id @key,
+  owns name,
+  owns summary,
+  owns status @values("identified", "active", "superseded", "retired");
+
+# what: socio-technical system that performs tasks and produces artifacts
+entity producing_system,
+  owns producing_system_id @key,
+  owns name,
+  owns summary,
+  owns status @values("identified", "active", "degraded", "retired");
+
+# what: desired delivery/process outcome
+entity goal_process,
+  owns goal_process_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "satisfied", "superseded", "cancelled");
+
+# what: desired product outcome for the system of interest
+entity goal_product,
+  owns goal_product_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "satisfied", "superseded", "cancelled");
+
+# what: initiating problem/opportunity that justifies the work
+entity business_need,
+  owns business_need_id @key,
+  owns title,
+  owns summary,
+  owns status @values("identified", "active", "satisfied", "superseded", "cancelled");
+
+# what: condition/property the product must satisfy
+entity requirement,
+  owns requirement_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "approved", "satisfied", "superseded", "cancelled");
+
+# what: executable CLI/agent surface used for coding work; conceptually a non-human performer/executor
+entity coding_agent,
+  owns coding_agent_id @key,
+  owns name,
+  owns summary,
+  owns executable_path,
+  owns cli_arguments,
+  owns working_directory,
+  owns source_ref,
+  owns status @values("enabled", "disabled", "degraded", "retired"),
+  owns created_at,
+  owns updated_at;
+
+# what: capability-side executor role for routing humans and agents
+entity executor_role,
+  owns executor_role_id @key,
+  owns name,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired"),
+  owns created_at,
+  owns updated_at;
+
+# what: practical task routing family used for segmentation and capability matching
+entity task_family,
+  owns task_family_id @key,
+  owns name,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired"),
+  owns created_at,
+  owns updated_at;
+
+# what: durable routing decision from one task to one executor contour
+entity executor_routing,
+  owns executor_routing_id @key,
+  owns selected_executor_kind @values("human", "coding_agent", "mixed"),
+  owns selected_executor_ref,
+  owns routing_basis,
+  owns approval_state @values("pending", "approved", "rejected", "superseded"),
+  owns launch_state @values("not_ready", "ready", "launched", "failed", "cancelled"),
+  owns summary,
+  owns status @values("proposed", "approved", "rejected", "launched", "superseded"),
+  owns created_at,
+  owns updated_at;
+
+# what: one execution occurrence of one task by one executor contour
+entity task_execution_run,
+  owns task_execution_run_id @key,
+  owns executor_kind @values("human", "coding_agent", "mixed"),
+  owns executor_ref,
+  owns result_ref,
+  owns source_ref,
+  owns summary,
+  owns status @values("queued", "running", "succeeded", "failed", "cancelled"),
+  owns started_at,
+  owns ended_at,
+  owns created_at,
+  owns updated_at;
+
+# what: current problem already affecting delivery or product
+entity issue,
+  owns issue_id @key,
+  owns title,
+  owns summary,
+  owns status @values("identified", "active", "resolved", "superseded", "cancelled");
+
+# what: future uncertainty threatening or enabling outcomes
+entity risk,
+  owns risk_id @key,
+  owns title,
+  owns summary,
+  owns status @values("identified", "active", "mitigated", "realized", "superseded", "cancelled");
+
+# what: already-given limitation on delivery or solution
+entity constraint,
+  owns constraint_id @key,
+  owns title,
+  owns summary,
+  owns status @values("identified", "active", "relaxed", "superseded", "retired");
+```
+
+### TO-BE first-class acceptance / outcome entities
+
+```tql
+# what: typed pass/fail/graded criterion for accepting a task result
+entity acceptance_criterion,
+  owns acceptance_criterion_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired");
+
+# what: one acceptance verdict over one produced result
+entity acceptance_evaluation,
+  owns acceptance_evaluation_id @key,
+  owns summary,
+  owns status @values("pending", "passed", "failed", "waived"),
+  owns created_at;
+
+# what: normalized evidence carrier for quote/span/source used to justify a task
+entity evidence_link,
+  owns evidence_link_id @key,
+  owns source_ref,
+  owns summary,
+  owns status @values("active", "superseded", "retired"),
+  owns created_at;
+
+# what: canonical DB-side produced result bound to execution
+entity artifact_record,
+  owns artifact_record_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired"),
+  owns created_at;
+
+# what: measured indicator for process or product outcomes
+entity kpi,
+  owns kpi_id @key,
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "retired");
+
+# what: one measured observation of a KPI
+entity kpi_observation,
+  owns kpi_observation_id @key,
+  owns summary,
+  owns status @values("recorded", "superseded"),
+  owns created_at;
+```
+
+### TO-BE first-class proposal / approval entities
+
+```tql
+# what: proposed mutation to a target object before approval
+entity change_proposal,
+  owns change_proposal_id @key,
+  owns source_ref,
+  owns summary,
+  owns description,
+  owns status @values("proposed", "accepted", "rejected", "superseded"),
+  owns created_at,
+  owns updated_at;
+
+# what: approved writeback order over a proposal
+entity writeback_decision,
+  owns writeback_decision_id @key,
+  owns source_ref,
+  owns summary,
+  owns status @values("pending", "approved", "rejected", "executed", "superseded"),
+  owns created_at,
+  owns updated_at;
+```
+
+Target task projection note:
+- `target_task_view.status` is constrained to `DRAFT_10 | READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE | UNKNOWN`
+- `target_task_view.priority` is constrained to `P1 | P2 | P3 | P4 | P5 | P6 | P7 | UNKNOWN`
+- current ingest normalizes raw Mongo labels into those canonical values before writing the projection
+
+### TO-BE task-local execution context
+
+`task_context_card` остаётся только именем для task-local structured surface.
+На уровне аннотированного TQL это не отдельная сущность, а прямой task-local relation bundle вокруг `target_task_view`:
+- `target_task_view -> task_family`
+- `target_task_view -> object_locator`
+- `target_task_view -> evidence_link`
+- `target_task_view -> acceptance_criterion`
+- `target_task_view -> coding_agent`
+- `executor_routing -> target_task_view`
+- `executor_routing -> task_family`
+- `executor_routing -> task_execution_run`
+- `task_execution_run -> target_task_view`
+- `task_execution_run -> artifact_record`
+
+### Minimal cross-entity relation contract
+
+```tql
+relation target_task_view_changes_system_of_interest,
+  relates target_task_view,
+  relates system_of_interest;
+
+relation target_task_view_executed_by_producing_system,
+  relates target_task_view,
+  relates producing_system;
+
+relation business_need_drives_goal_product,
+  relates business_need,
+  relates goal_product;
+
+relation goal_product_decomposes_to_requirement,
+  relates goal_product,
+  relates requirement;
+
+relation goal_process_decomposes_to_target_task_view,
+  relates goal_process,
+  relates target_task_view;
+
+relation target_task_view_classified_as_task_family,
+  relates target_task_view,
+  relates task_family;
+
+relation target_task_view_targets_object_locator,
+  relates target_task_view,
+  relates object_locator;
+
+relation target_task_view_cites_evidence_link,
+  relates target_task_view,
+  relates evidence_link;
+
+relation target_task_view_recommended_for_coding_agent,
+  relates target_task_view,
+  relates recommended_coding_agent;
+
+relation target_task_view_must_satisfy_acceptance_criterion,
+  relates target_task_view,
+  relates acceptance_criterion;
+
+relation target_task_view_produces_artifact_record,
+  relates target_task_view,
+  relates produced_artifact_record;
+
+relation executor_routing_targets_target_task_view,
+  relates executor_routing,
+  relates routed_target_task_view;
+
+relation executor_routing_classifies_task_family,
+  relates executor_routing,
+  relates task_family;
+
+relation executor_routing_launches_task_execution_run,
+  relates executor_routing,
+  relates launched_task_execution_run;
+
+relation task_execution_run_executes_target_task_view,
+  relates task_execution_run,
+  relates executed_target_task_view;
+
+relation task_execution_run_produces_artifact_record,
+  relates task_execution_run,
+  relates produced_artifact_record;
+
+relation acceptance_evaluation_checks_acceptance_criterion,
+  relates acceptance_evaluation,
+  relates acceptance_criterion;
+
+relation acceptance_evaluation_evaluates_artifact_record,
+  relates acceptance_evaluation,
+  relates artifact_record;
+
+relation goal_process_measured_by_kpi,
+  relates goal_process,
+  relates kpi;
+
+relation goal_product_measured_by_kpi,
+  relates goal_product,
+  relates kpi;
+
+relation change_proposal_targets_target_task_view,
+  relates change_proposal,
+  relates proposed_target_task_view;
+
+relation writeback_decision_accepts_change_proposal,
+  relates writeback_decision,
+  relates change_proposal;
+
+relation coding_agent_enacts_agent_role,
+  relates coding_agent,
+  relates agent_role;
+
+relation coding_agent_uses_prompt_pipeline,
+  relates coding_agent,
+  relates prompt_pipeline;
+
+relation coding_agent_enacts_executor_role,
+  relates coding_agent,
+  relates executor_role;
+
+relation performer_profile_enacts_executor_role,
+  relates performer_profile,
+  relates executor_role;
+
+relation coding_agent_supports_task_family,
+  relates coding_agent,
+  relates supported_task_family;
+
+relation task_family_eligible_for_executor_role,
+  relates task_family,
+  relates eligible_executor_role;
+```
+
+## Why `pain_point` (`[ ]`) is not canonical
+`pain_point` (`[ ]`) не является canonical class в этой ontology.
 
 Причина:
 - в OperOps / copilot runtime он не был фиксирован как first-class entity;
@@ -378,7 +1040,7 @@ Unification happens at the level of **operations**, not at the level of entity k
 - `issue`
 - `risk`
 - `constraint`
-- `goal_execution`
+- `goal_process`
 - `business_need`
 - `goal_product`
 - `requirement`
@@ -408,9 +1070,9 @@ This is ontologically sound because:
 - `constraint -> limits -> requirement`
 
 ### Execution-side relations
-- `goal_execution -> decomposes_to -> task`
+- `goal_process -> decomposes_to -> task`
 - `issue -> blocks -> task`
-- `risk -> threatens -> goal_execution`
+- `risk -> threatens -> goal_process`
 - `constraint -> limits -> task`
 
 ### Cross-stream relations
@@ -438,7 +1100,7 @@ Missing in the previous ontology draft, now added:
 - runtime/process layer
 - evidence/trace layer
 - status-domain layer
-- memory/context layer
+- context layer
 - artifact/audit layer
 - registry/configuration layer
 - actor/authority layer
@@ -461,16 +1123,23 @@ Needed carry-over into this ontology:
 ### C. Against current `copilot/ontology`
 Strong alignment:
 - current kernel already models:
-  - `voice_session`
-  - `processing_run`
-  - `mode_segment`
-  - `project_context_card`
-  - `context_pack`
-  - `artifact_record`
-  - `artifact_patch`
+  - `[mom]` `task`
+  - `[mom]` `voice_session`
+  - `[-o-]` `artifact_record`
+  - `[-o-]` `artifact_patch`
+  - `[-o-]` `context_pack`
+  - `[-o-]` `mode_segment`
+  - `[-o-]` `processing_run`
+  - `[-o-]` `project_context_card`
+  - `[-o-]` `target_task_view`
+  - `[-o-]` `as_is_possible_task_maps_to_target_task_view`
   - object-bound history/note/conclusion/manifest semantics
 
 This ontology doc now explicitly reflects those layers instead of staying task-only.
+
+Mongo/ontology parity gaps that remain explicit:
+- `entity -> discussed_in -> voice_session` is semantically accepted, but exact AS-IS storage still depends on `source_ref` / `external_ref` / `source_data.voice_sessions[]` rather than one first-class ontology relation;
+- `discussion_count` is a read-derived field and should not be described as if Mongo already stores it as a standalone canonical attribute.
 
 ## Structural consequences for current specs
 
@@ -554,7 +1223,7 @@ It must include:
 - runtime/process entities,
 - evidence/trace entities,
 - status-domain entities,
-- memory/context entities,
+- context entities,
 - artifact/audit entities,
 - registry/configuration entities,
 - actor/authority entities,

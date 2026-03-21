@@ -111,10 +111,10 @@ collections:
       parent_type_id: parent_type_id
       task_id: task_id
     relations:
-      - relation: task_type_tree_classifies_oper_task
+      - relation: task_type_tree_classifies_task
         owner_role: task_type_tree
         owner_lookup:
-          entity: oper_task
+          entity: task
           by: task_id
           from: task_id
 
@@ -270,7 +270,7 @@ collections:
           from: performer_id
 
   - collection: automation_tasks
-    target_entity: oper_task
+    target_entity: task
     key:
       attribute: task_id
       from: _id
@@ -365,27 +365,27 @@ collections:
         - issue_type
         - type
     relations:
-      - relation: project_has_oper_task
+      - relation: project_has_task
         owner_role: owner_project
         owner_lookup:
           entity: project
           by: project_id
           from: project_id
-      - relation: voice_session_sources_oper_task
+      - relation: voice_session_sources_task
         owner_role: source_voice_session
         owner_lookup:
           entity: voice_session
           by: voice_session_id
           from: source_ref
           transform: canonical_voice_ref_to_session_id
-      - relation: oper_task_classified_as_task_type
-        owner_role: oper_task
+      - relation: task_classified_as_task_type
+        owner_role: task
         owner_lookup:
           entity: task_type
           by: task_type_id
           from: task_type_id
-      - relation: oper_task_assigned_to_performer_profile
-        owner_role: oper_task
+      - relation: task_assigned_to_performer_profile
+        owner_role: task
         owner_lookup:
           entity: performer_profile
           by: performer_profile_id
@@ -411,10 +411,10 @@ collections:
       raw_date: raw_date
       result_link: result_link
     relations:
-      - relation: oper_task_has_work_log
+      - relation: task_has_work_log
         owner_role: work_log
         owner_lookup:
-          entity: oper_task
+          entity: task
           by: task_id
           from: ticket_db_id
       - relation: performer_profile_creates_work_log
@@ -499,9 +499,6 @@ collections:
           - processors
           - session_processors
           - processors_data
-      - projector: voice_session_create_tasks_drafts
-        inputs:
-          - processors_data.CREATE_TASKS.data
 
   - collection: automation_voice_bot_messages
     target_entity: voice_message
@@ -539,7 +536,7 @@ collections:
       transcription_provider: transcription.provider
       transcription_model: transcription.model
       transcription_schema_version: transcription.schema_version
-      task: task
+      task_text: task
       summary: transcription_text
       categorization: categorization
       categorization_error: categorization_error
@@ -977,7 +974,7 @@ missing_spec_collections:
 
 quality_gates:
   - name: no_orphan_tasks
-    check: each oper_task must link to exactly one project
+    check: each task must link to exactly one project
   - name: no_orphan_voice_messages
     check: each voice_message must link to one voice_session
   - name: no_orphan_voice_history_steps
