@@ -87,6 +87,7 @@ Use these as non-negotiable implementation constraints derived from `origin/main
   - direct DB-side TypeDB constraints are now part of the contract for task/task-view status and priority; do not bypass owner-level `@values(...)` with ad hoc raw-label writes.
   - `target_task_view` projection must normalize Mongo task labels to lifecycle keys and canonical `P1..P7` priority before writing to TypeDB.
   - executor-layer ontology vocabulary is now reserved and active: `task_family`, `executor_role`, `executor_routing`, `task_execution_run`.
+  - dual-stream execution semantics are fixed in `plan/voice-dual-stream-ontology.md`: draft tasks remain `task[DRAFT_10]`, `context_enrichment` is required before launch, `human approval` is launch authorization (not final acceptance), and execution must materialize through `executor_routing` -> `task_execution_run` -> `artifact_record` -> `acceptance_evaluation`.
 
 ## Core Principles
 

@@ -36,56 +36,59 @@ Production emphasis:
 
 ### Нормализация терминов
 
-- `task` — первичная операционная сущность работы. Это действие / deliverable, связанное с проектом, контекстом, исполнителем, критериями приемки и результирующим артефактом.
-- `draft task` — не отдельная сущность, а `task` в каноническом lifecycle state `DRAFT_10`. Это состояние формулировки, а не другой ontological kind.
-- `draft_recency_horizon` — derived operational read/workqueue policy for voice-derived `task[DRAFT_10]`. Это не новая сущность и не новый lifecycle state. Если параметр не задан, Draft reads остаются full baseline.
-- `discussion_window` — derived time range `[first_linked_session_at, last_linked_session_at]` over the voice sessions linked to one task. Для global Draft workqueue practically главным anchor служит `last_linked_session_at`; для session-local views window must be evaluated in both directions around the current session against this linked range. Это по-прежнему derived policy datum, не новая сущность.
-- `ready+ task` — тот же `task` в lifecycle `READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE`. Это уже принятый execution object.
-- `task_context_card` — не отдельная сущность, а название task-local structured surface. Это атрибутивный/реляционный состав внутри `task`, достаточный для coding agent execution без полного перечитывания session.
-- `task_type` / `task_classification` — типизация задачи (`ui`, `document`, `spec`, `research`, `audit`, и т.д.). Это classification dimension of `task`, а не отдельный work object.
-- `task_family` — practical routing classification layer поверх `task_type`: позволяет различать задачи между executor families и использовать это в routing.
-- `executor_role` — capability-side role ось для human/machine executors. Это не task family и не concrete executor instance.
-- `voice_session` — ограниченное событие обсуждения, из которого извлекаются задачи, цели, доказательства и обновления контекста.
-- `processing_run` — событие исполнения одного обработчика над одним session/message scope. Это occurrence процесса, а не приказ и не пользовательское решение.
-- `change_proposal` — предложение изменить сущность до approval. Для LLM/AI это более точный термин, чем `change_request`, потому что речь идёт о proposed mutation, а не о санкционированном запросе.
-- `writeback_decision` — утвержденное решение на применение изменения. Это санкция на запись, а не само исполнение.
-- `patch` — конкретная дельта / change-set, применяемая к объекту после approval.
-- `codex_task` — не отдельная сущность, а task-plane признак того, что данный `task` принадлежит Codex-oriented taskflow/review pipeline.
-- `goal_process` — целевое состояние процесса / delivery outcome.
-- `goal_product` — целевое состояние продукта / product outcome.
-- `business_need` — бизнес-импульс, проблема или возможность, ради которой вообще стартует изменение.
-- `system_of_interest` — система интереса: объект, который продуктно описывается, меняется или оценивается. Это closest FPF-aligned analogue to `describedEntity`.
-- `producing_system` — производящая система: socio-technical system, которая исполняет задачи, производит артефакты и изменяет систему интереса.
-- `project` — управленческий/операционный контур внутри producing system. Проект не тождественен системе интереса.
-- `issue` — текущая проблема, уже влияющая на достижение цели.
-- `risk` — будущая неопределенная угроза или возможность.
-- `constraint` — уже заданное ограничение, которое сужает решение или исполнение.
-- `acceptance_criterion` — типизированное условие приемки, по которому решается, принят ли результат задачи.
-- `acceptance_evaluation` — событие/запись оценки результата against `acceptance_criterion`, производящее verdict.
-- `kpi` — измеримый показатель результата или процесса.
-- `kpi_observation` — наблюденное измерение одного KPI в одном observation event.
-- `artifact_record` — canonical DB-side объект результата/артефакта.
-- `result_artifact` — human-facing alias для `artifact_record` в business/process prose, а не второй ontology object.
-- `evidence_link` — нормализованный носитель цитаты/таймкода/ссылки на сообщение или сегмент, которым обосновывается задача.
-- `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или другой target object.
-- `coding_agent` — first-class исполняющий tool/system для coding work. Концептуально это non-human performer/executor. Он задаётся как запускаемый CLI/agent surface с путём к исполняемому файлу, аргументами запуска и ссылками на role/pipeline cards. Типовые экземпляры: `fast-agent`, `codex cli`.
-- `task_intake_pool` — стадия/поверхность, в которой входящие задачи существуют как `task[DRAFT_10]` до routing на исполнителя.
-- `active_draft_window` — caller-provided operational slice of voice-derived `task[DRAFT_10]` bounded by recency of the linked discussion window. Это policy surface, не ontology object.
-- `context_enrichment` — стадия сборки достаточного task-local execution context: project/product materials, duplicate checks, object locators, expected result, acceptance criteria, routing basis. Это стадия процесса, а не новая first-class сущность.
-- `human approval` — санкция на то, что draft-formulation и minimum launch context достаточны для routing/launch. Это не то же самое, что acceptance результата.
-- `executor_routing` — first-class decision object перелива входящих задач от intake pool к human performer, coding agent или смешанному контуру.
-- `task_execution_run` — отдельный execution object одного запуска задачи; не `processing_run`.
-- `seed_context_base` — внешний исходный контекст для bootstrap executor layer; в ближайшем цикле это прежде всего `DevFigma / FigmaFlow` плюс project/dialogue context.
-- `discussion linkage` — отношение многие-ко-многим `task <-> voice_session`; одна задача может обсуждаться во многих сессиях. Это relation-only contract, пока самой связи не требуется отдельная lifecycle/state semantics.
+#### Корневые термины
 
-Sandbox vocabulary retirement:
-- нормализованная цепочка такова: `change_proposal -> writeback_decision -> patch -> history_step`;
-- `codex_task` остаётся task-plane subtype marker, а не отдельным entity kind.
+- `task` — первичная операционная сущность работы. Это действие / deliverable, связанное с контекстом, исполнителем, критериями приемки и результирующим артефактом.
+- `voice_session` — bounded discussion event, из которого извлекаются задачи, evidence и контекстные обновления.
+- `processing_run` — occurrence обработки одного session/message scope. Это run processing pipeline, а не запуск исполнения задачи.
+- `task_execution_run` — occurrence исполнения одной задачи одним executor contour. Это не `processing_run`.
+- `system_of_interest` — объект, который продуктно описывается, меняется или оценивается.
+- `producing_system` — socio-technical система, которая исполняет задачи и производит артефакты.
+- `project` — управленческий/операционный контур внутри `producing_system`; проект не тождественен ни `system_of_interest`, ни самой производящей системе.
 
-FPF-aligned referent split:
-- product-side claims (`goal_product`, `requirement`, часть `business_need`) описывают прежде всего `system_of_interest`;
-- process-side claims (`task`, `goal_process`, `issue`, `risk`, `constraint`) описывают прежде всего `producing_system`;
-- `project` не должен поглощать ни `system_of_interest`, ни `producing_system`: он управляет работой, но не исчерпывает ни объект изменения, ни систему производства.
+#### Пояснительные и операционные термины
+
+- `draft task` — тот же `task` в lifecycle state `DRAFT_10`.
+- `ready+ task` — тот же `task` в `READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE`.
+- `task_context_card` — имя task-local structured surface; это не вторая сущность, а сгруппированный состав внутри `task`.
+- `task_type` / `task_classification` — типизация задачи (`ui`, `document`, `spec`, `research`, `audit`, ...).
+- `task_family` — routing-oriented слой поверх `task_type`, используемый для сегментации между executor families.
+- `executor_role` — capability-side role ось для human/machine executors.
+- `coding_agent` — first-class non-human executor, задаваемый как CLI/agent surface с путём запуска, аргументами и role/pipeline refs.
+- `task_intake_pool` — стадия, в которой входящие задачи существуют как `task[DRAFT_10]` до routing.
+- `context_enrichment` — стадия сборки достаточного task-local execution context: project/product materials, duplicate checks, object locators, expected result, acceptance criteria, routing basis.
+- `human approval` — санкция на то, что формулировка задачи и её execution context достаточны для routing/launch.
+- `executor_routing` — durable decision object перелива задачи к human performer, `coding_agent` или mixed contour.
+- `artifact_record` — canonical DB-side produced result.
+- `result_artifact` — human-facing alias для `artifact_record`, а не второй ontology object.
+- `acceptance_criterion` — typed условие приемки produced result.
+- `acceptance_evaluation` — отдельный акт оценки результата against `acceptance_criterion`.
+- `evidence_link` — нормализованный носитель цитаты / таймкода / message span, которым задача обосновывается.
+- `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или иной target object.
+- `goal_process` / `goal_product` — целевые состояния process-side и product-side outcomes.
+- `business_need` / `requirement` / `issue` / `risk` / `constraint` — разные роды process/product claims, которые нельзя схлопывать в один “topic”.
+- `change_proposal` — предложенная mutation до approval.
+- `writeback_decision` — санкция на запись / применение изменения.
+- `patch` — конкретный change-set, реализующий изменение.
+- `kpi` / `kpi_observation` — измеримый показатель и конкретное observation event.
+- `seed_context_base` — внешний bootstrap context для executor layer; в ближайшем цикле это `DevFigma / FigmaFlow` плюс project/dialogue context.
+- `discussion linkage` — relation-only many-to-many `task <-> voice_session`.
+- `codex_task` — task-plane marker Codex-oriented review/execution flow, а не отдельный entity kind.
+
+#### Особенности нормализации
+
+- `draft_recency_horizon` — derived operational read/workqueue policy для voice-derived `task[DRAFT_10]`. Это не новая сущность и не новый lifecycle state.
+- `active_draft_window` — caller-provided Draft slice; если параметр не задан, canonical Draft baseline остаётся полным.
+- `discussion_window` — derived time range `[first_linked_session_at, last_linked_session_at]` over voice sessions linked to one task.
+- Для global Draft workqueue главным recency anchor practically служит `last_linked_session_at`.
+- Для session-local views окно должно оцениваться в обе стороны от текущей session относительно linked `discussion_window`.
+- Draft recency не должна определяться по `task.updated_at`, потому что recount/writeback может искусственно омолодить task row.
+- `result_artifact` нормализуется в `artifact_record`; human-facing alias допускается, в ontology second object — нет.
+- Нормализованная mutation chain такова: `change_proposal -> writeback_decision -> patch -> history_step`.
+- FPF-aligned split сохраняется:
+  - product-side claims (`goal_product`, `requirement`, часть `business_need`) описывают прежде всего `system_of_interest`;
+  - process-side claims (`task`, `goal_process`, `issue`, `risk`, `constraint`) описывают прежде всего `producing_system`;
+  - `project` не должен поглощать ни `system_of_interest`, ни `producing_system`.
 
 ## Entity Coverage Markers
 
@@ -151,15 +154,41 @@ Concrete counterexample:
 - каждая из этих задач может получить свой собственный `task_execution_run`;
 - следовательно, “запуск обработки” и “запуск исполнения задачи” не один и тот же род объекта.
 
-### Normalized mechanics
-1. из `voice_session` система materialize draft tasks;
-1a. caller may optionally apply `draft_recency_horizon` to bound the active Draft workqueue; if omitted, Draft storage truth remains fully visible;
-2. затем идёт `context_enrichment`: подтягиваются project/product materials, проверяются дубли, собираются `object_locator`, `evidence_link`, `acceptance_criterion`, `routing_basis`, `expected result`;
-3. человек утверждает не только сам draft, но и sufficiency собранного execution context;
-4. затем строится `executor_routing` к human performer, `coding_agent` или mixed contour;
-5. launch materialize как `task_execution_run`;
-6. produced result materialize как `artifact_record`;
-7. итоговая приемка materialize как `acceptance_evaluation`.
+### Целевая механика
+
+Короткая нормализация терминов для этого цикла:
+- `draft-задача` = `task[DRAFT_10]`, а не отдельный kind work object;
+- `context_enrichment` = стадия сборки достаточного task-local execution context;
+- `human approval` = санкция на то, что формулировка задачи и её execution context достаточны для routing/launch;
+- `execution-context` = не “всё знание проекта”, а минимально достаточный состав:
+  - `object_locator`
+  - `evidence_link`
+  - `expected result`
+  - `acceptance_criterion`
+  - routing / executor hints;
+- `artifact_record` = produced result;
+- `acceptance_evaluation` = отдельный акт приемки produced result, а не то же самое, что approval перед запуском.
+
+Нормализованный цикл:
+1. из `voice_session` система materialize draft-задачи как `task[DRAFT_10]`;
+1a. caller может опционально задать `draft_recency_horizon`, чтобы ограничить active Draft workqueue; если параметр не задан, canonical Draft baseline остаётся полным;
+2. система проходит `context_enrichment`: подтягивает материалы проекта/продукта, проверяет дубли, формирует `object of application`, `expected result`, `acceptance criteria`, `evidence links` и `routing basis`;
+3. человек быстро просматривает draft-задачи и утверждает только нужные;
+4. после approval задача не “получает контекст из ниоткуда”, а становится launch-authorized task с уже собранным и подтверждённым execution context:
+  - что менять;
+  - почему это вообще появилось;
+  - какой результат ожидается;
+  - по каким критериям принимать;
+  - кому это разумно маршрутизировать;
+5. затем система materialize `executor_routing`: задача либо уходит человеку, либо `coding_agent`, либо в mixed contour;
+6. запуск исполнения materialize как `task_execution_run`, а не как `processing_run`;
+7. на выходе получаем не просто “как-то закрытую задачу”, а конкретный produced result в виде `artifact_record`;
+8. человек проверяет produced result через `acceptance_evaluation` и либо принимает его, либо вносит уточнение / запускает следующий цикл.
+
+Практический смысл цикла:
+- не производить бесконечный backlog;
+- как можно быстрее переводить разговор в executor-ready task;
+- и дальше в produced result with explicit acceptance, а не в ещё одну невалидированную запись.
 
 ### Historical prior art
 Ближайший historical analogue этой механики — агент `PM-03-RequestsTask`:

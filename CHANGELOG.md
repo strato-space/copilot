@@ -8,6 +8,7 @@
 - **21:25** `create_tasks` context-overflow work still lacked exact inner MCP payload profiling, so operator decisions about model choice or prompt trimming were still guesswork instead of evidence-based engineering.
 - **21:25** Draft queue policy and historical digitization had drifted together: `DRAFT_10` visibility, session-local historical drilldown, and background recount were all using one implicit notion of “age”, which risked both ontology mistakes and wrong operational behavior.
 - **21:25** Temporary voice investigation artifacts (batch reports, parity evidence plan) were still living under `plan/`, mixing short-lived operational evidence with actual long-lived planning documents.
+- **22:00** The dual-stream ontology note still mixed launch approval semantics with final acceptance semantics and left executor-ready context boundaries underspecified, which could cause incorrect lifecycle modeling in follow-up implementations.
 
 ### FEATURE IMPLEMENTED
 - **09:10** Added DB-side owner-level `@values(...)` constraints for `task.status`, `task.priority`, `target_task_view.status`, `target_task_view.priority`, and the key TO-BE execution/process/product status carriers, making direct TypeDB writes materially safer.
@@ -18,6 +19,7 @@
 - **21:25** Implemented caller-provided Draft horizon policy (`draft_horizon_days` / `include_older_drafts`) across session/task surfaces, while preserving full canonical `DRAFT_10` baseline when the parameter is omitted.
 - **21:25** Added a resumable historical Draft digitization runner plus a human-readable registry; historical backfill was resumed from checkpoint and then exhausted under the current contract.
 - **21:25** Moved temporary voice investigation artifacts out of `plan/` into `tmp/voice-investigation-artifacts/` and linked the canonical profiling notebook to the active registries and `bd` issue.
+- **22:00** Rewrote the dual-stream “target mechanics” section with explicit ontology-normalized terms (`task[DRAFT_10]`, `context_enrichment`, launch authorization vs acceptance, `executor_routing`, `task_execution_run`, `artifact_record`, `acceptance_evaluation`) and fixed minimal execution-context composition.
 
 ### CHANGES
 - **09:10** Updated `ontology/typedb/schema/fragments/{10-as-is/10-entities-core,20-to-be/10-semantic-core}.tql`, `ontology/typedb/scripts/typedb-ontology-ingest.py`, and focused ontology tests so task/task-view status/priority are normalized and constrained at the DB layer.
@@ -30,6 +32,7 @@
 - **21:25** Updated `backend/src/api/routes/{voicebot/sessions,crm/voicebot,crm/tickets}.ts` so Draft visibility can be caller-bounded by linked discussion recency, while session-local reads evaluate the current session against the task’s linked discussion window in both directions and Ready+ stays full-history.
 - **21:25** Updated root `AGENTS.md`, root `README.md`, `docs/{VOICEBOT_API,VOICEBOT_API_TESTS,CREATE_TASKS_CONTEXT_OVERFLOW_PROFILING_2026-03-21}.md`, `plan/voice-dual-stream-ontology.md`, `/home/strato-space/y-tasks-sandbox/OperOps/OperOps - Voice2Task.md`, `/home/strato-space/prompt/{README.md,AGENTS.md,StratoProject/PM-04-DialogTaskSummary.md}`, and `agents/agent-cards/create_tasks.md` to document the new Draft-horizon contract, profiling workflow, bounded project CRM enrichment guidance, and active investigation registries.
 - **21:25** Moved `plan/{69a527c14b07162c36957e21-voice-session-done-rest-parity-plan.md,ambiguous_batch_*.txt,ambiguous_batch_*_report.json}` into `tmp/voice-investigation-artifacts/` and rewired live repo references accordingly.
+- **22:00** Updated `plan/voice-dual-stream-ontology.md` (“Целевая механика” normalization block) and synced root `AGENTS.md` + root `README.md` so repo-level instructions now explicitly preserve the launch/acceptance split and executor-ready context contract.
 
 ## 2026-03-19
 ### PROBLEM SOLVED
