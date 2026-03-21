@@ -58,14 +58,14 @@ oneOf:
   - `routing-topic`
 - После metadata-fetch:
   - ОБЯЗАТЕЛЬНО прочитай `voice.session_task_counts(session_id=session_id)`;
-  - ОБЯЗАТЕЛЬНО прочитай `voice.session_tasks(session_id=session_id, bucket="draft")`;
+  - ОБЯЗАТЕЛЬНО прочитай `voice.session_tasks(session_id=session_id, bucket="Draft")`;
   - ОБЯЗАТЕЛЬНО прочитай `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")`;
   - если известен `project-id`, ОБЯЗАТЕЛЬНО прочитай `voice.project(project_id)`;
   - если известен `project-id`, старайся НЕ читать весь project-wide CRM без границ:
     - если известны timestamps текущей discussion/session, читай `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table", from_date=..., to_date=...)` в bounded окне вокруг этой discussion;
     - practical default: использовать окно порядка `-30d .. +30d` вокруг текущей session/discussion, если нет более точного interval;
     - только если timestamps недоступны, допускается unbounded fallback.
-  - если во входном envelope переданы `draft_horizon_days` или `include_older_drafts`, протяни эти параметры в `voice.session_task_counts(...)` и `voice.session_tasks(..., bucket="draft")`;
+  - если во входном envelope переданы `draft_horizon_days` или `include_older_drafts`, протяни эти параметры в `voice.session_task_counts(...)` и `voice.session_tasks(..., bucket="Draft")`;
   - если эти параметры не переданы, не придумывай default и используй полный canonical draft baseline.
   - Считай нормальным, что `voice.project(project_id)` может вернуть sparse project card: отсутствие `git_repo`, `design_files`, `drive_folder_id`, `board_id` или backlog refs не означает ошибку и не должно блокировать генерацию задач.
 - Если любой MCP-источник вернул rows/tasks с `is_deleted=true` или непустым `deleted_at`, считай такие rows/tasks удалёнными и полностью исключай их из duplicate suppression и active context.
@@ -80,7 +80,7 @@ oneOf:
 5. Дочитай `voice.project(project_id)`, если известен `project-id`.
 6. Дочитай existing possible tasks и existing materialized tasks этой сессии.
 7. Дочитай активные задачи проекта, если известен `project-id`, prefer bounded-by-date CRM window.
-8. Считай `voice.session_tasks(session_id=..., bucket="draft")` mutable baseline для текущей сессии и верни полный желаемый набор `DRAFT_10` rows для этой сессии, а не только дельту.
+8. Считай `voice.session_tasks(session_id=..., bucket="Draft")` mutable baseline для текущей сессии и верни полный желаемый набор `DRAFT_10` rows для этой сессии, а не только дельту.
 9. Выдели только executor-ready задачи.
 10. Удали явные дубли.
 11. Верни только канонический JSON-массив.
@@ -115,7 +115,7 @@ oneOf:
 - В текущем Mongo reality у existing possible tasks `project_id` и `performer_id` могут быть пустыми строками; не отбрасывай и не переоткрывай scope только из-за пустого `project_id` у historical `voice_possible_task`.
 
 Дедупликация и snapshot semantics:
-- `voice.session_tasks(session_id=..., bucket="draft")` — это НЕ immutable duplicates, а mutable baseline.
+- `voice.session_tasks(session_id=..., bucket="Draft")` — это НЕ immutable duplicates, а mutable baseline.
 - `draft_horizon_days` / `include_older_drafts` — caller policy for draft visibility, а не новая ontology самой задачи.
 - Если задача уже есть в `DRAFT_10` и scope тот же, верни её с тем же `row_id/id`, но обнови формулировку при необходимости.
 - Если scope тот же, но задача уже материализована вне `DRAFT_10`, не возвращай её как новую Possible Task.

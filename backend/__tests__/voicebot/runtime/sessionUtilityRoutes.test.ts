@@ -85,7 +85,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('buildVoicePossibleTaskMasterQuery');
     expect(source).toContain('normalizeVoicePossibleTaskDocForApi');
     expect(source).toContain('listPossibleTaskMasterDocs({ db, sessionId })');
-    expect(source).toContain("bucket === 'draft'");
+    expect(source).toContain("bucket === 'Draft'");
     expect(source).toContain("reason: 'save_possible_tasks'");
   });
 

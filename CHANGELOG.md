@@ -2218,3 +2218,265 @@
   - `videoparser/specs/{ux_video_processing_guide.md,ux_video_processing_library_cli_spec.md}`.
 - **22:00** Updated `app/src/store/kanbanStore.ts` performer payout formula (`basicBonus` coefficient `0.05`).
 - **22:03** Type-safety gates passed: `cd app && npm run build`, `cd backend && npm run build`.
+
+## 2026-03-03
+### PROBLEM SOLVED
+- **12:33** Voice session taskflow parity was incomplete across backend and UI, and session-close REST parity still lacked a fully closed documentation trail.
+- **17:33** Project-group resolution could miss projects when `group.projects_ids` was empty, which broke FinOps/CRM project visibility in API-driven screens.
+
+### FEATURE IMPLEMENTED
+- **12:33** Completed session-scoped Voice taskflow parity across backend and UI.
+- **13:11** Finalized the REST-first done-session documentation package and repository closeout artifacts for the Voice rollout.
+
+### CHANGES
+- **12:33** Landed canonical session taskflow wiring in Voice backend/UI (`02e6b45`).
+- **13:11** Added/finalized REST parity docs and plans: `docs(voice)` / `docs(plan)` / `docs(copilot)` closeout artifacts.
+- **17:33** Switched project resolution away from `group.projects_ids` to direct `project.project_group` links and synchronized reverse-link analysis docs.
+
+## 2026-03-04
+### PROBLEM SOLVED
+- **08:55** Session summaries were not persisted through one canonical path, and categorization/Codex UX remained inconsistent.
+- **11:35** `runtime_tag` still behaved like an operational routing concept in parts of the Voice migration story.
+- **12:27** Voice close/session flows still needed realtime quota-recovery hardening.
+
+### FEATURE IMPLEMENTED
+- **22:02** Added optional Telegram WebApp bot bootstrap for the miniapp runtime.
+
+### CHANGES
+- **08:55** Added canonical session-summary persistence and aligned categorization/Codex UX (`f35f91c`).
+- **11:35** Deprecated `runtime_tag` as an operational flow contract and finalized migration docs (`295431b`).
+- **12:27** Hardened Voice close/session realtime quota-recovery path (`efc89ec`).
+- **11:37** Captured desloppify scanner artifacts and post-deploy evidence for the cleanup wave.
+
+## 2026-03-05
+### PROBLEM SOLVED
+- **16:02** OperOps project create/edit flow was still tied to inline modal behavior.
+- **16:21** CRM and Miniapp task attachments lacked one canonical shared flow.
+- **22:05** WebRTC paused `Done` and `webm` upload handling still had brittle edge cases.
+
+### FEATURE IMPLEMENTED
+- **16:21** Introduced a shared CRM↔Miniapp task attachment flow.
+- **16:02** Moved OperOps project create/edit work onto dedicated page routes.
+
+### CHANGES
+- **16:02** Routed project create/edit to dedicated OperOps pages (`2c7f5b2`).
+- **16:21** Implemented normalized task attachment upload/download flow across CRM and Miniapp (`54c99ce`).
+- **22:05** Hardened paused `Done` and `webm` upload handling in Voice/WebRTC (`9030306`).
+
+## 2026-03-06
+### PROBLEM SOLVED
+- **12:11** Live meetings still lacked a stable possible-task generation path.
+- **17:39** `create_tasks` debug/reconnect behavior was noisy and fragile under MCP disconnects.
+- **21:13** Agent-backed `create_tasks` errors were not surfaced clearly enough to operators.
+
+### FEATURE IMPLEMENTED
+- **12:11** Implemented live possible-task generation during meetings.
+- **18:45** Bound `create_tasks` to explicit MCP server/runtime configuration and refreshed the fast-agent fork/update path.
+
+### CHANGES
+- **12:11** Added live possible-task generation for active meetings (`e2a795b`).
+- **13:00** Normalized task-attachment filenames and row locators (`de3d038`).
+- **16:59** Added reconnect grace for MCP socket requests and hardened debug flow (`caf0011`, `e27d977`, `e0a932c`).
+- **17:44** Required `voice.fetch` first in the `create_tasks` prompt and shrank the `create_tasks` payload envelope (`8772fb0`, `b3f5beb`).
+- **18:45** Refreshed fast-agent upstream wiring, MCP bindings, and model/runtime defaults (`d34e2c5`, `4c27992`, `6bfe5f4`, `030e732`, `c8209a2`).
+- **21:45** Restored deleted possible tasks to live visibility and surfaced clearer agent error text (`5cff96d`, `1cbf0ba`).
+
+## 2026-03-07
+### PROBLEM SOLVED
+- **08:27** Possible-task refresh was still tied to inconsistent triggers and stale session notify symbols.
+- **10:27** Voice session tabs lacked stable counters/badges for `Задачи` and `Codex`.
+
+### FEATURE IMPLEMENTED
+- **06:57** Made `codexspark` the default fast-agent runtime model for the create_tasks path.
+- **11:28** Preserved explicit invoice tasks in `create_tasks`.
+
+### CHANGES
+- **08:27** Auto-refreshed possible tasks after transcribe and unified the manual `create_tasks` queue path (`73d11ee`, `4db1f8f`).
+- **08:45** Dropped stale `session_tasks_created` notify semantics and stopped recomputing possible tasks on session done (`1e4e24e`, `3526b10`).
+- **10:27** Added stage activity dots and split task/codex tab counters (`a1494a7`, `d44a4aa`, `ae1fd1a`).
+- **11:28** Updated create_tasks agent docs/runtime to preserve invoice-specific tasks and fetch transcript metadata (`bd4d167`, `4c755a2`).
+
+## 2026-03-08
+### PROBLEM SOLVED
+- **10:33** Live refresh could still erase visible possible tasks during session updates.
+- **22:08** Voice session contracts and TypeDB tooling were drifting apart.
+
+### FEATURE IMPLEMENTED
+- **22:08** Aligned Voice session contracts with canonical TypeDB tooling paths.
+
+### CHANGES
+- **10:33** Preserved possible tasks during live refresh (`a2b81d6`).
+- **22:08** Synchronized voice/ontology contracts and tooling layout (`1062bfe`).
+
+## 2026-03-09
+### PROBLEM SOLVED
+- **22:06** TypeDB source maintenance still depended on a fragmented handwritten layout, which blocked kernel-wide schema evolution.
+
+### FEATURE IMPLEMENTED
+- **22:06** Migrated TypeDB source management to TOON YAML.
+
+### CHANGES
+- **22:06** Reworked ontology source generation around TOON YAML (`614d837`).
+
+## 2026-03-10
+### PROBLEM SOLVED
+- **18:43** Voice session task tabs still depended on non-canonical status count behavior.
+- **11:45** Annotated TQL source had regressed after the TOON migration.
+
+### FEATURE IMPLEMENTED
+- **18:43** Enforced status-counts-only session task tabs in Voice.
+
+### CHANGES
+- **11:45** Restored annotated TQL source and removed the transient TOON fragment layer (`b56a8d1`).
+- **18:43** Enforced status-counts-only task-tab behavior in Voice (`3cb88f6`).
+- **22:11** Synchronized voice status-normalization planning docs (`ecde609`).
+
+## 2026-03-11
+### PROBLEM SOLVED
+- **22:07** Forecast revision history and Figma indexing were both missing from the platform surface.
+
+### FEATURE IMPLEMENTED
+- **22:07** Added forecast history and Figma indexing support.
+
+### CHANGES
+- **22:07** Landed FinOps forecast history and Figma indexing updates across app/backend/docs (`ba3db32`).
+
+## 2026-03-12
+### PROBLEM SOLVED
+- **12:31** Possible-task materialization and repair paths were still inconsistent.
+- **22:09** Possible-task statuses/visibility still leaked legacy behavior.
+- **11:43** RUB formatting could visually split the ruble sign from the amount.
+
+### FEATURE IMPLEMENTED
+- **12:31** Added repair path for possible-task materialization.
+- **22:09** Normalized possible-task statuses and visibility.
+
+### CHANGES
+- **11:43** Kept the ruble symbol attached to the formatted amount (`13778bc`).
+- **12:31** Fixed possible-task materialization and added a repair path (`08d9b98`).
+- **22:09** Normalized possible-task statuses and visibility (`498e1ff`).
+
+## 2026-03-13
+### PROBLEM SOLVED
+- **02:20** Voice/Telegram status migration still needed a finalized hardened path.
+- **22:03** Plan-Fact and Voice UI follow-up status docs were still out of sync with live behavior.
+
+### FEATURE IMPLEMENTED
+- **02:35** Added and refined the MPIC process review planning package.
+
+### CHANGES
+- **02:20** Finalized Voice/Telegram status migration and Telegram hardening (`fd57aed`).
+- **02:35** Added then refined the MPIC process review plan (`c735d71`, `01e62e7`).
+- **22:03** Synchronized UI follow-up docs for Plan-Fact and Voice (`d9a5f1c`).
+
+## 2026-03-14
+### PROBLEM SOLVED
+- **10:39** Voice/OperOps task surfaces were still split across incompatible semantics.
+- **12:02** Manual summarize remained brittle and task labels were not fully normalized.
+- **23:17** Lifecycle counters and spec/status tracking drifted after the task-surface rollout.
+
+### FEATURE IMPLEMENTED
+- **10:39** Landed the first full Voice/OperOps task-surface normalization wave.
+- **02:08** Approved the next-wave Voice task-surface contract in docs.
+
+### CHANGES
+- **02:08** Approved next-wave task-surface docs (`6d76cf2`).
+- **10:39** Landed Voice/OperOps task-surface normalization (`38056d7`, `d14ccc1`).
+- **12:02** Hardened summarize trigger and normalized task labels (`46db2fe`).
+- **23:17** Fixed lifecycle counters, enforced strict canonical task-status filtering, and synchronized spec/changelog status (`d4f3bea`, `ae5f8d7`, `569900f`).
+
+## 2026-03-15
+### PROBLEM SOLVED
+- **03:08** Strict session taskflow replacement still had unfinished runtime/docs edges.
+- **11:48** Backend recovery and ontology rollout supervision needed one coordinated operational path.
+- **13:11** Header actions, codex issue loading, and Telegram MarkdownV2 send discipline still had UX/ops inconsistencies.
+
+### FEATURE IMPLEMENTED
+- **11:48** Added quota-recovery supervision and ontology rollout tooling.
+- **14:00** Codified Telegram MarkdownV2 send discipline.
+
+### CHANGES
+- **03:08** Finalized strict session taskflow replacement and docs wording (`ba76c8f`, `0576f41`).
+- **10:41** Closed session with Codex issue loading and UX refinements (`4c4136a`).
+- **11:07** Added paused FAB double-click `Done` coverage (`ab5220e`).
+- **11:48** Added backend quota recovery plus ontology rollout supervision (`07b9692`).
+- **13:11** Aligned `Tasks`/`Summarize` header action styling and archived stale plans / hardened single-issue fallback (`d0753d7`, `7c95c57`).
+- **14:00** Documented Telegram MarkdownV2 send discipline and staged typedb sync/full-load tooling (`a601a65`, `4f47254`).
+
+## 2026-03-16
+### PROBLEM SOLVED
+- **11:00** Agent model fallback and status normalization still required one canonical runtime policy.
+- **22:05** Possible-task refreshes lacked correlation telemetry across apply/refresh flows.
+
+### FEATURE IMPLEMENTED
+- **22:05** Added correlated possible-task refresh telemetry.
+
+### CHANGES
+- **11:00** Finalized task status normalization and agent model fallback (`ca82d08`).
+- **22:05** Added correlated possible-task refresh telemetry (`132ecdf`).
+
+## 2026-03-17
+### PROBLEM SOLVED
+- **11:54** Session `Tasks` reads could bypass the backend recovery path.
+- **12:13** Agent restarts still retried too early, causing MCP readiness races.
+
+### FEATURE IMPLEMENTED
+- **22:02** Captured runtime OpenAI key/OAuth state and registered the company-creator card scaffold for future work.
+
+### CHANGES
+- **11:54** Routed session `Tasks` through backend recovery (`34f6ff5`).
+- **12:13** Added MCP readiness waiting after quota-recovery restarts (`51681ab`).
+- **22:02** Added runtime key-state docs and company card scaffold, then synced changelog/docs for the readiness fix (`e4f5237`, `3d1a2ad`).
+
+## 2026-03-18
+### PROBLEM SOLVED
+- **22:08** Voice discussion-linked taskflow and comment contracts were still under-specified for multi-session linkage.
+
+### FEATURE IMPLEMENTED
+- **22:08** Normalized discussion-linked taskflow and comment contracts.
+
+### CHANGES
+- **22:08** Landed discussion-linked taskflow/comment contract normalization (`7418c55`).
+
+## 2026-03-19
+### PROBLEM SOLVED
+- **22:03** The accepted Voice task bucket contract and host maintenance guardrails were still implicit rather than repository-owned.
+
+### FEATURE IMPLEMENTED
+- **22:03** Codified the accepted Voice task bucket and host cleanup guardrail.
+
+### CHANGES
+- **22:03** Added docs for the accepted Voice task bucket and host guardrail (`357e561`).
+
+## 2026-03-21
+### PROBLEM SOLVED
+- **09:12** Executor-layer ontology terms and DB-side task constraints were still underspecified.
+- **21:30** `create_tasks` still lacked exact payload profiling and a canonical Draft visibility policy.
+- **22:02** Dual-stream execution semantics needed ontology-first normalization.
+
+### FEATURE IMPLEMENTED
+- **09:12** Formalized executor-layer ontology and DB-side task constraints.
+- **21:30** Added `create_tasks` profiling and explicit Draft horizon semantics.
+- **22:02** Normalized dual-stream execution semantics in docs/specs.
+
+### CHANGES
+- **09:12** Landed executor-layer ontology and DB-side task constraints (`55c268b`).
+- **21:30** Added `create_tasks` profiling and formalized draft horizon policy (`3bf7fa9`).
+- **22:02** Updated dual-stream execution semantics docs/specs (`2fc6211`).
+
+## 2026-03-22
+### PROBLEM SOLVED
+- **00:23** Voice session title generation could leave the UI stuck in `Генерирую заголовок`, and task/session bucket drift still produced false counters, duplicate Draft exposure, or transient 400 noise after the bucket rename wave.
+- **00:58** OperOps CRM Draft and list surfaces were still heavier than needed for daily work and did not expose an operator-controlled bounded Draft horizon.
+- **01:23** Voice session page still produced preventable browser-console accessibility/markup noise after reload.
+
+### FEATURE IMPLEMENTED
+- **00:58** Split OperOps CRM into summary-list vs lazy-detail payloads, added Draft depth control with `1d / 7d / 14d / 30d / ∞`, and made `7d` the default fast surface.
+- **01:23** Finalized the strict `Draft / Ready+ / Codex` session-task bucket contract across backend/docs/tests with no lowercase live aliases in the canonical contract text.
+
+### CHANGES
+- **00:23** Added frontend stage timeouts / `finally` cleanup for `generate_session_title`, backend MCP correlation logging, and verified successful title generation + Telegram summary delivery for session `69be49ea4ad7c397307d2d6f`.
+- **00:41** Fixed Voice session `Задачи` counters so `Draft` rows are counted from the same canonical source as visible rows, and hardened `session_tasks(bucket='Ready+')` / `session_tab_counts` so Draft rows cannot leak into accepted-task reads (`copilot-f6z4`, `copilot-rdrq`).
+- **00:58** Added `/api/crm/tickets/status-counts`, `response_mode=summary|detail`, lazy ticket-detail hydration for CRM drawers/editors, `Loading ...` state instead of false `No data`, and request/profile instrumentation for CRM list payload size/perf (`copilot-83r7`, `copilot-bn3f`).
+- **01:05** Switched OperOps Draft depth presets to `1d / 7d / 14d / 30d / ∞`, with `7d` as the default fast view and `∞` meaning no `draft_horizon_days` filter.
+- **01:23** Cleaned the Voice session page console by adding explicit labels/names to MeetingCard/FAB fields, labeling the summary textarea, and removing AntD autosize’s hidden measurement textarea from the summary panel (`copilot-occa`).

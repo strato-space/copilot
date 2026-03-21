@@ -291,6 +291,8 @@ Preferred engineering principles for this repo:
   - duplicate top summary widgets with the same lifecycle labels/counts are a bug, not an accepted transition state,
   - the `Draft` tab is a normal status-first CRM surface; legacy voice backlog grouping is historical reference only,
   - accepted Voice tasks are treated as `Ready` work instead of a separate `Backlog` semantic bucket.
+- OperOps Draft visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default list/count surface is `7d`, while `∞` means an unbounded draft read.
+- OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open.
 
 ## Product Notes (VoiceBot)
 - VoiceBot backend routes live in `backend/src/api/routes/voicebot/`.
@@ -349,9 +351,9 @@ Preferred engineering principles for this repo:
   - if `draft_horizon_days` is omitted, Draft reads remain unbounded,
   - `include_older_drafts=true` overrides the horizon for explicit historical drilldown,
   - `READY_10+` remains full-history regardless of any Draft horizon policy.
-- Accepted session-task reads are canonical on `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'tasks' }`: the bucket is accepted-only, may return only non-draft lifecycle rows, and `DRAFT_10` leakage there is a contract violation (`copilot-f6z4`), not compatibility behavior.
+- Accepted session-task reads are canonical on `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`: the bucket is accepted-only, may return only non-draft lifecycle rows, and `DRAFT_10` leakage there is a contract violation (`copilot-f6z4`), not compatibility behavior.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
-  - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'draft' }` as strict canonical `DRAFT_10` draft baseline; optional `draft_horizon_days` / `include_older_drafts` tune visibility policy without changing storage truth
+  - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Draft' }` as strict canonical `DRAFT_10` draft baseline; accepted bucket is `Ready+`, codex bucket is `Codex`, and lowercase aliases are not part of the live contract; optional `draft_horizon_days` / `include_older_drafts` tune visibility policy without changing storage truth
   - create regular: `create_session_tasks`
   - create codex: `create_session_codex_tasks`
   - delete row: `delete_session_possible_task`
@@ -379,6 +381,9 @@ Preferred engineering principles for this repo:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
   - route emits realtime `session_update.taskflow_refresh.summary`,
   - frontend Summary panel binds to canonical session fields and supports edit/save/conflict states.
+- Session-title generation is fail-fast and traceable:
+  - frontend `generate_session_title` flow uses stage-level timeouts and `finally` cleanup so `Генерирую заголовок` cannot spin forever,
+  - backend MCP proxy logs `generate_session_title` correlations with `requestId` + `session_id` for incident triage.
 - Live meeting possible-task generation is canonical:
   - session header exposes `Tasks` before `Summarize`,
   - session-page `Tasks` button calls backend `POST /api/voicebot/generate_possible_tasks`,

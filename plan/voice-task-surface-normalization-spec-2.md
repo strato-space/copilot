@@ -147,7 +147,7 @@ Current read paths may resolve linkage from `discussion_sessions[]`, `source_dat
 
 ## Canonical Read Contract
 
-### `voice.session_tasks(session_id, bucket="draft")`
+### `voice.session_tasks(session_id, bucket="Draft")`
 This route/tool is the canonical read surface for the current session draft baseline.
 
 Behavior:
@@ -157,7 +157,7 @@ Behavior:
 - returns normalized draft rows,
 - includes normalized `discussion_sessions[]` and derived `discussion_count`.
 
-### `voice.session_tasks(session_id, bucket="tasks")`
+### `voice.session_tasks(session_id, bucket="Ready+")`
 This route/tool is the canonical accepted-only session task surface.
 
 Behavior:
@@ -165,7 +165,7 @@ Behavior:
 - may return only accepted lifecycle keys such as `READY_10`, `PROGRESS_10`, `REVIEW_10`, `DONE_10`, `ARCHIVE`,
 - must not return `DRAFT_10`,
 - returns `[]` when the session has no accepted linked tasks,
-- `DRAFT_10` rows appearing in `bucket="tasks"` are a contract violation / bug (`copilot-f6z4`), not accepted compatibility behavior.
+- `DRAFT_10` rows appearing in `bucket="Ready+"` are a contract violation / bug (`copilot-f6z4`), not accepted compatibility behavior.
 
 ### `voice.session_task_counts(session_id)`
 Task counts must be computed from the same task-plane view:
@@ -216,7 +216,7 @@ Semantics:
 ## Current Verified Runtime Facts
 1. `create_tasks` reads:
 - transcript via `voice.fetch(..., mode="transcript")`
-- current draft baseline via `voice.session_tasks(..., bucket="draft")`
+- current draft baseline via `voice.session_tasks(..., bucket="Draft")`
 - session-scoped tasks via `voice.crm_tickets(session_id=...)`
 - project-scoped tasks via `voice.project(...)` and `voice.crm_tickets(project_id=...)`
 

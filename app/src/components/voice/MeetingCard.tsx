@@ -56,6 +56,18 @@ const getInitials = (fullName: string): string => {
     return initials ? `${surname} ${initials}.` : surname;
 };
 
+const visuallyHiddenLabelStyle: CSSProperties = {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: 'hidden',
+    clip: 'rect(0, 0, 0, 0)',
+    whiteSpace: 'nowrap',
+    border: 0,
+};
+
 const readPerformerField = (performer: PerformerRecord | undefined, field: 'name' | 'email'): string => {
     const value = performer?.[field];
     return typeof value === 'string' ? value : '';
@@ -300,18 +312,20 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
             duration: 0,
         });
 
-        await generateSessionTitle(
-            voiceBotSession._id,
-            getSessionData,
-            updateSessionName,
-            sendMCPCall,
-            waitForCompletion,
-            waitForConnected,
-            connectionState
-        );
-
-        messageApi.destroy('generating-title');
-        patchUiState({ isGeneratingTitle: false });
+        try {
+            await generateSessionTitle(
+                voiceBotSession._id,
+                getSessionData,
+                updateSessionName,
+                sendMCPCall,
+                waitForCompletion,
+                waitForConnected,
+                connectionState
+            );
+        } finally {
+            messageApi.destroy('generating-title');
+            patchUiState({ isGeneratingTitle: false });
+        }
     };
 
     const triggerTasks = async (): Promise<void> => {
@@ -555,7 +569,12 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                 <div className="voice-meeting-header-row">
                     <div className="voice-meeting-header-main">
                         <div className="voice-meeting-control-field">
+                            <label htmlFor="voice-meeting-project-select" style={visuallyHiddenLabelStyle}>
+                                Проект сессии
+                            </label>
                             <Select
+                                id="voice-meeting-project-select"
+                                aria-label="Проект сессии"
                                 placeholder="Проект"
                                 className="w-[220px]"
                                 value={voiceBotSession?.project_id ?? undefined}
@@ -571,8 +590,13 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                         </div>
 
                         <div className="voice-meeting-control-field">
+                            <label htmlFor="voice-meeting-access-level-select" style={visuallyHiddenLabelStyle}>
+                                Уровень доступа сессии
+                            </label>
                             <Tooltip title={SESSION_ACCESS_LEVELS_DESCRIPTIONS[currentAccessLevel]}>
                                 <Select
+                                    id="voice-meeting-access-level-select"
+                                    aria-label="Уровень доступа сессии"
                                     placeholder="Уровень доступа"
                                     className="w-[220px]"
                                     value={currentAccessLevel}
@@ -861,7 +885,12 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                     </div>
 
                     <div className="voice-meeting-meta-chip voice-meeting-meta-chip-grow">
+                        <label htmlFor="voice-meeting-dialogue-tag-select" style={visuallyHiddenLabelStyle}>
+                            Тег диалога
+                        </label>
                         <Select
+                            id="voice-meeting-dialogue-tag-select"
+                            aria-label="Тег диалога"
                             className="w-full"
                             mode="tags"
                             value={currentDialogueTag ? [currentDialogueTag] : []}

@@ -103,6 +103,8 @@ interface KanbanLookupSlice {
 
 interface KanbanPrimaryDataSlice {
     tickets: Ticket[];
+    ticketsLoading: boolean;
+    ticketsDetailLoadingById: Record<string, boolean>;
     tickets_updated_at: number | null;
     boards: string[];
     performers: Performer[];
@@ -124,8 +126,17 @@ interface KanbanDictionaryDataSlice {
 }
 
 interface KanbanFetchSlice {
-    fetchTickets: (statuses?: string[]) => Promise<void>;
-    fetchTicketById: (ticket_id: string) => Promise<Ticket | null>;
+    fetchTickets: (
+        statuses?: string[],
+        options?: {
+            draftHorizonDays?: number | null;
+            includeOlderDrafts?: boolean;
+        }
+    ) => Promise<void>;
+    fetchTicketById: (ticket_id: string, options?: { syncList?: boolean }) => Promise<Ticket | null>;
+    ensureTicketDetails: (ticket: Ticket | string | null | undefined, options?: { force?: boolean }) => Promise<Ticket | null>;
+    isTicketDetailLoaded: (ticket: Ticket | null | undefined) => boolean;
+    isTicketDetailLoading: (ticket: Ticket | string | null | undefined) => boolean;
     fetchDictionary: () => Promise<void>;
 }
 
@@ -279,45 +290,286 @@ type KanbanState = KanbanFilterSlice &
     KanbanWarehouseSlice &
     KanbanImportSlice;
 
+const toLookupValue = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (!value || typeof value !== 'object') return '';
+    const record = value as Record<string, unknown>;
+    if (typeof record.$oid === 'string') return record.$oid;
+    if (typeof record._id === 'string') return record._id;
+    if (typeof record.toString === 'function') {
+        const directValue = record.toString();
+        if (directValue && directValue !== '[object Object]') return directValue;
+    }
+    return '';
+};
+
+const resolveTicketDbId = (ticket: Pick<Ticket, '_id'> | null | undefined): string =>
+    toLookupValue(ticket?._id).trim();
+
+const resolveTicketPublicId = (ticket: Pick<Ticket, 'id'> | null | undefined): string =>
+    toLookupValue(ticket?.id).trim();
+
+const inferTicketDetailLoaded = (ticket: Ticket | null | undefined): boolean => {
+    if (!ticket) return false;
+    if (ticket.detail_loaded === true) return true;
+    if (ticket.payload_mode === 'detail' || ticket.payload_mode === 'full') return true;
+    if (Array.isArray(ticket.comments_list)) return true;
+    if (Array.isArray(ticket.work_data)) return true;
+    if (Array.isArray(ticket.attachments)) return true;
+    return false;
+};
+
+const normalizeTicketForStore = (ticket: Ticket, fallbackMode: 'summary' | 'detail'): Ticket => {
+    const detailLoaded = inferTicketDetailLoaded(ticket);
+    const payloadMode = ticket.payload_mode ?? (detailLoaded ? 'detail' : fallbackMode);
+    return {
+        ...ticket,
+        detail_loaded: detailLoaded,
+        payload_mode: payloadMode,
+    };
+};
+
+const getPerfNow = (): number => {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+        return performance.now();
+    }
+    return Date.now();
+};
+
 export const useKanbanStore = create<KanbanState>((set, get) => {
     const api_request = useRequestStore.getState().api_request;
     let isFetchingTickets = false;
     let lastTicketsFetchAt = 0;
     let lastTicketsFetchKey = '';
+    let lastTicketsFetchPayload: {
+        statuses?: string[];
+        draftHorizonDays?: number | null;
+        includeOlderDrafts?: boolean;
+    } = {};
+    const pendingTicketDetails = new Map<string, Promise<Ticket | null>>();
     let isFetchingPaymentsTree = false;
     let lastPaymentsTreeFetchAt = 0;
 
-    const fetchTickets = async (statuses?: string[]): Promise<void> => {
-        const key = JSON.stringify(statuses ?? []);
+    const setTicketDetailLoading = (ticketId: string, value: boolean): void => {
+        if (!ticketId) return;
+        set((state) => {
+            const prev = state.ticketsDetailLoadingById ?? {};
+            if (value) {
+                if (prev[ticketId]) return state;
+                return {
+                    ticketsDetailLoadingById: {
+                        ...prev,
+                        [ticketId]: true,
+                    },
+                };
+            }
+            if (!prev[ticketId]) return state;
+            const next = { ...prev };
+            delete next[ticketId];
+            return { ticketsDetailLoadingById: next };
+        });
+    };
+
+    const mergeTicketIntoList = (nextTicket: Ticket): void => {
+        const nextDbId = resolveTicketDbId(nextTicket);
+        const nextPublicId = resolveTicketPublicId(nextTicket);
+        set((state) => {
+            const index = state.tickets.findIndex((ticket) => {
+                const dbId = resolveTicketDbId(ticket);
+                if (nextDbId && dbId && dbId === nextDbId) return true;
+                if (!nextDbId && nextPublicId && resolveTicketPublicId(ticket) === nextPublicId) return true;
+                return false;
+            });
+
+            if (index < 0) {
+                return { tickets: [...state.tickets, nextTicket] };
+            }
+            return {
+                tickets: update(state.tickets, {
+                    [index]: { $set: nextTicket },
+                }),
+            };
+        });
+    };
+
+    const fetchTickets = async (
+        statuses?: string[],
+        options: {
+            draftHorizonDays?: number | null;
+            includeOlderDrafts?: boolean;
+        } = {}
+    ): Promise<void> => {
+        const useLastPayload = statuses === undefined && Object.keys(options).length === 0;
+        const resolvedStatuses = useLastPayload ? lastTicketsFetchPayload.statuses : statuses;
+        const resolvedDraftHorizonDays = useLastPayload ? lastTicketsFetchPayload.draftHorizonDays : options.draftHorizonDays;
+        const resolvedIncludeOlderDrafts = useLastPayload ? lastTicketsFetchPayload.includeOlderDrafts : options.includeOlderDrafts;
+
+        const key = JSON.stringify({
+            statuses: resolvedStatuses ?? [],
+            draftHorizonDays: resolvedDraftHorizonDays ?? null,
+            includeOlderDrafts: Boolean(resolvedIncludeOlderDrafts),
+        });
         const now = Date.now();
         const recentlyFetched = key === lastTicketsFetchKey && now - lastTicketsFetchAt < 5000;
 
         if (isFetchingTickets && key === lastTicketsFetchKey) return;
         if (recentlyFetched) return;
 
+        const fetchPerfStartedAt = getPerfNow();
+        console.info('[crm.perf] tickets.fetch.start', {
+            statuses: resolvedStatuses ?? [],
+            draft_horizon_days: resolvedDraftHorizonDays ?? null,
+            include_older_drafts: Boolean(resolvedIncludeOlderDrafts),
+            fetch_key: key,
+        });
+
         isFetchingTickets = true;
         lastTicketsFetchKey = key;
         lastTicketsFetchAt = now;
+        lastTicketsFetchPayload = {
+            ...(resolvedStatuses ? { statuses: resolvedStatuses } : {}),
+            ...(resolvedDraftHorizonDays !== undefined ? { draftHorizonDays: resolvedDraftHorizonDays } : {}),
+            ...(resolvedIncludeOlderDrafts !== undefined ? { includeOlderDrafts: resolvedIncludeOlderDrafts } : {}),
+        };
+
+        let fetchTicketCount = 0;
+        let ticketsUpdatedAt: number | null = null;
+        let fetchErrorMessage: string | null = null;
 
         try {
-            const response = await api_request<Ticket[]>('tickets', { statuses });
-            const handleData = response.map((item) => ({ ...item }));
-            set({ tickets: handleData, tickets_updated_at: Date.now() });
+            set({ ticketsLoading: true });
+            const requestPayload: Record<string, unknown> = {
+                ...(resolvedStatuses ? { statuses: resolvedStatuses } : {}),
+                response_mode: 'summary',
+            };
+            if (typeof resolvedDraftHorizonDays === 'number' && Number.isFinite(resolvedDraftHorizonDays) && resolvedDraftHorizonDays > 0) {
+                requestPayload.draft_horizon_days = resolvedDraftHorizonDays;
+            }
+            if (resolvedIncludeOlderDrafts !== undefined) {
+                requestPayload.include_older_drafts = resolvedIncludeOlderDrafts;
+            }
+            const response = await api_request<Ticket[]>('tickets', requestPayload);
+            const previousTickets = get().tickets;
+            const previousDetailByDbId = new Map<string, Ticket>();
+            const previousDetailByPublicId = new Map<string, Ticket>();
+            for (const ticket of previousTickets) {
+                if (!inferTicketDetailLoaded(ticket)) continue;
+                const dbId = resolveTicketDbId(ticket);
+                const publicId = resolveTicketPublicId(ticket);
+                if (dbId) previousDetailByDbId.set(dbId, ticket);
+                if (publicId) previousDetailByPublicId.set(publicId, ticket);
+            }
+
+            const handleData = response.map((item) => {
+                const normalized = normalizeTicketForStore({ ...item }, 'summary');
+                if (inferTicketDetailLoaded(normalized)) {
+                    return normalized;
+                }
+
+                const dbId = resolveTicketDbId(normalized);
+                const publicId = resolveTicketPublicId(normalized);
+                const existingDetailed =
+                    (dbId ? previousDetailByDbId.get(dbId) : undefined) ??
+                    (publicId ? previousDetailByPublicId.get(publicId) : undefined);
+
+                if (!existingDetailed) {
+                    return normalized;
+                }
+
+                return normalizeTicketForStore(
+                    {
+                        ...existingDetailed,
+                        ...normalized,
+                    },
+                    'detail'
+                );
+            });
+            fetchTicketCount = handleData.length;
+            ticketsUpdatedAt = Date.now();
+            set({ tickets: handleData, tickets_updated_at: ticketsUpdatedAt });
         } catch (e) {
             console.error('Error fetching tickets:', e);
+            fetchErrorMessage = e instanceof Error ? e.message : String(e);
         } finally {
+            set({ ticketsLoading: false });
             isFetchingTickets = false;
+            console.info('[crm.perf] tickets.fetch.end', {
+                duration_ms: Number((getPerfNow() - fetchPerfStartedAt).toFixed(2)),
+                statuses: resolvedStatuses ?? [],
+                draft_horizon_days: resolvedDraftHorizonDays ?? null,
+                include_older_drafts: Boolean(resolvedIncludeOlderDrafts),
+                fetch_key: key,
+                tickets_count: fetchTicketCount,
+                tickets_updated_at: ticketsUpdatedAt,
+                ok: fetchErrorMessage === null,
+                ...(fetchErrorMessage ? { error: fetchErrorMessage } : {}),
+            });
         }
     };
 
-    const fetchTicketById = async (ticket_id: string): Promise<Ticket | null> => {
+    const fetchTicketById = async (
+        ticket_id: string,
+        options: { syncList?: boolean } = {}
+    ): Promise<Ticket | null> => {
         try {
-            const response = await api_request<{ ticket: Ticket }>('tickets/get-by-id', { ticket_id });
-            return response.ticket;
+            const response = await api_request<{ ticket: Ticket }>('tickets/get-by-id', {
+                ticket_id,
+                response_mode: 'detail',
+            });
+            const normalized = normalizeTicketForStore(response.ticket, 'detail');
+            if (options.syncList) {
+                mergeTicketIntoList(normalized);
+            }
+            return normalized;
         } catch (e) {
             console.error('Error fetching ticket:', e);
             return null;
         }
+    };
+
+    const ensureTicketDetails = async (
+        ticket: Ticket | string | null | undefined,
+        options: { force?: boolean } = {}
+    ): Promise<Ticket | null> => {
+        if (!ticket) return null;
+        const ticketId = typeof ticket === 'string' ? ticket.trim() : resolveTicketDbId(ticket) || resolveTicketPublicId(ticket);
+        if (!ticketId) return null;
+
+        const existingTicket =
+            typeof ticket === 'string'
+                ? get().tickets.find((item) => resolveTicketDbId(item) === ticketId || resolveTicketPublicId(item) === ticketId)
+                : ticket;
+
+        if (!options.force && inferTicketDetailLoaded(existingTicket ?? null)) {
+            return normalizeTicketForStore(existingTicket as Ticket, 'detail');
+        }
+
+        const pending = pendingTicketDetails.get(ticketId);
+        if (pending) return pending;
+
+        const request = (async () => {
+            setTicketDetailLoading(ticketId, true);
+            const fetched = await fetchTicketById(ticketId, { syncList: true });
+            return fetched;
+        })();
+
+        pendingTicketDetails.set(ticketId, request);
+
+        return request.finally(() => {
+            pendingTicketDetails.delete(ticketId);
+            setTicketDetailLoading(ticketId, false);
+        });
+    };
+
+    const isTicketDetailLoaded = (ticket: Ticket | null | undefined): boolean => inferTicketDetailLoaded(ticket);
+
+    const isTicketDetailLoading = (ticket: Ticket | string | null | undefined): boolean => {
+        if (!ticket) return false;
+        const ticketId = typeof ticket === 'string' ? ticket.trim() : resolveTicketDbId(ticket) || resolveTicketPublicId(ticket);
+        if (!ticketId) return false;
+        const loadingById = get().ticketsDetailLoadingById;
+        return Boolean(loadingById[ticketId]);
     };
 
     const fetchDictionary = async (): Promise<void> => {
@@ -394,6 +646,8 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         },
 
         tickets: [],
+        ticketsLoading: false,
+        ticketsDetailLoadingById: {},
         tickets_updated_at: null,
         boards: [],
         customers: [],
@@ -483,6 +737,9 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
 
         fetchTickets,
         fetchTicketById,
+        ensureTicketDetails,
+        isTicketDetailLoaded,
+        isTicketDetailLoading,
         fetchDictionary,
 
         updateTicket: async (ticket, updateProps, opt) => {

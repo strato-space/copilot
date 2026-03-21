@@ -3,6 +3,15 @@ import { message } from 'antd';
 import type { TicketsModalData, VoiceBotMessage, VoiceMessageRow } from '../types/voice';
 import { getCategorizationRowIdentity } from '../utils/categorizationRowIdentity';
 
+const withClientTimeout = async <T>(promise: Promise<T>, timeoutMs: number, timeoutLabel: string): Promise<T> => {
+    return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+            setTimeout(() => reject(new Error(timeoutLabel)), timeoutMs);
+        }),
+    ]);
+};
+
 interface ParticipantModalState {
     visible: boolean;
     loading: boolean;
@@ -173,6 +182,30 @@ const SORT_STORAGE_KEYS = {
     categorization: 'VOICEBOT_SORT_CATEGORIZATION_ASC',
     transcription: 'VOICEBOT_SORT_TRANSCRIPTION_ASC',
 } as const;
+
+const SESSION_TITLE_TRACE_PREFIX = '[sessionsUIStore.generateSessionTitle]';
+const SESSION_TITLE_STAGE_TIMEOUTS_MS = {
+    waitConnected: 8000,
+    sessionData: 30000,
+    mcpResult: 130000,
+    updateSessionName: 20000,
+} as const;
+
+const withStageTimeout = async <T>(stage: string, promise: Promise<T>, timeoutMs: number): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise<T>((_, reject) => {
+                timeoutId = setTimeout(() => {
+                    reject(new Error(`title_generation_timeout:${stage}`));
+                }, timeoutMs);
+            }),
+        ]);
+    } finally {
+        if (timeoutId != null) clearTimeout(timeoutId);
+    }
+};
 
 const readSortPreference = (storageKey: string): boolean | null => {
     if (typeof window === 'undefined') return null;
@@ -544,9 +577,25 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
         waitForConnected,
         connectionState
     ) => {
+        const startedAt = Date.now();
+        const trace = (stage: string, details?: Record<string, unknown>): void => {
+            console.info(`${SESSION_TITLE_TRACE_PREFIX} ${stage}`, {
+                session_id: sessionId,
+                elapsed_ms: Date.now() - startedAt,
+                ...details,
+            });
+        };
+
         try {
+            trace('start', { connection_state: connectionState });
             if (connectionState !== 'connected') {
-                const connected = await waitForConnected(5000);
+                trace('wait_connected:start');
+                const connected = await withStageTimeout(
+                    'wait_connected',
+                    waitForConnected(5000),
+                    SESSION_TITLE_STAGE_TIMEOUTS_MS.waitConnected
+                );
+                trace('wait_connected:done', { connected });
                 if (!connected) {
                     message.warning(
                         connectionState === 'connecting'
@@ -574,8 +623,14 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
                 return;
             }
 
-            const sessionData = await getSessionData(sessionId);
+            trace('session_data:start');
+            const sessionData = await withStageTimeout(
+                'session_data',
+                getSessionData(sessionId),
+                SESSION_TITLE_STAGE_TIMEOUTS_MS.sessionData
+            );
             const sessionMessages = sessionData?.session_messages || [];
+            trace('session_data:done', { message_count: sessionMessages.length });
             const messageText = (sessionMessages as VoiceBotMessage[])
                 .map((msg) => {
                     if (!msg || typeof msg !== 'object') return '';
@@ -604,27 +659,49 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
                 return;
             }
 
+            trace('mcp_call:send', { mcp_server: agentsMcpServerUrl });
             const requestId = sendMCPCall(agentsMcpServerUrl, 'generate_session_title', {
                 message: messageText,
+                session_id: sessionId,
             });
+            trace('mcp_call:sent', { request_id: requestId });
 
-            const result = await waitForCompletion(requestId, 120000);
+            trace('mcp_call:wait_result:start');
+            const result = await withStageTimeout(
+                'mcp_result',
+                waitForCompletion(requestId, 120000),
+                SESSION_TITLE_STAGE_TIMEOUTS_MS.mcpResult
+            );
+            trace('mcp_call:wait_result:done', { status: result?.status ?? 'timeout_or_null' });
             if (!result || result.status !== 'complete' || !result.result) {
                 message.error('Не удалось сгенерировать название');
                 return;
             }
 
             const finalResult = result.result as { title?: string; content?: Array<{ text?: string }> } | undefined;
-            const title = finalResult?.title || finalResult?.content?.[0]?.text;
+            const title = (finalResult?.title || finalResult?.content?.[0]?.text || '').trim();
             if (!title) {
                 message.error('Пустой результат генерации');
                 return;
             }
 
-            await updateSessionName(sessionId, title);
+            trace('update_session_name:start', { title_length: title.length });
+            await withStageTimeout(
+                'update_session_name',
+                updateSessionName(sessionId, title),
+                SESSION_TITLE_STAGE_TIMEOUTS_MS.updateSessionName
+            );
+            trace('update_session_name:done');
             message.success('Название сессии обновлено');
+            trace('complete');
         } catch (error) {
+            const errorText = error instanceof Error ? error.message : String(error);
             console.error('Ошибка при генерации названия:', error);
+            trace('error', { error: errorText });
+            if (errorText.startsWith('title_generation_timeout:')) {
+                message.error('Генерация названия заняла слишком много времени, попробуйте еще раз');
+                return;
+            }
             message.error('Ошибка при генерации названия');
         }
     },

@@ -105,7 +105,7 @@ Draft visibility policy coverage:
   - voice-derived draft detection
   - linked discussion window semantics
 - runtime session route coverage now includes:
-  - `session_tasks(bucket='draft', draft_horizon_days=...)`
+  - `session_tasks(bucket='Draft', draft_horizon_days=...)`
   - `include_older_drafts=true` override
 
 ## Notes

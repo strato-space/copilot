@@ -121,6 +121,9 @@ export default function CategorizationTableSummary({
             </div>
 
             <Input.TextArea
+                id="voice-categorization-summary-textarea"
+                name="session_summary_md"
+                aria-label="Summary markdown"
                 value={draftText}
                 onChange={(event) => {
                     setDraftText(event.target.value);
@@ -129,11 +132,28 @@ export default function CategorizationTableSummary({
                         setStatusText('');
                     }
                 }}
-                autoSize={{ minRows: 4, maxRows: 12 }}
+                rows={4}
+                style={{ resize: 'vertical' }}
                 maxLength={20000}
                 placeholder="Добавьте markdown summary..."
                 disabled={!isEditing || saveState === 'saving'}
             />
+            <label
+                htmlFor="voice-categorization-summary-textarea"
+                style={{
+                    position: 'absolute',
+                    width: 1,
+                    height: 1,
+                    padding: 0,
+                    margin: -1,
+                    overflow: 'hidden',
+                    clip: 'rect(0, 0, 0, 0)',
+                    whiteSpace: 'nowrap',
+                    border: 0,
+                }}
+            >
+                Summary markdown
+            </label>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
                 {isEditing ? (

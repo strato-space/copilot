@@ -107,7 +107,7 @@ Agent cards are located in `agent-cards/` directory:
 - **Purpose:** Extract actionable tasks from compact session envelopes
 - **Input modes:** `raw_text`, `session_id`, `session_url` (plain string remains a legacy alias for `raw_text`)
 - **Enrichment:** direct MCP `voice` reads
-- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.project(project_id)` -> `voice.session_task_counts(...)` -> `voice.session_tasks(..., bucket="draft")` -> `voice.crm_tickets(session_id)` -> `voice.crm_tickets(project_id)`
+- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.project(project_id)` -> `voice.session_task_counts(...)` -> `voice.session_tasks(..., bucket="Draft")` -> `voice.crm_tickets(session_id)` -> `voice.crm_tickets(project_id)`
 - **Output:** canonical JSON array with `id/name/description/priority/performer_id/project_id/task_type_id/dialogue_tag/task_id_from_ai/dependencies_from_ai/dialogue_reference`
 - **Guardrails:** executor-ready descriptions, no finance/evaluative noise, no StratoProject execution hop, mutable same-scope draft rewrite in place
 

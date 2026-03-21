@@ -15,6 +15,8 @@ import {
     Modal,
     Divider,
     Tag,
+    Empty,
+    message,
 } from 'antd';
 import type { TableColumnType, TableProps } from 'antd';
 import cn from 'classnames';
@@ -65,6 +67,13 @@ const roundTo = (value: number, precision = 0): number => {
     return Math.round(value * factor) / factor;
 };
 
+const getPerfNow = (): number => {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+        return performance.now();
+    }
+    return Date.now();
+};
+
 interface CRMKanbanProps {
     filter: {
         task_status?: string[];
@@ -75,6 +84,7 @@ interface CRMKanbanProps {
         source_ref?: string[];
     };
     refreshToken?: number;
+    draftHorizonDays?: number | undefined;
     columns?: string[];
     column_width?: Record<string, number> | undefined;
     pagination?: boolean | undefined;
@@ -85,6 +95,8 @@ const CRMKanban = (props: CRMKanbanProps) => {
     const { isAuth, loading: authLoading } = useAuthStore();
     const {
         tickets,
+        ticketsLoading,
+        tickets_updated_at,
         performers,
         projects,
         task_types,
@@ -92,6 +104,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         createTicket,
         massiveChangeStatus,
         fetchTickets,
+        ensureTicketDetails,
         fetchDictionary,
         getCustomerByProject,
         getProjectEpics,
@@ -115,15 +128,15 @@ const CRMKanban = (props: CRMKanbanProps) => {
         setEditingWorkHours,
         approveModalOpen,
         setApproveModalOpen,
-        projectFilter,
-        setProjectFilter,
     } = useCRMStore();
 
     const { customers, projectGroups, projects: projectsData } = useProjectsStore();
     const [projectGroupFilter, setProjectGroupFilter] = useState<string | null>(null);
+    const [projectFilterValues, setProjectFilterValues] = useState<string[]>([]);
     const [selectedRows, setSelectedRows] = useState<string[]>([]);
     const [selectedNewStatus, setSelectedNewStatus] = useState<string | null>(null);
     const tableRef = useRef<HTMLDivElement>(null);
+    const lastRenderPerfTicketsUpdatedAtRef = useRef<number | null>(null);
 
     const getCustomerNameByGroup = useCallback((group: { customer?: string }) => {
         const customer = customers.find(
@@ -251,11 +264,22 @@ const CRMKanban = (props: CRMKanbanProps) => {
         return nextStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN') ? [] : nextStatusFilter;
     }, [effectiveStatusFilter]);
 
+    const requestedDraftHorizonDays = useMemo(() => {
+        return requestedStatusFilter.length === 1 && String(requestedStatusFilter[0] || '').trim() === TASK_STATUSES.DRAFT_10
+            ? props.draftHorizonDays
+            : undefined;
+    }, [props.draftHorizonDays, requestedStatusFilter]);
+
     useEffect(() => {
         if (isAuth) {
-            void fetchTickets(requestedStatusFilter);
+            void fetchTickets(
+                requestedStatusFilter,
+                {
+                    ...(requestedDraftHorizonDays !== undefined ? { draftHorizonDays: requestedDraftHorizonDays } : {}),
+                }
+            );
         }
-    }, [isAuth, requestedStatusFilter, fetchTickets]);
+    }, [isAuth, requestedStatusFilter, requestedDraftHorizonDays, fetchTickets]);
 
     const lastRefreshTokenRef = useRef<number>(props.refreshToken ?? 0);
 
@@ -264,8 +288,13 @@ const CRMKanban = (props: CRMKanbanProps) => {
         const nextRefreshToken = props.refreshToken ?? 0;
         if (nextRefreshToken <= 0 || nextRefreshToken === lastRefreshTokenRef.current) return;
         lastRefreshTokenRef.current = nextRefreshToken;
-        void fetchTickets(requestedStatusFilter);
-    }, [isAuth, props.refreshToken, requestedStatusFilter, fetchTickets]);
+        void fetchTickets(
+            requestedStatusFilter,
+            {
+                ...(requestedDraftHorizonDays !== undefined ? { draftHorizonDays: requestedDraftHorizonDays } : {}),
+            }
+        );
+    }, [isAuth, props.refreshToken, requestedStatusFilter, requestedDraftHorizonDays, fetchTickets]);
 
     useEffect(() => {
         const nextStatusFilter = props.filter.task_status ?? [];
@@ -600,6 +629,56 @@ const CRMKanban = (props: CRMKanbanProps) => {
         [createTicket, getProjectByValue, toLookupValue]
     );
 
+    const withTicketDetails = useCallback(
+        async (record: Ticket): Promise<Ticket> => {
+            const detailed = await ensureTicketDetails(record);
+            return detailed ?? record;
+        },
+        [ensureTicketDetails]
+    );
+
+    const handleOpenComments = useCallback(
+        async (record: Ticket) => {
+            const detailKey = resolveTicketDbId(record) || resolveTicketPublicId(record) || record.name;
+            message.open({ key: `crm-ticket-comments-${detailKey}`, type: 'loading', content: 'Loading ...', duration: 0 });
+            try {
+                const detailed = await withTicketDetails(record);
+                setCommentedTicket(detailed);
+            } finally {
+                message.destroy(`crm-ticket-comments-${detailKey}`);
+            }
+        },
+        [resolveTicketDbId, resolveTicketPublicId, setCommentedTicket, withTicketDetails]
+    );
+
+    const handleOpenWorkHours = useCallback(
+        async (record: Ticket) => {
+            const detailKey = resolveTicketDbId(record) || resolveTicketPublicId(record) || record.name;
+            message.open({ key: `crm-ticket-work-${detailKey}`, type: 'loading', content: 'Loading ...', duration: 0 });
+            try {
+                const detailed = await withTicketDetails(record);
+                setEditingWorkHours(detailed);
+            } finally {
+                message.destroy(`crm-ticket-work-${detailKey}`);
+            }
+        },
+        [resolveTicketDbId, resolveTicketPublicId, setEditingWorkHours, withTicketDetails]
+    );
+
+    const handleOpenEditor = useCallback(
+        async (record: Ticket) => {
+            const detailKey = resolveTicketDbId(record) || resolveTicketPublicId(record) || record.name;
+            message.open({ key: `crm-ticket-edit-${detailKey}`, type: 'loading', content: 'Loading ...', duration: 0 });
+            try {
+                const detailed = await withTicketDetails(record);
+                setEditingTicket(detailed);
+            } finally {
+                message.destroy(`crm-ticket-edit-${detailKey}`);
+            }
+        },
+        [resolveTicketDbId, resolveTicketPublicId, setEditingTicket, withTicketDetails]
+    );
+
     const rowSelection: TableProps<Ticket>['rowSelection'] = {
         selectedRowKeys: selectedRows,
         onChange: (keys) => {
@@ -675,14 +754,14 @@ const CRMKanban = (props: CRMKanbanProps) => {
                         onChange={(value) => {
                             setProjectGroupFilter(value ?? null);
                             if (!value) {
-                                setProjectFilter([]);
+                                setProjectFilterValues([]);
                                 close?.();
                                 return;
                             }
                             const groupProjects = projectsData.filter(
                                 (p) => p.project_group && p.project_group.toString() === value
                             );
-                            setProjectFilter(groupProjects.map((p) => p.name));
+                            setProjectFilterValues(groupProjects.map((p) => p.name));
                             close?.();
                         }}
                         placeholder="Выберите группу"
@@ -1167,7 +1246,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                         <div className="flex items-center justify-center min-h-[18px] text-[12px] text-[#111827] cursor-pointer hover:bg-slate-200 px-1 rounded">
                             {planValue}
                         </div>
-                        <div className="flex items-center gap-1 cursor-pointer justify-center" onClick={() => setEditingWorkHours(record)}>
+                        <div className="flex items-center gap-1 cursor-pointer justify-center" onClick={() => { void handleOpenWorkHours(record); }}>
                             {show_alert ? <ExclamationCircleFilled className="text-red-800" /> : null}
                             <div className={`text-[12px] ${show_alert ? 'text-red-800' : 'text-[#111827]'}`}>{factValue}</div>
                         </div>
@@ -1181,11 +1260,11 @@ const CRMKanban = (props: CRMKanbanProps) => {
             render: (_, record) => (
                 <div
                     className="flex gap-2 cursor-pointer hover:bg-[#3086FF]/30 justify-center items-center h-[30px]"
-                    onClick={() => setCommentedTicket(record)}
+                    onClick={() => { void handleOpenComments(record); }}
                 >
                     <div>
-                        {record.comments_list && record.comments_list.length > 0 ? (
-                            <Badge count={record.comments_list.length} />
+                        {(typeof record.comments_count === 'number' ? record.comments_count : (record.comments_list?.length ?? 0)) > 0 ? (
+                            <Badge count={typeof record.comments_count === 'number' ? record.comments_count : (record.comments_list?.length ?? 0)} />
                         ) : (
                             <div className="h-4" />
                         )}
@@ -1204,7 +1283,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
                 return (
                     <div className="flex gap-4">
-                        <EditOutlined className="hover:text-cyan-500" onClick={() => setEditingTicket(record)} />
+                        <EditOutlined className="hover:text-cyan-500" onClick={() => { void handleOpenEditor(record); }} />
                         <Tooltip title="Клонировать задачу">
                             <CopyOutlined
                                 className="hover:text-cyan-500"
@@ -1266,12 +1345,15 @@ const CRMKanban = (props: CRMKanbanProps) => {
         handleTaskTypeUpdate,
         handleShipmentDateUpdate,
         handleCloneTicket,
-        setProjectFilter,
+        handleOpenComments,
+        handleOpenEditor,
+        handleOpenWorkHours,
         setProjectGroupFilter,
         setEditingColumn,
         setEditingTicket,
         setEditingWorkHours,
         setCommentedTicket,
+        ensureTicketDetails,
         resolveTicketDbId,
         resolveTicketPublicId,
         resolveTicketRouteId,
@@ -1326,9 +1408,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
         if (!hasUnknownStatusFilter) return false;
         return normalizeTargetTaskStatusKey(record.task_status) === null;
     });
-    if (projectFilter && projectFilter.length > 0) {
+    if (projectFilterValues.length > 0) {
         filteredTickets = filteredTickets.filter((record) =>
-            projectFilter.includes(getProjectDisplayName(record))
+            projectFilterValues.includes(getProjectDisplayName(record))
         );
     }
     const sourceRefFilterValues = normalizeVoiceSessionSourceRefs(props.filter.source_ref ?? []);
@@ -1338,9 +1420,36 @@ const CRMKanban = (props: CRMKanbanProps) => {
         );
     }
 
+    useEffect(() => {
+        if (!isAuth || ticketsLoading || tickets_updated_at === null) return;
+        if (lastRenderPerfTicketsUpdatedAtRef.current === tickets_updated_at) return;
+        lastRenderPerfTicketsUpdatedAtRef.current = tickets_updated_at;
+
+        let renderAfterFetchMs: number;
+        if (
+            typeof performance !== 'undefined' &&
+            typeof performance.now === 'function' &&
+            typeof performance.timeOrigin === 'number'
+        ) {
+            const fetchCompletedAtPerfNow = tickets_updated_at - performance.timeOrigin;
+            renderAfterFetchMs = getPerfNow() - fetchCompletedAtPerfNow;
+        } else {
+            renderAfterFetchMs = Date.now() - tickets_updated_at;
+        }
+
+        console.info('[crm.perf] tickets.render.after_fetch', {
+            render_after_fetch_ms: roundTo(Math.max(0, renderAfterFetchMs), 2),
+            tickets_count: tickets.length,
+            filtered_tickets_count: filteredTickets.length,
+            tickets_updated_at,
+        });
+    }, [isAuth, ticketsLoading, tickets_updated_at, tickets.length, filteredTickets.length]);
+
+    const isTableLoading = authLoading || ticketsLoading;
+
     return (
         <div className="crm-kanban w-full max-w-[1232px] 2xl:max-w-[1724px] mx-auto overflow-x-auto">
-            <Spin spinning={tickets.length < 1 || authLoading} size="large" fullscreen />
+            <Spin spinning={authLoading} size="large" fullscreen />
 
             {selectedRows.length > 0 ? (
                 <div className="flex justify-end mb-4">
@@ -1378,6 +1487,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                     sticky
                     columns={filteredColumns}
                     dataSource={filteredTickets}
+                    loading={false}
                     size="small"
                     scroll={{ x: 'max-content' }}
                     rowKey={(record) => resolveTicketRowKey(record)}
@@ -1388,6 +1498,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
                         },
                     })}
                     pagination={props.pagination ? { pageSize: 100 } : false}
+                    locale={{
+                        emptyText: isTableLoading ? 'Loading ...' : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No data" />,
+                    }}
                     onChange={(pagination, filters, sorter, extra) => {
                         if (extra.action === 'filter') {
                             saveFilters(filters as Record<string, (string | boolean)[] | null>);

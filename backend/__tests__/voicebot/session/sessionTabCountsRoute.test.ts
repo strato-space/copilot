@@ -123,7 +123,7 @@ describe('Voicebot session_tab_counts route', () => {
     generateDataFilterMock.mockResolvedValue({});
   });
 
-  it('returns task and codex counts for the current session scope', async () => {
+  it('returns accepted-only task and codex counts for the current session scope', async () => {
     const app = buildApp();
     const response = await request(app)
       .post('/voicebot/session_tab_counts')
@@ -133,10 +133,9 @@ describe('Voicebot session_tab_counts route', () => {
     expect(response.body).toEqual({
       success: true,
       session_id: sessionId.toHexString(),
-      tasks_count: 6,
+      tasks_count: 4,
       codex_count: 3,
       status_counts: [
-        { status: 'DRAFT_10', status_key: 'DRAFT_10', label: 'Draft', count: 2 },
         { status: 'REVIEW_10', status_key: 'REVIEW_10', label: 'Review', count: 3 },
         { status: 'UNKNOWN', status_key: 'UNKNOWN', label: 'Unknown', count: 1 },
       ],

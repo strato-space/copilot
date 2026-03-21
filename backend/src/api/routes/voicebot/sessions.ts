@@ -238,7 +238,7 @@ const VOICE_SESSION_TASK_STATUS_KEYS = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSIO
 
 const sessionTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
-    bucket: z.enum(['draft', 'tasks', 'codex']),
+    bucket: z.enum(['Draft', 'Ready+', 'Codex']),
     status_keys: z.array(z.enum(VOICE_SESSION_TASK_STATUS_KEYS)).optional(),
     include_older_drafts: z.union([z.boolean(), z.number(), z.string()]).optional(),
     draft_horizon_days: z.union([z.number(), z.string()]).optional(),
@@ -4927,9 +4927,28 @@ const CANONICAL_TASK_STATUS_ORDER_INDEX = new Map(
   CANONICAL_TASK_STATUS_ORDER.map((status, index) => [status, index])
 );
 const VOICE_SESSION_TASK_STATUS_ORDER = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSION_UNKNOWN_STATUS_KEY] as const;
+const VOICE_SESSION_ACCEPTED_STATUS_KEYS = [
+    ...TARGET_TASK_STATUS_KEYS.filter(
+        (statusKey): statusKey is Exclude<TargetTaskStatusKey, 'DRAFT_10'> => statusKey !== 'DRAFT_10'
+    ),
+    VOICE_SESSION_UNKNOWN_STATUS_KEY,
+] as const;
+type VoiceSessionAcceptedStatusKey = (typeof VOICE_SESSION_ACCEPTED_STATUS_KEYS)[number];
 const VOICE_SESSION_TASK_STATUS_ORDER_INDEX = new Map(
   VOICE_SESSION_TASK_STATUS_ORDER.map((status, index) => [status, index])
 );
+
+const normalizeAcceptedSessionStatusKeys = (
+    statusKeys?: readonly (TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY)[]
+): VoiceSessionAcceptedStatusKey[] => {
+    if (!statusKeys?.length) return [...VOICE_SESSION_ACCEPTED_STATUS_KEYS];
+    const requested = new Set(
+        statusKeys.filter(
+            (statusKey): statusKey is VoiceSessionAcceptedStatusKey => statusKey !== 'DRAFT_10'
+        )
+    );
+    return VOICE_SESSION_ACCEPTED_STATUS_KEYS.filter((statusKey) => requested.has(statusKey));
+};
 
 const isStaleVoicePossibleTaskRow = (value: unknown): boolean => {
     if (!value || typeof value !== 'object') return false;
@@ -5086,12 +5105,13 @@ const listSessionScopedAcceptedTasks = async ({
     db: Db;
     sessionId: string;
     session: Record<string, unknown>;
-    statusKeys: readonly (TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY)[];
+    statusKeys: readonly VoiceSessionAcceptedStatusKey[];
 }): Promise<Array<Record<string, unknown>>> => {
     const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
     const includeUnknown = statusKeys.includes(VOICE_SESSION_UNKNOWN_STATUS_KEY);
     const knownStatusKeys = statusKeys.filter(
-        (statusKey): statusKey is TargetTaskStatusKey => statusKey !== VOICE_SESSION_UNKNOWN_STATUS_KEY
+        (statusKey): statusKey is Exclude<VoiceSessionAcceptedStatusKey, typeof VOICE_SESSION_UNKNOWN_STATUS_KEY> =>
+            statusKey !== VOICE_SESSION_UNKNOWN_STATUS_KEY
     );
     const statusValues = knownStatusKeys.map((statusKey) => TASK_STATUSES[statusKey]);
 
@@ -5112,15 +5132,20 @@ const listSessionScopedAcceptedTasks = async ({
     );
 
     if (!includeUnknown) {
-        return await db.collection(COLLECTIONS.TASKS).find({
+        const items = await db.collection(COLLECTIONS.TASKS).find({
             ...baseMatch,
             task_status: { $in: statusValues },
         }).toArray() as Array<Record<string, unknown>>;
+        return items.filter((task) => normalizeVoiceSessionTaskBucketKey(task.task_status) !== 'DRAFT_10');
     }
 
     const items = await db.collection(COLLECTIONS.TASKS).find(baseMatch).toArray() as Array<Record<string, unknown>>;
     const selectedStatusSet = new Set<string>(statusKeys);
-    return items.filter((task) => selectedStatusSet.has(normalizeVoiceSessionTaskBucketKey(task.task_status)));
+    return items.filter((task) => {
+        const statusKey = normalizeVoiceSessionTaskBucketKey(task.task_status);
+        if (statusKey === 'DRAFT_10') return false;
+        return selectedStatusSet.has(statusKey);
+    });
 };
 
 const listSessionScopedDraftTasks = async ({
@@ -5210,8 +5235,6 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const sessionRecord = session as Record<string, unknown>;
-        const includeOlderDrafts = parseIncludeOlderDrafts(parsedBody.data.include_older_drafts);
-        const draftHorizonDays = parseDraftHorizonDays(parsedBody.data.draft_horizon_days);
         const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: sessionRecord });
         const externalRef = voiceSessionUrlUtils.canonical(sessionId);
 
@@ -5251,19 +5274,9 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             ),
         ]);
 
-        const draftTasksForSession = sessionTasks.filter(
-            (task) => normalizeVoiceSessionTaskBucketKey(task.task_status) === 'DRAFT_10'
-        ) as Array<Record<string, unknown>>;
-        const recencyFilteredDraftTasks = await filterVoiceDerivedDraftsByRecency({
-            db,
-            tasks: draftTasksForSession,
-            includeOlderDrafts,
-            draftHorizonDays,
-            referenceSession: sessionRecord,
-        });
-        const visibleDraftTasks = collapseVisibleDraftRows(recencyFilteredDraftTasks);
-        const nonDraftTasks = sessionTasks.filter((task) => normalizeVoiceSessionTaskBucketKey(task.task_status) !== 'DRAFT_10');
-        const visibleSessionTasks = [...visibleDraftTasks, ...nonDraftTasks];
+        const visibleSessionTasks = sessionTasks.filter(
+            (task) => normalizeVoiceSessionTaskBucketKey(task.task_status) !== 'DRAFT_10'
+        );
 
         const groupedStatusCounts = visibleSessionTasks.reduce((acc, task) => {
             const statusKey = normalizeVoiceSessionTaskBucketKey(task.task_status);
@@ -5330,7 +5343,7 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
         const bucket = parsedBody.data.bucket;
         const includeOlderDrafts = parseIncludeOlderDrafts(parsedBody.data.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(parsedBody.data.draft_horizon_days);
-        if (bucket === 'draft') {
+        if (bucket === 'Draft') {
             const draftDocs = await listSessionScopedDraftTasks({
                 db,
                 sessionId,
@@ -5351,7 +5364,7 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
             });
         }
 
-        if (bucket === 'codex') {
+        if (bucket === 'Codex') {
             const externalRef = voiceSessionUrlUtils.canonical(sessionId);
             const items = await db.collection(COLLECTIONS.TASKS).find(
                 mergeWithRuntimeFilter(
@@ -5378,9 +5391,7 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
             });
         }
 
-        const acceptedStatusKeys = (parsedBody.data.status_keys?.length
-            ? parsedBody.data.status_keys
-            : [...TARGET_TASK_STATUS_KEYS.filter((statusKey) => statusKey !== 'DRAFT_10'), VOICE_SESSION_UNKNOWN_STATUS_KEY]) as readonly (TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY)[];
+        const acceptedStatusKeys = normalizeAcceptedSessionStatusKeys(parsedBody.data.status_keys);
 
         const items = await listSessionScopedAcceptedTasks({
             db,

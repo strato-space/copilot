@@ -1183,7 +1183,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         try {
             const response = await voicebotHttp.request<unknown>(
                 'voicebot/session_tasks',
-                { session_id: normalizedSessionId, bucket: 'draft' },
+                { session_id: normalizedSessionId, bucket: 'Draft' },
                 Boolean(options?.silent)
             );
             const fallbackProjectId = String(get().voiceBotSession?.project_id || '').trim();

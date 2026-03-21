@@ -100,6 +100,8 @@ export interface TaskAttachment {
 export interface Ticket {
     _id: string;
     id: string;
+    payload_mode?: 'summary' | 'detail' | 'full';
+    detail_loaded?: boolean;
     name: string;
     project: string;
     project_id?: string;
@@ -115,6 +117,7 @@ export interface Ticket {
     epic?: string;
     epic_name?: string;
     comments_list?: Comment[];
+    comments_count?: number;
     work_data?: WorkData[];
     attachments?: TaskAttachment[];
     total_hours?: number;

@@ -1,13 +1,13 @@
 import { useEffect, useMemo } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import _ from 'lodash';
-import { Form, Input, DatePicker, Button, Select, Drawer, ConfigProvider } from 'antd';
+import { Form, Input, DatePicker, Button, Select, Drawer, ConfigProvider, Spin, Empty } from 'antd';
 import { CloseOutlined, EditOutlined } from '@ant-design/icons';
 
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
-import type { WorkData } from '../../types/crm';
+import type { WorkData, Ticket } from '../../types/crm';
 
 interface WorkFormValues {
     _id: string | null;
@@ -44,11 +44,32 @@ const getPerformerLabel = (performer: PerformerLabelRecord | null | undefined, f
     return fallback;
 };
 
+const toLookupValue = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    if (!value || typeof value !== 'object') return '';
+    const record = value as Record<string, unknown>;
+    if (typeof record.$oid === 'string') return record.$oid;
+    if (typeof record._id === 'string') return record._id;
+    if (typeof record.toString === 'function') {
+        const directValue = record.toString();
+        if (directValue && directValue !== '[object Object]') return directValue;
+    }
+    return '';
+};
+
+const resolveTicketDbId = (ticket: Ticket | null | undefined): string => toLookupValue(ticket?._id).trim();
+const resolveTicketPublicId = (ticket: Ticket | null | undefined): string => toLookupValue(ticket?.id).trim();
+
 const WorkHoursSidebar = () => {
     const {
+        tickets,
         performers,
         addWorkHours,
         editWorkHour,
+        ensureTicketDetails,
+        isTicketDetailLoaded,
+        isTicketDetailLoading,
         getCustomerByProject,
         getProjectGroupByProject,
         getProjectByName,
@@ -58,19 +79,45 @@ const WorkHoursSidebar = () => {
     const watchedWorkDataId = Form.useWatch('_id', form);
     const isEditingEntry = Boolean(watchedWorkDataId);
 
-    const customerName = editingWorkHours ? getCustomerByProject(editingWorkHours.project) : '';
-    const projectGroupName = editingWorkHours ? getProjectGroupByProject(editingWorkHours.project) : '';
-    const projectName = editingWorkHours ? getProjectByName(editingWorkHours.project)?.name || editingWorkHours.project : '';
+    const resolvedEditingWorkHours = useMemo(() => {
+        if (!editingWorkHours) return null;
+        const dbId = resolveTicketDbId(editingWorkHours);
+        const publicId = resolveTicketPublicId(editingWorkHours);
+        return (
+            tickets.find((ticket) => {
+                const ticketDbId = resolveTicketDbId(ticket);
+                if (dbId && ticketDbId === dbId) return true;
+                if (!dbId && publicId && resolveTicketPublicId(ticket) === publicId) return true;
+                return false;
+            }) ?? editingWorkHours
+        );
+    }, [editingWorkHours, tickets]);
+
+    useEffect(() => {
+        if (!resolvedEditingWorkHours) return;
+        if (isTicketDetailLoaded(resolvedEditingWorkHours)) return;
+        void ensureTicketDetails(resolvedEditingWorkHours);
+    }, [ensureTicketDetails, isTicketDetailLoaded, resolvedEditingWorkHours]);
+
+    const isHydratingDetail = Boolean(
+        resolvedEditingWorkHours && !isTicketDetailLoaded(resolvedEditingWorkHours)
+    );
+    const isDetailLoading =
+        isHydratingDetail || isTicketDetailLoading(resolvedEditingWorkHours ?? editingWorkHours ?? null);
+
+    const customerName = resolvedEditingWorkHours ? getCustomerByProject(resolvedEditingWorkHours.project) : '';
+    const projectGroupName = resolvedEditingWorkHours ? getProjectGroupByProject(resolvedEditingWorkHours.project) : '';
+    const projectName = resolvedEditingWorkHours ? getProjectByName(resolvedEditingWorkHours.project)?.name || resolvedEditingWorkHours.project : '';
     const historicalPerformerIds = useMemo(
         () =>
             Array.from(
                 new Set(
-                    (editingWorkHours?.work_data ?? [])
+                    (resolvedEditingWorkHours?.work_data ?? [])
                         .map((workData) => (typeof workData.created_by === 'string' ? workData.created_by.trim() : ''))
                         .filter(Boolean)
                 )
             ),
-        [editingWorkHours?.work_data]
+        [resolvedEditingWorkHours?.work_data]
     );
     const performerOptions = useMemo(() => {
         const result: Array<{ value: string; label: string }> = [];
@@ -106,7 +153,7 @@ const WorkHoursSidebar = () => {
     useEffect(() => {
         form.resetFields();
         form.setFieldsValue(emptyForm);
-    }, [editingWorkHours?._id, form]);
+    }, [resolvedEditingWorkHours?._id, form]);
 
     return (
         <ConfigProvider
@@ -128,9 +175,9 @@ const WorkHoursSidebar = () => {
                 open={editingWorkHours !== null}
                 closeIcon={<CloseOutlined />}
                 title={
-                    editingWorkHours ? (
+                    resolvedEditingWorkHours ? (
                         <div className="flex flex-col gap-1">
-                            <div className="text-[16px] w-[324px]">{editingWorkHours.name}</div>
+                            <div className="text-[16px] w-[324px]">{resolvedEditingWorkHours.name}</div>
                             <div className="text-[14px] text-slate-500">{projectName}</div>
                             <div className="text-[12px] text-slate-400">
                                 {projectGroupName || '—'} / {customerName || '—'}
@@ -157,6 +204,7 @@ const WorkHoursSidebar = () => {
                         <Button
                             size="large"
                             type="primary"
+                            disabled={!resolvedEditingWorkHours || isDetailLoading}
                             onClick={() => {
                                 form.submit();
                             }}
@@ -168,9 +216,15 @@ const WorkHoursSidebar = () => {
             >
                 <div className="flex flex-col w-full h-full relative px-4">
                     <div className="flex flex-col flex-grow flex-shrink overflow-auto gap-4 py-4 select-text">
-                        {editingWorkHours?.work_data
-                            ?.sort((a: WorkData, b: WorkData) => (b.date_timestamp ?? 0) - (a.date_timestamp ?? 0))
-                            .map((work_data: WorkData) => {
+                        {isDetailLoading ? (
+                            <div className="flex items-center justify-center h-full">
+                                <Spin size="default" />
+                            </div>
+                        ) : Array.isArray(resolvedEditingWorkHours?.work_data) &&
+                          resolvedEditingWorkHours.work_data.length > 0 ? (
+                            [...resolvedEditingWorkHours.work_data]
+                                .sort((a: WorkData, b: WorkData) => (b.date_timestamp ?? 0) - (a.date_timestamp ?? 0))
+                                .map((work_data: WorkData) => {
                                 const performerId = typeof work_data.created_by === 'string' ? work_data.created_by : '';
                                 const performerLabel = performerLabelById.get(performerId) ?? performerId;
                                 return (
@@ -201,16 +255,21 @@ const WorkHoursSidebar = () => {
                                         <div className="flex text-[14px]">{work_data.result_link}</div>
                                     </div>
                                 );
-                            })}
+                            })
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Записей пока нет" />
+                            </div>
+                        )}
                     </div>
                     <div className="-mx-6 border-t mt-2" />
                     <Form
                         form={form}
                         layout="horizontal"
                         onFinish={(values) => {
-                            if (!editingWorkHours) return;
+                            if (!resolvedEditingWorkHours || isDetailLoading) return;
                             const payload = {
-                                ticket_id: editingWorkHours._id,
+                                ticket_id: resolvedEditingWorkHours._id,
                                 date: values.date,
                                 time: parseFloat(values.time) || 0,
                                 description: values.comment,

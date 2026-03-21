@@ -259,6 +259,10 @@ export default function SessionPage() {
         () => buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession),
         [sessionId, voiceBotSession]
     );
+    const draftPossibleTasksCount = useMemo(
+        () => (Array.isArray(possibleTasks) ? possibleTasks.length : 0),
+        [possibleTasks]
+    );
     const sessionTaskCountByStatus = useMemo(() => {
         const counts = new Map<VoiceSessionTaskSubtabKey, number>();
         for (const entry of sessionTaskStatusCounts) {
@@ -266,8 +270,9 @@ export default function SessionPage() {
             if (!resolvedKey) continue;
             counts.set(resolvedKey, entry.count);
         }
+        counts.set('DRAFT_10', draftPossibleTasksCount);
         return counts;
-    }, [sessionTaskStatusCounts]);
+    }, [draftPossibleTasksCount, sessionTaskStatusCounts]);
     const sessionTaskTabs = useMemo<VoiceSessionTaskTab[]>(() => {
         return VOICE_SESSION_TASK_SUBTAB_KEYS
             .map((statusKey) => ({
@@ -278,10 +283,14 @@ export default function SessionPage() {
             }))
             .filter((entry) => entry.key !== VOICE_SESSION_UNKNOWN_STATUS_KEY || entry.count > 0);
     }, [sessionTaskCountByStatus]);
-    const sessionTasksTotalCount = useMemo(
-        () => (sessionOperOpsTasksCount === null ? 0 : sessionTaskTabs.reduce((sum, entry) => sum + entry.count, 0)),
-        [sessionOperOpsTasksCount, sessionTaskTabs]
-    );
+    const sessionTasksTotalCount = useMemo(() => {
+        if (sessionOperOpsTasksCount === null) return 0;
+        const nonDraftCount = sessionTaskTabs.reduce((sum, entry) => {
+            if (entry.key === 'DRAFT_10') return sum;
+            return sum + entry.count;
+        }, 0);
+        return draftPossibleTasksCount + nonDraftCount;
+    }, [draftPossibleTasksCount, sessionOperOpsTasksCount, sessionTaskTabs]);
     const activeSessionTaskStatuses = useMemo(
         () => sessionTaskTabs.find((entry) => entry.key === sessionTasksSubTab)?.taskStatuses ?? [],
         [sessionTaskTabs, sessionTasksSubTab]

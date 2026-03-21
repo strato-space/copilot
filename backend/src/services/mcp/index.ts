@@ -22,6 +22,17 @@ interface MCPCallMessage {
 
 type MCPAck = (payload: { ok: boolean; requestId?: string; message?: string; details?: unknown }) => void;
 
+function extractSessionIdFromArgs(args: Record<string, unknown>): string | undefined {
+    const sessionId = args.session_id;
+    if (typeof sessionId === 'string' && sessionId.trim()) {
+        return sessionId.trim();
+    }
+    if (typeof sessionId === 'number' && Number.isFinite(sessionId)) {
+        return String(sessionId);
+    }
+    return undefined;
+}
+
 // Connection and request tracking
 const connectionIds = new Map<string, string>(); // socket.id -> connectionId
 const requestMap = new Map<string, string>(); // requestId -> socket.id
@@ -75,6 +86,13 @@ export function setupMCPProxy(io: SocketIOServer): void {
                 // Track request for routing responses
                 requestMap.set(message.requestId, socket.id);
                 ack?.({ ok: true, requestId: message.requestId });
+
+                if (message.tool === 'generate_session_title') {
+                    logger.info('🧩 MCP correlation: generate_session_title', {
+                        requestId: message.requestId,
+                        session_id: extractSessionIdFromArgs(message.args),
+                    });
+                }
 
                 // Create MCP proxy client for the specified server
                 const targetMcpClient = new MCPProxyClient(message.mcpServer);

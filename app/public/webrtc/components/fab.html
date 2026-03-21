@@ -31,15 +31,18 @@
 
     <div class="fab-session-card" role="group" aria-label="Session">
       <div class="fab-session-row">
-        <input id="fab-session-id" class="fab-session-input" type="text" placeholder="Session ID" aria-label="Session ID" title="Current session ID (read-only until created)." />
+        <label class="fab-visually-hidden" for="fab-session-id">Session ID</label>
+        <input id="fab-session-id" name="session_id" class="fab-session-input" type="text" placeholder="Session ID" aria-label="Session ID" title="Current session ID (read-only until created)." />
         <button id="fab-open-session-link" class="fab-session-btn" type="button" data-action="open-session" title="Open public session link">↗</button>
       </div>
       <div class="fab-session-row fab-session-name-row">
-        <input id="fab-session-name" class="fab-session-input" type="text" placeholder="Session name" aria-label="Session name" title="Session display name (editable)." readonly />
+        <label class="fab-visually-hidden" for="fab-session-name">Session name</label>
+        <input id="fab-session-name" name="session_name" class="fab-session-input" type="text" placeholder="Session name" aria-label="Session name" title="Session display name (editable)." readonly />
         <button id="fab-edit-session-name" class="fab-session-btn fab-session-edit-btn" type="button" title="Edit session name">✎</button>
       </div>
       <div class="fab-session-row">
-        <select id="fab-session-project" class="fab-session-input" aria-label="Project" title="Project for active session (editable).">
+        <label class="fab-visually-hidden" for="fab-session-project">Project</label>
+        <select id="fab-session-project" name="session_project_id" class="fab-session-input" aria-label="Project" title="Project for active session (editable).">
           <option value="">Project</option>
         </select>
       </div>

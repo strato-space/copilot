@@ -14,7 +14,14 @@ import { AppError } from '../../middleware/error.js';
 import { normalizeTicketDbId } from '../../../utils/crmMiniappShared.js';
 import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
-import { TARGET_EDITABLE_TASK_STATUS_KEYS, isTaskStatusKey, toStoredTaskStatusValue } from '../../../services/taskStatusSurface.js';
+import {
+    TARGET_EDITABLE_TASK_STATUS_KEYS,
+    TARGET_TASK_STATUS_KEYS,
+    TARGET_TASK_STATUS_LABELS,
+    isTaskStatusKey,
+    normalizeTargetTaskStatusKey,
+    toStoredTaskStatusValue,
+} from '../../../services/taskStatusSurface.js';
 import {
     buildTaskAttachmentDownloadUrl,
     createTaskAttachmentFromUpload,
@@ -71,6 +78,85 @@ type PerformerPayload = {
     id: string;
     name: string;
     real_name: string;
+};
+
+type TicketsResponseMode = 'detail' | 'summary';
+type CrmTicketsProfileMode = TicketsResponseMode | 'status_counts';
+
+const estimateJsonPayloadBytes = (value: unknown): number => {
+    try {
+        return Buffer.byteLength(JSON.stringify(value), 'utf8');
+    } catch {
+        return -1;
+    }
+};
+
+const parseProfileFlag = (value: unknown): boolean => {
+    if (value === true) return true;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value !== 'string') return false;
+
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+};
+
+const resolveHeaderValue = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value);
+
+const resolveRequestId = (req: Request): string | undefined => {
+    const withRequestId = req as Request & {
+        id?: unknown;
+        requestId?: unknown;
+        request_id?: unknown;
+    };
+
+    const candidates = [
+        resolveHeaderValue(req.headers['x-request-id']),
+        resolveHeaderValue(req.headers['x-correlation-id']),
+        withRequestId.id,
+        withRequestId.requestId,
+        withRequestId.request_id,
+    ];
+
+    for (const candidate of candidates) {
+        const asText = toNonEmptyString(candidate);
+        if (asText) return asText;
+    }
+    return undefined;
+};
+
+const isRequestProfilingEnabled = (req: Request): boolean =>
+    parseProfileFlag(req.body?.profile) ||
+    parseProfileFlag(req.body?.request_profile) ||
+    parseProfileFlag(req.query?.profile) ||
+    parseProfileFlag(resolveHeaderValue(req.headers['x-profile'])) ||
+    parseProfileFlag(resolveHeaderValue(req.headers['x-crm-profile']));
+
+const logCrmTicketsProfile = ({
+    req,
+    endpoint,
+    responseMode,
+    startedAt,
+    rows,
+    payload,
+}: {
+    req: Request;
+    endpoint: '/api/crm/tickets' | '/api/crm/tickets/status-counts';
+    responseMode: CrmTicketsProfileMode;
+    startedAt: number;
+    rows: number;
+    payload: unknown;
+}): void => {
+    if (!isRequestProfilingEnabled(req)) return;
+
+    const requestId = resolveRequestId(req);
+    logger.info('[crm.tickets.profile]', {
+        endpoint,
+        ...(requestId ? { request_id: requestId } : {}),
+        response_mode: responseMode,
+        rows,
+        duration_ms: Date.now() - startedAt,
+        payload_bytes_estimate: estimateJsonPayloadBytes(payload),
+    });
 };
 
 const toNonEmptyString = (value: unknown): string | undefined => {
@@ -180,6 +266,31 @@ const buildWorkHoursLookupByTicketDbId = (): Record<string, unknown> => ({
     },
 });
 
+const buildWorkHoursSummaryLookupByTicketDbId = (): Record<string, unknown> => ({
+    $lookup: {
+        from: COLLECTIONS.WORK_HOURS,
+        let: { taskDbId: { $toString: '$_id' } },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $eq: ['$ticket_db_id', '$$taskDbId'],
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    total_hours: {
+                        $sum: { $ifNull: ['$work_hours', 0] },
+                    },
+                },
+            },
+        ],
+        as: 'work_hours_summary',
+    },
+});
+
 const buildCommentsLookupByTicket = (): Record<string, unknown> => ({
     $lookup: {
         from: COLLECTIONS.COMMENTS,
@@ -204,6 +315,51 @@ const buildCommentsLookupByTicket = (): Record<string, unknown> => ({
         as: 'comments_list',
     },
 });
+
+const buildCommentsSummaryLookupByTicket = (): Record<string, unknown> => ({
+    $lookup: {
+        from: COLLECTIONS.COMMENTS,
+        let: {
+            taskDbId: { $toString: '$_id' },
+            taskPublicId: '$id',
+        },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $or: [
+                            { $eq: ['$ticket_id', '$$taskDbId'] },
+                            { $eq: ['$ticket_db_id', '$$taskDbId'] },
+                            { $eq: ['$ticket_public_id', '$$taskPublicId'] },
+                        ],
+                    },
+                },
+            },
+            {
+                $count: 'comments_count',
+            },
+        ],
+        as: 'comments_summary',
+    },
+});
+
+const parseTicketsResponseMode = (rawMode: unknown): TicketsResponseMode | null => {
+    if (rawMode === undefined || rawMode === null) {
+        return 'detail';
+    }
+    if (typeof rawMode !== 'string') {
+        return null;
+    }
+
+    const normalizedMode = rawMode.trim().toLowerCase();
+    if (normalizedMode.length === 0 || normalizedMode === 'detail' || normalizedMode === 'full') {
+        return 'detail';
+    }
+    if (normalizedMode === 'summary' || normalizedMode === 'list') {
+        return 'summary';
+    }
+    return null;
+};
 
 const aggregateTicketByMatch = async ({
     db,
@@ -308,8 +464,14 @@ const normalizePerformer = async (db: Db, rawPerformer: unknown): Promise<Perfor
  * POST /api/crm/tickets
  */
 router.post('/', async (req: Request, res: Response) => {
+    const requestStartedAt = Date.now();
     try {
         const db = getDb();
+        const responseMode = parseTicketsResponseMode(req.body?.response_mode ?? req.body?.responseMode);
+        if (!responseMode) {
+            res.status(400).json({ error: 'response_mode must be one of: detail, summary' });
+            return;
+        }
         const rawStatuses = Array.isArray(req.body.statuses) ? req.body.statuses as string[] : [];
         const includeOlderDrafts = parseIncludeOlderDrafts(req.body?.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(req.body?.draft_horizon_days);
@@ -326,21 +488,125 @@ router.post('/', async (req: Request, res: Response) => {
             ? { task_status: { $in: exactStatusValues } }
             : { task_status: { $ne: TASK_STATUSES.ARCHIVE } };
 
-        let data = await db
-            .collection(COLLECTIONS.TASKS)
-            .aggregate([
+        const aggregatePipeline: Array<Record<string, unknown>> = [
+            {
+                $match: {
+                    is_deleted: { $ne: true },
+                    ...taskStatusQuery,
+                },
+            },
+        ];
+
+        if (responseMode === 'summary') {
+            aggregatePipeline.push(
                 {
-                    $match: {
-                        is_deleted: { $ne: true },
-                        ...taskStatusQuery,
+                    $lookup: {
+                        from: COLLECTIONS.PROJECTS,
+                        let: {
+                            projectId: '$project_id',
+                        },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $eq: ['$_id', '$$projectId'],
+                                    },
+                                },
+                            },
+                            {
+                                $project: {
+                                    _id: 1,
+                                    name: 1,
+                                },
+                            },
+                            {
+                                $limit: 1,
+                            },
+                        ],
+                        as: 'project_data_lookup',
                     },
                 },
                 {
-                    ...buildWorkHoursLookupByTicketDbId(),
+                    ...buildWorkHoursSummaryLookupByTicketDbId(),
                 },
                 {
-                    ...buildCommentsLookupByTicket(),
+                    ...buildCommentsSummaryLookupByTicket(),
                 },
+                {
+                    $addFields: {
+                        project_data: {
+                            $ifNull: [
+                                { $arrayElemAt: ['$project_data_lookup', 0] },
+                                {
+                                    $let: {
+                                        vars: {
+                                            embeddedProject: {
+                                                $cond: [
+                                                    { $isArray: '$project_data' },
+                                                    { $arrayElemAt: ['$project_data', 0] },
+                                                    '$project_data',
+                                                ],
+                                            },
+                                        },
+                                        in: {
+                                            $cond: [
+                                                { $eq: [{ $type: '$$embeddedProject' }, 'object'] },
+                                                {
+                                                    _id: '$$embeddedProject._id',
+                                                    name: '$$embeddedProject.name',
+                                                },
+                                                null,
+                                            ],
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                        total_hours: {
+                            $ifNull: [{ $arrayElemAt: ['$work_hours_summary.total_hours', 0] }, 0],
+                        },
+                        comments_count: {
+                            $ifNull: [{ $arrayElemAt: ['$comments_summary.comments_count', 0] }, 0],
+                        },
+                        attachments_count: {
+                            $cond: [{ $isArray: '$attachments' }, { $size: '$attachments' }, 0],
+                        },
+                    },
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        id: 1,
+                        name: 1,
+                        description: 1,
+                        priority: 1,
+                        task_status: 1,
+                        performer: 1,
+                        project: 1,
+                        project_id: 1,
+                        project_data: 1,
+                        task_type: 1,
+                        epic: 1,
+                        estimated_time: 1,
+                        shipment_date: 1,
+                        status_update_checked: 1,
+                        last_status_update: 1,
+                        notion_url: 1,
+                        notifications: 1,
+                        created_at: 1,
+                        updated_at: 1,
+                        created_by: 1,
+                        created_by_name: 1,
+                        source_kind: 1,
+                        discussion_count: 1,
+                        total_hours: 1,
+                        comments_count: 1,
+                        attachments_count: 1,
+                    },
+                }
+            );
+        } else {
+            aggregatePipeline.push(
                 {
                     $lookup: {
                         from: COLLECTIONS.PROJECTS,
@@ -349,8 +615,16 @@ router.post('/', async (req: Request, res: Response) => {
                         as: 'project_data',
                     },
                 },
-            ])
-            .toArray();
+                {
+                    ...buildWorkHoursLookupByTicketDbId(),
+                },
+                {
+                    ...buildCommentsLookupByTicket(),
+                }
+            );
+        }
+
+        let data = await db.collection(COLLECTIONS.TASKS).aggregate(aggregatePipeline).toArray();
 
         if (draftHorizonDays) {
             data = await filterVoiceDerivedDraftsByRecency({
@@ -359,6 +633,26 @@ router.post('/', async (req: Request, res: Response) => {
                 includeOlderDrafts,
                 draftHorizonDays,
             });
+        }
+
+        if (responseMode === 'summary') {
+            data = data.map((ticket) => ({
+                ...ticket,
+                total_hours: typeof ticket.total_hours === 'number' ? ticket.total_hours : 0,
+                comments_count: typeof ticket.comments_count === 'number' ? ticket.comments_count : 0,
+                attachments_count: typeof ticket.attachments_count === 'number' ? ticket.attachments_count : 0,
+            }));
+
+            logCrmTicketsProfile({
+                req,
+                endpoint: '/api/crm/tickets',
+                responseMode,
+                startedAt: requestStartedAt,
+                rows: data.length,
+                payload: data,
+            });
+            res.status(200).json(data);
+            return;
         }
 
         // Get project groups and customers for enrichment
@@ -413,13 +707,104 @@ router.post('/', async (req: Request, res: Response) => {
                     (total: number, wh: { work_hours: number }) => total + wh.work_hours,
                     0
                 ),
+                comments_count: Array.isArray(t.comments_list) ? t.comments_list.length : 0,
+                attachments_count: Array.isArray((t as Record<string, unknown>).attachments)
+                    ? ((t as Record<string, unknown>).attachments as unknown[]).length
+                    : 0,
                 attachments: ticketId ? buildCrmAttachmentViews(ticketId, (t as Record<string, unknown>).attachments) : [],
             };
         });
 
+        logCrmTicketsProfile({
+            req,
+            endpoint: '/api/crm/tickets',
+            responseMode,
+            startedAt: requestStartedAt,
+            rows: data.length,
+            payload: data,
+        });
         res.status(200).json(data);
     } catch (error) {
         logger.error('Error getting tickets:', error);
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/status-counts', async (req: Request, res: Response) => {
+    const requestStartedAt = Date.now();
+    try {
+        const db = getDb();
+        const includeOlderDrafts = parseIncludeOlderDrafts(req.body?.include_older_drafts);
+        const draftHorizonDays = parseDraftHorizonDays(req.body?.draft_horizon_days);
+
+        const aggregateRows = await db
+            .collection(COLLECTIONS.TASKS)
+            .aggregate([
+                {
+                    $match: {
+                        is_deleted: { $ne: true },
+                        task_status: {
+                            $in: TARGET_TASK_STATUS_KEYS.map((statusKey) => toStoredTaskStatusValue(statusKey)),
+                        },
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$task_status',
+                        count: { $sum: 1 },
+                    },
+                },
+            ])
+            .toArray();
+
+        const counts = new Map<(typeof TARGET_TASK_STATUS_KEYS)[number], number>(
+            TARGET_TASK_STATUS_KEYS.map((statusKey) => [statusKey, 0])
+        );
+
+        for (const row of aggregateRows) {
+            const statusKey = normalizeTargetTaskStatusKey({ task_status: row._id });
+            if (!statusKey) continue;
+            counts.set(statusKey, Number(row.count) || 0);
+        }
+
+        if (draftHorizonDays) {
+            const draftTasks = await db
+                .collection(COLLECTIONS.TASKS)
+                .find({
+                    is_deleted: { $ne: true },
+                    task_status: TASK_STATUSES.DRAFT_10,
+                })
+                .toArray();
+
+            const visibleDrafts = await filterVoiceDerivedDraftsByRecency({
+                db,
+                tasks: draftTasks as Array<Record<string, unknown>>,
+                includeOlderDrafts,
+                draftHorizonDays,
+            });
+
+            counts.set('DRAFT_10', visibleDrafts.length);
+        }
+
+        const responsePayload = {
+            status_counts: TARGET_TASK_STATUS_KEYS.map((statusKey) => ({
+                status_key: statusKey,
+                label: TARGET_TASK_STATUS_LABELS[statusKey],
+                count: counts.get(statusKey) ?? 0,
+            })),
+        };
+
+        logCrmTicketsProfile({
+            req,
+            endpoint: '/api/crm/tickets/status-counts',
+            responseMode: 'status_counts',
+            startedAt: requestStartedAt,
+            rows: responsePayload.status_counts.length,
+            payload: responsePayload,
+        });
+        res.status(200).json(responsePayload);
+    } catch (error) {
+        logger.error('Error getting ticket status counts:', error);
         res.status(500).json({ error: String(error) });
     }
 });

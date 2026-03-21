@@ -24,7 +24,7 @@ Use this as a fast guardrail before implementing anything:
   - accepted rows must not be soft-deleted by possible-task cleanup,
   - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
   - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
-  - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'tasks' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
+  - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 
@@ -105,6 +105,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - duplicate top summary widgets with the same lifecycle labels/counts are not part of the target contract,
   - the `Draft` tab still renders the orphan/session-grouped possible-task backlog above the CRM table as presentation-only grouping,
   - accepted Voice tasks are treated as `Ready` work, not as a separate `Backlog` semantic bucket.
+- OperOps Draft visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default list/count surface is `7d`, while `∞` means an unbounded draft read.
+- OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open.
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
@@ -203,7 +205,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Deleting the last active categorization row cascades deletion of the linked transcript segment with compensating rollback when log persistence fails.
 - Image attachments in categorization are rendered only in the Materials column; image-only blocks remain visible without image-as-text rows.
 - Session-scoped taskflow parity is now canonical across backend + Voice UI + mcp@voice:
-  - backend route `POST /api/voicebot/session_tasks` exposes canonical draft/task/codex buckets, with draft reads served as `{ session_id, bucket: 'draft' }`,
+  - backend route `POST /api/voicebot/session_tasks` exposes canonical `Draft/Ready+/Codex` buckets only (no lowercase aliases/fallback), with draft reads served as `{ session_id, bucket: 'Draft' }`,
   - mutations emit `session_update.taskflow_refresh` flags for `possible_tasks` / `tasks` / `codex`,
   - possible-task saves can carry `refresh_correlation_id` and `refresh_clicked_at_ms`; backend persists/logs these values and echoes them in `session_update.taskflow_refresh` for end-to-end latency diagnostics,
   - frontend consumes those hints with additive refresh tokens so the unified `Задачи` surface and `Codex` refresh without manual reload,
@@ -231,6 +233,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - backend route `POST /api/voicebot/save_summary` validates `{ session_id, md_text }` and writes `summary_md_text` + `summary_saved_at`,
   - backend emits realtime `session_update.taskflow_refresh.summary`,
   - frontend summary panel (`Summary`) supports edit/save/conflict states bound to those canonical fields.
+- Session-title generation is fail-fast and traceable:
+  - frontend `generate_session_title` uses stage-level timeouts and `finally` cleanup so `Генерирую заголовок` cannot spin forever,
+  - backend MCP proxy logs `generate_session_title` correlations with `requestId` + `session_id` for incident triage.
 - Done-flow summarize orchestration now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys to session log.
 - TS categorization/create-tasks chain treats non-text placeholders (`image`, `[Image]`, `[Screenshot]`) as non-blocking: rows are marked processed with empty categorization, and `CREATE_TASKS` can finalize without waiting on uncategorizable chunks.
 - Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).

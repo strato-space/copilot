@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Form, Input, Button, Select, DatePicker, InputNumber, Divider, message } from 'antd';
+import { Form, Input, Button, Select, DatePicker, InputNumber, Divider, message, Spin } from 'antd';
 import { ArrowLeftOutlined, CheckOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -52,6 +52,9 @@ const CRMCreateTicket = () => {
         performers,
         projects,
         fetchTickets,
+        ensureTicketDetails,
+        isTicketDetailLoaded,
+        isTicketDetailLoading,
         createTicket,
         editTicketData,
         task_types,
@@ -63,6 +66,9 @@ const CRMCreateTicket = () => {
     const { customers, projectGroups, projects: projectsFromStore } = useProjectsStore();
     const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
     const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+    const isDetailLoading =
+        Boolean(editingTicket?._id && !isTicketDetailLoaded(editingTicket)) ||
+        isTicketDetailLoading(editingTicket ?? null);
 
     // Функция для группировки проектов по project groups
     const getGroupedProjects = () => {
@@ -123,6 +129,23 @@ const CRMCreateTicket = () => {
         }
         setAttachments(Array.isArray(editingTicket?.attachments) ? editingTicket.attachments : []);
     }, [projects.length, fetchTickets, editingTicket, form, setEditTiketProject]);
+
+    useEffect(() => {
+        if (!editingTicket?._id) return;
+        if (isTicketDetailLoaded(editingTicket)) return;
+
+        const requestedTicketId = toIdString(editingTicket._id) ?? toIdString(editingTicket.id);
+        if (!requestedTicketId) return;
+
+        void ensureTicketDetails(editingTicket).then((ticket) => {
+            if (!ticket) return;
+            const current = useCRMStore.getState().editingTicket;
+            if (!current) return;
+            const currentTicketId = toIdString(current._id) ?? toIdString(current.id);
+            if (currentTicketId !== requestedTicketId) return;
+            setEditingTicket(ticket);
+        });
+    }, [editingTicket, ensureTicketDetails, isTicketDetailLoaded, setEditingTicket]);
 
     const projectEpics = useMemo(
         () => (editingTicket ? getProjectEpics(editTiketProject ?? '').filter((e) => !e.is_deleted) : []),
@@ -232,7 +255,8 @@ const CRMCreateTicket = () => {
     };
 
     return (
-        <div className="text-black flex flex-col pt-3">
+        <Spin spinning={isDetailLoading}>
+            <div className="text-black flex flex-col pt-3">
             <div className="flex justify-between items-center gap-3">
                 <div className="flex gap-4">
                     <ArrowLeftOutlined
@@ -247,15 +271,16 @@ const CRMCreateTicket = () => {
                         shape="circle"
                         danger
                         icon={<DeleteOutlined />}
+                        disabled={isDetailLoading}
                         onClick={() => {
                             if (editingTicket._id) deleteTicket(editingTicket._id);
                             setEditingTicket(null);
                         }}
                     />
-                    <Button type="primary" shape="circle" icon={<CheckOutlined />} onClick={() => form.submit()} />
+                    <Button type="primary" shape="circle" icon={<CheckOutlined />} disabled={isDetailLoading} onClick={() => form.submit()} />
                 </div>
             </div>
-            <div className="flex flex-col w-full mt-3">
+                <div className="flex flex-col w-full mt-3">
                 <Form
                     form={form}
                     layout="vertical"
@@ -265,6 +290,7 @@ const CRMCreateTicket = () => {
                         task_type: initialTaskType,
                     }}
                     onFinish={(values) => {
+                        if (isDetailLoading) return;
                         // Очищаем пустые строки, заменяя их на null
                         const cleanedValues = Object.fromEntries(
                             Object.entries(values).map(([key, value]) => {
@@ -511,8 +537,9 @@ const CRMCreateTicket = () => {
                         </div>
                     </div>
                 </Form>
+                </div>
             </div>
-        </div>
+        </Spin>
     );
 };
 

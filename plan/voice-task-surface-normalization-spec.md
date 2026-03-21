@@ -6,7 +6,7 @@
 - Plan status: implemented contract; production data aligned; live Mongo rechecked and legacy CREATE_TASKS payload migration applied on 2026-03-21.
 - Canonical design epic: `copilot-cux2`
 - Completed execution epics: `copilot-ojxy`, `copilot-kdqs`
-- Known follow-up bug: `copilot-f6z4` (`session_tasks(bucket='tasks')` leaking `DRAFT_10` rows on session-scoped path is a contract violation, not accepted behavior)
+- Known follow-up bug: `copilot-f6z4` (`session_tasks(bucket='Ready+')` leaking `DRAFT_10` rows on session-scoped path is a contract violation, not accepted behavior)
 - Mongo re-check (2026-03-21): live `automation_tasks` still stores status labels (`Draft`, `Ready`, `Progress 10`, `Review / Ready`, `Done`, `Archive`); key-first semantics are restored in runtime via `TASK_STATUSES` and `resolveTaskStatusKey`, not by raw key persistence in Mongo.
 
 **Статус документа**: implemented contract; production data aligned; prod verified
@@ -28,7 +28,7 @@
 - `Возможные задачи` не являются отдельной storage-сущностью;
 - все task surfaces работают поверх одной коллекции `automation_tasks`;
 - различие между draft и accepted rows задается главным образом `task_status`;
-- `voice.session_tasks(session_id, bucket="draft")` — это canonical draft read path и он должен читать только strict `DRAFT_10` rows;
+- `voice.session_tasks(session_id, bucket="Draft")` — это canonical draft read path и он должен читать только strict `DRAFT_10` rows;
 - `source_kind` — вспомогательный provenance/runtime marker, а не главный semantic discriminator;
 - `codex_task` — отдельный тип taskflow, а не атрибут различения между draft и accepted rows;
 - `PERIODIC` в target ontology выводится из lifecycle dictionary и переносится в отдельную recurrence dimension.
@@ -209,15 +209,15 @@ Migration implication:
 Отсюда следует:
 - `possible_tasks` не является отдельной storage-сущностью;
 - `crm_tickets(session_id=...)` — accepted-task view над той же коллекцией;
-- `session_tasks(session_id, bucket="tasks")` — session-scoped accepted-only task view над той же коллекцией;
+- `session_tasks(session_id, bucket="Ready+")` — session-scoped accepted-only task view над той же коллекцией;
 - `voicebot/codex_tasks` — codex-only **session-scoped** view над той же коллекцией;
 - OperOps `Codex` в целом не должен в этой спеke описываться как Mongo-only view над `automation_tasks`, потому что current product surface там backed by `bd` CLI / issue tracker, а не только общей task collection;
-- `session_tasks(session_id, bucket="draft")` нельзя сводить к session payload fallback; он должен читаться только из canonical draft rows по `task_status = DRAFT_10`.
-- `session_tasks(session_id, bucket="tasks")` не должен возвращать `DRAFT_10`;
-- если accepted rows для session отсутствуют, `session_tasks(session_id, bucket="tasks")` должен возвращать пустой список, а не fallback to draft rows.
+- `session_tasks(session_id, bucket="Draft")` нельзя сводить к session payload fallback; он должен читаться только из canonical draft rows по `task_status = DRAFT_10`.
+- `session_tasks(session_id, bucket="Ready+")` не должен возвращать `DRAFT_10`;
+- если accepted rows для session отсутствуют, `session_tasks(session_id, bucket="Ready+")` должен возвращать пустой список, а не fallback to draft rows.
 - raw storage linkage к voice session сегодня может идти через `source_ref`, `external_ref`, `source_data.session_id` и `source_data.voice_sessions[]`; normalized `discussion_sessions[]` useful for reads, но не является единственным storage predicate.
 
-### 2.3 Контракт `voice.session_tasks(session_id, bucket="draft")`
+### 2.3 Контракт `voice.session_tasks(session_id, bucket="Draft")`
 
 #### Storage semantics
 
@@ -241,9 +241,9 @@ Behavior-wise:
 
 В этой нормализации:
 - `voice.crm_tickets(session_id)` = accepted-only session task view
-- `voice.session_tasks(session_id, bucket="draft")` = strict canonical draft baseline
+- `voice.session_tasks(session_id, bucket="Draft")` = strict canonical draft baseline
 
-### 2.4 Контракт `voice.session_tasks(session_id, bucket="tasks")`
+### 2.4 Контракт `voice.session_tasks(session_id, bucket="Ready+")`
 
 #### Storage semantics
 
@@ -258,11 +258,11 @@ Behavior-wise:
 - route может возвращать только accepted lifecycle rows, связанных с данной session;
 - bucket не должен fallback’иться в draft rows, session payload compatibility data или другие provenance-based substitutes;
 - если accepted rows отсутствуют, route должен возвращать `[]`;
-- bucket не должен дублировать `bucket="draft"` ни по составу rows, ни по lifecycle semantics.
+- bucket не должен дублировать `bucket="Draft"` ни по составу rows, ни по lifecycle semantics.
 
 #### Allowed status keys
 
-Для `bucket="tasks"` допустимы только:
+Для `bucket="Ready+"` допустимы только:
 - `READY_10`
 - `PROGRESS_10`
 - `REVIEW_10`
@@ -271,7 +271,7 @@ Behavior-wise:
 
 #### Forbidden status keys
 
-Для `bucket="tasks"` недопустимы:
+Для `bucket="Ready+"` недопустимы:
 - `DRAFT_10`
 - любые legacy draft/new aliases, нормализуемые в `DRAFT_10`
 
@@ -279,7 +279,7 @@ Behavior-wise:
 
 Observed runtime bug:
 - `copilot-f6z4`
-- symptom: `session_tasks(bucket="tasks")` on session-scoped path may leak `DRAFT_10` rows
+- symptom: `session_tasks(bucket="Ready+")` on session-scoped path may leak `DRAFT_10` rows
 - classification: implementation bug / contract violation
 - status: must be fixed in backend/client path; spec does not permit this behavior
 
@@ -637,9 +637,9 @@ Filter:
 ### 7.4 Вывод
 
 Из этого следует:
-- `voicebot/session_tasks(bucket="draft")` / `voice.session_tasks(session_id, bucket="draft")` остаётся canonical draft read path;
-- `voicebot/session_tasks(bucket="tasks")` / `voice.session_tasks(session_id, bucket="tasks")` — canonical accepted-only session task bucket;
-- появление `DRAFT_10` inside `bucket="tasks"` является contract violation, а не допустимым compatibility mode;
+- `voicebot/session_tasks(bucket="Draft")` / `voice.session_tasks(session_id, bucket="Draft")` остаётся canonical draft read path;
+- `voicebot/session_tasks(bucket="Ready+")` / `voice.session_tasks(session_id, bucket="Ready+")` — canonical accepted-only session task bucket;
+- появление `DRAFT_10` inside `bucket="Ready+"` является contract violation, а не допустимым compatibility mode;
 - draft и accepted surfaces должны различаться exact status/filter semantics, а не session-payload fallback, provenance hints или разной target-онтологией вкладок.
 
 ## 8. OperOps tab normalization
@@ -783,25 +783,25 @@ Special grouping допустима только как presentation layer:
   - transcript + metadata
 - `voice.crm_tickets(session_id=...)`
   - broader accepted/session-linked reporting surface
-- `voice.session_tasks(session_id, bucket="draft")`
+- `voice.session_tasks(session_id, bucket="Draft")`
   - strict canonical draft route for a session
-- `voice.session_tasks(session_id, bucket="tasks")`
+- `voice.session_tasks(session_id, bucket="Ready+")`
   - strict canonical accepted-only session task bucket
 
 ### 10.2 Нормализация mental model
 
 Новая спека закрепляет:
 
-- `voice.session_tasks(session_id, bucket="draft")` = strict canonical draft route
-- `voice.session_tasks(session_id, bucket="tasks")` = strict canonical accepted-only session task bucket
+- `voice.session_tasks(session_id, bucket="Draft")` = strict canonical draft route
+- `voice.session_tasks(session_id, bucket="Ready+")` = strict canonical accepted-only session task bucket
 - `voice.crm_tickets(session_id)` = secondary accepted/session-linked reporting surface
 
 ### 10.3 Current strict contract
 
 Сейчас:
-- `voice.session_tasks(session_id, bucket="draft")` должен читать только canonical `DRAFT_10` rows;
-- `voice.session_tasks(session_id, bucket="tasks")` должен читать только accepted rows (`READY_10`, `PROGRESS_10`, `REVIEW_10`, `DONE_10`, `ARCHIVE`);
-- `voice.session_tasks(session_id, bucket="tasks")` не должен возвращать `DRAFT_10`;
+- `voice.session_tasks(session_id, bucket="Draft")` должен читать только canonical `DRAFT_10` rows;
+- `voice.session_tasks(session_id, bucket="Ready+")` должен читать только accepted rows (`READY_10`, `PROGRESS_10`, `REVIEW_10`, `DONE_10`, `ARCHIVE`);
+- `voice.session_tasks(session_id, bucket="Ready+")` не должен возвращать `DRAFT_10`;
 - `voice.crm_tickets(session_id)` должен читать только canonical accepted/session-linked rows как reporting surface;
 - fallback к `processors_data.CREATE_TASKS.data` и `agent_results.create_tasks` не является частью target contract.
 
@@ -840,7 +840,7 @@ Voice session может войти в operational bucket только если:
 Целевая модель следующей волны:
 - отдельная вкладка `Возможные задачи` не нужна как самостоятельная target semantics;
 - draft rows показываются как обычный status filter `DRAFT_10` внутри общей task surface `Задачи`;
-- `voice.session_tasks(session_id, bucket="draft")` при этом сохраняется как strict canonical draft route;
+- `voice.session_tasks(session_id, bucket="Draft")` при этом сохраняется как strict canonical draft route;
 - `PERIODIC` уходит из target lifecycle ontology в отдельную recurrence dimension.
 - lifecycle filters внутри `Задачи` и OperOps используют одну и ту же status axis:
   - `Draft`
@@ -868,9 +868,9 @@ Voice session может войти в operational bucket только если:
 
 ### Session scope
 - `voice.crm_tickets(session_id)` возвращает только accepted rows
-- `voice.session_tasks(session_id, bucket="draft")` описан как strict canonical draft baseline без session-payload fallback
-- `voice.session_tasks(session_id, bucket="tasks")` описан как strict accepted-only bucket и не может возвращать `DRAFT_10`
-- если `bucket="tasks"` возвращает `DRAFT_10`, это bug (`copilot-f6z4`), а не допустимый compatibility path
+- `voice.session_tasks(session_id, bucket="Draft")` описан как strict canonical draft baseline без session-payload fallback
+- `voice.session_tasks(session_id, bucket="Ready+")` описан как strict accepted-only bucket и не может возвращать `DRAFT_10`
+- если `bucket="Ready+"` возвращает `DRAFT_10`, это bug (`copilot-f6z4`), а не допустимый compatibility path
 
 ### Label / key / value wording
 - user-facing tables и reports показывают labels
@@ -969,7 +969,7 @@ Preferred replacement read surface:
 - `voice.session_tasks(session_id, bucket, status_keys=None)`
 
 Result:
-- canonical draft reads now go through `voice.session_tasks(session_id, bucket="draft")`
+- canonical draft reads now go through `voice.session_tasks(session_id, bucket="Draft")`
 - counts go through `voice.session_task_counts(session_id)`
 - `/home/tools/voice` no longer exposes `session_possible_tasks`
 - copilot backend no longer exposes `POST /voicebot/possible_tasks`

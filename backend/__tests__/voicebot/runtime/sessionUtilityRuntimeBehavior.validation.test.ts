@@ -836,7 +836,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.error).toBe('Session not found');
   });
 
-  it('session_tasks(draft) returns an empty list when no canonical draft master rows exist', async () => {
+  it('session_tasks(Draft) returns an empty list when no canonical draft master rows exist', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -873,14 +873,14 @@ describe('Voicebot utility routes runtime behavior', () => {
     const app = buildApp();
     const response = await request(app)
       .post('/voicebot/session_tasks')
-      .send({ session_id: sessionId.toHexString(), bucket: 'draft' });
+      .send({ session_id: sessionId.toHexString(), bucket: 'Draft' });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.items).toEqual([]);
   });
 
-  it('session_tasks(draft) prefers automation_tasks master rows linked to the voice session', async () => {
+  it('session_tasks(Draft) prefers automation_tasks master rows linked to the voice session', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -956,7 +956,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     const app = buildApp();
     const response = await request(app)
       .post('/voicebot/session_tasks')
-      .send({ session_id: sessionId.toHexString(), bucket: 'draft' });
+      .send({ session_id: sessionId.toHexString(), bucket: 'Draft' });
 
     expect(response.status).toBe(200);
     expect(response.body.items).toEqual(
@@ -981,7 +981,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
-  it('session_tasks(accepted) excludes stale voice possible-task rows from Unknown visibility', async () => {
+  it('session_tasks(Ready+) excludes stale voice possible-task rows from Unknown visibility', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -1016,6 +1016,20 @@ describe('Voicebot utility routes runtime behavior', () => {
         }
 
         return [
+          {
+            _id: new ObjectId(),
+            row_id: 'draft-row',
+            id: 'draft-row',
+            name: 'Draft row must stay hidden',
+            task_status: TASK_STATUSES.DRAFT_10,
+            source: 'VOICE_BOT',
+            source_kind: 'voice_possible_task',
+            source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: {
+              session_id: sessionId.toHexString(),
+              refresh_state: 'active',
+            },
+          },
           {
             _id: new ObjectId(),
             row_id: 'ready-row',
@@ -1054,7 +1068,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     const app = buildApp();
     const response = await request(app)
       .post('/voicebot/session_tasks')
-      .send({ session_id: sessionId.toHexString(), bucket: 'tasks' });
+      .send({ session_id: sessionId.toHexString(), bucket: 'Ready+' });
 
     expect(response.status).toBe(200);
     expect(response.body.items).toEqual([
@@ -1066,9 +1080,98 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.items).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ row_id: 'stale-backlog' })])
     );
+    expect(response.body.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'draft-row' })])
+    );
   });
 
-  it('session_tasks(draft) keeps a stale row visible only when no active row with the same row_id exists', async () => {
+  it('session_tasks(Ready+) strips DRAFT_10 from explicit status_keys, including UNKNOWN reads', async () => {
+    const sessionId = new ObjectId();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime accepted explicit status keys',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+    }));
+
+    const tasksFind = jest.fn(() => ({
+      toArray: async () => [
+        {
+          _id: new ObjectId(),
+          row_id: 'draft-row',
+          id: 'draft-row',
+          name: 'Should be hidden draft',
+          task_status: TASK_STATUSES.DRAFT_10,
+          source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        },
+        {
+          _id: new ObjectId(),
+          row_id: 'ready-row',
+          id: 'ready-row',
+          name: 'Ready row',
+          task_status: TASK_STATUSES.READY_10,
+          source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        },
+        {
+          _id: new ObjectId(),
+          row_id: 'unknown-row',
+          id: 'unknown-row',
+          name: 'Unknown row',
+          task_status: 'Backlog',
+          source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        },
+      ],
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: tasksFind,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        bucket: 'Ready+',
+        status_keys: ['DRAFT_10', 'READY_10', 'UNKNOWN'],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status_keys).toEqual(['READY_10', 'UNKNOWN']);
+    expect(response.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'ready-row', task_status: TASK_STATUSES.READY_10 }),
+        expect.objectContaining({ row_id: 'unknown-row', task_status: 'Backlog' }),
+      ])
+    );
+    expect(response.body.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'draft-row' })])
+    );
+  });
+
+  it('session_tasks(Draft) keeps a stale row visible only when no active row with the same row_id exists', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -1154,7 +1257,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     const app = buildApp();
     const response = await request(app)
       .post('/voicebot/session_tasks')
-      .send({ session_id: sessionId.toHexString(), bucket: 'draft' });
+      .send({ session_id: sessionId.toHexString(), bucket: 'Draft' });
 
     expect(response.status).toBe(200);
     expect(response.body.items).toHaveLength(2);
@@ -1169,7 +1272,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
-  it('session_tasks(draft) keeps session-local linked drafts visible inside the task discussion window even with draft_horizon_days', async () => {
+  it('session_tasks(Draft) keeps session-local linked drafts visible inside the task discussion window even with draft_horizon_days', async () => {
     const sessionId = new ObjectId();
     const oldIso = new Date('2025-01-01T00:00:00.000Z').toISOString();
     const sessionFindOne = jest.fn(async () => ({
@@ -1252,7 +1355,7 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     const horizonResponse = await request(app)
       .post('/voicebot/session_tasks')
-      .send({ session_id: sessionId.toHexString(), bucket: 'draft', draft_horizon_days: 30 });
+      .send({ session_id: sessionId.toHexString(), bucket: 'Draft', draft_horizon_days: 30 });
 
     expect(horizonResponse.status).toBe(200);
     expect(horizonResponse.body.items).toEqual([
@@ -1267,7 +1370,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       .post('/voicebot/session_tasks')
       .send({
         session_id: sessionId.toHexString(),
-        bucket: 'draft',
+        bucket: 'Draft',
         draft_horizon_days: 30,
         include_older_drafts: true,
       });

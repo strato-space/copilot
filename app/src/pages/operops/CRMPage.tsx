@@ -20,7 +20,7 @@ import { isPerformerSelectable } from '../../utils/performerLifecycle';
 import { parseCreateTasksMcpResult } from '../../utils/voicePossibleTasks';
 import type { Performer, Ticket } from '../../types/crm';
 import { resolveTaskProjectName, resolveTaskSourceInfo } from './taskPageUtils';
-import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTargetTaskStatusKey } from '../../utils/taskStatusSurface';
+import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
 
 interface VoiceSession {
     _id: string;
@@ -45,6 +45,15 @@ interface VoiceTask {
     priority?: string;
     upload_date?: string;
     dialogue_reference?: string;
+}
+
+interface TicketStatusCountEntry {
+    status_key?: string;
+    count?: number;
+}
+
+interface TicketStatusCountsResponse {
+    status_counts?: TicketStatusCountEntry[];
 }
 
 const { Text } = Typography;
@@ -89,6 +98,15 @@ const IN_PROGRESS_STATUS_KEYS: TaskStatusKey[] = ['PROGRESS_10'];
 const REVIEW_STATUS_KEYS: TaskStatusKey[] = ['REVIEW_10'];
 const DONE_STATUS_KEYS: TaskStatusKey[] = ['DONE_10'];
 const ARCHIVE_STATUS_KEYS: TaskStatusKey[] = ['ARCHIVE'];
+const DEFAULT_DRAFT_HORIZON_DAYS = 7;
+const DRAFT_HORIZON_OPTIONS = [
+    { value: 1, label: '1d' },
+    { value: 7, label: '7d' },
+    { value: 14, label: '14d' },
+    { value: 30, label: '30d' },
+    { value: 'infinity', label: '∞' },
+] as const;
+type DraftHorizonValue = (typeof DRAFT_HORIZON_OPTIONS)[number]['value'];
 
 const STATUS_TAB_KEYS: OperOpsStatusTabKey[] = ['draft', 'ready', 'in_progress', 'review', 'done', 'archive', 'codex'];
 
@@ -239,7 +257,7 @@ interface CRMPageUiState {
 
 const CRMPage = () => {
     const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew } = useCRMStore();
-    const { tickets, projects, projectsData, performers, fetchDictionary, fetchTickets, tickets_updated_at } = useKanbanStore();
+    const { projects, projectsData, performers, fetchDictionary, tickets_updated_at } = useKanbanStore();
     const { customers, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
     const { sendMCPCall, waitForCompletion, waitForConnected, connectionState } = useMCPRequestStore();
@@ -248,6 +266,14 @@ const CRMPage = () => {
     useCRMSocket();
 
     const [voiceSessions, setVoiceSessions] = useState<VoiceSession[]>([]);
+    const [statusCounts, setStatusCounts] = useState<Record<TaskStatusKey, number>>({
+        DRAFT_10: 0,
+        READY_10: 0,
+        PROGRESS_10: 0,
+        REVIEW_10: 0,
+        DONE_10: 0,
+        ARCHIVE: 0,
+    });
     const [uiState, setUiState] = useState<CRMPageUiState>({
         voiceLoading: false,
         reportLoading: false,
@@ -256,6 +282,9 @@ const CRMPage = () => {
     const [restartCreateTasksId, setRestartCreateTasksId] = useState<string | null>(null);
     const [reportModalKind, setReportModalKind] = useState<ReportModalKind>(null);
     const [reportResult, setReportResult] = useState<ReportResult | null>(null);
+    const [kanbanRefreshToken, setKanbanRefreshToken] = useState<number>(0);
+    const [draftHorizonDays, setDraftHorizonDays] = useState<DraftHorizonValue>(DEFAULT_DRAFT_HORIZON_DAYS);
+    const resolvedDraftHorizonDays = draftHorizonDays === 'infinity' ? undefined : draftHorizonDays;
     const [jiraForm] = Form.useForm();
     const [performerForm] = Form.useForm();
     const voiceLoading = uiState.voiceLoading;
@@ -288,8 +317,13 @@ const CRMPage = () => {
     const fetchVoiceSessions = useCallback(async () => {
         if (!isAuth) return;
         patchUiState({ voiceLoading: true });
+        const requestPayload = resolvedDraftHorizonDays !== undefined ? { draft_horizon_days: resolvedDraftHorizonDays } : {};
         try {
-            const data = await api_request<VoiceSession[]>('voicebot/sessions_in_crm', {}, { silent: true });
+            const data = await api_request<VoiceSession[]>(
+                'voicebot/sessions_in_crm',
+                requestPayload,
+                { silent: true }
+            );
             setVoiceSessions(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Ошибка при загрузке Voice сессий:', error);
@@ -297,7 +331,35 @@ const CRMPage = () => {
         } finally {
             patchUiState({ voiceLoading: false });
         }
-    }, [isAuth]);
+    }, [api_request, isAuth, resolvedDraftHorizonDays]);
+
+    const fetchStatusCounts = useCallback(async () => {
+        if (!isAuth) return;
+        const requestPayload = resolvedDraftHorizonDays !== undefined ? { draft_horizon_days: resolvedDraftHorizonDays } : {};
+        try {
+            const response = await api_request<TicketStatusCountsResponse>(
+                'tickets/status-counts',
+                requestPayload,
+                { silent: true }
+            );
+            const nextCounts: Record<TaskStatusKey, number> = {
+                DRAFT_10: 0,
+                READY_10: 0,
+                PROGRESS_10: 0,
+                REVIEW_10: 0,
+                DONE_10: 0,
+                ARCHIVE: 0,
+            };
+            for (const entry of response?.status_counts ?? []) {
+                const statusKey = typeof entry?.status_key === 'string' ? entry.status_key : '';
+                if (!TARGET_TASK_STATUS_KEYS.includes(statusKey as TaskStatusKey)) continue;
+                nextCounts[statusKey as TaskStatusKey] = Number(entry?.count) || 0;
+            }
+            setStatusCounts(nextCounts);
+        } catch (error) {
+            console.error('Ошибка при загрузке status counts:', error);
+        }
+    }, [api_request, isAuth, resolvedDraftHorizonDays]);
 
     const buildTranscriptionText = (messages: Array<Record<string, unknown>>): string => {
         return messages
@@ -454,13 +516,13 @@ const CRMPage = () => {
         const counts: Record<string, number> = {};
         for (const [widget, statusKeys] of Object.entries(STATUS_WIDGET_BUCKETS)) {
             counts[widget] = _.reduce(
-                tickets ?? [],
-                (result, ticket) => (matchesTargetTaskStatusKeys(ticket.task_status, statusKeys as readonly TaskStatusKey[]) ? result + 1 : result),
+                statusKeys as readonly TaskStatusKey[],
+                (result, statusKey) => result + (statusCounts[statusKey] ?? 0),
                 0
             );
         }
         return counts;
-    }, [tickets]);
+    }, [statusCounts]);
 
     const renderMainTabLabel = useCallback((label: string, count?: number) => (
         <span className="inline-flex items-center gap-1.5">
@@ -501,30 +563,29 @@ const CRMPage = () => {
         const performerFilter = toFilterArray(savedFilters.performer);
         const epicFilter = toFilterArray(savedFilters.epic);
         const titleFilter = toFilterArray(savedFilters.title);
-        const sourceRefFilter = toFilterArray(savedFilters.source_ref);
         return {
             task_status: activeTabDefinition.taskStatuses,
             ...(projectFilter ? { project: projectFilter } : {}),
             ...(performerFilter ? { performer: performerFilter } : {}),
             ...(epicFilter ? { epic: epicFilter } : {}),
             ...(titleFilter ? { title: titleFilter } : {}),
-            ...(sourceRefFilter ? { source_ref: sourceRefFilter } : {}),
         };
     }, [activeTabDefinition, isCodexTab, savedFilters]);
 
     const handleRefresh = () => {
         if (!isCodexTab) {
-            void fetchTickets(activeTabDefinition?.taskStatuses);
+            setKanbanRefreshToken(Date.now());
         }
+        void fetchStatusCounts();
         if (isDraftTab) {
             fetchVoiceSessions();
         }
     };
 
     useEffect(() => {
-        if (isCodexTab) return;
-        void fetchTickets(activeTabDefinition?.taskStatuses);
-    }, [activeTabDefinition, isCodexTab, fetchTickets]);
+        if (!isAuth) return;
+        void fetchStatusCounts();
+    }, [isAuth, fetchStatusCounts, tickets_updated_at]);
 
     useEffect(() => {
         if (isDraftTab) {
@@ -885,6 +946,24 @@ const CRMPage = () => {
                                     <SyncOutlined />
                                     <span>Данные обновляются: {tickets_updated_at ? dayjs(tickets_updated_at).format('HH:mm') : '—'}</span>
                                 </button>
+                                {isDraftTab ? (
+                                    <div className="flex items-center gap-2">
+                                        <span>Draft depth</span>
+                                        <Select
+                                            size="small"
+                                            value={draftHorizonDays}
+                                            options={DRAFT_HORIZON_OPTIONS.map((option) => ({
+                                                value: option.value,
+                                                label: option.label,
+                                            }))}
+                                            onChange={(value) => {
+                                                setDraftHorizonDays(value as DraftHorizonValue);
+                                                setKanbanRefreshToken(Date.now());
+                                            }}
+                                            className="w-[88px]"
+                                        />
+                                    </div>
+                                ) : null}
                             </div>
                             <div className="mt-4 pt-1">
                                 <Tabs onChange={(tab) => saveTab(tab)} activeKey={activeMainTab} items={tabItems} className="crm-header-tabs" tabBarStyle={{ marginBottom: 0 }} />
@@ -899,6 +978,8 @@ const CRMPage = () => {
                             <CRMKanban
                                 key={`operops-${activeMainTab}`}
                                 filter={crmFilter}
+                                refreshToken={kanbanRefreshToken}
+                                draftHorizonDays={resolvedDraftHorizonDays}
                             />
                         ) : null}
                     </ConfigProvider>

@@ -17,30 +17,30 @@ Introduce one unified read surface:
 - `voice.session_tasks(session_id, bucket, status_keys=None)`
 
 Required buckets:
-- `draft`
+- `Draft`
   - exact canonical filter: `DRAFT_10`
   - mutable baseline semantics preserved
-- `tasks`
+- `Ready+`
   - exact canonical filters over accepted lifecycle keys:
     - `READY_10`
     - `PROGRESS_10`
     - `REVIEW_10`
     - `DONE_10`
     - `ARCHIVE`
-- `codex`
+- `Codex`
   - `codex_task = true`
 
 Optional companion read tool:
 - `voice.session_task_counts(session_id)`
   - grouped counts for:
-    - `draft`
+    - `Draft`
     - accepted lifecycle keys
-    - `codex`
+    - `Codex`
 
 Mutation contract remains separate:
 - `create_session_tasks(session_id, tickets, preview=False)`
 - `create_session_codex_tasks(session_id, tickets, preview=False)`
-- `delete_session_task(session_id, row_id, bucket='draft')`
+- `delete_session_task(session_id, row_id, bucket='Draft')`
 
 ## Consumer inventory
 

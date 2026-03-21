@@ -30,7 +30,7 @@ Production emphasis:
 - `task` is the one central task-plane object;
 - task/session/chunk traceability must survive materialization into DB objects;
 - result and acceptance objects are mandatory parts of the production model, not optional prose add-ons.
-- ближайший production loop: `voice -> draft task intake -> context enrichment -> human approval -> executor routing -> agent/human launch -> execution -> result artifact -> verification/update`.
+- ближайший production loop: `voice_session -> task_intake_pool -> context_enrichment -> human_approval -> executor_routing -> task_execution_run -> artifact_record -> acceptance_evaluation`.
 
 ## Term Normalization / Glossary
 
@@ -42,38 +42,50 @@ Production emphasis:
 - `voice_session` — bounded discussion event, из которого извлекаются задачи, evidence и контекстные обновления.
 - `processing_run` — occurrence обработки одного session/message scope. Это run processing pipeline, а не запуск исполнения задачи.
 - `task_execution_run` — occurrence исполнения одной задачи одним executor contour. Это не `processing_run`.
+- `context_enrichment` — стадия сборки достаточного task-local `execution_context`: project/product materials, duplicate checks, `object_locator`, `evidence_link`, `expected_result`, `acceptance_criterion`, routing basis.
+- `execution_context` — не “всё знание проекта”, а минимально достаточный task-local состав: `object_locator`, `evidence_link`, `expected_result`, `acceptance_criterion`, routing / executor hints.
+- `human_approval` — санкция на то, что формулировка задачи и её `execution_context` достаточны для routing/launch.
+- `person` — человеческая identity-сущность: она отвечает на вопрос, кто этот человек, но не исчерпывает его текущую роль, полномочие или исполнительный профиль.
+- `actor` — участник системы, который может говорить, оценивать, согласовывать, комментировать и инициировать изменения.
+- `authority_scope` — граница полномочий, внутри которой `actor` может утверждать, принимать, отклонять или санкционировать изменение.
+- `executor_role` — capability-side role ось для human/machine executors.
+- `performer_profile` — canonical human executor profile / performer surface, grounded in `person`, в который задача может быть маршрутизирована для исполнения.
+- `coding_agent` — first-class non-human executor, задаваемый как CLI/agent surface с путём запуска, аргументами и role/pipeline refs.
+- `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или иной target object.
+- `expected_result` — нормализованное имя ожидаемого produced outcome задачи до её запуска и до факта приемки.
+- `artifact_record` — canonical DB-side produced result.
+- `result_artifact` — human-facing alias для `artifact_record`, а не вторая сущность.
+- `acceptance_evaluation` — отдельный акт оценки и приемки produced result against explicit acceptance conditions, выполняемый уполномоченным `actor`.
+- `goal_process` — process-side целевое состояние, к которому привязаны задачи и исполнение.
+- `goal_product` — product-side целевое состояние, к которому привязаны требования и изменения `system_of_interest`.
+- `business_need` — корневая причина, зачем вообще нужен проект или изменение.
+- `requirement` — то, что решение должно обеспечивать.
+- `issue` — уже возникшая проблема.
+- `risk` — будущая угроза или возможность с неопределённым исходом.
+- `constraint` — ограничение решения или исполнения.
+- `change_proposal` — предложенная mutation до approval.
+- `kpi` — измеримый показатель.
+- `kpi_observation` — конкретный факт наблюдения/измерения `kpi`.
+- `codex_task` — task-plane marker Codex-oriented review/execution flow, а не отдельный entity kind.
 - `system_of_interest` — объект, который продуктно описывается, меняется или оценивается.
 - `producing_system` — socio-technical система, которая исполняет задачи и производит артефакты.
 - `project` — управленческий/операционный контур внутри `producing_system`; проект не тождественен ни `system_of_interest`, ни самой производящей системе.
 
 #### Пояснительные и операционные термины
 
-- `draft task` — тот же `task` в lifecycle state `DRAFT_10`.
-- `ready+ task` — тот же `task` в `READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE`.
+- `task[DRAFT_10]` — тот же `task` в draft lifecycle state, а не отдельный kind work object.
+- `ready_plus_task` — тот же `task` в `READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE`.
 - `task_context_card` — имя task-local structured surface; это не вторая сущность, а сгруппированный состав внутри `task`.
 - `task_type` / `task_classification` — типизация задачи (`ui`, `document`, `spec`, `research`, `audit`, ...).
 - `task_family` — routing-oriented слой поверх `task_type`, используемый для сегментации между executor families.
-- `executor_role` — capability-side role ось для human/machine executors.
-- `coding_agent` — first-class non-human executor, задаваемый как CLI/agent surface с путём запуска, аргументами и role/pipeline refs.
 - `task_intake_pool` — стадия, в которой входящие задачи существуют как `task[DRAFT_10]` до routing.
-- `context_enrichment` — стадия сборки достаточного task-local execution context: project/product materials, duplicate checks, object locators, expected result, acceptance criteria, routing basis.
-- `human approval` — санкция на то, что формулировка задачи и её execution context достаточны для routing/launch.
-- `executor_routing` — durable decision object перелива задачи к human performer, `coding_agent` или mixed contour.
-- `artifact_record` — canonical DB-side produced result.
-- `result_artifact` — human-facing alias для `artifact_record`, а не второй ontology object.
+- `executor_routing` — durable decision object перелива задачи к `performer_profile`, `coding_agent` или mixed contour.
 - `acceptance_criterion` — typed условие приемки produced result.
-- `acceptance_evaluation` — отдельный акт оценки результата against `acceptance_criterion`.
 - `evidence_link` — нормализованный носитель цитаты / таймкода / message span, которым задача обосновывается.
-- `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или иной target object.
-- `goal_process` / `goal_product` — целевые состояния process-side и product-side outcomes.
-- `business_need` / `requirement` / `issue` / `risk` / `constraint` — разные роды process/product claims, которые нельзя схлопывать в один “topic”.
-- `change_proposal` — предложенная mutation до approval.
 - `writeback_decision` — санкция на запись / применение изменения.
 - `patch` — конкретный change-set, реализующий изменение.
-- `kpi` / `kpi_observation` — измеримый показатель и конкретное observation event.
 - `seed_context_base` — внешний bootstrap context для executor layer; в ближайшем цикле это `DevFigma / FigmaFlow` плюс project/dialogue context.
-- `discussion linkage` — relation-only many-to-many `task <-> voice_session`.
-- `codex_task` — task-plane marker Codex-oriented review/execution flow, а не отдельный entity kind.
+- `discussion_linkage` — relation-only many-to-many `task <-> voice_session`.
 
 #### Особенности нормализации
 
@@ -90,55 +102,14 @@ Production emphasis:
   - process-side claims (`task`, `goal_process`, `issue`, `risk`, `constraint`) описывают прежде всего `producing_system`;
   - `project` не должен поглощать ни `system_of_interest`, ни `producing_system`.
 
-## Entity Coverage Markers
-
-- `[mom]` - есть в MongoDB, есть в `ontology/typedb/schema/fragments/10-as-is`, есть в `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
-- `[-o-]` - есть только в ontology (`ontology/`)
-- `[ ]` - новая сущность, пока нигде нет
-
-Пометки ставятся только для object/table families. Поля, relation names и прочие non-entity identifiers не размечаются.
-
-## Verified Mongo / Ontology Parity Snapshot (2026-03-21)
-
-- live collection counts at recheck time: `automation_tasks=5573`, `automation_voice_bot_sessions=2060`, `automation_voice_bot_messages=13230`, `automation_comments=2229`;
-- current voice-origin task slice in Mongo after payload-to-draft migration: `source_kind=voice_possible_task -> 1611 Draft rows`, `source_kind missing -> 5 Draft rows`, `source_kind=voice_session -> 33 accepted rows` (`Ready=25`, `Progress 10=4`, `Review / Ready=4`);
-- live task-plane rows already exist in MongoDB and the exact AS-IS ontology entity is `task`;
-- historical docs/runtime may still mention retired draft/projection labels, but canonical normalization collapses them into `task` plus lifecycle/projection semantics rather than a second task family;
-- raw Mongo stores compatibility status labels (`Draft`, `Ready`, `Progress 10`, `Review / Ready`, `Done`, `Archive`), while API/spec semantics continue to speak in lifecycle keys (`DRAFT_10`, `READY_10`, ...);
-- raw session linkage is universally recoverable from `source_ref` / `external_ref` / `source_data.voice_sessions[]`;
-- direct `discussion_sessions[]` is only partially materialized in raw Mongo today (`1211/1616` Draft rows), and `discussion_count` is read-derived rather than a separately stored field;
-- current accepted voice rows do not universally persist direct `discussion_sessions[]`; accepted session lineage still rides mostly on `source_ref` / `external_ref` / `source_data.voice_sessions[]` plus acceptance lineage fields;
-- `5` accepted voice rows still carry legacy `source_data.refresh_state="stale"` payload residue, while live draft rows no longer do;
-- no active sessions currently retain historical `processors_data.CREATE_TASKS.data`; remaining payload residue sits on `78` non-active / historical sessions and no longer participates in normal runtime draft semantics;
-- `automation_comments` has active rows, but live Mongo currently shows `0` populated voice-linkage fields (`source_session_id`, `discussion_session_id`, `dialogue_reference`), so comment linkage remains contract-level/future-populated rather than already-universal storage truth;
-- no live draft rows remain with `source_data.refresh_state="stale"`, but compatibility linkage fields still exist and are still consumed by read paths.
-
-## Architectural Choices From Session History
-
-This document explicitly follows the architecture choices articulated by Valery Pavlovitch in the 2026-03-19 session history:
-- `task` is the central operational object; tasks exist to produce results and artifacts, not to be an isolated backlog surface;
-- `Draft` tasks are mutable, while `Ready+` tasks trend toward execution-ready immutability with acceptance criteria and artifact/result traceability;
-- one task may be discussed in multiple voice sessions; session lineage should therefore be many-to-many, not single-primary forever;
-- traceability must stay continuous: `VoiceSession -> Processing Run -> Task[DRAFT_10|...] -> Project Context -> Result Artifact`;
-- destructive and bulk task mutations stay human-in-the-loop through `Preview -> Confirm -> HistoryStep / UNDO`;
-- process-vs-product decomposition must remain explicit so execution objects are not collapsed into requirement objects.
-- acceptance criteria and measurable outcomes are first-class enough to deserve explicit ontology slots; otherwise “result produced” and “result accepted” collapse into one vague notion.
-- project/product confusion must be avoided: the project is not the produced product, and the produced product is not the producing system.
-- executor layer must arise above the task plane: incoming tasks should enter a common intake surface, then be routed to human performers, coding agents, or a mixed contour.
-- Draft queue breadth may be bounded by caller-provided recency policy without changing the ontology of `task[DRAFT_10]`; omitted policy means full Draft baseline.
-- Draft recency must not be keyed off `task.updated_at`, because recount/writeback can artificially “rejuvenate” an old task row; the correct anchor is linked discussion recency.
-- task routing should use explicit task segmentation between role/executor families rather than one flat undifferentiated queue.
-- `DevFigma / FigmaFlow` should serve as the near-term seed context for roles, skills, process templates, and artifact families when bootstrapping the executor layer.
-- the near-term validation path is practical rather than abstract: current `FigmaFlow lowres` and two real microprojects (`mriya2` hotels and real estate) are expected to validate task connection, routing, and execution.
-
 ## First-Wave Goal And Normalized Mechanics
 
 ### Goal
 Ближайшая цель этой волны не в том, чтобы “ещё лучше извлекать backlog items”, а в том, чтобы:
-- materialize из `voice_session` execution-ready `task[DRAFT_10]`;
-- обогатить их до minimum launch context;
-- провести human approval;
-- довести часть задач до `artifact_record` и `acceptance_evaluation`.
+- система materialize из `voice_session` execution-ready `task[DRAFT_10]`;
+- система обогащает их до minimum launch `execution_context`;
+- уполномоченный `actor` проводит `human_approval`;
+- исполнительный контур через `performer_profile` или `coding_agent` доводит часть задач до `artifact_record`, после чего уполномоченный `actor` выполняет `acceptance_evaluation`.
 
 Если этот цикл не доходит до produced-and-reviewed result, то ontology тривиализируется до “ещё одного канала генерации задач”, а это уже не тот предмет.
 
@@ -156,39 +127,23 @@ Concrete counterexample:
 
 ### Целевая механика
 
-Короткая нормализация терминов для этого цикла:
-- `draft-задача` = `task[DRAFT_10]`, а не отдельный kind work object;
-- `context_enrichment` = стадия сборки достаточного task-local execution context;
-- `human approval` = санкция на то, что формулировка задачи и её execution context достаточны для routing/launch;
-- `execution-context` = не “всё знание проекта”, а минимально достаточный состав:
-  - `object_locator`
-  - `evidence_link`
-  - `expected result`
-  - `acceptance_criterion`
-  - routing / executor hints;
-- `artifact_record` = produced result;
-- `acceptance_evaluation` = отдельный акт приемки produced result, а не то же самое, что approval перед запуском.
+Пояснительно, в рабочем языке этот цикл выглядит так:
+1. из `voice_session` система выделяет `task[DRAFT_10]`;
+2. система проходит `context_enrichment`: подтягивает материалы проекта/продукта, проверяет дубли, формирует `object_locator`, `expected_result`, `acceptance_criterion` и другой минимально достаточный `execution_context`;
+3. уполномоченный `actor` быстро просматривает эти `task[DRAFT_10]` и через `human_approval` утверждает только нужные;
+4. после `human_approval` задача не “получает контекст из ниоткуда”, а входит в launch-ready состояние с уже собранным `execution_context`: что менять, почему это вообще появилось, по каким критериям принимать и кому это разумно маршрутизировать;
+5. дальше `executor_routing` маршрутизирует задачу либо в `performer_profile`, либо в `coding_agent`, либо в mixed contour;
+6. затем выбранный исполнительный контур запускает `task_execution_run`, а не `processing_run`;
+7. на выходе `task_execution_run` производит не просто “как-то закрытую задачу”, а конкретный `artifact_record`;
+8. затем уполномоченный `actor` проводит `acceptance_evaluation`: результат либо принимается, либо уточняется и уходит в следующий цикл.
 
-Нормализованный цикл:
-1. из `voice_session` система materialize draft-задачи как `task[DRAFT_10]`;
-1a. caller может опционально задать `draft_recency_horizon`, чтобы ограничить active Draft workqueue; если параметр не задан, canonical Draft baseline остаётся полным;
-2. система проходит `context_enrichment`: подтягивает материалы проекта/продукта, проверяет дубли, формирует `object of application`, `expected result`, `acceptance criteria`, `evidence links` и `routing basis`;
-3. человек быстро просматривает draft-задачи и утверждает только нужные;
-4. после approval задача не “получает контекст из ниоткуда”, а становится launch-authorized task с уже собранным и подтверждённым execution context:
-  - что менять;
-  - почему это вообще появилось;
-  - какой результат ожидается;
-  - по каким критериям принимать;
-  - кому это разумно маршрутизировать;
-5. затем система materialize `executor_routing`: задача либо уходит человеку, либо `coding_agent`, либо в mixed contour;
-6. запуск исполнения materialize как `task_execution_run`, а не как `processing_run`;
-7. на выходе получаем не просто “как-то закрытую задачу”, а конкретный produced result в виде `artifact_record`;
-8. человек проверяет produced result через `acceptance_evaluation` и либо принимает его, либо вносит уточнение / запускает следующий цикл.
+Операционная оговорка:
+- caller может опционально задать `draft_recency_horizon`, чтобы ограничить active Draft workqueue; если параметр не задан, canonical Draft baseline остаётся полным.
 
 Практический смысл цикла:
 - не производить бесконечный backlog;
 - как можно быстрее переводить разговор в executor-ready task;
-- и дальше в produced result with explicit acceptance, а не в ещё одну невалидированную запись.
+- и дальше в `artifact_record` с явным `acceptance_evaluation`, а не в ещё одну невалидированную запись.
 
 ### Historical prior art
 Ближайший historical analogue этой механики — агент `PM-03-RequestsTask`:
@@ -205,7 +160,7 @@ Concrete counterexample:
 - не смешивать сущность, её состояние, её описание и её носитель;
 - не смешивать объект изменения, решение на изменение, исполнение изменения и след изменения;
 - не смешивать процессную цель, продуктную цель, требование, ограничение, риск и уже возникшую проблему;
-- не смешивать produced result, acceptance criterion и measured KPI.
+- не смешивать `artifact_record`, `acceptance_criterion` и `kpi_observation`.
 
 ### Core ontological claim
 Разговор в заказной разработке нельзя редуцировать ни:
@@ -222,6 +177,32 @@ Concrete counterexample:
 
 Попытка всё свести к `Task[]` — category mistake.
 Попытка всё свести к `Requirement[]` — category mistake.
+
+## Entity Coverage Markers
+
+- `[mom]` - есть в MongoDB, есть в `ontology/typedb/schema/fragments/10-as-is`, есть в `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
+- `[-o-]` - есть только в ontology (`ontology/`)
+- `[ ]` - новая сущность, пока нигде нет
+
+Пометки ставятся только для object/table families. Поля, relation names и прочие non-entity identifiers не размечаются.
+
+## Архитектурные решения из истории сессий
+
+Этот документ явно следует архитектурным решениям, которые Валерий Павлович сформулировал в session history от 2026-03-19:
+- `task` — центральный operational object; `task` существует ради `artifact_record`, а не как самоценный backlog item;
+- `task[DRAFT_10]` остаётся мутабельным, а `ready_plus_task` тяготеет к execution-ready immutability с `acceptance_criterion` и `artifact_record` traceability;
+- один `task` может обсуждаться во многих `voice_session`, поэтому `discussion_linkage` должен быть many-to-many, а не навсегда single-primary;
+- трассируемость должна оставаться непрерывной: `voice_session -> processing_run -> task[DRAFT_10|...] -> execution_context -> artifact_record`;
+- destructive и bulk mutations остаются human-in-the-loop через `change_proposal -> human_approval -> writeback_decision -> patch -> history_step / UNDO`;
+- process/product decomposition должна оставаться явной, чтобы `task` и `task_execution_run` не схлопывались в `requirement`;
+- `acceptance_criterion`, `acceptance_evaluation`, `kpi` и `kpi_observation` должны оставаться достаточно first-class, иначе `artifact_record` и сам акт принятия результата схлопываются в одно vague notion;
+- `project` не равен `system_of_interest`, а `system_of_interest` не равен `producing_system`;
+- `task_intake_pool` и `executor_routing` должны возникать поверх `task` plane: входящие `task[DRAFT_10]` сначала попадают в intake surface, а затем `executor_routing` маршрутизирует их по `executor_role` к `performer_profile`, `coding_agent` или в mixed contour;
+- ширина active `task[DRAFT_10]` queue может ограничиваться через caller-provided `draft_recency_horizon` без изменения ontology самого `task`; если policy не задана, Draft baseline остаётся полным;
+- Draft recency не должна определяться по `task.updated_at`, потому что recount/writeback может искусственно “омолодить” row; корректный anchor — linked `discussion_window`;
+- task routing должен использовать явную сегментацию между `task_family` и `executor_role`, а не один плоский undifferentiated queue;
+- `DevFigma / FigmaFlow` должен служить ближайшим `seed_context_base` для `executor_role`, process templates, skills и `artifact_record` families при bootstrap executor layer;
+- ближайший validation path должен быть practical, а не abstract: текущий `FigmaFlow lowres` и два реальных microprojects (`mriya2` hotels и real estate) — это ожидаемый полигон для проверки `task` connection, `executor_routing` и `task_execution_run`.
 
 ## Layered Ontology
 
@@ -344,7 +325,7 @@ Minimal relations:
 
 Current parity note:
 - `dialogue_reference` is still a field, not a first-class evidence entity;
-- session discussion linkage is not yet a first-class ontology relation in AS-IS and is currently carried operationally by `source_ref` / `external_ref` / `source_data.voice_sessions[]` plus partial `discussion_sessions[]`.
+- session `discussion_linkage` is not yet a first-class ontology relation in AS-IS and is currently carried operationally by `source_ref` / `external_ref` / `source_data.voice_sessions[]` plus partial `discussion_sessions[]`.
 
 ### Layer 3. Status Domain Ontology
 Это слой того, **какие статусы допустимы и в каком домене они живут**.
@@ -465,7 +446,7 @@ Minimal relations:
 - notes/conclusions/manifests are object-bound, never free-floating memory
 
 ### Layer 5.5 Outcome / Acceptance / Measurement Ontology
-Это слой того, **какой результат произведён, по каким критериям он принимается и как он измеряется**.
+Это слой того, **какой результат произведён, по каким критериям уполномоченный `actor` его принимает и как этот результат измеряется**.
 
 Canonical entities:
 - `[ ]` `acceptance_evaluation`
@@ -490,6 +471,7 @@ Minimal relations:
 - `task -> must_satisfy -> acceptance_criterion`
 - `acceptance_evaluation -> checks -> acceptance_criterion`
 - `acceptance_evaluation -> evaluates -> artifact_record`
+- `actor -> performs -> acceptance_evaluation`
 - `goal_process | goal_product -> measured_by -> kpi`
 - `kpi -> observed_as -> kpi_observation`
 
@@ -509,10 +491,10 @@ Role in OperOps sandbox:
 - `identity_map`
 
 Minimal relations:
-- user profile conditions command interpretation
-- skills registry governs agent behavior by user/chat/project scope
-- command registry governs available commands and aliases
-- seed context base is materialized into context packs, role/skill registries, and executor routing defaults rather than kept as one free-form blob
+- `user_profile` conditions command interpretation
+- `skills_registry` governs agent behavior by user/chat/project scope
+- `bot_command_registry` governs available commands and aliases
+- `seed_context_base` is materialized into context packs, role/skill registries, and `executor_routing` defaults rather than kept as one free-form blob
 
 ### Layer 7. Actor / Authority Ontology
 Это слой того, **кто говорит, кто принимает решения и кто исполняет**.
@@ -538,17 +520,22 @@ Role in current `copilot/ontology`:
 - `[-o-]` `access_policy`
 
 Minimal relations:
-- actor participates in session
-- actor may own/approve/comment/update entities
-- conceptually, coding_agent is a non-human performer/executor
+- `actor` participates in `voice_session`
+- human `actor` is grounded in `person`
+- `person` may have one or more `performer_profile`
+- `actor` may enact one or more `role`
+- `actor` is bounded by `authority_scope`
+- `actor` may own/approve/comment/update entities
+- conceptually, `coding_agent` is a non-human performer/executor
 - exact TQL currently keeps coding_agent separate from AS-IS `performer_profile`, because `performer_profile` already carries human HR/auth/payroll semantics
+- on the human side, `actor` and `performer_profile` are not identical: they share the same underlying `person`, but answer different ontological questions
 - executor capability matching runs on `task_family x executor_role`, not on one overloaded mixed field
-- coding_agent enacts agent_role and uses prompt_pipeline
-- coding_agent and performer_profile may each enact one or more executor roles
+- `coding_agent` enacts `agent_role` and uses `prompt_pipeline`
+- `coding_agent` and `performer_profile` may each enact one or more `executor_role`
 - `task[DRAFT_10]` functions as intake pool object before executor routing
-- executor routing uses task segmentation by role/task family plus available executor capabilities
-- task may be routed either to `performer_profile` or to `coding_agent`, with human approval before launch
-- task-local execution context may recommend one or more coding agents
+- `executor_routing` uses task segmentation by role/task family plus available executor capabilities
+- `executor_routing` may route one task either to `performer_profile` or to `coding_agent`, with `human_approval` before launch
+- `execution_context` may recommend one or more `coding_agent`
 - performer/assignee semantics must stay distinct from generic participant semantics
 
 ### Layer 7.5. Executor / Launch Ontology
@@ -937,7 +924,7 @@ Target task projection note:
 ### TO-BE task-local execution context
 
 `task_context_card` остаётся только именем для task-local structured surface.
-Этот surface должен materialize на стадии `context_enrichment` до routing/launch, а human approval подтверждает, что minimum launch context собран.
+Этот surface должен materialize на стадии `context_enrichment` до routing/launch, а `human_approval` подтверждает, что minimum launch context собран.
 На уровне аннотированного TQL это не отдельная сущность, а прямой task-local relation bundle вокруг `target_task_view`:
 - `target_task_view -> task_family`
 - `target_task_view -> object_locator`
@@ -1040,6 +1027,26 @@ relation change_proposal_targets_target_task_view,
 relation writeback_decision_accepts_change_proposal,
   relates writeback_decision,
   relates change_proposal;
+
+relation person_grounds_actor,
+  relates person,
+  relates actor;
+
+relation person_has_performer_profile,
+  relates person,
+  relates performer_profile;
+
+relation actor_enacts_role,
+  relates actor,
+  relates role;
+
+relation actor_bounded_by_authority_scope,
+  relates actor,
+  relates authority_scope;
+
+relation actor_performs_acceptance_evaluation,
+  relates actor,
+  relates acceptance_evaluation;
 
 relation coding_agent_enacts_agent_role,
   relates coding_agent,
@@ -1238,7 +1245,7 @@ It should explicitly remain task-plane scoped and inherit non-task concepts from
 ## Minimal Repair to Current Architecture
 1. Preserve the current task-plane and status-first semantics.
 2. Do not overload `create_tasks` with product or non-task semantics unless analyzer output becomes typed beyond `Task[]`.
-3. Treat discussion linkage as an orthogonal relation layer.
+3. Treat `discussion_linkage` as an orthogonal relation layer.
 4. Introduce product entities only after the task-plane remains stable.
 5. Add actor/authority, registry/configuration, and evidence/trace semantics before attempting broad product-plane automation.
 
@@ -1249,7 +1256,7 @@ It should explicitly remain task-plane scoped and inherit non-task concepts from
 - rebind follow-up specs to this doc.
 
 ### Phase 1. Task-plane Stability
-- finish task discussion linkage implementation;
+- finish task `discussion_linkage` implementation;
 - keep `DRAFT_10` baseline stable;
 - normalize comments and linkage before product-plane persistence.
 
@@ -1312,3 +1319,18 @@ It must include:
 - and binary modal management fields.
 
 Anything flatter will either collapse product into tasks, or collapse runtime into management, and both are category mistakes.
+
+## Verified Mongo / Ontology Parity Snapshot (2026-03-21)
+
+- live collection counts at recheck time: `automation_tasks=5573`, `automation_voice_bot_sessions=2060`, `automation_voice_bot_messages=13230`, `automation_comments=2229`;
+- current voice-origin task slice in Mongo after payload-to-draft migration: `source_kind=voice_possible_task -> 1611 Draft rows`, `source_kind missing -> 5 Draft rows`, `source_kind=voice_session -> 33 accepted rows` (`Ready=25`, `Progress 10=4`, `Review / Ready=4`);
+- live task-plane rows already exist in MongoDB and the exact AS-IS ontology entity is `task`;
+- historical docs/runtime may still mention retired draft/projection labels, but canonical normalization collapses them into `task` plus lifecycle/projection semantics rather than a second task family;
+- raw Mongo stores compatibility status labels (`Draft`, `Ready`, `Progress 10`, `Review / Ready`, `Done`, `Archive`), while API/spec semantics continue to speak in lifecycle keys (`DRAFT_10`, `READY_10`, ...);
+- raw session linkage is universally recoverable from `source_ref` / `external_ref` / `source_data.voice_sessions[]`;
+- direct `discussion_sessions[]` is only partially materialized in raw Mongo today (`1211/1616` Draft rows), and `discussion_count` is read-derived rather than a separately stored field;
+- current accepted voice rows do not universally persist direct `discussion_sessions[]`; accepted session lineage still rides mostly on `source_ref` / `external_ref` / `source_data.voice_sessions[]` plus acceptance lineage fields;
+- `5` accepted voice rows still carry legacy `source_data.refresh_state="stale"` payload residue, while live draft rows no longer do;
+- no active sessions currently retain historical `processors_data.CREATE_TASKS.data`; remaining payload residue sits on `78` non-active / historical sessions and no longer participates in normal runtime draft semantics;
+- `automation_comments` has active rows, but live Mongo currently shows `0` populated voice-linkage fields (`source_session_id`, `discussion_session_id`, `dialogue_reference`), so comment linkage remains contract-level/future-populated rather than already-universal storage truth;
+- no live draft rows remain with `source_data.refresh_state="stale"`, but compatibility linkage fields still exist and are still consumed by read paths.
