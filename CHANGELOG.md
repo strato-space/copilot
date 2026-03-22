@@ -3,15 +3,18 @@
 ## 2026-03-22
 ### PROBLEM SOLVED
 - **04:51** The ontology still had a split-brain task model and follow-up ontology defects after the initial cutover: `target_task_view` had been removed from the main task path, but identity discipline, provenance identity, subtype discriminator semantics, incremental sync coverage, and companion-doc inventories were not yet fully aligned, which risked semantic drift between schema, ingest, and operator docs.
+- **05:00** Post-push ontology smoke still failed in `typedb-ontology-validate.py` because the orphan-task aggregate used a TypeDB-inference-unsafe negative `source_kind` filter, so deploy validation could fail even when the deployed schema itself was coherent.
 
 ### FEATURE IMPLEMENTED
 - **04:51** Landed the hard `task-only` ontology cutover end-to-end: `task` is now the single canonical task-plane carrier, epistemic/evidence layers are first-class (`reasoning_item` / `assumption` / `open_question`, `evidence_observation` / `visual_observation`), provenance is keyed canonically, and high-level ontology docs now describe the same object inventory as the executable TypeDB schema.
+- **05:00** Restored green ontology smoke after push by simplifying the orphan-task validation aggregate to a TypeDB-safe form for the current schema/runtime contract.
 
 ### CHANGES
 - **04:51** Updated `ontology/typedb/schema/fragments/{00-kernel/10-attributes-and-ids,10-as-is/10-entities-core,10-as-is/30-entities-voice-operops,20-to-be/10-semantic-core,30-bridges/10-as-is-to-to-be}.tql`, regenerated `ontology/typedb/schema/str-ontology.tql`, and rewired `ontology/typedb/scripts/{typedb-ontology-ingest,typedb-ontology-contract-check}.py` plus `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml` to remove `target_task_view`, enforce single identity surfaces for new subtype entities, bind `visual_observation` to `evidence_link` by canonical `evidence_link_id`, formalize `reasoning_kind`, and include new ontology collections in incremental sync.
 - **04:51** Updated ontology docs and plans (`AGENTS.md`, `README.md`, `ontology/{README.md,plan/ontology-and-operations.md}`, `ontology/typedb/{AGENTS.md,README.md,docs/*}`, `plan/{voice-dual-stream-ontology,voice-task-surface-normalization-spec}.md`) so operator guidance, semantic glossary, bridge rules, and long-form ontology notes match the implemented schema reality.
 - **04:51** Extended ontology regression coverage with `ontology/typedb/tests/test_task_only_cutover.py`, updated schema/ingest tests, and re-ran `python ontology/typedb/scripts/build-typedb-schema.py`, `npm run ontology:typedb:test`, `npm run ontology:typedb:contract-check`, and `npm run ontology:typedb:ingest:dry -- --limit 5 --collections automation_tasks,automation_reasoning_items,automation_visual_observations`; all passed with `contract-check` at `errors=0`.
 - **04:51** Registered and closed ontology defects `copilot-fzur`, `copilot-5e88`, `copilot-6wdc`, `copilot-0115`, `copilot-bk93`, `copilot-951u`, and `copilot-5us4` after applying the corresponding schema, ingest, contract, and documentation fixes.
+- **05:00** Updated `ontology/typedb/scripts/typedb-ontology-validate.py` so deploy smoke no longer fails on the inference-unsafe negative `source_kind` filter in the orphan-task aggregate.
 
 ## 2026-03-21
 ### PROBLEM SOLVED

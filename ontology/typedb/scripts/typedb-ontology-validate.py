@@ -64,7 +64,7 @@ CHECKS = [
     AggregateCheck("forecast_rows_total", "match $f isa forecast_project_month; reduce $count = count;"),
     AggregateCheck(
         "orphan_tasks_without_project",
-        "match $t isa task; not { $t has source_kind \"voice_possible_task\"; }; not { (owner_project: $p, task: $t) isa project_has_task; }; reduce $count = count;",
+        "match $t isa task; not { (owner_project: $p, task: $t) isa project_has_task; }; reduce $count = count;",
         warn_if=lambda value: value > 0,
     ),
     AggregateCheck(
