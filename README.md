@@ -507,6 +507,10 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-22 22:45):
+  - WebRTC runtime in `app/public/webrtc/webrtc-voicebot-lib.js` now supports embedded session context by reading host-shared/parent session hints and parent URL.
+  - Session restore/update flows avoid clearing active session data while embedded to prevent unintended teardown after route updates.
+  - `voicebot:active-session-updated` synchronization now preserves effective session IDs across active/page context transitions when events omit `session_id`.
 - Close-session refresh (2026-03-16 22:02):
   - Added taskflow refresh correlation telemetry for live possible-task saves: the frontend now forwards optional click metadata (`refresh_correlation_id`, `refresh_clicked_at_ms`) through `createPossibleTasksForSession` into `save_possible_tasks`, and backend socket hints/logs now preserve this metadata end-to-end.
   - Updated docs/contracts (`CHANGELOG.md`, `README.md`, `AGENTS.md`) for the correlation-aware refresh semantics; no behavior rollback or fallback paths were introduced.

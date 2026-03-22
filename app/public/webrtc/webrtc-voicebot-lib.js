@@ -1269,6 +1269,43 @@
             } catch {}
             return '';
         }
+        function getEmbeddedParentSessionId(kind = 'any') {
+            if (!IS_EMBEDDED) return '';
+            const mode = String(kind || 'any').trim() || 'any';
+            try {
+                const shared = window.parent?.__voicebotState?.get?.();
+                if (shared && typeof shared === 'object') {
+                    const active = String(shared.activeSessionId || '').trim();
+                    const page = String(shared.pageSessionId || '').trim();
+                    const any = String(shared.sessionId || '').trim();
+                    const ordered = mode === 'active'
+                        ? [active, any, page]
+                        : (mode === 'page' ? [page, any, active] : [any, active, page]);
+                    for (const candidate of ordered) {
+                        if (candidate) return candidate;
+                    }
+                }
+            } catch {}
+            try {
+                const parentDoc = window.parent?.document;
+                const active = getFabSessionIdFromDoc(parentDoc);
+                const page = getSessionIdFromDoc(parentDoc);
+                const ordered = mode === 'active'
+                    ? [active, page]
+                    : (mode === 'page' ? [page, active] : [active, page]);
+                for (const candidate of ordered) {
+                    const safe = String(candidate || '').trim();
+                    if (safe) return safe;
+                }
+            } catch {}
+            if (mode !== 'active') {
+                try {
+                    const match = String(window.parent?.location?.pathname || '').match(/\/session\/([0-9a-fA-F]{24})(?:\/|$)/);
+                    if (match && match[1]) return String(match[1]).trim();
+                } catch {}
+            }
+            return '';
+        }
         function getActiveSessionIdValue() {
             if (ACTIVE_SESSION_ID) return String(ACTIVE_SESSION_ID).trim();
             try {
@@ -1277,6 +1314,8 @@
             } catch {}
             const fabId = getFabSessionIdFromDoc(document);
             if (fabId) return fabId;
+            const parentId = getEmbeddedParentSessionId('active');
+            if (parentId) return parentId;
             return '';
         }
         function getPageSessionIdValue() {
@@ -1286,6 +1325,8 @@
                 const match = String(location.pathname || '').match(/\/session\/([0-9a-fA-F]{24})(?:\/|$)/);
                 if (match && match[1]) return String(match[1]).trim();
             } catch {}
+            const parentId = getEmbeddedParentSessionId('page');
+            if (parentId) return parentId;
             return '';
         }
         function getSessionIdValue() {
@@ -1559,7 +1600,7 @@
                 try { return String(localStorage.getItem(SESSION_ID_STORAGE_KEY) || '').trim(); } catch { return ''; }
             })();
             if (!storedId) {
-                clearSessionInfoStorage();
+                if (!IS_EMBEDDED) clearSessionInfoStorage();
                 return { action: 'idle', reason: 'no-session' };
             }
             // Keep paused restore deterministic even if a stale "recording" write happened before refresh.
@@ -1567,12 +1608,12 @@
                 storedState = 'paused';
             }
             if (!['recording', 'paused'].includes(storedState)) {
-                clearActiveSession('stored-state-not-recording');
+                if (!IS_EMBEDDED) clearActiveSession('stored-state-not-recording');
                 return { action: 'idle', reason: 'state-not-recording' };
             }
             const session = await getSessionStatusById(storedId);
             if (!session || !isSessionOpen(session)) {
-                clearActiveSession('session-closed');
+                if (!IS_EMBEDDED) clearActiveSession('session-closed');
                 return { action: 'idle', reason: 'session-closed' };
             }
             setSessionIdEverywhere(storedId);
@@ -7095,21 +7136,33 @@
             window.addEventListener('voicebot:active-session-updated', (event) => {
                 try {
                     const detail = event?.detail || {};
+                    const previousActiveSessionId = String(getActiveSessionIdValue() || '').trim();
                     const hasSessionId = Object.prototype.hasOwnProperty.call(detail, 'session_id');
                     const hasSessionName = Object.prototype.hasOwnProperty.call(detail, 'session_name');
                     const hasProjectId = Object.prototype.hasOwnProperty.call(detail, 'project_id');
                     const hasProjectName = Object.prototype.hasOwnProperty.call(detail, 'project_name');
                     const incomingSessionId = String(detail?.session_id || '').trim();
+                    const effectiveSessionId = hasSessionId ? (incomingSessionId || previousActiveSessionId) : previousActiveSessionId;
 
                     if (hasSessionId) {
-                        ACTIVE_SESSION_ID = incomingSessionId;
-                        setSessionIdEverywhere(incomingSessionId);
+                        if (incomingSessionId) {
+                            ACTIVE_SESSION_ID = incomingSessionId;
+                            setSessionIdEverywhere(incomingSessionId);
+                        } else if (!previousActiveSessionId) {
+                            ACTIVE_SESSION_ID = '';
+                            setSessionIdEverywhere('');
+                        } else {
+                            console.warn('[voicebot:active-session-updated] ignoring empty session_id', {
+                                source: String(detail?.source || ''),
+                                active_session_id: previousActiveSessionId,
+                            });
+                        }
                     }
                     if (hasSessionName) {
                         const incomingSessionName = String(detail?.session_name || '');
                         setSessionNameEverywhere(incomingSessionName);
                         const pageSid = String(getPageSessionIdValue() || '').trim();
-                        if (incomingSessionId && pageSid && incomingSessionId === pageSid) {
+                        if (effectiveSessionId && pageSid && effectiveSessionId === pageSid) {
                             setPageSessionNameEverywhere(incomingSessionName);
                         }
                     }
@@ -7121,7 +7174,7 @@
                     }
 
                     if (hasSessionId || hasSessionName || hasProjectId || hasProjectName) {
-                        const sidToPersist = hasSessionId ? incomingSessionId : String(getActiveSessionIdValue() || '').trim();
+                        const sidToPersist = effectiveSessionId;
                         const nameToPersist = hasSessionName ? String(detail?.session_name || '') : String(getActiveSessionNameValue() || '');
                         const currentProjectEl = document.getElementById('fab-session-project');
                         const fallbackProjectId = String(currentProjectEl?.value || '').trim();
@@ -7720,6 +7773,9 @@
                         isRecording,
                         isPaused,
                         isFinalUploading,
+                        activeSessionId: String(getActiveSessionIdValue() || '').trim(),
+                        pageSessionId: String(getPageSessionIdValue() || '').trim(),
+                        sessionId: String(getSessionIdValue() || '').trim(),
                     }),
 	                    getCounters: () => {
 	                        const now = Date.now();

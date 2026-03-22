@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-03-22
+### PROBLEM SOLVED
+- **22:45** Session continuity in embedded WebRTC host mode could desynchronize after host route changes because runtime session resolution was relying only on local page data.
+
+### FEATURE IMPLEMENTED
+- Added embedded session-id resolution via parent/host hints in `app/public/webrtc/webrtc-voicebot-lib.js`, including parent URL fallback.
+- Preserved active embedded session state during restore/update to prevent unintended clear/teardown behavior after host navigation.
+- Improved `voicebot:active-session-updated` reconciliation so effective session ids remain stable when event payloads omit session identifiers.
+
+### CHANGES
+- Updated `app/public/webrtc/webrtc-voicebot-lib.js` with embedded-safe session derivation and synchronization logic.
+- Captured the close-session handoff changes in `AGENTS.md` and `README.md` (`Close-session refresh (2026-03-22 22:45)`).
+
 ## 2026-03-21
 ### PROBLEM SOLVED
 - **09:10** The ontology/spec wave still left one critical implementation gap: task/execution surfaces were described as if direct LLM writes to TypeDB were desirable, but canonical `task.status` and `task.priority` were not yet constrained on the DB side, so invalid raw labels could still leak into the write path.

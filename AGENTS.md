@@ -689,6 +689,10 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-22 22:45):
+  - WebRTC runtime in `app/public/webrtc/webrtc-voicebot-lib.js` now supports embedded session context by reading host-shared/parent session hints and parent URL.
+  - Session restore/update flows avoid clearing active session data while embedded to prevent unintended teardown after route updates.
+  - `voicebot:active-session-updated` synchronization now preserves effective session IDs across active/page context transitions when events omit `session_id`.
 - Close-session refresh (2026-03-16 22:02):
   - Added correlation-aware possible-task refresh telemetry across frontend and backend: `createPossibleTasksForSession` now forwards optional `refresh_correlation_id` / `refresh_clicked_at_ms`, and `session_update.taskflow_refresh` includes the same fields for deterministic click-to-refresh latency tracing.
   - Updated route-level logging in `POST /api/voicebot/save_possible_tasks` and the socket refresh emitter to log/emit correlation metadata without changing the existing taskflow mutation semantics.
