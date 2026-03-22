@@ -19,6 +19,28 @@ dotenv.config({ path: path.resolve(__dirname, 'e2e/.env'), override: true });
 
 const isCI = Boolean(process.env.CI);
 const authFile = path.join(__dirname, '.playwright/.auth/user.json');
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3002';
+
+const isLocalBaseURL = (() => {
+    try {
+        const parsed = new URL(baseURL);
+        return ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+})();
+
+const resolvedProxyServer = (() => {
+    if (isLocalBaseURL) return undefined;
+    return (
+        process.env.HTTPS_PROXY ??
+        process.env.https_proxy ??
+        process.env.HTTP_PROXY ??
+        process.env.http_proxy ??
+        process.env.ALL_PROXY ??
+        process.env.all_proxy
+    );
+})();
 
 // WebServer disabled - point tests to a running target via PLAYWRIGHT_BASE_URL
 // (default is http://127.0.0.1:3002).
@@ -49,7 +71,14 @@ export default defineConfig({
     /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
     use: {
         /* Base URL to use in actions like `await page.goto('/')`. */
-        baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3002',
+        baseURL,
+        ...(resolvedProxyServer
+            ? {
+                proxy: {
+                    server: resolvedProxyServer,
+                },
+            }
+            : {}),
         /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
         trace: 'on-first-retry',
         /* Screenshot on failure */

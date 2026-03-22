@@ -171,6 +171,11 @@ export const handleDoneMultipromptJob = async (
     return { ok: false, error: 'session_not_found' };
   }
 
+  const summaryCorrelationId =
+    normalizeCorrelationId(payload.summary_correlation_id) ||
+    normalizeCorrelationId(session.summary_correlation_id) ||
+    randomUUID();
+
   if (!payload.already_closed) {
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
       mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: 'runtime_tag' }),
@@ -179,10 +184,21 @@ export const handleDoneMultipromptJob = async (
           is_active: false,
           to_finalize: true,
           done_at: new Date(),
+          summary_correlation_id: summaryCorrelationId,
           updated_at: new Date(),
         },
         $inc: {
           done_count: 1,
+        },
+      }
+    );
+  } else if (!normalizeCorrelationId(session.summary_correlation_id)) {
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+      mergeWithRuntimeFilter({ _id: new ObjectId(session_id) }, { field: 'runtime_tag' }),
+      {
+        $set: {
+          summary_correlation_id: summaryCorrelationId,
+          updated_at: new Date(),
         },
       }
     );
@@ -196,10 +212,6 @@ export const handleDoneMultipromptJob = async (
   await queuePostprocessingJobs(session_id);
   await queueDoneNotify(session_id);
 
-  const summaryCorrelationId =
-    normalizeCorrelationId(payload.summary_correlation_id) ||
-    normalizeCorrelationId(session.summary_correlation_id) ||
-    randomUUID();
   const projectObjectId = toObjectIdOrNull(session.project_id);
   if (projectObjectId) {
     const summaryNotify = await queueReadyToSummarizeNotify({

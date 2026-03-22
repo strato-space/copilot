@@ -162,6 +162,108 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
+  it('create_tickets builds distinct bd external refs for multiple codex tasks from the same session', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const taskPerformerId = codexPerformerObjectId;
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    const deleteManySpy = jest.fn(async () => ({ deletedCount: 0 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: taskPerformerId,
+              id: 'automation-performer',
+              name: 'Automation Bot',
+              corporate_email: 'automation-bot@strato.space',
+            })),
+          };
+        }
+        if (name === COLLECTIONS.PROJECTS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: projectId,
+              git_repo: 'git@github.com:strato-space/copilot.git',
+            })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            findOne: jest.fn(async () => null),
+            insertMany: jest.fn(async () => ({ insertedCount: 0 })),
+            deleteMany: deleteManySpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [
+          {
+            id: 'ticket-one',
+            name: 'Codex task one',
+            description: 'One',
+            performer_id: taskPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Copilot',
+          },
+          {
+            id: 'ticket-two',
+            name: 'Codex task two',
+            description: 'Two',
+            performer_id: taskPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Copilot',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(createBdIssueMock).toHaveBeenCalledTimes(2);
+    const callA = createBdIssueMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const callB = createBdIssueMock.mock.calls[1]?.[0] as Record<string, unknown>;
+    expect(typeof callA.externalRef).toBe('string');
+    expect(typeof callB.externalRef).toBe('string');
+    expect(callA.externalRef).not.toBe(callB.externalRef);
+    expect(String(callA.externalRef)).toContain(`/voice/session/${sessionId.toHexString()}#codex-task=`);
+    expect(String(callB.externalRef)).toContain(`/voice/session/${sessionId.toHexString()}#codex-task=`);
+    expect(String(callA.description)).toContain(
+      `Source: Voice session https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`
+    );
+    expect(String(callB.description)).toContain(
+      `Source: Voice session https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`
+    );
+  });
+
   it('create_tickets returns codex_issue_sync_errors and keeps no mongo codex rows on bd sync failure', async () => {
     const sessionId = new ObjectId();
     const projectId = new ObjectId();

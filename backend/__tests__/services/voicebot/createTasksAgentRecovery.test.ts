@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { ObjectId } from 'mongodb';
 
 const initializeSessionMock = jest.fn();
 const callToolMock = jest.fn();
@@ -85,6 +86,89 @@ describe('runCreateTasksAgent quota fallback', () => {
         project_id: 'proj-1',
       }),
     ]);
+  });
+
+  it('adds bounded project CRM window to create_tasks envelope when session timing is available', async () => {
+    const sessionId = new ObjectId().toHexString();
+    const firstMessageAt = new Date('2026-01-10T12:00:00.000Z');
+    const lastMessageAt = new Date('2026-01-14T16:30:00.000Z');
+    const sessionFindOne = jest.fn(async () => ({
+      _id: new ObjectId(sessionId),
+      created_at: new Date('2026-01-09T09:00:00.000Z'),
+      updated_at: new Date('2026-01-15T10:00:00.000Z'),
+      done_at: new Date('2026-01-15T11:00:00.000Z'),
+    }));
+    const messagesFindOne = jest.fn(async (_query: unknown, options?: { sort?: Record<string, number> }) => {
+      const sort = options?.sort || {};
+      if (sort.message_timestamp === 1) {
+        return {
+          message_timestamp: Math.floor(firstMessageAt.getTime() / 1000),
+          created_at: firstMessageAt,
+        };
+      }
+      if (sort.message_timestamp === -1) {
+        return {
+          message_timestamp: Math.floor(lastMessageAt.getTime() / 1000),
+          created_at: lastMessageAt,
+        };
+      }
+      return null;
+    });
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === 'voicebot_sessions') {
+          return { findOne: sessionFindOne };
+        }
+        if (name === 'voicebot_messages') {
+          return { findOne: messagesFindOne };
+        }
+        return { findOne: jest.fn(async () => null) };
+      },
+    };
+
+    initializeSessionMock.mockResolvedValue({ sessionId: 'window-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify([
+              {
+                id: 'TASK-WINDOW-1',
+                row_id: 'TASK-WINDOW-1',
+                name: 'Windowed task',
+                description: 'Task from bounded window context',
+                priority: 'P3',
+              },
+            ]),
+          },
+        ],
+      },
+    });
+
+    await runCreateTasksAgent({
+      sessionId,
+      projectId: 'proj-window',
+      db: dbStub as never,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    const envelopeRaw = callToolMock.mock.calls[0]?.[1]?.message as string;
+    const envelope = JSON.parse(envelopeRaw) as Record<string, unknown>;
+    const crmWindow = envelope.project_crm_window as Record<string, unknown>;
+    const paddingMs = 30 * 24 * 60 * 60 * 1000;
+
+    expect(envelope.project_id).toBe('proj-window');
+    expect(crmWindow).toEqual({
+      from_date: new Date(firstMessageAt.getTime() - paddingMs).toISOString(),
+      to_date: new Date(lastMessageAt.getTime() + paddingMs).toISOString(),
+      anchor_from: firstMessageAt.toISOString(),
+      anchor_to: lastMessageAt.toISOString(),
+      source: 'message_bounds',
+    });
   });
 
   it('does not retry when fallback cannot recover runtime', async () => {

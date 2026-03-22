@@ -79,6 +79,25 @@ const extractVoiceSessionIdFromRef = (value: unknown): string => {
   }
 };
 
+const isVoiceSessionSourceRef = (value: unknown): boolean => {
+  const normalizedRef = normalizeVoiceSessionSourceRef(value);
+  if (!normalizedRef) return false;
+
+  if (VOICE_SESSION_ID_PATTERN.test(normalizedRef)) return true;
+  if (normalizedRef.toLowerCase().includes(VOICE_SESSION_URL_SEGMENT)) return true;
+  return Boolean(extractVoiceSessionIdFromRef(normalizedRef));
+};
+
+const getVoiceLinkageSourceRefs = (record: Record<string, unknown> | null): unknown[] => {
+  if (!record) return [];
+
+  const refs: unknown[] = [record.external_ref];
+  if (isVoiceSessionSourceRef(record.source_ref)) {
+    refs.push(record.source_ref);
+  }
+  return refs;
+};
+
 const expandVoiceSessionSourceRef = (value: unknown): string[] => {
   const normalizedRef = normalizeVoiceSessionSourceRef(value);
   if (!normalizedRef) return [];
@@ -120,8 +139,7 @@ export const buildVoiceSessionTaskSourceRefs = (
     sessionRecord?._id,
     sessionRecord?.session_id,
     sessionRecord?.session_db_id,
-    sessionRecord?.source_ref,
-    sessionRecord?.external_ref,
+    ...getVoiceLinkageSourceRefs(sessionRecord),
     getValueByPath(sessionRecord?.source_data, 'session_id'),
     getValueByPath(sessionRecord?.source_data, 'session_db_id'),
   ]);
@@ -138,8 +156,7 @@ export const ticketMatchesVoiceSessionSourceRefs = (
 
   const filterRefSet = new Set(normalizedSourceRefs);
   const ticketRefs = normalizeVoiceSessionSourceRefs([
-    ticketRecord.source_ref,
-    ticketRecord.external_ref,
+    ...getVoiceLinkageSourceRefs(ticketRecord),
     ticketRecord.session_id,
     ticketRecord.session_db_id,
     getValueByPath(ticketRecord, 'source.voice_session_id'),

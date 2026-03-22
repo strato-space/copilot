@@ -219,6 +219,12 @@ Preferred engineering principles for this repo:
   - every other account forces `default_model: codexplan`
 - Runtime key drift baseline for OpenAI-backed production services is documented in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (PM2 runtime mask vs `backend/.env.production` value vs agents Codex OAuth mode).
 
+### Subagent Execution Policy
+- Real implementation work should be delegated to subagents when practical; the parent thread should stay focused on discovery, coordination, integration, and final acceptance.
+- Subagents MUST start with a clean history by default (`fork_context=false`); do not spawn child agents with inherited conversation history unless there is an explicit, narrow reason to preserve prior thread state.
+- Parent prompts for subagents must be short, decision-complete, and scoped to one bounded write surface.
+- Targeted verification can be delegated to subagents, but final integration verification and production deploy/smoke remain the responsibility of the parent thread after all patches are merged.
+
 ### Code Organization
 - Frontend code lives in `app/src/`.
 - Miniapp code lives in `miniapp/src/`.
@@ -291,8 +297,8 @@ Preferred engineering principles for this repo:
   - duplicate top summary widgets with the same lifecycle labels/counts are a bug, not an accepted transition state,
   - the `Draft` tab is a normal status-first CRM surface; legacy voice backlog grouping is historical reference only,
   - accepted Voice tasks are treated as `Ready` work instead of a separate `Backlog` semantic bucket.
-- OperOps Draft visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default list/count surface is `7d`, while `∞` means an unbounded draft read.
-- OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open.
+- OperOps Draft/Archive visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default fast list/count surface is `1d`, while `∞` means an unbounded read.
+- OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open; Draft/Archive summary and status-count reads may prefilter recency through lightweight source/timestamp projections before trimming transient linkage fields from the response payload.
 
 ## Product Notes (VoiceBot)
 - VoiceBot backend routes live in `backend/src/api/routes/voicebot/`.
@@ -375,11 +381,13 @@ Preferred engineering principles for this repo:
   - refresh tokens must increment additively so repeated hints remain concurrency-safe
 - `CREATE_TASKS` persistence in API/worker paths is strict canonical `id/name/description/priority/...`; runtime fallback for legacy human-title keys is disabled.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
+- Backend `runCreateTasksAgent(...)` must derive bounded `project_crm_window` context from message/session bounds when project-wide CRM enrichment is available; use the bounded window first and fall back to unbounded project CRM only when timing cannot be resolved.
 - Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md`.
 - `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
 - The offline title-generation utility `backend/scripts/voicebot-generate-session-titles.ts` now uses the same quota-recovery rule and compare-before-copy guard as backend `create_tasks`.
 - Session summary persistence is canonical:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
+  - `summary_correlation_id` / `correlation_id` may be supplied or reused from the session and must reconcile a pending `summary_save` audit row to `done` instead of inserting a duplicate event,
   - route emits realtime `session_update.taskflow_refresh.summary`,
   - frontend Summary panel binds to canonical session fields and supports edit/save/conflict states.
 - Session-title generation is fail-fast and traceable:
@@ -390,6 +398,7 @@ Preferred engineering principles for this repo:
   - session-page `Tasks` button calls backend `POST /api/voicebot/generate_possible_tasks`,
   - backend delegates generation to `runCreateTasksAgent(...)`, so server-side quota recovery and auth/model sync rules apply to this UI path,
   - the agent may enrich context through MCP `voice` and `gsh`,
+  - manual refresh carries `refresh_correlation_id` / `refresh_clicked_at_ms` from UI click to backend completion log and realtime hint for end-to-end latency diagnostics,
   - backend persists possible tasks into `automation_tasks` through `generate_possible_tasks` / `save_possible_tasks` / `process_possible_tasks`,
   - `process_possible_tasks` now promotes selected rows into `READY_10` while keeping draft rows in `DRAFT_10`,
   - selected rows leave draft views without being soft-deleted,
@@ -406,9 +415,12 @@ Preferred engineering principles for this repo:
 - The `Unknown` subtab is visible only when `count > 0`; otherwise the fixed lifecycle axis remains `Draft / Ready / In Progress / Review / Done / Archive`.
 - The top-level `Задачи` badge must not render a placeholder `0` before `session_tab_counts` resolves.
 - Voice/OperOps accepted-task filtering must match `source_data.voice_sessions[].session_id` in addition to canonical session URL refs in `source_ref` / `external_ref`; otherwise repaired or migrated rows can disappear from session-scoped task views.
+- When a materialized OperOps task keeps its self-link in `source_ref`, voice-session linkage must prefer the canonical voice-session `external_ref`; do not treat `/operops/task/...` self-links as voice-session refs.
 - Accepted-task reads and `session_tab_counts` must ignore stale compatibility rows (`source_data.refresh_state='stale'`) so live status counts and non-draft task views stay aligned with the canonical draft baseline.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
+- Voice metadata signatures and transcription fallback footers must normalize UTF-8-as-Latin1 mojibake filenames from message/attachment metadata before rendering `file.webm` labels.
+- Voice-created Codex BD issues must use unique `external_ref=https://copilot.stratospace.fun/voice/session/<id>#codex-task=<task-id>` values per task, while human-readable source text stays on the plain canonical session URL.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.
 - Finalization backlog scan should prioritize newest sessions (`updated_at`/`_id` descending) with an expanded scan window so stale rows do not starve fresh closed sessions.
@@ -825,10 +837,10 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
   - `VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW` worker + prompt card (`agents/agent-cards/codex_deferred_review.md`),
   - issue-note persistence + Telegram approval card send,
   - callback actions `cdr:start:*` / `cdr:cancel:*` for Start/Cancel decisions.
-- Added canonical Codex task reference contract (`external_ref=https://copilot.stratospace.fun/voice/session/<id>`) for voice-created Codex tasks.
+- Added canonical Codex task reference contract (`external_ref=https://copilot.stratospace.fun/voice/session/<id>#codex-task=<task-id>`) for voice-created Codex tasks.
 - Completed Wave 4 (`copilot-l3j6`, `copilot-c1xj`, `copilot-zwjl`) and merged all commits to `main`.
 - Added Voice session tabs contract:
-  - `Задачи` tab (CRMKanban, `source_ref` scoped to current session, Work/Review subtabs),
+  - `Задачи` tab (CRMKanban, `source_ref` scoped to current session, lifecycle subtabs `Draft / Ready / In Progress / Review / Done / Archive`),
   - `Codex` tab with backend `POST /api/voicebot/codex_tasks` route, newest-first canonical filtering by `external_ref`, and shared status tabs (`Open`/`Deferred`/`Closed`/`All`) matching OperOps `Codex`.
 - Added OperOps `Codex` tab (`copilot-ex9q`) backed by `POST /api/crm/codex/issues` (`bd --no-daemon list --all --json --limit 500`) and inline refresh workflow.
 - Added inline Voice Codex issue detail drawer (`copilot-gb72`) with bd-show-like payload fields (`labels`, `dependencies`, `notes`, ownership metadata).

@@ -31,4 +31,19 @@ describe('voice metadata signature formatter', () => {
         });
         expect(signature).toBe(`002-1.webm, ${dayjs(Number(absoluteTimestampMs)).format('HH:mm:ss')}`);
     });
+
+    it('normalizes mojibake source filename in signature output', () => {
+        const absoluteTimestampMs = '1740925604000';
+        const utf8Name = 'Запись_15-43-11.webm';
+        const mojibakeName = Buffer.from(utf8Name, 'utf8').toString('latin1');
+
+        const signature = formatVoiceMetadataSignature({
+            startSeconds: 10,
+            endSeconds: 12,
+            sourceFileName: mojibakeName,
+            absoluteTimestampMs,
+        });
+
+        expect(signature).toBe(`0:10 - 0:12, ${utf8Name}, ${dayjs(Number(absoluteTimestampMs)).format('HH:mm:ss')}`);
+    });
 });

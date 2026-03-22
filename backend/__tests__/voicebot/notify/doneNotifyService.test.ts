@@ -146,12 +146,13 @@ describe('voicebotDoneNotify service', () => {
     const findOne = jest
       .fn()
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ _id: existingId });
+      .mockResolvedValueOnce({ _id: existingId, status: 'pending' });
     const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const updateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 0 }));
     const db = {
       collection: (name: string) => {
         if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
-          return { findOne, insertOne };
+          return { findOne, insertOne, updateOne };
         }
         return { findOne: async () => null };
       },
@@ -179,5 +180,52 @@ describe('voicebotDoneNotify service', () => {
     });
 
     expect(insertOne).toHaveBeenCalledTimes(1);
+    expect(updateOne).not.toHaveBeenCalled();
+  });
+
+  it('upgrades existing summary_save audit status from pending to done for the same idempotency key', async () => {
+    const sessionId = new ObjectId();
+    const existingId = new ObjectId();
+    const findOne = jest.fn(async () => ({
+      _id: existingId,
+      status: 'pending',
+      metadata: { idempotency_key: 'idem-3', source: 'done_multiprompt_auto' },
+    }));
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const updateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return { findOne, insertOne, updateOne };
+        }
+        return { findOne: async () => null };
+      },
+    } as any;
+
+    await writeSummaryAuditLog({
+      db,
+      session_id: sessionId,
+      session: { _id: sessionId },
+      event_name: 'summary_save',
+      status: 'done',
+      correlation_id: 'corr-3',
+      idempotency_key: 'idem-3',
+      metadata: { source: 'voicebot_save_summary_route', summary_chars: 10 },
+    });
+
+    expect(insertOne).not.toHaveBeenCalled();
+    expect(updateOne).toHaveBeenCalledWith(
+      { _id: existingId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: 'done',
+          metadata: expect.objectContaining({
+            idempotency_key: 'idem-3',
+            source: 'voicebot_save_summary_route',
+            summary_chars: 10,
+          }),
+        }),
+      })
+    );
   });
 });

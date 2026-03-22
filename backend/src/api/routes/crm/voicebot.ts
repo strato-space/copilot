@@ -75,7 +75,17 @@ router.post('/sessions_in_crm', async (_req: Request, res: Response) => {
                                             {
                                                 $or: [
                                                     { $eq: ['$external_ref', '$$sessionRef'] },
-                                                    { $eq: ['$source_ref', '$$sessionRef'] },
+                                                    {
+                                                        $and: [
+                                                            { $eq: ['$source_ref', '$$sessionRef'] },
+                                                            {
+                                                                $regexMatch: {
+                                                                    input: { $ifNull: ['$source_ref', ''] },
+                                                                    regex: /\/voice\/session\//i,
+                                                                },
+                                                            },
+                                                        ],
+                                                    },
                                                     { $eq: ['$source_data.session_id', '$$sessionIdObj'] },
                                                     { $eq: ['$source_data.session_id', '$$sessionIdStr'] },
                                                     {
@@ -131,7 +141,12 @@ router.post('/sessions_in_crm', async (_req: Request, res: Response) => {
                         task_status: TASK_STATUSES.DRAFT_10,
                         $or: [
                             { external_ref: canonicalRef },
-                            { source_ref: canonicalRef },
+                            {
+                                $and: [
+                                    { source_ref: canonicalRef },
+                                    { source_ref: /\/voice\/session\//i },
+                                ],
+                            },
                             ...(sessionObjectId ? [{ 'source_data.session_id': sessionObjectId }] : []),
                             { 'source_data.session_id': sessionId },
                             { 'source_data.voice_sessions.session_id': sessionId },

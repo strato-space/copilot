@@ -2,7 +2,7 @@ import { getLogger } from '../../../utils/logger.js';
 import * as childProcess from 'node:child_process';
 import fs from 'node:fs';
 import { ObjectId } from 'mongodb';
-import { VOICEBOT_COLLECTIONS } from '../../../constants.js';
+import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import { insertSessionLogEvent } from '../../../services/voicebotSessionLog.js';
 import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
@@ -27,6 +27,61 @@ const toRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+
+type NotifySemanticAckResult = {
+  accepted: boolean;
+  reason: string;
+};
+
+const requiresSemanticAck = (event: string): boolean =>
+  event === VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE;
+
+const parseSemanticAckForSummarize = ({
+  status,
+  bodyText,
+}: {
+  status: number;
+  bodyText: string;
+}): NotifySemanticAckResult => {
+  if (status === 204 || status === 205) {
+    return { accepted: false, reason: 'empty_status_code' };
+  }
+
+  const body = bodyText.trim();
+  if (!body) {
+    return { accepted: false, reason: 'empty_body' };
+  }
+
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { accepted: true, reason: 'non_object_body' };
+    }
+
+    const payload = parsed as Record<string, unknown>;
+    if (Object.keys(payload).length === 0) {
+      return { accepted: false, reason: 'empty_json_object' };
+    }
+
+    if (payload.noop === true) {
+      return { accepted: false, reason: 'explicit_noop' };
+    }
+
+    const explicitNegativeFlag = ['ok', 'success', 'accepted', 'handled', 'dispatched'].find(
+      (key) => payload[key] === false
+    );
+    if (explicitNegativeFlag) {
+      return {
+        accepted: false,
+        reason: `negative_flag_${explicitNegativeFlag}`,
+      };
+    }
+
+    return { accepted: true, reason: 'json_ack' };
+  } catch {
+    return { accepted: true, reason: 'plain_text_ack' };
+  }
+};
 
 type SessionLogContext = {
   sessionObjectId: ObjectId | null;
@@ -362,10 +417,49 @@ export const handleNotifyJob = async (
       };
     }
 
+    let semanticAckReason = 'not_required';
+    if (requiresSemanticAck(event)) {
+      const bodyText = await response.text().catch(() => '');
+      const ackResult = parseSemanticAckForSummarize({
+        status: response.status,
+        bodyText,
+      });
+      semanticAckReason = ackResult.reason;
+
+      if (!ackResult.accepted) {
+        logger.error('[voicebot-worker] notify http semantic ack failed', {
+          event,
+          session_id: session_id || null,
+          status: response.status,
+          semantic_ack_reason: ackResult.reason,
+          body: bodyText || null,
+        });
+        await writeNotifyLog({
+          context: logContext,
+          eventName: 'notify_http_failed',
+          status: 'error',
+          sourceTransport: 'http',
+          metadata: {
+            status: response.status,
+            reason: 'notify_http_semantic_ack_failed',
+            semantic_ack_reason: ackResult.reason,
+            body: bodyText || null,
+          },
+        });
+        return {
+          ok: false,
+          error: 'notify_http_semantic_ack_failed',
+          status: response.status,
+          ...hooksResult,
+        };
+      }
+    }
+
     logger.info('[voicebot-worker] notify http sent', {
       event,
       session_id: session_id || null,
       status: response.status,
+      semantic_ack_reason: semanticAckReason,
     });
     await writeNotifyLog({
       context: logContext,
@@ -373,6 +467,7 @@ export const handleNotifyJob = async (
       sourceTransport: 'http',
       metadata: {
         status: response.status,
+        semantic_ack_reason: semanticAckReason,
       },
     });
     return {

@@ -32,7 +32,11 @@ describe('Voice socket realtime contract', () => {
     expect(source).toContain('const shouldRefreshSummary = Boolean(refreshHint?.summary);');
     expect(source).toContain('nextState.sessionTasksRefreshToken = state.sessionTasksRefreshToken + 1;');
     expect(source).toContain('nextState.sessionCodexRefreshToken = state.sessionCodexRefreshToken + 1;');
+    expect(source).toContain("console.info('taskflow_refresh_received'");
     expect(source).toContain('get().fetchSessionPossibleTasks(activeSessionId, { silent: true })');
+    expect(source).toContain("console.info('possible_tasks_refreshed'");
+    expect(source).toContain('correlation_id: correlationId');
+    expect(source).toContain('e2e_from_click_ms: clickedAtMs !== null ? Date.now() - clickedAtMs : null');
     expect(source).toContain('get().getSessionData(activeSessionId)');
     expect(source).toContain('Failed to refresh voice session possible tasks after realtime hint');
     expect(source).toContain('Failed to refresh voice session summary after realtime hint');

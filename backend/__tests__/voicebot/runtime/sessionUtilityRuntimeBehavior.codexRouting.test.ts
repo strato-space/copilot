@@ -106,7 +106,9 @@ describe('Voicebot utility routes runtime behavior', () => {
       title: 'Investigate ingress regression',
       description: expect.stringContaining('Source: Voice session https://copilot.stratospace.fun/voice/session/'),
       assignee: 'tester@strato.space',
-      externalRef: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+      externalRef: expect.stringContaining(
+        `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}#codex-task=ticket-1`
+      ),
     });
     expect(deleteManySpy).toHaveBeenCalledTimes(1);
     expect(deleteManySpy).toHaveBeenCalledWith(

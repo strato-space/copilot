@@ -1,6 +1,7 @@
 import { ObjectId, type Db } from 'mongodb';
 
 import { COLLECTIONS, TASK_STATUSES, VOICEBOT_COLLECTIONS } from '../constants.js';
+import { isVoiceSessionSourceRef } from './taskSourceRef.js';
 
 const toText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
@@ -133,8 +134,10 @@ export const extractVoiceLinkedSessionIds = (task: Record<string, unknown>): str
     if (fromRef) sessionIds.add(fromRef);
   };
 
-  push(task.source_ref);
   push(task.external_ref);
+  if (isVoiceSessionSourceRef(task.source_ref)) {
+    push(task.source_ref);
+  }
   push(sourceData.voice_session_id);
   push(sourceData.session_id);
   push(sourceData.session_db_id);
@@ -268,8 +271,8 @@ export const buildVoiceDerivedDraftTaskFilter = (): Record<string, unknown> => (
   $or: [
     { source: 'VOICE_BOT' },
     { source_kind: 'voice_possible_task' },
-    { source_ref: /\/voice\/session\//i },
     { external_ref: /\/voice\/session\//i },
+    { source_ref: /\/voice\/session\//i },
     { 'source_data.voice_session_id': { $exists: true, $ne: null } },
     { 'source_data.session_id': { $exists: true, $ne: null } },
     { 'source_data.voice_sessions.0': { $exists: true } },

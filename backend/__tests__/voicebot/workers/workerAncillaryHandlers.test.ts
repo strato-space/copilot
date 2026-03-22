@@ -155,6 +155,59 @@ describe('voicebot ancillary worker handlers', () => {
     });
   });
 
+  it('treats empty 2xx ack as failure for session_ready_to_summarize notify', async () => {
+    process.env.VOICE_BOT_NOTIFIES_URL = 'https://notify.stratospace.fun/hook';
+    process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = 'test-token';
+
+    (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    });
+
+    const result = await handleNotifyJob(
+      {
+        session_id: '69963fb37d45b98d3fbc0344',
+        payload: { project_id: '69963fb37d45b98d3fbc0111' },
+      },
+      VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: 'notify_http_semantic_ack_failed',
+        status: 200,
+      })
+    );
+  });
+
+  it('accepts semantic json ack for session_ready_to_summarize notify', async () => {
+    process.env.VOICE_BOT_NOTIFIES_URL = 'https://notify.stratospace.fun/hook';
+    process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = 'test-token';
+
+    (global.fetch as unknown as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: true, accepted: true }),
+    });
+
+    const result = await handleNotifyJob(
+      {
+        session_id: '69963fb37d45b98d3fbc0344',
+        payload: { project_id: '69963fb37d45b98d3fbc0111' },
+      },
+      VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        status: 200,
+      })
+    );
+  });
+
   it('manifest includes start/events/notifies handlers', () => {
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.common.START_MULTIPROMPT]).toBeDefined();
     expect(VOICEBOT_WORKER_MANIFEST[VOICEBOT_JOBS.events.SEND_TO_SOCKET]).toBeDefined();

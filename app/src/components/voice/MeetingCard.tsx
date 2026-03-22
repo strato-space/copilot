@@ -340,12 +340,17 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
         });
 
         try {
-            const result = await createPossibleTasksForSession(voiceBotSession._id);
+            const refreshCorrelationId = crypto.randomUUID();
+            const refreshClickedAtMs = Date.now();
+            const result = await createPossibleTasksForSession(voiceBotSession._id, {
+                refreshCorrelationId,
+                refreshClickedAtMs,
+            });
             const tasksCount = result.tasks.length;
             messageApi.open({
                 key: 'create-tasks',
                 type: 'success',
-                content: tasksCount > 0 ? `Возможные задачи обновлены: ${tasksCount}` : 'Возможные задачи не найдены',
+                content: tasksCount > 0 ? `Черновики задач обновлены: ${tasksCount}` : 'Черновики задач не найдены',
                 duration: 4,
             });
         } catch (error) {

@@ -115,4 +115,37 @@ describe('voicebot notify worker session-log events', () => {
     expect(sentCall).toBeDefined();
     expect(sentCall?.[0]?.metadata?.status).toBe(200);
   });
+
+  it('writes notify_http_failed when summarize notify returns empty 2xx ack', async () => {
+    process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = '';
+    process.env.VOICE_BOT_NOTIFIES_URL = 'https://call-actions.stratospace.fun/notify';
+    process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = 'token';
+
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    } as Response);
+
+    const result = await handleNotifyJob({
+      event: 'session_ready_to_summarize',
+      session_id: '699f70000000000000000013',
+      payload: { project_id: '699f70000000000000000001' },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: 'notify_http_semantic_ack_failed',
+        status: 200,
+      })
+    );
+
+    const failedCall = insertSessionLogEventMock.mock.calls.find(
+      (call) => call[0]?.event_name === 'notify_http_failed'
+    );
+    expect(failedCall).toBeDefined();
+    expect(failedCall?.[0]?.metadata?.reason).toBe('notify_http_semantic_ack_failed');
+    expect(failedCall?.[0]?.metadata?.semantic_ack_reason).toBe('empty_body');
+  });
 });

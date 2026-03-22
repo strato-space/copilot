@@ -22,6 +22,16 @@ const REDUCED_CONTEXT_MAX_CHARS = 12000;
 const REDUCED_CONTEXT_SUMMARY_MAX_CHARS = 4000;
 const REDUCED_CONTEXT_MESSAGE_MAX_CHARS = 1200;
 const REDUCED_CONTEXT_MAX_MESSAGES = 8;
+const PROJECT_CRM_WINDOW_PADDING_DAYS = 30;
+const PROJECT_CRM_WINDOW_PADDING_MS = PROJECT_CRM_WINDOW_PADDING_DAYS * 24 * 60 * 60 * 1000;
+
+type ProjectCrmWindow = {
+  from_date: string;
+  to_date: string;
+  anchor_from: string;
+  anchor_to: string;
+  source: 'message_bounds' | 'session_bounds';
+};
 
 const measureTextPayload = (value: string): { chars: number; bytes: number } => ({
   chars: value.length,
@@ -37,6 +47,59 @@ const toText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return '';
+};
+
+const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const toDate = (value: unknown): Date | null => {
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    return Number.isFinite(timestamp) ? new Date(timestamp) : null;
+  }
+
+  const numeric = toFiniteNumber(value);
+  if (numeric !== null) {
+    const timestampMs =
+      numeric > 1_000_000_000_000
+        ? numeric
+        : numeric > 10_000_000_000
+          ? numeric
+          : numeric * 1000;
+    const date = new Date(timestampMs);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+};
+
+const toMessageDate = (value: unknown): Date | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const messageTimestamp = toFiniteNumber(record.message_timestamp);
+  if (messageTimestamp !== null) {
+    const timestampMs =
+      messageTimestamp > 1_000_000_000_000
+        ? messageTimestamp
+        : messageTimestamp > 10_000_000_000
+          ? messageTimestamp
+          : messageTimestamp * 1000;
+    const date = new Date(timestampMs);
+    if (Number.isFinite(date.getTime())) {
+      return date;
+    }
+  }
+
+  return toDate(record.created_at) ?? toDate(record.updated_at);
 };
 
 const normalizeDependencies = (value: unknown): string[] =>
@@ -139,6 +202,95 @@ const resolveDbForFallback = (db?: Db): Db | null => {
   } catch {
     return null;
   }
+};
+
+const deriveProjectCrmWindow = async ({
+  db,
+  sessionId,
+}: {
+  db: Db;
+  sessionId: string;
+}): Promise<ProjectCrmWindow | null> => {
+  if (!ObjectId.isValid(sessionId)) {
+    return null;
+  }
+
+  const sessionObjectId = new ObjectId(sessionId);
+  const [sessionDoc, firstMessageDoc, lastMessageDoc] = await Promise.all([
+    db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+      { _id: sessionObjectId },
+      {
+        projection: {
+          _id: 1,
+          created_at: 1,
+          updated_at: 1,
+          done_at: 1,
+          closed_at: 1,
+        },
+      }
+    ),
+    db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+      {
+        session_id: sessionId,
+        is_deleted: { $ne: true },
+      },
+      {
+        projection: {
+          _id: 1,
+          message_timestamp: 1,
+          created_at: 1,
+          updated_at: 1,
+        },
+        sort: { message_timestamp: 1, created_at: 1, _id: 1 },
+      }
+    ),
+    db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
+      {
+        session_id: sessionId,
+        is_deleted: { $ne: true },
+      },
+      {
+        projection: {
+          _id: 1,
+          message_timestamp: 1,
+          created_at: 1,
+          updated_at: 1,
+        },
+        sort: { message_timestamp: -1, created_at: -1, _id: -1 },
+      }
+    ),
+  ]);
+
+  const session = asRecord(sessionDoc);
+  const firstMessageAt = toMessageDate(firstMessageDoc);
+  const lastMessageAt = toMessageDate(lastMessageDoc);
+  const sessionCreatedAt = toDate(session?.created_at);
+  const sessionUpdatedAt = toDate(session?.updated_at);
+  const sessionDoneAt = toDate(session?.done_at) ?? toDate(session?.closed_at);
+
+  let anchorFrom = firstMessageAt ?? sessionCreatedAt ?? sessionUpdatedAt ?? sessionDoneAt;
+  let anchorTo = lastMessageAt ?? sessionDoneAt ?? sessionUpdatedAt ?? sessionCreatedAt;
+
+  if (!anchorFrom && anchorTo) anchorFrom = anchorTo;
+  if (!anchorTo && anchorFrom) anchorTo = anchorFrom;
+  if (!anchorFrom || !anchorTo) return null;
+
+  if (anchorFrom.getTime() > anchorTo.getTime()) {
+    const swap = anchorFrom;
+    anchorFrom = anchorTo;
+    anchorTo = swap;
+  }
+
+  const fromDate = new Date(anchorFrom.getTime() - PROJECT_CRM_WINDOW_PADDING_MS).toISOString();
+  const toDateValue = new Date(anchorTo.getTime() + PROJECT_CRM_WINDOW_PADDING_MS).toISOString();
+
+  return {
+    from_date: fromDate,
+    to_date: toDateValue,
+    anchor_from: anchorFrom.toISOString(),
+    anchor_to: anchorTo.toISOString(),
+    source: firstMessageAt || lastMessageAt ? 'message_bounds' : 'session_bounds',
+  };
 };
 
 const buildReducedCreateTasksRawText = async ({
@@ -300,19 +452,39 @@ export const runCreateTasksAgent = async ({
   const mcpServerUrl = resolveAgentsMcpServerUrl();
   const canonicalSessionUrl = voiceSessionUrlUtils.canonical(sessionId);
   const profileRunId = randomUUID();
+  const normalizedProjectId = toText(projectId);
+  const contextDb = resolveDbForFallback(db);
+  let projectCrmWindow: ProjectCrmWindow | null = null;
+
+  if (normalizedProjectId && contextDb) {
+    try {
+      projectCrmWindow = await deriveProjectCrmWindow({
+        db: contextDb,
+        sessionId,
+      });
+    } catch (error) {
+      logger.warn('[voicebot-worker] create_tasks project CRM window derivation failed', {
+        session_id: sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const buildEnvelope = (text?: string) =>
     text && text.trim().length > 0
       ? {
           mode: 'raw_text',
           raw_text: text.trim(),
           session_url: canonicalSessionUrl,
-          project_id: projectId || '',
+          project_id: normalizedProjectId,
+          ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
         }
       : {
           mode: 'session_id',
           session_id: sessionId,
           session_url: canonicalSessionUrl,
-          project_id: projectId || '',
+          project_id: normalizedProjectId,
+          ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
         };
 
   const executeAgentCall = async (envelope: Record<string, unknown>): Promise<Array<Record<string, unknown>>> => {
@@ -344,7 +516,7 @@ export const runCreateTasksAgent = async ({
         throw new Error(result.error || 'create_tasks_mcp_failed');
       }
 
-      return parseCreateTasksAgentResult(result.data, projectId || '');
+      return parseCreateTasksAgentResult(result.data, normalizedProjectId);
     } finally {
       await mcpClient.closeSession(session.sessionId).catch((error) => {
         logger.warn('[voicebot-worker] create_tasks agent session close failed', {
@@ -368,7 +540,7 @@ export const runCreateTasksAgent = async ({
   } catch (error) {
     if (!isAgentsQuotaFailure(error)) {
       if (isContextLengthFailure(error) && !(rawText && rawText.trim().length > 0)) {
-        const fallbackDb = resolveDbForFallback(db);
+        const fallbackDb = contextDb ?? resolveDbForFallback(db);
         if (!fallbackDb) throw error;
         const reducedRawText = await buildReducedCreateTasksRawText({
           db: fallbackDb,

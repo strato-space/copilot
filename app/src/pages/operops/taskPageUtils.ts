@@ -112,6 +112,8 @@ const SOURCE_KIND_LABELS = {
 } as const;
 
 const VOICE_SESSION_BASE_URL = 'https://copilot.stratospace.fun/voice/session';
+const OPEROPS_TASK_PATH_PATTERN = /^\/?operops\/task\/[^/?#]+/i;
+const OPEROPS_TASK_ABSOLUTE_PATTERN = /^https?:\/\/[^/]+\/operops\/task\/[^/?#]+/i;
 
 export interface TaskSourceInfo {
     kind: keyof typeof SOURCE_KIND_LABELS;
@@ -153,12 +155,18 @@ const normalizeExternalLink = (value: unknown): string => {
     if (!raw) return '';
     if (/^https?:\/\//i.test(raw)) return raw;
     if (/^t\.me\//i.test(raw)) return `https://${raw}`;
+    if (OPEROPS_TASK_PATH_PATTERN.test(raw)) {
+        return raw.startsWith('/') ? raw : `/${raw}`;
+    }
     return '';
 };
 
 const isTelegramLink = (value: string): boolean => /^https?:\/\/t\.me\//i.test(value);
 
 const isVoiceSessionLink = (value: string): boolean => /\/voice\/session\/[^/?#]+/i.test(value);
+
+const isOperOpsTaskLink = (value: string): boolean =>
+    OPEROPS_TASK_ABSOLUTE_PATTERN.test(value) || OPEROPS_TASK_PATH_PATTERN.test(value);
 
 const buildVoiceSessionLink = (sessionIdValue: unknown): string => {
     const sessionId = toLookupValue(sessionIdValue);
@@ -298,10 +306,14 @@ export const resolveTaskSourceInfo = (task: Ticket): TaskSourceInfo => {
     const embeddedSource = asRecord(task.source);
     const sourceData = asRecord(task.source_data);
     const telegramSource = asRecord(embeddedSource?.telegram) ?? asRecord(sourceData?.telegram);
-    const voiceSessionId = toLookupValue(sourceData?.session_id) || toLookupValue(embeddedSource?.voice_session_id);
-    const sourceRef = toNonEmptyString(task.source_ref) || toLookupValue(embeddedSource?.voice_session_id);
+    const embeddedVoiceSessionId = toLookupValue(embeddedSource?.voice_session_id);
+    const voiceSessionId = toLookupValue(sourceData?.session_id) || embeddedVoiceSessionId;
+    const sourceRef = toNonEmptyString(task.source_ref);
     const externalRef = normalizeExternalLink(task.external_ref);
     const sourceRefLink = normalizeExternalLink(sourceRef);
+    const sourceRefIsVoiceLink = isVoiceSessionLink(sourceRefLink) || isVoiceSessionLink(sourceRef);
+    const externalRefIsVoiceLink = isVoiceSessionLink(externalRef);
+    const sourceRefIsOperOpsTaskLink = isOperOpsTaskLink(sourceRefLink) || isOperOpsTaskLink(sourceRef);
     const telegramFallbackLink = buildTelegramLink(telegramSource);
 
     const explicitKind =
@@ -320,7 +332,7 @@ export const resolveTaskSourceInfo = (task: Ticket): TaskSourceInfo => {
     ) {
         kind = 'telegram';
     }
-    if (kind === 'unknown' && (voiceSessionId || isVoiceSessionLink(sourceRefLink) || isVoiceSessionLink(externalRef))) {
+    if (kind === 'unknown' && (voiceSessionId || externalRefIsVoiceLink || sourceRefIsVoiceLink)) {
         kind = 'voice_session';
     }
     if (kind === 'unknown') {
@@ -329,14 +341,28 @@ export const resolveTaskSourceInfo = (task: Ticket): TaskSourceInfo => {
 
     let link = '';
     if (kind === 'telegram') {
-        link = sourceRefLink || telegramFallbackLink || externalRef;
+        link = sourceRefLink || telegramFallbackLink || (isTelegramLink(externalRef) ? externalRef : '');
     } else if (kind === 'voice_session') {
-        link = externalRef || sourceRefLink || buildVoiceSessionLink(sourceRef || voiceSessionId);
+        link =
+            (externalRefIsVoiceLink ? externalRef : '') ||
+            (sourceRefIsVoiceLink ? sourceRefLink || sourceRef : '') ||
+            buildVoiceSessionLink(voiceSessionId);
     } else {
-        link = externalRef || sourceRefLink;
+        link = sourceRefLink || externalRef;
     }
 
-    const reference = sourceRef || voiceSessionId || link || 'N/A';
+    const reference =
+        kind === 'voice_session'
+            ? (externalRefIsVoiceLink ? externalRef : '') ||
+              (sourceRefIsVoiceLink ? sourceRef || sourceRefLink : '') ||
+              voiceSessionId ||
+              link ||
+              'N/A'
+            : sourceRef ||
+              (sourceRefIsOperOpsTaskLink ? sourceRefLink : '') ||
+              externalRef ||
+              link ||
+              'N/A';
 
     return {
         kind,

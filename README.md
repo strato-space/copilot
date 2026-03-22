@@ -92,7 +92,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
 - OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
 - Voice-linked task payloads may include `discussion_sessions[]` / `discussion_count`; the OperOps task page renders those links as a `Discussed in Sessions` timeline.
-- Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing), so Source->Voice navigation keeps task visibility consistent.
+- Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing); voice-session linkage must prefer `external_ref` when `source_ref` is the materialized OperOps self-link, so Source->Voice navigation keeps task visibility consistent.
 - Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
 - Codex issue IDs now use one token renderer across `Issue ID` and `Relationships` (blue link + copy action); relationship rows also show status pictograms (`open`, `in_progress`, `blocked`, `deferred`, `closed`, fallback).
@@ -105,8 +105,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - duplicate top summary widgets with the same lifecycle labels/counts are not part of the target contract,
   - the `Draft` tab still renders the orphan/session-grouped possible-task backlog above the CRM table as presentation-only grouping,
   - accepted Voice tasks are treated as `Ready` work, not as a separate `Backlog` semantic bucket.
-- OperOps Draft visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default list/count surface is `7d`, while `∞` means an unbounded draft read.
-- OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open.
+- OperOps Draft/Archive visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default fast list/count surface is `1d`, while `∞` means an unbounded read.
+- OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open; Draft/Archive summary and status-count reads may prefilter recency through lightweight source/timestamp projections before trimming transient linkage fields from response payloads.
 
 ## Voice notes
 - Voice UI is native in `app/` under `/voice/*` (no iframe embed).
@@ -128,6 +128,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `CREATE_TASKS` realtime delivery is Mongo-first and session-room based: workers persist refreshed Possible Tasks first, then enqueue `session_update.taskflow_refresh.possible_tasks` so all viewers refresh from canonical backend state.
 - `Possible Tasks` recompute is driven by successful transcript chunks; it is no longer tied to session completion or to categorization completion.
 - Voice draft reads now come from session-linked `DRAFT_10` task docs, dedupe by row lineage, and surface `discussion_sessions[]` / `discussion_count` for repeated-discussion visibility.
+- Manual session-page `Tasks` refresh now carries `refresh_correlation_id` / `refresh_clicked_at_ms` from click -> backend completion log -> realtime hint so end-to-end refresh latency can be traced without browser-side MCP.
 - `process_possible_tasks` is now non-destructive:
   - selected rows materialize into `READY_10`,
   - accepted rows keep `source_kind = voice_session`,
@@ -145,8 +146,10 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `cd backend && npm run voice:repair:softdeleted-materialized:apply -- --session <session_id>`
 - Legacy Voice/CRM status cleanup has now been applied directly in Mongo for the current status field only; the checked-in one-off migration helpers were removed after the live cleanup wave completed.
 - Voice/OperOps session task matching must also honor `source_data.voice_sessions[].session_id`, not only canonical session URLs in `source_ref` / `external_ref`, so accepted tasks remain visible after status migration and repair.
+- `POST /api/voicebot/save_summary` now reuses `summary_correlation_id` to reconcile a pending `summary_save` audit row to `done` instead of inserting a duplicate event when done-flow automation and manual save meet on the same session.
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
+- Transcription metadata signatures and fallback footers normalize UTF-8-as-Latin1 mojibake filenames from message/attachment metadata before rendering file labels.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - `subscribe_on_session` must replay a `session_update.taskflow_refresh.possible_tasks` hint so reconnecting session pages refetch canonical possible-task state even if an earlier realtime hint was missed.
@@ -326,6 +329,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
+- Backend `runCreateTasksAgent(...)` derives a bounded `project_crm_window` from message/session timing when project-wide CRM enrichment is available; project CRM reads should use that bounded window first and fall back to unbounded reads only when timing cannot be resolved.
 - `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
@@ -652,7 +656,7 @@ Rule for updates:
   - Voice `Codex` tab backed by `POST /api/voicebot/codex_tasks`,
   - OperOps `Codex` tab backed by `POST /api/crm/codex/issues` (latest 500 `bd` issues).
 - Added inline Codex task detail drawer in Voice session tab and expanded codex task payload mapping (`labels`, `dependencies`, `notes`, ownership metadata).
-- Added canonical Codex external reference contract (`https://copilot.stratospace.fun/voice/session/<id>`) across voice-created tasks.
+- Added canonical Codex external reference contract (`https://copilot.stratospace.fun/voice/session/<id>#codex-task=<task-id>`) across voice-created tasks.
 - Added transcribe trigger flow (`Codex`/`Кодекс`) and improved `@task` ingestion:
   - auto-create Codex session when no active session exists,
   - normalize and append canonical attachment links in created task descriptions.

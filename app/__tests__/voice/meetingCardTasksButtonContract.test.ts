@@ -21,8 +21,12 @@ describe('MeetingCard tasks button contract', () => {
     expect(idxCustomPrompt).toBeGreaterThan(idxSummarize);
     expect(componentSource).toContain('createPossibleTasksForSession');
     expect(componentSource).toContain('const triggerTasks = async (): Promise<void> => {');
-    expect(componentSource).toContain('const result = await createPossibleTasksForSession(voiceBotSession._id);');
-    expect(componentSource).toContain("content: tasksCount > 0 ? `Возможные задачи обновлены: ${tasksCount}` : 'Возможные задачи не найдены'");
+    expect(componentSource).toContain('const refreshCorrelationId = crypto.randomUUID();');
+    expect(componentSource).toContain('const refreshClickedAtMs = Date.now();');
+    expect(componentSource).toContain('const result = await createPossibleTasksForSession(voiceBotSession._id, {');
+    expect(componentSource).toContain('refreshCorrelationId,');
+    expect(componentSource).toContain('refreshClickedAtMs,');
+    expect(componentSource).toContain("content: tasksCount > 0 ? `Черновики задач обновлены: ${tasksCount}` : 'Черновики задач не найдены'");
   });
 
   it('builds MCP create_tasks args with a compact session envelope and avoids giant transcript blocks', () => {

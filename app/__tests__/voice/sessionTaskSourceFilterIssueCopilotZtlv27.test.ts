@@ -35,4 +35,15 @@ describe('voice session tasks source filter regression (copilot-ztlv.27)', () =>
 
     expect(ticketMatchesVoiceSessionSourceRefs(task, sessionSourceRefs)).toBe(true);
   });
+
+  it('keeps compatibility with legacy rows where source_ref is the voice session URL', () => {
+    const sessionSourceRefs = buildVoiceSessionTaskSourceRefs(sessionId, null);
+    const task = {
+      _id: taskId,
+      source_ref: `${canonicalSessionUrl}/`,
+      external_ref: undefined,
+    };
+
+    expect(ticketMatchesVoiceSessionSourceRefs(task, sessionSourceRefs)).toBe(true);
+  });
 });

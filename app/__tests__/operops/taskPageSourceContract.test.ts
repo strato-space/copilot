@@ -78,6 +78,36 @@ describe('TaskPage source contract', () => {
         expect(voiceSource.link).toBe('https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7');
     });
 
+    it('uses external_ref first for voice source display when source_ref is an OperOps task URL', () => {
+        const voiceSource = resolveTaskSourceInfo(
+            createTicket({
+                source_kind: 'voice_session',
+                source_ref: 'https://copilot.stratospace.fun/operops/task/OPS-77',
+                external_ref: 'https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7',
+                source_data: undefined,
+            })
+        );
+
+        expect(voiceSource.kind).toBe('voice_session');
+        expect(voiceSource.reference).toBe('https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7');
+        expect(voiceSource.link).toBe('https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7');
+    });
+
+    it('keeps source_ref as canonical self link for materialized OperOps tasks', () => {
+        const materializedTaskSource = resolveTaskSourceInfo(
+            createTicket({
+                source_kind: 'manual',
+                source_ref: 'https://copilot.stratospace.fun/operops/task/OPS-77',
+                external_ref: 'https://copilot.stratospace.fun/voice/session/699ec60739cbeaee2a40c8c7',
+                source_data: undefined,
+            })
+        );
+
+        expect(materializedTaskSource.kind).toBe('manual');
+        expect(materializedTaskSource.reference).toBe('https://copilot.stratospace.fun/operops/task/OPS-77');
+        expect(materializedTaskSource.link).toBe('https://copilot.stratospace.fun/operops/task/OPS-77');
+    });
+
     it('TaskPage renders source block with new-tab external link', () => {
         const componentPath = path.resolve(process.cwd(), 'src/pages/operops/TaskPage.tsx');
         const source = fs.readFileSync(componentPath, 'utf8');

@@ -98,7 +98,7 @@ const IN_PROGRESS_STATUS_KEYS: TaskStatusKey[] = ['PROGRESS_10'];
 const REVIEW_STATUS_KEYS: TaskStatusKey[] = ['REVIEW_10'];
 const DONE_STATUS_KEYS: TaskStatusKey[] = ['DONE_10'];
 const ARCHIVE_STATUS_KEYS: TaskStatusKey[] = ['ARCHIVE'];
-const DEFAULT_DRAFT_HORIZON_DAYS = 7;
+const DEFAULT_DRAFT_HORIZON_DAYS = 1;
 const DRAFT_HORIZON_OPTIONS = [
     { value: 1, label: '1d' },
     { value: 7, label: '7d' },
@@ -162,6 +162,13 @@ const STATUS_WIDGET_BUCKETS = {
 } as const;
 
 const normalizeTaskStatus = (value: unknown): string => coerceString(value)?.toLowerCase().replace(/[\s-]+/g, '_') ?? '';
+
+const getPerfNow = (): number => {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+        return performance.now();
+    }
+    return Date.now();
+};
 
 const toFilterArray = (value: unknown): string[] | undefined => {
     if (Array.isArray(value)) {
@@ -257,7 +264,7 @@ interface CRMPageUiState {
 
 const CRMPage = () => {
     const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew } = useCRMStore();
-    const { projects, projectsData, performers, fetchDictionary, tickets_updated_at } = useKanbanStore();
+    const { projects, projectsData, performers, fetchDictionary, tickets_updated_at, ticketsLoading } = useKanbanStore();
     const { customers, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
     const { sendMCPCall, waitForCompletion, waitForConnected, connectionState } = useMCPRequestStore();
@@ -296,6 +303,17 @@ const CRMPage = () => {
 
     const { isAuth, loading: authLoading } = useAuthStore();
     const initialDataLoadedRef = useRef(false);
+    const statusCountsInFlightRef = useRef<Promise<void> | null>(null);
+    const statusCountsLastKeyRef = useRef<string>('');
+    const statusCountsLastFetchAtRef = useRef<number>(0);
+    const tabSwitchSeqRef = useRef<number>(0);
+    const tabSwitchPerfRef = useRef<{
+        id: number;
+        from: OperOpsStatusTabKey;
+        to: OperOpsStatusTabKey;
+        startedAt: number;
+        waitForData: boolean;
+    } | null>(null);
 
     useEffect(() => {
         if (!isAuth) {
@@ -333,31 +351,56 @@ const CRMPage = () => {
         }
     }, [api_request, isAuth, resolvedDraftHorizonDays]);
 
-    const fetchStatusCounts = useCallback(async () => {
+    const fetchStatusCounts = useCallback(async (options: { force?: boolean } = {}) => {
         if (!isAuth) return;
         const requestPayload = resolvedDraftHorizonDays !== undefined ? { draft_horizon_days: resolvedDraftHorizonDays } : {};
-        try {
-            const response = await api_request<TicketStatusCountsResponse>(
-                'tickets/status-counts',
-                requestPayload,
-                { silent: true }
-            );
-            const nextCounts: Record<TaskStatusKey, number> = {
-                DRAFT_10: 0,
-                READY_10: 0,
-                PROGRESS_10: 0,
-                REVIEW_10: 0,
-                DONE_10: 0,
-                ARCHIVE: 0,
-            };
-            for (const entry of response?.status_counts ?? []) {
-                const statusKey = typeof entry?.status_key === 'string' ? entry.status_key : '';
-                if (!TARGET_TASK_STATUS_KEYS.includes(statusKey as TaskStatusKey)) continue;
-                nextCounts[statusKey as TaskStatusKey] = Number(entry?.count) || 0;
+        const requestKey = JSON.stringify({
+            draft_horizon_days: resolvedDraftHorizonDays ?? null,
+        });
+        const recentlyFetched = Date.now() - statusCountsLastFetchAtRef.current < 1200;
+        if (!options.force && statusCountsInFlightRef.current && statusCountsLastKeyRef.current === requestKey) {
+            await statusCountsInFlightRef.current;
+            return;
+        }
+        if (!options.force && recentlyFetched && statusCountsLastKeyRef.current === requestKey) {
+            return;
+        }
+
+        statusCountsLastKeyRef.current = requestKey;
+        statusCountsLastFetchAtRef.current = Date.now();
+
+        const requestPromise = (async () => {
+            try {
+                const response = await api_request<TicketStatusCountsResponse>(
+                    'tickets/status-counts',
+                    requestPayload,
+                    { silent: true }
+                );
+                const nextCounts: Record<TaskStatusKey, number> = {
+                    DRAFT_10: 0,
+                    READY_10: 0,
+                    PROGRESS_10: 0,
+                    REVIEW_10: 0,
+                    DONE_10: 0,
+                    ARCHIVE: 0,
+                };
+                for (const entry of response?.status_counts ?? []) {
+                    const statusKey = typeof entry?.status_key === 'string' ? entry.status_key : '';
+                    if (!TARGET_TASK_STATUS_KEYS.includes(statusKey as TaskStatusKey)) continue;
+                    nextCounts[statusKey as TaskStatusKey] = Number(entry?.count) || 0;
+                }
+                setStatusCounts(nextCounts);
+            } catch (error) {
+                console.error('Ошибка при загрузке status counts:', error);
+            } finally {
+                statusCountsLastFetchAtRef.current = Date.now();
             }
-            setStatusCounts(nextCounts);
-        } catch (error) {
-            console.error('Ошибка при загрузке status counts:', error);
+        })();
+
+        statusCountsInFlightRef.current = requestPromise;
+        await requestPromise;
+        if (statusCountsInFlightRef.current === requestPromise) {
+            statusCountsInFlightRef.current = null;
         }
     }, [api_request, isAuth, resolvedDraftHorizonDays]);
 
@@ -553,9 +596,52 @@ const CRMPage = () => {
     const activeMainTab = resolvedMainTab;
     const activeTabDefinition = STATUS_TAB_DEFINITIONS[activeMainTab];
     const isDraftTab = activeMainTab === 'draft';
+    const isArchiveTab = activeMainTab === 'archive';
     const isCodexTab = activeTabDefinition?.isCodex ?? false;
 
     const tabItems = useMemo(() => mainTabs.map(({ key, label }) => ({ key, label })), [mainTabs]);
+
+    const handleMainTabChange = useCallback((tab: string) => {
+        const nextTab = (STATUS_TAB_KEYS.includes(tab as OperOpsStatusTabKey) ? tab : 'draft') as OperOpsStatusTabKey;
+        if (nextTab === activeMainTab) {
+            saveTab(nextTab);
+            return;
+        }
+
+        const switchId = tabSwitchSeqRef.current + 1;
+        tabSwitchSeqRef.current = switchId;
+        const startedAt = getPerfNow();
+        const waitForData = nextTab !== 'codex';
+        tabSwitchPerfRef.current = {
+            id: switchId,
+            from: activeMainTab,
+            to: nextTab,
+            startedAt,
+            waitForData,
+        };
+        console.info(`[crm.perf] tab.switch.start ${JSON.stringify({
+            switch_id: switchId,
+            from: activeMainTab,
+            to: nextTab,
+            draft_horizon_days: resolvedDraftHorizonDays ?? null,
+            wait_for_data: waitForData,
+            ts: Date.now(),
+        })}`);
+
+        saveTab(nextTab);
+        if (!waitForData) {
+            console.info(`[crm.perf] tab.switch.done ${JSON.stringify({
+                switch_id: switchId,
+                from: activeMainTab,
+                to: nextTab,
+                draft_horizon_days: resolvedDraftHorizonDays ?? null,
+                wait_for_data: waitForData,
+                duration_ms: Number((getPerfNow() - startedAt).toFixed(2)),
+                ts: Date.now(),
+            })}`);
+            tabSwitchPerfRef.current = null;
+        }
+    }, [activeMainTab, resolvedDraftHorizonDays, saveTab]);
 
     const crmFilter = useMemo(() => {
         if (!activeTabDefinition || isCodexTab || !activeTabDefinition.taskStatuses) return null;
@@ -576,7 +662,7 @@ const CRMPage = () => {
         if (!isCodexTab) {
             setKanbanRefreshToken(Date.now());
         }
-        void fetchStatusCounts();
+        void fetchStatusCounts({ force: true });
         if (isDraftTab) {
             fetchVoiceSessions();
         }
@@ -585,13 +671,32 @@ const CRMPage = () => {
     useEffect(() => {
         if (!isAuth) return;
         void fetchStatusCounts();
-    }, [isAuth, fetchStatusCounts, tickets_updated_at]);
+    }, [isAuth, fetchStatusCounts]);
 
     useEffect(() => {
         if (isDraftTab) {
             fetchVoiceSessions();
         }
     }, [isDraftTab, fetchVoiceSessions]);
+
+    useEffect(() => {
+        const pending = tabSwitchPerfRef.current;
+        if (!pending) return;
+        if (activeMainTab !== pending.to) return;
+        if (pending.waitForData && ticketsLoading) return;
+
+        console.info(`[crm.perf] tab.switch.done ${JSON.stringify({
+            switch_id: pending.id,
+            from: pending.from,
+            to: pending.to,
+            draft_horizon_days: resolvedDraftHorizonDays ?? null,
+            wait_for_data: pending.waitForData,
+            tickets_loading: ticketsLoading,
+            duration_ms: Number((getPerfNow() - pending.startedAt).toFixed(2)),
+            ts: Date.now(),
+        })}`);
+        tabSwitchPerfRef.current = null;
+    }, [activeMainTab, resolvedDraftHorizonDays, ticketsLoading]);
 
     const resolveSessionTimestamp = (session: VoiceSession): number | string | null => {
         return session?.done_at ?? session?.last_voice_timestamp ?? session?.created_at ?? null;
@@ -946,9 +1051,9 @@ const CRMPage = () => {
                                     <SyncOutlined />
                                     <span>Данные обновляются: {tickets_updated_at ? dayjs(tickets_updated_at).format('HH:mm') : '—'}</span>
                                 </button>
-                                {isDraftTab ? (
+                                {isDraftTab || isArchiveTab ? (
                                     <div className="flex items-center gap-2">
-                                        <span>Draft depth</span>
+                                        <span>Draft/Archive depth</span>
                                         <Select
                                             size="small"
                                             value={draftHorizonDays}
@@ -966,7 +1071,7 @@ const CRMPage = () => {
                                 ) : null}
                             </div>
                             <div className="mt-4 pt-1">
-                                <Tabs onChange={(tab) => saveTab(tab)} activeKey={activeMainTab} items={tabItems} className="crm-header-tabs" tabBarStyle={{ marginBottom: 0 }} />
+                                <Tabs onChange={handleMainTabChange} activeKey={activeMainTab} items={tabItems} className="crm-header-tabs" tabBarStyle={{ marginBottom: 0 }} />
                             </div>
                         </div>
                         <div className="py-3 sm:py-4" />

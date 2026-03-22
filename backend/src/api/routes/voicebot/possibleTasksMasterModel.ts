@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 import { TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
 import { normalizeDateField, toIdString, toTaskReferenceList, toTaskText } from './sessionsSharedUtils.js';
+import { buildCanonicalTaskSourceRef } from '../../../services/taskSourceRef.js';
 
 export const ACTIVE_VOICE_DRAFT_STATUSES = [TASK_STATUSES.DRAFT_10] as const;
 
@@ -31,6 +32,7 @@ export type VoicePossibleTaskRelation = {
 };
 
 const RELATION_TYPE_SET = new Set<string>(VOICE_POSSIBLE_TASK_RELATION_TYPES);
+const VOICE_SESSION_SOURCE_REF_REGEX = /\/voice\/session\//i;
 
 const toStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
@@ -284,7 +286,12 @@ export const buildVoicePossibleTaskMasterQuery = ({
   task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
   $or: [
     { external_ref: externalRef },
-    { source_ref: externalRef },
+    {
+      $and: [
+        { source_ref: externalRef },
+        { source_ref: VOICE_SESSION_SOURCE_REF_REGEX },
+      ],
+    },
     { 'source_data.session_id': sessionObjectId },
     { 'source_data.session_id': sessionId },
     { 'source_data.voice_sessions.session_id': sessionId },
@@ -298,6 +305,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
   sessionId,
   sessionObjectId,
   externalRef,
+  sourceRef,
   now,
   createdBy,
   existingCreatedAt,
@@ -308,6 +316,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
   sessionId: string;
   sessionObjectId: ObjectId;
   externalRef: string;
+  sourceRef?: string;
   now: Date;
   createdBy?: {
     id?: string;
@@ -364,7 +373,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
     status_update_checked: false,
     source: 'VOICE_BOT',
     source_kind: 'voice_possible_task',
-    source_ref: externalRef,
+    source_ref: toTaskText(sourceRef) || buildCanonicalTaskSourceRef(undefined),
     external_ref: externalRef,
     type_class: TASK_CLASSES.TASK,
     is_deleted: false,

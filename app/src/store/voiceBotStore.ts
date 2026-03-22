@@ -45,6 +45,7 @@ import {
     filterPossibleTasksByLocators,
     parsePossibleTasksResponse,
 } from '../utils/voicePossibleTasks';
+import { extractVoiceSourceFileName } from '../utils/voiceSourceFileName';
 import { voicebotRuntimeConfig } from './voicebotRuntimeConfig';
 import { voicebotHttp } from './voicebotHttp';
 import { codexTaskTimeline } from './codexTaskTimeline';
@@ -285,31 +286,6 @@ const dedupeMaterialRows = (rows: VoiceMessageRow[]): VoiceMessageRow[] => {
     return uniqueRows;
 };
 
-const extractMessageSourceFileName = (msg: VoiceBotMessage): string => {
-    const msgRecord = msg && typeof msg === 'object' ? (msg as unknown as Record<string, unknown>) : {};
-    const candidates: Array<unknown> = [
-        msgRecord.file_name,
-        msg.file_metadata?.original_filename,
-    ];
-
-    const attachments = Array.isArray(msgRecord.attachments) ? msgRecord.attachments : [];
-    if (attachments.length > 0) {
-        const firstAttachment = attachments[0];
-        if (firstAttachment && typeof firstAttachment === 'object') {
-            const item = firstAttachment as Record<string, unknown>;
-            candidates.push(item.name, item.filename, item.file_name);
-        }
-    }
-
-    for (const candidate of candidates) {
-        if (typeof candidate !== 'string') continue;
-        const trimmed = candidate.trim();
-        if (trimmed) return trimmed;
-    }
-    return '';
-};
-
-
 const voiceMessageLinkUtils = {
     getMessageRecord(msg: VoiceBotMessage): Record<string, unknown> {
         return msg && typeof msg === 'object' ? (msg as unknown as Record<string, unknown>) : {};
@@ -352,7 +328,7 @@ const voiceMessageLinkUtils = {
         const record = this.getMessageRecord(msg);
         const attachments = Array.isArray(record.attachments) ? record.attachments : [];
         const messageRef = this.getPrimaryMessageRef(msg);
-        const sourceFileName = extractMessageSourceFileName(msg);
+        const sourceFileName = extractVoiceSourceFileName(msg);
 
         return attachments
             .map((attachment) => {
@@ -455,7 +431,7 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
         const messageDbId = typeof msg._id === 'string' ? msg._id.trim() : '';
         const ownImageRows = voiceMessageLinkUtils.getRowsByMessageRefs(imageRowsByMessageRef, messageRefs);
         const record = voiceMessageLinkUtils.getMessageRecord(msg);
-        const sourceFileName = extractMessageSourceFileName(msg);
+        const sourceFileName = extractVoiceSourceFileName(msg);
         const imageAnchorRef = voiceMessageLinkUtils.normalizeMessageRef(record.image_anchor_message_id);
         const linkedAnchorRows = imageAnchorRef ? (imageRowsByMessageRef.get(imageAnchorRef) ?? []) : [];
         const explicitLinkedEntries = messageRefs.flatMap((ref) => explicitLinkedImageRowsByTargetRef.get(ref) ?? []);
@@ -1046,7 +1022,31 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 const shouldRefreshSummary = Boolean(refreshHint?.summary);
                 if (activeSessionId && (!eventSessionId || eventSessionId === activeSessionId)) {
                     if (shouldRefreshPossibleTasks) {
+                        const correlationId = typeof refreshHint?.correlation_id === 'string' && refreshHint.correlation_id.trim()
+                            ? refreshHint.correlation_id.trim()
+                            : null;
+                        const clickedAtMs = typeof refreshHint?.clicked_at_ms === 'number' && Number.isFinite(refreshHint.clicked_at_ms)
+                            ? refreshHint.clicked_at_ms
+                            : null;
+
+                        console.info('taskflow_refresh_received', {
+                            session_id: activeSessionId,
+                            reason: refreshHint?.reason || null,
+                            correlation_id: correlationId,
+                            clicked_at_ms: clickedAtMs,
+                            e2e_from_click_ms: clickedAtMs !== null ? Date.now() - clickedAtMs : null,
+                        });
+
                         void get().fetchSessionPossibleTasks(activeSessionId, { silent: true })
+                            .then((items) => {
+                                console.info('possible_tasks_refreshed', {
+                                    session_id: activeSessionId,
+                                    correlation_id: correlationId,
+                                    clicked_at_ms: clickedAtMs,
+                                    e2e_from_click_ms: clickedAtMs !== null ? Date.now() - clickedAtMs : null,
+                                    items_count: items.length,
+                                });
+                            })
                             .catch((error) => {
                                 console.error('Failed to refresh voice session possible tasks after realtime hint:', error);
                             });
@@ -1121,7 +1121,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         }
 
         void get().fetchSessionPossibleTasks(sessionId, { silent: true }).catch((error) => {
-            console.error('Failed to refresh possible tasks after loading session:', error);
+            console.error('Failed to refresh draft tasks after loading session:', error);
         });
     },
 
@@ -1208,8 +1208,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             });
 
             if (!options?.silent) {
-                console.error('Ошибка при загрузке возможных задач:', error);
-                message.error('Не удалось загрузить возможные задачи');
+                console.error('Ошибка при загрузке черновиков задач:', error);
+                message.error('Не удалось загрузить черновики задач');
             }
 
             return [];
@@ -1242,8 +1242,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             }
         } catch (error) {
             if (!options?.silent) {
-                console.error('Ошибка при сохранении возможных задач:', error);
-                message.error('Не удалось сохранить возможные задачи');
+                console.error('Ошибка при сохранении черновиков задач:', error);
+                message.error('Не удалось сохранить черновики задач');
             }
             throw error;
         }

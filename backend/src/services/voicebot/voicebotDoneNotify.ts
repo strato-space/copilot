@@ -60,6 +60,8 @@ const findExistingSummaryAuditLog = async ({
     {
       projection: {
         _id: 1,
+        status: 1,
+        metadata: 1,
       },
     }
   ) as Promise<Record<string, unknown> | null>;
@@ -94,7 +96,47 @@ export const writeSummaryAuditLog = async ({
     correlation_id: correlationId,
     idempotency_key: idempotencyKey,
   });
-  if (existing) return existing;
+  if (existing) {
+    const existingStatus = typeof existing.status === 'string' ? existing.status.trim() : '';
+    if (existingStatus === status) return existing;
+
+    const existingMetadata =
+      existing.metadata && typeof existing.metadata === 'object'
+        ? (existing.metadata as Record<string, unknown>)
+        : {};
+
+    if (existing._id instanceof ObjectId) {
+      await db.collection(VOICEBOT_COLLECTIONS.SESSION_LOG).updateOne(
+        { _id: existing._id },
+        {
+          $set: {
+            status,
+            actor: actor ?? null,
+            source: source ?? null,
+            action: action ?? null,
+            metadata: {
+              ...existingMetadata,
+              ...normalizeMetadata(metadata),
+              idempotency_key: idempotencyKey,
+            },
+          },
+        }
+      );
+    }
+
+    return {
+      ...existing,
+      status,
+      actor: actor ?? null,
+      source: source ?? null,
+      action: action ?? null,
+      metadata: {
+        ...existingMetadata,
+        ...normalizeMetadata(metadata),
+        idempotency_key: idempotencyKey,
+      },
+    };
+  }
 
   return insertSessionLogEvent({
     db,

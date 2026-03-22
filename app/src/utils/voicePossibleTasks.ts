@@ -149,20 +149,6 @@ export const buildTranscriptionText = (messages: VoiceBotMessage[]): string => {
   return lines.join('\n');
 };
 
-export const extractPossibleTasksFromSession = (
-  session: VoiceBotSession | null | undefined
-): VoicePossibleTask[] => {
-  const defaultProjectId = toText(session?.project_id);
-  const processorsData = asRecord(session?.processors_data);
-  const agentResults = asRecord(session?.agent_results);
-  const createTasks = asRecord(processorsData?.CREATE_TASKS);
-
-  const canonicalItems = normalizePossibleTasks(createTasks?.data, defaultProjectId);
-  if (canonicalItems.length > 0) return canonicalItems;
-
-  return normalizePossibleTasks(agentResults?.create_tasks, defaultProjectId);
-};
-
 export const parsePossibleTasksResponse = (
   payload: unknown,
   defaultProjectId = ''

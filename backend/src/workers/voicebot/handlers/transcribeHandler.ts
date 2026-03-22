@@ -27,6 +27,7 @@ import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { getAudioDurationFromFile, splitAudioFileByDuration } from '../../../utils/audioUtils.js';
 import { getLogger } from '../../../utils/logger.js';
 import { buildCanonicalSessionLink } from '../../../voicebot_tgbot/sessionTelegramMessage.js';
+import { buildCanonicalTaskSourceRef } from '../../../services/taskSourceRef.js';
 import { isQuotaError, normalizeErrorCode } from './shared/openAiErrors.js';
 
 const logger = getLogger();
@@ -357,10 +358,12 @@ const maybeCreateCodexTaskFromVoiceCommand = async ({
     preferredId: taskTitle,
     fallbackText: normalizedText,
   });
+  const taskObjectId = new ObjectId();
   const now = new Date();
   const deferredUntil = new Date(now.getTime() + 15 * 60 * 1000);
 
   const taskDoc: Record<string, unknown> = {
+    _id: taskObjectId,
     id: publicTaskId,
     name: taskTitle,
     description: normalizedText || DEFAULT_CODEX_VOICE_TASK_DESCRIPTION,
@@ -381,7 +384,7 @@ const maybeCreateCodexTaskFromVoiceCommand = async ({
       : {}),
     created_by_performer_id: actorId || null,
     source_kind: 'voice_session',
-    source_ref: session_id,
+    source_ref: buildCanonicalTaskSourceRef(taskObjectId),
     external_ref: payload.external_ref,
     source: 'VOICE_BOT',
     source_data: {

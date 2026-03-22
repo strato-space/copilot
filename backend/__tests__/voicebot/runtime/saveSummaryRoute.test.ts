@@ -53,6 +53,8 @@ const buildFixture = () => {
   };
 
   const insertedLogs: Array<Record<string, unknown>> = [];
+  const sessionLogFindOne = jest.fn(async () => null);
+  const sessionLogUpdateOne = jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 }));
   const sessionUpdateOne = jest.fn(async (query: unknown, update: unknown) => {
     const queryId = extractQueryObjectId(query);
     if (!(queryId instanceof ObjectId) || !queryId.equals(sessionId)) {
@@ -97,7 +99,9 @@ const buildFixture = () => {
       }
       if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
         return {
+          findOne: sessionLogFindOne,
           insertOne: sessionLogInsertOne,
+          updateOne: sessionLogUpdateOne,
         };
       }
       return defaultCollection;
@@ -124,6 +128,8 @@ const buildFixture = () => {
     sessionId,
     sessionDoc,
     insertedLogs,
+    sessionLogFindOne,
+    sessionLogUpdateOne,
     sessionUpdateOne,
     sessionLogInsertOne,
     dbStub,
@@ -282,5 +288,49 @@ describe('POST /voicebot/save_summary', () => {
       .send({ session_id: fixture.sessionId.toHexString(), md_text: '' });
     expect(clearResponse.status).toBe(200);
     expect(clearResponse.body?.summary?.md_text).toBe('');
+  });
+
+  it('reconciles pending summary_save audit to done when summary_correlation_id is present', async () => {
+    const fixture = buildFixture();
+    const correlationId = 'corr-save-1';
+    fixture.sessionDoc.summary_correlation_id = correlationId;
+    const pendingEventId = new ObjectId();
+    fixture.sessionLogFindOne.mockResolvedValueOnce({
+      _id: pendingEventId,
+      status: 'pending',
+      metadata: {
+        idempotency_key: `${fixture.sessionId.toHexString()}:summary_save:${correlationId}`,
+        source: 'done_multiprompt_auto',
+      },
+    });
+
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.rawDbStub);
+
+    const app = buildApp(jest.fn());
+    const response = await request(app)
+      .post('/voicebot/save_summary')
+      .send({
+        session_id: fixture.sessionId.toHexString(),
+        md_text: 'summary text',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary_correlation_id).toBe(correlationId);
+    expect(response.body.summary_event_oid).toBe(`evt_${pendingEventId.toHexString()}`);
+    expect(fixture.sessionLogInsertOne).not.toHaveBeenCalled();
+    expect(fixture.sessionLogUpdateOne).toHaveBeenCalledWith(
+      { _id: pendingEventId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: 'done',
+          metadata: expect.objectContaining({
+            idempotency_key: `${fixture.sessionId.toHexString()}:summary_save:${correlationId}`,
+            source: 'voicebot_save_summary_route',
+            summary_chars: 'summary text'.length,
+          }),
+        }),
+      })
+    );
   });
 });

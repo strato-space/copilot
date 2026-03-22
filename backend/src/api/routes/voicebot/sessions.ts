@@ -59,6 +59,7 @@ import {
     toTaskReferenceList,
     toTaskText,
 } from './sessionsSharedUtils.js';
+import { buildCanonicalTaskSourceRef, isVoiceSessionSourceRef } from '../../../services/taskSourceRef.js';
 import {
     ACTIVE_VOICE_DRAFT_STATUSES,
     buildVoicePossibleTaskMasterDoc,
@@ -102,6 +103,7 @@ import {
     parseDraftHorizonDays,
     parseIncludeOlderDrafts,
 } from '../../../services/draftRecencyPolicy.js';
+import { writeSummaryAuditLog } from '../../../services/voicebot/voicebotDoneNotify.js';
 
 // NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -134,6 +136,8 @@ const VOICE_SESSION_SUMMARY_FIELD = 'summary_md_text' as const;
 const saveSummaryInputSchema = z.object({
     session_id: z.string().trim().min(1),
     md_text: z.string().max(SESSION_SUMMARY_MAX_CHARS),
+    summary_correlation_id: z.string().trim().min(1).optional(),
+    correlation_id: z.string().trim().min(1).optional(),
 });
 
 const SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD = 'row_id' as const;
@@ -564,7 +568,8 @@ type CodexIssueSyncInput = {
     name: string;
     description: string;
     assignee?: string;
-    externalRef: string;
+    sessionExternalRef: string;
+    bdExternalRef: string;
     performerId?: string;
     projectId?: string;
 };
@@ -572,20 +577,215 @@ type CodexIssueSyncInput = {
 const buildCodexIssueDescription = ({
     name,
     description,
-    sessionId,
+    sessionRef,
     creatorName,
 }: {
     name: string;
     description: string;
-    sessionId: string;
+    sessionRef: string;
     creatorName: string;
 }): string => [
     `Task: ${name}`,
     description,
     '',
-    `Source: Voice session ${sessionId}`,
+    `Source: Voice session ${sessionRef}`,
     `Creator: ${creatorName || 'unknown'}`,
 ].join('\n');
+
+const buildCodexBdExternalRef = ({
+    sessionRef,
+    taskId,
+    sourceTaskId,
+}: {
+    sessionRef: string;
+    taskId: string;
+    sourceTaskId: string;
+}): string => {
+    const discriminator = toTaskText(sourceTaskId) || toTaskText(taskId) || 'unknown';
+    const encoded = encodeURIComponent(discriminator);
+    return `${sessionRef}#codex-task=${encoded}`;
+};
+
+type AcceptedTaskLineageIndex = {
+    byAcceptedFromRowId: Map<string, ObjectId>;
+    byRowId: Map<string, ObjectId>;
+    bySourceDataRowId: Map<string, ObjectId>;
+    byCompatibilityKey: Map<string, ObjectId>;
+};
+
+const emptyAcceptedTaskLineageIndex = (): AcceptedTaskLineageIndex => ({
+    byAcceptedFromRowId: new Map<string, ObjectId>(),
+    byRowId: new Map<string, ObjectId>(),
+    bySourceDataRowId: new Map<string, ObjectId>(),
+    byCompatibilityKey: new Map<string, ObjectId>(),
+});
+
+const indexAcceptedTaskLineage = (
+    docs: Array<Record<string, unknown>>
+): AcceptedTaskLineageIndex => {
+    const index = emptyAcceptedTaskLineageIndex();
+
+    for (const doc of docs) {
+        const docObjectId = toObjectIdOrNull(doc._id);
+        if (!docObjectId) continue;
+        const sourceData = doc.source_data && typeof doc.source_data === 'object'
+            ? doc.source_data as Record<string, unknown>
+            : {};
+
+        const acceptedFromRowId = toTaskText(doc.accepted_from_row_id);
+        const rowId = toTaskText(doc.row_id);
+        const sourceDataRowId = toTaskText(sourceData.row_id);
+        const compatibilityKeys = [
+            toTaskText(doc.id),
+            toTaskText(doc.task_id_from_ai),
+        ].filter(Boolean);
+
+        if (acceptedFromRowId && !index.byAcceptedFromRowId.has(acceptedFromRowId)) {
+            index.byAcceptedFromRowId.set(acceptedFromRowId, docObjectId);
+        }
+        if (rowId && !index.byRowId.has(rowId)) {
+            index.byRowId.set(rowId, docObjectId);
+        }
+        if (sourceDataRowId && !index.bySourceDataRowId.has(sourceDataRowId)) {
+            index.bySourceDataRowId.set(sourceDataRowId, docObjectId);
+        }
+        for (const key of compatibilityKeys) {
+            if (!index.byCompatibilityKey.has(key)) {
+                index.byCompatibilityKey.set(key, docObjectId);
+            }
+        }
+    }
+
+    return index;
+};
+
+const listSessionLinkedAcceptedTaskLineageDocs = async ({
+    db,
+    sessionId,
+    canonicalExternalRef,
+}: {
+    db: Db;
+    sessionId: string;
+    canonicalExternalRef: string;
+}): Promise<Array<Record<string, unknown>>> => {
+    const sessionObjectId = new ObjectId(sessionId);
+    const collection = db.collection(COLLECTIONS.TASKS) as {
+        find?: (
+            filter: Record<string, unknown>,
+            options?: Record<string, unknown>
+        ) => {
+            sort?: (value: Record<string, unknown>) => { toArray?: () => Promise<Array<Record<string, unknown>>> };
+            toArray?: () => Promise<Array<Record<string, unknown>>>;
+        };
+    };
+    if (typeof collection.find !== 'function') return [];
+
+    const filter = mergeWithRuntimeFilter(
+        {
+            is_deleted: { $ne: true },
+            codex_task: { $ne: true },
+            task_status: { $ne: TASK_STATUSES.DRAFT_10 },
+            $or: [
+                { external_ref: canonicalExternalRef },
+                {
+                    $and: [
+                        { source_ref: canonicalExternalRef },
+                        { source_ref: /\/voice\/session\//i },
+                    ],
+                },
+                { 'source_data.session_id': sessionObjectId },
+                { 'source_data.session_id': sessionId },
+                { 'source_data.voice_sessions.session_id': sessionId },
+            ],
+        },
+        {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        }
+    );
+
+    const cursor = collection.find(
+        filter,
+        {
+            projection: {
+                _id: 1,
+                id: 1,
+                task_id_from_ai: 1,
+                row_id: 1,
+                accepted_from_row_id: 1,
+                source_data: 1,
+                updated_at: 1,
+                created_at: 1,
+            },
+        }
+    );
+    if (!cursor) return [];
+    if (typeof cursor.sort === 'function') {
+        const sorted = cursor.sort({ updated_at: -1, created_at: -1, _id: -1 });
+        if (sorted && typeof sorted.toArray === 'function') {
+            return await sorted.toArray();
+        }
+    }
+    if (typeof cursor.toArray === 'function') {
+        return await cursor.toArray();
+    }
+    return [];
+};
+
+const resolveExistingAcceptedTaskIdByLineage = ({
+    ticket,
+    fallbackRowId,
+    lineageIndex,
+}: {
+    ticket: Record<string, unknown>;
+    fallbackRowId: string;
+    lineageIndex: AcceptedTaskLineageIndex;
+}): ObjectId | null => {
+    const sourceData = ticket.source_data && typeof ticket.source_data === 'object'
+        ? ticket.source_data as Record<string, unknown>
+        : {};
+
+    const acceptedFromCandidates = Array.from(new Set([
+        toTaskText(ticket.accepted_from_row_id),
+        toTaskText(ticket.row_id),
+        fallbackRowId,
+    ].filter(Boolean)));
+    for (const key of acceptedFromCandidates) {
+        const found = lineageIndex.byAcceptedFromRowId.get(key);
+        if (found) return found;
+    }
+
+    const rowIdCandidates = Array.from(new Set([
+        toTaskText(ticket.row_id),
+        fallbackRowId,
+    ].filter(Boolean)));
+    for (const key of rowIdCandidates) {
+        const found = lineageIndex.byRowId.get(key);
+        if (found) return found;
+    }
+
+    const sourceDataRowIdCandidates = Array.from(new Set([
+        toTaskText(sourceData.row_id),
+        toTaskText(ticket.row_id),
+        fallbackRowId,
+    ].filter(Boolean)));
+    for (const key of sourceDataRowIdCandidates) {
+        const found = lineageIndex.bySourceDataRowId.get(key);
+        if (found) return found;
+    }
+
+    const compatibilityCandidates = Array.from(new Set([
+        toTaskText(ticket.id),
+        toTaskText(ticket.task_id_from_ai),
+    ].filter(Boolean)));
+    for (const key of compatibilityCandidates) {
+        const found = lineageIndex.byCompatibilityKey.get(key);
+        if (found) return found;
+    }
+
+    return null;
+};
 
 type SessionTaskRowLocatorResolution =
     | { ok: true; row_id: string; source_fields: string[] }
@@ -1013,7 +1213,7 @@ const softDeletePossibleTaskMasterRows = async ({
                 { _id: docObjectId },
                 {
                     $set: {
-                        source_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
+                        source_ref: buildCanonicalTaskSourceRef(docObjectId),
                         external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
                         'source_data.session_id': toTaskText(nextPrimary.session_id),
                         'source_data.session_name': toTaskText(nextPrimary.session_name),
@@ -3978,7 +4178,17 @@ router.post('/in_crm', async (req: Request, res: Response) => {
                                         {
                                             $or: [
                                                 { $eq: ["$external_ref", "$$sessionRef"] },
-                                                { $eq: ["$source_ref", "$$sessionRef"] },
+                                                {
+                                                    $and: [
+                                                        { $eq: ["$source_ref", "$$sessionRef"] },
+                                                        {
+                                                            $regexMatch: {
+                                                                input: { $ifNull: ["$source_ref", ""] },
+                                                                regex: /\/voice\/session\//i,
+                                                            },
+                                                        },
+                                                    ],
+                                                },
                                                 { $eq: ["$source_data.session_id", "$$sessionIdObj"] },
                                                 { $eq: ["$source_data.session_id", "$$sessionIdStr"] },
                                                 {
@@ -4075,7 +4285,12 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
                     task_status: TASK_STATUSES.DRAFT_10,
                     $or: [
                         { external_ref: canonicalExternalRef },
-                        { source_ref: canonicalExternalRef },
+                        {
+                            $and: [
+                                { source_ref: canonicalExternalRef },
+                                { source_ref: /\/voice\/session\//i },
+                            ],
+                        },
                         { 'source_data.session_id': new ObjectId(session_id) },
                         { 'source_data.session_id': session_id },
                         { 'source_data.voice_sessions.session_id': session_id },
@@ -4132,7 +4347,12 @@ const materializeSessionTickets = async ({
 }): Promise<Record<string, unknown>> => {
     const now = new Date();
     const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
-    const tasksToSave: Array<{ sourceTaskId: string; task: Record<string, unknown>; existingTaskId?: ObjectId | null }> = [];
+    const tasksToSave: Array<{
+        sourceTaskId: string;
+        task: Record<string, unknown>;
+        existingTaskId?: ObjectId | null;
+        materializedTaskId: ObjectId;
+    }> = [];
     const codexTasksToSync: Array<CodexIssueSyncInput> = [];
     const rejectedRows: CreateTicketsRejectedRow[] = [];
     const performerCache = new Map<string, Record<string, unknown> | null>();
@@ -4141,6 +4361,12 @@ const materializeSessionTickets = async ({
     const creatorId = performer?._id?.toHexString?.() ?? '';
     const creatorName = String(performer?.real_name || performer?.name || '').trim();
     const creatorEmail = String(actorEmail || '').trim();
+    const lineageDocs = await listSessionLinkedAcceptedTaskLineageDocs({
+        db,
+        sessionId,
+        canonicalExternalRef,
+    });
+    const acceptedTaskLineageIndex = indexAcceptedTaskLineage(lineageDocs);
 
     for (const [ticketIndex, rawTicket] of tickets.entries()) {
         if (!rawTicket || typeof rawTicket !== 'object') continue;
@@ -4165,7 +4391,7 @@ const materializeSessionTickets = async ({
             }));
 
         const ticketId = toTaskText(ticket.row_id) || toTaskText(ticket.id) || toTaskText(ticket.task_id_from_ai) || `task-${ticketIndex + 1}`;
-        const existingTaskId = toObjectIdOrNull(ticket._id);
+        const explicitExistingTaskId = toObjectIdOrNull(ticket._id);
         const name = String(ticket.name || '').trim();
         const description = String(ticket.description || '').trim();
         const rawPerformerId = toTaskText(ticket.performer_id);
@@ -4176,6 +4402,16 @@ const materializeSessionTickets = async ({
         const incomingSourceData = ticket.source_data && typeof ticket.source_data === 'object'
             ? ticket.source_data as Record<string, unknown>
             : {};
+        const canonicalRowId = toTaskText(ticket.row_id)
+            || toTaskText(incomingSourceData.row_id)
+            || ticketId;
+        const lineageExistingTaskId = resolveExistingAcceptedTaskIdByLineage({
+            ticket,
+            fallbackRowId: canonicalRowId,
+            lineageIndex: acceptedTaskLineageIndex,
+        });
+        const existingTaskId = explicitExistingTaskId || lineageExistingTaskId;
+        const materializedTaskId = existingTaskId || new ObjectId();
         const incomingVoiceSessions = normalizeVoiceTaskDiscussionSessions([
             ...(Array.isArray(ticket.discussion_sessions) ? ticket.discussion_sessions : []),
             ...(Array.isArray(incomingSourceData.voice_sessions) ? incomingSourceData.voice_sessions : []),
@@ -4312,7 +4548,12 @@ const materializeSessionTickets = async ({
                 name,
                 description,
                 assignee: toTaskText(creatorName || creatorEmail),
-                externalRef: canonicalExternalRef,
+                sessionExternalRef: canonicalExternalRef,
+                bdExternalRef: buildCodexBdExternalRef({
+                    sessionRef: canonicalExternalRef,
+                    taskId: publicTaskId,
+                    sourceTaskId: ticketId,
+                }),
                 performerId: rawPerformerId,
                 projectId: projectCacheKey,
             });
@@ -4333,8 +4574,10 @@ const materializeSessionTickets = async ({
             tasksToSave.push({
                 sourceTaskId: ticketId,
                 existingTaskId,
+                materializedTaskId,
                 task: {
                     id: publicTaskId,
+                    row_id: canonicalRowId,
                     name,
                 project_id: projectId,
                 project: projectName,
@@ -4360,11 +4603,12 @@ const materializeSessionTickets = async ({
                 ...(childRelations.length > 0 ? { children: childRelations } : {}),
                 source: 'VOICE_BOT',
                 source_kind: 'voice_session',
-                source_ref: canonicalExternalRef,
+                source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
                 external_ref: canonicalExternalRef,
                     discussion_sessions: discussionSessions,
                     source_data: {
                         ...incomingSourceData,
+                        row_id: canonicalRowId,
                         session_name: toTaskText(incomingSourceData.session_name) || String((session as Record<string, unknown>).session_name || ''),
                         session_id: toTaskText(incomingSourceData.session_id) || sessionId,
                         voice_sessions: discussionSessions,
@@ -4372,7 +4616,7 @@ const materializeSessionTickets = async ({
                     ...(isAcceptedFromPossibleTask
                         ? {
                             accepted_from_possible_task: true,
-                            accepted_from_row_id: ticketId,
+                            accepted_from_row_id: canonicalRowId,
                             accepted_at: now,
                             ...(acceptedBy ? { accepted_by: acceptedBy } : {}),
                             ...(creatorName ? { accepted_by_name: creatorName } : {}),
@@ -4444,12 +4688,13 @@ const materializeSessionTickets = async ({
     const existingTasksToUpdate = filteredTasksToSave.filter(({ existingTaskId }) => existingTaskId instanceof ObjectId);
     const newTasksToInsert = filteredTasksToSave.filter(({ existingTaskId }) => !(existingTaskId instanceof ObjectId));
 
-    for (const { sourceTaskId, existingTaskId, task } of existingTasksToUpdate) {
+    for (const { sourceTaskId, existingTaskId, materializedTaskId, task } of existingTasksToUpdate) {
         await db.collection(COLLECTIONS.TASKS).updateOne(
             { _id: existingTaskId as ObjectId },
             {
                 $set: {
                     ...task,
+                    source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
                     updated_at: now,
                     is_deleted: false,
                     deleted_at: null,
@@ -4462,7 +4707,11 @@ const materializeSessionTickets = async ({
 
     if (newTasksToInsert.length > 0) {
         const insertResult = await db.collection(COLLECTIONS.TASKS).insertMany(
-            newTasksToInsert.map(({ task }) => task)
+            newTasksToInsert.map(({ task, materializedTaskId }) => ({
+                _id: materializedTaskId,
+                ...task,
+                source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
+            }))
         );
         insertedCount += insertResult.insertedCount;
         for (const { sourceTaskId } of newTasksToInsert) {
@@ -4479,10 +4728,10 @@ const materializeSessionTickets = async ({
                     description: buildCodexIssueDescription({
                         name: codexTask.name,
                         description: codexTask.description,
-                        sessionId: codexTask.externalRef,
+                        sessionRef: codexTask.sessionExternalRef,
                         creatorName: String(creatorName || ''),
                     }),
-                    externalRef: codexTask.externalRef,
+                    externalRef: codexTask.bdExternalRef,
                     ...(codexTask.assignee ? { assignee: codexTask.assignee } : {}),
                 };
                 const issueId = await createBdIssue({
@@ -4735,6 +4984,7 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
         const generatedTasks = await runCreateTasksAgent({
             sessionId,
             projectId: session.project_id ? String(session.project_id) : '',
+            db,
         });
 
         const persisted = await persistPossibleTasksForSession({
@@ -4752,6 +5002,15 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             session_id: sessionId,
             generated_count: generatedTasks.length,
             saved_count: persisted.items.length,
+            correlation_id: parsedBody.data.refresh_correlation_id || null,
+            clicked_at_ms:
+                typeof parsedBody.data.refresh_clicked_at_ms === 'number'
+                    ? parsedBody.data.refresh_clicked_at_ms
+                    : null,
+            e2e_from_click_ms:
+                typeof parsedBody.data.refresh_clicked_at_ms === 'number'
+                    ? Date.now() - parsedBody.data.refresh_clicked_at_ms
+                    : null,
         });
 
         const refreshHintArgs: Parameters<typeof emitSessionTaskflowRefreshHint>[0] = {
@@ -5077,10 +5336,11 @@ const buildSessionScopedTaskMatch = ({
     session: Record<string, unknown>;
 }): Record<string, unknown> => {
     const refs = buildSessionScopedTaskRefs({ sessionId, session });
+    const legacyVoiceSourceRefs = refs.filter((ref) => isVoiceSessionSourceRef(ref));
     return {
         $or: [
-            { source_ref: { $in: refs } },
             { external_ref: { $in: refs } },
+            ...(legacyVoiceSourceRefs.length > 0 ? [{ source_ref: { $in: legacyVoiceSourceRefs } }] : []),
             { session_id: { $in: refs } },
             { session_db_id: { $in: refs } },
             { 'source.voice_session_id': { $in: refs } },
@@ -5732,45 +5992,79 @@ router.post('/save_summary', async (req: Request, res: Response) => {
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
+        const explicitCorrelationId =
+            getOptionalTrimmedString(parsedBody.data.summary_correlation_id) ||
+            getOptionalTrimmedString(parsedBody.data.correlation_id);
+        const sessionCorrelationId =
+            getOptionalTrimmedString(session.summary_correlation_id) ||
+            getOptionalTrimmedString(session.summary_flow_correlation_id);
+        const summaryCorrelationId = explicitCorrelationId || sessionCorrelationId || null;
+
         const sessionObjectId = new ObjectId(session_id);
         const summarySavedAt = new Date();
+        const summarySetPayload: Record<string, unknown> = {
+            [VOICE_SESSION_SUMMARY_FIELD]: md_text,
+            summary_saved_at: summarySavedAt,
+            updated_at: summarySavedAt,
+        };
+        if (summaryCorrelationId) {
+            summarySetPayload.summary_correlation_id = summaryCorrelationId;
+        }
         const updateResult = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
             runtimeSessionQuery({ _id: sessionObjectId }),
             {
-                $set: {
-                    [VOICE_SESSION_SUMMARY_FIELD]: md_text,
-                    summary_saved_at: summarySavedAt,
-                    updated_at: summarySavedAt,
-                },
+                $set: summarySetPayload,
             }
         );
         if (updateResult.matchedCount === 0) {
             return res.status(404).json({ error: 'Session not found' });
         }
 
-        const summarySaveEvent = await insertSessionLogEvent({
-            db,
-            session_id: sessionObjectId,
-            project_id: toObjectIdOrNull(session.project_id),
-            event_name: 'summary_save',
-            status: 'done',
-            actor: buildActorFromPerformer(performer),
-            source: buildWebSource(req),
-            action: {
-                type: 'save',
-                available: false,
-            },
-            metadata: {
-                summary_field: VOICE_SESSION_SUMMARY_FIELD,
-                summary_chars: md_text.length,
-            },
-        });
+        const summaryMetadata: Record<string, unknown> = {
+            summary_field: VOICE_SESSION_SUMMARY_FIELD,
+            summary_chars: md_text.length,
+            save_transport: 'voicebot_api_save_summary',
+            source: 'voicebot_save_summary_route',
+        };
+
+        const summarySaveEvent = summaryCorrelationId
+            ? await writeSummaryAuditLog({
+                db,
+                session_id: sessionObjectId,
+                session,
+                event_name: 'summary_save',
+                status: 'done',
+                actor: buildActorFromPerformer(performer),
+                source: buildWebSource(req),
+                action: {
+                    type: 'save',
+                    available: false,
+                },
+                correlation_id: summaryCorrelationId,
+                idempotency_key: `${session_id}:summary_save:${summaryCorrelationId}`,
+                metadata: summaryMetadata,
+            })
+            : await insertSessionLogEvent({
+                db,
+                session_id: sessionObjectId,
+                project_id: toObjectIdOrNull(session.project_id),
+                event_name: 'summary_save',
+                status: 'done',
+                actor: buildActorFromPerformer(performer),
+                source: buildWebSource(req),
+                action: {
+                    type: 'save',
+                    available: false,
+                },
+                metadata: summaryMetadata,
+            });
 
         emitSessionSummaryRefreshHint({ req, sessionId: session_id });
 
         return res.status(200).json({
             success: true,
             session_id,
+            summary_correlation_id: summaryCorrelationId,
             summary: {
                 md_text,
                 updated_at: summarySavedAt.toISOString(),

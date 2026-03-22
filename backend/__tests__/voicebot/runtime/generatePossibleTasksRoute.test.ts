@@ -12,6 +12,8 @@ const getUserPermissionsMock = jest.fn();
 const generateDataFilterMock = jest.fn();
 const runCreateTasksAgentMock = jest.fn();
 const persistPossibleTasksForSessionMock = jest.fn();
+const loggerInfoMock = jest.fn();
+const loggerErrorMock = jest.fn();
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -35,6 +37,15 @@ jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js
     persistPossibleTasksForSession: persistPossibleTasksForSessionMock,
   };
 });
+
+jest.unstable_mockModule('../../../src/utils/logger.js', () => ({
+  getLogger: () => ({
+    info: loggerInfoMock,
+    error: loggerErrorMock,
+    warn: jest.fn(),
+    debug: jest.fn(),
+  }),
+}));
 
 const { default: sessionsRouter } = await import('../../../src/api/routes/voicebot/sessions.js');
 
@@ -121,6 +132,8 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     generateDataFilterMock.mockReset();
     runCreateTasksAgentMock.mockReset();
     persistPossibleTasksForSessionMock.mockReset();
+    loggerInfoMock.mockReset();
+    loggerErrorMock.mockReset();
 
     getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
     generateDataFilterMock.mockResolvedValue({});
@@ -152,6 +165,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     expect(runCreateTasksAgentMock).toHaveBeenCalledWith({
       sessionId: fixture.sessionId.toString(),
       projectId: fixture.projectId.toHexString(),
+      db: fixture.dbStub,
     });
 
     expect(persistPossibleTasksForSessionMock).toHaveBeenCalledWith(
@@ -162,5 +176,44 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         refreshMode: 'full_recompute',
       })
     );
+  });
+
+  it('logs completion correlation/e2e fields for manual generate_possible_tasks refresh', async () => {
+    const fixture = buildFixture();
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+
+    runCreateTasksAgentMock.mockResolvedValue([
+      { id: 'T1', row_id: 'row-1', name: 'Task 1', priority: 'P2' },
+    ]);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [{ id: 'T1', row_id: 'row-1', name: 'Task 1', priority: 'P2' }],
+    });
+
+    const clickedAtMs = Date.now() - 250;
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/generate_possible_tasks')
+      .send({
+        session_id: fixture.sessionId.toString(),
+        refresh_correlation_id: 'corr-manual-1',
+        refresh_clicked_at_ms: clickedAtMs,
+      });
+
+    expect(response.status).toBe(200);
+
+    const completionCall = loggerInfoMock.mock.calls.find(
+      ([eventName]) => eventName === '[voicebot.sessions] generate_possible_tasks_completed'
+    );
+    expect(completionCall).toBeDefined();
+    expect(completionCall?.[1]).toEqual(
+      expect.objectContaining({
+        session_id: fixture.sessionId.toString(),
+        correlation_id: 'corr-manual-1',
+        clicked_at_ms: clickedAtMs,
+      })
+    );
+    expect(typeof (completionCall?.[1] as Record<string, unknown>).e2e_from_click_ms).toBe('number');
+    expect(((completionCall?.[1] as Record<string, unknown>).e2e_from_click_ms as number)).toBeGreaterThanOrEqual(0);
   });
 });

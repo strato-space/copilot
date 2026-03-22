@@ -5,6 +5,7 @@ import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import type { VoiceBotMessage } from '../../types/voice';
 import { formatVoiceMetadataSignature } from '../../utils/voiceMetadataSignature';
+import { extractVoiceSourceFileName, normalizeVoiceSourceFileName } from '../../utils/voiceSourceFileName';
 
 interface TranscriptionTableRowProps {
     row: VoiceBotMessage;
@@ -71,32 +72,6 @@ const parseSecondsValue = (value: unknown): number | null => {
     return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
 };
 
-const extractSourceFileName = (row: VoiceBotMessage): string => {
-    const rowRecord = row as unknown as Record<string, unknown>;
-
-    const candidates: Array<unknown> = [
-        rowRecord.file_name,
-        row?.file_metadata?.original_filename,
-    ];
-
-    const attachments = Array.isArray(rowRecord.attachments) ? rowRecord.attachments : [];
-    if (attachments.length > 0) {
-        const attachment = attachments[0];
-        if (attachment && typeof attachment === 'object') {
-            const item = attachment as Record<string, unknown>;
-            candidates.push(item.name, item.filename, item.file_name);
-        }
-    }
-
-    for (const candidate of candidates) {
-        if (typeof candidate !== 'string') continue;
-        const trimmed = candidate.trim();
-        if (trimmed) return trimmed;
-    }
-
-    return '';
-};
-
 const normalizeAttachmentUri = (value: unknown): string | null => {
     if (typeof value !== 'string') return null;
     const trimmed = value.trim();
@@ -124,11 +99,9 @@ const extractImageAttachment = (row: VoiceBotMessage): { url: string; name: stri
             normalizeAttachmentUri(item.url);
         if (!url) continue;
         const name =
-            typeof item.name === 'string' && item.name.trim()
-                ? item.name.trim()
-                : typeof item.file_name === 'string' && item.file_name.trim()
-                    ? item.file_name.trim()
-                    : 'image';
+            normalizeVoiceSourceFileName(item.name) ||
+            normalizeVoiceSourceFileName(item.file_name) ||
+            'image';
         return { url, name };
     }
     return null;
@@ -204,7 +177,7 @@ const resolveFallbackErrorSignature = (
     return formatVoiceMetadataSignature({
         startSeconds: relativeStartSeconds,
         endSeconds: relativeStartSeconds,
-        sourceFileName: extractSourceFileName(row),
+        sourceFileName: extractVoiceSourceFileName(row),
         absoluteTimestampMs: messageTimestampMs,
         omitZeroRange: sessionBaseMs == null,
     });
@@ -421,7 +394,7 @@ const formatSegmentTimeline = (
     return formatVoiceMetadataSignature({
         startSeconds: relativeStartSeconds,
         endSeconds: relativeEndSeconds ?? relativeStartSeconds,
-        sourceFileName: extractSourceFileName(row),
+        sourceFileName: extractVoiceSourceFileName(row),
         absoluteTimestampMs: segmentAbsoluteStartMs,
     });
 };

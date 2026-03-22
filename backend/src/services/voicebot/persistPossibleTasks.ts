@@ -6,6 +6,7 @@ import {
 } from '../../constants.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../runtimeScope.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
+import { buildCanonicalTaskSourceRef } from '../taskSourceRef.js';
 import {
   ACTIVE_VOICE_DRAFT_STATUSES,
   buildVoicePossibleTaskMasterDoc,
@@ -254,7 +255,7 @@ const softDeletePossibleTaskMasterRows = async ({
         { _id: docObjectId },
         {
           $set: {
-            source_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
+            source_ref: buildCanonicalTaskSourceRef(docObjectId),
             external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
             discussion_sessions: remainingVoiceSessions,
             'source_data.session_id': toTaskText(nextPrimary.session_id),
@@ -425,8 +426,10 @@ export const persistPossibleTasksForSession = async ({
       ...existingVoiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId),
     ];
     const discussionSessions = normalizeVoiceTaskDiscussionSessions(mergedVoiceSessions);
+    const taskObjectId = existingDoc?._id instanceof ObjectId ? existingDoc._id : new ObjectId();
 
     const nextDoc = {
+      _id: taskObjectId,
       ...buildVoicePossibleTaskMasterDoc({
         rawTask,
         index: taskIndex,
@@ -434,6 +437,7 @@ export const persistPossibleTasksForSession = async ({
         sessionId,
         sessionObjectId,
         externalRef: canonicalExternalRef,
+        sourceRef: buildCanonicalTaskSourceRef(taskObjectId),
         now,
         createdBy: {
           ...(createdById ? { id: createdById } : {}),
@@ -441,7 +445,6 @@ export const persistPossibleTasksForSession = async ({
         },
         existingCreatedAt: existingDoc?.created_at,
       }),
-      source_ref: canonicalExternalRef,
       external_ref: canonicalExternalRef,
       source_data: {
         ...persistedSourceData,

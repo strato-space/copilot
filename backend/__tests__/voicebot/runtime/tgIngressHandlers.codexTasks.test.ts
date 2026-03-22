@@ -66,6 +66,9 @@ describe('voicebot tgbot ingress handlers', () => {
     expect(insertedTask.source_kind).toBe('telegram');
     expect(insertedTask.created_by_performer_id).toEqual(performerId);
     expect(insertedTask.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
+    expect(String(insertedTask.source_ref || '')).toMatch(
+      /^https:\/\/copilot\.stratospace\.fun\/operops\/task\/[a-f0-9]{24}$/i
+    );
     expect(insertedTask.description).toContain('Investigate billing mismatch for February');
 
     const sourceData = insertedTask.source_data as Record<string, unknown>;
@@ -132,6 +135,9 @@ describe('voicebot tgbot ingress handlers', () => {
     const sourceData = insertedTask.source_data as Record<string, unknown>;
     expect(sourceData.session_id).toEqual(createdSessionId);
     expect(insertedTask.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${createdSessionId.toHexString()}`);
+    expect(String(insertedTask.source_ref || '')).toMatch(
+      /^https:\/\/copilot\.stratospace\.fun\/operops\/task\/[a-f0-9]{24}$/i
+    );
   });
 
   it('appends normalized public_attachment links to @task task descriptions for attachment ingress', async () => {

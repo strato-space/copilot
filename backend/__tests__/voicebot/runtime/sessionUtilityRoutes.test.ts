@@ -47,6 +47,10 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('persistPossibleTasksForSession({');
     expect(source).toContain("refreshMode: 'full_recompute'");
     expect(source).toContain("saved_count: persisted.items.length");
+    expect(source).toContain("logger.info('[voicebot.sessions] generate_possible_tasks_completed'");
+    expect(source).toContain('correlation_id: parsedBody.data.refresh_correlation_id || null');
+    expect(source).toContain('clicked_at_ms:');
+    expect(source).toContain('e2e_from_click_ms:');
   });
 
   it('publishes canonical session taskflow contract for MCP/client parity', () => {

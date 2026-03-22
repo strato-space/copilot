@@ -83,6 +83,78 @@ type PerformerPayload = {
 type TicketsResponseMode = 'detail' | 'summary';
 type CrmTicketsProfileMode = TicketsResponseMode | 'status_counts';
 
+const SUMMARY_DRAFT_RECENCY_TRANSIENT_FIELDS = [
+    'source',
+    'source_kind',
+    'source_data',
+    'source_ref',
+    'external_ref',
+] as const;
+
+const DRAFT_RECENCY_PREFILTER_PROJECTION = {
+    _id: 1,
+    task_status: 1,
+    source: 1,
+    source_kind: 1,
+    source_data: 1,
+    source_ref: 1,
+    external_ref: 1,
+} as const;
+
+const ARCHIVE_RECENCY_PREFILTER_PROJECTION = {
+    _id: 1,
+    task_status: 1,
+    updated_at: 1,
+    created_at: 1,
+} as const;
+
+const resolveDateLikeTimestamp = (value: unknown): number | null => {
+    if (value instanceof Date) {
+        const dateMs = value.getTime();
+        return Number.isFinite(dateMs) ? dateMs : null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value > 1e12 ? value : value * 1000;
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const numeric = Number(trimmed);
+        if (Number.isFinite(numeric)) {
+            return resolveDateLikeTimestamp(numeric);
+        }
+        const parsed = Date.parse(trimmed);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+};
+
+const resolveArchiveAnchorTimestamp = (task: Record<string, unknown>): number | null => {
+    return resolveDateLikeTimestamp(task.updated_at) ?? resolveDateLikeTimestamp(task.created_at);
+};
+
+const filterArchivedTasksByRecency = ({
+    tasks,
+    includeOlderDrafts,
+    draftHorizonDays,
+    now = Date.now(),
+}: {
+    tasks: Array<Record<string, unknown>>;
+    includeOlderDrafts?: boolean | undefined;
+    draftHorizonDays?: number | null | undefined;
+    now?: number | undefined;
+}): Array<Record<string, unknown>> => {
+    if (includeOlderDrafts || !draftHorizonDays) return tasks;
+
+    const cutoffTimestamp = now - draftHorizonDays * 24 * 60 * 60 * 1000;
+    return tasks.filter((task) => {
+        if (task.task_status !== TASK_STATUSES.ARCHIVE) return true;
+        const anchorTimestamp = resolveArchiveAnchorTimestamp(task);
+        if (anchorTimestamp === null) return false;
+        return anchorTimestamp >= cutoffTimestamp;
+    });
+};
+
 const estimateJsonPayloadBytes = (value: unknown): number => {
     try {
         return Buffer.byteLength(JSON.stringify(value), 'utf8');
@@ -487,12 +559,96 @@ router.post('/', async (req: Request, res: Response) => {
         const taskStatusQuery = exactStatusValues.length > 0
             ? { task_status: { $in: exactStatusValues } }
             : { task_status: { $ne: TASK_STATUSES.ARCHIVE } };
+        const isDraftOnlyStatusRequest =
+            statusKeys.length === 1 && statusKeys[0] === 'DRAFT_10';
+        const shouldUseDraftSummaryPrefilter =
+            responseMode === 'summary' &&
+            Boolean(draftHorizonDays) &&
+            !includeOlderDrafts &&
+            isDraftOnlyStatusRequest;
+        const isArchiveOnlyStatusRequest =
+            statusKeys.length === 1 && statusKeys[0] === 'ARCHIVE';
+        const shouldUseArchiveSummaryPrefilter =
+            responseMode === 'summary' &&
+            Boolean(draftHorizonDays) &&
+            !includeOlderDrafts &&
+            isArchiveOnlyStatusRequest;
+
+        let prefilteredDraftVisibleIds: ObjectId[] | null = null;
+        if (shouldUseDraftSummaryPrefilter) {
+            const draftCandidates = await db
+                .collection(COLLECTIONS.TASKS)
+                .find(
+                    {
+                        is_deleted: { $ne: true },
+                        task_status: TASK_STATUSES.DRAFT_10,
+                    },
+                    {
+                        projection: DRAFT_RECENCY_PREFILTER_PROJECTION,
+                    }
+                )
+                .toArray();
+
+            const visibleDrafts = await filterVoiceDerivedDraftsByRecency({
+                db,
+                tasks: draftCandidates as Array<Record<string, unknown>>,
+                includeOlderDrafts,
+                draftHorizonDays,
+            });
+
+            const visibleIds: ObjectId[] = [];
+            for (const draftTask of visibleDrafts) {
+                const taskObjectId = toObjectId(draftTask._id);
+                if (taskObjectId) {
+                    visibleIds.push(taskObjectId);
+                }
+            }
+            prefilteredDraftVisibleIds = visibleIds;
+        }
+
+        let prefilteredArchiveVisibleIds: ObjectId[] | null = null;
+        if (shouldUseArchiveSummaryPrefilter) {
+            const archiveCandidates = await db
+                .collection(COLLECTIONS.TASKS)
+                .find(
+                    {
+                        is_deleted: { $ne: true },
+                        task_status: TASK_STATUSES.ARCHIVE,
+                    },
+                    {
+                        projection: ARCHIVE_RECENCY_PREFILTER_PROJECTION,
+                    }
+                )
+                .toArray();
+
+            const visibleArchive = filterArchivedTasksByRecency({
+                tasks: archiveCandidates as Array<Record<string, unknown>>,
+                includeOlderDrafts,
+                draftHorizonDays,
+            });
+
+            const visibleIds: ObjectId[] = [];
+            for (const archiveTask of visibleArchive) {
+                const taskObjectId = toObjectId(archiveTask._id);
+                if (taskObjectId) {
+                    visibleIds.push(taskObjectId);
+                }
+            }
+            prefilteredArchiveVisibleIds = visibleIds;
+        }
+
+        const prefilteredVisibleIds = prefilteredDraftVisibleIds ?? prefilteredArchiveVisibleIds;
 
         const aggregatePipeline: Array<Record<string, unknown>> = [
             {
                 $match: {
                     is_deleted: { $ne: true },
                     ...taskStatusQuery,
+                    ...(prefilteredVisibleIds
+                        ? {
+                            _id: { $in: prefilteredVisibleIds },
+                        }
+                        : {}),
                 },
             },
         ];
@@ -597,7 +753,11 @@ router.post('/', async (req: Request, res: Response) => {
                         updated_at: 1,
                         created_by: 1,
                         created_by_name: 1,
+                        source: 1,
                         source_kind: 1,
+                        source_data: 1,
+                        source_ref: 1,
+                        external_ref: 1,
                         discussion_count: 1,
                         total_hours: 1,
                         comments_count: 1,
@@ -627,21 +787,38 @@ router.post('/', async (req: Request, res: Response) => {
         let data = await db.collection(COLLECTIONS.TASKS).aggregate(aggregatePipeline).toArray();
 
         if (draftHorizonDays) {
-            data = await filterVoiceDerivedDraftsByRecency({
-                db,
-                tasks: data as Array<Record<string, unknown>>,
-                includeOlderDrafts,
-                draftHorizonDays,
-            });
+            if (!prefilteredDraftVisibleIds) {
+                data = await filterVoiceDerivedDraftsByRecency({
+                    db,
+                    tasks: data as Array<Record<string, unknown>>,
+                    includeOlderDrafts,
+                    draftHorizonDays,
+                });
+            }
+            if (!prefilteredArchiveVisibleIds) {
+                data = filterArchivedTasksByRecency({
+                    tasks: data as Array<Record<string, unknown>>,
+                    includeOlderDrafts,
+                    draftHorizonDays,
+                });
+            }
         }
 
         if (responseMode === 'summary') {
-            data = data.map((ticket) => ({
-                ...ticket,
-                total_hours: typeof ticket.total_hours === 'number' ? ticket.total_hours : 0,
-                comments_count: typeof ticket.comments_count === 'number' ? ticket.comments_count : 0,
-                attachments_count: typeof ticket.attachments_count === 'number' ? ticket.attachments_count : 0,
-            }));
+            data = data.map((ticket) => {
+                const normalizedTicket = {
+                    ...ticket,
+                    total_hours: typeof ticket.total_hours === 'number' ? ticket.total_hours : 0,
+                    comments_count: typeof ticket.comments_count === 'number' ? ticket.comments_count : 0,
+                    attachments_count: typeof ticket.attachments_count === 'number' ? ticket.attachments_count : 0,
+                } as Record<string, unknown>;
+
+                for (const field of SUMMARY_DRAFT_RECENCY_TRANSIENT_FIELDS) {
+                    delete normalizedTicket[field];
+                }
+
+                return normalizedTicket;
+            });
 
             logCrmTicketsProfile({
                 req,
@@ -773,6 +950,8 @@ router.post('/status-counts', async (req: Request, res: Response) => {
                 .find({
                     is_deleted: { $ne: true },
                     task_status: TASK_STATUSES.DRAFT_10,
+                }, {
+                    projection: DRAFT_RECENCY_PREFILTER_PROJECTION,
                 })
                 .toArray();
 
@@ -784,6 +963,24 @@ router.post('/status-counts', async (req: Request, res: Response) => {
             });
 
             counts.set('DRAFT_10', visibleDrafts.length);
+
+            const archiveTasks = await db
+                .collection(COLLECTIONS.TASKS)
+                .find({
+                    is_deleted: { $ne: true },
+                    task_status: TASK_STATUSES.ARCHIVE,
+                }, {
+                    projection: ARCHIVE_RECENCY_PREFILTER_PROJECTION,
+                })
+                .toArray();
+
+            const visibleArchive = filterArchivedTasksByRecency({
+                tasks: archiveTasks as Array<Record<string, unknown>>,
+                includeOlderDrafts,
+                draftHorizonDays,
+            });
+
+            counts.set('ARCHIVE', visibleArchive.length);
         }
 
         const responsePayload = {

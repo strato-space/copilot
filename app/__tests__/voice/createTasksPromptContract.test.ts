@@ -22,7 +22,9 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).toContain('project-name');
     expect(promptSource).toContain('routing-topic');
     expect(promptSource).toContain('voice.project(project_id)');
-    expect(promptSource).not.toContain('voice.search(session_id=session_id, limit=1)');
+    expect(promptSource).toContain('voice.search(session_id=session_id, limit=1)');
+    expect(promptSource).toContain('bounded окне вокруг этой discussion');
+    expect(promptSource).toContain('только если timestamps недоступны, допускается unbounded fallback');
     expect(promptSource).not.toContain('MCP `gsh`');
     expect(promptSource).not.toContain('`gsh`');
   });

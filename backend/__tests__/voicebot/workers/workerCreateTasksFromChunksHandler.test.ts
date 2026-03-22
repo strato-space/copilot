@@ -91,10 +91,12 @@ describe('handleCreateTasksFromChunksJob', () => {
       session_id: sessionId.toString(),
       tasks_count: 1,
     });
-    expect(runCreateTasksAgentMock).toHaveBeenCalledWith({
-      sessionId: sessionId.toString(),
-      projectId: 'proj-1',
-    });
+    expect(runCreateTasksAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: sessionId.toString(),
+        projectId: 'proj-1',
+      })
+    );
     expect(persistPossibleTasksForSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: sessionId.toString(),
@@ -154,11 +156,13 @@ describe('handleCreateTasksFromChunksJob', () => {
       session_id: sessionId.toString(),
       tasks_count: 1,
     });
-    expect(runCreateTasksAgentMock).toHaveBeenCalledWith({
-      sessionId: sessionId.toString(),
-      projectId: 'proj-1',
-      rawText: 'Need to ship parity this week',
-    });
+    expect(runCreateTasksAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: sessionId.toString(),
+        projectId: 'proj-1',
+        rawText: 'Need to ship parity this week',
+      })
+    );
     expect(persistPossibleTasksForSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: sessionId.toString(),

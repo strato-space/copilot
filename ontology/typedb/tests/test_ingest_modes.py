@@ -143,6 +143,12 @@ class IngestHelpersTest(unittest.TestCase):
         self.assertEqual(ingest.normalize_task_priority("weird"), "UNKNOWN")
         self.assertEqual(ingest.normalize_task_priority(None), "UNKNOWN")
 
+    def test_transcript_segment_ids_are_namespaced_by_transcription(self) -> None:
+        transcription_id = "msg-1:transcription"
+        raw_segment_id = "ch_699ed31533bac29af6b5c54f"
+        segment_id = f"{transcription_id}:segment:{raw_segment_id}"
+        self.assertEqual(segment_id, "msg-1:transcription:segment:ch_699ed31533bac29af6b5c54f")
+
     def test_entity_has_matching_updated_at_returns_true_for_equal_timestamp(self) -> None:
         ctx = DummyCtx("full", {"collections": {}}, apply=True)
         original = ingest.load_entity_updated_at_index

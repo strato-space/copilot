@@ -22,15 +22,18 @@ oneOf:
   - mode: raw_text
     raw_text: string
     session_url?: string
+    project_crm_window?: { from_date: string, to_date: string, anchor_from?: string, anchor_to?: string, source?: string }
     draft_horizon_days?: int
     include_older_drafts?: boolean
   - mode: session_id
     session_id: string
     session_url?: string
+    project_crm_window?: { from_date: string, to_date: string, anchor_from?: string, anchor_to?: string, source?: string }
     draft_horizon_days?: int
     include_older_drafts?: boolean
   - mode: session_url
     session_url: string
+    project_crm_window?: { from_date: string, to_date: string, anchor_from?: string, anchor_to?: string, source?: string }
     draft_horizon_days?: int
     include_older_drafts?: boolean
 ```
@@ -44,6 +47,7 @@ oneOf:
 - Если известен `session_id`, первым действием ОБЯЗАТЕЛЬНО вызови `voice.fetch(id=session_id, mode="transcript")`.
 - Если пришёл `session_url`, извлеки `session_id` и первым действием ОБЯЗАТЕЛЬНО вызови `voice.fetch(id=session_id, mode="transcript")`.
 - Если известен `session_id`, ДО project-wide CRM enrichment постарайся получить lightweight session timing через `voice.search(session_id=session_id, limit=1)` или equivalent session lookup, чтобы bounded project CRM reads были привязаны ко времени текущей discussion.
+- Если в envelope есть `project_crm_window.from_date` и `project_crm_window.to_date`, считай это каноническим bounded окном для project-wide CRM read и используй его напрямую.
 
 Использование MCP:
 - Работай напрямую через MCP `voice`.
@@ -61,7 +65,8 @@ oneOf:
   - ОБЯЗАТЕЛЬНО прочитай `voice.session_tasks(session_id=session_id, bucket="Draft")`;
   - ОБЯЗАТЕЛЬНО прочитай `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")`;
   - если известен `project-id`, ОБЯЗАТЕЛЬНО прочитай `voice.project(project_id)`;
-  - если известен `project-id`, старайся НЕ читать весь project-wide CRM без границ:
+  - если известен `project-id`, project-wide CRM читай bounded-by-default:
+    - если во входном envelope передан `project_crm_window` с валидными `from_date/to_date`, сначала используй именно его в `voice.crm_tickets(project_id=..., include_archived=false, mode="table", from_date=..., to_date=...)`;
     - если известны timestamps текущей discussion/session, читай `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table", from_date=..., to_date=...)` в bounded окне вокруг этой discussion;
     - practical default: использовать окно порядка `-30d .. +30d` вокруг текущей session/discussion, если нет более точного interval;
     - только если timestamps недоступны, допускается unbounded fallback.

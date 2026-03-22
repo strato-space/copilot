@@ -19,6 +19,7 @@ import {
 import { extractSessionIdFromText } from './sessionRef.js';
 import { buildCanonicalSessionLink, getPublicInterfaceOrigin } from './sessionTelegramMessage.js';
 import { ensureUniqueTaskPublicId } from '../services/taskPublicId.js';
+import { buildCanonicalTaskSourceRef } from '../services/taskSourceRef.js';
 
 export type QueueLike = {
   add: (name: string, data: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
@@ -641,10 +642,12 @@ const createCodexTaskFromPayload = async ({
     preferredId: taskTitle,
     fallbackText: normalizedText,
   });
+  const taskObjectId = new ObjectId();
   const now = new Date();
   const deferredUntil = new Date(now.getTime() + 15 * 60 * 1000);
 
   const taskDoc: Record<string, unknown> = {
+    _id: taskObjectId,
     id: publicTaskId,
     name: taskTitle,
     description: buildTaskDescription({ normalizedText, payload }),
@@ -665,7 +668,7 @@ const createCodexTaskFromPayload = async ({
       : {}),
     created_by_performer_id: actor._id,
     source_kind: 'telegram',
-    source_ref: payload.source_ref || payload.session_id,
+    source_ref: buildCanonicalTaskSourceRef(taskObjectId),
     external_ref: buildCanonicalSessionLink(payload.session_id),
     source: 'VOICE_BOT',
     source_data: {

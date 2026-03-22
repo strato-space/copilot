@@ -1,21 +1,5 @@
 # Changelog
 
-## 2026-03-22
-### PROBLEM SOLVED
-- **04:51** The ontology still had a split-brain task model and follow-up ontology defects after the initial cutover: `target_task_view` had been removed from the main task path, but identity discipline, provenance identity, subtype discriminator semantics, incremental sync coverage, and companion-doc inventories were not yet fully aligned, which risked semantic drift between schema, ingest, and operator docs.
-- **05:00** Post-push ontology smoke still failed in `typedb-ontology-validate.py` because the orphan-task aggregate used a TypeDB-inference-unsafe negative `source_kind` filter, so deploy validation could fail even when the deployed schema itself was coherent.
-
-### FEATURE IMPLEMENTED
-- **04:51** Landed the hard `task-only` ontology cutover end-to-end: `task` is now the single canonical task-plane carrier, epistemic/evidence layers are first-class (`reasoning_item` / `assumption` / `open_question`, `evidence_observation` / `visual_observation`), provenance is keyed canonically, and high-level ontology docs now describe the same object inventory as the executable TypeDB schema.
-- **05:00** Restored green ontology smoke after push by simplifying the orphan-task validation aggregate to a TypeDB-safe form for the current schema/runtime contract.
-
-### CHANGES
-- **04:51** Updated `ontology/typedb/schema/fragments/{00-kernel/10-attributes-and-ids,10-as-is/10-entities-core,10-as-is/30-entities-voice-operops,20-to-be/10-semantic-core,30-bridges/10-as-is-to-to-be}.tql`, regenerated `ontology/typedb/schema/str-ontology.tql`, and rewired `ontology/typedb/scripts/{typedb-ontology-ingest,typedb-ontology-contract-check}.py` plus `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml` to remove `target_task_view`, enforce single identity surfaces for new subtype entities, bind `visual_observation` to `evidence_link` by canonical `evidence_link_id`, formalize `reasoning_kind`, and include new ontology collections in incremental sync.
-- **04:51** Updated ontology docs and plans (`AGENTS.md`, `README.md`, `ontology/{README.md,plan/ontology-and-operations.md}`, `ontology/typedb/{AGENTS.md,README.md,docs/*}`, `plan/{voice-dual-stream-ontology,voice-task-surface-normalization-spec}.md`) so operator guidance, semantic glossary, bridge rules, and long-form ontology notes match the implemented schema reality.
-- **04:51** Extended ontology regression coverage with `ontology/typedb/tests/test_task_only_cutover.py`, updated schema/ingest tests, and re-ran `python ontology/typedb/scripts/build-typedb-schema.py`, `npm run ontology:typedb:test`, `npm run ontology:typedb:contract-check`, and `npm run ontology:typedb:ingest:dry -- --limit 5 --collections automation_tasks,automation_reasoning_items,automation_visual_observations`; all passed with `contract-check` at `errors=0`.
-- **04:51** Registered and closed ontology defects `copilot-fzur`, `copilot-5e88`, `copilot-6wdc`, `copilot-0115`, `copilot-bk93`, `copilot-951u`, and `copilot-5us4` after applying the corresponding schema, ingest, contract, and documentation fixes.
-- **05:00** Updated `ontology/typedb/scripts/typedb-ontology-validate.py` so deploy smoke no longer fails on the inference-unsafe negative `source_kind` filter in the orphan-task aggregate.
-
 ## 2026-03-21
 ### PROBLEM SOLVED
 - **09:10** The ontology/spec wave still left one critical implementation gap: task/execution surfaces were described as if direct LLM writes to TypeDB were desirable, but canonical `task.status` and `task.priority` were not yet constrained on the DB side, so invalid raw labels could still leak into the write path.
@@ -2482,20 +2466,26 @@
 
 ## 2026-03-22
 ### PROBLEM SOLVED
-- **15:00** Voice session pages could fail to open after session-list sorting when the selected project still had historical performer links but zero active performer rows; backend `project_performers` enrichment built an empty Mongo logical selector and crashed the request with `$and/$or/$nor must be a nonempty array`.
 - **00:23** Voice session title generation could leave the UI stuck in `Генерирую заголовок`, and task/session bucket drift still produced false counters, duplicate Draft exposure, or transient 400 noise after the bucket rename wave.
-- **00:58** OperOps CRM Draft and list surfaces were still heavier than needed for daily work and did not expose an operator-controlled bounded Draft horizon.
-- **01:23** Voice session page still produced preventable browser-console accessibility/markup noise after reload.
+- **04:51** The ontology still had a split-brain task plane and a brittle validate-smoke path: `target_task_view` removal was incomplete, key goal/requirement ids and ingest normalization still drifted, and the orphan-task validation query could fail even when the deployed schema itself was coherent.
+- **15:00** Voice session pages could fail to open after session-list sorting when the selected project resolved to zero active performer rows; backend `project_performers` enrichment built an empty Mongo logical selector and returned `500`.
+- **16:42** The harness article content existed only as an unstructured local dump and had no adjacent Russian version for reuse or sharing.
+- **22:04** Session-scoped Voice/OperOps follow-up flows still had traceability gaps: materialized tasks could disappear from Voice matching when `source_ref` was an OperOps self-link, multiple Codex tasks from one session shared one BD external ref, manual Draft refresh / summary save lacked end-to-end correlation reconciliation, CRM Archive did not share the bounded depth fast path, and transcription metadata could surface mojibake filenames.
 
 ### FEATURE IMPLEMENTED
+- **00:58** Finalized the strict `Draft / Ready+ / Codex` session-task contract and split OperOps CRM into summary-list vs lazy-detail payloads with bounded Draft/Archive depth control and live status-count parity.
+- **04:51** Landed the hard `task-only` TypeDB cutover end-to-end and restored green ontology smoke after the validate-query fix and post-ingest schema regeneration.
 - **15:00** Hardened Voice Telegram/performer enrichment so project-performer reads now degrade to an empty performer list when lifecycle filtering removes every linked performer, keeping the session page load path alive for sorted navigation.
-- **00:58** Split OperOps CRM into summary-list vs lazy-detail payloads, added Draft depth control with `1d / 7d / 14d / 30d / ∞`, and made `7d` the default fast surface.
-- **01:23** Finalized the strict `Draft / Ready+ / Codex` session-task bucket contract across backend/docs/tests with no lowercase live aliases in the canonical contract text.
+- **16:42** Added structured English and Russian harness article artifacts for reuse and sharing.
+- **22:04** Finalized voice-source and Codex traceability contracts: session linkage prefers canonical voice refs, BD refs are unique per task, manual refresh/save flows carry correlation ids end-to-end, mojibake filenames are normalized in UI signatures, and live parity coverage now checks CRM/Voice tab counts against production APIs.
 
 ### CHANGES
-- **15:00** Updated `backend/src/services/telegramKnowledge.ts` to return early for empty performer batches and to skip Telegram-user lookup queries when both performer-id and Telegram-id selectors are empty; updated root `AGENTS.md` and `README.md` with the empty-selector contract for `POST /api/voicebot/project_performers`.
 - **00:23** Added frontend stage timeouts / `finally` cleanup for `generate_session_title`, backend MCP correlation logging, and verified successful title generation + Telegram summary delivery for session `69be49ea4ad7c397307d2d6f`.
 - **00:41** Fixed Voice session `Задачи` counters so `Draft` rows are counted from the same canonical source as visible rows, and hardened `session_tasks(bucket='Ready+')` / `session_tab_counts` so Draft rows cannot leak into accepted-task reads (`copilot-f6z4`, `copilot-rdrq`).
-- **00:58** Added `/api/crm/tickets/status-counts`, `response_mode=summary|detail`, lazy ticket-detail hydration for CRM drawers/editors, `Loading ...` state instead of false `No data`, and request/profile instrumentation for CRM list payload size/perf (`copilot-83r7`, `copilot-bn3f`).
-- **01:05** Switched OperOps Draft depth presets to `1d / 7d / 14d / 30d / ∞`, with `7d` as the default fast view and `∞` meaning no `draft_horizon_days` filter.
+- **00:58** Added `/api/crm/tickets/status-counts`, `response_mode=summary|detail`, lazy ticket-detail hydration for CRM drawers/editors, `Loading ...` state instead of false `No data`, request/profile instrumentation, and Draft/Archive bounded-depth handling; the fast surface now defaults to `1d`, while `∞` means no recency bound (`copilot-83r7`, `copilot-bn3f` plus current CRM refinements).
 - **01:23** Cleaned the Voice session page console by adding explicit labels/names to MeetingCard/FAB fields, labeling the summary textarea, and removing AntD autosize’s hidden measurement textarea from the summary panel (`copilot-occa`).
+- **04:51** Removed `target_task_view`, rebound task/process/product/execution relations directly onto `task`, added reasoning/evidence entities, restored missing goal/requirement id attributes, normalized ingest mapping for `task.status` / `task.priority`, regenerated `ontology/typedb/schema/str-ontology.tql`, and fixed `typedb-ontology-validate.py` to avoid the inference-unsafe orphan-task query (`ee5dda3`, `959afdd`, `7c4f32a`, `2b3d6e0`, `b11aa20`).
+- **15:00** Updated `backend/src/services/telegramKnowledge.ts` plus root docs so `POST /api/voicebot/project_performers` short-circuits empty performer/Telegram selector batches instead of issuing invalid Mongo logical arrays (`c8a164b`).
+- **16:42** Added `factory/harness.md` and `factory/harness.ru.md` as structured article artifacts (`7195877`).
+- **22:04** Updated `app/src/utils/{voiceSessionTaskSource,voiceSourceFileName,voiceMetadataSignature}.ts`, `app/src/pages/operops/taskPageUtils.ts`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/services/voicebot/{createTasksAgent,voicebotDoneNotify}.ts`, worker handlers, and focused tests/e2e so Voice session matching prefers `external_ref` when `source_ref` is an OperOps self-link (`copilot-ztlv.27`), Codex issue creation uses unique `#codex-task=` refs, manual Draft refresh and summary save carry/reconcile correlation ids, `runCreateTasksAgent(...)` injects bounded `project_crm_window`, mojibake filenames are normalized in metadata signatures, and live parity tests assert CRM/Voice tab counts against live APIs.
+- **22:04** Updated root `AGENTS.md` with the subagent execution policy: subagents should start with clean history by default, while final integration verification and deploy/smoke remain parent-thread responsibilities.

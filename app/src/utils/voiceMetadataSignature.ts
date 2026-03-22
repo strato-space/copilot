@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import { normalizeVoiceSourceFileName } from './voiceSourceFileName';
 
 const toSeconds = (value: unknown): number | null => {
     const numeric = Number(value);
@@ -60,7 +61,7 @@ export const formatVoiceMetadataSignature = ({
         ? `${relativeStart} - ${relativeEnd}`
         : '';
 
-    const fileName = typeof sourceFileName === 'string' ? sourceFileName.trim() : '';
+    const fileName = normalizeVoiceSourceFileName(sourceFileName);
     const absoluteMs = toTimestampMs(absoluteTimestampMs);
     const absoluteLabel = absoluteMs != null ? dayjs(absoluteMs).format('HH:mm:ss') : '';
 
@@ -76,7 +77,7 @@ export const formatVoiceMetadataFooterSignature = ({
     sourceFileName?: string | null | undefined;
     absoluteTimestampMs?: unknown;
 }): string | null => {
-    const fileName = typeof sourceFileName === 'string' ? sourceFileName.trim() : '';
+    const fileName = normalizeVoiceSourceFileName(sourceFileName);
     const absoluteMs = toTimestampMs(absoluteTimestampMs);
     if (!fileName || absoluteMs == null) return null;
 
@@ -89,9 +90,7 @@ export const buildCategorizationBlockMetadataSignature = ({
     messageTimestamp,
 }: CategorizationBlockMetadataSignatureInput): string | null => {
     const candidates = [...(rows || []), ...(materials || [])];
-    const withFileName = candidates.find((item) =>
-        typeof item?.source_file_name === 'string' && item.source_file_name.trim().length > 0
-    );
+    const withFileName = candidates.find((item) => normalizeVoiceSourceFileName(item?.source_file_name).length > 0);
 
     const sourceFileName = withFileName?.source_file_name;
     const timestampCandidate = withFileName?.message_timestamp ?? messageTimestamp;

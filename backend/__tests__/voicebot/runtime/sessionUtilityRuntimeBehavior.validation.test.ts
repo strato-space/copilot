@@ -96,7 +96,9 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(Array.isArray(insertedDocs)).toBe(true);
     expect(insertedDocs).toHaveLength(1);
     expect(insertedDocs[0]?.task_status).toBe(TASK_STATUSES.READY_10);
-    expect(insertedDocs[0]?.source_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
+    expect(String(insertedDocs[0]?.source_ref || '')).toMatch(
+      /^https:\/\/copilot\.stratospace\.fun\/operops\/task\/[a-f0-9]{24}$/i
+    );
     expect((insertedDocs[0]?.source_data as Record<string, unknown>)?.session_id).toBe(sessionId.toHexString());
     expect(insertedDocs[0]?.discussion_sessions).toEqual([
       expect.objectContaining({
@@ -1521,7 +1523,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           ],
           relations: [expect.objectContaining({ type: 'blocks', id: 'dep-1' })],
           source_kind: 'voice_possible_task',
-          source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+          source_ref: expect.stringMatching(/^https:\/\/copilot\.stratospace\.fun\/operops\/task\/[a-f0-9]{24}$/i),
         }),
       ])
     );
@@ -1940,7 +1942,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         name: 'Updated wording',
         description: 'Updated description with more context',
         project_id: projectId.toHexString(),
-        source_ref: canonicalRef,
+        source_ref: `https://copilot.stratospace.fun/operops/task/${sharedTaskId.toHexString()}`,
         external_ref: canonicalRef,
         source_data: expect.objectContaining({
           session_id: sessionId.toHexString(),
@@ -1959,7 +1961,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           id: 'shared-row',
           name: 'Updated wording',
           description: 'Updated description with more context',
-          source_ref: canonicalRef,
+          source_ref: `https://copilot.stratospace.fun/operops/task/${sharedTaskId.toHexString()}`,
           external_ref: canonicalRef,
           source_data: expect.objectContaining({
             session_id: sessionId.toHexString(),
@@ -2118,7 +2120,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         id: 'shared-row',
         name: 'Updated wording',
         description: 'Updated description',
-        source_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+        source_ref: `https://copilot.stratospace.fun/operops/task/${sharedTaskId.toHexString()}`,
       }),
     ]);
     expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
@@ -2246,6 +2248,148 @@ describe('Voicebot utility routes runtime behavior', () => {
           task_status: TASK_STATUSES.READY_10,
           accepted_from_possible_task: true,
           accepted_from_row_id: 'stored-row',
+        }),
+      })
+    );
+  });
+
+  it('process_possible_tasks reuses accepted task row by accepted_from_row_id lineage when payload has no _id', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+    const acceptedTaskId = new ObjectId();
+    const canonicalRef = `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`;
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+    const taskUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const masterFind = jest.fn((filter: Record<string, unknown>) => {
+      const serialized = JSON.stringify(filter);
+      const isDraftLookup = serialized.includes(`"${TASK_STATUSES.DRAFT_10}"`);
+      const isAcceptedLookup = serialized.includes(`"$ne":"${TASK_STATUSES.DRAFT_10}"`);
+      if (isAcceptedLookup) {
+        return {
+          sort: () => ({
+            toArray: async () => [
+              {
+                _id: acceptedTaskId,
+                accepted_from_row_id: 'stored-row',
+                row_id: 'stored-row',
+                id: 'copilot-existing',
+                task_status: TASK_STATUSES.READY_10,
+                external_ref: canonicalRef,
+                source_data: {
+                  session_id: sessionId.toHexString(),
+                  row_id: 'stored-row',
+                },
+              },
+            ],
+          }),
+        };
+      }
+      if (isDraftLookup) {
+        return {
+          sort: () => ({
+            toArray: async () => [
+              {
+                row_id: 'stored-row',
+                id: 'stored-row',
+                name: 'Stored row',
+                description: 'Stored description',
+                performer_id: validPerformerId.toHexString(),
+                project_id: projectId.toHexString(),
+                project: 'Stored project',
+                task_status: TASK_STATUSES.DRAFT_10,
+                source: 'VOICE_BOT',
+                source_kind: 'voice_possible_task',
+                external_ref: canonicalRef,
+                source_data: {
+                  session_id: sessionId.toHexString(),
+                  session_name: 'Runtime test session',
+                  voice_sessions: [
+                    {
+                      session_id: sessionId.toHexString(),
+                      session_name: 'Runtime test session',
+                      project_id: projectId.toHexString(),
+                      created_at: '2026-03-06T00:00:00.000Z',
+                      role: 'primary',
+                    },
+                  ],
+                  row_id: 'stored-row',
+                },
+              },
+            ],
+          }),
+        };
+      }
+      return {
+        sort: () => ({
+          toArray: async () => [],
+        }),
+      };
+    });
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({ _id: validPerformerId, name: 'Assignee' })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+            findOne: jest.fn(async () => null),
+            insertMany: insertManySpy,
+            updateOne: taskUpdateOneSpy,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            updateOne: sessionUpdateOneSpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/process_possible_tasks')
+      .send({
+        session_id: sessionId.toHexString(),
+        tickets: [{ row_id: 'stored-row' }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(insertManySpy).not.toHaveBeenCalled();
+    expect(taskUpdateOneSpy).toHaveBeenCalledWith(
+      { _id: acceptedTaskId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          row_id: 'stored-row',
+          accepted_from_row_id: 'stored-row',
+          source_ref: `https://copilot.stratospace.fun/operops/task/${acceptedTaskId.toHexString()}`,
+          external_ref: canonicalRef,
         }),
       })
     );

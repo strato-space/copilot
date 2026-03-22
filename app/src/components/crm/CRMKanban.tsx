@@ -265,7 +265,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
     }, [effectiveStatusFilter]);
 
     const requestedDraftHorizonDays = useMemo(() => {
-        return requestedStatusFilter.length === 1 && String(requestedStatusFilter[0] || '').trim() === TASK_STATUSES.DRAFT_10
+        if (requestedStatusFilter.length !== 1) return undefined;
+        const normalizedStatus = String(requestedStatusFilter[0] || '').trim();
+        return normalizedStatus === 'DRAFT_10' || normalizedStatus === 'ARCHIVE'
             ? props.draftHorizonDays
             : undefined;
     }, [props.draftHorizonDays, requestedStatusFilter]);

@@ -42,8 +42,8 @@ Production emphasis:
 - `voice_session` — bounded discussion event, из которого извлекаются задачи, evidence и контекстные обновления.
 - `processing_run` — occurrence обработки одного session/message scope. Это run processing pipeline, а не запуск исполнения задачи.
 - `task_execution_run` — occurrence исполнения одной задачи одним executor contour. Это не `processing_run`.
-- `context_enrichment` — стадия сборки достаточного task-local `execution_context`: project/product materials, duplicate checks, `object_locator`, `evidence_link`, `expected_result`, `acceptance_criterion`, routing basis.
-- `execution_context` — не “всё знание проекта”, а минимально достаточный task-local состав: `object_locator`, `evidence_link`, `expected_result`, `acceptance_criterion`, routing / executor hints.
+- `context_enrichment` — стадия сборки достаточного task-local `execution_context`: project/product materials, duplicate checks, `object_locator`, `evidence_link`, `acceptance_criterion`, routing basis.
+- `execution_context` — не “всё знание проекта”, а минимально достаточный task-local состав: `object_locator`, `evidence_link`, `acceptance_criterion`, routing / executor hints.
 - `human_approval` — санкция на то, что формулировка задачи и её `execution_context` достаточны для routing/launch.
 - `person` — человеческая identity-сущность: она отвечает на вопрос, кто этот человек, но не исчерпывает его текущую роль, полномочие или исполнительный профиль.
 - `actor` — участник системы, который может говорить, оценивать, согласовывать, комментировать и инициировать изменения.
@@ -52,7 +52,6 @@ Production emphasis:
 - `performer_profile` — canonical human executor profile / performer surface, grounded in `person`, в который задача может быть маршрутизирована для исполнения.
 - `coding_agent` — first-class non-human executor, задаваемый как CLI/agent surface с путём запуска, аргументами и role/pipeline refs.
 - `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или иной target object.
-- `expected_result` — нормализованное имя ожидаемого produced outcome задачи до её запуска и до факта приемки.
 - `outcome_record` — canonical DB-side типизированный результат исполнения (`artifact | decision | state_transition`).
 - `artifact_record` — canonical DB-side produced result.
 - `result_artifact` — human-facing alias для `artifact_record`, а не вторая сущность.
@@ -130,7 +129,7 @@ Concrete counterexample:
 
 Пояснительно, в рабочем языке этот цикл выглядит так:
 1. из `voice_session` система выделяет `task[DRAFT_10]`;
-2. система проходит `context_enrichment`: подтягивает материалы проекта/продукта, проверяет дубли, формирует `object_locator`, `expected_result`, `acceptance_criterion` и другой минимально достаточный `execution_context`;
+2. система проходит `context_enrichment`: подтягивает материалы проекта/продукта, проверяет дубли, формирует `object_locator`, `acceptance_criterion` и другой минимально достаточный `execution_context`;
 3. уполномоченный `actor` быстро просматривает эти `task[DRAFT_10]` и через `human_approval` утверждает только нужные;
 4. после `human_approval` задача не “получает контекст из ниоткуда”, а входит в launch-ready состояние с уже собранным `execution_context`: что менять, почему это вообще появилось, по каким критериям принимать и кому это разумно маршрутизировать;
 5. дальше `executor_routing` маршрутизирует задачу либо в `performer_profile`, либо в `coding_agent`, либо в mixed contour;
@@ -273,10 +272,10 @@ Minimal relations:
 
 Canonical entities:
 - `[-o-]` `evidence_observation`
-- `[mom]` `visual_observation`
+- `[-o-]` `visual_observation`
 - `[mom]` `voice_message`
 - `[-o-]` `transcript_segment`
-- `[ ]` `evidence_link`
+- `[-o-]` `evidence_link`
 
 Support field:
 - `dialogue_reference` — current field-level evidence carrier, not a first-class evidence entity
@@ -417,10 +416,11 @@ Minimal relations:
 - writeback decisions govern durable mutations
 - notes/conclusions/manifests are object-bound, never free-floating memory
 
-### Layer 5.5 Outcome / Acceptance / Measurement Ontology
+### Layer 6. Outcome / Acceptance / Measurement Ontology
 Это слой того, **какой результат произведён, по каким критериям уполномоченный `actor` его принимает и как этот результат измеряется**.
 
 Canonical entities:
+- `[-o-]` `outcome_record`
 - `[ ]` `acceptance_evaluation`
 - `[mom]` `artifact_record`
 - `[mom]` `kpi`
@@ -448,7 +448,7 @@ Minimal relations:
 - `goal_process | goal_product -> measured_by -> kpi`
 - `kpi -> observed_as -> kpi_observation`
 
-### Layer 6. Registry / Configuration Ontology
+### Layer 7. Registry / Configuration Ontology
 Это слой того, **какие правила и словари управляют runtime без переписывания онтологии руками**.
 
 Canonical entities:
@@ -469,7 +469,7 @@ Minimal relations:
 - `bot_command_registry` governs available commands and aliases
 - `seed_context_base` is materialized into context packs, role/skill registries, and `executor_routing` defaults rather than kept as one free-form blob
 
-### Layer 7. Actor / Authority Ontology
+### Layer 8. Actor / Authority Ontology
 Это слой того, **кто говорит, кто принимает решения и кто исполняет**.
 
 Canonical entities:
@@ -511,7 +511,7 @@ Minimal relations:
 - `execution_context` may recommend one or more `coding_agent`
 - performer/assignee semantics must stay distinct from generic participant semantics
 
-### Layer 7.5. Executor / Launch Ontology
+### Layer 8.5. Executor / Launch Ontology
 Это слой того, **как задача переходит от intake к конкретному исполнению**.
 
 Canonical entities:
@@ -537,7 +537,7 @@ Key discipline:
 - `task_execution_run` is not `processing_run`;
 - `task_family` is not `executor_role`.
 
-### Layer 8. Management Ontology: Process / Delivery Stream
+### Layer 9. Management Ontology: Process / Delivery Stream
 Это PMBOK/SWEBOK-совместимый слой **кто что делает, что мешает, и какого process outcome мы добиваемся**.
 
 Canonical entities:
@@ -562,7 +562,7 @@ Exact current-state note:
 - historical draft/projection labels are legacy bridge/support vocabulary, not a second task storage family,
 - this matches the architectural choice that task semantics should converge to one first-class operational entity.
 
-### Layer 9. Management Ontology: Product Stream
+### Layer 10. Management Ontology: Product Stream
 Это PMBOK/SWEBOK-совместимый слой **что должно быть изготовлено и какими продуктными свойствами / business drivers оно обусловлено**.
 
 Canonical entities:
@@ -577,7 +577,7 @@ Meaning:
 - `goal_product`: целевое состояние продукта/решения
 - `requirement`: что решение должно обеспечивать
 
-### Layer 10. Cross-Cutting Classification
+### Layer 11. Cross-Cutting Classification
 Это не отдельные management objects, а classification layer.
 
 Canonical entities/fields:
@@ -599,15 +599,15 @@ Current parity note:
 AS IS / TO BE linkage rule:
 - AS IS: one primary session carrier still lives in `source_ref` / `external_ref`, with multi-session compatibility carried in `source_data.voice_sessions[]` and partial top-level `discussion_sessions[]`;
 - TO BE: `task -> discussed_in -> voice_session` becomes the first-class many-to-many task/session linkage, with message/chunk evidence attached separately;
-- decision: `discussion_link` itself is not promoted to a first-class entity at this stage, because the link currently has no independent lifecycle/approval/state semantics of its own;
+- decision: `discussion_linkage` itself is not promoted to a first-class entity at this stage, because the link currently has no independent lifecycle/approval/state semantics of its own;
 - migration implication: historical session payloads in `processors_data.CREATE_TASKS.data` must be materialized into canonical `DRAFT_10` task docs, after which the payload is legacy history only.
 
-### Layer 11. Decision / Assumption Ontology
+### Layer 12. Decision / Assumption Ontology
 Это слой того, **какие решения уже приняты и какие предпосылки приняты временно**.
 
 Canonical entities:
 - `[ ]` `decision`
-- `[mom]` `reasoning_item`
+- `[-o-]` `reasoning_item`
 - `[-o-]` `assumption`
 - `[-o-]` `open_question`
 

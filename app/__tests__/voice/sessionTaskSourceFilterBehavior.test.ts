@@ -63,6 +63,25 @@ describe('voice session task source filter behavior', () => {
     expect(ticketMatchesVoiceSessionSourceRefs(ticket, refs)).toBe(true);
   });
 
+  it('matches ticket by external_ref when source_ref is an OperOps task URL', () => {
+    const refs = buildVoiceSessionTaskSourceRefs(sessionId, null);
+    const ticket = {
+      source_ref: 'https://copilot.stratospace.fun/operops/task/OPS-42',
+      external_ref: canonicalSessionUrl,
+    };
+
+    expect(ticketMatchesVoiceSessionSourceRefs(ticket, refs)).toBe(true);
+  });
+
+  it('does not treat OperOps source_ref as a voice linkage ref', () => {
+    const refs = buildVoiceSessionTaskSourceRefs(sessionId, null);
+    const ticket = {
+      source_ref: 'https://copilot.stratospace.fun/operops/task/OPS-42',
+    };
+
+    expect(ticketMatchesVoiceSessionSourceRefs(ticket, refs)).toBe(false);
+  });
+
   it('matches ticket when session is stored in source_data.voice_sessions array', () => {
     const refs = buildVoiceSessionTaskSourceRefs(sessionId, null);
     const ticket = {

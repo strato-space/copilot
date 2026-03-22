@@ -37,7 +37,9 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 | `/api/voicebot/projects` | `POST` | List projects available for the performer. |
 | `/api/voicebot/update_*` | `POST` | Session metadata updates (name/project/access/users/dialogue tag). |
 
-## Possible Tasks / taskflow endpoints
+## Draft Taskflow Endpoints
+
+- Legacy endpoint names still contain `possible_tasks` for compatibility, but the runtime contract is Draft-first (`DRAFT_10` -> `READY_10+`) with strict bucket reads (`Draft / Ready+ / Codex`).
 
 | Endpoint | Method | Purpose |
 |---|---|---|
@@ -90,7 +92,8 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - `voice.session_task_counts(...)`
   - `voice.session_tasks(..., bucket="Draft")`
   - `voice.crm_tickets(session_id=...)`
-  - `voice.crm_tickets(project_id=...)`
+  - `voice.crm_tickets(project_id=..., from_date=..., to_date=...)` when session/discussion timing is available
+  - unbounded `voice.crm_tickets(project_id=...)` only as fallback when timing cannot be resolved
 - For session-centric agents like `create_tasks`, project-wide `voice.crm_tickets(project_id=...)` should be bounded by `from_date` / `to_date` when session timing is available; unbounded project CRM is fallback-only.
 - For voice-derived draft reads, callers may optionally pass:
   - `draft_horizon_days`
@@ -102,7 +105,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - `bucket`
   - `count`
   - `items`
-- `DRAFT_10` Possible Tasks are mutable:
+- `DRAFT_10` draft rows are mutable:
   - same-scope rows are rewritten in place by canonical `row_id/id`
   - duplicate suppression applies to materialized task space, not to mutable `DRAFT_10` baseline rows
   - `agent_results.create_tasks` is not part of the task-surface runtime contract; draft state lives only in canonical task rows
@@ -113,7 +116,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - Automatic runtime path:
   - every successful text transcription completion enqueues `POSTPROCESSORS.CREATE_TASKS`,
   - worker delegates to fast-agent `create_tasks`,
-  - refreshed possible-task rows are persisted to `automation_tasks`,
+  - refreshed Draft rows are persisted to `automation_tasks`,
   - only after persistence does the worker enqueue websocket refresh via `session_update.taskflow_refresh.possible_tasks`,
   - runtime recompute is not gated by session close or categorization completion.
 - Manual categorization path:
@@ -139,7 +142,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - `Транскрипция`, `Категоризация`, and `Задачи` show a subtle green pulse dot while their stage is still pending:
   - transcription pending = uploaded/new chunk not yet transcribed,
   - categorization pending = transcript exists but categorization is not complete,
-  - possible tasks pending = transcript advanced beyond the last completed `CREATE_TASKS` run or `CREATE_TASKS` is currently processing.
+  - draft tasks pending = transcript advanced beyond the last completed `CREATE_TASKS` run or `CREATE_TASKS` is currently processing.
 
 ### Multi-process delivery
 - Socket.IO Redis adapter is enabled in backend bootstrap (`backend/src/index.ts`), so events are delivered correctly across PM2 processes.

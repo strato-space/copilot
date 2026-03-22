@@ -2039,7 +2039,7 @@ def project_voice_message_transcription(ctx: IngestContext, doc: dict[str, Any],
         key_value=transcription_id,
         attr_specs=[
             ("source_ref", "string", message_id),
-            ("task", "string", as_string(transcription_payload.get("task")) or as_string(doc.get("task"))),
+            ("task_text", "string", as_string(transcription_payload.get("task")) or as_string(doc.get("task"))),
             ("duration", "double", as_number(transcription_payload.get("duration_seconds")) or as_number(doc.get("duration"))),
             ("summary", "string", to_capped_stringish(summary_text)),
             ("transcription_provider", "string", as_string(transcription_payload.get("provider"))),
@@ -2069,7 +2069,12 @@ def project_voice_message_transcription(ctx: IngestContext, doc: dict[str, Any],
     for index, segment in enumerate(segments, start=1):
         if not isinstance(segment, dict):
             continue
-        segment_id = as_string(segment.get("id")) or f"{transcription_id}:segment:{index:04d}"
+        raw_segment_id = as_string(segment.get("id"))
+        segment_id = (
+            f"{transcription_id}:segment:{raw_segment_id}"
+            if raw_segment_id
+            else f"{transcription_id}:segment:{index:04d}"
+        )
         upsert_entity(
             ctx,
             entity="transcript_segment",
@@ -2284,7 +2289,7 @@ def build_voice_message_attr_specs(
         ("transcription_model", "string", as_string(resolve_doc_path(doc, "transcription.model"))),
         ("transcription_schema_version", "integer", as_number(resolve_doc_path(doc, "transcription.schema_version"))),
         ("transcription_raw", "string", to_capped_stringish(doc.get("transcription_raw"))),
-        ("task", "string", as_string(doc.get("task"))),
+        ("task_text", "string", as_string(doc.get("task"))),
         ("categorization", "string", to_capped_stringish(doc.get("categorization"))),
         ("categorization_timestamp", "double", as_number(doc.get("categorization_timestamp"))),
         ("categorization_error", "string", as_string(doc.get("categorization_error"))),

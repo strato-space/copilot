@@ -277,7 +277,9 @@ describe('handleTranscribeJob', () => {
       real_name: 'Codex',
     }));
     const tasksFindOne = jest.fn(async () => null);
-    const tasksInsertOne = jest.fn(async () => ({ insertedId: codexTaskId }));
+    const tasksInsertOne = jest.fn(async (doc: Record<string, unknown>) => ({
+      insertedId: (doc._id as ObjectId) || codexTaskId,
+    }));
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
@@ -333,6 +335,11 @@ describe('handleTranscribeJob', () => {
     expect(insertedTask.priority_reason).toBe('voice_command');
     expect(insertedTask.codex_review_state).toBe('deferred');
     expect(insertedTask.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`);
+    const insertedTaskObjectId = insertedTask._id as ObjectId | undefined;
+    expect(insertedTaskObjectId instanceof ObjectId).toBe(true);
+    expect(String(insertedTask.source_ref || '')).toBe(
+      `https://copilot.stratospace.fun/operops/task/${insertedTaskObjectId?.toHexString()}`
+    );
 
     const sourceData = insertedTask.source_data as Record<string, unknown>;
     const payload = sourceData.payload as Record<string, unknown>;
@@ -352,7 +359,7 @@ describe('handleTranscribeJob', () => {
     const codexTaskIdUpdate = sessionsUpdateOne.mock.calls.find((call) => {
       const update = call[1] as Record<string, unknown> | undefined;
       const setPayload = (update?.$set || {}) as Record<string, unknown>;
-      return setPayload['processors_data.CODEX_TASKS.last_task_id'] === codexTaskId.toHexString();
+      return setPayload['processors_data.CODEX_TASKS.last_task_id'] === insertedTaskObjectId?.toHexString();
     });
     expect(codexTaskIdUpdate).toBeDefined();
   });

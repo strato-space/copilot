@@ -212,4 +212,57 @@ describe('handleDoneMultipromptJob', () => {
 
     expect(result).toEqual({ ok: false, error: 'session_not_found' });
   });
+
+  it('persists generated summary_correlation_id for already-closed sessions without correlation id', async () => {
+    const sessionId = new ObjectId();
+    const sessionDoc = { _id: sessionId, is_deleted: false, is_active: false, to_finalize: true };
+    const sessionsFindOne = jest.fn(async () => sessionDoc);
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const tgSessionsUpdateMany = jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 }));
+    const postprocessorsAdd = jest.fn(async () => ({ id: 'post-job' }));
+    const notifiesAdd = jest.fn(async () => ({ id: 'notify-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS) {
+          return {
+            updateMany: tgSessionsUpdateMany,
+          };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsAdd,
+      },
+      [VOICEBOT_QUEUES.NOTIFIES]: {
+        add: notifiesAdd,
+      },
+    });
+
+    const result = await handleDoneMultipromptJob({
+      session_id: sessionId.toString(),
+      already_closed: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(sessionsUpdateOne).toHaveBeenCalledTimes(1);
+    expect(sessionsUpdateOne).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          summary_correlation_id: expect.any(String),
+          updated_at: expect.any(Date),
+        }),
+      })
+    );
+  });
 });

@@ -4,6 +4,8 @@ export interface VoiceSessionTaskflowRefreshHint {
     tasks?: boolean;
     codex?: boolean;
     summary?: boolean;
+    correlation_id?: string;
+    clicked_at_ms?: number;
     updated_at?: string;
 }
 
