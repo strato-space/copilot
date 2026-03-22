@@ -45,11 +45,25 @@ class SchemaLayersTest(unittest.TestCase):
         self.assertIn("relation voice_message_has_transcription,", text)
         self.assertIn("relation voice_session_has_participant_person,", text)
         self.assertIn("relation drive_project_file_indexes_drive_node,", text)
-        self.assertIn("relation target_task_view_classified_as_task_family,", text)
-        self.assertIn("relation executor_routing_targets_target_task_view,", text)
+        self.assertIn("relation task_classified_as_task_family,", text)
+        self.assertIn("relation executor_routing_targets_task,", text)
         self.assertIn("relation executor_routing_launches_task_execution_run,", text)
-        self.assertIn("relation task_execution_run_executes_target_task_view,", text)
+        self.assertIn("relation task_execution_run_executes_task,", text)
         self.assertIn("relation task_execution_run_produces_artifact_record,", text)
+        self.assertNotIn("entity target_task_view,", text)
+        self.assertNotIn("attribute target_task_view_id, value string;", text)
+
+    def test_generated_schema_contains_epistemic_and_visual_observation_entities(self) -> None:
+        _, text = build.build_outputs()
+        self.assertIn("entity reasoning_item,", text)
+        self.assertIn("entity assumption sub reasoning_item,", text)
+        self.assertIn("entity open_question sub reasoning_item,", text)
+        self.assertIn("entity evidence_observation,", text)
+        self.assertIn("entity visual_observation sub evidence_observation,", text)
+        self.assertIn("relation assumption_conditions_task,", text)
+        self.assertIn("relation open_question_blocks_task,", text)
+        self.assertIn("relation visual_observation_cites_evidence_link,", text)
+        self.assertIn("relation visual_observation_about_object_locator,", text)
 
     def test_generated_schema_excludes_routing_items_from_to_be_core(self) -> None:
         _, text = build.build_outputs()

@@ -103,7 +103,7 @@ Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
   - `agent_role`
   - `prompt_pipeline`
   - `context_bundle`
-  - `target_task_view`
+  - `task` as the single canonical task-plane semantic carrier
 - [x] Add Mode Engine core:
   - `mode_definition`
   - `mode_segment`
@@ -125,6 +125,13 @@ Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
   - `writeback_decision`
   - `review_annotation`
   - `access_policy`
+- [x] Add evidence and epistemic core:
+  - `evidence_link`
+  - `evidence_observation`
+  - `visual_observation`
+  - `reasoning_item`
+  - `assumption`
+  - `open_question`
 - [x] Add typed memory classifications as separate object-bound entities:
   - `working_memory`
   - `session_memory`
@@ -144,13 +151,11 @@ Design `copilot` ontology as a strict semantic layer for LLMs and agents, with:
 ## Bridge Layer (`30-bridges`)
 - [x] Keep and refine:
   - `as_is_project_maps_to_project_context_card`
-  - `as_is_oper_task_maps_to_target_task_view`
 - [x] Replace `as_is_voice_session_maps_to_context_bundle` with `as_is_voice_session_maps_to_mode_segment`.
 - [x] Add object-bound bridges:
   - `as_is_voice_message_maps_to_object_event`
   - `as_is_summary_maps_to_object_conclusion`
   - `as_is_attachment_maps_to_artifact_record`
-  - `as_is_possible_task_maps_to_target_task_view`
   - `object_manifest_assembled_for_context_bundle`
   - `writeback_decision_writes_object_note`
   - `review_annotation_approves_writeback`

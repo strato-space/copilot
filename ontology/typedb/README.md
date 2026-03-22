@@ -75,7 +75,7 @@ Ontology uses a dual surface:
 - `20-to-be` now models object-bound target semantics aligned with Mode Engine and FPF, not generic memory buckets.
 - `30-bridges` now expresses AS-IS -> TO-BE semantic translation for projects, sessions, tasks, object history, and semantic artifacts.
 - These layers are for reasoning and traceability only; they are not a runtime CRUD source of truth.
-- DB-side owner-level `@values(...)` constraints are now part of the schema contract for `task`, `target_task_view`, and key TO-BE execution/process/product status carriers.
+- DB-side owner-level `@values(...)` constraints are now part of the schema contract for `task` and key TO-BE execution/process/product status carriers.
 
 ## Current TO-BE Semantic Core
 
@@ -99,6 +99,14 @@ The current `20-to-be` layer defines:
 - artifact semantics:
   - `artifact_record`
   - `artifact_patch`
+- evidence semantics:
+  - `evidence_link`
+  - `evidence_observation`
+  - `visual_observation`
+- epistemic semantics:
+  - `reasoning_item`
+  - `assumption`
+  - `open_question`
 - object-bound lifecycle semantics:
   - `object_revision`
   - `object_event`
@@ -109,7 +117,7 @@ The current `20-to-be` layer defines:
   - `review_annotation`
   - `access_policy`
 - task semantics:
-  - `target_task_view`
+  - `task` as the single canonical task-plane semantic carrier
 - executor-layer semantics:
   - `coding_agent`
   - `task_family`
@@ -125,8 +133,6 @@ The current `20-to-be` layer defines:
 The current `30-bridges` layer defines bridge families such as:
 - `as_is_project_maps_to_project_context_card`
 - `as_is_voice_session_maps_to_mode_segment`
-- `as_is_task_maps_to_target_task_view`
-- `as_is_possible_task_maps_to_target_task_view`
 - `as_is_voice_message_maps_to_object_event`
 - `as_is_summary_maps_to_object_conclusion`
 - `as_is_attachment_maps_to_artifact_record`

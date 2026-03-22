@@ -70,6 +70,8 @@ SPARSE_OPTIONAL_RELATION_LOOKUPS: dict[str, set[str]] = {
     "finops_expense_operations": {"project_has_cost_expense <- project_id"},
 }
 
+REASONING_ITEM_KINDS = {"assumption", "open_question"}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Validate MongoDB documents against TypeDB schema/mapping without importing data')
@@ -206,6 +208,33 @@ def main() -> int:
         for doc in iter_docs(db, collection, args.limit):
             scanned += 1
             total_scanned += 1
+            if collection == "automation_reasoning_items":
+                kind_value = ingest.as_string(doc.get("kind"))
+                normalized_kind = kind_value.strip().lower() if isinstance(kind_value, str) else ""
+                if normalized_kind not in REASONING_ITEM_KINDS:
+                    add_issue(
+                        issues,
+                        "ERROR",
+                        collection,
+                        "unsupported_kind",
+                        f"unsupported kind {kind_value!r}; expected one of {sorted(REASONING_ITEM_KINDS)}",
+                        seen,
+                        args.sample_errors,
+                        counters,
+                    )
+            if collection == "automation_visual_observations":
+                evidence_link_id = ingest.normalize_id(doc.get("evidence_link_id"))
+                if not evidence_link_id:
+                    add_issue(
+                        issues,
+                        "ERROR",
+                        collection,
+                        "missing_canonical_evidence_link_id",
+                        "evidence_link_id is required for canonical visual-observation provenance",
+                        seen,
+                        args.sample_errors,
+                        counters,
+                    )
             for attr, source_field in attributes_cfg.items():
                 if not isinstance(source_field, str):
                     continue

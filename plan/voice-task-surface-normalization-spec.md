@@ -177,14 +177,12 @@
 
 #### TO-BE / bridge layer, already relevant
 
-Если normalization в будущем углубляется, уже существующие TO-BE/bridge объекты и связи остаются релевантны:
-- `target_task_view`
-- `as_is_task_maps_to_target_task_view`
-- `as_is_possible_task_maps_to_target_task_view`
+Если normalization в будущем углубляется, уже существующие TO-BE объекты и связи остаются релевантны:
+- `task` as single semantic carrier
 - `as_is_voice_session_maps_to_mode_segment`
 - `as_is_voice_message_maps_to_object_event`
 
-Но текущая спецификация не требует немедленного переключения UI на TO-BE projection.  
+Но текущая спецификация не требует немедленного переключения UI на отдельную TO-BE сущность поверх `task`.  
 Она фиксирует status-first semantics поверх текущего AS-IS storage model и задает следующий replacement contract.
 Иными словами: current ontology и Mongo теперь сходятся в одном primary entity name `task`; исторические draft/projection labels больше не должны читаться как отдельные entity kinds.
 

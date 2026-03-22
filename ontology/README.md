@@ -27,7 +27,7 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - `typedb` AS-IS layer explicitly separates `person` and `performer_profile`; do not collapse `automation_persons` and `automation_performers` into one ontology object.
 - Kernel TQL attributes with `# @toon inventory=inspect ...` are the source of truth for dictionary-like field inspection and generated inline domain values in `str-ontology.tql`.
 - Ontology-specific implementation plans live under `ontology/plan/`.
-- Direct TypeDB write discipline now includes DB-side owner-level `@values(...)` constraints for task/task-view status and priority plus key TO-BE execution objects.
+- Direct TypeDB write discipline now includes DB-side owner-level `@values(...)` constraints for `task.status` and `task.priority` plus key TO-BE execution objects.
 - Executor-layer kernel vocabulary is now active in the ontology surface: `coding_agent`, `task_family`, `executor_role`, `executor_routing`, and `task_execution_run`.
 
 ## Key Rules

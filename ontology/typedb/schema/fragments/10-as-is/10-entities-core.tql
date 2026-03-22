@@ -702,8 +702,25 @@ entity task,
   plays task_has_priority:task,
   plays task_assigned_to_performer_profile:task,
   plays patch_operation_mutates_task:task,
-  plays as_is_task_maps_to_target_task_view:as_is_task,
-  plays as_is_possible_task_maps_to_target_task_view:as_is_possible_task;
+  plays task_changes_system_of_interest:task,
+  plays task_executed_by_producing_system:task,
+  plays goal_process_decomposes_to_task:task,
+  plays task_satisfies_requirement:task,
+  plays task_must_satisfy_acceptance_criterion:task,
+  plays task_classified_as_task_family:task,
+  plays executor_routing_targets_task:routed_task,
+  plays task_execution_run_executes_task:executed_task,
+  plays task_targets_object_locator:task,
+  plays task_cites_evidence_link:task,
+  plays task_recommended_for_coding_agent:task,
+  plays task_produces_artifact_record:task,
+  plays object_revision_revises_task:revised_task,
+  plays object_event_affects_task:affected_task,
+  plays object_note_attaches_to_task:noted_task,
+  plays object_conclusion_applies_to_task:concluded_task,
+  plays change_proposal_targets_task:proposed_task,
+  plays assumption_conditions_task:conditioned_task,
+  plays open_question_blocks_task:blocked_task;
 # --- </semantic-card> ---
 
 # --- <semantic-card id="epic_task"> ---

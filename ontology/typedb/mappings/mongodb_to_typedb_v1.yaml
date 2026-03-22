@@ -776,6 +776,42 @@ collections:
       created_at: created_at
       updated_at: updated_at
 
+  - collection: automation_visual_observations
+    target_entity: visual_observation
+    key:
+      attribute: evidence_observation_id
+      from: _id
+    attributes:
+      observation_type: observation_type
+    relations:
+      - relation: visual_observation_cites_evidence_link
+        owner_role: evidence_link
+        owner_lookup:
+          entity: evidence_link
+          by: evidence_link_id
+          from: evidence_link_id
+      - relation: visual_observation_about_object_locator
+        owner_role: object_locator
+        owner_lookup:
+          entity: object_locator
+          by: object_locator_id
+          from: object_locator_ref
+
+  - collection: automation_reasoning_items
+    target_entity: reasoning_item
+    key:
+      attribute: reasoning_item_id
+      from: _id
+    attributes:
+      project_id: project_id
+      source_ref: source_ref
+      summary: summary
+      reasoning_kind: kind
+      assertion_status: assertion_status
+      status: status
+      created_at: created_at
+      updated_at: updated_at
+
   - collection: automation_finances_expenses
     target_entity: legacy_finance_expense
     key:

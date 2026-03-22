@@ -84,8 +84,8 @@ Use these as non-negotiable implementation constraints derived from `origin/main
   - performance notes for the 2026-03-15 rollout tuning live in `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md`.
   - `copilot` ontology is the common kernel; project-local ontologies must extend it rather than fork it.
   - semantic markdown (`SemanticCards`) is a required companion surface for key ontology objects and should live in project-local AFS plus the platform glossary.
-  - direct DB-side TypeDB constraints are now part of the contract for task/task-view status and priority; do not bypass owner-level `@values(...)` with ad hoc raw-label writes.
-  - `target_task_view` projection must normalize Mongo task labels to lifecycle keys and canonical `P1..P7` priority before writing to TypeDB.
+- direct DB-side TypeDB constraints are now part of the contract for `task.status` and `task.priority`; do not bypass owner-level `@values(...)` with ad hoc raw-label writes.
+- Mongo task labels must normalize directly into canonical lifecycle keys and `P1..P7` priority before writing to TypeDB.
   - executor-layer ontology vocabulary is now reserved and active: `task_family`, `executor_role`, `executor_routing`, `task_execution_run`.
   - dual-stream execution semantics are fixed in `plan/voice-dual-stream-ontology.md`: draft tasks remain `task[DRAFT_10]`, `context_enrichment` is required before launch, `human approval` is launch authorization (not final acceptance), and execution must materialize through `executor_routing` -> `task_execution_run` -> `artifact_record` -> `acceptance_evaluation`.
 

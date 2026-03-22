@@ -40,6 +40,8 @@ SUPPORTED_COLLECTIONS = [
     "automation_google_drive_events_channels",
     "automation_google_drive_structure",
     "automation_object_locator",
+    "automation_visual_observations",
+    "automation_reasoning_items",
     "automation_finances_expenses",
     "automation_finances_income",
     "automation_finances_income_types",
@@ -69,6 +71,8 @@ INCREMENTAL_COLLECTIONS = {
     # update/reconcile semantics are implemented for mutable collections.
     "automation_projects",
     "automation_tasks",
+    "automation_reasoning_items",
+    "automation_visual_observations",
     "automation_voice_bot_sessions",
     "automation_voice_bot_messages",
 }
@@ -521,7 +525,7 @@ TARGET_TASK_STATUS_KEYS: set[str] = {
 }
 
 
-def normalize_target_task_status_key(value: Any) -> str:
+def normalize_task_status_key(value: Any) -> str:
     raw = as_string(value)
     if not raw:
         return "UNKNOWN"
@@ -543,7 +547,7 @@ TARGET_TASK_PRIORITY_BY_VALUE: dict[str, str] = {
 }
 
 
-def normalize_target_task_priority(value: Any) -> str:
+def normalize_task_priority(value: Any) -> str:
     raw = as_string(value)
     if not raw:
         return "UNKNOWN"
@@ -1576,7 +1580,7 @@ def project_project_context_card(ctx: IngestContext, doc: dict[str, Any], projec
 def project_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
     status_name = as_string(doc.get("task_status")) or as_string(doc.get("status"))
     if status_name:
-        status_id = normalize_target_task_status_key(status_name)
+        status_id = normalize_task_status_key(status_name)
         status_cache_key = ("status_dict", "status_id", status_id)
         if status_cache_key not in ctx.ensured_entity_keys:
             upsert_entity(
@@ -1646,52 +1650,6 @@ def project_task_status_and_priority(ctx: IngestContext, doc: dict[str, Any], ta
                     owner_role="task_priority",
                     owner_value=priority_id,
                 )
-
-
-def project_target_task_view(ctx: IngestContext, doc: dict[str, Any], task_id: str) -> None:
-    target_id = task_id
-    attr_specs = [
-        ("project_id", "string", normalize_id(doc.get("project_id"))),
-        ("title", "string", as_string(doc.get("name"))),
-        ("summary", "string", as_string(doc.get("description"))),
-        ("description", "string", as_string(doc.get("description"))),
-        ("status", "string", normalize_target_task_status_key(doc.get("task_status") or doc.get("status"))),
-        ("priority", "string", normalize_target_task_priority(doc.get("priority"))),
-        ("created_at", "datetime", as_datetime(doc.get("created_at"))),
-        ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
-    ]
-    upsert_entity(
-        ctx,
-        entity="target_task_view",
-        key_attr="target_task_view_id",
-        key_value=target_id,
-        attr_specs=attr_specs,
-    )
-    reconcile_relation(
-        ctx,
-        relation_name="as_is_task_maps_to_target_task_view",
-        source_entity="task",
-        source_key_attr="task_id",
-        source_key_value=task_id,
-        source_role="as_is_task",
-        owner_entity="target_task_view",
-        owner_by="target_task_view_id",
-        owner_role="target_task_view",
-        owner_value=target_id,
-    )
-    if as_string(doc.get("source_kind")) == "voice_possible_task":
-        reconcile_relation(
-            ctx,
-            relation_name="as_is_possible_task_maps_to_target_task_view",
-            source_entity="task",
-            source_key_attr="task_id",
-            source_key_value=task_id,
-            source_role="as_is_possible_task",
-            owner_entity="target_task_view",
-            owner_by="target_task_view_id",
-            owner_role="target_task_view",
-            owner_value=target_id,
-        )
 
 
 def project_mode_segment(ctx: IngestContext, doc: dict[str, Any], session_id: str) -> None:
@@ -2663,12 +2621,12 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             )
             return
 
-        status = normalize_target_task_status_key(doc.get("task_status") or doc.get("status"))
+        status = normalize_task_status_key(doc.get("task_status") or doc.get("status"))
         fields = ["insert $t isa task", f"has task_id {lit_string(doc_id)}"]
         append_string_attr(fields, "title", as_string(doc.get("name")))
         append_string_attr(fields, "description", as_string(doc.get("description")))
         append_string_attr(fields, "status", status)
-        append_string_attr(fields, "priority", normalize_target_task_priority(doc.get("priority")))
+        append_string_attr(fields, "priority", normalize_task_priority(doc.get("priority")))
         append_number_attr(fields, "priority_rank", as_number(doc.get("priority")))
         append_string_attr(fields, "project_id", normalize_id(doc.get("project_id")))
         query = f"{', '.join(fields)};"
@@ -2683,7 +2641,6 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
             key_attr="task_id",
             key_value=doc_id,
         )
-        project_target_task_view(ctx, doc, doc_id)
         project_task_status_and_priority(ctx, doc, doc_id)
 
         project_id = None if is_tombstoned_doc("automation_tasks", doc) else normalize_id(doc.get("project_id"))
@@ -2710,6 +2667,146 @@ def ingest_tasks(ctx: IngestContext) -> CollectionStats:
         )
 
     return for_each_doc(ctx, "automation_tasks", handler)
+
+
+def ingest_reasoning_items(ctx: IngestContext) -> CollectionStats:
+    def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
+        doc_id = normalize_id(doc.get("_id"))
+        if not doc_id:
+            stats.skipped += 1
+            ctx.deadletter.write(
+                {
+                    "collection": "automation_reasoning_items",
+                    "source_id": None,
+                    "reason": "missing_id",
+                    "payload": doc,
+                }
+            )
+            return
+
+        kind = (as_string(doc.get("kind")) or "").strip().lower()
+        if kind == "assumption":
+            entity = "assumption"
+            key_attr = "reasoning_item_id"
+            source_role = "assumption"
+            relation_name = "assumption_conditions_task"
+            owner_role = "conditioned_task"
+            extra_specs = [("confidence", "string", as_string(doc.get("confidence")))]
+        elif kind == "open_question":
+            entity = "open_question"
+            key_attr = "reasoning_item_id"
+            source_role = "open_question"
+            relation_name = "open_question_blocks_task"
+            owner_role = "blocked_task"
+            extra_specs = [("question_kind", "string", as_string(doc.get("question_kind")))]
+        else:
+            stats.skipped += 1
+            ctx.deadletter.write(
+                {
+                    "collection": "automation_reasoning_items",
+                    "source_id": doc_id,
+                    "reason": "unsupported_kind",
+                    "payload": doc,
+                }
+            )
+            return
+
+        attr_specs: list[tuple[str, str, Any]] = [
+            ("reasoning_item_id", "string", doc_id),
+            ("project_id", "string", normalize_id(doc.get("project_id"))),
+            ("source_ref", "string", as_string(doc.get("source_ref"))),
+            ("summary", "string", as_string(doc.get("summary"))),
+            ("reasoning_kind", "string", kind or "unknown"),
+            ("assertion_status", "string", as_string(doc.get("assertion_status"))),
+            ("status", "string", as_string(doc.get("status"))),
+            ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+            ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+        ]
+        attr_specs.extend(extra_specs)
+        upsert_entity(
+            ctx,
+            entity=entity,
+            key_attr=key_attr,
+            key_value=doc_id,
+            attr_specs=attr_specs,
+        )
+
+        task_id = normalize_id(doc.get("task_id"))
+        reconcile_relation(
+            ctx,
+            relation_name=relation_name,
+            source_entity=entity,
+            source_key_attr=key_attr,
+            source_key_value=doc_id,
+            source_role=source_role,
+            owner_entity="task",
+            owner_by="task_id",
+            owner_role=owner_role,
+            owner_value=task_id,
+        )
+
+    return for_each_doc(ctx, "automation_reasoning_items", handler)
+
+
+def ingest_visual_observations(ctx: IngestContext) -> CollectionStats:
+    def handler(doc: dict[str, Any], stats: CollectionStats) -> None:
+        doc_id = normalize_id(doc.get("_id"))
+        if not doc_id:
+            stats.skipped += 1
+            ctx.deadletter.write(
+                {
+                    "collection": "automation_visual_observations",
+                    "source_id": None,
+                    "reason": "missing_id",
+                    "payload": doc,
+                }
+            )
+            return
+
+        attr_specs = [
+            ("evidence_observation_id", "string", doc_id),
+            ("source_ref", "string", as_string(doc.get("source_ref"))),
+            ("summary", "string", as_string(doc.get("summary"))),
+            ("description", "string", as_string(doc.get("description"))),
+            ("observation_type", "string", as_string(doc.get("observation_type"))),
+            ("status", "string", as_string(doc.get("status"))),
+            ("created_at", "datetime", as_datetime(doc.get("created_at"))),
+            ("updated_at", "datetime", as_datetime(doc.get("updated_at"))),
+        ]
+        upsert_entity(
+            ctx,
+            entity="visual_observation",
+            key_attr="evidence_observation_id",
+            key_value=doc_id,
+            attr_specs=attr_specs,
+        )
+
+        reconcile_relation(
+            ctx,
+            relation_name="visual_observation_cites_evidence_link",
+            source_entity="visual_observation",
+            source_key_attr="evidence_observation_id",
+            source_key_value=doc_id,
+            source_role="visual_observation",
+            owner_entity="evidence_link",
+            owner_by="evidence_link_id",
+            owner_role="evidence_link",
+            owner_value=normalize_id(doc.get("evidence_link_id")),
+        )
+        reconcile_relation(
+            ctx,
+            relation_name="visual_observation_about_object_locator",
+            source_entity="visual_observation",
+            source_key_attr="evidence_observation_id",
+            source_key_value=doc_id,
+            source_role="visual_observation",
+            owner_entity="object_locator",
+            owner_by="object_locator_id",
+            owner_role="object_locator",
+            owner_value=normalize_id(doc.get("object_locator_ref")),
+        )
+
+    return for_each_doc(ctx, "automation_visual_observations", handler)
 
 
 def ingest_voice_sessions(ctx: IngestContext) -> CollectionStats:
@@ -4080,6 +4177,8 @@ INGESTERS: dict[str, Callable[[IngestContext], CollectionStats]] = {
     "automation_projects": lambda ctx: ingest_collection_from_mapping(ctx, "automation_projects"),
     # Keep automation_tasks strictly mapping-driven to avoid schema/mapping drift.
     "automation_tasks": lambda ctx: ingest_collection_from_mapping(ctx, "automation_tasks"),
+    "automation_reasoning_items": ingest_reasoning_items,
+    "automation_visual_observations": ingest_visual_observations,
     "automation_voice_bot_sessions": ingest_voice_sessions,
     "automation_voice_bot_messages": ingest_voice_messages,
     "forecasts_project_month": lambda ctx: ingest_collection_from_mapping(ctx, "forecasts_project_month"),

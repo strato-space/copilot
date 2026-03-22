@@ -73,7 +73,7 @@ Project-local overlay entities may bridge to kernel entities only through explic
 Examples:
 - `customer_invoice_maps_to_artifact_record`
 - `industry_case_maps_to_project_context_card`
-- `domain_risk_extends_target_task_view`
+- `domain_risk_extends_task`
 
 Rule:
 - overlay bridge semantics live in the project overlay, not in the kernel schema.

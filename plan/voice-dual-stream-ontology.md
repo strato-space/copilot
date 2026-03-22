@@ -30,7 +30,7 @@ Production emphasis:
 - `task` is the one central task-plane object;
 - task/session/chunk traceability must survive materialization into DB objects;
 - result and acceptance objects are mandatory parts of the production model, not optional prose add-ons.
-- ближайший production loop: `voice_session -> task_intake_pool -> context_enrichment -> human_approval -> executor_routing -> task_execution_run -> artifact_record -> acceptance_evaluation`.
+- ближайший production loop: `voice_session -> task_intake_pool -> context_enrichment -> human_approval -> executor_routing -> task_execution_run -> outcome_record (обычно artifact_record) -> acceptance_evaluation`.
 
 ## Term Normalization / Glossary
 
@@ -53,6 +53,7 @@ Production emphasis:
 - `coding_agent` — first-class non-human executor, задаваемый как CLI/agent surface с путём запуска, аргументами и role/pipeline refs.
 - `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или иной target object.
 - `expected_result` — нормализованное имя ожидаемого produced outcome задачи до её запуска и до факта приемки.
+- `outcome_record` — canonical DB-side типизированный результат исполнения (`artifact | decision | state_transition`).
 - `artifact_record` — canonical DB-side produced result.
 - `result_artifact` — human-facing alias для `artifact_record`, а не вторая сущность.
 - `acceptance_evaluation` — отдельный акт оценки и приемки produced result against explicit acceptance conditions, выполняемый уполномоченным `actor`.
@@ -109,7 +110,7 @@ Production emphasis:
 - система materialize из `voice_session` execution-ready `task[DRAFT_10]`;
 - система обогащает их до minimum launch `execution_context`;
 - уполномоченный `actor` проводит `human_approval`;
-- исполнительный контур через `performer_profile` или `coding_agent` доводит часть задач до `artifact_record`, после чего уполномоченный `actor` выполняет `acceptance_evaluation`.
+- исполнительный контур через `performer_profile` или `coding_agent` доводит часть задач до `outcome_record` (в первом приближении обычно `artifact_record`), после чего уполномоченный `actor` выполняет `acceptance_evaluation`.
 
 Если этот цикл не доходит до produced-and-reviewed result, то ontology тривиализируется до “ещё одного канала генерации задач”, а это уже не тот предмет.
 
@@ -134,7 +135,7 @@ Concrete counterexample:
 4. после `human_approval` задача не “получает контекст из ниоткуда”, а входит в launch-ready состояние с уже собранным `execution_context`: что менять, почему это вообще появилось, по каким критериям принимать и кому это разумно маршрутизировать;
 5. дальше `executor_routing` маршрутизирует задачу либо в `performer_profile`, либо в `coding_agent`, либо в mixed contour;
 6. затем выбранный исполнительный контур запускает `task_execution_run`, а не `processing_run`;
-7. на выходе `task_execution_run` производит не просто “как-то закрытую задачу”, а конкретный `artifact_record`;
+7. на выходе `task_execution_run` производит не просто “как-то закрытую задачу”, а конкретный `outcome_record` (в первом приближении обычно `artifact_record`);
 8. затем уполномоченный `actor` проводит `acceptance_evaluation`: результат либо принимается, либо уточняется и уходит в следующий цикл.
 
 Операционная оговорка:
@@ -143,7 +144,7 @@ Concrete counterexample:
 Практический смысл цикла:
 - не производить бесконечный backlog;
 - как можно быстрее переводить разговор в executor-ready task;
-- и дальше в `artifact_record` с явным `acceptance_evaluation`, а не в ещё одну невалидированную запись.
+- и дальше в `outcome_record` (обычно `artifact_record`) с явным `acceptance_evaluation`, а не в ещё одну невалидированную запись.
 
 ### Historical prior art
 Ближайший historical analogue этой механики — агент `PM-03-RequestsTask`:
@@ -151,7 +152,7 @@ Concrete counterexample:
 
 Текущая ontology обобщает этот паттерн:
 - от CRM-only task creation
-- к `task -> executor_routing -> task_execution_run -> artifact_record -> acceptance_evaluation`.
+- к `task -> executor_routing -> task_execution_run -> outcome_record -> acceptance_evaluation`.
 
 ## Ontological Discipline
 
@@ -189,10 +190,10 @@ Concrete counterexample:
 ## Архитектурные решения из истории сессий
 
 Этот документ явно следует архитектурным решениям, которые Валерий Павлович сформулировал в session history от 2026-03-19:
-- `task` — центральный operational object; `task` существует ради `artifact_record`, а не как самоценный backlog item;
+- `task` — центральный operational object; `task` существует ради типизированного `outcome_record` (в первом приближении обычно `artifact_record`), а не как самоценный backlog item;
 - `task[DRAFT_10]` остаётся мутабельным, а `ready_plus_task` тяготеет к execution-ready immutability с `acceptance_criterion` и `artifact_record` traceability;
 - один `task` может обсуждаться во многих `voice_session`, поэтому `discussion_linkage` должен быть many-to-many, а не навсегда single-primary;
-- трассируемость должна оставаться непрерывной: `voice_session -> processing_run -> task[DRAFT_10|...] -> execution_context -> artifact_record`;
+- трассируемость должна оставаться непрерывной: `voice_session -> processing_run -> task[DRAFT_10|...] -> execution_context -> outcome_record`;
 - destructive и bulk mutations остаются human-in-the-loop через `change_proposal -> human_approval -> writeback_decision -> patch -> history_step / UNDO`;
 - process/product decomposition должна оставаться явной, чтобы `task` и `task_execution_run` не схлопывались в `requirement`;
 - `acceptance_criterion`, `acceptance_evaluation`, `kpi` и `kpi_observation` должны оставаться достаточно first-class, иначе `artifact_record` и сам акт принятия результата схлопываются в одно vague notion;
@@ -236,41 +237,10 @@ Role in current `copilot/ontology`:
 
 Exact task-plane support already present in current ontology:
 - `[mom]` `task`
-- `[-o-]` `target_task_view`
 
 Direct AS-IS task definition:
 - current TQL definition lives in [`ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql`](../ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql)
-
-Quoted definition:
-
-```tql
-# ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql
-# kind: task-record
-# what: Operational task record from Mongo runtime.
-# not: Not the normalized target task view.
-# why: Acts as the main AS-IS source for task projection.
-entity task,
-  owns task_id @key,
-  owns project_id,
-  owns row_id,
-  owns title,
-  owns description,
-  owns status @values("DRAFT_10", "READY_10", "PROGRESS_10", "REVIEW_10", "DONE_10", "ARCHIVE", "UNKNOWN"),
-  owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
-  owns performer_id,
-  owns source_kind,
-  owns source_ref,
-  owns external_ref,
-  owns source_data,
-  owns dialogue_reference,
-  owns dialogue_tag,
-  owns task_id_from_ai,
-  owns priority_reason,
-  owns codex_task,
-  owns is_deleted,
-  owns created_at,
-  owns updated_at;
-```
+- canonical in-document snippet is defined once in `TQL-Oriented Canonical Contract -> AS-IS exact entity: task` below (single source, no duplicated snippets).
 
 `codex_task` linkage semantics:
 - ontologically it is an attribute of `task`, not a second task entity;
@@ -302,6 +272,8 @@ Minimal relations:
 Это слой того, **чем обосновывается извлечённый смысл**.
 
 Canonical entities:
+- `[-o-]` `evidence_observation`
+- `[mom]` `visual_observation`
 - `[mom]` `voice_message`
 - `[-o-]` `transcript_segment`
 - `[ ]` `evidence_link`
@@ -363,7 +335,7 @@ AS-IS dictionary note:
 - therefore `status_dict` is evidence that statuses are already scoped, not evidence for one universal alphabet.
 
 Minimal TO-BE interpretation rule:
-- `task` / `target_task_view`: interpret `status` as `task_lifecycle_state`
+- `task`: interpret `status` as `task_lifecycle_state`
 - `voice_session`: interpret `status` as `session_processing_state`
 - `processing_run`, `change_proposal`, `writeback_decision`, `acceptance_evaluation`, `review_annotation`, `object_event`: interpret `status` as `event_status` or review/proposal event state
 - `coding_agent`: interpret `status` as availability/activity state of the executable agent surface
@@ -372,7 +344,7 @@ Minimal TO-BE interpretation rule:
 Minimal-schema enforcement choice:
 - for direct LLM/coding-agent writes into TypeDB, TO-BE entities use owner-level `@values(...)` constraints on `owns status`;
 - this keeps one string carrier while still enforcing per-entity allowed status lists at DB level;
-- `target_task_view` now normalizes raw Mongo labels into canonical lifecycle keys during projection and is constrained in TypeDB via owner-level `@values(...)` on those keys plus `UNKNOWN` fallback.
+- `task` now normalizes raw Mongo labels directly into canonical lifecycle keys and is constrained in TypeDB via owner-level `@values(...)` on those keys plus `UNKNOWN` fallback.
 
 ### Layer 4. Context Ontology
 Это слой того, **какой typed context доступен для анализа и решений**.
@@ -467,10 +439,11 @@ Greek-scholastic note:
 - otherwise the model collapses “do work”, “produce artifact”, “pass acceptance”, and “improve KPI” into one undifferentiated task blob.
 
 Minimal relations:
-- `task -> produces -> artifact_record`
+- `task -> produces -> outcome_record`
+- `artifact_record -> subtype_of -> outcome_record`
 - `task -> must_satisfy -> acceptance_criterion`
 - `acceptance_evaluation -> checks -> acceptance_criterion`
-- `acceptance_evaluation -> evaluates -> artifact_record`
+- `acceptance_evaluation -> evaluates -> outcome_record`
 - `actor -> performs -> acceptance_evaluation`
 - `goal_process | goal_product -> measured_by -> kpi`
 - `kpi -> observed_as -> kpi_observation`
@@ -552,12 +525,12 @@ Meaning:
 - `task_execution_run`: one concrete run of task execution by one executor contour
 
 Minimal relations:
-- `target_task_view -> classified_as -> task_family`
-- `executor_routing -> targets -> target_task_view`
+- `task -> classified_as -> task_family`
+- `executor_routing -> targets -> task`
 - `executor_routing -> classifies -> task_family`
 - `executor_routing -> launches -> task_execution_run`
-- `task_execution_run -> executes -> target_task_view`
-- `task_execution_run -> produces -> artifact_record`
+- `task_execution_run -> executes -> task`
+- `task_execution_run -> produces -> outcome_record`
 
 Key discipline:
 - `executor_routing` is not a UI-only suggestion and not the execution run itself;
@@ -583,7 +556,6 @@ Meaning:
 
 Role in current `copilot/ontology` / task bridge:
 - `[mom]` `task`
-- `[-o-]` `target_task_view`
 
 Exact current-state note:
 - one primary storage entity now exists: `automation_tasks -> task`,
@@ -635,8 +607,9 @@ AS IS / TO BE linkage rule:
 
 Canonical entities:
 - `[ ]` `decision`
-- `[ ]` `assumption`
-- `[ ]` `open_question`
+- `[mom]` `reasoning_item`
+- `[-o-]` `assumption`
+- `[-o-]` `open_question`
 
 Rationale:
 - в OperOps sandbox есть сильный акцент на review, ambiguity gates, open questions, project-card decisions;
@@ -646,6 +619,10 @@ Rationale:
 
 Этот раздел фиксирует сущности в максимально структурном виде, близком к аннотированному TQL.
 Цель: чтобы было понятно не только *что существует*, но и *какие атрибуты и связи мы обязуемся определять*.
+
+Canonical bearer rule for invariants:
+- write-side domain invariants anchor on `task`;
+- there is no second semantic task carrier parallel to `task`.
 
 ### AS-IS exact entity: `task`
 
@@ -658,8 +635,8 @@ entity task,
   owns row_id,
   owns title,
   owns description,
-  owns status,
-  owns priority,
+  owns status @values("DRAFT_10", "READY_10", "PROGRESS_10", "REVIEW_10", "DONE_10", "ARCHIVE", "UNKNOWN"),
+  owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
   owns performer_id,
   owns source_kind,
   owns source_ref,
@@ -669,6 +646,8 @@ entity task,
   owns dialogue_tag,
   owns task_id_from_ai,
   owns priority_reason,
+  owns codex_task,
+  owns is_deleted,
   owns created_at,
   owns updated_at,
   plays project_has_task:task,
@@ -765,27 +744,41 @@ entity requirement,
   owns summary,
   owns status @values("draft", "approved", "satisfied", "superseded", "cancelled");
 
-# what: executable CLI/agent surface used for coding work; conceptually a non-human performer/executor
-entity coding_agent,
-  owns coding_agent_id @key,
+# what: unified participant with authority semantics (human or machine)
+entity actor,
+  owns actor_id @key,
+  owns actor_kind @values("human", "machine"),
   owns name,
   owns summary,
+  owns status @values("active", "disabled", "degraded", "retired");
+
+# what: executable CLI/agent surface used for coding work; conceptually a non-human performer/executor
+entity coding_agent sub actor,
   owns executable_path,
   owns cli_arguments,
   owns working_directory,
   owns source_ref,
-  owns status @values("enabled", "disabled", "degraded", "retired"),
   owns created_at,
   owns updated_at;
 
-# what: capability-side executor role for routing humans and agents
-entity executor_role,
-  owns executor_role_id @key,
+# what: generalized role type for authority and execution semantics
+entity role,
+  owns role_id @key,
   owns name,
   owns summary,
-  owns status @values("draft", "active", "superseded", "retired"),
+  owns status @values("draft", "active", "superseded", "retired");
+
+# what: capability-side executor role for routing humans and agents
+entity executor_role sub role,
   owns created_at,
   owns updated_at;
+
+# what: scope boundary of what actor may approve/reject/apply
+entity authority_scope,
+  owns authority_scope_id @key,
+  owns name,
+  owns summary,
+  owns status @values("active", "superseded", "retired");
 
 # what: practical task routing family used for segmentation and capability matching
 entity task_family,
@@ -848,6 +841,15 @@ entity constraint,
 ### TO-BE first-class acceptance / outcome entities
 
 ```tql
+# what: generic typed result of task execution / governance transition
+entity outcome_record,
+  owns outcome_record_id @key,
+  owns outcome_kind @values("artifact", "decision", "state_transition"),
+  owns title,
+  owns summary,
+  owns status @values("draft", "active", "superseded", "retired"),
+  owns created_at;
+
 # what: typed pass/fail/graded criterion for accepting a task result
 entity acceptance_criterion,
   owns acceptance_criterion_id @key,
@@ -870,13 +872,26 @@ entity evidence_link,
   owns status @values("active", "superseded", "retired"),
   owns created_at;
 
-# what: canonical DB-side produced result bound to execution
-entity artifact_record,
-  owns artifact_record_id @key,
-  owns title,
+# what: object locator for what exactly task changes
+entity object_locator,
+  owns object_locator_id @key,
+  owns locator_kind @values("file", "component", "screen", "rule", "agent", "artifact", "other"),
+  owns source_ref,
   owns summary,
-  owns status @values("draft", "active", "superseded", "retired"),
+  owns status @values("active", "superseded", "retired"),
   owns created_at;
+
+# what: canonical DB-side produced artifact bound to execution
+entity artifact_record sub outcome_record,
+  owns artifact_kind @values("code", "document", "design", "config", "data", "other");
+
+# what: governance/product decision as first-class execution outcome
+entity decision sub outcome_record,
+  owns decision_kind @values("accept", "reject", "defer", "change");
+
+# what: explicit state transition outcome (without external artifact payload)
+entity state_transition_outcome sub outcome_record,
+  owns transition_kind @values("status_change", "routing_change", "scope_change", "other");
 
 # what: measured indicator for process or product outcomes
 entity kpi,
@@ -916,36 +931,77 @@ entity writeback_decision,
   owns updated_at;
 ```
 
-Target task projection note:
-- `target_task_view.status` is constrained to `DRAFT_10 | READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE | UNKNOWN`
-- `target_task_view.priority` is constrained to `P1 | P2 | P3 | P4 | P5 | P6 | P7 | UNKNOWN`
-- current ingest normalizes raw Mongo labels into those canonical values before writing the projection
+### TO-BE first-class reasoning / registry entities (TypeDB extension)
+
+```tql
+# what: shared base for temporary/defeasible reasoning records
+entity reasoning_item,
+  owns reasoning_item_id @key,
+  owns summary,
+  owns status @values("open", "closed", "superseded");
+
+entity assumption sub reasoning_item,
+  owns confidence @values("low", "medium", "high");
+
+entity open_question sub reasoning_item,
+  owns question_kind @values("scope", "risk", "requirement", "execution", "other");
+
+# what: registry-layer configurable entry
+entity registry_entry,
+  owns registry_entry_id @key,
+  owns name,
+  owns summary,
+  owns status @values("active", "disabled", "retired");
+
+entity bot_command_registry sub registry_entry,
+  owns command_prefix,
+  owns alias_set;
+
+entity skills_registry sub registry_entry,
+  owns skill_scope,
+  owns skill_version;
+
+entity identity_map sub registry_entry,
+  owns source_system,
+  owns external_identity_ref;
+
+entity user_profile,
+  owns user_profile_id @key,
+  owns source_ref,
+  owns summary,
+  owns status @values("active", "disabled", "retired");
+```
+
+Task normalization note:
+- `task.status` is constrained to `DRAFT_10 | READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE | UNKNOWN`
+- `task.priority` is constrained to `P1 | P2 | P3 | P4 | P5 | P6 | P7 | UNKNOWN`
+- current ingest normalizes raw Mongo labels into those canonical values before writing `task`
 
 ### TO-BE task-local execution context
 
 `task_context_card` остаётся только именем для task-local structured surface.
 Этот surface должен materialize на стадии `context_enrichment` до routing/launch, а `human_approval` подтверждает, что minimum launch context собран.
-На уровне аннотированного TQL это не отдельная сущность, а прямой task-local relation bundle вокруг `target_task_view`:
-- `target_task_view -> task_family`
-- `target_task_view -> object_locator`
-- `target_task_view -> evidence_link`
-- `target_task_view -> acceptance_criterion`
-- `target_task_view -> coding_agent`
-- `executor_routing -> target_task_view`
+На уровне аннотированного TQL это не отдельная сущность, а прямой task-local relation bundle вокруг `task`:
+- `task -> task_family`
+- `task -> object_locator`
+- `task -> evidence_link`
+- `task -> acceptance_criterion`
+- `task -> coding_agent`
+- `executor_routing -> task`
 - `executor_routing -> task_family`
 - `executor_routing -> task_execution_run`
-- `task_execution_run -> target_task_view`
-- `task_execution_run -> artifact_record`
+- `task_execution_run -> task`
+- `task_execution_run -> outcome_record`
 
 ### Minimal cross-entity relation contract
 
 ```tql
-relation target_task_view_changes_system_of_interest,
-  relates target_task_view,
+relation task_changes_system_of_interest,
+  relates task,
   relates system_of_interest;
 
-relation target_task_view_executed_by_producing_system,
-  relates target_task_view,
+relation task_executed_by_producing_system,
+  relates task,
   relates producing_system;
 
 relation business_need_drives_goal_product,
@@ -956,37 +1012,37 @@ relation goal_product_decomposes_to_requirement,
   relates goal_product,
   relates requirement;
 
-relation goal_process_decomposes_to_target_task_view,
+relation goal_process_decomposes_to_task,
   relates goal_process,
-  relates target_task_view;
+  relates task;
 
-relation target_task_view_classified_as_task_family,
-  relates target_task_view,
+relation task_classified_as_task_family,
+  relates task,
   relates task_family;
 
-relation target_task_view_targets_object_locator,
-  relates target_task_view,
+relation task_targets_object_locator,
+  relates task,
   relates object_locator;
 
-relation target_task_view_cites_evidence_link,
-  relates target_task_view,
+relation task_cites_evidence_link,
+  relates task,
   relates evidence_link;
 
-relation target_task_view_recommended_for_coding_agent,
-  relates target_task_view,
+relation task_recommended_for_coding_agent,
+  relates task,
   relates recommended_coding_agent;
 
-relation target_task_view_must_satisfy_acceptance_criterion,
-  relates target_task_view,
+relation task_must_satisfy_acceptance_criterion,
+  relates task,
   relates acceptance_criterion;
 
-relation target_task_view_produces_artifact_record,
-  relates target_task_view,
-  relates produced_artifact_record;
+relation task_produces_outcome_record,
+  relates task,
+  relates outcome_record;
 
-relation executor_routing_targets_target_task_view,
+relation executor_routing_targets_task,
   relates executor_routing,
-  relates routed_target_task_view;
+  relates task;
 
 relation executor_routing_classifies_task_family,
   relates executor_routing,
@@ -996,21 +1052,21 @@ relation executor_routing_launches_task_execution_run,
   relates executor_routing,
   relates launched_task_execution_run;
 
-relation task_execution_run_executes_target_task_view,
+relation task_execution_run_executes_task,
   relates task_execution_run,
-  relates executed_target_task_view;
+  relates task;
 
-relation task_execution_run_produces_artifact_record,
+relation task_execution_run_produces_outcome_record,
   relates task_execution_run,
-  relates produced_artifact_record;
+  relates outcome_record;
 
 relation acceptance_evaluation_checks_acceptance_criterion,
   relates acceptance_evaluation,
   relates acceptance_criterion;
 
-relation acceptance_evaluation_evaluates_artifact_record,
+relation acceptance_evaluation_evaluates_outcome_record,
   relates acceptance_evaluation,
-  relates artifact_record;
+  relates outcome_record;
 
 relation goal_process_measured_by_kpi,
   relates goal_process,
@@ -1020,9 +1076,9 @@ relation goal_product_measured_by_kpi,
   relates goal_product,
   relates kpi;
 
-relation change_proposal_targets_target_task_view,
+relation change_proposal_targets_task,
   relates change_proposal,
-  relates proposed_target_task_view;
+  relates task;
 
 relation writeback_decision_accepts_change_proposal,
   relates writeback_decision,
@@ -1097,25 +1153,24 @@ Applies to:
 - optionally later to `requirement`, `issue`, `risk`
 
 ### `necessity`
-Binary canonical scale:
+Canonical scale:
 - `necessary` (`□p`)
-- `possible` (`◇p`)
+- `contingent` (`◇p & ¬□p`)
+- `impossible` (`¬◇p`)
 
 ### `knowledge_state`
-Binary canonical scale:
-- `dont_know` (`¬Kp`)
-- `know` (`Kp`)
+Canonical scale:
+- `known_true`
+- `known_false`
+- `unknown`
 
-### `null` semantics
+### `mixed_modal` semantics
 Если у верхнеуровневой сущности внутри неё смешаны части с разными модальными значениями:
-- `necessity = null`
-- и/или `knowledge_state = null`
-
-Это не третий статус.
-Это сигнал на WBS decomposition.
+- `mixed_modal = true`
+- модальные поля остаются типизированными (`necessity`, `knowledge_state`) и не перегружаются `null`-семантикой.
 
 Rule:
-- mixed modal state means the entity is too coarse and must be decomposed until necessity/knowledge become unambiguous.
+- mixed modal state means the entity is too coarse and must be decomposed until modality becomes unambiguous.
 
 ## Unified Action Grammar
 Unification happens at the level of **operations**, not at the level of entity kinds.
@@ -1216,8 +1271,6 @@ Strong alignment:
   - `[-o-]` `mode_segment`
   - `[-o-]` `processing_run`
   - `[-o-]` `project_context_card`
-  - `[-o-]` `target_task_view`
-  - `[-o-]` `as_is_possible_task_maps_to_target_task_view`
   - object-bound history/note/conclusion/manifest semantics
 
 This ontology doc now explicitly reflects those layers instead of staying task-only.
@@ -1284,8 +1337,8 @@ It should explicitly remain task-plane scoped and inherit non-task concepts from
 - do not store them as fake tasks.
 
 ### Phase 5. Modal Layer Adoption
-- add binary `necessity` and `knowledge_state` to analyzer output for `task` and `business_need` first;
-- allow `null` until WBS decomposition makes state unambiguous;
+- add typed `necessity` (`necessary | contingent | impossible`) and `knowledge_state` (`known_true | known_false | unknown`) to analyzer output for `task` and `business_need` first;
+- use `mixed_modal=true` as decomposition signal instead of `null`-overload semantics;
 - do not use these as lifecycle statuses.
 
 ### Phase 6. Evidence / Authority / Decision Layer
@@ -1316,7 +1369,7 @@ It must include:
 - product/requirement entities,
 - decision/assumption entities,
 - cross-cutting classification and relation layers,
-- and binary modal management fields.
+- and typed modal management fields (`necessity`, `knowledge_state`, `mixed_modal`).
 
 Anything flatter will either collapse product into tasks, or collapse runtime into management, and both are category mistakes.
 

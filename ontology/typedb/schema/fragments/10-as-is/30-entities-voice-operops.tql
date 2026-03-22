@@ -292,7 +292,8 @@ entity object_locator,
   owns path,
   owns created_at,
   owns updated_at,
-  plays target_task_view_targets_object_locator:object_locator;
+  plays task_targets_object_locator:object_locator,
+  plays visual_observation_about_object_locator:object_locator;
 
 entity transcript_chunk,
   owns transcript_chunk_id @key,

@@ -124,24 +124,24 @@ class IngestHelpersTest(unittest.TestCase):
         self.assertIn("relation as_is_project_maps_to_project_context_card,", text)
         self.assertIn("relation as_is_voice_session_maps_to_mode_segment,", text)
 
-    def test_normalize_target_task_status_key_maps_labels_to_canonical_keys(self) -> None:
-        self.assertEqual(ingest.normalize_target_task_status_key("Draft"), "DRAFT_10")
-        self.assertEqual(ingest.normalize_target_task_status_key("Ready"), "READY_10")
-        self.assertEqual(ingest.normalize_target_task_status_key("Progress 10"), "PROGRESS_10")
-        self.assertEqual(ingest.normalize_target_task_status_key("Review / Ready"), "REVIEW_10")
-        self.assertEqual(ingest.normalize_target_task_status_key("Done"), "DONE_10")
-        self.assertEqual(ingest.normalize_target_task_status_key("Archive"), "ARCHIVE")
-        self.assertEqual(ingest.normalize_target_task_status_key("DRAFT_10"), "DRAFT_10")
-        self.assertEqual(ingest.normalize_target_task_status_key("weird"), "UNKNOWN")
-        self.assertEqual(ingest.normalize_target_task_status_key(None), "UNKNOWN")
+    def test_normalize_task_status_key_maps_labels_to_canonical_keys(self) -> None:
+        self.assertEqual(ingest.normalize_task_status_key("Draft"), "DRAFT_10")
+        self.assertEqual(ingest.normalize_task_status_key("Ready"), "READY_10")
+        self.assertEqual(ingest.normalize_task_status_key("Progress 10"), "PROGRESS_10")
+        self.assertEqual(ingest.normalize_task_status_key("Review / Ready"), "REVIEW_10")
+        self.assertEqual(ingest.normalize_task_status_key("Done"), "DONE_10")
+        self.assertEqual(ingest.normalize_task_status_key("Archive"), "ARCHIVE")
+        self.assertEqual(ingest.normalize_task_status_key("DRAFT_10"), "DRAFT_10")
+        self.assertEqual(ingest.normalize_task_status_key("weird"), "UNKNOWN")
+        self.assertEqual(ingest.normalize_task_status_key(None), "UNKNOWN")
 
-    def test_normalize_target_task_priority_maps_raw_labels_to_canonical_values(self) -> None:
-        self.assertEqual(ingest.normalize_target_task_priority("🔥 P1 "), "P1")
-        self.assertEqual(ingest.normalize_target_task_priority("🔥 P1"), "P1")
-        self.assertEqual(ingest.normalize_target_task_priority("P2"), "P2")
-        self.assertEqual(ingest.normalize_target_task_priority("P7"), "P7")
-        self.assertEqual(ingest.normalize_target_task_priority("weird"), "UNKNOWN")
-        self.assertEqual(ingest.normalize_target_task_priority(None), "UNKNOWN")
+    def test_normalize_task_priority_maps_raw_labels_to_canonical_values(self) -> None:
+        self.assertEqual(ingest.normalize_task_priority("🔥 P1 "), "P1")
+        self.assertEqual(ingest.normalize_task_priority("🔥 P1"), "P1")
+        self.assertEqual(ingest.normalize_task_priority("P2"), "P2")
+        self.assertEqual(ingest.normalize_task_priority("P7"), "P7")
+        self.assertEqual(ingest.normalize_task_priority("weird"), "UNKNOWN")
+        self.assertEqual(ingest.normalize_task_priority(None), "UNKNOWN")
 
     def test_entity_has_matching_updated_at_returns_true_for_equal_timestamp(self) -> None:
         ctx = DummyCtx("full", {"collections": {}}, apply=True)

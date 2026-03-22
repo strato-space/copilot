@@ -28,6 +28,18 @@ A declaration of what output is promised, under which admissibility rules, and w
 ### Artifact Record
 A semantic artifact object with identity and lineage. It is not a raw blob and not generic memory.
 
+### Task
+The single canonical task-plane semantic carrier. It is not a projection surface parallel to itself.
+
+### Evidence Link
+A normalized provenance object for quoted/span/source evidence attached to semantic objects.
+
+### Evidence Observation / Visual Observation
+Evidence-plane objects. They describe what was observed in sources; they are not task instructions and not epistemic assumptions.
+
+### Reasoning Item / Assumption / Open Question
+Epistemic-plane objects. They encode defeasible premises or unresolved blockers used in planning; they are not evidence objects and not domain execution objects.
+
 ### Object Revision / Event / Note / Conclusion / Manifest
 History and interpretation attached to specific ontology objects, never as free-floating memory.
 

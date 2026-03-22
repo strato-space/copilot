@@ -26,7 +26,7 @@ Scope: `/home/strato-space/copilot/ontology/typedb`
 - Edit TQL fragments first, then rebuild the generated schema.
 - Keep rich semantic comments directly in the annotated TQL fragments.
 - For enum-like direct-write fields, prefer owner-level `@values(...)` constraints in TypeDB over ad hoc app-only validation.
-- Preserve canonical normalization rules in ingest for `target_task_view` status/priority before tightening DB constraints further.
+- Preserve canonical normalization rules in ingest for `task` status/priority before tightening DB constraints further.
 - If operator workflow changes, update:
   - `ontology/typedb/README.md`
   - repo root `CHANGELOG.md`

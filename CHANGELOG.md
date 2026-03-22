@@ -1,8 +1,21 @@
 # Changelog
 
+## 2026-03-22
+### PROBLEM SOLVED
+- **04:51** The ontology still had a split-brain task model and follow-up ontology defects after the initial cutover: `target_task_view` had been removed from the main task path, but identity discipline, provenance identity, subtype discriminator semantics, incremental sync coverage, and companion-doc inventories were not yet fully aligned, which risked semantic drift between schema, ingest, and operator docs.
+
+### FEATURE IMPLEMENTED
+- **04:51** Landed the hard `task-only` ontology cutover end-to-end: `task` is now the single canonical task-plane carrier, epistemic/evidence layers are first-class (`reasoning_item` / `assumption` / `open_question`, `evidence_observation` / `visual_observation`), provenance is keyed canonically, and high-level ontology docs now describe the same object inventory as the executable TypeDB schema.
+
+### CHANGES
+- **04:51** Updated `ontology/typedb/schema/fragments/{00-kernel/10-attributes-and-ids,10-as-is/10-entities-core,10-as-is/30-entities-voice-operops,20-to-be/10-semantic-core,30-bridges/10-as-is-to-to-be}.tql`, regenerated `ontology/typedb/schema/str-ontology.tql`, and rewired `ontology/typedb/scripts/{typedb-ontology-ingest,typedb-ontology-contract-check}.py` plus `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml` to remove `target_task_view`, enforce single identity surfaces for new subtype entities, bind `visual_observation` to `evidence_link` by canonical `evidence_link_id`, formalize `reasoning_kind`, and include new ontology collections in incremental sync.
+- **04:51** Updated ontology docs and plans (`AGENTS.md`, `README.md`, `ontology/{README.md,plan/ontology-and-operations.md}`, `ontology/typedb/{AGENTS.md,README.md,docs/*}`, `plan/{voice-dual-stream-ontology,voice-task-surface-normalization-spec}.md`) so operator guidance, semantic glossary, bridge rules, and long-form ontology notes match the implemented schema reality.
+- **04:51** Extended ontology regression coverage with `ontology/typedb/tests/test_task_only_cutover.py`, updated schema/ingest tests, and re-ran `python ontology/typedb/scripts/build-typedb-schema.py`, `npm run ontology:typedb:test`, `npm run ontology:typedb:contract-check`, and `npm run ontology:typedb:ingest:dry -- --limit 5 --collections automation_tasks,automation_reasoning_items,automation_visual_observations`; all passed with `contract-check` at `errors=0`.
+- **04:51** Registered and closed ontology defects `copilot-fzur`, `copilot-5e88`, `copilot-6wdc`, `copilot-0115`, `copilot-bk93`, `copilot-951u`, and `copilot-5us4` after applying the corresponding schema, ingest, contract, and documentation fixes.
+
 ## 2026-03-21
 ### PROBLEM SOLVED
-- **09:10** The ontology/spec wave still left one critical implementation gap: task/execution surfaces were described as if direct LLM writes to TypeDB were desirable, but task/task-view `status` and `priority` were not yet constrained on the DB side, so invalid raw labels could still leak into the write path.
+- **09:10** The ontology/spec wave still left one critical implementation gap: task/execution surfaces were described as if direct LLM writes to TypeDB were desirable, but canonical `task.status` and `task.priority` were not yet constrained on the DB side, so invalid raw labels could still leak into the write path.
 - **09:10** The executor-layer rollout remained only partially formalized: `coding_agent` existed, but `task_family`, `executor_role`, `executor_routing`, and `task_execution_run` were not all present as exact ontology objects/relations, which left the next implementation wave underspecified.
 - **09:10** Residual ambiguous-session rerun accounting was incomplete: batches `2` and `3` had only noisy MCP logs instead of structured outcomes, so the remaining migration tail could not be summarized deterministically.
 - **21:25** `create_tasks` context-overflow work still lacked exact inner MCP payload profiling, so operator decisions about model choice or prompt trimming were still guesswork instead of evidence-based engineering.
@@ -11,8 +24,8 @@
 - **22:00** The dual-stream ontology note still mixed launch approval semantics with final acceptance semantics and left executor-ready context boundaries underspecified, which could cause incorrect lifecycle modeling in follow-up implementations.
 
 ### FEATURE IMPLEMENTED
-- **09:10** Added DB-side owner-level `@values(...)` constraints for `task.status`, `task.priority`, `target_task_view.status`, `target_task_view.priority`, and the key TO-BE execution/process/product status carriers, making direct TypeDB writes materially safer.
-- **09:10** Normalized the `target_task_view` projection to canonical lifecycle keys and canonical `P1..P7` priorities before writing into TypeDB, while keeping the raw Mongo task row as the AS-IS source object.
+- **09:10** Added DB-side owner-level `@values(...)` constraints for `task.status`, `task.priority`, and the key TO-BE execution/process/product status carriers, making direct TypeDB writes materially safer.
+- **09:10** Normalized Mongo task labels directly into canonical lifecycle keys and canonical `P1..P7` priorities before writing into TypeDB.
 - **09:10** Landed the first executor-layer ontology surface end-to-end: `task_family`, `executor_role`, `executor_routing`, and `task_execution_run` now exist in the TypeDB semantic core and in the checked-in production specs.
 - **09:10** Closed residual rerun accounting for ambiguous CREATE_TASKS batches: batch `1` and `4` remain manual-review buckets, while batches `2` and `3` are now classified as deterministic `timed_out` MCP buckets with structured reports.
 - **21:25** Landed a live profiling substrate for `create_tasks`: backend now emits outer run/result size metrics, the repo-local fast-agent bootstrap emits per-tool inner MCP payload sizes and per-turn token landmarks, and a dedicated `gpt-5.4` runtime can be used for isolated investigation without disturbing the main `codexspark` runtime.
@@ -22,7 +35,7 @@
 - **22:00** Rewrote the dual-stream “target mechanics” section with explicit ontology-normalized terms (`task[DRAFT_10]`, `context_enrichment`, launch authorization vs acceptance, `executor_routing`, `task_execution_run`, `artifact_record`, `acceptance_evaluation`) and fixed minimal execution-context composition.
 
 ### CHANGES
-- **09:10** Updated `ontology/typedb/schema/fragments/{10-as-is/10-entities-core,20-to-be/10-semantic-core}.tql`, `ontology/typedb/scripts/typedb-ontology-ingest.py`, and focused ontology tests so task/task-view status/priority are normalized and constrained at the DB layer.
+- **09:10** Updated `ontology/typedb/schema/fragments/{10-as-is/10-entities-core,20-to-be/10-semantic-core}.tql`, `ontology/typedb/scripts/typedb-ontology-ingest.py`, and focused ontology tests so canonical `task` status/priority are normalized and constrained at the DB layer.
 - **09:10** Extended the ontology kernel ids/attrs plus semantic-core relations for executor-layer objects (`task_family`, `executor_role`, `executor_routing`, `task_execution_run`) and aligned `plan/voice-dual-stream-ontology.md` plus `/home/strato-space/y-tasks-sandbox/OperOps/OperOps - Voice2Task.md` to the same exact labels.
 - **09:10** Normalized Mongo priority noise in `automation_tasks` by rewriting legacy `🔥 P1` variants to canonical `P1`, then re-ran ontology verification (`build`, `test`, `contract-check`) successfully.
 - **09:10** Updated `backend/scripts/rerun-ambiguous-create-tasks-batch.ts` with timeout-aware reporting and wrote structured results to `plan/ambiguous_batch_{2,3}_report.json`; final accounting is `batch1 manual_review=14`, `batch2 timed_out=14`, `batch3 timed_out=14`, `batch4 manual_review=12`.

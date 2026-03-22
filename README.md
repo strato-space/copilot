@@ -45,7 +45,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Ontology operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`.
 - Ontology architecture and rollout roadmap live in `ontology/plan/ontology-and-operations.md`.
 - `copilot` ontology is the kernel/common layer; projects are expected to extend it via per-project overlays and SemanticCards under `/home/strato-space/<project-slug>/`.
-- Direct TypeDB write discipline now uses DB-side owner-level `@values(...)` constraints for task/task-view status and priority plus key TO-BE execution objects; `target_task_view` projection normalizes Mongo labels into lifecycle keys and `P1..P7` priority before writing.
+- Direct TypeDB write discipline now uses DB-side owner-level `@values(...)` constraints for `task.status` and `task.priority` plus key TO-BE execution objects; Mongo task labels are normalized directly into canonical lifecycle keys and `P1..P7` priority before writing.
 - Executor-layer ontology is now staged in the kernel plan/spec surface: `task_family`, `executor_role`, `executor_routing`, and `task_execution_run` are the canonical next-wave execution objects.
 - Dual-stream execution semantics are fixed in `plan/voice-dual-stream-ontology.md`: draft tasks stay `task[DRAFT_10]`, `context_enrichment` is mandatory before launch, `human approval` is launch authorization (not final acceptance), and runtime flow is `executor_routing` -> `task_execution_run` -> `artifact_record` -> `acceptance_evaluation`.
 

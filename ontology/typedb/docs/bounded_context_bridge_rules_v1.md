@@ -47,7 +47,6 @@ Used for:
 Same underlying subject, different view/model.
 Used for:
 - `project` <-> `project_context_card`
-- `oper_task` <-> `target_task_view`
 - `voice_session` <-> `mode_segment`
 
 ### 3. derived-from

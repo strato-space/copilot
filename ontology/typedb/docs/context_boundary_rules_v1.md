@@ -30,7 +30,7 @@ Examples:
 - `project_context_card`
 - `mode_definition`
 - `mode_segment`
-- `target_task_view`
+- `task`
 - `artifact_record`
 - `object_note`
 - `object_conclusion`
@@ -67,7 +67,6 @@ When AS-IS and TO-BE refer to the same semantic thing but different representati
 Examples:
 - `as_is_project_maps_to_project_context_card`
 - `as_is_voice_session_maps_to_mode_segment`
-- `as_is_oper_task_maps_to_target_task_view`
 
 ## Canonical vs Non-Canonical Bridges
 ### Canonical bridges
