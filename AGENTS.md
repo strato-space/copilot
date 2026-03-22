@@ -16,6 +16,7 @@ This repository is the umbrella workspace for three related modules:
 - FX rates live in `finance-ops/admin_app/src/store/fxStore.ts` and drive RUB conversions across analytics, KPIs, and plan-fact tables.
 - The plan-fact grid keeps at least one pinned month; users can pin up to 3 and can unpin the active month if another month remains pinned.
 - Expense attachments are stored under `backend/app/data/uploads/expenses` and served from `/uploads/expenses`.
+- Keep `finance-ops/admin_app/package-lock.json` in sync with `finance-ops/admin_app/package.json` whenever dependency updates occur to avoid local install/runtime drift.
 
 ## Deployment endpoints
 - `copilot.stratospace.fun` → FinOps shell served from `finance-ops/admin_app/dist` (host Nginx config in `deploy/nginx-host.conf`; the portal lives in `frontend/` for containerized runs).

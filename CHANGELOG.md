@@ -64,3 +64,13 @@
 - KPI cards now include payroll + other expenses, FX-aware totals, and extra deltas derived from employee/expense stores.
 - Updated expense categories/seeds, analytics layout styles, and notification UI styling.
 - Host Nginx config now serves the FinOps build from `finance-ops/admin_app/dist` with clean SPA routing.
+
+## 2026-03-22
+### PROBLEM SOLVED
+- 22:46 - `jest` test execution lockfile drift risk resurfaced because `jest-environment-jsdom` was already declared but not fully represented in `package-lock.json`; this could produce inconsistent installs across environments.
+
+### FEATURE IMPLEMENTED
+- 22:46 - Synchronized `finance-ops/admin_app` dependency lock metadata so the repository now captures the full `jest` browser-style test stack (`jest-environment-jsdom` + required transitive packages) deterministically.
+
+### CHANGES
+- 22:46 - Regenerated `finance-ops/admin_app/package-lock.json` after dependency declaration updates, adding `jest-environment-jsdom`/`jsdom` related transitive entries required by the current testing setup.
