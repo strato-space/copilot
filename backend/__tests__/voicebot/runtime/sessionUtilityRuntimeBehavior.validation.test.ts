@@ -327,6 +327,117 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
+  it('create_tickets reuses accepted lineage rows without overwriting created_at', async () => {
+    const sessionId = new ObjectId();
+    const projectId = new ObjectId();
+    const validPerformerId = new ObjectId();
+    const acceptedTaskId = new ObjectId();
+    const originalCreatedAt = new Date('2026-03-06T00:00:00.000Z');
+
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Runtime test session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+
+    const taskUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => ({ insertedCount: docs.length }));
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: acceptedTaskId,
+            row_id: 'stored-row',
+            id: 'copilot-accepted',
+            task_status: TASK_STATUSES.READY_10,
+            accepted_from_row_id: 'stored-row',
+            external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+            source_data: {
+              session_id: sessionId.toHexString(),
+              session_name: 'Runtime test session',
+              row_id: 'stored-row',
+            },
+            created_at: originalCreatedAt,
+          },
+        ],
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.PERFORMERS) {
+          return {
+            findOne: jest.fn(async () => ({ _id: validPerformerId, name: 'Assignee' })),
+          };
+        }
+        if (name === COLLECTIONS.PROJECTS) {
+          return {
+            findOne: jest.fn(async () => ({ _id: projectId, id: 'project-id', title: 'Copilot' })),
+          };
+        }
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+            findOne: jest.fn(async () => null),
+            updateOne: taskUpdateOneSpy,
+            insertMany: insertManySpy,
+          };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/create_tickets')
+        .send({
+        session_id: sessionId.toHexString(),
+        tickets: [
+          {
+            _id: acceptedTaskId.toHexString(),
+            row_id: 'stored-row',
+            name: 'Updated accepted row',
+            description: 'Updated accepted description',
+            performer_id: validPerformerId.toHexString(),
+            project_id: projectId.toHexString(),
+            project: 'Demo project',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.created_task_ids).toEqual(['stored-row']);
+    expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
+    const updatePayload = taskUpdateOneSpy.mock.calls[0]?.[1] as { $set: Record<string, unknown> };
+    expect(updatePayload).toEqual(
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          name: 'Updated accepted row',
+          description: 'Updated accepted description',
+          row_id: 'stored-row',
+        }),
+      })
+    );
+    expect(updatePayload.$set).not.toHaveProperty('created_at');
+    expect(masterFind).toHaveBeenCalled();
+    expect(insertManySpy).not.toHaveBeenCalled();
+  });
+
   it('create_tickets returns row-level invalid_rows details for invalid performer ids', async () => {
     const sessionId = new ObjectId();
     const projectId = new ObjectId();

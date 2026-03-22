@@ -12,7 +12,7 @@ const toTaskId = (value: unknown): string => {
 
 export const buildCanonicalTaskSourceRef = (taskId: unknown): string => {
   const normalizedTaskId = toTaskId(taskId);
-  if (!normalizedTaskId) return CANONICAL_OPEROPS_TASK_BASE;
+  if (!normalizedTaskId) return '';
   return `${CANONICAL_OPEROPS_TASK_BASE}/${normalizedTaskId}`;
 };
 

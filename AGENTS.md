@@ -416,11 +416,18 @@ Preferred engineering principles for this repo:
 - The top-level `Задачи` badge must not render a placeholder `0` before `session_tab_counts` resolves.
 - Voice/OperOps accepted-task filtering must match `source_data.voice_sessions[].session_id` in addition to canonical session URL refs in `source_ref` / `external_ref`; otherwise repaired or migrated rows can disappear from session-scoped task views.
 - When a materialized OperOps task keeps its self-link in `source_ref`, voice-session linkage must prefer the canonical voice-session `external_ref`; do not treat `/operops/task/...` self-links as voice-session refs.
+- Materialized task ref semantics are fixed:
+  - Mongo `_id` is the only durable internal row identity,
+  - `external_ref` is the canonical source ref,
+  - `source_ref` is the canonical OperOps self URL (`/operops/task/<mongo_id>`),
+  - `bd_external_ref` is a separate bd sync key and must not replace the source-ref contract.
+- Accepted Voice task reuse must preserve the original `created_at`; lineage-based updates may refresh task content/state, but must not rewrite row creation time.
 - Accepted-task reads and `session_tab_counts` must ignore stale compatibility rows (`source_data.refresh_state='stale'`) so live status counts and non-draft task views stay aligned with the canonical draft baseline.
 - Transcript segment `edit/delete/rollback` routes must requeue `CREATE_TASKS` in incremental-refresh mode so manual transcript corrections do not leave possible-task candidates stale.
 - Done-flow summarize pipeline now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys for retry-safe diagnostics.
 - Voice metadata signatures and transcription fallback footers must normalize UTF-8-as-Latin1 mojibake filenames from message/attachment metadata before rendering `file.webm` labels.
 - Voice-created Codex BD issues must use unique `external_ref=https://copilot.stratospace.fun/voice/session/<id>#codex-task=<task-id>` values per task, while human-readable source text stays on the plain canonical session URL.
+- `create_tickets` must not blanket-delete unrelated `codex_task` rows by session before bd sync; adjacent direct Codex task docs from the same source session must survive.
 - TS voice workers run deterministic pending-session scans via scheduled `PROCESSING` jobs; `processingLoop` must keep `is_waiting: { $ne: true }` semantics to avoid skipping unset rows.
 - `processingLoop` now prioritizes sessions discovered from pending messages (even when `is_messages_processed=true`), requeues categorization after quota cooldown, and falls back to global runtime queues when handler-local queues are absent.
 - Finalization backlog scan should prioritize newest sessions (`updated_at`/`_id` descending) with an expanded scan window so stale rows do not starve fresh closed sessions.

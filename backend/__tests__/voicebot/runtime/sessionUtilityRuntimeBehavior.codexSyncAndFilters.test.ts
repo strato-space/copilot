@@ -21,7 +21,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     resetRuntimeBehaviorMocks();
   });
 
-  it('create_tickets deletes old codex rows for the same voice session before creating new codex issue', async () => {
+  it('create_tickets does not delete existing codex tasks for the same voice session before creating new codex issue', async () => {
     const sessionId = new ObjectId();
     const codexProjectId = new ObjectId();
     const taskPerformerId = codexPerformerObjectId;
@@ -132,14 +132,7 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(deleteManySpy).toHaveBeenCalledTimes(1);
-    expect(deleteManySpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
-        codex_task: true,
-        is_deleted: { $ne: true },
-      })
-    );
+    expect(deleteManySpy).not.toHaveBeenCalled();
     expect(createBdIssueMock).toHaveBeenCalledTimes(1);
     expect(response.body.insertedCount).toBe(1);
     expect(insertManySpy).toHaveBeenCalledTimes(1);
@@ -367,7 +360,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.codex_issue_sync_errors).toHaveLength(1);
     expect(createBdIssueMock).toHaveBeenCalledTimes(1);
     expect(insertManySpy).not.toHaveBeenCalled();
-    expect(deleteManySpy).toHaveBeenCalledTimes(1);
+    expect(deleteManySpy).not.toHaveBeenCalled();
   });
 
   it('task_types reads execution plans without runtime-tag filter', async () => {

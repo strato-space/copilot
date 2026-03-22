@@ -92,6 +92,12 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OperOps TaskPage metadata now includes `Created by`, resolved from task creator fields with performer-directory fallback.
 - OperOps TaskPage metadata now includes `Source` with source kind and clickable external link (Voice/Telegram/manual fallback contract).
 - Voice-linked task payloads may include `discussion_sessions[]` / `discussion_count`; the OperOps task page renders those links as a `Discussed in Sessions` timeline.
+- Materialized Voice/OperOps task refs are normalized:
+  - Mongo `_id` is the durable internal row identity,
+  - `external_ref` is the canonical source ref,
+  - `source_ref` is the canonical OperOps self URL,
+  - `bd_external_ref` is a separate bd sync key used only for Codex issue creation.
+- Accepted Voice task reuse is lineage-based and preserves the original `created_at`; repeated materialization updates the existing row instead of creating a fresh duplicate.
 - Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing); voice-session linkage must prefer `external_ref` when `source_ref` is the materialized OperOps self-link, so Source->Voice navigation keeps task visibility consistent.
 - Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.

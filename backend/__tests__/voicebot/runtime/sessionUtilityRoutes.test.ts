@@ -34,9 +34,6 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('const codexTasksToSync: Array<CodexIssueSyncInput> = [];');
     expect(source).toContain('const filteredTasksToSave = tasksToSave.filter(({ task }) => {');
     expect(source).toContain('[voicebot.create_tickets] dropped codex task before insertMany');
-    expect(source).toContain('await db.collection(COLLECTIONS.TASKS).deleteMany(');
-    expect(source).toContain('external_ref: canonicalExternalRef');
-    expect(source).toContain('codex_task: true');
     expect(source).toContain('const issueId = await createBdIssue({');
   });
 

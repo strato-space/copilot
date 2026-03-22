@@ -4351,6 +4351,7 @@ const materializeSessionTickets = async ({
         sourceTaskId: string;
         task: Record<string, unknown>;
         existingTaskId?: ObjectId | null;
+        preserveCreatedAt?: boolean;
         materializedTaskId: ObjectId;
     }> = [];
     const codexTasksToSync: Array<CodexIssueSyncInput> = [];
@@ -4411,6 +4412,7 @@ const materializeSessionTickets = async ({
             lineageIndex: acceptedTaskLineageIndex,
         });
         const existingTaskId = explicitExistingTaskId || lineageExistingTaskId;
+        const preserveCreatedAt = Boolean(existingTaskId);
         const materializedTaskId = existingTaskId || new ObjectId();
         const incomingVoiceSessions = normalizeVoiceTaskDiscussionSessions([
             ...(Array.isArray(ticket.discussion_sessions) ? ticket.discussion_sessions : []),
@@ -4575,6 +4577,7 @@ const materializeSessionTickets = async ({
                 sourceTaskId: ticketId,
                 existingTaskId,
                 materializedTaskId,
+                preserveCreatedAt,
                 task: {
                     id: publicTaskId,
                     row_id: canonicalRowId,
@@ -4654,23 +4657,6 @@ const materializeSessionTickets = async ({
         };
     }
 
-    if (codexTasksToSync.length > 0) {
-        await db.collection(COLLECTIONS.TASKS).deleteMany(
-            mergeWithRuntimeFilter(
-                {
-                    external_ref: canonicalExternalRef,
-                    codex_task: true,
-                    is_deleted: { $ne: true },
-                },
-                {
-                    field: 'runtime_tag',
-                    familyMatch: IS_PROD_RUNTIME,
-                    includeLegacyInProd: IS_PROD_RUNTIME,
-                }
-            )
-        );
-    }
-
     let insertedCount = 0;
     const createdTaskIds = new Set<string>();
     const filteredTasksToSave = tasksToSave.filter(({ task }) => {
@@ -4688,18 +4674,20 @@ const materializeSessionTickets = async ({
     const existingTasksToUpdate = filteredTasksToSave.filter(({ existingTaskId }) => existingTaskId instanceof ObjectId);
     const newTasksToInsert = filteredTasksToSave.filter(({ existingTaskId }) => !(existingTaskId instanceof ObjectId));
 
-    for (const { sourceTaskId, existingTaskId, materializedTaskId, task } of existingTasksToUpdate) {
+    for (const { sourceTaskId, existingTaskId, materializedTaskId, task, preserveCreatedAt } of existingTasksToUpdate) {
+        const updateSet: Record<string, unknown> = {
+            ...task,
+            source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
+            updated_at: now,
+            is_deleted: false,
+            deleted_at: null,
+        };
+        if (preserveCreatedAt) {
+            delete updateSet.created_at;
+        }
         await db.collection(COLLECTIONS.TASKS).updateOne(
             { _id: existingTaskId as ObjectId },
-            {
-                $set: {
-                    ...task,
-                    source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
-                    updated_at: now,
-                    is_deleted: false,
-                    deleted_at: null,
-                },
-            }
+            { $set: updateSet },
         );
         insertedCount += 1;
         if (sourceTaskId) createdTaskIds.add(sourceTaskId);

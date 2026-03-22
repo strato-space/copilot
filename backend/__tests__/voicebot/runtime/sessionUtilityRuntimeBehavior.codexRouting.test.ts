@@ -110,14 +110,7 @@ describe('Voicebot utility routes runtime behavior', () => {
         `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}#codex-task=ticket-1`
       ),
     });
-    expect(deleteManySpy).toHaveBeenCalledTimes(1);
-    expect(deleteManySpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
-        codex_task: true,
-        is_deleted: { $ne: true },
-      })
-    );
+    expect(deleteManySpy).not.toHaveBeenCalled();
     expect(insertManySpy).not.toHaveBeenCalled();
   });
 
@@ -204,7 +197,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.insertedCount).toBe(0);
     expect(createBdIssueMock).toHaveBeenCalledTimes(1);
     expect(insertManySpy).not.toHaveBeenCalled();
-    expect(deleteManySpy).toHaveBeenCalledTimes(1);
+    expect(deleteManySpy).not.toHaveBeenCalled();
   });
 
   it('create_tickets routes raw codex alias ids to bd sync without performer lookup or mongo insertMany', async () => {
@@ -289,7 +282,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.insertedCount).toBe(0);
     expect(createBdIssueMock).toHaveBeenCalledTimes(1);
     expect(insertManySpy).not.toHaveBeenCalled();
-    expect(deleteManySpy).toHaveBeenCalledTimes(1);
+    expect(deleteManySpy).not.toHaveBeenCalled();
     expect(performerFindOneSpy).not.toHaveBeenCalled();
   });
 
@@ -377,7 +370,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.insertedCount).toBe(0);
     expect(createBdIssueMock).toHaveBeenCalledTimes(1);
     expect(insertManySpy).not.toHaveBeenCalled();
-    expect(deleteManySpy).toHaveBeenCalledTimes(1);
+    expect(deleteManySpy).not.toHaveBeenCalled();
   });
 
   it('create_tickets routes performer records labeled as codex by name to bd sync without mongo insertMany', async () => {
@@ -463,7 +456,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.insertedCount).toBe(0);
     expect(createBdIssueMock).toHaveBeenCalledTimes(1);
     expect(insertManySpy).not.toHaveBeenCalled();
-    expect(deleteManySpy).toHaveBeenCalledTimes(1);
+    expect(deleteManySpy).not.toHaveBeenCalled();
   });
 
 });
