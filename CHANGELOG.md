@@ -2482,15 +2482,18 @@
 
 ## 2026-03-22
 ### PROBLEM SOLVED
+- **15:00** Voice session pages could fail to open after session-list sorting when the selected project still had historical performer links but zero active performer rows; backend `project_performers` enrichment built an empty Mongo logical selector and crashed the request with `$and/$or/$nor must be a nonempty array`.
 - **00:23** Voice session title generation could leave the UI stuck in `Генерирую заголовок`, and task/session bucket drift still produced false counters, duplicate Draft exposure, or transient 400 noise after the bucket rename wave.
 - **00:58** OperOps CRM Draft and list surfaces were still heavier than needed for daily work and did not expose an operator-controlled bounded Draft horizon.
 - **01:23** Voice session page still produced preventable browser-console accessibility/markup noise after reload.
 
 ### FEATURE IMPLEMENTED
+- **15:00** Hardened Voice Telegram/performer enrichment so project-performer reads now degrade to an empty performer list when lifecycle filtering removes every linked performer, keeping the session page load path alive for sorted navigation.
 - **00:58** Split OperOps CRM into summary-list vs lazy-detail payloads, added Draft depth control with `1d / 7d / 14d / 30d / ∞`, and made `7d` the default fast surface.
 - **01:23** Finalized the strict `Draft / Ready+ / Codex` session-task bucket contract across backend/docs/tests with no lowercase live aliases in the canonical contract text.
 
 ### CHANGES
+- **15:00** Updated `backend/src/services/telegramKnowledge.ts` to return early for empty performer batches and to skip Telegram-user lookup queries when both performer-id and Telegram-id selectors are empty; updated root `AGENTS.md` and `README.md` with the empty-selector contract for `POST /api/voicebot/project_performers`.
 - **00:23** Added frontend stage timeouts / `finally` cleanup for `generate_session_title`, backend MCP correlation logging, and verified successful title generation + Telegram summary delivery for session `69be49ea4ad7c397307d2d6f`.
 - **00:41** Fixed Voice session `Задачи` counters so `Draft` rows are counted from the same canonical source as visible rows, and hardened `session_tasks(bucket='Ready+')` / `session_tab_counts` so Draft rows cannot leak into accepted-task reads (`copilot-f6z4`, `copilot-rdrq`).
 - **00:58** Added `/api/crm/tickets/status-counts`, `response_mode=summary|detail`, lazy ticket-detail hydration for CRM drawers/editors, `Loading ...` state instead of false `No data`, and request/profile instrumentation for CRM list payload size/perf (`copilot-83r7`, `copilot-bn3f`).

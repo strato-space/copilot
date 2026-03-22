@@ -113,6 +113,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice API source of truth is local: `/api/voicebot/*` (flat contract + legacy aliases during migration).
 - Runtime isolation is enforced by per-environment deployment/database boundaries; `runtime_tag` is not a canonical runtime filter contract.
 - Voice admin/person/project payloads can be enriched with Telegram user/chat links and project-performer memberships; `POST /api/voicebot/project_performers` returns a permission-checked `{ project, performers }` payload backed by `automation_telegram_*` and `automation_project_performer_links`.
+- `POST /api/voicebot/project_performers` must remain safe when a project keeps performer links but the active performer selector resolves to zero rows; enrichment should return an empty performer list instead of building Mongo queries with empty logical arrays.
 - Telegram/project knowledge can be seeded into those collections with `cd backend && npm run telegram:knowledge:seed:dry` or `cd backend && npm run telegram:knowledge:seed:apply`.
 - Telegram knowledge seeding now reuses shared routing-project extraction (`backend/src/utils/routingConfig.ts`) so routing topics, project names, and project aliases resolve consistently when one routing item carries multiple project sources.
 - Telegram seed rollout/rollback contract lives in `ontology/plan/telegram-knowledge-seed-rollout.md`.

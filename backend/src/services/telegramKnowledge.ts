@@ -369,16 +369,20 @@ export const enrichPerformersWithTelegramAndProjectLinks = async <T extends Mini
   db: Db,
   performers: T[],
 ): Promise<Array<T & EnrichedTelegramRefs & { project_performer_links: ProjectPerformerLinkRef[] }>> => {
+  if (!performers.length) return [];
+
   const performerIds = performers.map((item) => toObjectIdOrNull(item._id)).filter((item): item is ObjectId => item !== null);
   const telegramIds = uniqueStrings(performers.map((item) => String(item.telegram_id ?? '').trim()));
 
   const [telegramUsers, projectLinks] = await Promise.all([
-    safeFindToArray<TelegramUserDocument>(getTelegramUsersCollection(db), {
-      $or: [
-        ...(performerIds.length ? [{ performer_id: { $in: performerIds } }] : []),
-        ...(telegramIds.length ? [{ telegram_id: { $in: telegramIds } }] : []),
-      ],
-    }),
+    (performerIds.length || telegramIds.length)
+      ? safeFindToArray<TelegramUserDocument>(getTelegramUsersCollection(db), {
+          $or: [
+            ...(performerIds.length ? [{ performer_id: { $in: performerIds } }] : []),
+            ...(telegramIds.length ? [{ telegram_id: { $in: telegramIds } }] : []),
+          ],
+        })
+      : Promise.resolve([] as WithId<TelegramUserDocument>[]),
     performerIds.length
       ? safeFindToArray<ProjectPerformerLinkDocument>(getProjectPerformerLinksCollection(db), { performer_id: { $in: performerIds } })
       : Promise.resolve([] as WithId<ProjectPerformerLinkDocument>[]),
