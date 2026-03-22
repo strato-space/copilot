@@ -3920,6 +3920,10 @@ def ingest_collection_from_mapping(ctx: IngestContext, collection: str) -> Colle
                             if isinstance(field, str) and field
                         ]
                 raw_value = resolve_mapped_value(doc, source_field, coalesce_fields)
+                if target_entity == "task" and attr == "status":
+                    raw_value = normalize_task_status_key(raw_value)
+                elif target_entity == "task" and attr == "priority":
+                    raw_value = normalize_task_priority(raw_value)
                 if attr_type == "string":
                     if attr == "activity_state":
                         bool_status = as_bool(raw_value)
