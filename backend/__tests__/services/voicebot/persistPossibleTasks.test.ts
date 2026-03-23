@@ -12,6 +12,27 @@ const buildTasksCollection = (seedDocs: TaskDoc[]) => {
     const serialized = JSON.stringify(filter);
     const hasProjectFilter = serialized.includes('"project_id":"proj-1"') || serialized.includes('"project_id":"proj-2"');
     const hasRowIdMatch = serialized.includes('"row_id"') && serialized.includes('"$in"');
+    const LOCATOR_KEYS = new Set(['row_id', 'id', 'task_id_from_ai', 'source_data.row_id']);
+    const collectLocatorInStrings = (value: unknown): string[] => {
+      if (Array.isArray(value)) {
+        return value.flatMap((entry) => collectLocatorInStrings(entry));
+      }
+      if (!value || typeof value !== 'object') return [];
+      const record = value as Record<string, unknown>;
+      const nested = Object.entries(record).flatMap(([key, entry]) => {
+        if (LOCATOR_KEYS.has(key) && entry && typeof entry === 'object' && !Array.isArray(entry)) {
+          const inValues = Array.isArray((entry as Record<string, unknown>).$in)
+            ? ((entry as Record<string, unknown>).$in as unknown[])
+                .map((candidate) => String(candidate || '').trim())
+                .filter(Boolean)
+            : [];
+          return inValues;
+        }
+        return collectLocatorInStrings(entry);
+      });
+      return nested;
+    };
+    const rowIdMatches = Array.from(new Set(collectLocatorInStrings(filter)));
 
     const matchesSession = (doc: TaskDoc, sessionId: string): boolean => {
       const externalRef = String(doc.external_ref || '');
@@ -29,6 +50,18 @@ const buildTasksCollection = (seedDocs: TaskDoc[]) => {
 
     const sessionIdMatch = serialized.match(/[a-f0-9]{24}/i)?.[0] || '';
     let results: TaskDoc[] = [];
+    const matchesRowIdFilter = (doc: TaskDoc): boolean => {
+      if (rowIdMatches.length === 0) return true;
+      const sourceData = (doc.source_data && typeof doc.source_data === 'object'
+        ? (doc.source_data as Record<string, unknown>)
+        : {}) as Record<string, unknown>;
+      return rowIdMatches.some((value) =>
+        String(doc.row_id || '') === value ||
+        String(doc.id || '') === value ||
+        String(doc.task_id_from_ai || '') === value ||
+        String(sourceData.row_id || '') === value
+      );
+    };
 
     if (hasProjectFilter) {
       const projectId = serialized.includes('"project_id":"proj-2"') ? 'proj-2' : 'proj-1';
@@ -38,7 +71,9 @@ const buildTasksCollection = (seedDocs: TaskDoc[]) => {
         results = docs.filter((doc) => String(doc.project_id || '') === projectId && doc.is_deleted !== true);
       }
     } else if (sessionIdMatch) {
-      results = docs.filter((doc) => matchesSession(doc, sessionIdMatch) && doc.is_deleted !== true);
+      results = docs.filter(
+        (doc) => matchesSession(doc, sessionIdMatch) && matchesRowIdFilter(doc) && doc.is_deleted !== true
+      );
     }
 
     return {
@@ -264,6 +299,104 @@ describe('persistPossibleTasksForSession', () => {
           }),
         }),
       ]),
+    );
+  });
+
+  it('marks missing draft rows as stale instead of deleting them during incremental refresh', async () => {
+    const existingDocA = new ObjectId();
+    const existingDocB = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocA,
+        row_id: 'draft-a',
+        id: 'draft-a',
+        name: 'Оставить живой draft',
+        description: 'Описание A',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-a',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+      {
+        _id: existingDocB,
+        row_id: 'draft-b',
+        id: 'draft-b',
+        name: 'Не удалять при incremental refresh',
+        description: 'Описание B',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-b',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Incremental refresh session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'draft-a',
+          id: 'draft-a',
+          name: 'Оставить живой draft',
+          description: 'Обновлённое описание A',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'incremental_refresh',
+    });
+
+    expect(result.removedRowIds).toEqual(['draft-b']);
+
+    const persistedDocs = tasksCollection.snapshot();
+    const refreshedDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
+    const staleDocB = persistedDocs.find((doc) => String(doc._id) === String(existingDocB));
+
+    expect(refreshedDocA).toEqual(
+      expect.objectContaining({
+        _id: existingDocA,
+        row_id: 'draft-a',
+        is_deleted: false,
+        source_data: expect.objectContaining({
+          row_id: 'draft-a',
+          last_refresh_mode: 'incremental_refresh',
+        }),
+      })
+    );
+    expect((refreshedDocA?.source_data as Record<string, unknown>).refresh_state).toBeUndefined();
+    expect((refreshedDocA?.source_data as Record<string, unknown>).stale_since).toBeUndefined();
+
+    expect(staleDocB).toEqual(
+      expect.objectContaining({
+        _id: existingDocB,
+        row_id: 'draft-b',
+        source_data: expect.objectContaining({
+          row_id: 'draft-b',
+          refresh_state: 'stale',
+          stale_since: expect.any(String),
+          last_refresh_mode: 'incremental_refresh',
+        }),
+      })
     );
   });
 });

@@ -13,6 +13,7 @@ const generateDataFilterMock = jest.fn();
 const runCreateTasksAgentMock = jest.fn();
 const runCreateTasksCompositeAgentMock = jest.fn();
 const persistPossibleTasksForSessionMock = jest.fn();
+const applyCreateTasksCompositeCommentSideEffectsMock = jest.fn();
 const loggerInfoMock = jest.fn();
 const loggerErrorMock = jest.fn();
 
@@ -39,6 +40,10 @@ jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js
     persistPossibleTasksForSession: persistPossibleTasksForSessionMock,
   };
 });
+
+jest.unstable_mockModule('../../../src/services/voicebot/createTasksCompositeCommentSideEffects.js', () => ({
+  applyCreateTasksCompositeCommentSideEffects: applyCreateTasksCompositeCommentSideEffectsMock,
+}));
 
 jest.unstable_mockModule('../../../src/utils/logger.js', () => ({
   getLogger: () => ({
@@ -137,6 +142,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     runCreateTasksAgentMock.mockReset();
     runCreateTasksCompositeAgentMock.mockReset();
     persistPossibleTasksForSessionMock.mockReset();
+    applyCreateTasksCompositeCommentSideEffectsMock.mockReset();
     loggerInfoMock.mockReset();
     loggerErrorMock.mockReset();
 
@@ -149,6 +155,13 @@ describe('POST /voicebot/generate_possible_tasks', () => {
       enrich_ready_task_comments: [],
       session_name: '',
       project_id: '',
+    });
+    applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
+      insertedEnrichmentComments: 0,
+      dedupedEnrichmentComments: 0,
+      insertedCodexEnrichmentNotes: 0,
+      dedupedCodexEnrichmentNotes: 0,
+      unresolvedEnrichmentLookupIds: [],
     });
   });
 
@@ -203,6 +216,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
       expect.objectContaining({
         db: fixture.dbStub,
         sessionId: fixture.sessionId.toString(),
+        sessionName: 'Morning Session about bounded task planning',
         defaultProjectId: fixture.projectId.toHexString(),
         refreshMode: 'full_recompute',
       })
@@ -213,12 +227,18 @@ describe('POST /voicebot/generate_possible_tasks', () => {
       {
         $set: expect.objectContaining({
           summary_md_text: 'Короткое саммари по диалогу.',
-          summary_saved_at: expect.any(String),
+          summary_saved_at: expect.any(Date),
           review_md_text: 'Review markdown',
           session_name: 'Morning Session about bounded task planning',
           updated_at: expect.any(Date),
         }),
       }
+    );
+    expect(applyCreateTasksCompositeCommentSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: fixture.sessionId.toString(),
+        drafts: [],
+      })
     );
   });
 

@@ -545,13 +545,13 @@ const markPossibleTaskMasterRowsStale = async ({
         $set: {
           source_data: {
             ...sourceData,
+            refresh_state: 'stale',
+            stale_since: staleAt.toISOString(),
             last_refresh_mode: 'incremental_refresh',
           },
           updated_at: staleAt,
         },
         $unset: {
-          'source_data.refresh_state': 1,
-          'source_data.stale_since': 1,
           'source_data.superseded_at': 1,
         },
       }
@@ -716,7 +716,11 @@ export const persistPossibleTasksForSession = async ({
   const staleRowIds = existingSessionDocs
     .filter((doc) => !collectVoicePossibleTaskLocatorKeys(doc).some((key) => nextSessionRowIds.has(key)))
     .flatMap((doc) => collectVoicePossibleTaskLocatorKeys(doc));
-  await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
+  if (refreshMode === 'incremental_refresh') {
+    await markPossibleTaskMasterRowsStale({ db, sessionId, rowIds: staleRowIds, staleAt: now });
+  } else {
+    await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
+  }
 
   const refreshedMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
   const refreshedItems = refreshedMasterDocs

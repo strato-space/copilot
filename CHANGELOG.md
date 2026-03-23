@@ -2,6 +2,10 @@
 
 ## 2026-03-23
 ### PROBLEM SOLVED
+- **22:47** Background `CREATE_TASKS` refreshes still applied only part of the composite analyzer output, so worker-driven recomputes could leave `summary_md_text`, `review_md_text`, generated session/project updates, and Ready+/Codex enrichment side effects missing even after draft rows were refreshed.
+- **22:47** Incremental draft refreshes could still soft-delete unmatched rows outright, which made narrowed recomputes destructive and removed the stale compatibility evidence needed for repeated-session triage.
+- **22:47** Voice incident investigations still depended on ad hoc Mongo/PM2 spelunking, so parity failures between manual and background `CREATE_TASKS` paths had no standard evidence bundle or first-response operator workflow.
+- **22:47** Draft enrichment markdown still tolerated freeform preface text before the canonical sections, so parser/builders could drift away from the fixed `## description`-first contract.
 - **00:58** Voice sessions still depended on manual `Done` even after activity stopped, which left inactive active sessions open indefinitely and could preserve missing titles until an operator intervened.
 - **02:27** Closed voice sessions could keep blinking green `Категоризация` / `Задачи` dots because the frontend treated stale historical incompleteness as if runtime processing were still active.
 - **01:53** Voice inline Codex details could hide existing `bd` comments because the modal reused table-row payloads instead of loading the canonical single-issue detail contract.
@@ -13,6 +17,10 @@
 - **11:36** Draft editing still leaked operator-hostile details: task-type selectors exposed raw ids, priority reasons were hidden, and the form spread task semantics across too many separate fields instead of one Markdown surface plus explicit Q/A chunks.
 
 ### FEATURE IMPLEMENTED
+- **22:47** Extracted shared composite session-state and comment-side-effect services for `CREATE_TASKS`, then reused them from both the manual route and the background chunk worker so session summary/review/title/project patches, Ready+/Codex enrichment, processor success markers, and summary refresh hints land consistently.
+- **22:47** `incremental_refresh` now preserves unmatched draft candidates as `source_data.refresh_state='stale'` compatibility rows instead of deleting them immediately, while `full_recompute` remains the explicit destructive path.
+- **22:47** Added an incident-grade voice session forensics CLI plus a checked-in operator playbook; investigations now produce reproducible bundles with queue snapshots, PM2 log hits, and per-session JSON/Markdown summaries.
+- **22:47** Tightened the canonical Draft markdown contract so `## description` is always the first meaningful section and non-section prefaces are ignored by parsers/builders.
 - **00:58** Added a worker-driven inactive-session close path with a default `10`-minute inactivity threshold, canonical `DONE_MULTIPROMPT` close orchestration, and automatic `generate_session_title` execution when a session is still unnamed at close time.
 - **02:27** Activity dots in Voice tabs are now runtime-aware: closed/inactive/finalized sessions suppress stale green indicators, while active sessions still show pending processing.
 - **01:53** Voice Codex details modal now fetches full `codex/issue` payloads on open, so comments and related metadata match the standalone OperOps Codex page.
@@ -25,6 +33,10 @@
 - **11:36** Simplified the Draft editor to one Markdown task surface plus a plain `Question:` / `Answer:` chunk, made task types human-readable, exposed priority reasons on hover, and reduced Save/Clone/Delete to icon-only task controls.
 
 ### CHANGES
+- **22:47** Added `backend/src/services/voicebot/{createTasksCompositeSessionState,createTasksCompositeCommentSideEffects}.ts`, rewired `backend/src/api/routes/voicebot/sessions.ts` and `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts`, and expanded focused route/worker tests so manual/background `CREATE_TASKS` now share session patching, comment enrichment, and processor-completion behavior.
+- **22:47** Updated `backend/src/services/voicebot/persistPossibleTasks.ts` and focused persistence tests so `incremental_refresh` marks missing draft rows stale instead of soft-deleting them, while live draft reads still exclude stale compatibility rows.
+- **22:47** Updated `backend/src/services/voicebot/createTasksAgent.ts`, `app/src/utils/voicePossibleTasks.ts`, `app/__tests__/voice/voicePossibleTasksParser.test.ts`, `agents/agent-cards/create_tasks.md`, and `plan/voice-dual-stream-ontology.md` to enforce the `## description`-first markdown contract for Draft enrichment surfaces.
+- **22:47** Added `backend/scripts/voicebot-session-forensics.ts`, npm script `voice:session:forensics`, the English operator guide `docs/VOICE_SESSION_FORENSICS_PLAYBOOK.md`, and reference investigation bundles under `tmp/voice-investigation-artifacts/20260323T153446Z-69c13e953126bf876842c7ac*`.
 - **00:58** Added `backend/src/services/voicebot/{voicebotInactiveSessionService,voicebotSessionTitleService}.ts`, `backend/src/workers/voicebot/handlers/shared/closeInactiveSessions.ts`, and worker-manifest/runner wiring for `VOICEBOT_JOBS.common.CLOSE_INACTIVE_SESSIONS`; refreshed `backend/scripts/voicebot-close-inactive-sessions.ts` to delegate through the shared service and prefer `--inactive-minutes` while keeping `--inactive-hours` as an operational override.
 - **00:58** Added focused regression coverage in `backend/__tests__/services/voicebotInactiveSessionService.test.ts`, `backend/__tests__/scripts/voicebotCloseInactiveSessionsContract.test.ts`, `backend/__tests__/voicebot/session/sessionDoneFlowService.test.ts`, `backend/__tests__/voicebot/workers/queueLockNamingContract.test.ts`, and `backend/__tests__/entrypoints/orphanedEntrypointsContract.test.ts`.
 - **01:53** Updated `app/src/components/codex/CodexIssuesTable.tsx` and new contract `app/__tests__/codex/codexIssuesTableModalDetailsContract.test.ts` so Voice Codex modal details load the canonical single-issue payload before rendering `CodexIssueDetailsCard`.

@@ -156,7 +156,7 @@ const hasMarkdownEnrichmentSections = (description: string): boolean =>
 
 const buildCanonicalDraftDescription = (name: string, description: string): string => {
   const synopsis = normalizeWhitespace(description) || name || 'Не указано';
-  const lines: string[] = [synopsis, ''];
+  const lines: string[] = [];
   for (const key of VOICE_TASK_ENRICHMENT_SECTION_KEYS) {
     lines.push(`## ${key}`);
     if (key === 'description') {

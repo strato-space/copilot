@@ -203,6 +203,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - apply (auto-heal): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:summarize-mcp-watchdog:apply`
   - checks required endpoint/service mappings: `fs`, `tg-ro`, `call`, `seq`, `tm`, `tgbot`.
   - remediation is targeted: inactive `mcp@*` units are started, active units with endpoint `502`/unreachable probes are restarted.
+- Incident-grade voice session forensics are canonical through `cd backend && npm run voice:session:forensics -- --session <session_id> --bundle-dir ../tmp/voice-investigation-artifacts/<run-id>-<session_id>`; the standard bundle is `index.json`, `index.md`, per-session JSON/Markdown reports, queue snapshots, PM2 log hits, and a linked `bd` verdict. The operator workflow lives in `docs/VOICE_SESSION_FORENSICS_PLAYBOOK.md`.
 - Empty stale sessions can be cleaned in worker runtime by scheduled `CLEANUP_EMPTY_SESSIONS` jobs (no-message sessions older than configured threshold are marked `is_deleted=true`):
   - env knobs: `VOICEBOT_EMPTY_SESSION_CLEANUP_INTERVAL_MS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_AGE_HOURS`, `VOICEBOT_EMPTY_SESSION_CLEANUP_BATCH_LIMIT`.
 - Voice sessions list supports deleted-session mode (`include_deleted` / `Показывать удаленные`); creator/participant filters suppress numeric identity placeholders and keep only human-readable labels.
@@ -239,6 +240,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `create_selected.validation_failed`
   - `create_selected.failed`
 - CREATE_TASKS payloads are normalized to canonical `id/name/description/priority/...` shape in both worker (`createTasksFromChunks`) and API utility (`save_create_tasks`) write paths.
+- Manual `POST /api/voicebot/generate_possible_tasks` and background `CREATE_TASKS` worker refresh now share one composite side-effect contract: session `summary_md_text` / `review_md_text` / generated `session_name` / `project_id`, Ready+ enrichment comments, Codex note enrichment, processor success markers, and `session_update.taskflow_refresh.summary` when summary text exists.
 - Taskflow row-locator priority is canonical `row_id -> id -> task_id_from_ai`; `task_id_from_ai` remains a legacy fallback for mutation compatibility, not the primary row identity.
 - Historical CREATE_TASKS legacy payload migration runbook is archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md` (verify/apply/post-check + rollback).
 - Categorization metadata signature is rendered once per message block footer (`source_file_name + HH:mm:ss`) instead of repeating per row; row focus uses blue selection only.

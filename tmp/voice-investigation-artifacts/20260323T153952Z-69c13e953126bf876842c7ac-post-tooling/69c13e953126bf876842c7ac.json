@@ -1,0 +1,1948 @@
+{
+  "generated_at": "2026-03-23T15:39:54.703Z",
+  "session": {
+    "session_id": "69c13e953126bf876842c7ac",
+    "exists": true,
+    "session": {
+      "_id": "69c13e953126bf876842c7ac",
+      "session_name": "Автопривязка voice-сессий и запуск задач",
+      "status": "",
+      "state": "",
+      "source_type": "",
+      "session_type": "multiprompt_voice_session",
+      "is_active": false,
+      "to_finalize": true,
+      "is_deleted": false,
+      "project_id": "6875e887c5f43ce3d205e7c6",
+      "has_summary_md_text": true,
+      "has_review_md_text": true,
+      "summary_saved_at": "2026-03-23T15:30:35.347Z",
+      "title_generated_at": "2026-03-23T13:45:10.142Z",
+      "user_id": "6684069c0141435d411c01f8",
+      "chat_id": "214255344",
+      "created_at": "2026-03-23T13:22:29.298Z",
+      "updated_at": "2026-03-23T15:30:35.392Z",
+      "done_at": "2026-03-23T13:45:10.184Z"
+    },
+    "counters": {
+      "messages_total": 2,
+      "session_log_total": 19,
+      "linked_tasks_total": 3,
+      "linked_tasks_by_status": {
+        "Draft": 3
+      },
+      "pm2_log_hits_total": 80,
+      "queue_job_matches_total": 0
+    },
+    "create_tasks_state": {
+      "is_processing": false,
+      "is_processed": true,
+      "has_payload_array": false,
+      "payload_items": 0,
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "job_queued_timestamp": "2026-03-23T13:47:55.362Z",
+      "job_finished_timestamp": "2026-03-23T15:30:35.392Z",
+      "auto_requested_at": "2026-03-23T13:49:14.853Z",
+      "error_message": ""
+    },
+    "session_surfaces": {
+      "has_summary_md_text": true,
+      "has_review_md_text": true,
+      "summary_saved_at": "2026-03-23T15:30:35.347Z",
+      "title_generated_at": "2026-03-23T13:45:10.142Z"
+    },
+    "diagnostics": {
+      "queue_snapshot_error": "redis_unreachable"
+    },
+    "anomalies": [
+      "queue_snapshot_unavailable"
+    ],
+    "slices": {
+      "recent_messages": [
+        {
+          "_id": "69c143ab4f6bf13b72e0d340",
+          "created_at": "2026-03-23T13:44:10.121Z",
+          "updated_at": "2026-03-23T13:44:10.121Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 20-15-29 - Ð·Ð°Ð¿Ð¸ÑÑ.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 1311.387,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c13fd94f6bf13b72e0d33f",
+          "created_at": "2026-03-23T13:27:52.259Z",
+          "updated_at": "2026-03-23T13:27:52.259Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 19-43-52 - Ð·Ð°Ð¿Ð¸ÑÑ.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 1800.431,
+          "is_deleted": false
+        }
+      ],
+      "recent_session_log": [
+        {
+          "_id": "69c14457b5ae2cb7e266b2e9",
+          "event_time": "2026-03-23T13:47:03.167Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c14457b5ae2cb7e266b2e8",
+          "event_time": "2026-03-23T13:47:03.085Z",
+          "event_name": "notify_hook_started",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c14456b5ae2cb7e266b2e7",
+          "event_time": "2026-03-23T13:47:02.981Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c14456b5ae2cb7e266b2e6",
+          "event_time": "2026-03-23T13:47:02.937Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": "42ae2d98-4548-4b3f-ab4b-80cbe9533a98"
+        },
+        {
+          "_id": "69c14456b5ae2cb7e266b2e5",
+          "event_time": "2026-03-23T13:47:02.886Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c14456b5ae2cb7e266b2e4",
+          "event_time": "2026-03-23T13:47:02.856Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c14456b5ae2cb7e266b2e3",
+          "event_time": "2026-03-23T13:47:02.815Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": "42ae2d98-4548-4b3f-ab4b-80cbe9533a98"
+        },
+        {
+          "_id": "69c144564f6bf13b72e0d343",
+          "event_time": "2026-03-23T13:47:02.525Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c144564f6bf13b72e0d342",
+          "event_time": "2026-03-23T13:47:02.516Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c143e7b5ae2cb7e266b2e0",
+          "event_time": "2026-03-23T13:45:11.079Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c143e6b5ae2cb7e266b2df",
+          "event_time": "2026-03-23T13:45:10.956Z",
+          "event_name": "notify_hook_started",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c143e6b5ae2cb7e266b2de",
+          "event_time": "2026-03-23T13:45:10.814Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c143e6b5ae2cb7e266b2dd",
+          "event_time": "2026-03-23T13:45:10.775Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": "42ae2d98-4548-4b3f-ab4b-80cbe9533a98"
+        },
+        {
+          "_id": "69c143e6b5ae2cb7e266b2dc",
+          "event_time": "2026-03-23T13:45:10.758Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c143e6b5ae2cb7e266b2db",
+          "event_time": "2026-03-23T13:45:10.734Z",
+          "event_name": "summary_save",
+          "status": "done",
+          "reason": "",
+          "correlation_id": "42ae2d98-4548-4b3f-ab4b-80cbe9533a98"
+        },
+        {
+          "_id": "69c143e6b5ae2cb7e266b2da",
+          "event_time": "2026-03-23T13:45:10.658Z",
+          "event_name": "summary_telegram_send",
+          "status": "queued",
+          "reason": "",
+          "correlation_id": "42ae2d98-4548-4b3f-ab4b-80cbe9533a98"
+        },
+        {
+          "_id": "69c143e6b5ae2cb7e266b2d9",
+          "event_time": "2026-03-23T13:45:10.390Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c143b8b5ae2cb7e266b2d5",
+          "event_time": "2026-03-23T13:44:24.902Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c143b84f6bf13b72e0d341",
+          "event_time": "2026-03-23T13:44:24.090Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        }
+      ],
+      "recent_linked_tasks": [
+        {
+          "_id": "69c140f5b5ae2cb7e266b2d4",
+          "id": "task-3",
+          "task_status": "Draft",
+          "priority": "🔥 P1",
+          "title": "",
+          "name": "Запустить автоматический stale-task loop для Codex исполнения",
+          "created_at": "2026-03-23T13:32:37.712Z",
+          "updated_at": "2026-03-23T15:30:35.168Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c140f5b5ae2cb7e266b2d4"
+        },
+        {
+          "_id": "69c140f5b5ae2cb7e266b2d3",
+          "id": "task-2",
+          "task_status": "Draft",
+          "priority": "🔥 P1",
+          "title": "",
+          "name": "Автоматизировать генерацию заголовков и project binding voice-сессий",
+          "created_at": "2026-03-23T13:32:37.712Z",
+          "updated_at": "2026-03-23T15:30:35.168Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c140f5b5ae2cb7e266b2d3"
+        },
+        {
+          "_id": "69c140f5b5ae2cb7e266b2d2",
+          "id": "task-1",
+          "task_status": "Draft",
+          "priority": "🔥 P1",
+          "title": "",
+          "name": "Насытить карточку проекта контекстным словарём для матчинга",
+          "created_at": "2026-03-23T13:32:37.712Z",
+          "updated_at": "2026-03-23T15:30:35.168Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c140f5b5ae2cb7e266b2d2"
+        }
+      ],
+      "recent_pm2_log_hits": [
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166431",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166432",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166433",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166434",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166435",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/auth/list-users HTTP/1.1\" 200 1094 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166436",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166437",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166438",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166443",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166444",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"FQuwv9EVXq10i7npAAAX\",\"session_id\":\"69c13e953126bf876842c7ac\",\"room\":\"voicebot:session:69c13e953126bf876842c7ac\",\"subscribers\":1}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166445",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"FQuwv9EVXq10i7npAAAX\",\"session_id\":\"69c13e953126bf876842c7ac\",\"room\":\"voicebot:session:69c13e953126bf876842c7ac\",\"subscribers\":1}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166446",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291170 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166447",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166448",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166449",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166450",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166451",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166452",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166453",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166454",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166455",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166456",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"FQuwv9EVXq10i7npAAAX\",\"session_id\":\"69c13e953126bf876842c7ac\",\"room\":\"voicebot:session:69c13e953126bf876842c7ac\",\"subscribers\":1}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166457",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166458",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166459",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166460",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166461",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166462",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166463",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166464",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166465",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166466",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166467",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166468",
+          "line": 0,
+          "text": "23:16 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:23:16 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166469",
+          "line": 0,
+          "text": "23:16 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:23:16 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166478",
+          "line": 0,
+          "text": "24:04 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:24:04 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166497",
+          "line": 0,
+          "text": "24:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:24:12 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166550",
+          "line": 0,
+          "text": "27:00 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:00 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166559",
+          "line": 0,
+          "text": "27:20 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:20 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166560",
+          "line": 0,
+          "text": "27:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:37 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166561",
+          "line": 0,
+          "text": "27:52 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn380pei_yxof9h\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files\":[{\"name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 19-43-52 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"size\":111067804,\"mime_type\":\"video/webm\"}]}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166562",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn380pei_yxof9h\",\"session_id\":\"69c13e953126bf876842c7ac\",\"message_id\":\"69c13fd94f6bf13b72e0d33f\",\"file_name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 19-43-52 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"file_size\":111067804,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166563",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c13e953126bf876842c7ac: files=1 {\"service\":\"copilot-backend\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166564",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn380pei_yxof9h\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files_count\":1,\"results_count\":1}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166565",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:53 +0000] \"POST /api/voicebot/uploads/audio HTTP/1.1\" 200 480 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166566",
+          "line": 0,
+          "text": "27:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:54 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166567",
+          "line": 0,
+          "text": "27:55 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:55 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166660",
+          "line": 0,
+          "text": "32:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:37 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166661",
+          "line": 0,
+          "text": "32:39 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:39 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 13326 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166662",
+          "line": 0,
+          "text": "32:39 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:39 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 252117 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166663",
+          "line": 0,
+          "text": "32:39 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:39 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166664",
+          "line": 0,
+          "text": "32:40 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:40 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166665",
+          "line": 0,
+          "text": "32:41 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:41 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166666",
+          "line": 0,
+          "text": "32:43 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:43 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166753",
+          "line": 0,
+          "text": "37:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:37:38 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166754",
+          "line": 0,
+          "text": "37:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:37:54 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166755",
+          "line": 0,
+          "text": "38:16 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:38:16 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166842",
+          "line": 0,
+          "text": "43:09 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:43:09 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166858",
+          "line": 0,
+          "text": "44:10 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn38lnxe_lrk2yk\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files\":[{\"name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 20-15-29 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"size\":78275768,\"mime_type\":\"video/webm\"}]}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166859",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn38lnxe_lrk2yk\",\"session_id\":\"69c13e953126bf876842c7ac\",\"message_id\":\"69c143ab4f6bf13b72e0d340\",\"file_name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 20-15-29 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"file_size\":78275768,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166860",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c13e953126bf876842c7ac: files=1 {\"service\":\"copilot-backend\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166861",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn38lnxe_lrk2yk\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files_count\":1,\"results_count\":1}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166862",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:11 +0000] \"POST /api/voicebot/uploads/audio HTTP/1.1\" 200 479 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166863",
+          "line": 0,
+          "text": "44:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:12 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166876",
+          "line": 0,
+          "text": "44:13 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:13 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166899",
+          "line": 0,
+          "text": "44:21 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:21 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166900",
+          "line": 0,
+          "text": "44:21 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:21 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 253431 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166901",
+          "line": 0,
+          "text": "44:24 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:24 +0000] \"POST /api/voicebot/sessions/update_project HTTP/1.1\" 200 101 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166902",
+          "line": 0,
+          "text": "44:25 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:25 +0000] \"POST /api/voicebot/sessions/update_access_level HTTP/1.1\" 200 16 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166903",
+          "line": 0,
+          "text": "44:29 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:29 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166912",
+          "line": 0,
+          "text": "44:30 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:30 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166913",
+          "line": 0,
+          "text": "44:30 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:30 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166915",
+          "line": 0,
+          "text": "44:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:58 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 502 52 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166917",
+          "line": 0,
+          "text": "44:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:58 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 502 52 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166919",
+          "line": 0,
+          "text": "45:10 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:45:10 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166920",
+          "line": 0,
+          "text": "45:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:45:12 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166948",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"GET /api/auth/me HTTP/1.1\" - - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166951",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166952",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"GET /api/auth/me HTTP/1.1\" 200 928 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c13e953126bf876842c7ac",
+          "file": "1166957",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"POST /api/voicebot/sessions/update_name HTTP/1.1\" 200 16 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      ],
+      "queue_snapshots": [],
+      "recent_queue_jobs": []
+    },
+    "timeline": [
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166431",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166432",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166433",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166434",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166435",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/auth/list-users HTTP/1.1\" 200 1094 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166436",
+          "line": 0,
+          "text": "22:36 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:36 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166437",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166438",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166443",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166444",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"FQuwv9EVXq10i7npAAAX\",\"session_id\":\"69c13e953126bf876842c7ac\",\"room\":\"voicebot:session:69c13e953126bf876842c7ac\",\"subscribers\":1}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166445",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"FQuwv9EVXq10i7npAAAX\",\"session_id\":\"69c13e953126bf876842c7ac\",\"room\":\"voicebot:session:69c13e953126bf876842c7ac\",\"subscribers\":1}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166446",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291170 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166447",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166448",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166449",
+          "line": 0,
+          "text": "22:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:37 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166450",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166451",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166452",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166453",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166454",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166455",
+          "line": 0,
+          "text": "22:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:38 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166456",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"FQuwv9EVXq10i7npAAAX\",\"session_id\":\"69c13e953126bf876842c7ac\",\"room\":\"voicebot:session:69c13e953126bf876842c7ac\",\"subscribers\":1}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166457",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166458",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166459",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166460",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166461",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1925 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166462",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166463",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166464",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166465",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166466",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166467",
+          "line": 0,
+          "text": "22:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:22:53 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166468",
+          "line": 0,
+          "text": "23:16 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:23:16 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166469",
+          "line": 0,
+          "text": "23:16 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:23:16 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166478",
+          "line": 0,
+          "text": "24:04 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:24:04 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166497",
+          "line": 0,
+          "text": "24:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:24:12 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166550",
+          "line": 0,
+          "text": "27:00 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:00 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166559",
+          "line": 0,
+          "text": "27:20 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:20 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166560",
+          "line": 0,
+          "text": "27:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:37 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166561",
+          "line": 0,
+          "text": "27:52 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn380pei_yxof9h\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files\":[{\"name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 19-43-52 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"size\":111067804,\"mime_type\":\"video/webm\"}]}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166562",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn380pei_yxof9h\",\"session_id\":\"69c13e953126bf876842c7ac\",\"message_id\":\"69c13fd94f6bf13b72e0d33f\",\"file_name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 19-43-52 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"file_size\":111067804,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166563",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c13e953126bf876842c7ac: files=1 {\"service\":\"copilot-backend\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166564",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn380pei_yxof9h\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files_count\":1,\"results_count\":1}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166565",
+          "line": 0,
+          "text": "27:53 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:53 +0000] \"POST /api/voicebot/uploads/audio HTTP/1.1\" 200 480 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166566",
+          "line": 0,
+          "text": "27:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:54 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166567",
+          "line": 0,
+          "text": "27:55 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:27:55 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166660",
+          "line": 0,
+          "text": "32:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:37 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166661",
+          "line": 0,
+          "text": "32:39 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:39 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 13326 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166662",
+          "line": 0,
+          "text": "32:39 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:39 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 252117 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166663",
+          "line": 0,
+          "text": "32:39 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:39 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166664",
+          "line": 0,
+          "text": "32:40 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:40 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166665",
+          "line": 0,
+          "text": "32:41 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:41 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166666",
+          "line": 0,
+          "text": "32:43 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:32:43 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166753",
+          "line": 0,
+          "text": "37:38 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:37:38 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166754",
+          "line": 0,
+          "text": "37:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:37:54 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166755",
+          "line": 0,
+          "text": "38:16 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:38:16 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166842",
+          "line": 0,
+          "text": "43:09 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:43:09 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166858",
+          "line": 0,
+          "text": "44:10 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn38lnxe_lrk2yk\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files\":[{\"name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 20-15-29 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"size\":78275768,\"mime_type\":\"video/webm\"}]}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166859",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn38lnxe_lrk2yk\",\"session_id\":\"69c13e953126bf876842c7ac\",\"message_id\":\"69c143ab4f6bf13b72e0d340\",\"file_name\":\"ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 20-15-29 - Ð·Ð°Ð¿Ð¸ÑÑ.webm\",\"file_size\":78275768,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166860",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c13e953126bf876842c7ac: files=1 {\"service\":\"copilot-backend\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166861",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn38lnxe_lrk2yk\",\"session_id\":\"69c13e953126bf876842c7ac\",\"files_count\":1,\"results_count\":1}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166862",
+          "line": 0,
+          "text": "44:11 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:11 +0000] \"POST /api/voicebot/uploads/audio HTTP/1.1\" 200 479 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166863",
+          "line": 0,
+          "text": "44:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:12 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166876",
+          "line": 0,
+          "text": "44:13 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:13 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166899",
+          "line": 0,
+          "text": "44:21 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:21 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166900",
+          "line": 0,
+          "text": "44:21 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:21 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 253431 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166901",
+          "line": 0,
+          "text": "44:24 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:24 +0000] \"POST /api/voicebot/sessions/update_project HTTP/1.1\" 200 101 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166902",
+          "line": 0,
+          "text": "44:25 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:25 +0000] \"POST /api/voicebot/sessions/update_access_level HTTP/1.1\" 200 16 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166903",
+          "line": 0,
+          "text": "44:29 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:29 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166912",
+          "line": 0,
+          "text": "44:30 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:30 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166913",
+          "line": 0,
+          "text": "44:30 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:30 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166915",
+          "line": 0,
+          "text": "44:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:58 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 502 52 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166917",
+          "line": 0,
+          "text": "44:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:44:58 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 502 52 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166919",
+          "line": 0,
+          "text": "45:10 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:45:10 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166920",
+          "line": 0,
+          "text": "45:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:45:12 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1291166 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166948",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"GET /api/auth/me HTTP/1.1\" - - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166951",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166952",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"GET /api/auth/me HTTP/1.1\" 200 928 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1166957",
+          "line": 0,
+          "text": "47:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [23/Mar/2026:13:47:02 +0000] \"POST /api/voicebot/sessions/update_name HTTP/1.1\" 200 16 \"https://copilot.stratospace.fun/voice/session/69c13e953126bf876842c7ac\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:22:29.298Z",
+        "source": "session",
+        "kind": "session_created",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:27:52.259Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c13fd94f6bf13b72e0d33f",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 19-43-52 - Ð·Ð°Ð¿Ð¸ÑÑ.webm"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:32:37.712Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c140f5b5ae2cb7e266b2d4",
+          "id": "task-3",
+          "priority": "🔥 P1",
+          "title": "Запустить автоматический stale-task loop для Codex исполнения"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:32:37.712Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c140f5b5ae2cb7e266b2d3",
+          "id": "task-2",
+          "priority": "🔥 P1",
+          "title": "Автоматизировать генерацию заголовков и project binding voice-сессий"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:32:37.712Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c140f5b5ae2cb7e266b2d2",
+          "id": "task-1",
+          "priority": "🔥 P1",
+          "title": "Насытить карточку проекта контекстным словарём для матчинга"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:44:10.121Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c143ab4f6bf13b72e0d340",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "ÐÐ°Ð¿Ð¸ÑÑ Ð²ÑÑÑÐµÑÐ¸ 23.03.2026 20-15-29 - Ð·Ð°Ð¿Ð¸ÑÑ.webm"
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:44:24.090Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c143b84f6bf13b72e0d341",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:44:24.902Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69c143b8b5ae2cb7e266b2d5",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.184Z",
+        "source": "session",
+        "kind": "session_done",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.390Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c143e6b5ae2cb7e266b2d9",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.658Z",
+        "source": "session_log",
+        "kind": "summary_telegram_send",
+        "details": {
+          "_id": "69c143e6b5ae2cb7e266b2da",
+          "status": "queued",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.734Z",
+        "source": "session_log",
+        "kind": "summary_save",
+        "details": {
+          "_id": "69c143e6b5ae2cb7e266b2db",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.758Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69c143e6b5ae2cb7e266b2dc",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.775Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c143e6b5ae2cb7e266b2dd",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.814Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c143e6b5ae2cb7e266b2de",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:10.956Z",
+        "source": "session_log",
+        "kind": "notify_hook_started",
+        "details": {
+          "_id": "69c143e6b5ae2cb7e266b2df",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:45:11.079Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69c143e7b5ae2cb7e266b2e0",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:02.516Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c144564f6bf13b72e0d342",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:02.525Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c144564f6bf13b72e0d343",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:02.815Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c14456b5ae2cb7e266b2e3",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:02.856Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c14456b5ae2cb7e266b2e4",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:02.886Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69c14456b5ae2cb7e266b2e5",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:02.937Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c14456b5ae2cb7e266b2e6",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:02.981Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c14456b5ae2cb7e266b2e7",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:03.085Z",
+        "source": "session_log",
+        "kind": "notify_hook_started",
+        "details": {
+          "_id": "69c14457b5ae2cb7e266b2e8",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T13:47:03.167Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69c14457b5ae2cb7e266b2e9",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c13e953126bf876842c7ac",
+        "ts": "2026-03-23T15:30:35.392Z",
+        "source": "session",
+        "kind": "session_updated",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      }
+    ]
+  }
+}

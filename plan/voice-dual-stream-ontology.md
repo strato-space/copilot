@@ -169,7 +169,7 @@ Concrete counterexample:
 Для `task[DRAFT_10]` canonical mutable enrichment surface живёт в `task.description` как Markdown.
 
 Нормализация `task[DRAFT_10].description`:
-1. первый абзац — короткий human-readable synopsis;
+1. первым содержательным разделом всегда идёт `## description`;
 2. далее идут секции Markdown в фиксированном порядке;
 3. именно эти секции считаются canonical review/enrichment surface, а не comments.
 
@@ -747,6 +747,9 @@ entity task,
   owns description,
   owns status @values("DRAFT_10", "READY_10", "PROGRESS_10", "REVIEW_10", "DONE_10", "ARCHIVE", "UNKNOWN"),
   owns priority @values("P1", "P2", "P3", "P4", "P5", "P6", "P7", "UNKNOWN"),
+  owns task_type_name,
+  owns task_type_id,
+  owns issue_type,
   owns performer_id,
   owns source_kind,
   owns source_ref,
@@ -761,7 +764,8 @@ entity task,
   owns created_at,
   owns updated_at,
   plays project_has_task:task,
-  plays voice_session_sources_task:sourced_task;
+  plays voice_session_sources_task:sourced_task,
+  plays task_classified_as_task_type:task;
 ```
 
 ### AS-IS exact entity: `voice_session`
@@ -1086,6 +1090,15 @@ Task normalization note:
 - `task.status` is constrained to `DRAFT_10 | READY_10 | PROGRESS_10 | REVIEW_10 | DONE_10 | ARCHIVE | UNKNOWN`
 - `task.priority` is constrained to `P1 | P2 | P3 | P4 | P5 | P6 | P7 | UNKNOWN`
 - current ingest normalizes raw Mongo labels into those canonical values before writing `task`
+
+Task type dictionary split note:
+- UI label `Тип` (legacy CRM surface) and UI label `Тип задачи` (voice draft surface) are storage-distinct but ontology-close fields.
+- legacy `Тип` carrier in task rows is `task_type` (mapped into `task_type_name`); in live rows it is often an ObjectId-like reference, not a stable human label.
+- voice/intake `Тип задачи` carrier is `task_type_id`.
+- `automation_task_types_tree` (`task_type_tree`) is the practical taxonomy source for both UI selectors; leaf nodes with `type_class=TASK` are the classification target for task rows.
+- `automation_task_types` (`task_type`) remains a flat legacy dictionary surface; keep as compatibility dictionary, not as the only canonical taxonomy for current routing/enrichment flow.
+- `issue_type` (with runtime coalesce `issue_type | type`) is a separate issue/codex subtype axis and must not be mixed with `task_type_id`.
+- write-side normalization rule for new taskflow writes: prefer `task_type_id`; keep legacy `task_type`/`task_type_name` as compatibility mirror when required.
 
 ### TO-BE task-local execution context
 

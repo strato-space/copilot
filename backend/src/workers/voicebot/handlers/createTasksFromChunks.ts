@@ -8,7 +8,16 @@ import { getDb } from '../../../services/db.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { getLogger } from '../../../utils/logger.js';
 import { runtimeQuery } from './shared/sharedRuntime.js';
-import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
+import {
+  runCreateTasksAgent,
+} from '../../../services/voicebot/createTasksAgent.js';
+import {
+  applyCreateTasksCompositeSessionPatch,
+  extractCreateTasksCompositeMeta,
+  markCreateTasksProcessorSuccess,
+  resolveCreateTasksCompositeSessionContext,
+} from '../../../services/voicebot/createTasksCompositeSessionState.js';
+import { applyCreateTasksCompositeCommentSideEffects } from '../../../services/voicebot/createTasksCompositeCommentSideEffects.js';
 import {
   persistPossibleTasksForSession,
   type PossibleTasksRefreshMode,
@@ -59,6 +68,7 @@ const toProjectId = (value: ObjectId | string | null | undefined): string => {
   return value.toString().trim();
 };
 
+
 const normalizeRefreshMode = (value: unknown): PossibleTasksRefreshMode | null => {
   const normalized = String(value || '').trim();
   if (normalized === 'full_recompute' || normalized === 'incremental_refresh') {
@@ -94,6 +104,7 @@ const enqueuePossibleTasksRefresh = async ({
         taskflow_refresh: {
           reason: 'auto_transcription_chunk',
           possible_tasks: true,
+          summary: true,
           updated_at: updatedAt,
         },
       },
@@ -138,15 +149,39 @@ export const handleCreateTasksFromChunksJob = async (
       db,
       ...(chunkTexts.length > 0 ? { rawText: chunkTexts.join('\n\n') } : {}),
     });
+    const compositeMeta = extractCreateTasksCompositeMeta(tasks);
+    const resolvedContext = resolveCreateTasksCompositeSessionContext({
+      session,
+      compositeMeta,
+    });
+    const sessionFilter = runtimeQuery({ _id: sessionObjectId });
 
     const persisted = await persistPossibleTasksForSession({
       db,
       sessionId: session_id,
-      sessionName: String(session.session_name || '').trim(),
-      defaultProjectId: toProjectId(session.project_id),
+      sessionName: resolvedContext.effectiveSessionName,
+      defaultProjectId: resolvedContext.effectiveProjectId,
       taskItems: tasks,
       createdById: session.user_id ? String(session.user_id) : '',
       refreshMode,
+    });
+
+    await applyCreateTasksCompositeSessionPatch({
+      db,
+      sessionFilter,
+      resolvedContext,
+    });
+    await applyCreateTasksCompositeCommentSideEffects({
+      db,
+      sessionId: session_id,
+      session: session as unknown as Record<string, unknown>,
+      drafts: compositeMeta?.enrich_ready_task_comments,
+      ...(session.user_id ? { actorId: String(session.user_id) } : {}),
+    });
+    await markCreateTasksProcessorSuccess({
+      db,
+      sessionFilter,
+      processorKey: 'CREATE_TASKS',
     });
 
     await enqueuePossibleTasksRefresh({ session_id });
@@ -163,6 +198,7 @@ export const handleCreateTasksFromChunksJob = async (
       runtimeQuery({ _id: sessionObjectId }),
       {
         $set: {
+          'processors_data.CREATE_TASKS.job_finished_timestamp': Date.now(),
           'processors_data.CREATE_TASKS.is_processing': false,
           'processors_data.CREATE_TASKS.is_processed': false,
           'processors_data.CREATE_TASKS.error': message,

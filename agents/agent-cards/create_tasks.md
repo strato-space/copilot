@@ -202,7 +202,8 @@ oneOf:
 - `## open_questions`
 
 Правила:
-- первый абзац/первая секция должна давать короткий human-readable synopsis;
+- первым содержательным разделом всегда должен быть `## description`;
+- не добавляй отдельный preface, synopsis-префикс или строку вида `Короткий synopsis: ...` вне canonical Markdown sections;
 - отдельными UI-полями остаются только `name`, `priority`, `project`, `task_type`, `performer` (в runtime это `name/priority/project_id/task_type_id/performer_id`);
 - всё остальное содержательное наполнение задачи (scope, locators, expected outcomes, acceptance, evidence, routing hints, unresolved items) живёт в одном Markdown surface `task.description`;
 - секции могут быть частично пустыми на раннем intake;

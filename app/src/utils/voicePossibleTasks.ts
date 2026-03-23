@@ -188,8 +188,7 @@ export const buildVoiceTaskEnrichmentDescription = (
     sections[key] = normalizeVoiceTaskEnrichmentValue(partialSections[key] || '');
   }
 
-  const synopsis = sections.description || 'Не указано';
-  const lines: string[] = [synopsis, ''];
+  const lines: string[] = [];
   for (const key of VOICE_TASK_ENRICHMENT_SECTION_KEYS) {
     lines.push(`## ${key}`);
     lines.push(sections[key] || 'Не указано');
@@ -208,27 +207,18 @@ export const parseVoiceTaskEnrichmentSections = (
 
   const lines = description.replace(/\r\n/g, '\n').split('\n');
   let currentSectionKey: VoiceTaskEnrichmentSectionKey | null = null;
-  const prefaceBuffer: string[] = [];
-  let encounteredSection = false;
 
   for (const line of lines) {
     const headingCandidate = parseSectionHeadingFromLine(line);
     if (headingCandidate !== null) {
-      encounteredSection = true;
       currentSectionKey = resolveEnrichmentSectionKey(headingCandidate);
       continue;
     }
     if (/^\s{0,3}#{1,6}\s+/.test(line)) {
-      encounteredSection = true;
       currentSectionKey = null;
       continue;
     }
-    if (!currentSectionKey) {
-      if (!encounteredSection) {
-        prefaceBuffer.push(line);
-      }
-      continue;
-    }
+    if (!currentSectionKey) continue;
     const bucket = sectionBuffers.get(currentSectionKey);
     if (!bucket) continue;
     bucket.push(line);
@@ -248,9 +238,7 @@ export const parseVoiceTaskEnrichmentSections = (
     };
   });
   const missingKeys = entries.filter((entry) => !entry.isFilled).map((entry) => entry.key);
-  const prefaceSynopsis = normalizeVoiceTaskEnrichmentValue(prefaceBuffer.join('\n').trim());
-  const synopsisSource = sections.description || prefaceSynopsis || description;
-  const synopsis = truncateSynopsis(toSingleLine(stripMarkdownForSynopsis(synopsisSource)));
+  const synopsis = truncateSynopsis(toSingleLine(stripMarkdownForSynopsis(sections.description || '')));
 
   return {
     synopsis,

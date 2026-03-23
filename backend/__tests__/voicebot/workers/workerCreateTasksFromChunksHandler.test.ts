@@ -11,6 +11,8 @@ const getDbMock = jest.fn();
 const getVoicebotQueuesMock = jest.fn();
 const runCreateTasksAgentMock = jest.fn();
 const persistPossibleTasksForSessionMock = jest.fn();
+const applyCreateTasksCompositeCommentSideEffectsMock = jest.fn();
+const CREATE_TASKS_COMPOSITE_META_KEY = '__create_tasks_composite_meta';
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -21,11 +23,16 @@ jest.unstable_mockModule('../../../src/services/voicebotQueues.js', () => ({
 }));
 
 jest.unstable_mockModule('../../../src/services/voicebot/createTasksAgent.js', () => ({
+  CREATE_TASKS_COMPOSITE_META_KEY,
   runCreateTasksAgent: runCreateTasksAgentMock,
 }));
 
 jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js', () => ({
   persistPossibleTasksForSession: persistPossibleTasksForSessionMock,
+}));
+
+jest.unstable_mockModule('../../../src/services/voicebot/createTasksCompositeCommentSideEffects.js', () => ({
+  applyCreateTasksCompositeCommentSideEffects: applyCreateTasksCompositeCommentSideEffectsMock,
 }));
 
 const { handleCreateTasksFromChunksJob } = await import(
@@ -38,16 +45,26 @@ describe('handleCreateTasksFromChunksJob', () => {
     getVoicebotQueuesMock.mockReset();
     runCreateTasksAgentMock.mockReset();
     persistPossibleTasksForSessionMock.mockReset();
+    applyCreateTasksCompositeCommentSideEffectsMock.mockReset();
+    applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
+      insertedEnrichmentComments: 0,
+      dedupedEnrichmentComments: 0,
+      insertedCodexEnrichmentNotes: 0,
+      dedupedCodexEnrichmentNotes: 0,
+      unresolvedEnrichmentLookupIds: [],
+    });
   });
 
   it('recomputes full-session possible tasks when chunks_to_process is empty', async () => {
     const sessionId = new ObjectId();
+    const generatedProjectId = new ObjectId().toString();
     const sessionsFindOne = jest.fn(async () => ({
       _id: sessionId,
       session_name: 'Demo session',
       project_id: 'proj-1',
       user_id: 'user-1',
     }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
     const eventsAdd = jest.fn(async () => ({ id: 'event-job' }));
 
     getDbMock.mockReturnValue({
@@ -55,7 +72,7 @@ describe('handleCreateTasksFromChunksJob', () => {
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
           return {
             findOne: sessionsFindOne,
-            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+            updateOne: sessionsUpdateOne,
           };
         }
         return {};
@@ -66,7 +83,7 @@ describe('handleCreateTasksFromChunksJob', () => {
       [VOICEBOT_QUEUES.EVENTS]: { add: eventsAdd },
     });
 
-    runCreateTasksAgentMock.mockResolvedValue([
+    const generatedTasks = [
       {
         row_id: 'TASK-1',
         id: 'TASK-1',
@@ -74,7 +91,14 @@ describe('handleCreateTasksFromChunksJob', () => {
         description: 'Implement parity',
         priority: 'P2',
       },
-    ]);
+    ] as Array<Record<string, unknown>>;
+    (generatedTasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] = {
+      summary_md_text: 'Summary body',
+      scholastic_review_md: 'Review body',
+      session_name: 'Demo session with generated title',
+      project_id: generatedProjectId,
+    };
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
     persistPossibleTasksForSessionMock.mockResolvedValue({
       items: [{ id: 'TASK-1', row_id: 'TASK-1', name: 'Ship parity' }],
       rows: [{ id: 'TASK-1', row_id: 'TASK-1', name: 'Ship parity' }],
@@ -100,7 +124,42 @@ describe('handleCreateTasksFromChunksJob', () => {
     expect(persistPossibleTasksForSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: sessionId.toString(),
+        sessionName: 'Demo session with generated title',
+        defaultProjectId: generatedProjectId,
         refreshMode: 'full_recompute',
+      })
+    );
+    expect(sessionsUpdateOne).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          summary_md_text: 'Summary body',
+          review_md_text: 'Review body',
+          session_name: 'Demo session with generated title',
+          project_id: expect.any(ObjectId),
+        }),
+      })
+    );
+    expect(sessionsUpdateOne).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.is_processing': false,
+          'processors_data.CREATE_TASKS.is_processed': true,
+        }),
+        $unset: expect.objectContaining({
+          'processors_data.CREATE_TASKS.error': 1,
+          'processors_data.CREATE_TASKS.error_message': 1,
+          'processors_data.CREATE_TASKS.error_timestamp': 1,
+        }),
+      })
+    );
+    expect(applyCreateTasksCompositeCommentSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: sessionId.toString(),
+        drafts: undefined,
       })
     );
   });
@@ -223,6 +282,7 @@ describe('handleCreateTasksFromChunksJob', () => {
     });
     const updatePayload = sessionsUpdateOne.mock.calls[0]?.[1] as Record<string, unknown>;
     const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    expect(setPayload['processors_data.CREATE_TASKS.job_finished_timestamp']).toEqual(expect.any(Number));
     expect(setPayload['processors_data.CREATE_TASKS.error']).toBe('create_tasks_agent_error: insufficient_quota');
   });
 });

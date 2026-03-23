@@ -44,6 +44,7 @@ Error details: responses request failed for model 'gpt-5.2-codex' (code: insuffi
   it('parses canonical Draft enrichment markdown sections from description', () => {
     const parsed = parseVoiceTaskEnrichmentSections(
       [
+        '## description',
         'Короткий synopsis',
         '',
         '### object_locators',
@@ -72,6 +73,7 @@ Error details: responses request failed for model 'gpt-5.2-codex' (code: insuffi
   it('ignores non-canonical legacy singular enrichment headings', () => {
     const parsed = parseVoiceTaskEnrichmentSections(
       [
+        '## description',
         'Legacy synopsis',
         '',
         '**expected result**',
@@ -82,15 +84,16 @@ Error details: responses request failed for model 'gpt-5.2-codex' (code: insuffi
       ].join('\n')
     );
 
-    expect(parsed.sections.description).toBe('');
+    expect(parsed.sections.description).toContain('Legacy synopsis');
+    expect(parsed.sections.description).toContain('**expected result**');
     expect(parsed.sections.expected_results).toBe('Каноничное значение');
     expect(parsed.synopsis).toContain('Legacy synopsis');
-    expect(parsed.synopsis).toContain('expected result');
   });
 
   it('keeps parser strict for canonical enrichment section keys', () => {
     const parsed = parseVoiceTaskEnrichmentSections(
       [
+        '## description',
         'Короткий synopsis',
         '',
         '### object locator',
@@ -119,11 +122,26 @@ Error details: responses request failed for model 'gpt-5.2-codex' (code: insuffi
       open_questions: 'Кто утверждает финальный rollout?',
     });
 
-    expect(description).toContain('Подготовить запуск');
+    expect(description).toContain('## description');
     expect(description).toContain('## expected_results');
     expect(description).toContain('Есть готовый execution brief');
     expect(description).toContain('## object_locators');
     expect(description).toContain('Не указано');
     expect(description).toContain('## open_questions');
+    expect(description.startsWith('## description')).toBe(true);
+  });
+
+  it('keeps parser strict and does not treat preface text as canonical description', () => {
+    const parsed = parseVoiceTaskEnrichmentSections(
+      [
+        'Короткий synopsis',
+        '',
+        '### expected_results',
+        'Получить воспроизводимый результат.',
+      ].join('\n')
+    );
+
+    expect(parsed.sections.description).toBe('');
+    expect(parsed.synopsis).toBe('');
   });
 });
