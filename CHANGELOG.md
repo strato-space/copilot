@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-03-23
+### PROBLEM SOLVED
+- **00:58** Voice sessions still depended on manual `Done` even after activity stopped, which left inactive active sessions open indefinitely and could preserve missing titles until an operator intervened.
+- **02:27** Closed voice sessions could keep blinking green `Категоризация` / `Задачи` dots because the frontend treated stale historical incompleteness as if runtime processing were still active.
+- **01:53** Voice inline Codex details could hide existing `bd` comments because the modal reused table-row payloads instead of loading the canonical single-issue detail contract.
+- **02:42** OperOps task pages could crash with React error `#310` and render a blank page when hook order drifted between loading/not-found renders and the final task render.
+
+### FEATURE IMPLEMENTED
+- **00:58** Added a worker-driven inactive-session close path with a default `10`-minute inactivity threshold, canonical `DONE_MULTIPROMPT` close orchestration, and automatic `generate_session_title` execution when a session is still unnamed at close time.
+- **02:27** Activity dots in Voice tabs are now runtime-aware: closed/inactive/finalized sessions suppress stale green indicators, while active sessions still show pending processing.
+- **01:53** Voice Codex details modal now fetches full `codex/issue` payloads on open, so comments and related metadata match the standalone OperOps Codex page.
+- **02:42** Hardened the OperOps `TaskPage` render contract by making discussion-session memoization hook-safe across loading, not-found, and loaded renders.
+
+### CHANGES
+- **00:58** Added `backend/src/services/voicebot/{voicebotInactiveSessionService,voicebotSessionTitleService}.ts`, `backend/src/workers/voicebot/handlers/shared/closeInactiveSessions.ts`, and worker-manifest/runner wiring for `VOICEBOT_JOBS.common.CLOSE_INACTIVE_SESSIONS`; refreshed `backend/scripts/voicebot-close-inactive-sessions.ts` to delegate through the shared service and prefer `--inactive-minutes` while keeping `--inactive-hours` as an operational override.
+- **00:58** Added focused regression coverage in `backend/__tests__/services/voicebotInactiveSessionService.test.ts`, `backend/__tests__/scripts/voicebotCloseInactiveSessionsContract.test.ts`, `backend/__tests__/voicebot/session/sessionDoneFlowService.test.ts`, `backend/__tests__/voicebot/workers/queueLockNamingContract.test.ts`, and `backend/__tests__/entrypoints/orphanedEntrypointsContract.test.ts`.
+- **01:53** Updated `app/src/components/codex/CodexIssuesTable.tsx` and new contract `app/__tests__/codex/codexIssuesTableModalDetailsContract.test.ts` so Voice Codex modal details load the canonical single-issue payload before rendering `CodexIssueDetailsCard`.
+- **02:27** Updated `app/src/utils/voiceSessionTabs.ts`, `app/src/pages/voice/SessionPage.tsx`, and `app/__tests__/voice/voiceSessionTabs.test.ts` so pending indicators are gated by live runtime activity instead of stale historical payload shape.
+- **02:42** Updated `app/src/pages/operops/TaskPage.tsx` to keep `discussionSessions` memoization above early returns, preserving hook order and preventing the blank-page crash on `/operops/task/:taskId`.
+
+## 2026-03-22
+### PROBLEM SOLVED
+- **15:00** Voice session pages could fail to open after session-list sorting when the selected project resolved to zero active performer rows; backend `project_performers` enrichment built an empty Mongo logical selector and returned `500`.
+- **22:11** Voice/OperOps task linkage still mixed source URLs, self URLs, and `bd` sync keys, so accepted task reuse and Codex issue sync could duplicate logical work or collide on `bd` uniqueness.
+- **16:42** Factory execution guidance was still implicit and mostly oral, so autonomous runs lacked one concise harness article that tied repo-level execution surfaces to the dual-stream ontology.
+
+### FEATURE IMPLEMENTED
+- **15:00** Added a safe empty-result path for `project_performers`, so zero resolved performer rows now return `200` with an empty list instead of crashing the session page.
+- **22:11** Normalized task reference semantics across Voice -> OperOps -> `bd`: Mongo `_id` remains the internal identity, `external_ref` is the canonical source ref, `source_ref` is the canonical OperOps self URL, `bd_external_ref` is a separate sync key, and accepted task reuse preserves original creation identity.
+- **16:42** Added the Factory harness article and Russian translation so autonomous execution has one explicit repo-local guide aligned with the platform’s voice/taskflow contracts.
+
+### CHANGES
+- **15:00** Updated backend `project_performers` enrichment guards and related deploy/runtime checks so empty performer selectors short-circuit before Mongo builds empty logical arrays.
+- **22:11** Updated backend task materialization/sync surfaces to preserve lineage-based accepted-row reuse, keep `created_at` stable on updates, avoid blanket deletion of unrelated `codex_task` rows, and separate `bd_external_ref` from human-readable source URLs; updated frontend source-link matching and task-page utilities to prefer canonical `external_ref` source linkage.
+- **16:42** Added `factory/harness.md` plus its Russian companion article, and aligned repo documentation with the executable harness workflow.
+
 ## 2026-03-21
 ### PROBLEM SOLVED
 - **09:10** The ontology/spec wave still left one critical implementation gap: task/execution surfaces were described as if direct LLM writes to TypeDB were desirable, but canonical `task.status` and `task.priority` were not yet constrained on the DB side, so invalid raw labels could still leak into the write path.

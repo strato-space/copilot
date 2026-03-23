@@ -20,8 +20,20 @@ describe('Voicebot queue/lock naming contract', () => {
   it('uses env-stable scheduler ids (no runtime_tag suffix)', () => {
     expect(runnerSource).toContain('processing-loop${VOICEBOT_ENV_QUEUE_SUFFIX}');
     expect(runnerSource).toContain('cleanup-empty-sessions${VOICEBOT_ENV_QUEUE_SUFFIX}');
+    expect(runnerSource).toContain('close-inactive-sessions${VOICEBOT_ENV_QUEUE_SUFFIX}');
     expect(runnerSource).not.toContain('processing-loop-${RUNTIME_TAG}');
     expect(runnerSource).not.toContain('cleanup-empty-sessions-${RUNTIME_TAG}');
+    expect(runnerSource).not.toContain('close-inactive-sessions-${RUNTIME_TAG}');
+  });
+
+  it('keeps close-inactive scheduler defaults and env knobs explicit', () => {
+    expect(constantsSource).toContain("CLOSE_INACTIVE_SESSIONS: 'CLOSE_INACTIVE_SESSIONS'");
+    expect(runnerSource).toContain('VOICEBOT_CLOSE_INACTIVE_SESSIONS_ENABLED');
+    expect(runnerSource).toContain('VOICEBOT_CLOSE_INACTIVE_SESSIONS_INTERVAL_MS');
+    expect(runnerSource).toContain('VOICEBOT_CLOSE_INACTIVE_SESSIONS_TIMEOUT_MINUTES');
+    expect(runnerSource).toContain('VOICEBOT_CLOSE_INACTIVE_SESSIONS_BATCH_LIMIT');
+    expect(runnerSource).toContain('return 10;');
+    expect(runnerSource).toContain('generate_missing_title: true');
   });
 
   it('uses env-stable tg poller lock key (no runtime_tag suffix)', () => {

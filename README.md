@@ -101,10 +101,12 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing); voice-session linkage must prefer `external_ref` when `source_ref` is the materialized OperOps self-link, so Source->Voice navigation keeps task visibility consistent.
 - Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
+- Voice Codex inline details now fetch the canonical `POST /api/crm/codex/issue` payload on drawer open, so comments and related metadata match the standalone OperOps Codex issue page.
 - Codex issue IDs now use one token renderer across `Issue ID` and `Relationships` (blue link + copy action); relationship rows also show status pictograms (`open`, `in_progress`, `blocked`, `deferred`, `closed`, fallback).
 - Single-issue OperOps Codex loads now share the JSONL fallback path with the list route: when `bd show` reports out-of-sync JSONL and `bd sync --import-only` fails with `bufio.Scanner: token too long`, `/api/crm/codex/issue` falls back to direct `.beads/issues.jsonl` parsing instead of returning `502`.
 - Codex relationship groups are normalized in details card as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency reading.
 - Performer selectors normalize Codex assignment to canonical performer `_id=69a2561d642f3a032ad88e7a` (legacy synthetic ids are rewritten) in CRM and Voice task-assignment flows.
+- OperOps `TaskPage` must keep hook ordering stable across loading / not-found / loaded renders; discussion-session memoization must not sit below early returns or the page can blank-crash with React hook-order errors.
 - OperOps main task navigation is status-first:
   - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
   - lifecycle counts belong inline in those tab labels,
@@ -172,7 +174,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Frontend Voice task tabs must translate backend status labels back into canonical CRM status keys before filtering `CRMKanban`; label strings are not valid task-status filter inputs by themselves.
 - Voice and OperOps task displays must render target labels (`Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`) rather than raw stored labels like `Progress 10` or `Review / Ready`.
 - `Codex` badge is computed from the same session-scoped Codex issue source/filter as the `Codex` tab content itself.
-- `Транскрипция`, `Категоризация`, and `Задачи` now show a slow green processing dot while that pipeline stage is still catching up to newly arrived transcript chunks.
+- `Транскрипция`, `Категоризация`, and `Задачи` show a slow green processing dot only while live runtime work is still active; closed/inactive/finalized sessions suppress stale dots even if historical payloads remain incomplete.
 - WebRTC REST close diagnostics now always include `session_id` in client warning payloads (`close failed`, `close rejected`, `request failed`) to speed up backend correlation.
 - `Done` in WebRTC now runs bounded auto-upload draining and marks remaining failed chunk uploads for explicit retry instead of indefinite automatic loops.
 - WebRTC page `Done` stays enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, even without `pageSession` in the iframe URL.
@@ -188,11 +190,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:dedupe:webm:apply`
   - rules: only non-Telegram `*.webm` messages, grouped by `(session_id, file_name)`, keep one most relevant message and mark the rest `is_deleted=true`.
 - Idle active sessions can be auto-closed via backend script:
-  - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-hours=4`
-  - dry run (LLM/automation JSON): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-hours=4 --json`
-  - dry run (streaming JSONL): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-hours=4 --jsonl`
-  - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:apply -- --inactive-hours=4`
-  - activity window uses latest session update/message/session-log timestamps; sessions with no movement above the threshold are closed through `DONE_MULTIPROMPT` flow.
+  - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-minutes=10`
+  - dry run (LLM/automation JSON): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-minutes=10 --json`
+  - dry run (streaming JSONL): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-minutes=10 --jsonl`
+  - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:apply -- --inactive-minutes=10`
+  - `--inactive-hours` remains accepted as an operational override, but the canonical operator surface is minutes-first with default `10`.
+  - activity window uses latest session update/message/session-log timestamps; idle sessions are closed through canonical `DONE_MULTIPROMPT` orchestration and auto-generate a missing title through `generate_session_title` before completion.
+- Production voice workers also schedule `CLOSE_INACTIVE_SESSIONS` automatically; tune with `VOICEBOT_CLOSE_INACTIVE_SESSIONS_{ENABLED,INTERVAL_MS,TIMEOUT_MINUTES,BATCH_LIMIT}`.
 - Summarize MCP dependency watchdog is available for `session_ready_to_summarize` prerequisites:
   - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:summarize-mcp-watchdog:dry`
   - dry run JSON: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:summarize-mcp-watchdog:dry -- --json`

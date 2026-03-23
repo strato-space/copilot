@@ -7,6 +7,19 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   return value as Record<string, unknown>;
 };
 
+export const isSessionRuntimeActive = (session: VoiceBotSession | null | undefined): boolean => {
+  if (!session) return true;
+  if (session.is_active === false) return false;
+
+  const sessionRecord = asRecord(session);
+  if (!sessionRecord) return true;
+
+  if (toText(sessionRecord.done_at).length > 0) return false;
+  if (toText(sessionRecord.closed_at).length > 0) return false;
+  if (session.is_finalized === true && session.is_active !== true) return false;
+  return true;
+};
+
 const hasAudioPayload = (message: VoiceBotMessage): boolean =>
   [
     message.file_path,
@@ -102,21 +115,33 @@ export const countVisibleCategorizationGroups = (groups: VoiceMessageGroup[]): n
     return hasTextRows || hasMaterials;
   }).length;
 
-export const hasPendingTranscriptionMessages = (messages: VoiceBotMessage[]): boolean =>
-  messages.some((message) => {
+export const hasPendingTranscriptionMessages = (
+  messages: VoiceBotMessage[],
+  session?: VoiceBotSession | null
+): boolean => {
+  if (!isSessionRuntimeActive(session)) return false;
+  return messages.some((message) => {
     if (isDeleted(message.is_deleted)) return false;
     const hasHardError = toText(message.transcription_error).length > 0;
     if (hasHardError) return false;
     if (message.to_transcribe === true) return true;
     return hasAudioPayload(message) && !message.is_transcribed && !hasTranscriptText(message);
   });
+};
 
-export const hasPendingCategorizationMessages = (messages: VoiceBotMessage[]): boolean =>
-  hasPendingTranscriptionMessages(messages) ||
-  messages.some((message) => {
-    if (isDeleted(message.is_deleted)) return false;
-    return hasTranscriptText(message) && !isCategorizationComplete(message);
-  });
+export const hasPendingCategorizationMessages = (
+  messages: VoiceBotMessage[],
+  session?: VoiceBotSession | null
+): boolean => {
+  if (!isSessionRuntimeActive(session)) return false;
+  return (
+    hasPendingTranscriptionMessages(messages, session) ||
+    messages.some((message) => {
+      if (isDeleted(message.is_deleted)) return false;
+      return hasTranscriptText(message) && !isCategorizationComplete(message);
+    })
+  );
+};
 
 const toEpochMs = (value: unknown): number => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -132,7 +157,8 @@ export const hasPendingPossibleTasksRefresh = (
   session: VoiceBotSession | null,
   messages: VoiceBotMessage[]
 ): boolean => {
-  if (hasPendingTranscriptionMessages(messages)) return true;
+  if (!isSessionRuntimeActive(session)) return false;
+  if (hasPendingTranscriptionMessages(messages, session)) return true;
 
   const hasAnyTranscript = messages.some((message) => !isDeleted(message.is_deleted) && hasTranscriptText(message));
   if (!hasAnyTranscript) return false;

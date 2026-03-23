@@ -80,6 +80,10 @@ import {
   type CleanupEmptySessionsJobData,
 } from './handlers/shared/cleanupEmptySessions.js';
 import {
+  handleCloseInactiveSessionsJob,
+  type CloseInactiveSessionsJobData,
+} from './handlers/shared/closeInactiveSessions.js';
+import {
   handleCodexDeferredReviewJob,
   type CodexDeferredReviewJobData,
 } from './handlers/codexDeferredReview.js';
@@ -91,6 +95,8 @@ export const VOICEBOT_WORKER_MANIFEST: Record<string, VoicebotWorkerHandler> = {
     handleDoneMultipromptJob(payload as DoneMultipromptJobData),
   [VOICEBOT_JOBS.common.PROCESSING]: async (payload: unknown) =>
     handleProcessingLoopJob(payload as ProcessingLoopJobData),
+  [VOICEBOT_JOBS.common.CLOSE_INACTIVE_SESSIONS]: async (payload: unknown) =>
+    handleCloseInactiveSessionsJob(payload as CloseInactiveSessionsJobData),
   [VOICEBOT_JOBS.common.CLEANUP_EMPTY_SESSIONS]: async (payload: unknown) =>
     handleCleanupEmptySessionsJob(payload as CleanupEmptySessionsJobData),
   [VOICEBOT_JOBS.common.CODEX_DEFERRED_REVIEW]: async (payload: unknown) =>

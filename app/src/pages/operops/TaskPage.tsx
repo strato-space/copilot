@@ -173,6 +173,39 @@ const TaskPage = () => {
         }
     }, [isAuth, taskId, fetchTicketById, fetchDictionary]);
 
+    const discussionSessions = useMemo(() => {
+        if (!task) {
+            return [];
+        }
+
+        const sourceData =
+            task.source_data && typeof task.source_data === 'object'
+                ? (task.source_data as Record<string, unknown>)
+                : {};
+        const rawItems = Array.isArray(task.discussion_sessions)
+            ? task.discussion_sessions
+            : Array.isArray(sourceData.voice_sessions)
+              ? sourceData.voice_sessions
+              : [];
+        const bySessionId = new Map<string, { session_id: string; session_name?: string; created_at?: string }>();
+        rawItems.forEach((entry) => {
+            if (!entry || typeof entry !== 'object') return;
+            const record = entry as Record<string, unknown>;
+            const sessionId = typeof record.session_id === 'string' ? record.session_id.trim() : '';
+            if (!sessionId || bySessionId.has(sessionId)) return;
+            bySessionId.set(sessionId, {
+                session_id: sessionId,
+                ...(typeof record.session_name === 'string' && record.session_name.trim()
+                    ? { session_name: record.session_name.trim() }
+                    : {}),
+                ...(typeof record.created_at === 'string' && record.created_at.trim()
+                    ? { created_at: record.created_at.trim() }
+                    : {}),
+            });
+        });
+        return Array.from(bySessionId.values());
+    }, [task]);
+
     if (loading || authLoading) {
         return (
             <div className="flex justify-center items-center h-screen">
@@ -257,31 +290,6 @@ const TaskPage = () => {
     const safeTaskDescription = sanitizeTaskDescriptionHtml(task.description);
     const safeTaskDescriptionNodes = renderSanitizedHtml(safeTaskDescription);
     const attachments = Array.isArray(task.attachments) ? task.attachments : [];
-    const discussionSessions = useMemo(() => {
-        const sourceData = task.source_data && typeof task.source_data === 'object'
-            ? task.source_data as Record<string, unknown>
-            : {};
-        const rawItems = Array.isArray(task.discussion_sessions)
-            ? task.discussion_sessions
-            : (Array.isArray(sourceData.voice_sessions) ? sourceData.voice_sessions : []);
-        const bySessionId = new Map<string, { session_id: string; session_name?: string; created_at?: string }>();
-        rawItems.forEach((entry) => {
-            if (!entry || typeof entry !== 'object') return;
-            const record = entry as Record<string, unknown>;
-            const sessionId = typeof record.session_id === 'string' ? record.session_id.trim() : '';
-            if (!sessionId || bySessionId.has(sessionId)) return;
-            bySessionId.set(sessionId, {
-                session_id: sessionId,
-                ...(typeof record.session_name === 'string' && record.session_name.trim()
-                    ? { session_name: record.session_name.trim() }
-                    : {}),
-                ...(typeof record.created_at === 'string' && record.created_at.trim()
-                    ? { created_at: record.created_at.trim() }
-                    : {}),
-            });
-        });
-        return Array.from(bySessionId.values());
-    }, [task]);
 
     const formatFileSize = (size: number): string => {
         if (!Number.isFinite(size) || size <= 0) return '0 B';

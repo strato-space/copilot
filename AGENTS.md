@@ -290,7 +290,9 @@ Preferred engineering principles for this repo:
 - OperOps Codex relationship groups are normalized as `Parent`, `Children`, `Depends On (blocks/waits-for)`, and `Blocks (dependents)` for deterministic dependency semantics.
 - Shared Codex table status tabs now use strict segmentation `Open | In Progress | Deferred | Blocked | Closed | All` with per-tab counters; deferred/open are no longer merged heuristically.
 - Single-issue OperOps Codex loads must tolerate `bd` out-of-sync recovery failures the same way list loads do: if `bd show` reports stale JSONL and `bd sync --import-only` fails with `bufio.Scanner: token too long`, the backend should fall back to direct `.beads/issues.jsonl` parsing instead of returning `502`.
+- Voice Codex inline details must fetch the canonical single-issue payload (`POST /api/crm/codex/issue`) on drawer open; list-row payloads are not sufficient for comments/details parity with the standalone OperOps page.
 - Voice-linked task payloads may include `discussion_sessions[]` / `discussion_count`; OperOps `TaskPage` should expose those links as a `Discussed in Sessions` timeline instead of hiding multi-session discussion context.
+- OperOps `TaskPage` must keep hook order stable across loading/not-found/loaded renders; discussion-session memoization cannot live below early returns or the page may crash with React hook-order errors.
 - OperOps main task navigation is status-first:
   - top-level tabs are `Draft`, `Ready`, `In Progress`, `Review`, `Done`, `Archive`, and `Codex`,
   - lifecycle counts should be shown inline in those tab labels instead of duplicated summary widgets,
@@ -335,7 +337,8 @@ Preferred engineering principles for this repo:
 - WebRTC page `Done` must stay enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, not only when the page URL carries `pageSession`.
 - WebRTC FAB must surface a red `Mic 1 OFF` critical state during `recording` / `paused` / `cutting`, and missing saved Mic 1 devices must downgrade deterministically `LifeCam -> Microphone -> OFF`.
 - WebRTC REST close warnings must include `session_id` in client logs so 404/403/5xx close incidents can be matched with backend access logs quickly.
-- Inactive open sessions can be auto-closed by cron via `backend/scripts/voicebot-close-inactive-sessions.ts` (uses latest session/message/session-log activity timestamps and runs `DONE_MULTIPROMPT` flow for sessions idle above threshold).
+- Inactive open sessions can be auto-closed by cron via `backend/scripts/voicebot-close-inactive-sessions.ts` (minutes-first operator surface, default `10`-minute inactivity threshold, latest session/message/session-log activity timestamps, canonical `DONE_MULTIPROMPT` flow, and missing-title generation through `generate_session_title` before completion).
+- Voice worker runtime owns scheduled `CLOSE_INACTIVE_SESSIONS` jobs; tune with `VOICEBOT_CLOSE_INACTIVE_SESSIONS_{ENABLED,INTERVAL_MS,TIMEOUT_MINUTES,BATCH_LIMIT}` rather than ad hoc cron copies.
 - Summarize MCP dependency watchdog script (`backend/scripts/summarize-mcp-watchdog.ts`) is canonical for `session_ready_to_summarize` prerequisites: it probes required endpoint/service pairs (`fs`, `tg-ro`, `call`, `seq`, `tm`, `tgbot`) and in apply mode auto-heals only failed units (`start` inactive, `restart` active with endpoint `502`/unreachable diagnostics).
 - Full-track archive chunks are tracked as `trackKind='full_track'` with metadata (`sessionId`, `mic`, `duration/start/end`) in voicebot runtime, but upload is intentionally disabled until diarization flow is introduced.
 - Web upload route now returns structured oversize diagnostics (`413 file_too_large` with `max_size_bytes`/`max_size_mb`), and WebRTC upload errors normalize backend payloads into concise UI-safe messages.
@@ -347,6 +350,7 @@ Preferred engineering principles for this repo:
 - Session page should not expose a separate `Возможные задачи` top tab; draft rows belong to the unified `Задачи` surface under the `DRAFT_10` / `Draft` lifecycle subtab, keeping the compact task-table contract (no standalone status/project/AI columns, keep `description`).
 - The lifecycle subtab axis inside `Задачи` is fixed (`Draft / Ready / In Progress / Review / Done / Archive`) and remains visible even when every bucket count is zero.
 - The parent `Задачи` count must include all lifecycle buckets, including `Draft`, and it must be computed from the canonical exact-key lifecycle buckets only.
+- Voice tab green activity indicators (`Транскрипция`, `Категоризация`, `Задачи`) are runtime-only signals: inactive/closed/finalized sessions must suppress stale dots even when historical payloads are incomplete.
 - `task_type_id` is optional in the Possible Tasks table; required-field validation now blocks only `name`, `description`, `performer_id`, and `priority`.
 - Voice Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; required create contract remains `name/description/performer_id/priority` with optional project link.
 - Draft read semantics are canonical on session-linked `DRAFT_10` task docs: session APIs must dedupe by row lineage, surface `discussion_sessions[]` / `discussion_count`, and treat `source_kind` plus stale refresh markers as compatibility metadata only.

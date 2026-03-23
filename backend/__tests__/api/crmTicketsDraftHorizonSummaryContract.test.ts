@@ -15,7 +15,12 @@ describe('CRM tickets draft horizon summary contract', () => {
     expect(source).toContain('external_ref: 1,');
   });
 
-  it('strips temporary voice linkage fields from summary payload after filtering', () => {
+  it('strips only transient source metadata while keeping source refs for session-linked list filtering', () => {
+    expect(source).toContain("'source',");
+    expect(source).toContain("'source_kind',");
+    expect(source).toContain("'source_data',");
+    expect(source).not.toContain("'source_ref',");
+    expect(source).not.toContain("'external_ref',");
     expect(source).toContain('for (const field of SUMMARY_DRAFT_RECENCY_TRANSIENT_FIELDS) {');
     expect(source).toContain('delete normalizedTicket[field];');
   });

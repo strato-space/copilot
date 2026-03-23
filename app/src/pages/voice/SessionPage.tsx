@@ -307,12 +307,12 @@ export default function SessionPage() {
     const screenshortCount = sessionAttachments.length;
 
     const hasTranscriptionPending = useMemo(
-        () => hasPendingTranscriptionMessages(voiceBotMessages),
-        [voiceBotMessages]
+        () => hasPendingTranscriptionMessages(voiceBotMessages, voiceBotSession),
+        [voiceBotMessages, voiceBotSession]
     );
     const hasCategorizationPending = useMemo(
-        () => hasPendingCategorizationMessages(voiceBotMessages),
-        [voiceBotMessages]
+        () => hasPendingCategorizationMessages(voiceBotMessages, voiceBotSession),
+        [voiceBotMessages, voiceBotSession]
     );
     const hasPossibleTasksPending = useMemo(
         () => hasPendingPossibleTasksRefresh(voiceBotSession, voiceBotMessages),

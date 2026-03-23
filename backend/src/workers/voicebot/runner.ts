@@ -104,6 +104,39 @@ const resolveEmptySessionCleanupBatchLimit = (): number => {
   return raw;
 };
 
+const resolveCloseInactiveSessionsEnabled = (): boolean => {
+  const raw = String(process.env.VOICEBOT_CLOSE_INACTIVE_SESSIONS_ENABLED || '').trim().toLowerCase();
+  if (!raw) return true;
+  return !['0', 'false', 'no', 'off'].includes(raw);
+};
+
+const resolveCloseInactiveSessionsIntervalMs = (): number => {
+  const raw = Number.parseInt(
+    String(process.env.VOICEBOT_CLOSE_INACTIVE_SESSIONS_INTERVAL_MS || ''),
+    10
+  );
+  if (!Number.isFinite(raw) || raw < 30_000) return 60_000;
+  return raw;
+};
+
+const resolveCloseInactiveSessionsTimeoutMinutes = (): number => {
+  const raw = Number.parseInt(
+    String(process.env.VOICEBOT_CLOSE_INACTIVE_SESSIONS_TIMEOUT_MINUTES || ''),
+    10
+  );
+  if (!Number.isFinite(raw) || raw < 1) return 10;
+  return raw;
+};
+
+const resolveCloseInactiveSessionsBatchLimit = (): number => {
+  const raw = Number.parseInt(
+    String(process.env.VOICEBOT_CLOSE_INACTIVE_SESSIONS_BATCH_LIMIT || ''),
+    10
+  );
+  if (!Number.isFinite(raw) || raw < 1) return 100;
+  return raw;
+};
+
 export const resolveQueueConcurrency = (queueName: string): number => {
   return queueConcurrency.get(queueName) ?? 1;
 };
@@ -182,6 +215,11 @@ export const startVoicebotWorkers = async ({
   const emptySessionCleanupIntervalMs = resolveEmptySessionCleanupIntervalMs();
   const emptySessionCleanupMaxAgeHours = resolveEmptySessionCleanupMaxAgeHours();
   const emptySessionCleanupBatchLimit = resolveEmptySessionCleanupBatchLimit();
+  const closeInactiveSessionsSchedulerId = `close-inactive-sessions${VOICEBOT_ENV_QUEUE_SUFFIX}`;
+  const closeInactiveSessionsEnabled = resolveCloseInactiveSessionsEnabled();
+  const closeInactiveSessionsIntervalMs = resolveCloseInactiveSessionsIntervalMs();
+  const closeInactiveSessionsTimeoutMinutes = resolveCloseInactiveSessionsTimeoutMinutes();
+  const closeInactiveSessionsBatchLimit = resolveCloseInactiveSessionsBatchLimit();
 
   await commonQueue.upsertJobScheduler(
     processingSchedulerId,
@@ -225,6 +263,40 @@ export const startVoicebotWorkers = async ({
     max_age_hours: emptySessionCleanupMaxAgeHours,
     batch_limit: emptySessionCleanupBatchLimit,
   });
+
+  if (closeInactiveSessionsEnabled) {
+    await commonQueue.upsertJobScheduler(
+      closeInactiveSessionsSchedulerId,
+      { every: closeInactiveSessionsIntervalMs },
+      {
+        name: VOICEBOT_JOBS.common.CLOSE_INACTIVE_SESSIONS,
+        data: {
+          inactivity_minutes: closeInactiveSessionsTimeoutMinutes,
+          batch_limit: closeInactiveSessionsBatchLimit,
+          generate_missing_title: true,
+        },
+        opts: {
+          removeOnComplete: true,
+          removeOnFail: 50,
+        },
+      }
+    );
+    logger.info('[voicebot-workers] close_inactive_sessions_scheduler_ready', {
+      runtime_tag: RUNTIME_TAG,
+      queue: VOICEBOT_QUEUES.COMMON,
+      scheduler_id: closeInactiveSessionsSchedulerId,
+      every_ms: closeInactiveSessionsIntervalMs,
+      inactivity_minutes: closeInactiveSessionsTimeoutMinutes,
+      batch_limit: closeInactiveSessionsBatchLimit,
+    });
+  } else {
+    await commonQueue.removeJobScheduler(closeInactiveSessionsSchedulerId).catch(() => undefined);
+    logger.info('[voicebot-workers] close_inactive_sessions_scheduler_disabled', {
+      runtime_tag: RUNTIME_TAG,
+      queue: VOICEBOT_QUEUES.COMMON,
+      scheduler_id: closeInactiveSessionsSchedulerId,
+    });
+  }
 
   const workers = queueNames.map(
     (queueName) =>
@@ -274,10 +346,13 @@ export const startVoicebotWorkers = async ({
     workers,
     close: async () => {
       await Promise.allSettled(workers.map((worker) => worker.close()));
-      await Promise.allSettled([
-        commonQueue.removeJobScheduler(processingSchedulerId),
-        commonQueue.removeJobScheduler(cleanupEmptySessionsSchedulerId),
-      ]);
+      const schedulerIds = [processingSchedulerId, cleanupEmptySessionsSchedulerId];
+      if (closeInactiveSessionsEnabled) {
+        schedulerIds.push(closeInactiveSessionsSchedulerId);
+      }
+      await Promise.allSettled(
+        schedulerIds.map((schedulerId) => commonQueue.removeJobScheduler(schedulerId))
+      );
       await Promise.allSettled([commonQueue.close()]);
       await closeVoicebotQueues();
       await closeRedis();

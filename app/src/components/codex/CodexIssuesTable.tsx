@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LinkOutlined } from '@ant-design/icons';
-import { Alert, Button, Drawer, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Drawer, Space, Spin, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import type { TableColumnsType } from 'antd';
 import dayjs from 'dayjs';
 import { useRequestStore } from '../../store/requestStore';
 import { ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
-import CodexIssueDetailsCard from './CodexIssueDetailsCard';
+import CodexIssueDetailsCard, { type CodexIssueDetails } from './CodexIssueDetailsCard';
 
 const { Text } = Typography;
 
@@ -48,6 +48,12 @@ interface CodexIssuePayload {
     data?: unknown;
     issues?: unknown;
     items?: unknown;
+    [key: string]: unknown;
+}
+
+interface CodexIssueDetailsPayload {
+    issue?: unknown;
+    data?: unknown;
     [key: string]: unknown;
 }
 
@@ -157,9 +163,41 @@ const normalizeIssueList = (payload: unknown): CodexIssue[] => {
     return candidate.map(normalizeIssue).filter((issue): issue is CodexIssue => issue !== null);
 };
 
+const normalizeIssueDetailsPayload = (payload: unknown): CodexIssueDetails | null => {
+    if (Array.isArray(payload)) {
+        const firstObject = payload.find(
+            (item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item)
+        );
+        return (firstObject as CodexIssueDetails | undefined) ?? null;
+    }
+
+    if (!payload || typeof payload !== 'object') return null;
+    const candidate = payload as CodexIssueDetailsPayload;
+
+    if (candidate.issue && typeof candidate.issue === 'object' && !Array.isArray(candidate.issue)) {
+        return candidate.issue as CodexIssueDetails;
+    }
+
+    if (candidate.data && typeof candidate.data === 'object' && !Array.isArray(candidate.data)) {
+        return candidate.data as CodexIssueDetails;
+    }
+
+    if (Array.isArray(candidate.data)) {
+        const issueFromData = candidate.data.find(
+            (item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item)
+        );
+        if (issueFromData) return issueFromData as CodexIssueDetails;
+    }
+
+    return candidate as CodexIssueDetails;
+};
+
 const resolveTaskKey = (task: CodexIssue): string => toText(task.id) || toText(task._id) || `codex-${toText(task.title) || 'issue'}`;
 
 const resolveTaskId = (task: CodexIssue): string => toText(task.id) || toText(task._id) || '—';
+
+const resolveIssueRequestId = (issue: CodexIssue | CodexIssueDetails): string =>
+    toText(issue.id) || toText((issue as CodexIssue).issue_id) || toText(issue._id);
 
 const resolveTaskLink = (task: CodexIssue): string | null => {
     const taskId = toText(task.id) || toText(task._id);
@@ -227,6 +265,9 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
+    const [selectedIssueDetails, setSelectedIssueDetails] = useState<CodexIssueDetails | null>(null);
+    const [selectedIssueDetailsLoading, setSelectedIssueDetailsLoading] = useState(false);
+    const [selectedIssueDetailsError, setSelectedIssueDetailsError] = useState<string | null>(null);
     const [view, setView] = useState<CodexIssuesView>('open');
     const [pageSize, setPageSize] = useState<number>(CODEX_DEFAULT_PAGE_SIZE);
     const [currentPage, setCurrentPage] = useState<number>(1);
@@ -341,6 +382,62 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
             setSelectedKey(null);
         }
     }, [filteredIssues, selectedKey]);
+
+    useEffect(() => {
+        if (!selectedTask) {
+            setSelectedIssueDetails(null);
+            setSelectedIssueDetailsError(null);
+            setSelectedIssueDetailsLoading(false);
+            return;
+        }
+
+        const issueId = resolveIssueRequestId(selectedTask);
+        if (!issueId) {
+            setSelectedIssueDetails(null);
+            setSelectedIssueDetailsError('Не удалось определить issue id для загрузки деталей');
+            setSelectedIssueDetailsLoading(false);
+            return;
+        }
+
+        let isCancelled = false;
+        setSelectedIssueDetails(null);
+        setSelectedIssueDetailsError(null);
+        setSelectedIssueDetailsLoading(true);
+
+        void (async () => {
+            try {
+                const response = await api_request<unknown>(
+                    'codex/issue',
+                    {
+                        id: issueId,
+                        issue_id: issueId,
+                    },
+                    { silent: true }
+                );
+                if (isCancelled) return;
+                const parsed = normalizeIssueDetailsPayload(response);
+                if (!parsed) {
+                    setSelectedIssueDetails(null);
+                    setSelectedIssueDetailsError('Некорректный ответ API codex/issue');
+                    return;
+                }
+                setSelectedIssueDetails(parsed);
+            } catch (fetchError) {
+                if (isCancelled) return;
+                console.error('Ошибка при загрузке деталей Codex issue', fetchError);
+                setSelectedIssueDetails(null);
+                setSelectedIssueDetailsError('Не удалось загрузить детали Codex issue');
+            } finally {
+                if (!isCancelled) {
+                    setSelectedIssueDetailsLoading(false);
+                }
+            }
+        })();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [api_request, selectedTask]);
 
     const columns = useMemo<TableColumnsType<CodexIssue>>(
         () => [
@@ -495,7 +592,12 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
         [filteredIssues]
     );
 
-    const selectedTaskLink = selectedTask ? resolveTaskLink(selectedTask) : null;
+    const selectedIssueDetailsTaskId = selectedIssueDetails ? resolveIssueRequestId(selectedIssueDetails) : '';
+    const selectedTaskLink = selectedIssueDetailsTaskId
+        ? `/operops/codex/task/${selectedIssueDetailsTaskId}`
+        : selectedTask
+            ? resolveTaskLink(selectedTask)
+            : null;
 
     return (
         <div className="w-full">
@@ -543,16 +645,25 @@ export default function CodexIssuesTable({ sourceRefs = [], limit = CODEX_DEFAUL
             >
                 {selectedTask ? (
                     <div className="px-2 py-1">
-                        <CodexIssueDetailsCard
-                            issue={selectedTask}
-                            extra={
-                                selectedTaskLink ? (
-                                    <Button href={selectedTaskLink} target="_blank" rel="noopener noreferrer" type="primary">
-                                        Открыть задачу в OperOps
-                                    </Button>
-                                ) : undefined
-                            }
-                        />
+                        {selectedIssueDetailsLoading ? (
+                            <div className="flex min-h-[180px] items-center justify-center">
+                                <Spin size="large" />
+                            </div>
+                        ) : null}
+                        {selectedIssueDetailsError ? <Alert message={selectedIssueDetailsError} type="error" className="mb-3" /> : null}
+                        {selectedIssueDetails ? (
+                            <CodexIssueDetailsCard
+                                issue={selectedIssueDetails}
+                                issueIdFallback={resolveIssueRequestId(selectedTask)}
+                                extra={
+                                    selectedTaskLink ? (
+                                        <Button href={selectedTaskLink} target="_blank" rel="noopener noreferrer" type="primary">
+                                            Открыть задачу в OperOps
+                                        </Button>
+                                    ) : undefined
+                                }
+                            />
+                        ) : null}
                     </div>
                 ) : null}
             </Drawer>

@@ -167,4 +167,55 @@ describe('completeSessionDoneFlow summary correlation/idempotency', () => {
       })
     );
   });
+
+  it('keeps missing-title sessions on canonical done-flow path without direct title mutation', async () => {
+    const sessionId = new ObjectId();
+    const session = {
+      _id: sessionId,
+      chat_id: 999,
+      is_active: true,
+      to_finalize: false,
+      session_name: null,
+    };
+    const dbFixture = buildDb({ session });
+    const commonAdd = jest.fn(async () => ({ id: 'job-auto-close' }));
+
+    const result = await completeSessionDoneFlow({
+      session_id: sessionId.toHexString(),
+      db: dbFixture.db as any,
+      source: {
+        type: 'script',
+        script: 'voicebot-close-inactive-sessions',
+      },
+      queues: {
+        [VOICEBOT_QUEUES.COMMON]: { add: commonAdd },
+      },
+      telegram_user_id: '999',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.mode).toBe('queued');
+
+    const closeCall = dbFixture.updateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const incPayload = (update?.$inc || {}) as Record<string, unknown>;
+      return Number(incPayload.done_count || 0) === 1;
+    });
+    expect(closeCall).toBeTruthy();
+
+    const closeUpdate = (closeCall?.[1] || {}) as Record<string, unknown>;
+    const setPayload = (closeUpdate.$set || {}) as Record<string, unknown>;
+    expect(setPayload).not.toHaveProperty('session_name');
+    expect(setPayload).not.toHaveProperty('title_generated_at');
+    expect(setPayload).not.toHaveProperty('title_generated_by');
+
+    expect(commonAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.common.DONE_MULTIPROMPT,
+      expect.objectContaining({
+        session_id: sessionId.toHexString(),
+        already_closed: true,
+        summary_correlation_id: result.summary_correlation_id,
+      })
+    );
+  });
 });

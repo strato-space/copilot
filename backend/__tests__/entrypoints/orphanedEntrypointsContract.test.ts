@@ -7,13 +7,11 @@ import type {} from '../../scripts/voicebot-dedupe-webm-filenames.ts';
 import type {} from '../../scripts/voicebot-close-inactive-sessions.ts';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const backendRoot = process.cwd();
 
 describe('backend operational entrypoints', () => {
   it('keeps package scripts wired to runtime and maintenance entrypoints', () => {
-    const packageJsonPath = path.resolve(currentDir, '../../package.json');
+    const packageJsonPath = path.resolve(backendRoot, 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
       scripts?: Record<string, string>;
     };
@@ -23,6 +21,9 @@ describe('backend operational entrypoints', () => {
     expect(scripts['dev:voicebot-workers']).toContain('src/workers/voicebot/runtime.ts');
     expect(scripts['runtime:backfill:dry']).toContain('scripts/runtime-tag-backfill.ts');
     expect(scripts['voice:close-idle:dry']).toContain('scripts/voicebot-close-inactive-sessions.ts');
+    expect(scripts['voice:close-idle:dry']).not.toContain('--apply');
+    expect(scripts['voice:close-idle:apply']).toContain('scripts/voicebot-close-inactive-sessions.ts');
+    expect(scripts['voice:close-idle:apply']).toContain('--apply');
     expect(scripts['voice:summarize-mcp-watchdog:dry']).toContain('scripts/summarize-mcp-watchdog.ts');
     expect(scripts['voice:dedupe:webm:dry']).toContain('scripts/voicebot-dedupe-webm-filenames.ts');
     expect(scripts['workhours:backfill:ticket-db-id:dry']).toContain(
@@ -42,7 +43,7 @@ describe('backend operational entrypoints', () => {
     ];
 
     for (const relativePath of entrypointFiles) {
-      const absolutePath = path.resolve(currentDir, relativePath);
+      const absolutePath = path.resolve(backendRoot, relativePath.replace('../../', ''));
       expect(fs.existsSync(absolutePath)).toBe(true);
     }
   });

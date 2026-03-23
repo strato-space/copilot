@@ -87,8 +87,6 @@ const SUMMARY_DRAFT_RECENCY_TRANSIENT_FIELDS = [
     'source',
     'source_kind',
     'source_data',
-    'source_ref',
-    'external_ref',
 ] as const;
 
 const DRAFT_RECENCY_PREFILTER_PROJECTION = {
