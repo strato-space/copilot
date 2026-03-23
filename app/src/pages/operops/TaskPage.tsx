@@ -1,5 +1,5 @@
 import { createElement, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
     Spin,
     Button,
@@ -32,7 +32,6 @@ import sanitizeHtml from 'sanitize-html';
 import _ from 'lodash';
 
 import { useKanbanStore } from '../../store/kanbanStore';
-import { useCRMStore } from '../../store/crmStore';
 import { useAuthStore } from '../../store/authStore';
 import type { TaskAttachment, Ticket, Performer } from '../../types/crm';
 import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
@@ -150,9 +149,9 @@ interface TaskTypeInfo {
 }
 
 const TaskPage = () => {
+    const navigate = useNavigate();
     const { taskId } = useParams<{ taskId: string }>();
     const { performers, fetchTicketById, fetchDictionary, epics, projectsData, deleteTicketAttachment } = useKanbanStore();
-    const { setEditingTicket } = useCRMStore();
     const { isAuth, loading: authLoading } = useAuthStore();
     const [loading, setLoading] = useState(true);
     const [task, setTask] = useState<Ticket | null>(null);
@@ -340,7 +339,11 @@ const TaskPage = () => {
                         </Title>
                     </div>
                 </div>
-                <Button type="primary" icon={<EditOutlined />} onClick={() => setEditingTicket(task)}>
+                <Button
+                    type="primary"
+                    icon={<EditOutlined />}
+                    onClick={() => navigate(`/operops/crm/task/${encodeURIComponent(canonicalTaskId)}/edit`)}
+                >
                     Edit Task
                 </Button>
             </div>

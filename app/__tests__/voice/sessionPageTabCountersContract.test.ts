@@ -7,17 +7,19 @@ describe('SessionPage tab counters and indicators contract', () => {
   const source = fs.readFileSync(pagePath, 'utf8');
   const css = fs.readFileSync(cssPath, 'utf8');
 
-  it('renders compact count labels for all voice tabs except Log', () => {
+  it('renders compact tab labels with Саммари and Ревью inserted after Categorization', () => {
     expect(source).toContain("label: renderTabLabel('Транскрипция', transcriptionCount");
     expect(source).toContain("label: renderTabLabel('Категоризация', categorizationCount");
+    expect(source).toContain("label: renderTabLabel('Саммари', 0, { showCount: false })");
+    expect(source).toContain("label: renderTabLabel('Ревью', 0, { processing: hasTaskflowPending, showCount: false })");
     expect(source).toContain("label: renderTabLabel('Задачи', sessionTasksTotalCount, {");
     expect(source).toContain("label: renderTabLabel('Codex', sessionCodexCount)");
     expect(source).toContain("label: renderTabLabel('Screenshort', screenshortCount)");
     expect(source).toContain("label: renderTabLabel('Log', 0, { showCount: false })");
     expect(source).toContain('const renderTabLabel = (label: string, count: number');
+    expect(source).toContain('const hasTaskflowPending = hasPossibleTasksPending;');
     expect(source).toContain('showCount: sessionOperOpsTasksCount !== null');
     expect(source).not.toContain("label: 'Work'");
-    expect(source).not.toContain("label: 'Review'");
   });
 
   it('always renders a fixed lifecycle filter axis inside unified Tasks', () => {
@@ -30,11 +32,13 @@ describe('SessionPage tab counters and indicators contract', () => {
     expect(source).toContain("setSessionTasksSubTab(sessionTaskTabs[0]?.key || '')");
   });
 
-  it('marks only Transcription, Categorization, and unified Tasks with processing dots', () => {
+  it('marks Transcription, Categorization, Ревью, and unified Tasks with processing dots', () => {
     expect(source).toContain('{ processing: hasTranscriptionPending }');
     expect(source).toContain('{ processing: hasCategorizationPending }');
+    expect(source).toContain("label: renderTabLabel('Ревью', 0, { processing: hasTaskflowPending, showCount: false })");
     expect(source).toContain("label: renderTabLabel('Задачи', sessionTasksTotalCount, {");
-    expect(source).toContain('processing: hasPossibleTasksPending,');
+    expect(source).toContain('processing: hasTaskflowPending,');
+    expect(source).not.toContain("label: renderTabLabel('Саммари', 0, { processing:");
     expect(source).not.toContain("label: renderTabLabel('Codex', sessionCodexCount, { processing:");
     expect(source).not.toContain("label: renderTabLabel('Screenshort', screenshortCount, { processing:");
   });

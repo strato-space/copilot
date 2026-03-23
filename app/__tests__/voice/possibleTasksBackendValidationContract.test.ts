@@ -8,11 +8,12 @@ describe('PossibleTasks backend validation contract', () => {
   it('maps backend performer_id validation failures to row-level UI state', () => {
     expect(source).toContain('isVoiceTaskCreateValidationError');
     expect(source).toContain('const [rowCreationErrors, setRowCreationErrors] = useState<Record<string, TaskRowCreationErrors>>({});');
-    expect(source).toContain('if (rowError.field === \'performer_id\') {');
-    expect(source).toContain('} else if (rowError.field === \'project_id\') {');
-    expect(source).toContain('setRowCreationErrors(rowErrorsByTaskId);');
+    expect(source).toContain('if (rowError.field === \'performer_id\' && !mappedErrors.performer_id) {');
+    expect(source).toContain('} else if (rowError.field === \'project_id\' && !mappedErrors.project_id) {');
+    expect(source).toContain('[row.row_id]: mappedErrors');
     expect(source).toContain('Выберите проект с заполненным git_repo.');
     expect(source).toContain('const rowKey = rowsById.get(rowError.ticketId)?.row_id || rowError.ticketId;');
-    expect(source).toContain('rowCreationErrors[record.row_id]?.project_id');
+    expect(source).toContain('rowCreationErrors[activeRow.row_id]?.project_id');
+    expect(source).toContain('rowCreationErrors[activeRow.row_id]?.performer_id');
   });
 });

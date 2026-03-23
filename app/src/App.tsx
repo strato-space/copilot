@@ -226,6 +226,7 @@ export default function App(): ReactElement {
           <Route path="/operops" element={<OperOpsLayout />}>
             <Route index element={<Navigate to="/operops/crm" replace />} />
             <Route path="crm" element={<CRMPage />} />
+            <Route path="crm/task/:taskId/edit" element={<CRMPage />} />
             <Route path="performers" element={<PerformersPage />} />
             <Route path="finances-performers" element={<FinancesPerformersPage />} />
             <Route path="projects-tree" element={<ProjectsTree />} />

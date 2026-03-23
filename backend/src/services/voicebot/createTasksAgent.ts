@@ -11,6 +11,38 @@ const logger = getLogger();
 
 type UnknownRecord = Record<string, unknown>;
 
+export const CREATE_TASKS_COMPOSITE_META_KEY = '__create_tasks_composite_meta' as const;
+
+export type CreateTasksCompositeEnrichmentDraft = {
+  lookup_id: string;
+  comment: string;
+  task_db_id?: string;
+  task_public_id?: string;
+  dialogue_reference?: string;
+};
+
+export type CreateTasksCompositeResult = {
+  summary_md_text: string;
+  scholastic_review_md: string;
+  task_draft: Array<Record<string, unknown>>;
+  enrich_ready_task_comments: CreateTasksCompositeEnrichmentDraft[];
+  session_name: string;
+  project_id: string;
+};
+
+const VOICE_TASK_ENRICHMENT_SECTION_KEYS = [
+  'description',
+  'object_locators',
+  'expected_results',
+  'acceptance_criteria',
+  'evidence_links',
+  'executor_routing_hints',
+  'open_questions',
+] as const;
+
+const MIN_SESSION_TITLE_WORDS = 5;
+const MAX_SESSION_TITLE_WORDS = 12;
+
 const resolveAgentsMcpServerUrl = (): string =>
   String(
     process.env.VOICEBOT_AGENTS_MCP_URL ||
@@ -22,8 +54,8 @@ const REDUCED_CONTEXT_MAX_CHARS = 12000;
 const REDUCED_CONTEXT_SUMMARY_MAX_CHARS = 4000;
 const REDUCED_CONTEXT_MESSAGE_MAX_CHARS = 1200;
 const REDUCED_CONTEXT_MAX_MESSAGES = 8;
-const PROJECT_CRM_WINDOW_PADDING_DAYS = 30;
-const PROJECT_CRM_WINDOW_PADDING_MS = PROJECT_CRM_WINDOW_PADDING_DAYS * 24 * 60 * 60 * 1000;
+const PROJECT_CRM_LOOKBACK_DAYS = 14;
+const PROJECT_CRM_LOOKBACK_MS = PROJECT_CRM_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 
 type ProjectCrmWindow = {
   from_date: string;
@@ -48,6 +80,18 @@ const toText = (value: unknown): string => {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return '';
 };
+
+const normalizeWhitespace = (value: string): string =>
+  value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+const normalizeSummaryMarkdown = (value: unknown): string =>
+  normalizeWhitespace(toText(value));
+
+const countWords = (value: string): number =>
+  value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
 
 const toFiniteNumber = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -105,6 +149,47 @@ const toMessageDate = (value: unknown): Date | null => {
 const normalizeDependencies = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((entry) => toText(entry)).filter(Boolean) : [];
 
+const hasMarkdownEnrichmentSections = (description: string): boolean =>
+  VOICE_TASK_ENRICHMENT_SECTION_KEYS.some((key) =>
+    new RegExp(`^\\s{0,3}#{1,6}\\s+${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'im').test(description)
+  );
+
+const buildCanonicalDraftDescription = (name: string, description: string): string => {
+  const synopsis = normalizeWhitespace(description) || name || 'Не указано';
+  const lines: string[] = [synopsis, ''];
+  for (const key of VOICE_TASK_ENRICHMENT_SECTION_KEYS) {
+    lines.push(`## ${key}`);
+    if (key === 'description') {
+      lines.push(synopsis);
+    } else {
+      lines.push('Не указано');
+    }
+    lines.push('');
+  }
+  return normalizeWhitespace(lines.join('\n'));
+};
+
+const normalizeDraftDescription = (name: string, description: string): string => {
+  const normalized = normalizeWhitespace(description);
+  if (!normalized) {
+    return buildCanonicalDraftDescription(name, '');
+  }
+  if (hasMarkdownEnrichmentSections(normalized)) {
+    return normalized;
+  }
+  return buildCanonicalDraftDescription(name, normalized);
+};
+
+const normalizeCompositeSessionName = (value: unknown): string => {
+  const normalized = toText(value).replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  const words = countWords(normalized);
+  if (words < MIN_SESSION_TITLE_WORDS || words > MAX_SESSION_TITLE_WORDS) {
+    return '';
+  }
+  return normalized;
+};
+
 const normalizeTaskShape = (
   value: unknown,
   index: number,
@@ -116,13 +201,15 @@ const normalizeTaskShape = (
   const taskIdFromAi = toText(record.task_id_from_ai);
   const id = toText(record.id) || taskIdFromAi || `task-${index + 1}`;
   const rowId = toText(record.row_id) || id;
+  const name = toText(record.name) || `Задача ${index + 1}`;
+  const description = normalizeDraftDescription(name, toText(record.description));
 
   return {
     ...record,
     row_id: rowId,
     id,
-    name: toText(record.name) || `Задача ${index + 1}`,
-    description: toText(record.description),
+    name,
+    description,
     priority: toText(record.priority) || 'P3',
     priority_reason: toText(record.priority_reason),
     performer_id: toText(record.performer_id),
@@ -144,6 +231,38 @@ const parseTasksPayload = (value: unknown, defaultProjectId = ''): Array<Record<
   const record = asRecord(value);
   if (!record) return [];
   return parseTasksPayload(record.items ?? record.data ?? record.tasks, defaultProjectId);
+};
+
+const normalizeEnrichmentDraft = (value: unknown): CreateTasksCompositeEnrichmentDraft | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+  const comment = toText(record.comment);
+  if (!comment) return null;
+
+  const lookupId =
+    toText(record.lookup_id) ||
+    toText(record.task_public_id) ||
+    toText(record.task_db_id) ||
+    toText(record.id);
+  if (!lookupId) return null;
+
+  const taskDbId = toText(record.task_db_id);
+  const taskPublicId = toText(record.task_public_id);
+  const dialogueReference = toText(record.dialogue_reference);
+  return {
+    lookup_id: lookupId,
+    comment,
+    ...(taskDbId ? { task_db_id: taskDbId } : {}),
+    ...(taskPublicId ? { task_public_id: taskPublicId } : {}),
+    ...(dialogueReference ? { dialogue_reference: dialogueReference } : {}),
+  };
+};
+
+const parseEnrichmentDrafts = (value: unknown): CreateTasksCompositeEnrichmentDraft[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => normalizeEnrichmentDraft(entry))
+    .filter((entry): entry is CreateTasksCompositeEnrichmentDraft => entry !== null);
 };
 
 const toSingleLine = (value: string): string =>
@@ -184,9 +303,54 @@ const extractAgentError = (raw: string): string => {
   return '';
 };
 
+const extractNestedText = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) return value.message || '';
+  const record = asRecord(value);
+  if (!record) return '';
+
+  const textCandidates: string[] = [];
+  const directError = toText(record.error);
+  if (directError) textCandidates.push(directError);
+  const directMessage = toText(record.message);
+  if (directMessage) textCandidates.push(directMessage);
+
+  const content = Array.isArray(record.content) ? record.content : [];
+  for (const entry of content) {
+    const text = toText(asRecord(entry)?.text);
+    if (text) textCandidates.push(text);
+  }
+
+  for (const candidate of [record.data, record.payload, record.result, record.output, record.structuredContent]) {
+    const nested = extractNestedText(candidate);
+    if (nested) textCandidates.push(nested);
+  }
+
+  return textCandidates.join(' ');
+};
+
 const isContextLengthFailure = (error: unknown): boolean => {
-  const text = error instanceof Error ? error.message : String(error);
-  return /context_length_exceeded/i.test(text);
+  const text = toSingleLine(extractNestedText(error));
+  if (!text) return false;
+  return (
+    /context_length_exceeded/i.test(text) ||
+    /input exceeds the context window/i.test(text) ||
+    /context window of this model/i.test(text) ||
+    /string_above_max_length/i.test(text)
+  );
+};
+
+const shouldRetryCreateTasksWithReducedContext = ({
+  error,
+  rawText,
+}: {
+  error: unknown;
+  rawText: string | undefined;
+}): boolean => {
+  if (rawText && rawText.trim().length > 0) {
+    return false;
+  }
+  return isContextLengthFailure(error);
 };
 
 const clipText = (value: string, limit: number): string => {
@@ -281,8 +445,8 @@ const deriveProjectCrmWindow = async ({
     anchorTo = swap;
   }
 
-  const fromDate = new Date(anchorFrom.getTime() - PROJECT_CRM_WINDOW_PADDING_MS).toISOString();
-  const toDateValue = new Date(anchorTo.getTime() + PROJECT_CRM_WINDOW_PADDING_MS).toISOString();
+  const fromDate = new Date(anchorTo.getTime() - PROJECT_CRM_LOOKBACK_MS).toISOString();
+  const toDateValue = anchorTo.toISOString();
 
   return {
     from_date: fromDate,
@@ -364,9 +528,55 @@ const buildReducedCreateTasksRawText = async ({
   return clipText(blocks.join('\n\n'), REDUCED_CONTEXT_MAX_CHARS);
 };
 
-const parseTasksJson = (raw: string, defaultProjectId = ''): Array<Record<string, unknown>> => {
+const toEmptyCompositeResult = (defaultProjectId = ''): CreateTasksCompositeResult => ({
+  summary_md_text: '',
+  scholastic_review_md: '',
+  task_draft: [],
+  enrich_ready_task_comments: [],
+  session_name: '',
+  project_id: defaultProjectId,
+});
+
+const normalizeCompositeResult = (
+  value: unknown,
+  defaultProjectId = ''
+): CreateTasksCompositeResult | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const hasCompositeShape =
+    Object.prototype.hasOwnProperty.call(record, 'summary_md_text') ||
+    Object.prototype.hasOwnProperty.call(record, 'scholastic_review_md') ||
+    Object.prototype.hasOwnProperty.call(record, 'task_draft') ||
+    Object.prototype.hasOwnProperty.call(record, 'enrich_ready_task_comments') ||
+    Object.prototype.hasOwnProperty.call(record, 'session_name') ||
+    Object.prototype.hasOwnProperty.call(record, 'project_id');
+
+  if (!hasCompositeShape) return null;
+
+  const taskDraft = parseTasksPayload(record.task_draft, defaultProjectId);
+  const enrichComments = parseEnrichmentDrafts(record.enrich_ready_task_comments);
+  const summaryMdText = normalizeSummaryMarkdown(record.summary_md_text);
+  const scholasticReview = toText(record.scholastic_review_md);
+  const sessionName = normalizeCompositeSessionName(record.session_name);
+  const projectId = toText(record.project_id) || defaultProjectId;
+
+  return {
+    summary_md_text: summaryMdText,
+    scholastic_review_md: scholasticReview,
+    task_draft: taskDraft,
+    enrich_ready_task_comments: enrichComments,
+    session_name: sessionName,
+    project_id: projectId,
+  };
+};
+
+const parseCreateTasksCompositeJson = (
+  raw: string,
+  defaultProjectId = ''
+): CreateTasksCompositeResult => {
   const direct = raw.trim();
-  if (!direct) return [];
+  if (!direct) return toEmptyCompositeResult(defaultProjectId);
 
   const candidates = [
     direct,
@@ -378,8 +588,8 @@ const parseTasksJson = (raw: string, defaultProjectId = ''): Array<Record<string
     if (!candidate) continue;
     try {
       const parsed = JSON.parse(candidate) as unknown;
-      const normalized = parseTasksPayload(parsed, defaultProjectId);
-      if (normalized.length > 0 || candidate === '[]') return normalized;
+      const normalizedComposite = normalizeCompositeResult(parsed, defaultProjectId);
+      if (normalizedComposite) return normalizedComposite;
     } catch {
       // continue
     }
@@ -393,19 +603,19 @@ const parseTasksJson = (raw: string, defaultProjectId = ''): Array<Record<string
   throw new Error('create_tasks_invalid_json');
 };
 
-const parseCreateTasksAgentResult = (
+export const parseCreateTasksCompositeResult = (
   payload: unknown,
   defaultProjectId = ''
-): Array<Record<string, unknown>> => {
-  const direct = parseTasksPayload(payload, defaultProjectId);
-  if (direct.length > 0) return direct;
+): CreateTasksCompositeResult => {
+  const directComposite = normalizeCompositeResult(payload, defaultProjectId);
+  if (directComposite) return directComposite;
 
   if (typeof payload === 'string') {
-    return parseTasksJson(payload, defaultProjectId);
+    return parseCreateTasksCompositeJson(payload, defaultProjectId);
   }
 
   const record = asRecord(payload);
-  if (!record) return [];
+  if (!record) return toEmptyCompositeResult(defaultProjectId);
 
   if (record.isError === true) {
     const content = Array.isArray(record.content) ? record.content : [];
@@ -420,25 +630,55 @@ const parseCreateTasksAgentResult = (
 
   const nestedCandidates = [record.structuredContent, record.output, record.result, record.payload];
   for (const candidate of nestedCandidates) {
-    const normalized = parseTasksPayload(candidate, defaultProjectId);
-    if (normalized.length > 0) return normalized;
+    const normalizedComposite = normalizeCompositeResult(candidate, defaultProjectId);
+    if (normalizedComposite) return normalizedComposite;
   }
 
   const content = Array.isArray(record.content) ? record.content : [];
   for (const entry of content) {
     const text = toText(asRecord(entry)?.text);
     if (!text) continue;
-    const normalized = parseTasksJson(text, defaultProjectId);
-    if (normalized.length > 0 || text.trim() === '[]') return normalized;
+    const normalizedComposite = parseCreateTasksCompositeJson(text, defaultProjectId);
+    if (
+      normalizedComposite.summary_md_text ||
+      normalizedComposite.task_draft.length > 0 ||
+      normalizedComposite.enrich_ready_task_comments.length > 0 ||
+      normalizedComposite.scholastic_review_md
+    ) {
+      return normalizedComposite;
+    }
   }
 
   const text = toText(record.text) || toText(record.output_text);
-  if (text) return parseTasksJson(text, defaultProjectId);
+  if (text) return parseCreateTasksCompositeJson(text, defaultProjectId);
 
-  return [];
+  return toEmptyCompositeResult(defaultProjectId);
 };
 
-export const runCreateTasksAgent = async ({
+const attachCompositeMetaToDraft = (
+  taskDraft: Array<Record<string, unknown>>,
+  composite: CreateTasksCompositeResult
+): void => {
+  const meta = {
+    summary_md_text: composite.summary_md_text,
+    scholastic_review_md: composite.scholastic_review_md,
+    enrich_ready_task_comments: composite.enrich_ready_task_comments,
+    session_name: composite.session_name,
+    project_id: composite.project_id,
+  };
+  try {
+    Object.defineProperty(taskDraft, CREATE_TASKS_COMPOSITE_META_KEY, {
+      value: meta,
+      enumerable: false,
+      configurable: true,
+      writable: false,
+    });
+  } catch {
+    // Ignore non-critical metadata attachment failures
+  }
+};
+
+export const runCreateTasksCompositeAgent = async ({
   sessionId,
   projectId,
   rawText,
@@ -448,7 +688,7 @@ export const runCreateTasksAgent = async ({
   projectId?: string;
   rawText?: string;
   db?: Db;
-}): Promise<Array<Record<string, unknown>>> => {
+}): Promise<CreateTasksCompositeResult> => {
   const mcpServerUrl = resolveAgentsMcpServerUrl();
   const canonicalSessionUrl = voiceSessionUrlUtils.canonical(sessionId);
   const profileRunId = randomUUID();
@@ -487,17 +727,18 @@ export const runCreateTasksAgent = async ({
           ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
         };
 
-  const executeAgentCall = async (envelope: Record<string, unknown>): Promise<Array<Record<string, unknown>>> => {
+  const executeAgentCall = async (envelope: Record<string, unknown>): Promise<CreateTasksCompositeResult> => {
     const mcpClient = new MCPProxyClient(mcpServerUrl);
     const session = await mcpClient.initializeSession();
     const serializedEnvelope = JSON.stringify(envelope);
     const envelopeMetrics = measureTextPayload(serializedEnvelope);
+    const envelopeMode = toText(envelope.mode) || (toText(envelope.raw_text) ? 'raw_text' : 'session_id');
     try {
       logger.info('[voicebot-worker] create_tasks agent run started', {
         profile_run_id: profileRunId,
         session_id: sessionId,
         mcp_server: mcpServerUrl,
-        mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
+        mode: envelopeMode,
         envelope_chars: envelopeMetrics.chars,
         envelope_bytes: envelopeMetrics.bytes,
       });
@@ -513,10 +754,11 @@ export const runCreateTasksAgent = async ({
       );
 
       if (!result.success) {
-        throw new Error(result.error || 'create_tasks_mcp_failed');
+        const nestedFailure = toSingleLine(extractNestedText(result.data));
+        throw new Error(nestedFailure || result.error || 'create_tasks_mcp_failed');
       }
 
-      return parseCreateTasksAgentResult(result.data, normalizedProjectId);
+      return parseCreateTasksCompositeResult(result.data, normalizedProjectId);
     } finally {
       await mcpClient.closeSession(session.sessionId).catch((error) => {
         logger.warn('[voicebot-worker] create_tasks agent session close failed', {
@@ -528,18 +770,21 @@ export const runCreateTasksAgent = async ({
   };
 
   try {
-    const tasks = await executeAgentCall(buildEnvelope(rawText));
-    logger.info('[voicebot-worker] create_tasks agent completed', {
-      profile_run_id: profileRunId,
-      session_id: sessionId,
-      tasks_count: tasks.length,
-      mcp_server: mcpServerUrl,
-      mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
-    });
-    return tasks;
+    const composite = await executeAgentCall(buildEnvelope(rawText));
+      logger.info('[voicebot-worker] create_tasks agent completed', {
+        profile_run_id: profileRunId,
+        session_id: sessionId,
+        tasks_count: composite.task_draft.length,
+        has_summary_md_text: Boolean(composite.summary_md_text),
+        ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
+        has_scholastic_review_md: Boolean(composite.scholastic_review_md),
+        mcp_server: mcpServerUrl,
+        mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
+      });
+    return composite;
   } catch (error) {
     if (!isAgentsQuotaFailure(error)) {
-      if (isContextLengthFailure(error) && !(rawText && rawText.trim().length > 0)) {
+      if (shouldRetryCreateTasksWithReducedContext({ error, rawText })) {
         const fallbackDb = contextDb ?? resolveDbForFallback(db);
         if (!fallbackDb) throw error;
         const reducedRawText = await buildReducedCreateTasksRawText({
@@ -547,6 +792,12 @@ export const runCreateTasksAgent = async ({
           sessionId,
         });
         if (!reducedRawText) throw error;
+        logger.warn('[voicebot-worker] create_tasks agent primary run hit context overflow', {
+          profile_run_id: profileRunId,
+          session_id: sessionId,
+          mcp_server: mcpServerUrl,
+          error: error instanceof Error ? error.message : String(error),
+        });
         logger.warn('[voicebot-worker] create_tasks agent retrying with reduced context', {
           profile_run_id: profileRunId,
           session_id: sessionId,
@@ -554,15 +805,18 @@ export const runCreateTasksAgent = async ({
           reduced_chars: reducedRawText.length,
           reduced_bytes: Buffer.byteLength(reducedRawText, 'utf8'),
         });
-        const tasks = await executeAgentCall(buildEnvelope(reducedRawText));
+        const composite = await executeAgentCall(buildEnvelope(reducedRawText));
         logger.info('[voicebot-worker] create_tasks agent completed with reduced context', {
           profile_run_id: profileRunId,
           session_id: sessionId,
-          tasks_count: tasks.length,
+          tasks_count: composite.task_draft.length,
+          has_summary_md_text: Boolean(composite.summary_md_text),
+          ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
+          has_scholastic_review_md: Boolean(composite.scholastic_review_md),
           mcp_server: mcpServerUrl,
           mode: 'raw_text_reduced',
         });
-        return tasks;
+        return composite;
       }
       throw error;
     }
@@ -579,14 +833,39 @@ export const runCreateTasksAgent = async ({
       mcp_server: mcpServerUrl,
     });
 
-    const tasks = await executeAgentCall(buildEnvelope(rawText));
+    const composite = await executeAgentCall(buildEnvelope(rawText));
     logger.info('[voicebot-worker] create_tasks agent completed after quota recovery', {
       profile_run_id: profileRunId,
       session_id: sessionId,
-      tasks_count: tasks.length,
+      tasks_count: composite.task_draft.length,
+      has_summary_md_text: Boolean(composite.summary_md_text),
+      ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
+      has_scholastic_review_md: Boolean(composite.scholastic_review_md),
       mcp_server: mcpServerUrl,
       mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
     });
-    return tasks;
+    return composite;
   }
+};
+
+export const runCreateTasksAgent = async ({
+  sessionId,
+  projectId,
+  rawText,
+  db,
+}: {
+  sessionId: string;
+  projectId?: string;
+  rawText?: string;
+  db?: Db;
+}): Promise<Array<Record<string, unknown>>> => {
+  const composite = await runCreateTasksCompositeAgent({
+    sessionId,
+    ...(projectId ? { projectId } : {}),
+    ...(rawText ? { rawText } : {}),
+    ...(db ? { db } : {}),
+  });
+  const taskDraft = composite.task_draft;
+  attachCompositeMetaToDraft(taskDraft, composite);
+  return taskDraft;
 };

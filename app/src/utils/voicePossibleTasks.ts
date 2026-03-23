@@ -2,10 +2,29 @@ import type {
   VoiceBotMessage,
   VoiceBotSession,
   VoicePossibleTask,
+  VoiceTaskEnrichmentParseResult,
+  VoiceTaskEnrichmentSectionKey,
+  VoiceTaskEnrichmentSections,
 } from '../types/voice';
 import { CANONICAL_VOICE_SESSION_URL_BASE } from './voiceSessionTaskSource';
 
 type UnknownRecord = Record<string, unknown>;
+type CreateTasksCompositeCommentDraft = {
+  lookup_id: string;
+  comment: string;
+  task_db_id?: string;
+  task_public_id?: string;
+  dialogue_reference?: string;
+};
+
+export type CreateTasksCompositeMcpResult = {
+  summary_md_text: string;
+  scholastic_review_md: string;
+  task_draft: VoicePossibleTask[];
+  enrich_ready_task_comments: CreateTasksCompositeCommentDraft[];
+  session_name: string;
+  project_id: string;
+};
 
 const toText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
@@ -23,6 +42,37 @@ const parseDependencies = (value: unknown): string[] => {
   return value.map((entry) => toText(entry)).filter(Boolean);
 };
 
+const normalizeEnrichmentDraft = (value: unknown): CreateTasksCompositeCommentDraft | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+  const comment = toText(record.comment);
+  if (!comment) return null;
+  const lookupId =
+    toText(record.lookup_id) ||
+    toText(record.task_public_id) ||
+    toText(record.task_db_id) ||
+    toText(record.id);
+  if (!lookupId) return null;
+
+  const taskDbId = toText(record.task_db_id);
+  const taskPublicId = toText(record.task_public_id);
+  const dialogueReference = toText(record.dialogue_reference);
+  return {
+    lookup_id: lookupId,
+    comment,
+    ...(taskDbId ? { task_db_id: taskDbId } : {}),
+    ...(taskPublicId ? { task_public_id: taskPublicId } : {}),
+    ...(dialogueReference ? { dialogue_reference: dialogueReference } : {}),
+  };
+};
+
+const parseEnrichmentDrafts = (value: unknown): CreateTasksCompositeCommentDraft[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => normalizeEnrichmentDraft(entry))
+    .filter((entry): entry is CreateTasksCompositeCommentDraft => entry !== null);
+};
+
 const canonicalSessionUrl = (sessionId: string): string =>
   `${CANONICAL_VOICE_SESSION_URL_BASE}/${encodeURIComponent(sessionId)}`;
 
@@ -34,6 +84,9 @@ const toSingleLine = (value: string): string =>
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const normalizeWhitespace = (value: string): string =>
+  value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
 const extractCreateTasksAgentError = (raw: string): string => {
   const singleLine = toSingleLine(raw);
@@ -54,6 +107,159 @@ const extractCreateTasksAgentError = (raw: string): string => {
   }
 
   return '';
+};
+
+export const VOICE_TASK_ENRICHMENT_SECTION_KEYS: VoiceTaskEnrichmentSectionKey[] = [
+  'description',
+  'object_locators',
+  'expected_results',
+  'acceptance_criteria',
+  'evidence_links',
+  'executor_routing_hints',
+  'open_questions',
+];
+
+const VOICE_TASK_ENRICHMENT_SECTION_KEY_SET = new Set<VoiceTaskEnrichmentSectionKey>(
+  VOICE_TASK_ENRICHMENT_SECTION_KEYS
+);
+
+const VOICE_TASK_ENRICHMENT_EMPTY_VALUES = new Set(['', '-', '—', 'не указано']);
+
+const normalizeSectionHeading = (raw: string): string =>
+  raw
+    .toLowerCase()
+    .trim()
+    .replace(/[`*~]/g, '')
+    .replace(/[:：]/g, '')
+    .replace(/\s+/g, ' ');
+
+const resolveEnrichmentSectionKey = (rawHeading: string): VoiceTaskEnrichmentSectionKey | null => {
+  const normalized = normalizeSectionHeading(rawHeading);
+  if (VOICE_TASK_ENRICHMENT_SECTION_KEY_SET.has(normalized as VoiceTaskEnrichmentSectionKey)) {
+    return normalized as VoiceTaskEnrichmentSectionKey;
+  }
+  return null;
+};
+
+const parseSectionHeadingFromLine = (line: string): string | null => {
+  const markdownHeadingMatch = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+  if (markdownHeadingMatch?.[1]) return markdownHeadingMatch[1];
+
+  return null;
+};
+
+const stripMarkdownForSynopsis = (value: string): string =>
+  value
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[`*_~>#-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const truncateSynopsis = (value: string, maxLength = 180): string => {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
+};
+
+const emptyEnrichmentSections = (): VoiceTaskEnrichmentSections => ({
+  description: '',
+  object_locators: '',
+  expected_results: '',
+  acceptance_criteria: '',
+  evidence_links: '',
+  executor_routing_hints: '',
+  open_questions: '',
+});
+
+export const isVoiceTaskEnrichmentValueFilled = (value: string): boolean => {
+  const normalized = value.trim().toLowerCase();
+  return !VOICE_TASK_ENRICHMENT_EMPTY_VALUES.has(normalized);
+};
+
+const normalizeVoiceTaskEnrichmentValue = (value: string): string => {
+  const normalized = value.trim();
+  return isVoiceTaskEnrichmentValueFilled(normalized) ? normalized : '';
+};
+
+export const buildVoiceTaskEnrichmentDescription = (
+  partialSections: Partial<VoiceTaskEnrichmentSections>
+): string => {
+  const sections = emptyEnrichmentSections();
+  for (const key of VOICE_TASK_ENRICHMENT_SECTION_KEYS) {
+    sections[key] = normalizeVoiceTaskEnrichmentValue(partialSections[key] || '');
+  }
+
+  const synopsis = sections.description || 'Не указано';
+  const lines: string[] = [synopsis, ''];
+  for (const key of VOICE_TASK_ENRICHMENT_SECTION_KEYS) {
+    lines.push(`## ${key}`);
+    lines.push(sections[key] || 'Не указано');
+    lines.push('');
+  }
+
+  return lines.join('\n').trim();
+};
+
+export const parseVoiceTaskEnrichmentSections = (
+  description: string
+): VoiceTaskEnrichmentParseResult => {
+  const sections = emptyEnrichmentSections();
+  const sectionBuffers = new Map<VoiceTaskEnrichmentSectionKey, string[]>();
+  VOICE_TASK_ENRICHMENT_SECTION_KEYS.forEach((key) => sectionBuffers.set(key, []));
+
+  const lines = description.replace(/\r\n/g, '\n').split('\n');
+  let currentSectionKey: VoiceTaskEnrichmentSectionKey | null = null;
+  const prefaceBuffer: string[] = [];
+  let encounteredSection = false;
+
+  for (const line of lines) {
+    const headingCandidate = parseSectionHeadingFromLine(line);
+    if (headingCandidate !== null) {
+      encounteredSection = true;
+      currentSectionKey = resolveEnrichmentSectionKey(headingCandidate);
+      continue;
+    }
+    if (/^\s{0,3}#{1,6}\s+/.test(line)) {
+      encounteredSection = true;
+      currentSectionKey = null;
+      continue;
+    }
+    if (!currentSectionKey) {
+      if (!encounteredSection) {
+        prefaceBuffer.push(line);
+      }
+      continue;
+    }
+    const bucket = sectionBuffers.get(currentSectionKey);
+    if (!bucket) continue;
+    bucket.push(line);
+  }
+
+  for (const key of VOICE_TASK_ENRICHMENT_SECTION_KEYS) {
+    sections[key] = normalizeVoiceTaskEnrichmentValue((sectionBuffers.get(key) || []).join('\n').trim());
+  }
+
+  const entries = VOICE_TASK_ENRICHMENT_SECTION_KEYS.map((key) => {
+    const value = sections[key];
+    return {
+      key,
+      label: key,
+      value,
+      isFilled: isVoiceTaskEnrichmentValueFilled(value),
+    };
+  });
+  const missingKeys = entries.filter((entry) => !entry.isFilled).map((entry) => entry.key);
+  const prefaceSynopsis = normalizeVoiceTaskEnrichmentValue(prefaceBuffer.join('\n').trim());
+  const synopsisSource = sections.description || prefaceSynopsis || description;
+  const synopsis = truncateSynopsis(toSingleLine(stripMarkdownForSynopsis(synopsisSource)));
+
+  return {
+    synopsis,
+    sections,
+    entries,
+    filledCount: entries.length - missingKeys.length,
+    totalCount: entries.length,
+    missingKeys,
+  };
 };
 
 export const collectPossibleTaskLocators = (value: unknown): string[] => {
@@ -234,6 +440,73 @@ const parseTasksJson = (raw: string): VoicePossibleTask[] => {
   throw new Error('Не удалось распарсить результат агента');
 };
 
+const emptyCreateTasksCompositeResult = (defaultProjectId = ''): CreateTasksCompositeMcpResult => ({
+  summary_md_text: '',
+  scholastic_review_md: '',
+  task_draft: [],
+  enrich_ready_task_comments: [],
+  session_name: '',
+  project_id: defaultProjectId,
+});
+
+const normalizeCreateTasksCompositeResult = (
+  value: unknown,
+  defaultProjectId = ''
+): CreateTasksCompositeMcpResult | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const hasCompositeShape =
+    Object.prototype.hasOwnProperty.call(record, 'summary_md_text') ||
+    Object.prototype.hasOwnProperty.call(record, 'scholastic_review_md') ||
+    Object.prototype.hasOwnProperty.call(record, 'task_draft') ||
+    Object.prototype.hasOwnProperty.call(record, 'enrich_ready_task_comments') ||
+    Object.prototype.hasOwnProperty.call(record, 'session_name') ||
+    Object.prototype.hasOwnProperty.call(record, 'project_id');
+  if (!hasCompositeShape) return null;
+
+  return {
+    summary_md_text: toText(record.summary_md_text),
+    scholastic_review_md: toText(record.scholastic_review_md),
+    task_draft: parsePossibleTasksResponse(record.task_draft, defaultProjectId),
+    enrich_ready_task_comments: parseEnrichmentDrafts(record.enrich_ready_task_comments),
+    session_name: toText(record.session_name),
+    project_id: toText(record.project_id) || defaultProjectId,
+  };
+};
+
+const parseCreateTasksCompositeJson = (
+  raw: string,
+  defaultProjectId = ''
+): CreateTasksCompositeMcpResult => {
+  const direct = raw.trim();
+  if (!direct) return emptyCreateTasksCompositeResult(defaultProjectId);
+
+  const candidates = [
+    direct,
+    direct.replace(/^```json\s*/i, '').replace(/```$/i, '').trim(),
+    direct.replace(/^```\s*/i, '').replace(/```$/i, '').trim(),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      const normalizedComposite = normalizeCreateTasksCompositeResult(parsed, defaultProjectId);
+      if (normalizedComposite) return normalizedComposite;
+    } catch {
+      // continue
+    }
+  }
+
+  const agentError = extractCreateTasksAgentError(direct);
+  if (agentError) {
+    throw new Error(`Ошибка модели в create_tasks: ${agentError}`);
+  }
+
+  throw new Error('Не удалось распарсить composite-результат create_tasks');
+};
+
 export const parseCreateTasksMcpResult = (
   payload: unknown,
   defaultProjectId = ''
@@ -269,4 +542,48 @@ export const parseCreateTasksMcpResult = (
   }
 
   return [];
+};
+
+export const parseCreateTasksCompositeMcpResult = (
+  payload: unknown,
+  defaultProjectId = ''
+): CreateTasksCompositeMcpResult => {
+  const directComposite = normalizeCreateTasksCompositeResult(payload, defaultProjectId);
+  if (directComposite) return directComposite;
+
+  if (typeof payload === 'string') {
+    return parseCreateTasksCompositeJson(payload, defaultProjectId);
+  }
+
+  const record = asRecord(payload);
+  if (!record) return emptyCreateTasksCompositeResult(defaultProjectId);
+
+  const nestedCandidates = [record.structuredContent, record.output, record.result, record.payload];
+  for (const candidate of nestedCandidates) {
+    const normalizedComposite = normalizeCreateTasksCompositeResult(candidate, defaultProjectId);
+    if (normalizedComposite) return normalizedComposite;
+  }
+
+  const content = Array.isArray(record.content) ? record.content : [];
+  for (const item of content) {
+    const itemRecord = asRecord(item);
+    const text = toText(itemRecord?.text);
+    if (!text) continue;
+    const normalizedComposite = parseCreateTasksCompositeJson(text, defaultProjectId);
+    if (
+      normalizedComposite.summary_md_text ||
+      normalizedComposite.task_draft.length > 0 ||
+      normalizedComposite.enrich_ready_task_comments.length > 0 ||
+      normalizedComposite.scholastic_review_md
+    ) {
+      return normalizedComposite;
+    }
+  }
+
+  const text = toText(record.text) || toText(record.output_text);
+  if (text) {
+    return parseCreateTasksCompositeJson(text, defaultProjectId);
+  }
+
+  return emptyCreateTasksCompositeResult(defaultProjectId);
 };

@@ -150,6 +150,11 @@ Preferred engineering principles for this repo:
 - Keep dependencies aligned with current stable releases; avoid opportunistic downgrades unless explicitly required.
 - `runtime_tag` may exist in historical records/logs, but new contracts must not rely on tag-family filtering for operational isolation.
 
+### IX. Repo-Level Execution & Tracking Policy
+- Default tracking surface is `bd`; work should be represented by claimed/created `bd` issues before changing repository artifacts.
+- Bounded execution is the default delivery mode when practical: prefer swarm/subagents with narrow, independently verifiable write surfaces.
+- Parent thread remains responsible for final integration, acceptance, and required verification gates.
+
 ## Technology Stack Constraints
 
 **Backend:**
@@ -212,14 +217,15 @@ Preferred engineering principles for this repo:
 - Backend quota self-heal for `create_tasks` is canonical: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once via `agents/pm2-agents.sh`, then retries the MCP call once.
 - Backend quota self-heal retry must wait for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart; immediate retries before readiness are a known `ECONNREFUSED` race.
 - Invalid-key / `401 unauthorized` failures in agent-backed `create_tasks` are treated as the same recoverable auth/runtime drift class as quota-style failures.
-- Auth sync and model sync are coupled:
+- Auth sync and model sync are canonical:
   - source auth account lives in `/root/.codex/auth.json`
   - runtime auth copy lives in `agents/.codex/auth.json`
-  - `tokens.account_id` in `{d72d46e8-41f3-47c1-ba22-98c52b3f6448, 4e0cfe6a-0bb7-4b6b-86c3-74a477572e49}` forces `default_model: codexspark`
-  - every other account forces `default_model: codexplan`
+  - runtime `default_model` is pinned to `gpt-5.4`
+  - auth recovery may restart agents and restore the same `gpt-5.4` default after sync
 - Runtime key drift baseline for OpenAI-backed production services is documented in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (PM2 runtime mask vs `backend/.env.production` value vs agents Codex OAuth mode).
 
 ### Subagent Execution Policy
+- Default execution mode for this repo: track work in `bd` and prefer bounded swarm/subagent execution when practical; parent thread remains responsible for final integration and acceptance.
 - Real implementation work should be delegated to subagents when practical; the parent thread should stay focused on discovery, coordination, integration, and final acceptance.
 - Subagents MUST start with a clean history by default (`fork_context=false`); do not spawn child agents with inherited conversation history unless there is an explicit, narrow reason to preserve prior thread state.
 - Parent prompts for subagents must be short, decision-complete, and scoped to one bounded write surface.
@@ -231,7 +237,6 @@ Preferred engineering principles for this repo:
 - Backend code lives in `backend/src/`.
 - Figma indexing code lives in `figma/src/`.
 - Agents code lives in `agents/`.
-- Agent-card scaffold `agents/agent-cards/CompanyCreator.md` is reserved for the company-creation workflow; keep card-level prompt contract changes there when enabling it.
 - Do not store build artifacts outside module directories.
 - For `app/`, keep only TypeScript/TSX sources and avoid JS duplicates.
 - Use `.env` files for environment-specific configuration; do not commit secrets.
@@ -337,7 +342,7 @@ Preferred engineering principles for this repo:
 - WebRTC page `Done` must stay enabled from `paused` in embedded Settings/Monitor contexts whenever active/session state exists, not only when the page URL carries `pageSession`.
 - WebRTC FAB must surface a red `Mic 1 OFF` critical state during `recording` / `paused` / `cutting`, and missing saved Mic 1 devices must downgrade deterministically `LifeCam -> Microphone -> OFF`.
 - WebRTC REST close warnings must include `session_id` in client logs so 404/403/5xx close incidents can be matched with backend access logs quickly.
-- Inactive open sessions can be auto-closed by cron via `backend/scripts/voicebot-close-inactive-sessions.ts` (minutes-first operator surface, default `10`-minute inactivity threshold, latest session/message/session-log activity timestamps, canonical `DONE_MULTIPROMPT` flow, and missing-title generation through `generate_session_title` before completion).
+- Inactive open sessions can be auto-closed by cron via `backend/scripts/voicebot-close-inactive-sessions.ts` (minutes-first operator surface, default `10`-minute inactivity threshold, latest session/message/session-log activity timestamps, canonical `DONE_MULTIPROMPT` flow, and missing-title generation through composite `create_tasks.session_name` before completion).
 - Voice worker runtime owns scheduled `CLOSE_INACTIVE_SESSIONS` jobs; tune with `VOICEBOT_CLOSE_INACTIVE_SESSIONS_{ENABLED,INTERVAL_MS,TIMEOUT_MINUTES,BATCH_LIMIT}` rather than ad hoc cron copies.
 - Summarize MCP dependency watchdog script (`backend/scripts/summarize-mcp-watchdog.ts`) is canonical for `session_ready_to_summarize` prerequisites: it probes required endpoint/service pairs (`fs`, `tg-ro`, `call`, `seq`, `tm`, `tgbot`) and in apply mode auto-heals only failed units (`start` inactive, `restart` active with endpoint `502`/unreachable diagnostics).
 - Full-track archive chunks are tracked as `trackKind='full_track'` with metadata (`sessionId`, `mic`, `duration/start/end`) in voicebot runtime, but upload is intentionally disabled until diarization flow is introduced.
@@ -385,18 +390,18 @@ Preferred engineering principles for this repo:
   - refresh tokens must increment additively so repeated hints remain concurrency-safe
 - `CREATE_TASKS` persistence in API/worker paths is strict canonical `id/name/description/priority/...`; runtime fallback for legacy human-title keys is disabled.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
-- Backend `runCreateTasksAgent(...)` must derive bounded `project_crm_window` context from message/session bounds when project-wide CRM enrichment is available; use the bounded window first and fall back to unbounded project CRM only when timing cannot be resolved.
+- Backend `runCreateTasksAgent(...)` must derive a bounded `project_crm_window` from session/message bounds and keep project-wide CRM enrichment capped to `30d`; unbounded project CRM is not part of the active contract.
 - Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md`.
-- `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
+- Composite `create_tasks` output is the canonical runtime contract for session naming; legacy standalone title-agent cards are no longer part of the active execution path.
 - The offline title-generation utility `backend/scripts/voicebot-generate-session-titles.ts` now uses the same quota-recovery rule and compare-before-copy guard as backend `create_tasks`.
 - Session summary persistence is canonical:
   - backend `POST /api/voicebot/save_summary` validates `{session_id, md_text}` and writes `summary_md_text` + `summary_saved_at`,
   - `summary_correlation_id` / `correlation_id` may be supplied or reused from the session and must reconcile a pending `summary_save` audit row to `done` instead of inserting a duplicate event,
   - route emits realtime `session_update.taskflow_refresh.summary`,
-  - frontend Summary panel binds to canonical session fields and supports edit/save/conflict states.
+  - frontend binds `summary_md_text` to the top-level `Саммари` tab instead of rendering a second summary panel under `Категоризация`.
 - Session-title generation is fail-fast and traceable:
-  - frontend `generate_session_title` flow uses stage-level timeouts and `finally` cleanup so `Генерирую заголовок` cannot spin forever,
-  - backend MCP proxy logs `generate_session_title` correlations with `requestId` + `session_id` for incident triage.
+  - frontend title generation uses stage-level timeouts and `finally` cleanup so `Генерирую заголовок` cannot spin forever,
+  - backend composite analyzer path logs `session_name` generation correlations with `requestId` + `session_id` for incident triage.
 - Live meeting possible-task generation is canonical:
   - session header exposes `Tasks` before `Summarize`,
   - session-page `Tasks` button calls backend `POST /api/voicebot/generate_possible_tasks`,
@@ -629,6 +634,8 @@ Notes:
 ### Important Rules
 
 - ✅ Use bd for ALL task tracking
+- ✅ `bd` is the default tracking surface for everyday work; do not rely on ad hoc side lists as primary planning
+- ✅ Prefer bounded swarm/subagent execution when practical, keeping scopes narrow and independently verifiable
 - ✅ Before any task that changes project artifacts, ensure there is a bd issue covering that work
 - ✅ Treat project artifacts broadly: code, documentation, tests, configs, scripts, migrations, generated project artifacts, and any checked-in file changes all require a bd issue
 - ✅ Always use `--json` flag for programmatic use

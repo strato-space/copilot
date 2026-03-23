@@ -1,24 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Button,
-  Checkbox,
+  Empty,
   Grid,
   Input,
   message,
   Popconfirm,
   Select,
   Space,
-  Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { CopyOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
 
+import type { TaskTypeNode } from '../../types/voice';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useCurrentUserPermissions } from '../../store/permissionsStore';
 import { PERMISSIONS } from '../../constants/permissions';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
+import { CODEX_PERFORMER_ID } from '../../utils/codexPerformer';
 import { isVoiceTaskCreateValidationError } from '../../utils/voiceTaskCreation';
 
 type RawTaskRecord = Record<string, unknown>;
@@ -43,6 +45,8 @@ type TaskRow = {
 type TaskRowView = TaskRow & {
   __missing: Array<keyof TaskRow>;
   __isReady: boolean;
+  __descriptionDraft: TaskDescriptionDraft;
+  __hasLocalChanges: boolean;
 };
 
 type TaskRowCreationErrors = {
@@ -51,14 +55,33 @@ type TaskRowCreationErrors = {
   general?: string;
 };
 
+const { Text } = Typography;
+
 const PRIORITY_OPTIONS = ['🔥 P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
+const AUTOSAVE_DEBOUNCE_MS = 800;
+const QUESTION_ANSWER_CHUNK_REGEX =
+  /(?:^|\n\n)(Question:\s*\n[\s\S]*?\n\nAnswer:\s*\n[\s\S]*)$/i;
 
 const PERFORMER_PICKER_POPUP_HEIGHT = {
   mobile: 320,
   desktop: 520,
 } as const;
 
+type TaskDescriptionDraft = {
+  markdown: string;
+  qaChunk: string;
+};
+
 const toText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const toObjectIdText = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    const oid = (value as { $oid?: unknown }).$oid;
+    if (typeof oid === 'string') return oid.trim();
+  }
+  return '';
+};
 
 const parseDependencies = (value: unknown): string[] =>
   Array.isArray(value)
@@ -70,6 +93,7 @@ const parseDependencies = (value: unknown): string[] =>
 const REQUIRED_FIELDS: Array<keyof TaskRow> = [
   'name',
   'description',
+  'project_id',
   'performer_id',
   'priority',
 ];
@@ -91,6 +115,38 @@ const REQUIRED_FIELD_LABELS: Record<keyof TaskRow, string> = {
   discussion_count: 'обсуждения',
 };
 
+const resolveTaskTypeNodeId = (node: TaskTypeNode): string =>
+  toText(node._id) || toText(node.key) || toObjectIdText(node.id);
+
+const resolveTaskTypeNodeTitle = (node: TaskTypeNode): string =>
+  toText(node.path) || toText(node.long_name) || toText(node.title) || toText(node.name) || toText(node.task_id);
+
+export const flattenTaskTypeOptions = (nodes: TaskTypeNode[] | null): Array<{ value: string; label: string }> => {
+  if (!Array.isArray(nodes) || nodes.length === 0) return [];
+
+  const options: Array<{ value: string; label: string }> = [];
+  const walk = (list: TaskTypeNode[], prefix: string): void => {
+    for (const node of list) {
+      const nodeId = resolveTaskTypeNodeId(node);
+      const nodeTitle = resolveTaskTypeNodeTitle(node) || nodeId;
+      if (nodeId) {
+        const label = toText(node.path) || (prefix ? `${prefix} / ${nodeTitle}` : nodeTitle);
+        options.push({
+          value: nodeId,
+          label,
+        });
+      }
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        const nextPrefix = toText(node.path) || (prefix ? `${prefix} / ${nodeTitle}` : nodeTitle);
+        walk(node.children, nextPrefix);
+      }
+    }
+  };
+
+  walk(nodes, '');
+  return options;
+};
+
 const getMissingFields = (task: TaskRow): Array<keyof TaskRow> =>
   REQUIRED_FIELDS.filter((field) => !toText(task[field]));
 
@@ -103,9 +159,12 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
   const priority = toText(raw.priority) || 'P3';
   const priorityReason = toText(raw.priority_reason);
   const dialogueReference = toText(raw.dialogue_reference);
-  const discussionCount = typeof raw.discussion_count === 'number' && Number.isFinite(raw.discussion_count)
-    ? raw.discussion_count
-    : (Array.isArray(raw.discussion_sessions) ? raw.discussion_sessions.length : 0);
+  const discussionCount =
+    typeof raw.discussion_count === 'number' && Number.isFinite(raw.discussion_count)
+      ? raw.discussion_count
+      : Array.isArray(raw.discussion_sessions)
+        ? raw.discussion_sessions.length
+        : 0;
 
   return {
     row_id: rowId,
@@ -125,6 +184,60 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
   };
 };
 
+const splitTaskDescription = (description: string): TaskDescriptionDraft => {
+  const normalized = description.replace(/\r\n/g, '\n').trim();
+  if (!normalized) return { markdown: '', qaChunk: '' };
+
+  const qaChunkMatch = normalized.match(QUESTION_ANSWER_CHUNK_REGEX);
+  if (qaChunkMatch?.[1]) {
+    const qaChunk = qaChunkMatch[1].trim();
+    const markdown = normalized.slice(0, normalized.length - qaChunk.length).trim();
+    return {
+      markdown,
+      qaChunk,
+    };
+  }
+
+  return {
+    markdown: normalized,
+    qaChunk: '',
+  };
+};
+
+const buildTaskDescription = (draft: TaskDescriptionDraft): string => {
+  const markdown = draft.markdown.trim();
+  const qaChunk = draft.qaChunk.trim();
+  if (!qaChunk) return markdown;
+  return markdown ? `${markdown}\n\n${qaChunk}` : qaChunk;
+};
+
+const renderPriorityTag = (priority: string, priorityReason: string, color: string) => {
+  const reason = toText(priorityReason);
+  const tag = <Tag color={color}>{priority}</Tag>;
+  if (!reason) return tag;
+  return (
+    <Tooltip title={reason}>
+      <span>{tag}</span>
+    </Tooltip>
+  );
+};
+
+const toPersistencePayload = (row: TaskRow): Record<string, unknown> => ({
+  row_id: row.row_id,
+  id: row.id,
+  name: toText(row.name),
+  description: toText(row.description),
+  performer_id: toText(row.performer_id),
+  project_id: toText(row.project_id),
+  priority: toText(row.priority),
+  priority_reason: toText(row.priority_reason),
+  task_type_id: toText(row.task_type_id) || null,
+  dialogue_tag: toText(row.dialogue_tag) || null,
+  task_id_from_ai: toText(row.task_id_from_ai) || null,
+  dependencies_from_ai: row.dependencies_from_ai,
+  dialogue_reference: toText(row.dialogue_reference) || null,
+});
+
 function PossibleTasksSessionScope() {
   const screens = Grid.useBreakpoint();
   const { hasPermission } = useCurrentUserPermissions();
@@ -132,31 +245,41 @@ function PossibleTasksSessionScope() {
     voiceBotSession,
     possibleTasks,
     performers_for_tasks_list,
+    prepared_projects,
+    task_types,
     fetchPerformersForTasksList,
+    fetchPreparedProjects,
+    fetchTaskTypes,
+    saveSessionPossibleTasks,
     confirmSelectedTickets,
     deleteTaskFromSession,
   } = useVoiceBotStore();
 
-  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [activeRowId, setActiveRowId] = useState<string>('');
   const [drafts, setDrafts] = useState<Record<string, Partial<TaskRow>>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [isAutosaving, setIsAutosaving] = useState(false);
+  const [lastAutosavedAt, setLastAutosavedAt] = useState<number | null>(null);
+  const [saveInProgressRowId, setSaveInProgressRowId] = useState<string | null>(null);
+  const [cloneInProgressRowId, setCloneInProgressRowId] = useState<string | null>(null);
+  const [deleteInProgressRowId, setDeleteInProgressRowId] = useState<string | null>(null);
   const [rowCreationErrors, setRowCreationErrors] = useState<Record<string, TaskRowCreationErrors>>({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [onlySelected, setOnlySelected] = useState(false);
+
+  const autosaveTimerRef = useRef<number | null>(null);
+  const rowsRef = useRef<TaskRow[]>([]);
+  const draftsRef = useRef<Record<string, Partial<TaskRow>>>({});
+  const draftsRevisionRef = useRef(0);
 
   const canUpdateProjects = hasPermission(PERMISSIONS.PROJECTS.UPDATE);
   const performerPickerListHeight = screens.md
     ? PERFORMER_PICKER_POPUP_HEIGHT.desktop
     : PERFORMER_PICKER_POPUP_HEIGHT.mobile;
-
+  const sessionId = toText(voiceBotSession?._id);
   const defaultProjectId = toText(voiceBotSession?.project_id);
-  const hasSessionProject = Boolean(defaultProjectId);
 
-  const sourceTasks = useMemo(() => {
-    return possibleTasks.map((task, index) => parseTask(task as unknown as RawTaskRecord, index, defaultProjectId));
-  }, [possibleTasks, defaultProjectId]);
+  const sourceTasks = useMemo(
+    () => possibleTasks.map((task, index) => parseTask(task as unknown as RawTaskRecord, index, defaultProjectId)),
+    [possibleTasks, defaultProjectId]
+  );
 
   const historicalPerformerIds = useMemo(
     () =>
@@ -193,6 +316,15 @@ function PossibleTasksSessionScope() {
     performers_for_tasks_list,
   ]);
 
+  useEffect(() => {
+    if (!prepared_projects) {
+      void fetchPreparedProjects();
+    }
+    if (!task_types) {
+      void fetchTaskTypes();
+    }
+  }, [fetchPreparedProjects, fetchTaskTypes, prepared_projects, task_types]);
+
   const rows = useMemo(
     () =>
       sourceTasks.map((row) => ({
@@ -201,6 +333,14 @@ function PossibleTasksSessionScope() {
       })),
     [sourceTasks, drafts]
   );
+
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
 
   const rowsById = useMemo(() => {
     const map = new Map<string, TaskRow>();
@@ -230,9 +370,10 @@ function PossibleTasksSessionScope() {
           toText(performer.username) ||
           toText(performer.email) ||
           value;
-        const label = !isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)
-          ? `${baseLabel} (архив)`
-          : baseLabel;
+        const label =
+          !isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)
+            ? `${baseLabel} (архив)`
+            : baseLabel;
         result.push({ value, label });
         seen.add(value);
       }
@@ -247,6 +388,17 @@ function PossibleTasksSessionScope() {
     return result;
   }, [historicalPerformerIds, performers_for_tasks_list]);
 
+  const projectOptions = useMemo(
+    () =>
+      (prepared_projects || []).map((project) => ({
+        value: toText(project._id),
+        label: toText(project.name) || toText(project.title) || toText(project._id),
+      })),
+    [prepared_projects]
+  );
+
+  const taskTypeOptions = useMemo(() => flattenTaskTypeOptions(task_types), [task_types]);
+
   const rowsWithMeta = useMemo(
     () =>
       rows.map((row) => {
@@ -255,48 +407,99 @@ function PossibleTasksSessionScope() {
           ...row,
           __missing: missing,
           __isReady: missing.length === 0,
+          __descriptionDraft: splitTaskDescription(row.description),
+          __hasLocalChanges: Boolean(drafts[row.row_id]),
         };
       }),
-    [rows]
+    [rows, drafts]
   );
 
-  const filteredRows = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return rowsWithMeta.filter((row) => {
-      if (priorityFilter !== 'all' && row.priority !== priorityFilter) return false;
-      if (onlySelected && !selectedRowKeys.includes(row.row_id)) return false;
+  useEffect(() => {
+    if (rowsWithMeta.length === 0) {
+      if (activeRowId) setActiveRowId('');
+      return;
+    }
+    const hasActive = rowsWithMeta.some((row) => row.row_id === activeRowId);
+    if (!hasActive) {
+      setActiveRowId(rowsWithMeta[0]?.row_id || '');
+    }
+  }, [activeRowId, rowsWithMeta]);
 
-      if (!query) return true;
+  const activeRow = useMemo(
+    () => rowsWithMeta.find((row) => row.row_id === activeRowId) || rowsWithMeta[0] || null,
+    [activeRowId, rowsWithMeta]
+  );
 
-      const searchable = [
-        row.name,
-        row.description,
-        row.priority_reason,
-        row.dialogue_reference,
-        row.task_id_from_ai,
-        row.dependencies_from_ai.join(' '),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+  const clearAutosaveTimer = useCallback(() => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }, []);
 
-      return searchable.includes(query);
-    });
-  }, [rowsWithMeta, searchQuery, priorityFilter, onlySelected, selectedRowKeys]);
+  const persistDrafts = useCallback(
+    async (reason: 'debounce' | 'blur' | 'manual'): Promise<boolean> => {
+      if (!sessionId) return false;
+      if (Object.keys(draftsRef.current).length === 0) return false;
 
-  const totalCount = rowsWithMeta.length;
-  const readyCount = rowsWithMeta.filter((row) => row.__isReady).length;
-  const missingCount = totalCount - readyCount;
-  const visibleSelectedCount = filteredRows.filter((row) => selectedRowKeys.includes(row.row_id)).length;
+      const revisionAtStart = draftsRevisionRef.current;
+      const payload = rowsRef.current.map((row) => toPersistencePayload(row));
+      setIsAutosaving(true);
 
-  const setDraftValue = (rowId: string, field: keyof TaskRow, value: string) => {
-    setDrafts((prev) => ({
-      ...prev,
-      [rowId]: {
-        ...(prev[rowId] || {}),
-        [field]: value,
-      },
-    }));
+      try {
+        await saveSessionPossibleTasks(sessionId, payload, {
+          silent: true,
+          refreshMode: 'incremental_refresh',
+        });
+
+        if (draftsRevisionRef.current === revisionAtStart) {
+          setDrafts({});
+        }
+        setLastAutosavedAt(Date.now());
+        console.info('[voice.possible_tasks] autosave.ok', {
+          sessionId,
+          reason,
+          rowsCount: payload.length,
+        });
+        return true;
+      } catch (error) {
+        console.error('[voice.possible_tasks] autosave.failed', {
+          sessionId,
+          reason,
+          error,
+        });
+        if (reason === 'manual') {
+          message.error('Не удалось сохранить черновик');
+        }
+        return false;
+      } finally {
+        setIsAutosaving(false);
+      }
+    },
+    [saveSessionPossibleTasks, sessionId]
+  );
+
+  useEffect(() => {
+    clearAutosaveTimer();
+    if (!sessionId || Object.keys(drafts).length === 0) return;
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      void persistDrafts('debounce');
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return clearAutosaveTimer;
+  }, [clearAutosaveTimer, drafts, persistDrafts, sessionId]);
+
+  useEffect(() => clearAutosaveTimer, [clearAutosaveTimer]);
+
+  const flushAutosave = useCallback(
+    async (reason: 'blur' | 'manual') => {
+      clearAutosaveTimer();
+      await persistDrafts(reason);
+    },
+    [clearAutosaveTimer, persistDrafts]
+  );
+
+  const clearRowError = (rowId: string) => {
     setRowCreationErrors((prev) => {
       if (!prev[rowId]) return prev;
       const next = { ...prev };
@@ -305,193 +508,147 @@ function PossibleTasksSessionScope() {
     });
   };
 
+  const setDraftValue = (rowId: string, field: keyof TaskRow, value: string) => {
+    draftsRevisionRef.current += 1;
+    setDrafts((prev) => ({
+      ...prev,
+      [rowId]: {
+        ...(prev[rowId] || {}),
+        [field]: value,
+      },
+    }));
+    clearRowError(rowId);
+  };
+
+  const setDescriptionDraftValue = (rowId: string, patch: Partial<TaskDescriptionDraft>) => {
+    const row = rowsById.get(rowId);
+    if (!row) return;
+    const currentDraft = splitTaskDescription(row.description);
+    const nextDraft: TaskDescriptionDraft = {
+      markdown: patch.markdown ?? currentDraft.markdown,
+      qaChunk: patch.qaChunk ?? currentDraft.qaChunk,
+    };
+    setDraftValue(rowId, 'description', buildTaskDescription(nextDraft));
+  };
+
   const handleDeleteTask = async (rowId: string) => {
-    setDeletingTaskId(rowId);
+    setDeleteInProgressRowId(rowId);
     try {
+      await flushAutosave('manual');
       const success = await deleteTaskFromSession(rowId);
       if (!success) return;
-      setSelectedRowKeys((prev) => prev.filter((id) => id !== rowId));
       setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[rowId];
-        return next;
-      });
-      setRowCreationErrors((prev) => {
         if (!prev[rowId]) return prev;
         const next = { ...prev };
         delete next[rowId];
         return next;
       });
+      clearRowError(rowId);
     } finally {
-      setDeletingTaskId(null);
+      setDeleteInProgressRowId(null);
     }
   };
 
-  const handleCreateSelected = async () => {
-    if (selectedRowKeys.length === 0) {
-      console.info('[voice.possible_tasks] create_selected.aborted', {
-        reason: 'no_selection',
-        sessionId: voiceBotSession?._id || null,
-      });
-      message.warning('Выберите хотя бы одну задачу');
-      return;
-    }
-    if (!hasSessionProject) {
-      console.info('[voice.possible_tasks] create_selected.aborted', {
-        reason: 'missing_session_project',
-        sessionId: voiceBotSession?._id || null,
-        selectedRowIds: selectedRowKeys,
-      });
-      message.error('У сессии не выбран проект. Укажите проект в шапке сессии.');
-      return;
-    }
-
-    const selectedTasks = selectedRowKeys
-      .map((id) => rowsById.get(id))
-      .filter((task): task is TaskRow => Boolean(task));
-    const invalid = selectedTasks
-      .map((task) => ({
-        task,
-        missing: getMissingFields(task),
-      }))
-      .filter((entry) => entry.missing.length > 0);
-
-    if (invalid.length > 0) {
-      const first = invalid[0];
-      if (!first) return;
-      console.info('[voice.possible_tasks] create_selected.aborted', {
-        reason: 'invalid_selected_task',
-        sessionId: voiceBotSession?._id || null,
-        selectedRowIds: selectedRowKeys,
-        firstInvalidRowId: first.task.row_id,
-        missingFields: first.missing,
-      });
-      message.error(
-        `Задача "${first.task.name}" не готова: ${first.missing
-          .map((field) => REQUIRED_FIELD_LABELS[field])
-          .join(', ')}`
-      );
-      return;
-    }
-
-    const payload = selectedTasks.map((task) => ({
-      row_id: task.row_id,
-      id: task.id,
-      name: toText(task.name),
-      description: toText(task.description),
-      performer_id: toText(task.performer_id),
-      project_id: defaultProjectId,
-      priority: toText(task.priority),
-      priority_reason: toText(task.priority_reason),
-      task_type_id: toText(task.task_type_id) || null,
-      dialogue_tag: toText(task.dialogue_tag) || null,
-      task_id_from_ai: toText(task.task_id_from_ai) || null,
-      dependencies_from_ai: task.dependencies_from_ai,
-      dialogue_reference: toText(task.dialogue_reference) || null,
-    }));
-
-    console.info('[voice.possible_tasks] create_selected.submit', {
-      sessionId: voiceBotSession?._id || null,
-      selectedRowIds: selectedRowKeys,
-      selectedCount: selectedRowKeys.length,
-      performerIds: Array.from(new Set(payload.map((task) => toText(task.performer_id)).filter(Boolean))),
-      payload: payload.map((task) => ({
-        row_id: task.row_id,
-        performer_id: task.performer_id,
-        project_id: task.project_id,
-        priority: task.priority,
-      })),
-    });
-
-    setIsSubmitting(true);
-    setRowCreationErrors({});
+  const handleCloneTask = async (row: TaskRowView) => {
+    if (!sessionId) return;
+    setCloneInProgressRowId(row.row_id);
     try {
-      const result = await confirmSelectedTickets(selectedRowKeys, payload);
-      console.info('[voice.possible_tasks] create_selected.result', {
-        sessionId: voiceBotSession?._id || null,
-        selectedRowIds: selectedRowKeys,
-        createdTaskIds: result.createdTaskIds,
-        removedRowIds: result.removedRowIds,
-        rowErrorsCount: result.rowErrors.length,
+      await flushAutosave('manual');
+      const cloneSuffix = `${Date.now().toString(36)}-${Math.round(Math.random() * 9999)}`;
+      const cloneRow: TaskRow = {
+        ...row,
+        row_id: `${toText(row.row_id) || 'task'}-clone-${cloneSuffix}`,
+        id: `${toText(row.id) || 'task'}-clone-${cloneSuffix}`,
+        task_id_from_ai: '',
+        name: `${toText(row.name) || 'Задача'} (copy)`,
+      };
+      const nextPayload = [...rowsRef.current.map((item) => toPersistencePayload(item)), toPersistencePayload(cloneRow)];
+      await saveSessionPossibleTasks(sessionId, nextPayload, {
+        refreshMode: 'incremental_refresh',
       });
-      const removedRowIdSet = new Set(result.removedRowIds);
-      if (removedRowIdSet.size > 0) {
-        setSelectedRowKeys((prev) => prev.filter((id) => !removedRowIdSet.has(id)));
-        setDrafts((prev) => {
-          if (Object.keys(prev).length === 0) return prev;
-          const next = { ...prev };
-          for (const id of removedRowIdSet) {
-            delete next[id];
-          }
-          return next;
-        });
-        setRowCreationErrors((prev) => {
-          if (Object.keys(prev).length === 0) return prev;
-          const next = { ...prev };
-          for (const id of removedRowIdSet) {
-            delete next[id];
-          }
-          return next;
-        });
-      }
+      setActiveRowId(cloneRow.row_id);
+      message.success('Черновик клонирован');
+    } catch (error) {
+      console.error('[voice.possible_tasks] clone.failed', { sessionId, rowId: row.row_id, error });
+      message.error('Не удалось клонировать черновик');
+    } finally {
+      setCloneInProgressRowId(null);
+    }
+  };
+
+  const handleSaveRow = async (row: TaskRowView) => {
+    const missing = getMissingFields(row);
+    if (missing.length > 0) {
+      message.error(`Заполните поля: ${missing.map((field) => REQUIRED_FIELD_LABELS[field]).join(', ')}`);
+      return;
+    }
+    if (!sessionId) return;
+
+    const payload = toPersistencePayload(row);
+    setSaveInProgressRowId(row.row_id);
+    clearRowError(row.row_id);
+
+    try {
+      await flushAutosave('manual');
+      console.info('[voice.possible_tasks] save.submit', {
+        sessionId,
+        rowId: row.row_id,
+        performer_id: row.performer_id,
+        routing: toText(row.performer_id) === CODEX_PERFORMER_ID ? 'codex' : 'human',
+      });
+
+      await confirmSelectedTickets([row.row_id], [payload]);
+      setRowCreationErrors((prev) => {
+        if (!prev[row.row_id]) return prev;
+        const next = { ...prev };
+        delete next[row.row_id];
+        return next;
+      });
+      console.info('[voice.possible_tasks] save.result', {
+        sessionId,
+        rowId: row.row_id,
+        routing: toText(row.performer_id) === CODEX_PERFORMER_ID ? 'codex' : 'human',
+      });
     } catch (error) {
       if (isVoiceTaskCreateValidationError(error)) {
-        console.warn('[voice.possible_tasks] create_selected.validation_failed', {
-          sessionId: voiceBotSession?._id || null,
-          selectedRowIds: selectedRowKeys,
-          rowErrors: error.rowErrors,
-        });
-        const rowErrorsByTaskId: Record<string, TaskRowCreationErrors> = {};
+        const mappedErrors: TaskRowCreationErrors = {};
         for (const rowError of error.rowErrors) {
           const rowKey = rowsById.get(rowError.ticketId)?.row_id || rowError.ticketId;
-          if (!rowKey) continue;
-          const current = rowErrorsByTaskId[rowKey] || {};
-          if (rowError.field === 'performer_id') {
-            if (!current.performer_id) current.performer_id = rowError.message;
-          } else if (rowError.field === 'project_id') {
-            if (!current.project_id) current.project_id = rowError.message;
-          } else if (!current.general) {
-            current.general = rowError.message;
+          if (rowKey !== row.row_id) continue;
+          if (rowError.field === 'performer_id' && !mappedErrors.performer_id) {
+            mappedErrors.performer_id = rowError.message;
+          } else if (rowError.field === 'project_id' && !mappedErrors.project_id) {
+            mappedErrors.project_id = rowError.message;
+          } else if (!mappedErrors.general) {
+            mappedErrors.general = rowError.message;
           }
-          rowErrorsByTaskId[rowKey] = current;
         }
 
-        if (Object.keys(rowErrorsByTaskId).length > 0) {
-          setRowCreationErrors(rowErrorsByTaskId);
-          const failedTaskIds = new Set(Object.keys(rowErrorsByTaskId));
-          setSelectedRowKeys((prev) => prev.filter((id) => failedTaskIds.has(id)));
-        }
+        setRowCreationErrors((prev) => ({
+          ...prev,
+          [row.row_id]: mappedErrors,
+        }));
 
-        const firstRowError = error.rowErrors[0];
-        if (firstRowError) {
-          const taskName = rowsById.get(firstRowError.ticketId)?.name || firstRowError.ticketId;
+        const first = error.rowErrors[0];
+        if (first) {
           const followUpHint =
-            firstRowError.field === 'performer_id'
+            first.field === 'performer_id'
               ? 'Выберите исполнителя из списка.'
-              : firstRowError.field === 'project_id'
+              : first.field === 'project_id'
                 ? 'Выберите проект с заполненным git_repo.'
                 : '';
           message.error(
             followUpHint
-              ? `Задача "${taskName}": ${firstRowError.message}. ${followUpHint}`
-              : `Задача "${taskName}": ${firstRowError.message}`
+              ? `${first.message}. ${followUpHint}`
+              : first.message
           );
-          return;
         }
-
-        const genericError = error.backendError || 'Не удалось создать задачи';
-        message.error(genericError);
-        return;
+      } else {
+        console.error('[voice.possible_tasks] save.failed', { sessionId, rowId: row.row_id, error });
+        message.error('Не удалось materialize задачу');
       }
-      console.error('[voice.possible_tasks] create_selected.failed', {
-        sessionId: voiceBotSession?._id || null,
-        selectedRowIds: selectedRowKeys,
-        error,
-      });
-      console.error('Ошибка при создании задач:', error);
-      message.error('Не удалось создать задачи');
     } finally {
-      setIsSubmitting(false);
+      setSaveInProgressRowId(null);
     }
   };
 
@@ -501,244 +658,223 @@ function PossibleTasksSessionScope() {
         type="warning"
         showIcon
         message="Доступ ограничен"
-        description="Недостаточно прав для создания задач."
+        description="Недостаточно прав для редактирования и materialize задач."
       />
     );
   }
 
-  if (rows.length === 0) {
-    return (
-      <div className="py-8 text-center text-slate-500">
-        Задачи не найдены
-      </div>
-    );
+  if (rowsWithMeta.length === 0) {
+    return <div className="py-8 text-center text-slate-500">Задачи не найдены</div>;
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {!hasSessionProject ? (
-        <Alert
-          type="warning"
-          showIcon
-          message="У сессии не выбран проект"
-          description="Выберите проект в шапке сессии, после этого задачи можно будет создать."
-        />
-      ) : null}
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Space size={8} wrap>
-          <Tag color="default">Всего: {totalCount}</Tag>
-          <Tag color="success">Готово: {readyCount}</Tag>
-          <Tag color="warning">Нужно заполнить: {missingCount}</Tag>
-          <Tag color="blue">Выбрано: {selectedRowKeys.length}</Tag>
-          {onlySelected ? <Tag color="processing">Показаны только выбранные</Tag> : null}
-        </Space>
-        <Space size={8} wrap>
-          <Button size="small" onClick={() => setSelectedRowKeys(filteredRows.map((row) => row.row_id))}>
-            Выбрать видимые
-          </Button>
-          <Button size="small" onClick={() => setSelectedRowKeys([])}>
-            Очистить выбор
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            loading={isSubmitting}
-            disabled={selectedRowKeys.length === 0 || !hasSessionProject}
-            onClick={() => void handleCreateSelected()}
-          >
-            Создать выбранные ({selectedRowKeys.length})
-          </Button>
-        </Space>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Input.Search
-          allowClear
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Поиск по названию, описанию, тегам, ссылкам"
-          style={{ width: 360, maxWidth: '100%' }}
-        />
-        <Select
-          value={priorityFilter}
-          onChange={(value) => setPriorityFilter(toText(value) || 'all')}
-          style={{ width: 180 }}
-          options={[
-            { value: 'all', label: 'Все приоритеты' },
-            ...PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: priority })),
-          ]}
-        />
-        <Checkbox checked={onlySelected} onChange={(event) => setOnlySelected(event.target.checked)}>
-          Только выбранные
-        </Checkbox>
-        <Typography.Text type="secondary">Видимых: {filteredRows.length}</Typography.Text>
-        {visibleSelectedCount > 0 ? (
-          <Typography.Text type="secondary">из них выбрано: {visibleSelectedCount}</Typography.Text>
-        ) : null}
-      </div>
-
-      <Table<TaskRowView>
-        rowKey="row_id"
-        size="small"
-        tableLayout="fixed"
-        sticky
-        scroll={{ x: 1120 }}
-        pagination={{ pageSize: 50, showSizeChanger: true, pageSizeOptions: ['50', '100', '200'] }}
-        dataSource={filteredRows}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys.map(String)),
-          columnWidth: 44,
-        }}
-        expandable={{
-          rowExpandable: (record) =>
-            Boolean(
-              record.task_id_from_ai ||
-              record.dependencies_from_ai.length > 0 ||
-              record.priority_reason ||
-              record.dialogue_reference
-            ),
-          expandedRowRender: (record) => (
-            <div className="flex flex-col gap-2 py-1">
-              {record.task_id_from_ai ? (
-                <Typography.Text type="secondary">
-                  AI task id: <Typography.Text code>{record.task_id_from_ai}</Typography.Text>
-                </Typography.Text>
-              ) : null}
-              {record.priority_reason ? (
-                <Typography.Text type="secondary">
-                  Причина приоритета: {record.priority_reason}
-                </Typography.Text>
-              ) : null}
-              {record.dependencies_from_ai.length > 0 ? (
-                <div>
-                    <Typography.Text type="secondary">Зависимости:</Typography.Text>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {record.dependencies_from_ai.map((dependency) => (
-                      <Tag key={`${record.row_id}-${dependency}`}>{dependency}</Tag>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {record.dialogue_reference ? (
-                <Typography.Text type="secondary">Источник: {record.dialogue_reference}</Typography.Text>
-              ) : null}
-            </div>
-          ),
-        }}
-        columns={[
-          {
-            title: 'Название задачи',
-            dataIndex: 'name',
-            width: 320,
-            render: (_value, record) => (
-              <div className="flex flex-col gap-1">
-                {rowCreationErrors[record.row_id]?.project_id ? (
-                  <Typography.Text type="danger">{rowCreationErrors[record.row_id]?.project_id}</Typography.Text>
-                ) : null}
-                {rowCreationErrors[record.row_id]?.general ? (
-                  <Typography.Text type="danger">{rowCreationErrors[record.row_id]?.general}</Typography.Text>
-                ) : null}
-                <Input
-                  status={record.__missing.includes('name') ? 'error' : ''}
-                  value={record.name}
-                  onChange={(event) => setDraftValue(record.row_id, 'name', event.target.value)}
-                />
-              </div>
-            ),
-          },
-          {
-            title: 'Описание',
-            dataIndex: 'description',
-            render: (_value, record) => (
-              <div className="flex flex-col gap-1">
-                <Input.TextArea
-                  status={record.__missing.includes('description') ? 'error' : ''}
-                  autoSize={{ minRows: 1, maxRows: 5 }}
-                  value={record.description}
-                  onChange={(event) => setDraftValue(record.row_id, 'description', event.target.value)}
-                />
-              </div>
-            ),
-          },
-          {
-            title: 'Обс.',
-            dataIndex: 'discussion_count',
-            width: 92,
-            align: 'center',
-            render: (_value, record) => (
-              <Tag color={record.discussion_count > 1 ? 'processing' : 'default'}>
-                {record.discussion_count || 1}
-              </Tag>
-            ),
-          },
-          {
-            title: 'Приоритет',
-            dataIndex: 'priority',
-            width: 112,
-            render: (_value, record) => (
-              <Select
-                status={record.__missing.includes('priority') ? 'error' : ''}
-                value={record.priority || undefined}
-                onChange={(value) => setDraftValue(record.row_id, 'priority', toText(value))}
-                options={PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: priority }))}
-                style={{ width: '100%' }}
-              />
-            ),
-          },
-          {
-            title: 'Исполнитель',
-            dataIndex: 'performer_id',
-            width: 220,
-            render: (_value, record) => {
-              const performerErrorText = rowCreationErrors[record.row_id]?.performer_id || '';
-              return (
-                <div className="flex flex-col gap-1">
-                  <Select
-                    status={record.__missing.includes('performer_id') || Boolean(performerErrorText) ? 'error' : ''}
-                    allowClear
-                    value={record.performer_id || undefined}
-                    onChange={(value) => setDraftValue(record.row_id, 'performer_id', toText(value))}
-                    options={performerOptions}
-                    showSearch
-                    optionFilterProp="label"
-                    listHeight={performerPickerListHeight}
-                    style={{ width: '100%' }}
-                    placeholder="Исполнитель"
-                  />
-                  {!record.__missing.includes('performer_id') && performerErrorText ? (
-                    <Typography.Text type="danger">{performerErrorText}</Typography.Text>
-                  ) : null}
-                </div>
-              );
-            },
-          },
-          {
-            title: '',
-            key: 'actions',
-            width: 44,
-            render: (_value, record) => (
-              <Popconfirm
-                title="Удалить задачу?"
-                description="Это действие нельзя отменить"
-                onConfirm={() => void handleDeleteTask(record.row_id)}
-                okText="Удалить"
-                cancelText="Отмена"
-                okButtonProps={{ danger: true }}
+    <div className="grid gap-4 lg:grid-cols-[minmax(560px,1.6fr)_minmax(320px,1fr)] xl:grid-cols-[minmax(720px,1.8fr)_minmax(360px,1fr)]">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex max-h-[70vh] flex-col gap-2 overflow-y-auto pr-1">
+          {rowsWithMeta.map((row) => {
+            const isActive = row.row_id === activeRow?.row_id;
+            return (
+              <button
+                key={row.row_id}
+                type="button"
+                className={`w-full rounded-lg border p-3 text-left transition ${
+                  isActive
+                    ? 'border-blue-500 bg-blue-50 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+                onClick={() => setActiveRowId(row.row_id)}
               >
-                <Button
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  loading={deletingTaskId === record.row_id}
-                  size="small"
+                <div className="mb-1 flex items-start justify-between gap-2">
+                  <Text strong className="min-w-0 break-words">
+                    {row.name}
+                  </Text>
+                  {renderPriorityTag(row.priority, row.priority_reason, row.__isReady ? 'success' : 'warning')}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        {activeRow ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-start justify-end gap-3">
+              <Space size={8} wrap>
+                <Tooltip title="Сохранить">
+                  <Button
+                    type="primary"
+                    shape="circle"
+                    aria-label="Сохранить черновик"
+                    icon={<SaveOutlined />}
+                    loading={saveInProgressRowId === activeRow.row_id}
+                    onClick={() => void handleSaveRow(activeRow)}
+                  />
+                </Tooltip>
+                <Tooltip title="Клонировать">
+                  <Button
+                    shape="circle"
+                    aria-label="Клонировать черновик"
+                    icon={<CopyOutlined />}
+                    loading={cloneInProgressRowId === activeRow.row_id}
+                    onClick={() => void handleCloneTask(activeRow)}
+                  />
+                </Tooltip>
+                <Popconfirm
+                  title="Удалить черновик?"
+                  description="Это действие нельзя отменить."
+                  onConfirm={() => void handleDeleteTask(activeRow.row_id)}
+                  okText="Удалить"
+                  cancelText="Отмена"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Tooltip title="Удалить">
+                    <Button
+                      danger
+                      shape="circle"
+                      aria-label="Удалить черновик"
+                      icon={<DeleteOutlined />}
+                      loading={deleteInProgressRowId === activeRow.row_id}
+                    />
+                  </Tooltip>
+                </Popconfirm>
+              </Space>
+            </div>
+
+            <Text type="secondary">
+              {isAutosaving
+                ? 'Автосохранение...'
+                : Object.keys(drafts).length > 0
+                  ? 'Есть несохраненные изменения'
+                  : lastAutosavedAt
+                    ? `Черновик сохранен в ${new Date(lastAutosavedAt).toLocaleTimeString('ru-RU')}`
+                    : 'Изменения сохраняются автоматически при blur/debounce'}
+            </Text>
+
+            {rowCreationErrors[activeRow.row_id]?.project_id ? (
+              <Alert type="error" showIcon message={rowCreationErrors[activeRow.row_id]?.project_id} />
+            ) : null}
+            {rowCreationErrors[activeRow.row_id]?.general ? (
+              <Alert type="error" showIcon message={rowCreationErrors[activeRow.row_id]?.general} />
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Text strong>Название</Text>
+                <Input
+                  status={activeRow.__missing.includes('name') ? 'error' : ''}
+                  value={activeRow.name}
+                  onChange={(event) => setDraftValue(activeRow.row_id, 'name', event.target.value)}
+                  onBlur={() => void flushAutosave('blur')}
                 />
-              </Popconfirm>
-            ),
-          },
-        ]}
-      />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Text strong>Приоритет</Text>
+                <Tooltip title={toText(activeRow.priority_reason) || undefined}>
+                  <div>
+                    <Select
+                      status={activeRow.__missing.includes('priority') ? 'error' : ''}
+                      value={activeRow.priority || undefined}
+                      onChange={(value) => setDraftValue(activeRow.row_id, 'priority', toText(value))}
+                      onBlur={() => void flushAutosave('blur')}
+                      options={PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: priority }))}
+                    />
+                  </div>
+                </Tooltip>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Text strong>Проект</Text>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="Проект"
+                  status={
+                    activeRow.__missing.includes('project_id') || Boolean(rowCreationErrors[activeRow.row_id]?.project_id)
+                      ? 'error'
+                      : ''
+                  }
+                  value={activeRow.project_id || undefined}
+                  onChange={(value) => setDraftValue(activeRow.row_id, 'project_id', toText(value))}
+                  onBlur={() => void flushAutosave('blur')}
+                  options={projectOptions}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Text strong>Тип задачи</Text>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="Тип задачи"
+                  value={activeRow.task_type_id || undefined}
+                  onChange={(value) => setDraftValue(activeRow.row_id, 'task_type_id', toText(value))}
+                  onBlur={() => void flushAutosave('blur')}
+                  options={taskTypeOptions}
+                />
+              </div>
+
+              <div className="md:col-span-2 flex flex-col gap-1">
+                <Text strong>Исполнитель</Text>
+                <Select
+                  status={
+                    activeRow.__missing.includes('performer_id') ||
+                    Boolean(rowCreationErrors[activeRow.row_id]?.performer_id)
+                      ? 'error'
+                      : ''
+                  }
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  listHeight={performerPickerListHeight}
+                  placeholder="Исполнитель"
+                  value={activeRow.performer_id || undefined}
+                  onChange={(value) => setDraftValue(activeRow.row_id, 'performer_id', toText(value))}
+                  onBlur={() => void flushAutosave('blur')}
+                  options={performerOptions}
+                />
+                {rowCreationErrors[activeRow.row_id]?.performer_id ? (
+                  <Text type="danger">{rowCreationErrors[activeRow.row_id]?.performer_id}</Text>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Text strong>Описание (Markdown)</Text>
+              <Input.TextArea
+                status={activeRow.__missing.includes('description') ? 'error' : ''}
+                autoSize={{ minRows: 8, maxRows: 16 }}
+                value={activeRow.__descriptionDraft.markdown}
+                onChange={(event) =>
+                  setDescriptionDraftValue(activeRow.row_id, { markdown: event.target.value })
+                }
+                onBlur={() => void flushAutosave('blur')}
+                placeholder={
+                  '## description\n[описание]\n\n## object_locators\n[локаторы]\n\n## expected_results\n[ожидаемые результаты]\n\n## acceptance_criteria\n[критерии]\n\n## evidence_links\n[ссылки]\n\n## executor_routing_hints\n[подсказки маршрутизации]\n\n## open_questions\n[открытые вопросы]'
+                }
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Text strong>Question / Answer</Text>
+              <Input.TextArea
+                autoSize={{ minRows: 4, maxRows: 10 }}
+                value={activeRow.__descriptionDraft.qaChunk}
+                onChange={(event) =>
+                  setDescriptionDraftValue(activeRow.row_id, { qaChunk: event.target.value })
+                }
+                onBlur={() => void flushAutosave('blur')}
+                placeholder={'Question:\n[копия вопросов]\n\nAnswer:\n[ответы пользователя]'}
+              />
+            </div>
+          </div>
+        ) : (
+          <Empty description="Выберите черновик слева" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        )}
+      </div>
     </div>
   );
 }

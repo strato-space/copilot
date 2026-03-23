@@ -9,7 +9,7 @@
 #
 # If not specified, defaults to "codex".
 # Can be overriden with a command line switch --model=<model>, or within the Agent constructor.
-default_model: codexspark
+default_model: gpt-5.4
 # mcp-ui support: disabled, enabled or auto. "auto" opens the web browser on the asset automatically
 # mcp_ui_output_dir: ".fast-agent/ui"  # Where to write MCP-UI HTML files (relative to CWD if not absolute)
 # mcp_ui_mode: enabled
@@ -19,11 +19,17 @@ mcp_timeline:
   steps: 20 # number of timeline buckets to render
   step_seconds: 15 # seconds per bucket (accepts values like "45s", "2m")
 
-#shell_execution:
-# length of time before terminating subprocess
-#  timeout_seconds: 20
-# warning interval if no output seen
-#  warning_seconds: 5
+shell_execution:
+  # Bound shell runtime to short-lived non-interactive commands.
+  timeout_seconds: 45
+  warning_interval_seconds: 15
+  interactive_use_pty: false
+  # Keep shell output bounded to avoid oversized prompt injections/leaks.
+  output_display_lines: 8
+  output_byte_limit: 65536
+  show_bash: false
+  # Fail fast when an agent card points to a missing/invalid cwd.
+  missing_cwd_policy: error
 
 # Logging and Console Configuration:
 logger:

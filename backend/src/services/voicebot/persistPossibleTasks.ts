@@ -135,6 +135,210 @@ const buildProjectScopedPossibleTaskRuntimeQuery = ({
     ],
 });
 
+const buildProjectScopedPossibleTaskSemanticRuntimeQuery = ({
+  projectId,
+}: {
+  projectId: string;
+}): Record<string, unknown> =>
+  runtimeTaskQuery({
+    is_deleted: { $ne: true },
+    codex_task: { $ne: true },
+    task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
+    project_id: projectId,
+  });
+
+const normalizeSemanticText = (value: unknown): string =>
+  toTaskText(value)
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-z0-9а-я]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const SEMANTIC_STOP_WORDS = new Set<string>([
+  'и',
+  'или',
+  'в',
+  'во',
+  'на',
+  'по',
+  'под',
+  'над',
+  'из',
+  'для',
+  'к',
+  'ко',
+  'с',
+  'со',
+  'о',
+  'об',
+  'от',
+  'до',
+  'за',
+  'про',
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'for',
+  'to',
+  'of',
+  'in',
+  'on',
+  'with',
+]);
+
+const normalizeSemanticToken = (token: string): string => {
+  const normalized = token.trim();
+  if (normalized.length < 4) return normalized;
+  if (!/[а-я]/i.test(normalized)) return normalized;
+  if (normalized.length < 7) return normalized;
+  return normalized.replace(
+    /(ами|ями|ого|ему|ому|ыми|ими|ов|ев|ом|ем|ах|ях|ам|ям|ую|юю|ая|яя|ое|ее|ый|ий|ой|а|я|ы|и|у|ю|о|е)$/i,
+    ''
+  );
+};
+
+const tokenizeSemanticText = (value: unknown): string[] =>
+  normalizeSemanticText(value)
+    .split(' ')
+    .map((token) => normalizeSemanticToken(token))
+    .filter((token) => token.length >= 3 && !SEMANTIC_STOP_WORDS.has(token));
+
+const buildTaskSemanticSignature = (task: Record<string, unknown>): {
+  normalizedName: string;
+  normalizedComposite: string;
+  nameTokenSet: Set<string>;
+  tokenSet: Set<string>;
+} => {
+  const normalizedName = normalizeSemanticText(task.name);
+  const normalizedDescription = normalizeSemanticText(task.description);
+  const normalizedComposite = [normalizedName, normalizedDescription].filter(Boolean).join(' ').trim();
+  const nameTokenSet = new Set<string>(tokenizeSemanticText(task.name));
+  const tokenSet = new Set<string>([
+    ...nameTokenSet,
+    ...tokenizeSemanticText(task.description),
+  ]);
+
+  return {
+    normalizedName,
+    normalizedComposite,
+    nameTokenSet,
+    tokenSet,
+  };
+};
+
+const calculateTokenCoverage = ({
+  left,
+  right,
+}: {
+  left: Set<string>;
+  right: Set<string>;
+}): {
+  sharedTokens: number;
+  smallerCoverage: number;
+  largerCoverage: number;
+} => {
+  let sharedTokens = 0;
+  left.forEach((token) => {
+    if (right.has(token)) sharedTokens += 1;
+  });
+
+  const smallerSetSize = Math.min(left.size, right.size);
+  const largerSetSize = Math.max(left.size, right.size);
+  return {
+    sharedTokens,
+    smallerCoverage: sharedTokens / smallerSetSize,
+    largerCoverage: sharedTokens / largerSetSize,
+  };
+};
+
+const calculateSemanticReuseScore = ({
+  incoming,
+  candidate,
+}: {
+  incoming: {
+    normalizedName: string;
+    normalizedComposite: string;
+    nameTokenSet: Set<string>;
+    tokenSet: Set<string>;
+  };
+  candidate: {
+    normalizedName: string;
+    normalizedComposite: string;
+    nameTokenSet: Set<string>;
+    tokenSet: Set<string>;
+  };
+}): number => {
+  if (incoming.normalizedComposite && incoming.normalizedComposite === candidate.normalizedComposite) {
+    return 10_000;
+  }
+  if (incoming.normalizedName && incoming.normalizedName === candidate.normalizedName) {
+    return 9_000;
+  }
+
+  const incomingNameTokens = incoming.nameTokenSet;
+  const candidateNameTokens = candidate.nameTokenSet;
+  if (incomingNameTokens.size >= 4 && candidateNameTokens.size >= 4) {
+    const nameCoverage = calculateTokenCoverage({
+      left: incomingNameTokens,
+      right: candidateNameTokens,
+    });
+    if (
+      nameCoverage.sharedTokens >= 4 &&
+      nameCoverage.smallerCoverage >= 0.75 &&
+      nameCoverage.largerCoverage >= 0.65
+    ) {
+      return Math.round(8_000 + nameCoverage.sharedTokens * 100 + nameCoverage.smallerCoverage * 10 + nameCoverage.largerCoverage);
+    }
+  }
+
+  const incomingTokens = incoming.tokenSet;
+  const candidateTokens = candidate.tokenSet;
+  if (incomingTokens.size < 4 || candidateTokens.size < 4) return -1;
+  const coverage = calculateTokenCoverage({
+    left: incomingTokens,
+    right: candidateTokens,
+  });
+  if (
+    coverage.sharedTokens < 4 ||
+    coverage.smallerCoverage < 0.55 ||
+    coverage.largerCoverage < 0.4
+  ) return -1;
+
+  return Math.round(coverage.sharedTokens * 100 + coverage.smallerCoverage * 10 + coverage.largerCoverage);
+};
+
+const selectProjectScopedSemanticReuseDoc = ({
+  incomingTask,
+  projectId,
+  existingDocs,
+}: {
+  incomingTask: Record<string, unknown>;
+  projectId: string;
+  existingDocs: Array<Record<string, unknown>>;
+}): Record<string, unknown> | undefined => {
+  if (!projectId) return undefined;
+  const incomingSignature = buildTaskSemanticSignature(incomingTask);
+  let bestMatch: Record<string, unknown> | undefined;
+  let bestScore = -1;
+
+  for (const candidateDoc of existingDocs) {
+    if (toTaskText(candidateDoc.project_id) !== projectId) continue;
+    const candidateSignature = buildTaskSemanticSignature(candidateDoc);
+    const score = calculateSemanticReuseScore({
+      incoming: incomingSignature,
+      candidate: candidateSignature,
+    });
+    if (score <= bestScore) continue;
+    bestScore = score;
+    bestMatch = candidateDoc;
+  }
+
+  return bestScore >= 0 ? bestMatch : undefined;
+};
+
 const listPossibleTaskSaveMatchDocs = async ({
   db,
   sessionId,
@@ -162,8 +366,15 @@ const listPossibleTaskSaveMatchDocs = async ({
   );
   const projectDocs = projectCursor ? await projectCursor.toArray() : [];
 
+  const projectSemanticCursor = toSortedTaskCursor(
+    db.collection(COLLECTIONS.TASKS),
+    buildProjectScopedPossibleTaskSemanticRuntimeQuery({ projectId }),
+    { projection: POSSIBLE_TASK_MASTER_PROJECTION }
+  );
+  const projectSemanticDocs = projectSemanticCursor ? await projectSemanticCursor.toArray() : [];
+
   const mergedByKey = new Map<string, Record<string, unknown>>();
-  for (const doc of [...sessionDocs, ...projectDocs]) {
+  for (const doc of [...sessionDocs, ...projectDocs, ...projectSemanticDocs]) {
     const docKey =
       toIdString((doc as Record<string, unknown>)._id) ||
       collectVoicePossibleTaskLocatorKeys(doc)[0] ||
@@ -390,15 +601,35 @@ export const persistPossibleTasksForSession = async ({
   const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
 
   for (const [taskIndex, rawTask] of taskItems.entries()) {
-    const canonicalRowId = resolveVoicePossibleTaskRowId({ rawTask, index: taskIndex });
+    const incomingCanonicalRowId = resolveVoicePossibleTaskRowId({ rawTask, index: taskIndex });
     const candidateKeys = new Set<string>(collectVoicePossibleTaskLocatorKeys(rawTask));
-    if (canonicalRowId) candidateKeys.add(canonicalRowId);
+    if (incomingCanonicalRowId) candidateKeys.add(incomingCanonicalRowId);
 
     let existingDoc: Record<string, unknown> | undefined;
     for (const key of candidateKeys) {
       existingDoc = existingAliasMap.get(key);
       if (existingDoc) break;
     }
+    if (!existingDoc && defaultProjectId) {
+      existingDoc = selectProjectScopedSemanticReuseDoc({
+        incomingTask: rawTask,
+        projectId: defaultProjectId,
+        existingDocs,
+      });
+    }
+
+    const existingCanonicalRowId = existingDoc
+      ? resolveVoicePossibleTaskRowId({ rawTask: existingDoc, index: taskIndex })
+      : '';
+    const canonicalRowId = existingCanonicalRowId || incomingCanonicalRowId;
+    const persistedTaskForMasterDoc = existingDoc
+      ? {
+          ...rawTask,
+          row_id: existingCanonicalRowId || toTaskText(existingDoc.row_id) || toTaskText(existingDoc.id),
+          id: toTaskText(existingDoc.id) || existingCanonicalRowId || toTaskText(existingDoc.row_id),
+          name: toTaskText(existingDoc.name) || toTaskText(rawTask.name),
+        }
+      : rawTask;
 
     const existingSourceData =
       existingDoc?.source_data && typeof existingDoc.source_data === 'object'
@@ -431,7 +662,7 @@ export const persistPossibleTasksForSession = async ({
     const nextDoc = {
       _id: taskObjectId,
       ...buildVoicePossibleTaskMasterDoc({
-        rawTask,
+        rawTask: persistedTaskForMasterDoc,
         index: taskIndex,
         defaultProjectId: defaultProjectId || '',
         sessionId,

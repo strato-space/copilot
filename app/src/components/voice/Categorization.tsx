@@ -8,7 +8,6 @@ import PermissionGate from './PermissionGate';
 import { PERMISSIONS } from '../../constants/permissions';
 import CategorizationTableRow from './CategorizationTableRow';
 import CategorizationTableHeader from './CategorizationTableHeader';
-import CategorizationTableSummary from './CategorizationTableSummary';
 import { getCategorizationRowIdentity } from '../../utils/categorizationRowIdentity';
 import { buildCategorizationBlockMetadataSignature } from '../../utils/voiceMetadataSignature';
 
@@ -18,7 +17,7 @@ const voiceMessageSources = {
 } as const;
 
 export default function Categorization() {
-    const { voiceBotSession, voiceMesagesData, createTasksFromRows, saveSessionSummary } = useVoiceBotStore();
+    const { voiceBotSession, voiceMesagesData, createTasksFromRows } = useVoiceBotStore();
     const {
         selectedCategorizationRows,
         clearSelectedCategorizationRows,
@@ -212,12 +211,6 @@ export default function Categorization() {
                         })}
                     </tbody>
                 </table>
-                <CategorizationTableSummary
-                    sessionId={voiceBotSession?._id}
-                    summaryText={voiceBotSession?.summary_md_text || ''}
-                    summarySavedAt={voiceBotSession?.summary_saved_at}
-                    onSave={saveSessionSummary}
-                />
             </div>
         </>
     );

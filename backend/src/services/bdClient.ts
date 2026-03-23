@@ -24,6 +24,11 @@ type BdCreateIssueInput = {
   issueType?: 'bug' | 'feature' | 'task' | 'epic' | 'chore';
 };
 
+type BdAppendIssueNotesInput = {
+  issueId: string;
+  notes: string;
+};
+
 const normalizeTextValue = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (value == null) return '';
@@ -174,4 +179,43 @@ export const createBdIssue = async ({
   });
 
   return issueId;
+};
+
+export const appendBdIssueNotes = async ({
+  issueId,
+  notes,
+}: BdAppendIssueNotesInput): Promise<void> => {
+  const normalizedIssueId = normalizeTextValue(issueId);
+  const normalizedNotes = normalizeTextValue(notes);
+  if (!normalizedIssueId) {
+    throw new Error('bd_append_notes_missing_issue_id');
+  }
+  if (!normalizedNotes) {
+    return;
+  }
+
+  const command = resolveBdBin();
+  const args = ['--no-daemon', 'update', normalizedIssueId, '--append-notes', normalizedNotes, '--json'];
+  const result = await runCommand({
+    command,
+    args,
+    timeoutMs: DEFAULT_BD_TIMEOUT_MS,
+  });
+
+  if (result.timedOut) {
+    throw new Error('bd_append_notes_timeout');
+  }
+
+  if (result.code !== 0) {
+    const message =
+      normalizeTextValue(result.stderr) ||
+      normalizeTextValue(result.stdout) ||
+      `bd_append_notes_exit_code_${String(result.code)}`;
+    throw new Error(message);
+  }
+
+  logger.info('[bd.client] appended issue notes', {
+    issue_id: normalizedIssueId,
+    command,
+  });
 };

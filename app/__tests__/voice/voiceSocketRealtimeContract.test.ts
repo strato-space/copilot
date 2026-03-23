@@ -30,6 +30,7 @@ describe('Voice socket realtime contract', () => {
     expect(source).toContain('const refreshHint = data?.taskflow_refresh');
     expect(source).toContain('const shouldRefreshPossibleTasks = Boolean(refreshHint?.possible_tasks);');
     expect(source).toContain('const shouldRefreshSummary = Boolean(refreshHint?.summary);');
+    expect(source).toContain('const shouldRefreshReview = Boolean(refreshHint?.tasks || refreshHint?.possible_tasks);');
     expect(source).toContain('nextState.sessionTasksRefreshToken = state.sessionTasksRefreshToken + 1;');
     expect(source).toContain('nextState.sessionCodexRefreshToken = state.sessionCodexRefreshToken + 1;');
     expect(source).toContain("console.info('taskflow_refresh_received'");
@@ -37,9 +38,10 @@ describe('Voice socket realtime contract', () => {
     expect(source).toContain("console.info('possible_tasks_refreshed'");
     expect(source).toContain('correlation_id: correlationId');
     expect(source).toContain('e2e_from_click_ms: clickedAtMs !== null ? Date.now() - clickedAtMs : null');
+    expect(source).toContain('if (shouldRefreshSummary || shouldRefreshReview) {');
     expect(source).toContain('get().getSessionData(activeSessionId)');
     expect(source).toContain('Failed to refresh voice session possible tasks after realtime hint');
-    expect(source).toContain('Failed to refresh voice session summary after realtime hint');
+    expect(source).toContain('Failed to refresh voice session ${target} after realtime hint:');
   });
 
   it('uses additive refresh token increments so repeated taskflow hints stay concurrency-safe', () => {

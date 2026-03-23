@@ -19,12 +19,21 @@ describe('SessionPage OperOps tasks tab contract', () => {
     expect(source).toContain('refreshToken={sessionTasksRefreshToken}');
   });
 
-  it('keeps tasks tab before Screenshort and derives fixed lifecycle sub-tabs from target status keys', () => {
+  it('renders Саммари and Ревью between Categorization and Tasks and keeps lifecycle sub-tabs for Tasks', () => {
+    const idxCategorization = source.indexOf("key: '2'");
+    const idxSummary = source.indexOf("key: 'summary'");
+    const idxReview = source.indexOf("key: 'review'");
     const idxTasks = source.indexOf("key: 'operops_tasks'");
     const idxScreenshort = source.indexOf("key: 'screenshort'");
 
+    expect(idxCategorization).toBeGreaterThanOrEqual(0);
+    expect(idxSummary).toBeGreaterThan(idxCategorization);
+    expect(idxReview).toBeGreaterThan(idxSummary);
     expect(idxTasks).toBeGreaterThanOrEqual(0);
+    expect(idxTasks).toBeGreaterThan(idxReview);
     expect(idxScreenshort).toBeGreaterThan(idxTasks);
+    expect(source).toContain("label: renderTabLabel('Саммари', 0, { showCount: false })");
+    expect(source).toContain("label: renderTabLabel('Ревью', 0, { processing: hasTaskflowPending, showCount: false })");
     expect(source).toContain("const VOICE_SESSION_UNKNOWN_STATUS_KEY = 'UNKNOWN' as const;");
     expect(source).toContain('const VOICE_SESSION_TASK_SUBTAB_KEYS = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSION_UNKNOWN_STATUS_KEY] as const;');
     expect(source).toContain("const VOICE_SESSION_UNKNOWN_STATUS_LABEL = 'Unknown' as const;");
@@ -37,7 +46,6 @@ describe('SessionPage OperOps tasks tab contract', () => {
     expect(source).toContain('const sessionTasksTotalCount = useMemo(');
     expect(source).toContain('task_status: activeSessionTaskStatuses');
     expect(source).not.toContain("label: 'Work'");
-    expect(source).not.toContain("label: 'Review'");
   });
 
   it('falls back to the first lifecycle status tab when the selected status disappears', () => {

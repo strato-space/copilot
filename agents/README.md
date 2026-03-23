@@ -6,7 +6,6 @@ Fast-Agent based AI agents for intelligent dialogue processing.
 
 This directory contains the Fast-Agent configuration and AgentCards for Copilot's AI-powered features:
 - **create_tasks** - Extract actionable tasks from compact session envelopes
-- **generate_session_title** - Generate concise session titles from transcript segments
 
 ## Quick Start
 
@@ -58,7 +57,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 
 ## Runtime Notes
 
-- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `codexspark`.
+- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `gpt-5.4`.
 - `run_fast_agent.py` is the repo-local bootstrap entrypoint for runtime model registrations. It currently registers `gpt-5.4` as a large-window Codex model (`context_window=950000`) without patching site-packages directly.
 - Preferred `create_tasks` input is a compact structured envelope with modes `raw_text`, `session_id`, or `session_url`.
 - A plain string is still treated as legacy `raw_text` input for backward compatibility.
@@ -68,7 +67,11 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 - `create_tasks` treats current-session draft possible tasks as the editable baseline: same-scope rows should be returned with the same `row_id/id` and improved wording instead of being suppressed as duplicates.
 - `voice.fetch(..., mode="transcript")` is the canonical metadata source for session-backed task extraction and now carries a frontmatter block with `session-id`, `session-name`, `session-url`, `project-id`, `project-name`, and `routing-topic`.
 - If transcript metadata includes `project-id`, `create_tasks` must read exactly one project card through `voice.project(project_id)`; it should not rehydrate project context through `voice.search` or a full project list.
+- If `project_id` is present, `create_tasks` must run a read-only shell entrypoint-read pass inside allowed roots (`/home/strato-space/copilot`, `/home/strato-space/mediagen`) by reading `AGENTS.md` and `README.md` before task materialization; root-wide `ls/find/rg` inventory is not part of the contract.
+- For code/spec/project tasks, `task.description -> ## evidence_links` must include concrete local code/doc/file references discovered in that shell pass (absolute paths in allowed roots).
 - `create_tasks` still excludes finance noise, but must keep explicit finance-adjacent operational documents (`счёт`, `invoice`, `акт`, `смета`, `КП`, `договор`) when they are directly поручены как рабочий deliverable.
+- `create_tasks` should read the transcript frontmatter (`session-id`, `session-name`, `session-url`, `project-id`, `project-name`, `routing-topic`) before task generation and use `voice.crm_dictionary()` when available to infer `task_type_id`.
+- `create_tasks` returns a full desired Draft snapshot for the current session rather than a minimal delta and keeps same-scope Draft rows mutable by `row_id/id`.
 
 ### Production Deployment (PM2)
 
@@ -107,14 +110,11 @@ Agent cards are located in `agent-cards/` directory:
 - **Purpose:** Extract actionable tasks from compact session envelopes
 - **Input modes:** `raw_text`, `session_id`, `session_url` (plain string remains a legacy alias for `raw_text`)
 - **Enrichment:** direct MCP `voice` reads
-- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.project(project_id)` -> `voice.session_task_counts(...)` -> `voice.session_tasks(..., bucket="Draft")` -> `voice.crm_tickets(session_id)` -> `voice.crm_tickets(project_id, from_date, to_date)` when session/discussion timing is available; unbounded `voice.crm_tickets(project_id)` is fallback-only when timing cannot be resolved
-- **Output:** canonical JSON array with `id/name/description/priority/performer_id/project_id/task_type_id/dialogue_tag/task_id_from_ai/dependencies_from_ai/dialogue_reference`
+- **Session path:** `voice.fetch(..., mode="transcript")` -> `voice.project(project_id)` -> `voice.session_task_counts(...)` -> `voice.session_tasks(..., bucket="Draft")` -> `voice.crm_tickets(session_id)` -> `voice.crm_tickets(project_id, from_date, to_date)` with a bounded `14d` project window; unbounded `voice.crm_tickets(project_id)` is not part of the active contract
+- **Output:** canonical composite JSON with `scholastic_review_md`, `task_draft`, `enrich_ready_task_comments`, `session_name`, `project_id`
+- **Composite metadata:** `scholastic_review_md` is persisted as session `review_md_text`; `session_name` title signal is expected to be 5-12 words; `enrich_ready_task_comments` is written immediately to canonical comment/note surfaces with dedupe.
 - **Guardrails:** executor-ready descriptions, no finance/evaluative noise, no StratoProject execution hop, mutable same-scope draft rewrite in place
-
-### generate_session_title.md
-- **Model:** inherited from runtime/config
-- **Purpose:** Generate concise session titles (3-8 words)
-- **Output:** Single string with the title
+- **Project evidence contract:** with `project_id`, mandatory read-only shell entrypoint-read pass in allowed roots (`AGENTS.md` + `README.md`, then direct follow-up reads only) plus non-empty `## evidence_links` for code/spec/project tasks
 
 ## MCP Servers
 

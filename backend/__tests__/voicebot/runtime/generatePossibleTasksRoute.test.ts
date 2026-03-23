@@ -11,6 +11,7 @@ const getRawDbMock = jest.fn();
 const getUserPermissionsMock = jest.fn();
 const generateDataFilterMock = jest.fn();
 const runCreateTasksAgentMock = jest.fn();
+const runCreateTasksCompositeAgentMock = jest.fn();
 const persistPossibleTasksForSessionMock = jest.fn();
 const loggerInfoMock = jest.fn();
 const loggerErrorMock = jest.fn();
@@ -29,6 +30,7 @@ jest.unstable_mockModule('../../../src/permissions/permission-manager.js', () =>
 
 jest.unstable_mockModule('../../../src/services/voicebot/createTasksAgent.js', () => ({
   runCreateTasksAgent: runCreateTasksAgentMock,
+  runCreateTasksCompositeAgent: runCreateTasksCompositeAgentMock,
 }));
 
 jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js', async () => {
@@ -51,6 +53,7 @@ const { default: sessionsRouter } = await import('../../../src/api/routes/voiceb
 
 type StubCollection = {
   findOne?: jest.Mock;
+  updateOne?: jest.Mock;
 };
 
 const extractQueryObjectId = (query: unknown): ObjectId | null => {
@@ -87,6 +90,7 @@ const buildFixture = () => {
       }
       return null;
     }),
+    updateOne: jest.fn(async () => ({ acknowledged: true, matchedCount: 1, modifiedCount: 1 })),
   };
 
   const defaultCollection: StubCollection = {
@@ -131,12 +135,21 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     getUserPermissionsMock.mockReset();
     generateDataFilterMock.mockReset();
     runCreateTasksAgentMock.mockReset();
+    runCreateTasksCompositeAgentMock.mockReset();
     persistPossibleTasksForSessionMock.mockReset();
     loggerInfoMock.mockReset();
     loggerErrorMock.mockReset();
 
     getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
     generateDataFilterMock.mockResolvedValue({});
+    runCreateTasksCompositeAgentMock.mockResolvedValue({
+      summary_md_text: '',
+      scholastic_review_md: '',
+      task_draft: [],
+      enrich_ready_task_comments: [],
+      session_name: '',
+      project_id: '',
+    });
   });
 
   it('routes session Tasks generation through backend runCreateTasksAgent and persists canonical items', async () => {
@@ -144,9 +157,22 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     getDbMock.mockReturnValue(fixture.dbStub);
     getRawDbMock.mockReturnValue(fixture.dbStub);
 
-    runCreateTasksAgentMock.mockResolvedValue([
+    const generatedTasks = [
       { id: 'T1', row_id: 'row-1', name: 'Task 1', priority: 'P2' },
-    ]);
+    ] as Array<Record<string, unknown>>;
+    Object.defineProperty(generatedTasks, '__create_tasks_composite_meta', {
+      value: {
+        summary_md_text: 'Короткое саммари по диалогу.',
+        scholastic_review_md: 'Review markdown',
+        task_draft: [],
+        enrich_ready_task_comments: [],
+        session_name: 'Morning Session about bounded task planning',
+        project_id: fixture.projectId.toHexString(),
+      },
+      enumerable: false,
+      configurable: true,
+    });
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
     persistPossibleTasksForSessionMock.mockResolvedValue({
       items: [{ id: 'T1', row_id: 'row-1', name: 'Task 1', priority: 'P2' }],
     });
@@ -161,6 +187,11 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     expect(response.body.generated_count).toBe(1);
     expect(response.body.saved_count).toBe(1);
     expect(Array.isArray(response.body.items)).toBe(true);
+    expect(response.body.summary_md_text).toBe('Короткое саммари по диалогу.');
+    expect(response.body.review_md_text).toBe('Review markdown');
+    expect(response.body.summary_saved).toBe(true);
+    expect(response.body.review_saved).toBe(true);
+    expect(response.body.title_updated).toBe(true);
 
     expect(runCreateTasksAgentMock).toHaveBeenCalledWith({
       sessionId: fixture.sessionId.toString(),
@@ -175,6 +206,19 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         defaultProjectId: fixture.projectId.toHexString(),
         refreshMode: 'full_recompute',
       })
+    );
+    const sessionsCollection = fixture.dbStub.collection(VOICEBOT_COLLECTIONS.SESSIONS) as StubCollection;
+    expect(sessionsCollection.updateOne).toHaveBeenCalledWith(
+      { _id: fixture.sessionId },
+      {
+        $set: expect.objectContaining({
+          summary_md_text: 'Короткое саммари по диалогу.',
+          summary_saved_at: expect.any(String),
+          review_md_text: 'Review markdown',
+          session_name: 'Morning Session about bounded task planning',
+          updated_at: expect.any(Date),
+        }),
+      }
     );
   });
 

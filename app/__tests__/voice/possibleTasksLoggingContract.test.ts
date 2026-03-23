@@ -7,12 +7,13 @@ describe('PossibleTasks logging contract', () => {
   const componentSource = fs.readFileSync(componentPath, 'utf8');
   const storeSource = fs.readFileSync(storePath, 'utf8');
 
-  it('logs actionable submit-path events in the PossibleTasks component', () => {
-    expect(componentSource).toContain("[voice.possible_tasks] create_selected.aborted");
-    expect(componentSource).toContain("[voice.possible_tasks] create_selected.submit");
-    expect(componentSource).toContain("[voice.possible_tasks] create_selected.result");
-    expect(componentSource).toContain("[voice.possible_tasks] create_selected.validation_failed");
-    expect(componentSource).toContain("[voice.possible_tasks] create_selected.failed");
+  it('logs actionable autosave and single-row save events in the PossibleTasks component', () => {
+    expect(componentSource).toContain("[voice.possible_tasks] autosave.ok");
+    expect(componentSource).toContain("[voice.possible_tasks] autosave.failed");
+    expect(componentSource).toContain("[voice.possible_tasks] save.submit");
+    expect(componentSource).toContain("[voice.possible_tasks] save.result");
+    expect(componentSource).toContain("[voice.possible_tasks] save.failed");
+    expect(componentSource).toContain("[voice.possible_tasks] clone.failed");
   });
 
   it('logs request/response summaries around process_possible_tasks in the store', () => {

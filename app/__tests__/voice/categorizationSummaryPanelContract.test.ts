@@ -1,29 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-describe('Categorization summary panel contract', () => {
+describe('Voice summary tab contract', () => {
     const categorizationPath = path.resolve(process.cwd(), 'src/components/voice/Categorization.tsx');
-    const summaryPanelPath = path.resolve(process.cwd(), 'src/components/voice/CategorizationTableSummary.tsx');
+    const sessionPagePath = path.resolve(process.cwd(), 'src/pages/voice/SessionPage.tsx');
     const categorizationSource = fs.readFileSync(categorizationPath, 'utf8');
-    const summaryPanelSource = fs.readFileSync(summaryPanelPath, 'utf8');
+    const sessionPageSource = fs.readFileSync(sessionPagePath, 'utf8');
 
-    it('renders Summary panel after categorization table and binds canonical session summary fields', () => {
+    it('removes summary panel from Categorization table surface', () => {
         expect(categorizationSource).toContain('<table className="w-full border-collapse bg-white shadow-sm">');
-        expect(categorizationSource).toContain('<CategorizationTableSummary');
-        expect(categorizationSource).toContain('summaryText={voiceBotSession?.summary_md_text || \'\'}');
-        expect(categorizationSource).toContain('summarySavedAt={voiceBotSession?.summary_saved_at}');
-        expect(categorizationSource).toContain('onSave={saveSessionSummary}');
+        expect(categorizationSource).not.toContain('CategorizationTableSummary');
+        expect(categorizationSource).not.toContain('saveSessionSummary');
     });
 
-    it('supports markdown edit/save with loading/saved/error/conflict states and optimistic lock guard', () => {
-        expect(summaryPanelSource).toContain("type SummarySaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';");
-        expect(summaryPanelSource).toContain('const hasConcurrentSummaryUpdate = canonicalText !== baseText || canonicalSavedAt !== baseSavedAt;');
-        expect(summaryPanelSource).toContain('if (hasConcurrentSummaryUpdate && draftText !== canonicalText)');
-        expect(summaryPanelSource).toContain('session_id: sessionId');
-        expect(summaryPanelSource).toContain('md_text: draftText');
-        expect(summaryPanelSource).toContain("loading={saveState === 'saving'}");
-        expect(summaryPanelSource).toContain('setSaveState(\'saved\');');
-        expect(summaryPanelSource).toContain('setSaveState(\'error\');');
-        expect(summaryPanelSource).toContain('setSaveState(\'conflict\');');
+    it('renders a dedicated read-only Саммари tab from canonical session summary_md_text', () => {
+        expect(sessionPageSource).toContain("key: 'summary'");
+        expect(sessionPageSource).toContain("label: renderTabLabel('Саммари', 0, { showCount: false })");
+        expect(sessionPageSource).toContain('const summaryMdText = useMemo(() => toTrimmedText(voiceBotSession?.summary_md_text), [voiceBotSession]);');
+        expect(sessionPageSource).toContain('<ReactMarkdown remarkPlugins={[remarkGfm]}>{summaryMdText}</ReactMarkdown>');
+        expect(sessionPageSource).toContain('description="Саммари еще не сформировано"');
     });
 });

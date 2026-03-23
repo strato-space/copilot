@@ -4,6 +4,7 @@ import type { TableColumnType } from 'antd';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { FileExcelOutlined, SyncOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import _ from 'lodash';
 
 import { CRMKanban, CRMCreateTicket, CRMCreateEpic } from '../../components/crm';
@@ -263,11 +264,15 @@ interface CRMPageUiState {
 }
 
 const CRMPage = () => {
-    const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew } = useCRMStore();
-    const { projects, projectsData, performers, fetchDictionary, tickets_updated_at, ticketsLoading } = useKanbanStore();
+    const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew, setEditingTicket } = useCRMStore();
+    const { projects, projectsData, performers, fetchDictionary, tickets_updated_at, ticketsLoading, fetchTicketById } = useKanbanStore();
     const { customers, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
     const { sendMCPCall, waitForCompletion, waitForConnected, connectionState } = useMCPRequestStore();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { taskId: routeTaskId } = useParams<{ taskId?: string }>();
+    const isRouteEditMode = Boolean(routeTaskId);
 
     // Socket.IO for real-time CRM updates
     useCRMSocket();
@@ -291,6 +296,7 @@ const CRMPage = () => {
     const [reportResult, setReportResult] = useState<ReportResult | null>(null);
     const [kanbanRefreshToken, setKanbanRefreshToken] = useState<number>(0);
     const [draftHorizonDays, setDraftHorizonDays] = useState<DraftHorizonValue>(DEFAULT_DRAFT_HORIZON_DAYS);
+    const [routeEditHydrated, setRouteEditHydrated] = useState<boolean>(false);
     const resolvedDraftHorizonDays = draftHorizonDays === 'infinity' ? undefined : draftHorizonDays;
     const [jiraForm] = Form.useForm();
     const [performerForm] = Form.useForm();
@@ -314,6 +320,70 @@ const CRMPage = () => {
         startedAt: number;
         waitForData: boolean;
     } | null>(null);
+
+    useEffect(() => {
+        if (!isRouteEditMode) {
+            setRouteEditHydrated(false);
+            return;
+        }
+
+        if (!isAuth || !routeTaskId) {
+            return;
+        }
+
+        let canceled = false;
+        setRouteEditHydrated(false);
+
+        void fetchTicketById(routeTaskId)
+            .then((ticket) => {
+                if (canceled) return;
+                if (!ticket) {
+                    setEditingTicket(null);
+                    setRouteEditHydrated(true);
+                    navigate('/operops/crm', { replace: true });
+                    return;
+                }
+                setEditingTicket(ticket);
+                setRouteEditHydrated(true);
+            })
+            .catch((error) => {
+                if (canceled) return;
+                console.error('Failed to load CRM edit ticket from route:', error);
+                setEditingTicket(null);
+                setRouteEditHydrated(true);
+                navigate('/operops/crm', { replace: true });
+            });
+
+        return () => {
+            canceled = true;
+        };
+    }, [isRouteEditMode, isAuth, routeTaskId, fetchTicketById, navigate, setEditingTicket]);
+
+    useEffect(() => {
+        if (isRouteEditMode || editingTicket == null) {
+            return;
+        }
+
+        const editingTicketId = coerceString(editingTicket._id) ?? coerceString(editingTicket.id);
+        if (!editingTicketId) {
+            return;
+        }
+
+        const targetPath = `/operops/crm/task/${encodeURIComponent(editingTicketId)}/edit`;
+        if (location.pathname !== targetPath) {
+            navigate(targetPath, { replace: true });
+        }
+    }, [isRouteEditMode, editingTicket, location.pathname, navigate]);
+
+    useEffect(() => {
+        if (!isRouteEditMode || !routeEditHydrated) {
+            return;
+        }
+
+        if (editingTicket == null) {
+            navigate('/operops/crm', { replace: true });
+        }
+    }, [isRouteEditMode, routeEditHydrated, editingTicket, navigate]);
 
     useEffect(() => {
         if (!isAuth) {

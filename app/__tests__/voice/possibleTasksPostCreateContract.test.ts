@@ -14,9 +14,9 @@ describe('PossibleTasks post-create contract', () => {
     expect(storeSource.includes('voiceBotSession: removePossibleTasksFromSession')).toBe(false);
   });
 
-  it('keeps only failed rows selected after partial validation errors', () => {
-    expect(componentSource.includes('const failedTaskIds = new Set(Object.keys(rowErrorsByTaskId))')).toBe(true);
-    expect(componentSource.includes('prev.filter((id) => failedTaskIds.has(id))')).toBe(true);
+  it('materializes a single active draft row through performer routing Save action', () => {
+    expect(componentSource.includes('routing: toText(row.performer_id) === CODEX_PERFORMER_ID ? \'codex\' : \'human\'')).toBe(true);
+    expect(componentSource.includes('await confirmSelectedTickets([row.row_id], [payload]);')).toBe(true);
+    expect(componentSource.includes('aria-label="Сохранить черновик"')).toBe(true);
   });
-
 });

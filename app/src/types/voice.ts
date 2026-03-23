@@ -43,6 +43,7 @@ export interface VoiceBotSession {
     } | null;
     summary_md_text?: string;
     summary_saved_at?: string;
+    review_md_text?: string;
     taskflow_refresh?: VoiceSessionTaskflowRefreshHint | null;
 }
 
@@ -82,6 +83,33 @@ export interface VoicePossibleTask {
         created_at?: string;
         role?: string;
     }>;
+}
+
+export type VoiceTaskEnrichmentSectionKey =
+    | 'description'
+    | 'object_locators'
+    | 'expected_results'
+    | 'acceptance_criteria'
+    | 'evidence_links'
+    | 'executor_routing_hints'
+    | 'open_questions';
+
+export type VoiceTaskEnrichmentSections = Record<VoiceTaskEnrichmentSectionKey, string>;
+
+export interface VoiceTaskEnrichmentEntry {
+    key: VoiceTaskEnrichmentSectionKey;
+    label: VoiceTaskEnrichmentSectionKey;
+    value: string;
+    isFilled: boolean;
+}
+
+export interface VoiceTaskEnrichmentParseResult {
+    synopsis: string;
+    sections: VoiceTaskEnrichmentSections;
+    entries: VoiceTaskEnrichmentEntry[];
+    filledCount: number;
+    totalCount: number;
+    missingKeys: VoiceTaskEnrichmentSectionKey[];
 }
 
 export interface VoiceBotMessage {
@@ -244,7 +272,18 @@ export interface VoiceSessionLogEvent {
 
 export interface TaskTypeNode {
     _id?: string;
+    key?: string;
+    id?: string | { $oid?: string } | null;
     name?: string;
+    title?: string;
+    long_name?: string;
+    path?: string;
+    task_id?: string;
+    parent?: {
+        _id?: string;
+        title?: string;
+        name?: string;
+    } | null;
     children?: TaskTypeNode[];
 }
 

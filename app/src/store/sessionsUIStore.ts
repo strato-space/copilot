@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { message } from 'antd';
 import type { TicketsModalData, VoiceBotMessage, VoiceMessageRow } from '../types/voice';
 import { getCategorizationRowIdentity } from '../utils/categorizationRowIdentity';
+import { parseCreateTasksCompositeMcpResult } from '../utils/voicePossibleTasks';
 
 const withClientTimeout = async <T>(promise: Promise<T>, timeoutMs: number, timeoutLabel: string): Promise<T> => {
     return await Promise.race([
@@ -133,7 +134,10 @@ interface TicketsModalEditActionsSlice {
         sessionId: string,
         getSessionData: (
             sessionId: string
-        ) => Promise<{ session_messages?: Array<Record<string, unknown>> | VoiceBotMessage[] }>,
+        ) => Promise<{
+            session_messages?: Array<Record<string, unknown>> | VoiceBotMessage[];
+            voice_bot_session?: { project_id?: unknown } | null;
+        }>,
         updateSessionName: (sessionId: string, name: string) => Promise<void>,
         sendMCPCall: (mcpServer: string, tool: string, args: unknown, stream?: boolean) => string,
         waitForCompletion: (requestId: string, timeoutMs?: number) => Promise<{ status: string; result?: unknown } | null>,
@@ -631,20 +635,6 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
             );
             const sessionMessages = sessionData?.session_messages || [];
             trace('session_data:done', { message_count: sessionMessages.length });
-            const messageText = (sessionMessages as VoiceBotMessage[])
-                .map((msg) => {
-                    if (!msg || typeof msg !== 'object') return '';
-                    const transcription = typeof msg.transcription_text === 'string' ? msg.transcription_text.trim() : '';
-                    if (transcription) return transcription;
-                    const categ = Array.isArray(msg.categorization) ? msg.categorization : [];
-                    if (categ.length === 0) return '';
-                    const chunks = categ
-                        .map((chunk) => (typeof chunk.text === 'string' ? chunk.text.trim() : ''))
-                        .filter(Boolean);
-                    return chunks.join(' ');
-                })
-                .filter(Boolean)
-                .join('\n');
             const hasCategorizationData = sessionMessages.some((msg) => {
                 if (!msg || typeof msg !== 'object') return false;
                 if ('categorization' in msg) {
@@ -659,9 +649,20 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
                 return;
             }
 
-            trace('mcp_call:send', { mcp_server: agentsMcpServerUrl });
-            const requestId = sendMCPCall(agentsMcpServerUrl, 'generate_session_title', {
-                message: messageText,
+            const projectId =
+                sessionData?.voice_bot_session && typeof sessionData.voice_bot_session === 'object'
+                    ? String((sessionData.voice_bot_session as Record<string, unknown>).project_id || '').trim()
+                    : '';
+            const envelope = {
+                mode: 'session_id',
+                session_id: sessionId,
+                session_url: `https://copilot.stratospace.fun/voice/session/${encodeURIComponent(sessionId)}`,
+                project_id: projectId,
+            };
+
+            trace('mcp_call:send', { mcp_server: agentsMcpServerUrl, tool: 'create_tasks' });
+            const requestId = sendMCPCall(agentsMcpServerUrl, 'create_tasks', {
+                message: JSON.stringify(envelope),
                 session_id: sessionId,
             });
             trace('mcp_call:sent', { request_id: requestId });
@@ -678,8 +679,8 @@ export const useSessionsUIStore = create<SessionsUIState>((set, get) => ({
                 return;
             }
 
-            const finalResult = result.result as { title?: string; content?: Array<{ text?: string }> } | undefined;
-            const title = (finalResult?.title || finalResult?.content?.[0]?.text || '').trim();
+            const composite = parseCreateTasksCompositeMcpResult(result.result);
+            const title = composite.session_name.trim();
             if (!title) {
                 message.error('Пустой результат генерации');
                 return;

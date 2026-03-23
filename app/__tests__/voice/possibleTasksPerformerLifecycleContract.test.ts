@@ -13,7 +13,8 @@ describe('PossibleTasks performer lifecycle contract', () => {
 
   it('keeps historical performer assignments visible while hiding inactive/deleted in selector', () => {
     expect(source).toContain('if (!isPerformerSelectable(performer) && !historicalPerformerIdSet.has(value)) continue;');
-    expect(source).toContain("const label = !isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)");
+    expect(source).toContain('!isPerformerSelectable(performer) && historicalPerformerIdSet.has(value)');
+    expect(source).toContain('? `${baseLabel} (архив)`');
     expect(source).toContain("result.push({ value: performerId, label: performerId });");
   });
 });

@@ -195,7 +195,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - dry run (streaming JSONL): `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:dry -- --inactive-minutes=10 --jsonl`
   - apply: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:close-idle:apply -- --inactive-minutes=10`
   - `--inactive-hours` remains accepted as an operational override, but the canonical operator surface is minutes-first with default `10`.
-  - activity window uses latest session update/message/session-log timestamps; idle sessions are closed through canonical `DONE_MULTIPROMPT` orchestration and auto-generate a missing title through `generate_session_title` before completion.
+  - activity window uses latest session update/message/session-log timestamps; idle sessions are closed through canonical `DONE_MULTIPROMPT` orchestration and auto-generate a missing title through composite `create_tasks.session_name` before completion.
 - Production voice workers also schedule `CLOSE_INACTIVE_SESSIONS` automatically; tune with `VOICEBOT_CLOSE_INACTIVE_SESSIONS_{ENABLED,INTERVAL_MS,TIMEOUT_MINUTES,BATCH_LIMIT}`.
 - Summarize MCP dependency watchdog is available for `session_ready_to_summarize` prerequisites:
   - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:summarize-mcp-watchdog:dry`
@@ -246,10 +246,10 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Session summary now has a canonical persistence path:
   - backend route `POST /api/voicebot/save_summary` validates `{ session_id, md_text }` and writes `summary_md_text` + `summary_saved_at`,
   - backend emits realtime `session_update.taskflow_refresh.summary`,
-  - frontend summary panel (`Summary`) supports edit/save/conflict states bound to those canonical fields.
+  - frontend exposes `Саммари` as a top-level read/edit tab bound to those canonical fields instead of rendering a second summary panel under `Категоризация`.
 - Session-title generation is fail-fast and traceable:
-  - frontend `generate_session_title` uses stage-level timeouts and `finally` cleanup so `Генерирую заголовок` cannot spin forever,
-  - backend MCP proxy logs `generate_session_title` correlations with `requestId` + `session_id` for incident triage.
+  - frontend title generation uses stage-level timeouts and `finally` cleanup so `Генерирую заголовок` cannot spin forever,
+  - backend composite analyzer path logs `session_name` generation correlations with `requestId` + `session_id` for incident triage.
 - Done-flow summarize orchestration now propagates `summary_correlation_id` and writes summary audit events (`summary_telegram_send`, `summary_save`) with idempotency keys to session log.
 - TS categorization/create-tasks chain treats non-text placeholders (`image`, `[Image]`, `[Screenshot]`) as non-blocking: rows are marked processed with empty categorization, and `CREATE_TASKS` can finalize without waiting on uncategorizable chunks.
 - Session toolbar and FAB keep unified control order `New / Rec / Cut / Pause / Done`; `Rec` activates page session before routing to FAB control, while status badge follows runtime states (`recording`, `paused`, `finalizing`, `error`, `closed`, `ready`).
@@ -330,19 +330,18 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - for session-local reads the horizon is evaluated against the task's linked discussion window in both directions around the current session
 - Current create_tasks overflow / payload investigation notebook lives in `docs/CREATE_TASKS_CONTEXT_OVERFLOW_PROFILING_2026-03-21.md`; temporary voice investigation artifacts were moved out of `plan/` into `tmp/voice-investigation-artifacts/`.
 - Runtime key drift baseline for OpenAI-backed services is tracked in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (live PM2 `OPENAI_API_KEY` mask, `backend/.env.production` value, and agents Codex OAuth account/model mode).
-- Auth sync and model sync are now coupled:
+- Auth sync and model sync are canonical:
   - source of truth: `/root/.codex/auth.json`
   - runtime copy: `agents/.codex/auth.json`
-  - if `tokens.account_id` is one of `d72d46e8-41f3-47c1-ba22-98c52b3f6448` or `4e0cfe6a-0bb7-4b6b-86c3-74a477572e49`, set `default_model: codexspark`
-  - otherwise set `default_model: codexplan`
-- Reserved scaffold for company-creation card lives in `agents/agent-cards/CompanyCreator.md`; keep workflow prompt contract updates in that file when the card is enabled.
+  - runtime `default_model` is pinned to `gpt-5.4`
+  - auth recovery may restart agents and restore the same `gpt-5.4` default after sync
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
-- Backend `runCreateTasksAgent(...)` derives a bounded `project_crm_window` from message/session timing when project-wide CRM enrichment is available; project CRM reads should use that bounded window first and fall back to unbounded reads only when timing cannot be resolved.
-- `generate_session_title` and `generate_session_title_send` accept plain transcript text as the canonical runtime contract; legacy enriched segment arrays remain backward-compatible input.
+- Backend `runCreateTasksAgent(...)` derives a bounded `project_crm_window` from message/session timing and keeps project-wide CRM reads bounded; unbounded project CRM is not part of the active contract.
+- Composite `create_tasks` output is the canonical session-naming path; standalone title agent cards are no longer part of the active runtime contract.
 - Frontend trigger points:
-  - AI title button in `/voice/session/:id` calls MCP tool `generate_session_title`.
+  - AI title button in `/voice/session/:id` calls MCP tool `create_tasks` and consumes `session_name` from the composite output.
   - CRM "restart create_tasks" flow calls MCP tool `create_tasks`.
   - Session-page `Tasks` button in `/voice/session/:id` now calls backend `POST /api/voicebot/generate_possible_tasks`, which delegates to backend `runCreateTasksAgent(...)`, persists canonical draft rows, and inherits server-side quota recovery before returning refreshed items.
   - successful transcript completion in TS worker runtime auto-enqueues `CREATE_TASKS`, persists refreshed `DRAFT_10` master rows into `automation_tasks`, and only then emits `session_update.taskflow_refresh.possible_tasks` to all open viewers of the session.
@@ -355,8 +354,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - browser opens Socket.IO to backend (`/socket.io`),
   - frontend emits `mcp_call`,
   - backend MCP proxy (`backend/src/services/mcp/*`) calls Fast-Agent MCP endpoint.
-- Required tool names in agent cards:
-  - `generate_session_title` (`agents/agent-cards/generate_session_title.md`)
+- Required tool name in active agent cards:
   - `create_tasks` (`agents/agent-cards/create_tasks.md`)
 - Historical web-upload audio recovery note: when old `source_type=web` voice messages still point to missing relative `uploads/audio/sessions/<session_id>/<file>.webm` files, first check `/home/strato-space/voicebot/uploads/audio/sessions/<session_id>/` on `p2` before declaring the source irrecoverable.
 - Voice session header action ownership is explicit: `Tasks` and `Summarize` belong to the right header action cluster before the custom-prompt action, not to the left recording-control strip.

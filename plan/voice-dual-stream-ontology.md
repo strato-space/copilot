@@ -145,6 +145,116 @@ Concrete counterexample:
 - как можно быстрее переводить разговор в executor-ready task;
 - и дальше в `outcome_record` (обычно `artifact_record`) с явным `acceptance_evaluation`, а не в ещё одну невалидированную запись.
 
+### Storage-preserving enrichment contract
+
+Граница этой волны намеренно жёсткая:
+- в этой волне не меняются Mongo collections;
+- не меняются Codex issue structures;
+- не вводятся новые stored objects, collection families или дополнительные persistence surfaces;
+- не выполняется реализация UI/agent/runtime;
+- цель волны — decision-complete semantic/spec contract для downstream implementation.
+
+Следовательно, enrichment в этой волне нормализуется как storage-preserving:
+- поверх уже существующих `task.description`;
+- поверх existing comments;
+- поверх existing linkage/session/task metadata;
+- без требования сначала перестраивать MongoDB или Codex storage.
+
+Ниже фиксируются два разных enrichment surface:
+- `Draft enrichment surface`;
+- `Ready+ enrichment surface`.
+
+#### `Draft enrichment surface`
+
+Для `task[DRAFT_10]` canonical mutable enrichment surface живёт в `task.description` как Markdown.
+
+Нормализация `task[DRAFT_10].description`:
+1. первый абзац — короткий human-readable synopsis;
+2. далее идут секции Markdown в фиксированном порядке;
+3. именно эти секции считаются canonical review/enrichment surface, а не comments.
+
+Обязательный spec-template для `task[DRAFT_10]`:
+- `## description`
+- `## object_locators`
+- `## expected_results`
+- `## acceptance_criteria`
+- `## evidence_links`
+- `## executor_routing_hints`
+- `## open_questions`
+
+Нормативные правила:
+- отдельными UI-полями остаются только `name`, `priority`, `project`, `task_type`, `performer` (runtime-поля: `name/priority/project_id/task_type_id/performer_id`);
+- всё остальное содержательное наполнение задачи живёт в едином Markdown surface `task.description`;
+- секции могут быть частично пустыми на раннем этапе intake;
+- enrichment обновляет тот же `task[DRAFT_10]`, а не создаёт новый row;
+- comments не являются primary enrichment surface для `Draft`;
+- UI должен интерпретировать неполноту секций как incomplete draft, а не как storage error;
+- `context_enrichment` practically materializes именно этот Markdown surface;
+- `human_approval` проверяет не “красоту текста”, а достаточность заполнения surface для launch/routing.
+- Внутри `## open_questions` используется явный chunk convention:
+  - `Question:` — формулировка открытого вопроса;
+  - `Answer:` — подтверждённый ответ или `TBD` до подтверждения.
+
+То есть в этой модели:
+- `Draft -> description-first enrichment`
+- `task[DRAFT_10]` остаётся mutable intake object до `human_approval`.
+
+#### `Ready+ enrichment surface`
+
+После `human_approval` и materialization в `Ready+`:
+- `title` и `description` считаются launch snapshot;
+- они не должны автоматически переписываться каждым новым discussion pass;
+- новое содержательное уточнение для `Ready+` добавляется через comments, а не через rewrite description.
+
+Нормализация policy:
+- comments создаются `on demand`, когда появляется materially new clarification;
+- comments могут быть session-aware и discussion-aware, если runtime это умеет;
+- comments — append-only enrichment artifact для `Ready+`;
+- `Ready+ description` остаётся stable execution brief, а не mutable enrichment notebook.
+
+То есть в этой модели:
+- `Ready+ -> comment-first enrichment`
+- comment creation is clarification artifact, not a trigger to rewrite launch snapshot.
+
+### `Draft review workspace`
+
+Новая canonical visualization target для `task[DRAFT_10]` фиксируется как `review workspace`, а не как legacy table with short title/description.
+
+Границы shape:
+- это не отдельная верхняя вкладка вне `Задачи`;
+- это richer surface внутри существующего `Задачи -> Draft`;
+- layout — `master-detail review workspace`.
+
+Фиксированный shape:
+- слева: список `task[DRAFT_10]`;
+- справа: богатая review card выбранной задачи.
+
+Левый список должен показывать не только:
+- `name`;
+- короткий synopsis;
+
+но и derived review signals:
+- completeness chips по ключевым секциям;
+- наличие/отсутствие `object_locators`;
+- наличие/отсутствие `expected_results`;
+- наличие/отсутствие `acceptance_criteria`;
+- наличие/отсутствие `evidence_links`;
+- linked session count / discussion signal;
+- routing hint state.
+
+Правая панель должна рендерить parsed Markdown surface:
+- synopsis;
+- `object_locators`;
+- `expected_results`;
+- `acceptance_criteria`;
+- `evidence_links`;
+- `executor_routing_hints`;
+- `open_questions`.
+
+Следствие для implementation:
+- richer Draft UX строится как derived render уже существующего Markdown-bearing `task.description`;
+- richer Draft UX не требует сначала вводить новый Mongo object kind.
+
 ### Historical prior art
 Ближайший historical analogue этой механики — агент `PM-03-RequestsTask`:
 `request -> formulation/decomposition -> duplicate check -> verification -> assignment`.
@@ -1294,6 +1404,56 @@ It should explicitly inherit concepts from this ontology doc rather than restati
 ### 3. For `voice-task-session-discussion-linking-spec.md`
 This remains the relation-layer spec for task<->session discussion.
 It should explicitly remain task-plane scoped and inherit non-task concepts from this ontology doc without restating them.
+
+## Appendix: Downstream contract for task enrichment agents
+
+Этот appendix фиксирует не runtime implementation now, а normative downstream requirement для task-enrichment agents.
+
+### For `create_tasks.md`
+
+Будущий downstream contract для [create_tasks.md](../agents/agent-cards/create_tasks.md):
+- `create_tasks` должен иметь доступ к shell;
+- перед enrichment он должен читать через `read_multiple_files`:
+  - [factory/harness.md](../factory/harness.md)
+  - [voice-dual-stream-ontology.md](./voice-dual-stream-ontology.md)
+- `harness.md` используется как operational guidance по environment/harness discipline;
+- `voice-dual-stream-ontology.md` используется как semantic target model.
+
+Нормативные следствия для output behavior:
+- Draft output должен стремиться не к “1 строка `name` + 2 строки `description`”, а к Markdown-enriched `description` по canonical template этой ontology;
+- Ready+ follow-up analyzers должны использовать `comment-first` policy и не переписывать execution brief автоматически;
+- implementer не должен проектировать enrichment surface заново локально в agent-card, а должен следовать этому ontology contract.
+
+### For related agent paths
+
+Этот же downstream contract должен применяться к любым related agent paths, которые:
+- enrich или reconcile `task[DRAFT_10]`;
+- дообогащают `Ready+`;
+- строят review/routing hints поверх discussion-derived tasks.
+
+Boundary reminder:
+- этот appendix не означает, что agent-cards меняются в этой волне;
+- он означает, что следующая волна implementation не должна принимать новые product decisions заново.
+
+## Acceptance markers for this spec wave
+
+Эта спека считается готовой, если в ней явно зафиксировано следующее:
+- есть отдельный `storage-preserving enrichment contract`;
+- явно различены `Draft` и `Ready+` enrichment surfaces;
+- для `task[DRAFT_10]` задан фиксированный Markdown template в `description`;
+- для `Ready+` зафиксирован `comment-first on demand` policy;
+- есть appendix с downstream contract для `create_tasks` и чтения:
+  - `harness.md`
+  - `voice-dual-stream-ontology.md`
+- есть decision-complete описание `Draft review workspace` как `master-detail` surface;
+- в тексте явно сказано, что эта волна не меняет storage structure и не является implementation wave.
+
+## Assumptions for this spec wave
+
+- `task.description` уже допустим как Markdown-bearing field и может использоваться как canonical Draft enrichment surface без storage migration;
+- existing comments достаточно для `Ready+` enrichment without schema changes;
+- `create_tasks.md` и UI будут меняться в следующих волнах; в этой волне они только получают normative contract через ontology-spec;
+- glossary-термины (`task[DRAFT_10]`, `context_enrichment`, `human_approval`, `executor_routing`, `acceptance_criterion`) остаются в английской/латинской нормализации внутри русского текста.
 
 ## Minimal Repair to Current Architecture
 1. Preserve the current task-plane and status-first semantics.

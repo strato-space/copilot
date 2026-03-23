@@ -17,12 +17,7 @@ const RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 const AGENTS_READY_TIMEOUT_MS = 30_000;
 const AGENTS_READY_POLL_INTERVAL_MS = 500;
 const AGENTS_READY_REQUEST_TIMEOUT_MS = 2_000;
-const CODEXSPARK_ACCOUNT_IDS = new Set([
-  'd72d46e8-41f3-47c1-ba22-98c52b3f6448',
-  '4e0cfe6a-0bb7-4b6b-86c3-74a477572e49',
-]);
-const DEFAULT_MODEL_SPARK = 'codexspark';
-const DEFAULT_MODEL_PLAN = 'codexplan';
+const DEFAULT_MODEL = 'gpt-5.4';
 
 let recoveryInFlight: Promise<boolean> | null = null;
 let lastRecoveryAttemptAt = 0;
@@ -46,25 +41,7 @@ const toErrorText = (value: unknown): string => {
   return '';
 };
 
-const resolveDesiredDefaultModel = (authBytes: Buffer): string => {
-  try {
-    const parsed = JSON.parse(authBytes.toString('utf8')) as {
-      account_id?: unknown;
-      accountId?: unknown;
-      tokens?: { account_id?: unknown; accountId?: unknown } | null;
-    };
-    const accountId = String(
-      parsed.tokens?.account_id ??
-      parsed.tokens?.accountId ??
-      parsed.account_id ??
-      parsed.accountId ??
-      ''
-    ).trim();
-    return CODEXSPARK_ACCOUNT_IDS.has(accountId) ? DEFAULT_MODEL_SPARK : DEFAULT_MODEL_PLAN;
-  } catch {
-    return DEFAULT_MODEL_PLAN;
-  }
-};
+const resolveDesiredDefaultModel = (_authBytes: Buffer): string => DEFAULT_MODEL;
 
 const readCurrentDefaultModel = (configText: string): string => {
   const match = configText.match(/^\s*default_model:\s*(\S+)\s*$/m);

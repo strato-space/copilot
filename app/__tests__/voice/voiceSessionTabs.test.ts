@@ -71,9 +71,9 @@ describe('voiceSessionTabs utilities', () => {
     expect(hasPendingPossibleTasksRefresh(settledSession, messages)).toBe(false);
   });
 
-  it('treats transcript presence without CREATE_TASKS processor snapshot as pending possible-tasks refresh', () => {
+  it('does not keep possible-tasks pending forever when transcript exists but CREATE_TASKS snapshot is absent', () => {
     const messages = [{ _id: '1', transcription_text: 'need a task' }] as VoiceBotMessage[];
-    expect(hasPendingPossibleTasksRefresh(null, messages)).toBe(true);
+    expect(hasPendingPossibleTasksRefresh(null, messages)).toBe(false);
   });
 
   it('turns off pending indicators for closed or inactive sessions even with historical incomplete payload', () => {

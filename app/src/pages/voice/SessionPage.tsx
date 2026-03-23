@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Tabs, message } from 'antd';
+import { Empty, Tabs, Typography, message } from 'antd';
 import { useParams } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { CRMKanban } from '../../components/crm';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
@@ -130,6 +132,37 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
     if (!(target instanceof Element)) return false;
     if (target.closest('input, textarea, [contenteditable=\"true\"], [contenteditable=\"\"]')) return true;
     return false;
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+};
+
+const toTrimmedText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const resolveReviewMarkdown = (session: unknown): string => {
+    const sessionRecord = asRecord(session);
+    if (!sessionRecord) return '';
+
+    const direct = toTrimmedText(sessionRecord.review_md_text);
+    if (direct) return direct;
+
+    const processorsData = asRecord(sessionRecord.processors_data);
+    if (!processorsData) return '';
+
+    const directProcessorText = toTrimmedText(processorsData.review_md_text);
+    if (directProcessorText) return directProcessorText;
+
+    const reviewProcessor = asRecord(processorsData.REVIEW) || asRecord(processorsData.review);
+    if (!reviewProcessor) return '';
+
+    const processorText = toTrimmedText(reviewProcessor.review_md_text) || toTrimmedText(reviewProcessor.md_text);
+    if (processorText) return processorText;
+
+    const firstData = Array.isArray(reviewProcessor.data) ? asRecord(reviewProcessor.data[0]) : null;
+    if (!firstData) return '';
+    return toTrimmedText(firstData.review_md_text) || toTrimmedText(firstData.md_text) || toTrimmedText(firstData.text);
 };
 
 export default function SessionPage() {
@@ -305,6 +338,8 @@ export default function SessionPage() {
         [voiceMesagesData]
     );
     const screenshortCount = sessionAttachments.length;
+    const summaryMdText = useMemo(() => toTrimmedText(voiceBotSession?.summary_md_text), [voiceBotSession]);
+    const reviewMdText = useMemo(() => resolveReviewMarkdown(voiceBotSession), [voiceBotSession]);
 
     const hasTranscriptionPending = useMemo(
         () => hasPendingTranscriptionMessages(voiceBotMessages, voiceBotSession),
@@ -318,6 +353,7 @@ export default function SessionPage() {
         () => hasPendingPossibleTasksRefresh(voiceBotSession, voiceBotMessages),
         [voiceBotSession, voiceBotMessages]
     );
+    const hasTaskflowPending = hasPossibleTasksPending;
 
     useEffect(() => {
         let disposed = false;
@@ -406,9 +442,45 @@ export default function SessionPage() {
             children: <Categorization />,
         },
         {
+            key: 'summary',
+            label: renderTabLabel('Саммари', 0, { showCount: false }),
+            children: summaryMdText ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="prose prose-slate max-w-none prose-headings:mb-3 prose-p:mb-3 prose-pre:whitespace-pre-wrap">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{summaryMdText}</ReactMarkdown>
+                    </div>
+                </div>
+            ) : (
+                <div className="rounded-xl border border-slate-200 bg-white p-8">
+                    <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="Саммари еще не сформировано"
+                    />
+                </div>
+            ),
+        },
+        {
+            key: 'review',
+            label: renderTabLabel('Ревью', 0, { processing: hasTaskflowPending, showCount: false }),
+            children: reviewMdText ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="prose prose-slate max-w-none prose-headings:mb-3 prose-p:mb-3 prose-pre:whitespace-pre-wrap">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{reviewMdText}</ReactMarkdown>
+                    </div>
+                </div>
+            ) : (
+                <div className="rounded-xl border border-slate-200 bg-white p-8">
+                    <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="Ревью еще не сформировано"
+                    />
+                </div>
+            ),
+        },
+        {
             key: 'operops_tasks',
             label: renderTabLabel('Задачи', sessionTasksTotalCount, {
-                processing: hasPossibleTasksPending,
+                processing: hasTaskflowPending,
                 showCount: sessionOperOpsTasksCount !== null,
             }),
             children: (

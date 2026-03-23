@@ -10,9 +10,11 @@ export const getRawDbMock = jest.fn();
 export const getUserPermissionsMock = jest.fn();
 export const generateDataFilterMock = jest.fn();
 export const createBdIssueMock = jest.fn();
+export const appendBdIssueNotesMock = jest.fn();
 
 jest.unstable_mockModule('../../../src/services/bdClient.js', () => ({
   createBdIssue: createBdIssueMock,
+  appendBdIssueNotes: appendBdIssueNotesMock,
 }));
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
@@ -76,6 +78,7 @@ export const resetRuntimeBehaviorMocks = () => {
   getUserPermissionsMock.mockReset();
   generateDataFilterMock.mockReset();
   createBdIssueMock.mockReset();
+  appendBdIssueNotesMock.mockReset();
 
   getUserPermissionsMock.mockResolvedValue([
     PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL,
@@ -83,5 +86,6 @@ export const resetRuntimeBehaviorMocks = () => {
   ]);
   generateDataFilterMock.mockResolvedValue({});
   createBdIssueMock.mockResolvedValue('copilot-codex-bd-id');
+  appendBdIssueNotesMock.mockResolvedValue(undefined);
   delete process.env.VOICE_WEB_INTERFACE_URL;
 };

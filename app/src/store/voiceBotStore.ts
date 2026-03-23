@@ -1020,6 +1020,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
 
                 const shouldRefreshPossibleTasks = Boolean(refreshHint?.possible_tasks);
                 const shouldRefreshSummary = Boolean(refreshHint?.summary);
+                const shouldRefreshReview = Boolean(refreshHint?.tasks || refreshHint?.possible_tasks);
                 if (activeSessionId && (!eventSessionId || eventSessionId === activeSessionId)) {
                     if (shouldRefreshPossibleTasks) {
                         const correlationId = typeof refreshHint?.correlation_id === 'string' && refreshHint.correlation_id.trim()
@@ -1052,7 +1053,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                             });
                     }
 
-                    if (shouldRefreshSummary) {
+                    if (shouldRefreshSummary || shouldRefreshReview) {
                         void get().getSessionData(activeSessionId)
                             .then((sessionData) => {
                                 set((state) => {
@@ -1065,7 +1066,8 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                                 });
                             })
                             .catch((error) => {
-                                console.error('Failed to refresh voice session summary after realtime hint:', error);
+                                const target = shouldRefreshSummary ? 'summary/review' : 'review';
+                                console.error(`Failed to refresh voice session ${target} after realtime hint:`, error);
                             });
                     }
                 }
@@ -1283,7 +1285,27 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
 
         set((state) => {
             if (state.currentSessionId !== normalizedSessionId) return state;
+            const currentSession = state.voiceBotSession;
+            const nextSession =
+                currentSession && typeof currentSession === 'object'
+                    ? {
+                        ...currentSession,
+                        ...(typeof responseRecord?.summary_md_text === 'string' && responseRecord.summary_md_text.trim()
+                            ? { summary_md_text: responseRecord.summary_md_text.trim() }
+                            : {}),
+                        ...(typeof responseRecord?.review_md_text === 'string' && responseRecord.review_md_text.trim()
+                            ? { review_md_text: responseRecord.review_md_text.trim() }
+                            : {}),
+                        ...(typeof responseRecord?.session_name === 'string' && responseRecord.session_name.trim()
+                            ? { session_name: responseRecord.session_name.trim() }
+                            : {}),
+                        ...(typeof responseRecord?.project_id === 'string' && responseRecord.project_id.trim()
+                            ? { project_id: responseRecord.project_id.trim() }
+                            : {}),
+                    }
+                    : currentSession;
             return {
+                voiceBotSession: nextSession,
                 possibleTasks: savedTasks,
                 possibleTasksLoadedAt: Date.now(),
             };

@@ -1,10 +1,9 @@
 import { ObjectId, type Db } from 'mongodb';
 import { VOICEBOT_COLLECTIONS } from '../../constants.js';
 import { getDb } from '../db.js';
-import { MCPProxyClient } from '../mcp/proxyClient.js';
 import { buildCategorizationCleanupPayload, generateSegmentOid } from '../../api/routes/voicebot/messageHelpers.js';
-import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from './agentsRuntimeRecovery.js';
 import { getLogger } from '../../utils/logger.js';
+import { runCreateTasksCompositeAgent } from './createTasksAgent.js';
 
 const logger = getLogger();
 
@@ -45,13 +44,6 @@ export type GenerateSessionTitleForSessionResult = {
   reason?: string;
   error?: string;
 };
-
-const resolveAgentsMcpServerUrl = (): string =>
-  String(
-    process.env.VOICEBOT_AGENTS_MCP_URL ||
-      process.env.AGENTS_MCP_URL ||
-      'http://127.0.0.1:8722'
-  ).trim();
 
 const toText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
@@ -170,25 +162,6 @@ const classifySkipReason = (messages: VoiceBotMessageDoc[]): string => {
   return 'requires_categorization';
 };
 
-const extractGeneratedTitle = (value: unknown): string => {
-  if (!value || typeof value !== 'object') return '';
-  const record = value as Record<string, unknown>;
-  const direct = toText(record.title) || toText(record.output_text) || toText(record.text);
-  if (direct) return direct;
-  const content = Array.isArray(record.content) ? record.content : [];
-  for (const entry of content) {
-    if (!entry || typeof entry !== 'object') continue;
-    const text = toText((entry as Record<string, unknown>).text);
-    if (text) return text;
-  }
-  const structured = record.structuredContent;
-  if (structured && typeof structured === 'object') {
-    const structuredTitle = toText((structured as Record<string, unknown>).title);
-    if (structuredTitle) return structuredTitle;
-  }
-  return '';
-};
-
 const classifyGeneratedTitleError = (title: string): string | null => {
   const normalized = title.trim();
   if (!normalized) return 'empty_title';
@@ -199,50 +172,6 @@ const classifyGeneratedTitleError = (title: string): string | null => {
   return null;
 };
 
-const generateSessionTitle = async (
-  mcpClient: MCPProxyClient,
-  sessionId: string,
-  messageText: string
-): Promise<string> => {
-  const callOnce = async (): Promise<string> => {
-    const session = await mcpClient.initializeSession();
-    try {
-      const result = await mcpClient.callTool(
-        'generate_session_title',
-        { message: messageText },
-        session.sessionId,
-        { timeout: 120_000 }
-      );
-      if (!result.success) throw new Error(result.error || 'generate_session_title_failed');
-      const title = extractGeneratedTitle(result.data);
-      if (!title) throw new Error(`generate_session_title_empty:${sessionId}`);
-      return title;
-    } finally {
-      await mcpClient.closeSession(session.sessionId).catch(() => undefined);
-    }
-  };
-
-  try {
-    const title = await callOnce();
-    if (!isAgentsQuotaFailure(title)) {
-      return title;
-    }
-    const recovered = await attemptAgentsQuotaRecovery({ reason: title });
-    if (!recovered) return title;
-    return await callOnce();
-  } catch (error) {
-    if (!isAgentsQuotaFailure(error)) {
-      throw error;
-    }
-    const reason = error instanceof Error ? error.message : String(error);
-    const recovered = await attemptAgentsQuotaRecovery({ reason });
-    if (!recovered) {
-      throw error;
-    }
-    return await callOnce();
-  }
-};
-
 const hasSessionTitle = (value: unknown): boolean =>
   typeof value === 'string' && value.trim().length > 0;
 
@@ -251,7 +180,7 @@ export const generateSessionTitleForSession = async ({
   db = getDb(),
   updateSession = true,
   generatedBy = 'voicebot-generate-session-titles',
-  mcpServerUrl,
+  mcpServerUrl: _mcpServerUrl,
 }: GenerateSessionTitleForSessionOptions): Promise<GenerateSessionTitleForSessionResult> => {
   const normalizedSessionId = String(sessionId || '').trim();
   if (!normalizedSessionId || !ObjectId.isValid(normalizedSessionId)) {
@@ -329,10 +258,13 @@ export const generateSessionTitleForSession = async ({
     };
   }
 
-  const mcpClient = new MCPProxyClient(mcpServerUrl || resolveAgentsMcpServerUrl());
-
   try {
-    const title = await generateSessionTitle(mcpClient, normalizedSessionId, messageText);
+    const composite = await runCreateTasksCompositeAgent({
+      sessionId: normalizedSessionId,
+      projectId: '',
+      db,
+    });
+    const title = String(composite.session_name || '').trim();
     const titleError = classifyGeneratedTitleError(title);
     if (titleError) {
       return {
@@ -385,7 +317,7 @@ export const generateSessionTitleForSession = async ({
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn('[voicebot-title] generate_session_title failed', {
+    logger.warn('[voicebot-title] create_tasks session_name generation failed', {
       session_id: normalizedSessionId,
       error: message,
     });
@@ -395,7 +327,7 @@ export const generateSessionTitleForSession = async ({
       generated: false,
       skipped: false,
       message_count: messages.length,
-      error: message || 'generate_session_title_failed',
+      error: message || 'create_tasks_session_name_failed',
     };
   }
 };

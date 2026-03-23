@@ -11,6 +11,35 @@ interface ServiceAccountCredentials {
 }
 
 const logger = getLogger();
+const LOAD_INFO_MAX_ATTEMPTS = 4;
+const LOAD_INFO_BASE_DELAY_MS = 250;
+const LOAD_INFO_MAX_DELAY_MS = 2000;
+const GOOGLE_NO_PROXY_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'api.telegram.org',
+    'telegram.org',
+    '.telegram.org',
+    '*.telegram.org',
+    'googleapis.com',
+    '.googleapis.com',
+    'docs.google.com',
+    '.google.com',
+    'github.com',
+    '.github.com',
+    'stratospace.fun',
+    '.stratospace.fun',
+    '*.stratospace.fun',
+    '176.124.201.53',
+];
+
+type RetryableError = {
+    code?: string;
+    message?: string;
+    response?: {
+        status?: number;
+    };
+};
 
 const parseCredentials = (raw: string, source: string): ServiceAccountCredentials => {
     try {
@@ -85,9 +114,91 @@ export const createSpreadsheet = async (folderId: string, title: string, auth: J
     return spreadsheetId;
 };
 
+const disableSpreadsheetClientProxy = (doc: GoogleSpreadsheet): void => {
+    // google-spreadsheet uses internal axios clients (sheetsApi/driveApi). Explicitly disable proxy
+    // to avoid env-level proxy interference on loadInfo() calls.
+    doc.sheetsApi.defaults.proxy = false;
+    doc.driveApi.defaults.proxy = false;
+};
+
+const normalizeNoProxyToken = (token: string): string => token.trim().toLowerCase();
+
+const appendNoProxyHosts = (value: string | undefined): string => {
+    const currentTokens = (value ?? '')
+        .split(',')
+        .map((token) => token.trim())
+        .filter(Boolean);
+    const existing = new Set(currentTokens.map(normalizeNoProxyToken));
+    const merged = [...currentTokens];
+
+    for (const host of GOOGLE_NO_PROXY_HOSTS) {
+        if (!existing.has(normalizeNoProxyToken(host))) {
+            merged.push(host);
+        }
+    }
+
+    return merged.join(',');
+};
+
+const ensureGoogleNoProxyEnv = (): void => {
+    process.env.NO_PROXY = appendNoProxyHosts(process.env.NO_PROXY);
+    process.env.no_proxy = appendNoProxyHosts(process.env.no_proxy);
+};
+
+const isRetryableLoadInfoError = (error: unknown): boolean => {
+    const candidate = error as RetryableError | undefined;
+    const status = candidate?.response?.status;
+    if (status === 429 || status === 502 || status === 503 || status === 504) {
+        return true;
+    }
+
+    const code = String(candidate?.code ?? '').toUpperCase();
+    if (code === 'ECONNRESET' || code === 'ECONNABORTED' || code === 'ETIMEDOUT' || code === 'EAI_AGAIN') {
+        return true;
+    }
+
+    const message = String(candidate?.message ?? '').toUpperCase();
+    return message.includes('ECONNRESET')
+        || message.includes('SOCKET HANG UP')
+        || message.includes('ETIMEDOUT')
+        || message.includes('EAI_AGAIN');
+};
+
+const getLoadInfoBackoffMs = (attempt: number): number =>
+    Math.min(LOAD_INFO_BASE_DELAY_MS * (2 ** Math.max(0, attempt - 1)), LOAD_INFO_MAX_DELAY_MS);
+
+const sleep = async (ms: number): Promise<void> =>
+    new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+
 export const loadSpreadsheet = async (spreadsheetId: string, auth: JWT): Promise<GoogleSpreadsheet> => {
+    ensureGoogleNoProxyEnv();
     const doc = new GoogleSpreadsheet(spreadsheetId, auth);
-    await doc.loadInfo();
+    disableSpreadsheetClientProxy(doc);
+
+    for (let attempt = 1; attempt <= LOAD_INFO_MAX_ATTEMPTS; attempt++) {
+        try {
+            await doc.loadInfo();
+            return doc;
+        } catch (error) {
+            const retryable = isRetryableLoadInfoError(error);
+            const hasRetriesLeft = attempt < LOAD_INFO_MAX_ATTEMPTS;
+
+            if (!retryable || !hasRetriesLeft) {
+                throw error;
+            }
+
+            const delayMs = getLoadInfoBackoffMs(attempt);
+            logger.warn('[google.drive] loadSpreadsheet loadInfo retrying after transient failure', {
+                spreadsheetId,
+                attempt,
+                delayMs,
+                status: (error as RetryableError | undefined)?.response?.status,
+                code: (error as RetryableError | undefined)?.code,
+            });
+            await sleep(delayMs);
+        }
+    }
+
     return doc;
 };
 

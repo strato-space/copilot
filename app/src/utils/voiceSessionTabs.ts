@@ -165,13 +165,18 @@ export const hasPendingPossibleTasksRefresh = (
 
   const processorsData = asRecord(session?.processors_data);
   const createTasks = asRecord(processorsData?.CREATE_TASKS);
-  if (!createTasks) return true;
+  if (!createTasks) return false;
   if (createTasks.is_processing === true) return true;
 
-  const autoRequestedAt = toEpochMs(createTasks.auto_requested_at);
+  const latestRequestedAt = Math.max(
+    toEpochMs(createTasks.auto_requested_at),
+    toEpochMs(createTasks.requested_at),
+    toEpochMs(createTasks.last_requested_at)
+  );
   const lastCompletedAt = Math.max(
     toEpochMs(createTasks.job_finished_timestamp),
-    toEpochMs(createTasks.last_generated_at)
+    toEpochMs(createTasks.last_generated_at),
+    toEpochMs(createTasks.last_completed_at)
   );
-  return autoRequestedAt > 0 && autoRequestedAt > lastCompletedAt;
+  return latestRequestedAt > 0 && latestRequestedAt > lastCompletedAt;
 };
