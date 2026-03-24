@@ -20,6 +20,10 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - `typedb/queries/validation_v1.tql` — validation/smoke queries.
 - `typedb/docs/rollout_plan_v1.md` — rollout and migration notes.
 - `plan/ontology-and-operations.md` — implemented architecture roadmap for the object-bound ontology model.
+- `plan/voice-dual-stream-ontology.md` — canonical voice/task domain ontology for the dual-stream management model.
+- `plan/ontology-persistence-db-spec.md` — generic persistence-layer architecture for annotated-TQL-card-driven storage.
+- `plan/ontology-persistence-system-needs.ru.md` and `plan/ontology-persistence-system-needs.en.md` — generic persistence verification needs in RU/EN.
+- `plan/voice-ontology-persistence-alignment-spec.md` — bridge that binds the voice/task ontology to the generic persistence kernel without contaminating the generic spec with domain terms.
 - `typedb/inventory_latest/entity_sampling_latest.md` — Mongo-backed full-doc verification samples and compact ontology examples.
 - `typedb/inventory_latest/domain_inventory_latest.md` and `typedb/inventory_latest/domain_inventory_latest.json` — canonical latest domain inventory outputs for inspect-marked dictionary-like attributes.
 - `typedb/docs/semantic-glossary.md` plus `ontology/typedb/docs/bounded_context_bridge_rules_v1.md`, `ontology/typedb/docs/semantic_cards_workflow_v1.md`, and `ontology/typedb/docs/object_history_and_output_contract_v1.md` — LLM-facing semantic glossary for the ontology kernel.
@@ -36,6 +40,11 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - Treat `ontology/*` as source of truth for conceptual model and TypeDB scaffolding.
 - Do not place new ontology scripts back under `backend/scripts`; use `ontology/typedb/scripts/*`.
 - Keep schema/mapping updates synchronized with docs and changelog.
+- Keep the voice/persistence document family internally separated by role:
+  - `voice-dual-stream-ontology.md` = domain ontology,
+  - `ontology-persistence-system-needs.*` = generic persistence requirements,
+  - `ontology-persistence-db-spec.md` = generic persistence architecture,
+  - `voice-ontology-persistence-alignment-spec.md` = domain-to-persistence bridge.
 
 ## Entry Points
 

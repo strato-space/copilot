@@ -3,18 +3,26 @@
 ## Status ⚪Open
 
 - Task-surface ticket line: ⚪Open 1  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 0
-- Plan status: ontology draft rewritten to cover OperOps sandbox and current copilot ontology; Mongo/task-plane parity snapshot folded in; downstream specs still need alignment.
+- Plan status: ontology draft rewritten to cover OperOps sandbox and current copilot ontology; Mongo/task-plane parity snapshot folded in; downstream persistence alignment now lives in a separate bridge spec.
 - Canonical ontology ticket: `copilot-ua6e`
 
-**Статус документа**: rewritten ontology draft open; downstream spec alignment pending
+**Статус документа**: rewritten ontology draft open; downstream persistence alignment delegated to separate bridge spec
 **Дата**: 2026-03-21
 **Основание**: three-way reconciliation across `/home/strato-space/y-tasks-sandbox/OperOps`, current voice/task specs in `copilot/plan`, the current semantic kernel under `copilot/ontology`, and live Mongo recheck against `automation_tasks` / `automation_voice_bot_sessions` on 2026-03-21.
 
 ## Purpose
 Роль этого файла:
-- это производственная спека с упором на то, какие объекты, связи и статусные домены должны создаваться и поддерживаться в базе;
+- это каноническая domain ontology спека для voice/task world;
 - это companion document к `OperOps - Voice2Task.md`, который описывает бизнесово-операционный и UX/process contract;
-- здесь primary concern не экранный UX, а production-facing object model для Mongo/ontology/runtime.
+- здесь primary concern не экранный UX и не generic persistence architecture, а domain-side object model, relation vocabulary и category discipline;
+- domain-specific persistence consequences этой ontology выносятся в `ontology/plan/voice-ontology-persistence-alignment-spec.md`;
+- implementation-wave assumptions и rollout notes ниже считаются annex material и не должны автоматически читаться как generic persistence law.
+
+Термин `dual-stream` в заголовке фиксируется так:
+- `project-management stream` описывает producing-system side: `task`, `goal_process`, `issue`, `risk`, `constraint`, routing, execution и control;
+- `product-management stream` описывает system-of-interest side: `goal_product`, `requirement`, product-facing часть `business_need` и change intent;
+- `domain ontology model` в этой редакции не объявляется третьим stream в заголовке, а трактуется как orthogonal formal layer, которая связывает и дисциплинирует оба management streams;
+- если в будущей редакции `domain ontology model` будет выделен в самостоятельный stream family, документ family может стать triadic without invalidating the present dual-stream naming for this wave.
 
 Зафиксировать каноническую ontology для voice sessions / voice dialogs в заказной разработке так, чтобы один документ одновременно покрывал:
 - conceptual model из `OperOps` sandbox;
@@ -53,6 +61,7 @@ Production emphasis:
 - `coding_agent` — first-class non-human executor, задаваемый как CLI/agent surface с путём запуска, аргументами и role/pipeline refs.
 - `object_locator` — ссылка на объект применения задачи: файл, компонент, экран, правило, агент, артефакт или иной target object.
 - `outcome_record` — canonical DB-side типизированный результат исполнения (`artifact | decision | state_transition`).
+- `settled_decision` — epistemic resolution entity, фиксирующий закрытие вопроса в разговоре или review, но не являющийся execution outcome.
 - `artifact_record` — canonical DB-side produced result.
 - `result_artifact` — human-facing alias для `artifact_record`, а не вторая сущность.
 - `acceptance_evaluation` — отдельный акт оценки и приемки produced result against explicit acceptance conditions, выполняемый уполномоченным `actor`.
@@ -102,7 +111,7 @@ Production emphasis:
   - process-side claims (`task`, `goal_process`, `issue`, `risk`, `constraint`) описывают прежде всего `producing_system`;
   - `project` не должен поглощать ни `system_of_interest`, ни `producing_system`.
 
-## First-Wave Goal And Normalized Mechanics
+## Annex A. First-Wave Domain Consequences
 
 ### Goal
 Ближайшая цель этой волны не в том, чтобы “ещё лучше извлекать backlog items”, а в том, чтобы:
@@ -296,9 +305,9 @@ Concrete counterexample:
 
 Пометки ставятся только для object/table families. Поля, relation names и прочие non-entity identifiers не размечаются.
 
-## Архитектурные решения из истории сессий
+## Доменные commitments, засвидетельствованные в истории сессий
 
-Этот документ явно следует архитектурным решениям, которые Валерий Павлович сформулировал в session history от 2026-03-19:
+Этот документ явно следует domain-side commitments, которые Валерий Павлович сформулировал в session history от 2026-03-19:
 - `task` — центральный operational object; `task` существует ради типизированного `outcome_record` (в первом приближении обычно `artifact_record`), а не как самоценный backlog item;
 - `task[DRAFT_10]` остаётся мутабельным, а `ready_plus_task` тяготеет к execution-ready immutability с `acceptance_criterion` и `artifact_record` traceability;
 - один `task` может обсуждаться во многих `voice_session`, поэтому `discussion_linkage` должен быть many-to-many, а не навсегда single-primary;
@@ -349,7 +358,7 @@ Exact task-plane support already present in current ontology:
 
 Direct AS-IS task definition:
 - current TQL definition lives in [`ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql`](../ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql)
-- canonical in-document snippet is defined once in `TQL-Oriented Canonical Contract -> AS-IS exact entity: task` below (single source, no duplicated snippets).
+- canonical in-document snippet is defined once in `TQL-Oriented Canonical Contract -> AS-IS canonical excerpt: task` below (single source, no duplicated snippets).
 
 `codex_task` linkage semantics:
 - ontologically it is an attribute of `task`, not a second task entity;
@@ -531,18 +540,18 @@ Minimal relations:
 
 Canonical entities:
 - `[-o-]` `outcome_record`
-- `[ ]` `acceptance_evaluation`
-- `[mom]` `artifact_record`
-- `[mom]` `kpi`
-- `[mom]` `kpi_observation`
-- `[mom]` `kpi_trigger_event`
-- `[ ]` `acceptance_criterion`
+- `[-o-]` `acceptance_evaluation`
+- `[-o-]` `artifact_record`
+- `[-o-]` `kpi`
+- `[-o-]` `kpi_observation`
+- `[-o-]` `kpi_trigger_event`
+- `[-o-]` `acceptance_criterion`
 
 Role in current `copilot/ontology`:
-- `[mom]` `artifact_record`
-- `[mom]` `kpi`
-- `[mom]` `kpi_observation`
-- `[mom]` `kpi_trigger_event`
+- `[-o-]` `artifact_record`
+- `[-o-]` `kpi`
+- `[-o-]` `kpi_observation`
+- `[-o-]` `kpi_trigger_event`
 
 Greek-scholastic note:
 - this layer is needed because `task`, `result`, `acceptance`, and `measurement` are not the same kind of thing;
@@ -623,6 +632,9 @@ Minimal relations:
 
 ### Layer 8.5. Executor / Launch Ontology
 Это слой того, **как задача переходит от intake к конкретному исполнению**.
+
+Numbering note:
+- `Layer 8.5` is a sublayer of Actor / Authority Ontology focused on the execution contour, not a separate peer order alongside Layers 8, 9, 10 and 12.
 
 Canonical entities:
 - `[ ]` `task_family`
@@ -712,11 +724,11 @@ AS IS / TO BE linkage rule:
 - decision: `discussion_linkage` itself is not promoted to a first-class entity at this stage, because the link currently has no independent lifecycle/approval/state semantics of its own;
 - migration implication: historical session payloads in `processors_data.CREATE_TASKS.data` must be materialized into canonical `DRAFT_10` task docs, after which the payload is legacy history only.
 
-### Layer 12. Decision / Assumption Ontology
+### Layer 12. Settled Decision / Assumption Ontology
 Это слой того, **какие решения уже приняты и какие предпосылки приняты временно**.
 
 Canonical entities:
-- `[ ]` `decision`
+- `[-o-]` `settled_decision`
 - `[-o-]` `reasoning_item`
 - `[-o-]` `assumption`
 - `[-o-]` `open_question`
@@ -724,6 +736,15 @@ Canonical entities:
 Rationale:
 - в OperOps sandbox есть сильный акцент на review, ambiguity gates, open questions, project-card decisions;
 - без этих сущностей часть voice-discussion смысла снова будет насильно сведена к task/requirement.
+
+Grouping principle:
+- this layer groups epistemic-resolution objects only: open question, defeasible assumption, reasoning trace, and settled discussion decision;
+- execution outcomes stay in the outcome hierarchy and are not grouped here merely because ordinary language also calls some of them "decision".
+
+Negative delimitation:
+- `settled_decision` != `assumption` != `open_question` != `reasoning_item` по epistemic status;
+- `settled_decision` != `decision sub outcome_record`; the former closes a conversational/review question, the latter is an execution-produced governance verdict;
+- they must not collapse into one untyped `knowledge_item`.
 
 ## TQL-Oriented Canonical Contract
 
@@ -734,9 +755,10 @@ Canonical bearer rule for invariants:
 - write-side domain invariants anchor on `task`;
 - there is no second semantic task carrier parallel to `task`.
 
-### AS-IS exact entity: `task`
+### AS-IS canonical excerpt: `task`
 
 ```tql
+# NOTE: simplified excerpt; full definition in `ontology/typedb/schema/fragments/10-as-is/10-entities-core.tql`
 # what: primary operational work object
 # scope: BC.TaskWorld
 entity task,
@@ -768,9 +790,10 @@ entity task,
   plays task_classified_as_task_type:task;
 ```
 
-### AS-IS exact entity: `voice_session`
+### AS-IS canonical excerpt: `voice_session`
 
 ```tql
+# NOTE: simplified excerpt; full definition in `ontology/typedb/schema/fragments/10-as-is/30-entities-voice-operops.tql`
 # what: bounded discussion event
 # scope: BC.VoiceWorld
 entity voice_session,
@@ -794,9 +817,10 @@ entity voice_session,
   plays voice_session_sources_task:source_voice_session;
 ```
 
-### AS-IS exact entity: `processing_run`
+### AS-IS canonical excerpt: `processing_run`
 
 ```tql
+# NOTE: simplified excerpt; full definition in `ontology/typedb/schema/fragments/10-as-is/30-entities-voice-operops.tql`
 # what: one execution occurrence of one processor over one session/message scope
 # scope: BC.VoiceWorld
 entity processing_run,
@@ -804,7 +828,6 @@ entity processing_run,
   owns source_ref,
   owns processor_name,
   owns processor_scope,
-  owns processor_kind,
   owns status,
   owns started_at,
   owns ended_at,
@@ -954,6 +977,11 @@ entity constraint,
 
 ### TO-BE first-class acceptance / outcome entities
 
+Schema-lag note:
+- this canonical TO-BE block is the semantic target model for the outcome / acceptance family;
+- the currently applied `ontology/typedb/schema/fragments/20-to-be/10-semantic-core.tql` already materializes `acceptance_criterion` and `acceptance_evaluation`, but still lags the full `outcome_record` hierarchy;
+- until that schema sync lands, `outcome_record`, `decision`, and `state_transition_outcome` should be read here as target-contract types rather than already-applied schema facts.
+
 ```tql
 # what: generic typed result of task execution / governance transition
 entity outcome_record,
@@ -1045,6 +1073,10 @@ entity writeback_decision,
   owns updated_at;
 ```
 
+Coverage note:
+- `patch` and `history_step` remain canonical members of the mutation chain,
+- but in this wave their structured contract is still inherited from existing AS-IS schema plus Layer 5 markers; dedicated TO-BE card blocks for them are deferred.
+
 ### TO-BE first-class reasoning / registry entities (TypeDB extension)
 
 ```tql
@@ -1053,6 +1085,8 @@ entity reasoning_item,
   owns reasoning_item_id @key,
   owns summary,
   owns status @values("open", "closed", "superseded");
+
+entity settled_decision sub reasoning_item;
 
 entity assumption sub reasoning_item,
   owns confidence @values("low", "medium", "high");
@@ -1099,6 +1133,13 @@ Task type dictionary split note:
 - `automation_task_types` (`task_type`) remains a flat legacy dictionary surface; keep as compatibility dictionary, not as the only canonical taxonomy for current routing/enrichment flow.
 - `issue_type` (with runtime coalesce `issue_type | type`) is a separate issue/codex subtype axis and must not be mixed with `task_type_id`.
 - write-side normalization rule for new taskflow writes: prefer `task_type_id`; keep legacy `task_type`/`task_type_name` as compatibility mirror when required.
+
+Operational migration contract (staged):
+- Phase 1 target: operational `Тип задачи` (`task_type_id`) becomes the default and canonical classifier for all new/edited task rows.
+- authoritative read path for task classification: read `task_type_id` when present; if absent, resolve `task_type` / `task_type_name` through the compatibility bridge into `task_type_id`, and do not treat legacy carriers as co-equal canonical reads.
+- canonical source for Phase 1 writes: `automation_task_types_tree` with `type_class=TASK` leaves.
+- compatibility read-path for historical rows: keep reading `task_type`/`task_type_name`, then resolve via mapping bridge into `task_type_id` when possible.
+- do not block migration on full orthogonal decomposition; decomposition of unified type into `issue_type`, `role`, and other axes is Phase 2+ work.
 
 ### TO-BE task-local execution context
 
@@ -1270,6 +1311,10 @@ relation task_family_eligible_for_executor_role,
 ## Modal Management Layer
 Эта layer не заменяет сущности, а модально описывает их состояние.
 
+Frame note:
+- in this document wave, `necessity` has a deontic reading (obligation / permission contour), not an alethic one;
+- modal notation here should be read against a weak deontic frame `KD`, while `knowledge_state` is an independent epistemic overlay rather than the same modal axis.
+
 Applies to:
 - `task`
 - `business_need`
@@ -1402,7 +1447,10 @@ Mongo/ontology parity gaps that remain explicit:
 - `entity -> discussed_in -> voice_session` is semantically accepted, but exact AS-IS storage still depends on `source_ref` / `external_ref` / `source_data.voice_sessions[]` rather than one first-class ontology relation;
 - `discussion_count` is a read-derived field and should not be described as if Mongo already stores it as a standalone canonical attribute.
 
-## Structural consequences for current specs
+## Appendix 1. Structural consequences for current specs
+
+Этот appendix фиксирует downstream consequences этой ontology, но не превращает их в generic persistence law.
+Domain-specific persistence binding для этой ontology живёт отдельно в `ontology/plan/voice-ontology-persistence-alignment-spec.md`.
 
 ### 1. For `voice-task-surface-normalization-spec.md`
 Still valid as task-surface canonical contract.
@@ -1418,7 +1466,7 @@ It should explicitly inherit concepts from this ontology doc rather than restati
 This remains the relation-layer spec for task<->session discussion.
 It should explicitly remain task-plane scoped and inherit non-task concepts from this ontology doc without restating them.
 
-## Appendix: Downstream contract for task enrichment agents
+## Appendix 2. Downstream contract for task enrichment agents
 
 Этот appendix фиксирует не runtime implementation now, а normative downstream requirement для task-enrichment agents.
 
@@ -1448,7 +1496,7 @@ Boundary reminder:
 - этот appendix не означает, что agent-cards меняются в этой волне;
 - он означает, что следующая волна implementation не должна принимать новые product decisions заново.
 
-## Acceptance markers for this spec wave
+## Annex B. Acceptance markers for this ontology wave
 
 Эта спека считается готовой, если в ней явно зафиксировано следующее:
 - есть отдельный `storage-preserving enrichment contract`;
@@ -1461,21 +1509,21 @@ Boundary reminder:
 - есть decision-complete описание `Draft review workspace` как `master-detail` surface;
 - в тексте явно сказано, что эта волна не меняет storage structure и не является implementation wave.
 
-## Assumptions for this spec wave
+## Annex C. Assumptions for this ontology wave
 
 - `task.description` уже допустим как Markdown-bearing field и может использоваться как canonical Draft enrichment surface без storage migration;
 - existing comments достаточно для `Ready+` enrichment without schema changes;
 - `create_tasks.md` и UI будут меняться в следующих волнах; в этой волне они только получают normative contract через ontology-spec;
 - glossary-термины (`task[DRAFT_10]`, `context_enrichment`, `human_approval`, `executor_routing`, `acceptance_criterion`) остаются в английской/латинской нормализации внутри русского текста.
 
-## Minimal Repair to Current Architecture
+## Annex D. Minimal Repair to Current Architecture
 1. Preserve the current task-plane and status-first semantics.
 2. Do not overload `create_tasks` with product or non-task semantics unless analyzer output becomes typed beyond `Task[]`.
 3. Treat `discussion_linkage` as an orthogonal relation layer.
 4. Introduce product entities only after the task-plane remains stable.
 5. Add actor/authority, registry/configuration, and evidence/trace semantics before attempting broad product-plane automation.
 
-## Proposed Execution Plan
+## Annex E. Proposed Execution Plan
 
 ### Phase 0. Ontology Freeze
 - accept this document as conceptual source for voice-dialog analysis;
@@ -1484,6 +1532,9 @@ Boundary reminder:
 ### Phase 1. Task-plane Stability
 - finish task `discussion_linkage` implementation;
 - keep `DRAFT_10` baseline stable;
+- switch task classification default to operational `Тип задачи` (`task_type_id`) from `task_type_tree` (`type_class=TASK`);
+- require `task_type_id` for all new/edited task rows on write-side;
+- keep legacy `task_type` as compatibility mirror and backfill bridge where historical rows still store only legacy type;
 - normalize comments and linkage before product-plane persistence.
 
 ### Phase 2. Runtime/Registry Alignment
@@ -1492,6 +1543,7 @@ Boundary reminder:
   - status domains
   - command/skills registries
   in any future analyzer/runtime contracts
+- start orthogonal decomposition of unified type surface into independent axes (`issue_type`, `role`, operation/object/deliverable families) without breaking Phase 1 `task_type_id` compatibility.
 
 ### Phase 3. Analyzer Output Expansion
 - expand from `Task[]` to typed management result:
@@ -1546,7 +1598,7 @@ It must include:
 
 Anything flatter will either collapse product into tasks, or collapse runtime into management, and both are category mistakes.
 
-## Verified Mongo / Ontology Parity Snapshot (2026-03-21)
+## Appendix 3. Verified Mongo / Ontology Parity Snapshot (2026-03-21)
 
 - live collection counts at recheck time: `automation_tasks=5573`, `automation_voice_bot_sessions=2060`, `automation_voice_bot_messages=13230`, `automation_comments=2229`;
 - current voice-origin task slice in Mongo after payload-to-draft migration: `source_kind=voice_possible_task -> 1611 Draft rows`, `source_kind missing -> 5 Draft rows`, `source_kind=voice_session -> 33 accepted rows` (`Ready=25`, `Progress 10=4`, `Review / Ready=4`);

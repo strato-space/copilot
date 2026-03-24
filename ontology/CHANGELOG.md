@@ -1,5 +1,164 @@
 # Ontology Changelog
 
+## 2026-03-25
+
+### PROBLEM SOLVED
+
+- **22:30** The voice/domain ontology, generic persistence requirements, and generic persistence architecture were still entangled across one planning surface, which made it too easy to mix domain ontology with domain-agnostic persistence law.
+- **22:30** The dual-stream ontology still had several local scholastic inconsistencies in its planning form: unresolved `decision` genus drift, undeclared modal frame, stale path references, and misleading AS-IS excerpt completeness.
+
+### FEATURE IMPLEMENTED
+
+- **22:30** Rehomed the canonical dual-stream domain ontology to `ontology/plan/voice-dual-stream-ontology.md` and introduced a separated persistence document family:
+  - `ontology-persistence-system-needs.ru.md`
+  - `ontology-persistence-system-needs.en.md`
+  - `ontology-persistence-db-spec.md`
+  - `voice-ontology-persistence-alignment-spec.md`
+- **22:30** Tightened the voice/task ontology with explicit dual-stream definition, epistemic `settled_decision`, deontic modal-frame note, authoritative `task_type_id` read path, schema-lag note for `outcome_record`, and explicit deferred coverage for `patch` / `history_step`.
+
+### CHANGES
+
+- Moved the canonical planning source from `plan/voice-dual-stream-ontology.md` to `ontology/plan/voice-dual-stream-ontology.md`.
+- Updated plan documents to point at the ontology-local canonical source:
+  - `plan/voice-non-draft-discussion-analyzer-contract.md`
+  - `plan/voice-task-session-discussion-linking-spec.md`
+  - `plan/voice-task-surface-normalization-spec-2.md`
+- Added new ontology planning specs:
+  - `ontology/plan/ontology-persistence-db-spec.md`
+  - `ontology/plan/ontology-persistence-system-needs.ru.md`
+  - `ontology/plan/ontology-persistence-system-needs.en.md`
+  - `ontology/plan/voice-ontology-persistence-alignment-spec.md`
+- Updated ontology-local docs:
+  - `ontology/README.md`
+  - `ontology/AGENTS.md`
+
+## 2026-03-23
+
+### PROBLEM SOLVED
+
+- **12:05** Voice review/taskflow semantics were still drifting between composite analyzer behavior, draft review surfaces, and the planning documents that described those surfaces.
+- **22:54** Incident-grade CREATE_TASKS parity and forensic procedures still lacked ontology-adjacent planning references, so operator reasoning about draft/task outcomes remained under-documented.
+
+### FEATURE IMPLEMENTED
+
+- **12:05** Brought planning surfaces into parity with the unified voice review model and stricter composite task-analysis contract.
+- **22:54** Preserved ontology-adjacent planning references for CREATE_TASKS parity and voice forensics as part of the voice/task document set.
+
+### CHANGES
+
+- Updated ontology-adjacent planning documents under `plan/` to stay aligned with the active composite analyzer and voice review model.
+
+## 2026-03-22
+
+### PROBLEM SOLVED
+
+- **05:09** TypeDB ontology/schema contracts around task normalization, goal/requirement ids, and validation still had residual drift after the status/priority normalization wave.
+- **22:11** Voice/CRM linkage and traceability rules still needed planning-level alignment so task lineage and source semantics were described coherently.
+
+### FEATURE IMPLEMENTED
+
+- **05:09** Completed a concentrated ontology repair wave for TypeDB validation, missing ids, task-only semantics, and generated schema regeneration.
+- **22:11** Refreshed the planning-level traceability references used by the voice/task ontology surfaces.
+
+### CHANGES
+
+- Landed ontology/schema fixes through the 2026-03-22 TypeDB normalization commits.
+- Kept the active voice/task planning set aligned with the refreshed linkage and traceability contract.
+
+## 2026-03-21
+
+### PROBLEM SOLVED
+
+- **09:12** The executor layer and DB-side task constraints were still under-formalized at the ontology/planning level.
+- **21:30** Draft-horizon policy and create_tasks profiling still lacked one coherent dual-stream planning interpretation.
+- **22:02** Dual-stream execution semantics needed an explicit planning-level normalization so launch authorization, acceptance, and execution outcomes were no longer conflated.
+
+### FEATURE IMPLEMENTED
+
+- **09:12** Formalized the executor-layer ontology vocabulary and DB-side task constraints as active kernel commitments.
+- **21:30** Added planning-level support for draft horizon and create_tasks profiling as bounded, ontology-aware policies.
+- **22:02** Normalized dual-stream execution semantics in the planning surface and fixed the launch/acceptance split.
+
+### CHANGES
+
+- Updated the dual-stream planning materials and ontology-adjacent references so they reflect executor-layer and bounded draft/taskflow semantics.
+
+## 2026-03-19
+
+### PROBLEM SOLVED
+
+- **22:03** Voice task-bucket semantics and repo guardrails still lacked synchronized planning/documentation wording.
+
+### FEATURE IMPLEMENTED
+
+- **22:03** Synchronized the planning/documentation layer around the accepted voice task bucket and related operator guardrails.
+
+### CHANGES
+
+- Updated the relevant planning/doc surfaces under `plan/` / `ontology` to preserve the accepted bucket contract.
+
+## 2026-03-18
+
+### PROBLEM SOLVED
+
+- **22:08** Discussion-linked taskflow and comment contracts were still under-specified in the planning/ontology surface.
+
+### FEATURE IMPLEMENTED
+
+- **22:08** Formalized repeated-discussion/task-session linkage semantics and adjacent comment-contract language in the active planning set.
+
+### CHANGES
+
+- Updated the voice/task discussion-linking planning surfaces later used as inputs to the dual-stream ontology.
+
+## 2026-03-16
+
+### PROBLEM SOLVED
+
+- **11:00** Task status normalization and agent-model fallback had landed in runtime, but the ontology-adjacent planning/documentation layer still needed to reflect the normalized lifecycle surface.
+
+### FEATURE IMPLEMENTED
+
+- **11:00** Synchronized ontology-adjacent planning/docs with the finalized task-status normalization wave.
+
+### CHANGES
+
+- Refreshed planning references used by the voice/task ontology family so they describe the normalized lifecycle axis consistently.
+
+## 2026-03-15
+
+### PROBLEM SOLVED
+
+- **03:08** The strict session-taskflow replacement still lacked finalized planning wording.
+- **13:22** Stale plans and fallback wording were still mixed into active planning/doc surfaces.
+- **22:04** TypeDB sync/full-load tooling lacked a cleaner staged operator story in ontology docs.
+
+### FEATURE IMPLEMENTED
+
+- **03:08** Finalized the planning wording for the strict taskflow replacement surface.
+- **13:22** Archived stale planning surfaces and hardened active docs around the accepted contracts.
+- **22:04** Added staged TypeDB sync and scratch full-load tooling as the ontology operator contract.
+
+### CHANGES
+
+- Updated ontology planning and TypeDB operator docs to reflect staged sync/full-load tooling and to retire stale plan surfaces.
+
+## 2026-03-14
+
+### PROBLEM SOLVED
+
+- **02:08** The next-wave voice/task contract still needed one approved planning articulation before implementation drift could be controlled.
+- **10:39 / 21:50 / 23:22 / 23:51** The task-surface normalization wave kept changing runtime semantics faster than the planning/docs layer was being synchronized.
+
+### FEATURE IMPLEMENTED
+
+- **02:08** Approved the next-wave voice/task contract in the planning layer.
+- **10:39 / 21:50 / 23:22 / 23:51** Repeatedly synchronized planning/docs with the strict canonical task-status filtering and unified task-surface contract as live verification progressed.
+
+### CHANGES
+
+- Updated the active voice/task planning specs so they matched the implemented status-first task surface and later live verification fixes.
+
 ## 2026-03-10
 
 ### PROBLEM SOLVED

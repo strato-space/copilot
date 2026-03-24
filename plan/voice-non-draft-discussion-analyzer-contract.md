@@ -9,7 +9,7 @@
 
 **Статус документа**: contract draft open; implementation pending
 **Дата**: 2026-03-18  
-**Основание**: updated [voice-dual-stream-ontology.md](/home/strato-space/copilot/plan/voice-dual-stream-ontology.md) and [voice-task-session-discussion-linking-spec.md](/home/strato-space/copilot/plan/voice-task-session-discussion-linking-spec.md).
+**Основание**: updated [voice-dual-stream-ontology.md](/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md) and [voice-task-session-discussion-linking-spec.md](/home/strato-space/copilot/plan/voice-task-session-discussion-linking-spec.md).
 
 ## Purpose
 Определить отдельный output contract для analyzer, который обнаруживает **повторное обсуждение существующих non-draft tasks** в voice session и не создает новые draft rows.

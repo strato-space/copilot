@@ -11,7 +11,7 @@
 **Дата**: 2026-03-18  
 **Основание**: текущие `bd` states for `copilot-96tc`, `copilot-br3m`; spec фиксирует target 1:N session-link/comment semantics, но эта wave всё ещё open в `bd`.
 
-**Conceptual source**: [voice-dual-stream-ontology.md](/home/strato-space/copilot/plan/voice-dual-stream-ontology.md)
+**Conceptual source**: [voice-dual-stream-ontology.md](/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md)
 
 ## Purpose
 Этот документ фиксирует **relation-layer contract** для repeated discussion of existing entities in voice sessions.

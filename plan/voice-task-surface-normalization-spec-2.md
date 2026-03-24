@@ -12,7 +12,7 @@
 **Дата**: 2026-03-21
 **Основание**: текущие `bd` states for `copilot-jn28`, `copilot-3d7n`, `copilot-muzv`, `copilot-br3m`; текущие comments уже фиксируют landed draft-reconcile/backlog-cleanup work, но все follow-up tickets остаются open; live Mongo recheck against `automation_tasks` / `automation_voice_bot_sessions` done on 2026-03-21.
 
-**Conceptual source**: [voice-dual-stream-ontology.md](/home/strato-space/copilot/plan/voice-dual-stream-ontology.md)
+**Conceptual source**: [voice-dual-stream-ontology.md](/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md)
 
 ## Purpose
 Этот документ фиксирует **task-plane only** contract для voice-driven draft task baseline.

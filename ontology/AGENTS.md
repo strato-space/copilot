@@ -26,6 +26,11 @@ Scope: `/home/strato-space/copilot/ontology`
 - Keep schema and mapping changes atomic and documented.
 - Treat `ontology/typedb/schema/fragments/*.tql` as editable source of truth and `ontology/typedb/schema/str-ontology.tql` as the generated artifact.
 - Treat `copilot` ontology as kernel/common layer for all project-local ontology overlays.
+- Keep the ontology planning family role-separated:
+  - `ontology/plan/voice-dual-stream-ontology.md` defines the voice/task domain ontology;
+  - `ontology/plan/ontology-persistence-system-needs.*` define generic persistence requirements;
+  - `ontology/plan/ontology-persistence-db-spec.md` defines the generic persistence architecture;
+  - `ontology/plan/voice-ontology-persistence-alignment-spec.md` binds the voice/task ontology to that generic persistence kernel.
 - Keep project-local SemanticCards aligned with ontology changes whenever object semantics change.
 - Keep DB-side owner-level `@values(...)` constraints intact for task/task-view status and priority; do not reintroduce unconstrained raw-label writes.
 - Treat executor-layer objects (`task_family`, `executor_role`, `executor_routing`, `task_execution_run`) as active kernel vocabulary, not speculative prose-only terms.
@@ -46,6 +51,8 @@ Run ontology tooling via backend npm aliases (stable operator contract):
 - `cd /home/strato-space/copilot/backend && npm run ontology:typedb:validate`
 
 ## Recent Updates
+
+- 2026-03-25: Rehomed the dual-stream voice ontology into `ontology/plan/voice-dual-stream-ontology.md`, added the generic ontology-persistence spec family plus the voice-domain bridge spec, and aligned plan documents to reference the ontology-local canonical source instead of the old repo-root `plan/` path.
 
 - 2026-02-28: `copilot-gym6.1`..`copilot-gym6.5` completed ontology runtime-parity wave:
   - gap matrix baseline added: `ontology/typedb/docs/runtime_contract_gap_matrix_v1.md`,
