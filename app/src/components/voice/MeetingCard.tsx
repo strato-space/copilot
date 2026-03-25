@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { Button, Select, message, Input, Tooltip, Modal } from 'antd';
 import { DownloadOutlined, EditOutlined, RobotOutlined, MoreOutlined, PlusOutlined, ProfileOutlined, RedoOutlined, UploadOutlined, LoadingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -11,8 +11,10 @@ import AddParticipantModal from './AddParticipantModal';
 import AccessUsersModal from './AccessUsersModal';
 import CustomPromptModal from './CustomPromptModal';
 import AudioUploader from './AudioUploader';
-import { buildGroupedProjectOptions } from './projectSelectOptions';
+import { useHydratedProjectOptions } from '../../hooks/useHydratedProjectOptions';
+import ProjectSelect from '../shared/ProjectSelect';
 import { readActiveSessionIdFromEvent, readVoiceFabGlobals } from '../../utils/voiceFabSync';
+import { hasPendingPossibleTasksRefresh } from '../../utils/voiceSessionTabs';
 import type { SessionAccessLevel } from '../../constants/permissions';
 import type { VoicebotPerson } from '../../types/voice';
 
@@ -114,6 +116,8 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
     const [fabActiveSessionId, setFabActiveSessionId] = useState('');
     const [savedTagOptions, setSavedTagOptions] = useState<string[]>([]);
     const [uploaderModalVisible, setUploaderModalVisible] = useState(false);
+    const { groupedProjectOptions } = useHydratedProjectOptions(prepared_projects);
+    const suppressNextTitleBlurSaveRef = useRef(false);
 
     const patchUiState = (patch: Partial<MeetingCardUiState>): void => {
         setUiState((prev) => ({ ...prev, ...patch }));
@@ -242,10 +246,27 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
         patchUiState({ isEditingTitle: true });
     };
 
-    const handleSessionNameSave = async (): Promise<void> => {
+    const handleSessionNameSave = async (options?: { deferPersist?: boolean }): Promise<void> => {
+        const shouldDeferPersist = options?.deferPersist === true;
+        suppressNextTitleBlurSaveRef.current = false;
         patchUiState({ isEditingTitle: false });
         if (voiceBotSession && sessionNameDraft !== voiceBotSession.session_name) {
+            if (shouldDeferPersist) {
+                window.setTimeout(() => {
+                    void updateSessionName(voiceBotSession._id, sessionNameDraft);
+                }, 0);
+                return;
+            }
             await updateSessionName(voiceBotSession._id, sessionNameDraft);
+        }
+    };
+
+    const markTitleBlurHandoff = (event: ReactMouseEvent<HTMLElement>): void => {
+        if (!uiState.isEditingTitle) return;
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.closest('button, .ant-select, .ant-select-selector, .voice-meeting-icon-button')) {
+            suppressNextTitleBlurSaveRef.current = true;
         }
     };
 
@@ -566,31 +587,31 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
     })();
 
     const currentAccessLevel = (voiceBotSession?.access_level || SESSION_ACCESS_LEVELS.PRIVATE) as SessionAccessLevel;
+    const hasTaskflowPending = useMemo(
+        () => hasPendingPossibleTasksRefresh(voiceBotSession, voiceBotMessages),
+        [voiceBotSession, voiceBotMessages]
+    );
 
     return (
         <>
             {contextHolder}
             <div data-record="False" className="voice-meeting-glass-card">
                 <div className="voice-meeting-header-row">
-                    <div className="voice-meeting-header-main">
+                    <div className="voice-meeting-header-main" onMouseDownCapture={markTitleBlurHandoff}>
                         <div className="voice-meeting-control-field">
                             <label htmlFor="voice-meeting-project-select" style={visuallyHiddenLabelStyle}>
                                 Проект сессии
                             </label>
-                            <Select
+                            <ProjectSelect
                                 id="voice-meeting-project-select"
                                 aria-label="Проект сессии"
                                 placeholder="Проект"
                                 className="w-[220px]"
-                                value={voiceBotSession?.project_id ?? undefined}
+                                popupClassName="voice-project-select-popup"
+                                value={voiceBotSession?.project_id ?? null}
                                 onChange={(value) => voiceBotSession?._id && updateSessionProject(voiceBotSession._id, value ?? null)}
                                 allowClear
-                                options={buildGroupedProjectOptions(prepared_projects)}
-                                showSearch
-                                optionFilterProp="label"
-                                filterOption={(inputValue, option) =>
-                                    String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
-                                }
+                                options={groupedProjectOptions}
                             />
                         </div>
 
@@ -622,8 +643,8 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                                 <Input
                                     value={sessionNameDraft}
                                     onChange={(event) => setSessionNameDraft(event.target.value)}
-                                    onBlur={handleSessionNameSave}
-                                    onPressEnter={handleSessionNameSave}
+                                    onBlur={() => void handleSessionNameSave({ deferPersist: suppressNextTitleBlurSaveRef.current })}
+                                    onPressEnter={() => void handleSessionNameSave()}
                                     className="voice-meeting-title-input"
                                 />
                             ) : (
@@ -631,6 +652,12 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                                     {voiceBotSession?.session_name || 'Без названия'}
                                 </div>
                             )}
+
+                            {hasTaskflowPending ? (
+                                <Tooltip title="Идет перерасчет заголовка, ревью и задач">
+                                    <span className="voice-tab-processing-dot" aria-label="Перерасчет taskflow" />
+                                </Tooltip>
+                            ) : null}
 
                             <Tooltip title="Редактировать">
                                 <Button

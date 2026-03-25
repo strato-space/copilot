@@ -5,82 +5,79 @@ describe('PossibleTasks design contract', () => {
   const componentPath = path.resolve(process.cwd(), 'src/components/voice/PossibleTasks.tsx');
   const source = fs.readFileSync(componentPath, 'utf8');
 
-  it('removes counters, search/filter, and bulk-selection controls from draft surface', () => {
-    expect(source.includes('Всего: {totalCount}')).toBe(false);
-    expect(source.includes('Создать выбранные ({selectedRowKeys.length})')).toBe(false);
-    expect(source.includes('Поиск по названию, описанию, тегам, ссылкам')).toBe(false);
-    expect(source.includes("'Все приоритеты'")).toBe(false);
-    expect(source.includes('Только выбранные')).toBe(false);
-    expect(source.includes('<Checkbox')).toBe(false);
+  it('keeps draft surface free of legacy counters, bulk controls, and table headers', () => {
+    expect(source).not.toContain('Всего: {totalCount}');
+    expect(source).not.toContain('Создать выбранные');
+    expect(source).not.toContain('Поиск по названию, описанию, тегам, ссылкам');
+    expect(source).not.toContain('Только выбранные');
+    expect(source).not.toContain('<Checkbox');
+    expect(source).not.toContain('ЗАДАЧА');
+    expect(source).not.toContain('ИСПОЛНИТЕЛЬ');
+    expect(source).not.toContain('ПРИОРИТЕТ');
+    expect(source).not.toContain('ПРОЕКТ');
   });
 
-  it('implements two-pane workspace with left draft list and one right rich card', () => {
-    expect(source.includes('Черновики')).toBe(false);
-    expect(source.includes('Карточка черновика')).toBe(false);
-    expect(source.includes('Заполнить:')).toBe(false);
-    expect(source.includes('Нужно:')).toBe(false);
-    expect(source.includes('xl:grid-cols-[minmax(720px,1.8fr)_minmax(360px,1fr)]')).toBe(true);
-    expect(source.includes('aria-label="Сохранить черновик"')).toBe(true);
-    expect(source.includes('aria-label="Клонировать черновик"')).toBe(true);
-    expect(source.includes('aria-label="Удалить черновик"')).toBe(true);
-    expect(source.includes('shape="circle"')).toBe(true);
-    expect(source.includes("onClick={() => setActiveRowId(row.row_id)}")).toBe(true);
-    expect(source.includes("key={row.row_id}")).toBe(true);
+  it('uses a dominant left draft list with compact rows and a narrower right detail pane', () => {
+    expect(source).toContain('grid w-full items-stretch gap-3 lg:grid-cols-[minmax(0,5.5fr)_minmax(420px,2.25fr)] xl:grid-cols-[minmax(0,5.15fr)_minmax(560px,2.45fr)]');
+    expect(source).toContain("rounded-[5px] border px-0.5 py-0 text-left transition");
+    expect(source).toContain("rounded-[12px] border border-white/70 bg-white/82 p-1.5");
+    expect(source).toContain("rounded-[12px] border border-white/70 bg-white/84 p-2");
+    expect(source).toContain('lg:h-[calc(100vh-232px)] lg:min-h-0');
   });
 
-  it('keeps editable controls for required fields in detail card', () => {
-    expect(source.includes("status={activeRow.__missing.includes('name') ? 'error' : ''}")).toBe(true);
-    expect(source.includes("activeRow.__missing.includes('project_id')")).toBe(true);
-    expect(source.includes("activeRow.__missing.includes('performer_id') ||")).toBe(true);
-    expect(source.includes("setDraftValue(activeRow.row_id, 'project_id', toText(value))")).toBe(true);
-    expect(source.includes("setDraftValue(activeRow.row_id, 'task_type_id', toText(value))")).toBe(true);
-    expect(source.includes("Boolean(rowCreationErrors[activeRow.row_id]?.performer_id)")).toBe(true);
-    expect(source.includes("setDraftValue(activeRow.row_id, 'name', event.target.value)")).toBe(true);
-    expect(source.includes("setDraftValue(activeRow.row_id, 'priority', toText(value))")).toBe(true);
-    expect(source.includes('<Tooltip title={toText(activeRow.priority_reason) || undefined}>')).toBe(true);
-    expect(source.includes('renderPriorityTag(row.priority, row.priority_reason')).toBe(true);
+  it('renders inline-editable title, conditional project chip, performer pill, and priority pill in the list', () => {
+    expect(source).toContain('aria-label="Редактировать название"');
+    expect(source).toContain("resolvedProjectId !== resolvedSessionProjectId");
+    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_id, 'project_id')");
+    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_id, 'performer_id')");
+    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_id, 'priority')");
+    expect(source).toContain("text-slate-400");
+    expect(source).toContain("|| '—'");
+    expect(source).toContain('title={toText(row.priority_reason) || \'Изменить приоритет\'}');
   });
 
-  it('uses simplified markdown and q/a editors instead of section grids', () => {
-    expect(source.includes('parseVoiceTaskEnrichmentSections')).toBe(false);
-    expect(source.includes('<Text strong>Описание (Markdown)</Text>')).toBe(true);
-    expect(source.includes('<Text strong>Question / Answer</Text>')).toBe(true);
-    expect(source.includes("setDescriptionDraftValue(activeRow.row_id, { markdown: event.target.value })")).toBe(true);
-    expect(source.includes("setDescriptionDraftValue(activeRow.row_id, { qaChunk: event.target.value })")).toBe(true);
-    expect(source.includes('## acceptance_criteria')).toBe(true);
-    expect(source.includes('Question:\\n[копия вопросов]\\n\\nAnswer:\\n[ответы пользователя]')).toBe(true);
-    expect(source.includes('VOICE_TASK_ENRICHMENT_SECTION_KEYS.map((sectionKey) => {')).toBe(false);
-    expect(source.includes("Storage surface: `task.description`")).toBe(false);
-    expect(source.includes('setEnrichmentSectionValue(')).toBe(false);
+  it('opens inline editors from compact controls via click and keeps option search on searchLabel', () => {
+    expect(source).toContain('onClick={(event) => {');
+    expect(source).toContain('onMouseDown={(event) => {');
+    expect(source).toContain('inlineSelectRefs.current');
+    expect(source).toContain('defaultOpen');
+    expect(source).toContain('handleInlineActivatorMouseDown(event, row.row_id, \'project_id\')');
+    expect(source).toContain('<ProjectSelect');
+    expect(source).toContain('<OperationalTaskTypeSelect');
+    expect(source).toContain('popupClassName="voice-project-select-popup"');
+    expect(source).toContain('popupClassName="w-[380px]"');
+    expect(source).not.toContain("labelRender={renderOpaqueLabel('Проект')}");
+    expect(source).not.toContain("labelRender={renderOpaqueLabel('Тип задачи')}");
+    expect(source).toContain("labelRender={renderOpaqueLabel('Исполнитель')}");
+    expect(source).toContain('Архивный исполнитель');
   });
 
-  it('keeps right card compact without separate metadata side panels', () => {
-    expect(source.includes('AI task id')).toBe(false);
-    expect(source.includes('Причина приоритета')).toBe(false);
-    expect(source.includes('Зависимости')).toBe(false);
-    expect(source.includes('Источник')).toBe(false);
-    expect(source.includes('Review signals')).toBe(false);
+  it('saves drafts only outside active editing and keeps a long debounce', () => {
+    expect(source).toContain('const AUTOSAVE_DEBOUNCE_MS = 5000;');
+    expect(source).toContain('if (!sessionId || Object.keys(drafts).length === 0 || isInlineEditingActive) return;');
+    expect(source).toContain('const shouldFreezeServerRowsSnapshot = isInlineEditingActive || isAutosaving;');
+    expect(source).toContain('const refreshCorrelationId = crypto.randomUUID();');
+    expect(source).toContain('refreshClickedAtMs');
+    expect(source).toContain('import { useShallow } from \'zustand/react/shallow\';');
+    expect(source).toContain("await saveSessionPossibleTasks(sessionId, payload, {");
+    expect(source).toContain("refreshMode: 'incremental_refresh'");
   });
 
-  it('shows priority_reason on hover for priority badge and priority field only when present', () => {
-    expect(source.includes('const renderPriorityTag = (priority: string, priorityReason: string, color: string) => {')).toBe(true);
-    expect(source.includes("if (!reason) return tag;")).toBe(true);
-    expect(source.includes('{renderPriorityTag(row.priority, row.priority_reason, row.__isReady ? \'success\' : \'warning\')}')).toBe(true);
-    expect(source.includes('Tooltip title={toText(activeRow.priority_reason) || undefined}')).toBe(true);
-  });
-
-  it('autosaves draft changes on blur/debounce', () => {
-    expect(source.includes('const AUTOSAVE_DEBOUNCE_MS = 800;')).toBe(true);
-    expect(source.includes("await saveSessionPossibleTasks(sessionId, payload, {")).toBe(true);
-    expect(source.includes("refreshMode: 'incremental_refresh'")).toBe(true);
-    expect(source.includes('onBlur={() => void flushAutosave(\'blur\')}')).toBe(true);
-  });
-
-  it('uses taller responsive popup height for performer selector', () => {
-    expect(source.includes('const PERFORMER_PICKER_POPUP_HEIGHT = {')).toBe(true);
-    expect(source.includes('mobile: 320')).toBe(true);
-    expect(source.includes('desktop: 520')).toBe(true);
-    expect(source.includes('const performerPickerListHeight = screens.md')).toBe(true);
-    expect(source.includes('listHeight={performerPickerListHeight}')).toBe(true);
+  it('keeps the detail pane limited to explicit form fields plus one large markdown body', () => {
+    expect(source).toContain('<Text strong>Название</Text>');
+    expect(source).toContain('<Text strong>Приоритет</Text>');
+    expect(source).toContain('<Text strong>Проект</Text>');
+    expect(source).toContain('<Text strong>Тип</Text>');
+    expect(source).toContain('<Text strong>Исполнитель</Text>');
+    expect(source).toContain('<Text strong>Описание (Markdown)</Text>');
+    expect(source).toContain('autoSize={{ minRows: 24, maxRows: 40 }}');
+    expect(source).toContain('getCompactInlinePillClassName(Boolean(row.performer_id))');
+    expect(source).toContain("const [openDetailSelectField, setOpenDetailSelectField] = useState<string | null>(null);");
+    expect(source).toContain("const isInlineEditingActive = Boolean(editingNameRowId || inlineListEdit || focusedDetailField || openDetailSelectField);");
+    expect(source).not.toContain('allowClear\n                    placeholder="Проект"');
+    expect(source).not.toContain('buildTaskTypeAliasLookup');
+    expect(source).not.toContain('AI task id');
+    expect(source).not.toContain('Источник');
+    expect(source).not.toContain('Review signals');
   });
 });

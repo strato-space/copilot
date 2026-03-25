@@ -13,6 +13,7 @@ import { useKanbanStore } from '../../../store/kanbanStore';
 import { useCRMStore } from '../../../store/crmStore';
 import BonusCalculator from './BonusCalculator.js';
 import ProjectTag from '../ProjectTag';
+import { projectDisplayName, projectSelectLabel, resolveProjectOption } from '../../../utils/projectSelectOptions';
 
 import 'dayjs/locale/ru';
 
@@ -47,6 +48,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ performer }) => {
     const [lastChanged, setLastChanged] = useState<number>(0);
 
     const fetchPerfrormerFinances = useKanbanStore((state) => state.fetchPerfrormerFinances);
+    const projectsData = useKanbanStore((state) => state.projectsData);
     const performerFinancesData = useKanbanStore((state) => state.performerFinancesData) as
         | {
             tickets: Record<string, Array<{ ticket: { id: string; name: string }; totalWorkHours: number }>>;
@@ -88,14 +90,23 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ performer }) => {
     const worksDataSource = useMemo(() => {
         if (!performerFinancesData) return [];
         return Object.entries(performerFinancesData.tickets ?? {}).flatMap(([project, tickets]) =>
-            tickets.map((ticket) => ({
-                key: ticket.ticket.id,
-                project,
-                name: ticket.ticket.name,
-                totalWorkHours: ticket.totalWorkHours,
-            }))
+            tickets.map((ticket) => {
+                const resolvedProject = resolveProjectOption(projectsData, project);
+                return {
+                    key: ticket.ticket.id,
+                    project,
+                    projectLabel: resolvedProject
+                        ? projectDisplayName(resolvedProject)
+                        : projectSelectLabel(project, project),
+                    projectTooltip: resolvedProject
+                        ? projectDisplayName(resolvedProject)
+                        : projectSelectLabel(project, project),
+                    name: ticket.ticket.name,
+                    totalWorkHours: ticket.totalWorkHours,
+                };
+            })
         );
-    }, [performerFinancesData]);
+    }, [performerFinancesData, projectsData]);
 
     const statsForBonus = useMemo(() => {
         const stats = (performerFinancesData?.works_statistic ?? {}) as Record<string, unknown>;
@@ -251,7 +262,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ performer }) => {
                                 render: (text, record, index) => {
                                     const prev = worksDataSource[index - 1] as { project?: string } | undefined;
                                     const isFirst = index === 0 || record.project !== prev?.project;
-                                    return isFirst ? <ProjectTag name={record.project} tooltip={record.project} /> : null;
+                                    return isFirst ? <ProjectTag name={record.projectLabel} tooltip={record.projectTooltip} /> : null;
                                 },
                             },
                             {

@@ -11,6 +11,9 @@ module.exports = {
             script: 'npm',
             args: 'run dev',
             env_file: path.join(backDir, '.env.development'),
+            env: {
+                NODE_ENV: 'development',
+            },
         },
         {
             name: 'copilot-miniapp-backend-dev',
@@ -18,6 +21,9 @@ module.exports = {
             script: 'npm',
             args: 'run dev:miniapp',
             env_file: path.join(backDir, '.env.development'),
+            env: {
+                NODE_ENV: 'development',
+            },
         },
         {
             name: 'copilot-backend-local',
@@ -25,6 +31,9 @@ module.exports = {
             script: 'npm',
             args: 'run dev',
             env_file: path.join(backDir, '.env.development'),
+            env: {
+                NODE_ENV: 'development',
+            },
         },
         {
             name: 'copilot-miniapp-backend-local',
@@ -32,6 +41,9 @@ module.exports = {
             script: 'npm',
             args: 'run dev:miniapp',
             env_file: path.join(backDir, '.env.development'),
+            env: {
+                NODE_ENV: 'development',
+            },
         },
         {
             name: 'copilot-backend-prod',
@@ -39,6 +51,9 @@ module.exports = {
             script: 'npm',
             args: 'run start',
             env_file: path.join(backDir, '.env.production'),
+            env: {
+                NODE_ENV: 'production',
+            },
         },
         {
             name: 'copilot-miniapp-backend-prod',
@@ -46,6 +61,9 @@ module.exports = {
             script: 'npm',
             args: 'run start:miniapp',
             env_file: path.join(backDir, '.env.production'),
+            env: {
+                NODE_ENV: 'production',
+            },
         },
     ],
 };

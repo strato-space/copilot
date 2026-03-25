@@ -9,6 +9,128 @@ body {
   color: #0f172a;
 }
 
+.app-shell-layout {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.app-shell-sider {
+  background: #ffffff !important;
+}
+
+.app-shell-sider-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 10px 6px;
+}
+
+.app-shell-sider-top--collapsed {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.app-shell-sider-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #0f172a;
+  flex: 0 0 auto;
+}
+
+.app-shell-sider-toggle {
+  flex: 0 0 auto;
+  border: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.app-shell-sider-toggle:hover {
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.app-shell-nav {
+  border-inline-end: 0 !important;
+  background: transparent !important;
+}
+
+.app-shell-nav .ant-menu-item {
+  margin: 2px 8px !important;
+  width: auto;
+  border-radius: 10px;
+  height: 34px;
+  line-height: 34px;
+  padding-inline: 10px !important;
+}
+
+.app-shell-nav .ant-menu-item-selected {
+  background: #eef2ff !important;
+}
+
+.app-shell-nav .ant-menu-item-selected .ant-menu-title-content,
+.app-shell-nav .ant-menu-item-selected .app-shell-nav-link {
+  color: #0f172a !important;
+}
+
+.app-shell-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  color: inherit;
+}
+
+.app-shell-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell-nav-meta {
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  opacity: 0.8;
+}
+
+.app-shell-nav-meta--zero {
+  color: #64748b;
+}
+
+.app-shell-nav-meta--alpha {
+  color: #be185d;
+}
+
+.app-shell-nav-meta--beta {
+  color: #0e7490;
+}
+
+.app-shell-main {
+  min-width: 0;
+  background: transparent;
+}
+
+.app-shell-main-content {
+  min-width: 0;
+  width: 100%;
+  background: transparent !important;
+}
+
+.app-shell-main-surface {
+  min-height: 100vh;
+  width: 100%;
+  background: transparent;
+  padding: 0;
+}
+
 h1,
 h2,
 h3,
@@ -458,10 +580,16 @@ h5 {
 
 .voice-session-shell {
   position: relative;
-  min-height: calc(100vh - 72px);
-  padding: 12px 24px 24px;
+  min-height: 100vh;
+  padding: 0;
   color: var(--voice-text-main);
   overflow: hidden;
+}
+
+.voice-session-shell--workspace {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
 }
 
 .voice-session-shell-bg {
@@ -479,11 +607,11 @@ h5 {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 1740px;
-  margin: 0 auto;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  padding: 10px 12px 14px;
 }
 
 .voice-session-content {
@@ -494,17 +622,20 @@ h5 {
 
 .voice-session-tabs-shell {
   width: 100%;
-  max-width: 1740px;
   background: var(--voice-glass-bg-strong);
   border: 1px solid var(--voice-glass-border);
-  border-radius: 26px;
-  padding: 10px 14px 14px;
+  border-radius: 16px;
+  padding: 6px;
   box-shadow: var(--voice-glass-shadow);
   backdrop-filter: blur(22px) saturate(1.35);
 }
 
+.voice-session-shell .voice-meeting-meta-row > .voice-meeting-meta-chip:nth-child(2) {
+  display: none;
+}
+
 .voice-session-tabs-shell .ant-tabs-nav {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .voice-session-tabs-shell .ant-tabs-tab {
@@ -529,17 +660,29 @@ h5 {
 
 .voice-meeting-glass-card {
   width: 100%;
-  max-width: 1740px;
-  margin: 0 auto;
-  padding: 14px 14px 12px;
-  border-radius: 26px;
+  padding: 8px;
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   background: var(--voice-glass-bg-strong);
   border: 1px solid var(--voice-glass-border);
   box-shadow: var(--voice-glass-shadow);
   backdrop-filter: blur(22px) saturate(1.32);
+}
+
+.voice-session-loading-panel {
+  width: 100%;
+  min-height: 180px;
+  border-radius: 16px;
+  border: 1px solid var(--voice-glass-border);
+  background: var(--voice-glass-bg-strong);
+  box-shadow: var(--voice-glass-shadow);
+  backdrop-filter: blur(22px) saturate(1.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--voice-text-main);
 }
 
 .voice-meeting-header-row {
@@ -762,8 +905,141 @@ h5 {
   color: var(--voice-text-main) !important;
 }
 
-.voice-project-select-popup {
+.voice-sessions-shell {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  padding: 10px 12px 18px;
+  box-sizing: border-box;
+}
+
+.voice-sessions-shell-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(1120px 560px at 12% -18%, rgba(56, 189, 248, 0.24), transparent 64%),
+    radial-gradient(980px 520px at 94% 8%, rgba(99, 102, 241, 0.18), transparent 58%),
+    linear-gradient(180deg, rgba(245, 248, 252, 0.94) 0%, rgba(232, 240, 250, 0.96) 100%);
+}
+
+.voice-sessions-surface {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.voice-sessions-shell .ant-tabs {
+  border-radius: 18px;
+  border: 1px solid var(--voice-glass-border);
+  background: var(--voice-glass-bg-strong);
+  box-shadow: var(--voice-glass-shadow);
+  backdrop-filter: blur(22px) saturate(1.35);
+  padding: 8px 10px 0;
+}
+
+.voice-sessions-shell .ant-tabs-nav {
+  margin-bottom: 8px;
+}
+
+.voice-sessions-shell .ant-tabs-tab {
+  border-radius: 10px;
+}
+
+.voice-sessions-shell .ant-tabs-tab-btn {
+  color: var(--voice-text-subtle);
+}
+
+.voice-sessions-shell .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--voice-text-main) !important;
+}
+
+.voice-sessions-shell .ant-table-wrapper {
+  border-radius: 16px;
+  border: 1px solid var(--voice-glass-border);
+  background: var(--voice-glass-bg-strong);
+  box-shadow: var(--voice-glass-shadow);
+  backdrop-filter: blur(22px) saturate(1.35);
+  overflow: hidden;
+}
+
+.voice-sessions-shell .ant-table {
+  background: transparent;
+}
+
+.voice-sessions-shell .ant-table-container,
+.voice-sessions-shell .ant-table-content,
+.voice-sessions-shell .ant-table-header,
+.voice-sessions-shell .ant-table-body {
+  background: transparent;
+}
+
+.voice-sessions-shell .ant-table-thead > tr > th {
+  background: rgba(255, 255, 255, 0.34) !important;
+  color: var(--voice-text-subtle);
+  border-bottom: 1px solid rgba(130, 150, 180, 0.2) !important;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.voice-sessions-shell .ant-table-tbody > tr > td {
+  background: rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(130, 150, 180, 0.14);
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.voice-sessions-shell .ant-table-tbody > tr:hover > td {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.voice-sessions-shell .ant-pagination {
+  margin: 0;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(130, 150, 180, 0.14);
+}
+
+.voice-sessions-shell .ant-pagination .ant-pagination-total-text {
+  color: var(--voice-text-subtle);
+}
+
+.voice-project-select-popup,
+.copilot-project-select-popup {
   min-width: 420px !important;
+}
+
+.copilot-task-type-select-popup {
+  min-width: 380px !important;
+}
+
+.copilot-hierarchical-select-popup .ant-select-item-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 10px 12px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #334155;
+  background: rgba(241, 245, 249, 0.98);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.copilot-hierarchical-select-popup .ant-select-item-option-grouped {
+  padding-left: 18px !important;
+  margin-inline-start: 0 !important;
+}
+
+.copilot-hierarchical-select-popup .ant-select-item-option-content {
+  white-space: nowrap;
 }
 
 .sessions-table .ant-table-tbody > tr.sessions-row-deleted > td {
@@ -787,7 +1063,21 @@ h5 {
 
 @media (max-width: 1200px) {
   .voice-session-shell {
-    padding: 8px 12px 16px;
+    padding: 0;
+  }
+
+  .voice-session-shell--workspace {
+    margin: 0;
+    padding: 0;
+  }
+
+  .voice-session-page {
+    padding: 10px 12px 12px;
+    gap: 10px;
+  }
+
+  .voice-sessions-shell {
+    padding: 10px 12px 14px;
   }
 
   .voice-meeting-header-row {

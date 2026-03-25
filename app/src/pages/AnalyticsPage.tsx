@@ -605,7 +605,7 @@ export default function AnalyticsPage(): ReactElement {
         items={[
           {
             key: 'operops',
-            label: 'OperOps',
+            label: 'Ops metrics',
             children: (
               <div className="flex flex-col gap-4">
                 <Card className="border border-slate-200">
@@ -855,12 +855,12 @@ export default function AnalyticsPage(): ReactElement {
           },
           {
             key: 'finance',
-            label: 'Finance',
+            label: 'Finance metrics',
             children: null,
           },
           {
             key: 'desops',
-            label: 'DesOps',
+            label: 'Design metrics',
             children: (
               <Card>
                 <Empty description="Пока пусто" />

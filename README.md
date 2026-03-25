@@ -12,6 +12,8 @@ Use this as a fast guardrail before implementing anything:
 - Full-track chunks are intentionally non-uploading until diarization is introduced; do not re-enable implicit uploads.
 - Runtime isolation for Voice is deployment-scoped (separate DB/instance per environment); `runtime_tag` is transitional metadata and not an operational routing contract.
 - Realtime updates are required: uploads and workers must emit session/message events so Transcription/Categorization update without refresh.
+- Browser-based UI acceptance should restart `mcp@chrome-devtools.service` before each live verification cycle; stale MCP/CDP state is not an accepted explanation for skipped smoke checks.
+- Shared selector parity is a product contract: project and operational task-type controls should reuse the same wrappers and option-source builders across Voice and OperOps so hierarchy/labels never degrade into flat lists or raw ids on one surface.
 - Session list contracts are user-facing:
   - quick tabs: `Все`, `Без проекта`, `Активные`, `Мои`,
   - deleted toggle `Показывать удаленные`,
@@ -47,7 +49,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `copilot` ontology is the kernel/common layer; projects are expected to extend it via per-project overlays and SemanticCards under `/home/strato-space/<project-slug>/`.
 - Direct TypeDB write discipline now uses DB-side owner-level `@values(...)` constraints for `task.status` and `task.priority` plus key TO-BE execution objects; Mongo task labels are normalized directly into canonical lifecycle keys and `P1..P7` priority before writing.
 - Executor-layer ontology is now staged in the kernel plan/spec surface: `task_family`, `executor_role`, `executor_routing`, and `task_execution_run` are the canonical next-wave execution objects.
-- Dual-stream execution semantics are fixed in `plan/voice-dual-stream-ontology.md`: draft tasks stay `task[DRAFT_10]`, `context_enrichment` is mandatory before launch, `human approval` is launch authorization (not final acceptance), and runtime flow is `executor_routing` -> `task_execution_run` -> `artifact_record` -> `acceptance_evaluation`.
+- Dual-stream execution semantics are fixed in `ontology/plan/voice-dual-stream-ontology.md`: draft tasks stay `task[DRAFT_10]`, `context_enrichment` is mandatory before launch, `human approval` is launch authorization (not final acceptance), and runtime flow is `executor_routing` -> `task_execution_run` -> `artifact_record` -> `acceptance_evaluation`.
 
 ## Interface Contracts (High Impact)
 
@@ -290,7 +292,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
 - Status-first Voice/OperOps surface convergence now lives in `plan/voice-task-surface-normalization-spec.md` as the active contract; the old as-built Voice status plan is archived in `plan/archive/voice-task-status-normalization-plan.legacy.md`.
 - Discussion-linking / ontology follow-up specs for the current Voice task wave live in:
-  - `plan/voice-dual-stream-ontology.md`
+  - `ontology/plan/voice-dual-stream-ontology.md`
   - `plan/voice-task-session-discussion-linking-spec.md`
   - `plan/voice-non-draft-discussion-analyzer-contract.md`
   - `plan/voice-task-surface-normalization-spec-2.md`
@@ -335,8 +337,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Auth sync and model sync are canonical:
   - source of truth: `/root/.codex/auth.json`
   - runtime copy: `agents/.codex/auth.json`
-  - runtime `default_model` is pinned to `gpt-5.4`
-  - auth recovery may restart agents and restore the same `gpt-5.4` default after sync
+  - runtime `default_model` is pinned to `gpt-5.4-mini`
+  - auth recovery may restart agents and restore the same `gpt-5.4-mini` default after sync
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.

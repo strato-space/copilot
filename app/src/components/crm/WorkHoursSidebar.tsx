@@ -7,6 +7,7 @@ import { CloseOutlined, EditOutlined } from '@ant-design/icons';
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
+import { resolveTaskProjectName } from '../../pages/operops/taskPageUtils';
 import type { WorkData, Ticket } from '../../types/crm';
 
 interface WorkFormValues {
@@ -72,7 +73,7 @@ const WorkHoursSidebar = () => {
         isTicketDetailLoading,
         getCustomerByProject,
         getProjectGroupByProject,
-        getProjectByName,
+        projectsData,
     } = useKanbanStore();
     const { editingWorkHours, setEditingWorkHours } = useCRMStore();
     const [form] = Form.useForm<WorkFormValues>();
@@ -107,7 +108,7 @@ const WorkHoursSidebar = () => {
 
     const customerName = resolvedEditingWorkHours ? getCustomerByProject(resolvedEditingWorkHours.project) : '';
     const projectGroupName = resolvedEditingWorkHours ? getProjectGroupByProject(resolvedEditingWorkHours.project) : '';
-    const projectName = resolvedEditingWorkHours ? getProjectByName(resolvedEditingWorkHours.project)?.name || resolvedEditingWorkHours.project : '';
+    const projectName = resolvedEditingWorkHours ? resolveTaskProjectName(resolvedEditingWorkHours, projectsData) : '';
     const historicalPerformerIds = useMemo(
         () =>
             Array.from(

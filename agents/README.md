@@ -57,14 +57,14 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 
 ## Runtime Notes
 
-- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `gpt-5.4`.
-- `run_fast_agent.py` is the repo-local bootstrap entrypoint for runtime model registrations. It currently registers `gpt-5.4` as a large-window Codex model (`context_window=950000`) without patching site-packages directly.
+- `create_tasks` inherits the runtime model from `fastagent.config.yaml` unless you override it explicitly via `--model`. Current config default is `gpt-5.4-mini`.
+- `run_fast_agent.py` is the repo-local bootstrap entrypoint for runtime model registrations. It registers `gpt-5.4` as a large-window Codex model (`context_window=950000`) and `gpt-5.4-mini` as the default Codex mini runtime without patching site-packages directly.
 - Preferred `create_tasks` input is a compact structured envelope with modes `raw_text`, `session_id`, or `session_url`.
 - A plain string is still treated as legacy `raw_text` input for backward compatibility.
 - Session-backed task extraction enriches context directly through MCP `voice`.
 - Session-backed `create_tasks` requests do not ship full transcript/categorization/material blocks over Socket.IO anymore; the prompt rehydrates context from MCP `voice` by `session_id/session_url`.
 - `create_tasks` must not route through StratoProject execution; enrichment is direct MCP `voice`.
-- `create_tasks` treats current-session draft possible tasks as the editable baseline: same-scope rows should be returned with the same `row_id/id` and improved wording instead of being suppressed as duplicates.
+- `create_tasks` treats current-session draft possible tasks as the editable baseline: same-scope rows should be returned with the same `row_id/id`, while `name/description` may be refreshed in place when the current transcript gives a more accurate wording.
 - `voice.fetch(..., mode="transcript")` is the canonical metadata source for session-backed task extraction and now carries a frontmatter block with `session-id`, `session-name`, `session-url`, `project-id`, `project-name`, and `routing-topic`.
 - If transcript metadata includes `project-id`, `create_tasks` must read exactly one project card through `voice.project(project_id)`; it should not rehydrate project context through `voice.search` or a full project list.
 - If `project_id` is present, `create_tasks` must run a read-only shell entrypoint-read pass inside allowed roots (`/home/strato-space/copilot`, `/home/strato-space/mediagen`) by reading `AGENTS.md` and `README.md` before task materialization; root-wide `ls/find/rg` inventory is not part of the contract.
@@ -72,6 +72,7 @@ Security note: keep the agent service bound to loopback (`127.0.0.1`) and access
 - `create_tasks` still excludes finance noise, but must keep explicit finance-adjacent operational documents (`счёт`, `invoice`, `акт`, `смета`, `КП`, `договор`) when they are directly поручены как рабочий deliverable.
 - `create_tasks` should read the transcript frontmatter (`session-id`, `session-name`, `session-url`, `project-id`, `project-name`, `routing-topic`) before task generation and use `voice.crm_dictionary()` when available to infer `task_type_id`.
 - `create_tasks` returns a full desired Draft snapshot for the current session rather than a minimal delta and keeps same-scope Draft rows mutable by `row_id/id`.
+- `create_tasks` must run a separate tail-pass over the last 25-30% of the transcript so late concrete asks are not silently lost under earlier platform discussion.
 
 ### Production Deployment (PM2)
 

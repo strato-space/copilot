@@ -38,7 +38,6 @@ import {
     StopOutlined,
     BellOutlined,
     EyeOutlined,
-    FilterOutlined,
     ClockCircleOutlined,
     TeamOutlined,
 } from '@ant-design/icons';
@@ -52,9 +51,27 @@ import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTarget
 import { NOTION_TICKET_PRIORITIES } from '../../constants/crm';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
 import { normalizeVoiceSessionSourceRefs, ticketMatchesVoiceSessionSourceRefs } from '../../utils/voiceSessionTaskSource';
-import type { Ticket, Performer, Epic, TaskType } from '../../types/crm';
+import {
+    buildGroupedProjectOptions,
+    hydrateProjectsWithRelations,
+    projectDisplayName,
+    projectHierarchyLabel,
+    projectOptionValue,
+    resolveProjectSelectValue,
+} from '../../utils/projectSelectOptions';
+import {
+    buildGroupedTaskTypeOptions,
+    taskTypeHierarchyLabel,
+    resolveTaskTypeOption,
+    resolveTaskTypeSelectValue,
+    taskTypeDisplayLabel,
+} from '../../utils/taskTypeSelectOptions';
+import { resolveTaskProjectName } from '../../pages/operops/taskPageUtils';
+import type { Ticket, Performer, Epic } from '../../types/crm';
 
 import AvatarName from './AvatarName';
+import OperationalTaskTypeSelect from '../shared/OperationalTaskTypeSelect';
+import ProjectSelect from '../shared/ProjectSelect';
 import ProjectTag from './ProjectTag';
 import CommentsSidebar from './CommentsSidebar';
 import WorkHoursSidebar from './WorkHoursSidebar';
@@ -85,7 +102,8 @@ interface CRMKanbanProps {
     };
     refreshToken?: number;
     draftHorizonDays?: number | undefined;
-    columns?: string[];
+    draftCompactView?: boolean;
+    columns?: string[] | undefined;
     column_width?: Record<string, number> | undefined;
     pagination?: boolean | undefined;
 }
@@ -131,19 +149,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
     } = useCRMStore();
 
     const { customers, projectGroups, projects: projectsData } = useProjectsStore();
-    const [projectGroupFilter, setProjectGroupFilter] = useState<string | null>(null);
-    const [projectFilterValues, setProjectFilterValues] = useState<string[]>([]);
     const [selectedRows, setSelectedRows] = useState<string[]>([]);
     const [selectedNewStatus, setSelectedNewStatus] = useState<string | null>(null);
     const tableRef = useRef<HTMLDivElement>(null);
     const lastRenderPerfTicketsUpdatedAtRef = useRef<number | null>(null);
-
-    const getCustomerNameByGroup = useCallback((group: { customer?: string }) => {
-        const customer = customers.find(
-            (c) => c._id && group.customer && c._id.toString() === group.customer.toString()
-        );
-        return customer?.name ?? 'Без заказчика';
-    }, [customers]);
 
     const toLookupValue = useCallback((value: unknown): string => {
         if (typeof value === 'string') return value;
@@ -209,53 +218,36 @@ const CRMKanban = (props: CRMKanbanProps) => {
         ].join(':');
     }, [resolveTicketDbId, resolveTicketPublicId, toLookupValue]);
 
+    const hydratedProjectsData = useMemo(
+        () => hydrateProjectsWithRelations(projectsData, projectGroups, customers),
+        [customers, projectGroups, projectsData]
+    );
+
     const getProjectByValue = useCallback((projectValue?: unknown) => {
         const targetValue = toLookupValue(projectValue);
         if (!targetValue) return null;
 
         return (
-            projectsData.find((p) => p._id.toString() === targetValue) ??
-            projectsData.find((p) => p.name === targetValue)
+            hydratedProjectsData.find((p) => projectOptionValue(p) === targetValue) ??
+            hydratedProjectsData.find((p) => p.name === targetValue)
         );
-    }, [projectsData, toLookupValue]);
+    }, [hydratedProjectsData, toLookupValue]);
 
     const getProjectInfo = useCallback((project_id?: string | null, project_name?: string | null) => {
         const project = getProjectByValue(project_id) ?? getProjectByValue(project_name);
         if (!project) {
-            return project_name || project_id
-                ? { project: project_name || project_id, group: 'Unknown', customer: 'Unknown' }
-                : null;
+            return null;
         }
 
-        const group = projectGroups.find(
-            (g) => g._id && project.project_group && g._id.toString() === project.project_group.toString()
-        );
-        const customer = group
-            ? customers.find((c) => c._id && group.customer && c._id.toString() === group.customer.toString())
-            : null;
-
         return {
-            project: project.name,
-            group: group?.name ?? 'Unassigned',
-            customer: customer?.name ?? 'Unknown',
+            project: projectDisplayName(project),
+            hierarchy: projectHierarchyLabel(project),
         };
-    }, [customers, getProjectByValue, projectGroups]);
+    }, [getProjectByValue]);
 
     const getProjectDisplayName = useCallback((record: Ticket): string => {
-        const projectData = (record as Ticket & { project_data?: unknown }).project_data;
-        const projectDataName =
-            projectData &&
-            typeof projectData === 'object' &&
-            !Array.isArray(projectData) &&
-            'name' in projectData &&
-            typeof projectData.name === 'string'
-                ? projectData.name
-                : Array.isArray(projectData)
-                  ? projectData.find((item) => item && typeof item.name === 'string' && item.name)
-                        ?.name
-                  : '';
-        return projectDataName || getProjectByValue(record.project_id)?.name || getProjectByValue(record.project)?.name || record.project || '—';
-    }, [getProjectByValue]);
+        return resolveTaskProjectName(record, projectsData);
+    }, [projectsData]);
 
     const effectiveStatusFilter = props.filter.task_status ?? statusFilter;
 
@@ -263,6 +255,12 @@ const CRMKanban = (props: CRMKanbanProps) => {
         const nextStatusFilter = effectiveStatusFilter;
         return nextStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN') ? [] : nextStatusFilter;
     }, [effectiveStatusFilter]);
+
+    const requestedProjectFilter = useMemo(() => {
+        return (props.filter.project ?? [])
+            .map((value) => toLookupValue(value).trim().toLowerCase())
+            .filter((value) => value.length > 0);
+    }, [props.filter.project, toLookupValue]);
 
     const requestedDraftHorizonDays = useMemo(() => {
         if (requestedStatusFilter.length !== 1) return undefined;
@@ -311,10 +309,21 @@ const CRMKanban = (props: CRMKanbanProps) => {
         return (a ?? '').localeCompare(b ?? '');
     }, []);
 
-    const getTaskType = useCallback((id: string | undefined): TaskType | undefined => {
-        if (!id) return undefined;
-        const taskTypes = task_types ?? [];
-        return taskTypes.find((t) => t._id === id || t.task_id === id);
+    const resolveTicketProjectValue = useCallback((record: Ticket): string => {
+        const projectData = (record as Ticket & { project_data?: unknown }).project_data;
+        const projectFromData = projectData && typeof projectData === 'object' && !Array.isArray(projectData)
+            ? projectData as { _id?: unknown; name?: unknown }
+            : null;
+        return (
+            resolveProjectSelectValue(
+                hydratedProjectsData,
+                projectFromData?._id ?? projectFromData?.name ?? record.project_id ?? record.project ?? null
+            ) ?? ''
+        ).trim().toLowerCase();
+    }, [hydratedProjectsData]);
+
+    const getTaskType = useCallback((id: string | undefined) => {
+        return resolveTaskTypeOption(task_types, id) ?? undefined;
     }, [task_types]);
 
     const compareTaskTypes = useCallback((a: string | undefined, b: string | undefined) => {
@@ -355,47 +364,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
         return () => document.removeEventListener('keydown', onKeyDown);
     }, [closeInlineEditor]);
 
-    const groupedProjectOptions = useMemo(() => {
-        const projectsByGroup: Record<string, Array<{ _id: string; name: string }>> = {};
-
-        projectsData.forEach((project) => {
-            const group = projectGroups.find(
-                (g) =>
-                    g._id &&
-                    project.project_group &&
-                    g._id.toString() === project.project_group.toString()
-            );
-            const customer = group
-                ? customers.find(
-                      (c) =>
-                          c._id &&
-                          group.customer &&
-                          c._id.toString() === group.customer.toString()
-                  )
-                : null;
-
-            const groupKey = group
-                ? `${customer?.name ?? 'Unknown'} / ${group.name}`
-                : 'Unassigned';
-
-            if (!projectsByGroup[groupKey]) {
-                projectsByGroup[groupKey] = [];
-            }
-            projectsByGroup[groupKey].push({
-                _id: project._id,
-                name: project.name,
-            });
-        });
-
-        return Object.entries(projectsByGroup).map(([groupName, values]) => ({
-            label: groupName,
-            title: groupName,
-            options: values.map((value) => ({
-                label: value.name,
-                value: value._id,
-            })),
-        }));
-    }, [customers, projectGroups, projectsData]);
+    const groupedProjectOptions = useMemo(
+        () => buildGroupedProjectOptions(hydratedProjectsData),
+        [hydratedProjectsData]
+    );
 
     const historicalPerformerLabels = useMemo(() => {
         const labels = new Map<string, string>();
@@ -454,20 +426,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
     );
 
     const taskTypeOptions = useMemo(
-        () =>
-            Object.entries(
-                _.groupBy(
-                    Object.values(Array.isArray(task_types) ? task_types : []),
-                    'supertype'
-                )
-            ).map(([supertype, groupedTaskTypes]: [string, TaskType[]]) => ({
-                label: supertype,
-                title: supertype,
-                options: groupedTaskTypes.map((tt) => ({
-                    label: `${tt.task_id ?? ''} ${tt.name}`,
-                    value: tt._id,
-                })),
-            })),
+        () => buildGroupedTaskTypeOptions(task_types),
         [task_types]
     );
 
@@ -595,7 +554,10 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 : undefined;
 
             const normalizedProject = getProjectByValue(record.project_id) ?? getProjectByValue(record.project);
-            const projectValue = normalizedProject?._id ?? toLookupValue(record.project_id) ?? record.project;
+            const projectValue =
+                projectOptionValue(normalizedProject ?? {}) ||
+                toLookupValue(record.project_id) ||
+                toLookupValue(record.project);
 
             const shipmentDate = typeof record.shipment_date === 'string' && dayjs(record.shipment_date).isValid()
                 ? dayjs(record.shipment_date).format('YYYY-MM-DD')
@@ -612,7 +574,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
             if (projectValue) clonePayload.project = projectValue;
 
-            const taskTypeValue = toLookupValue(record.task_type);
+            const taskTypeValue = resolveTaskTypeSelectValue(task_types, record.task_type) ?? '';
             if (taskTypeValue) clonePayload.task_type = taskTypeValue;
 
             if (performerId) clonePayload.performer = performerId;
@@ -628,7 +590,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
             await createTicket(clonePayload);
         },
-        [createTicket, getProjectByValue, toLookupValue]
+        [createTicket, getProjectByValue, task_types, toLookupValue]
     );
 
     const withTicketDetails = useCallback(
@@ -693,9 +655,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
     const columns = useMemo<TableColumnType<Ticket>[]>(() => [
         {
-            title: 'Дата',
+            title: props.draftCompactView ? 'Создан' : 'Дата',
             key: 'created_at',
-            width: 60,
+            width: props.draftCompactView ? 80 : 60,
             render: (_, record) => (
                 <div className="flex flex-col relative">
                     <div className="text-[12px]">{dayjs(record.created_at).format('DD.MM')}</div>
@@ -728,9 +690,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 ) : null,
         },
         {
-            title: 'Upd',
+            title: props.draftCompactView ? 'Обновлён' : 'Upd',
             key: 'updated_at',
-            width: 60,
+            width: props.draftCompactView ? 96 : 60,
             render: (_, record) => (
                 <div className="flex flex-col">
                     <div className="text-[12px]">{dayjs(record.updated_at).format('DD.MM')}</div>
@@ -744,56 +706,20 @@ const CRMKanban = (props: CRMKanbanProps) => {
             key: 'project',
             width: 120,
             sorter: (a, b) => compareStrings(getProjectDisplayName(a), getProjectDisplayName(b)),
-            filterDropdown: ({ close }) => (
-                <div className="p-2 w-[260px]">
-                    <Select
-                        options={projectGroups.map((group) => ({
-                            value: group._id,
-                            label: `${group.name} (${getCustomerNameByGroup(group)})`,
-                        }))}
-                        showSearch
-                        value={projectGroupFilter}
-                        onChange={(value) => {
-                            setProjectGroupFilter(value ?? null);
-                            if (!value) {
-                                setProjectFilterValues([]);
-                                close?.();
-                                return;
-                            }
-                            const groupProjects = projectsData.filter(
-                                (p) => p.project_group && p.project_group.toString() === value
-                            );
-                            setProjectFilterValues(groupProjects.map((p) => p.name));
-                            close?.();
-                        }}
-                        placeholder="Выберите группу"
-                        allowClear
-                        className="w-full"
-                    />
-                </div>
-            ),
-            filterIcon: () => <FilterOutlined style={{ color: projectGroupFilter ? '#1677ff' : undefined }} />,
             render: (_, record) => {
                 const projectInfo = getProjectInfo(record.project_id, record.project);
                 const projectName = getProjectDisplayName(record);
-                const currentProject =
-                    getProjectByValue(record.project_id) ?? getProjectByValue(record.project);
-                const currentProjectValue = currentProject?._id ?? toLookupValue(record.project_id);
+                const currentProjectValue =
+                    resolveProjectSelectValue(hydratedProjectsData, record.project_id ?? record.project ?? null) ?? null;
 
                 if (isInlineEditing(record, 'project')) {
                     return (
                         <div onClick={(event) => event.stopPropagation()}>
-                            <Select
+                            <ProjectSelect
                                 autoFocus
                                 defaultOpen
                                 value={currentProjectValue || null}
                                 options={groupedProjectOptions}
-                                showSearch
-                                filterOption={(inputValue, option) =>
-                                    (option?.label ?? '')
-                                        .toLowerCase()
-                                        .includes(inputValue.toLowerCase())
-                                }
                                 onChange={(value) =>
                                     handleProjectUpdate(record, String(value))
                                 }
@@ -802,7 +728,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
                                 }}
                                 className="w-full min-w-[220px]"
                                 popupClassName="w-[380px]"
-                                popupMatchSelectWidth={false}
                             />
                         </div>
                     );
@@ -810,13 +735,13 @@ const CRMKanban = (props: CRMKanbanProps) => {
 
                 return (
                     <div
-                        className="flex flex-col cursor-pointer"
+                        className="flex min-w-0 cursor-pointer flex-col"
                         style={{
                             justifyContent: 'center',
                             alignItems: 'start',
                             color: 'black',
-                            height: projectInfo ? 'auto' : '48px',
-                            padding: projectInfo ? '4px' : '0px',
+                            minHeight: '40px',
+                            padding: projectInfo ? '2px 0' : '0px',
                         }}
                         onClick={(event) => {
                             event.stopPropagation();
@@ -824,7 +749,21 @@ const CRMKanban = (props: CRMKanbanProps) => {
                         }}
                     >
                         {projectName && projectName !== '—' ? (
-                            <ProjectTag name={projectName} tooltip={projectInfo?.project ?? projectName} />
+                            <div className="flex min-w-0 flex-col">
+                                <ProjectTag
+                                    name={projectName}
+                                    tooltip={
+                                        projectInfo
+                                            ? [projectInfo.hierarchy, projectInfo.project].filter(Boolean).join(' / ')
+                                            : projectName
+                                    }
+                                />
+                                {projectInfo?.hierarchy ? (
+                                    <span className="max-w-[180px] truncate pl-1 text-[11px] leading-4 text-slate-500">
+                                        {projectInfo.hierarchy}
+                                    </span>
+                                ) : null}
+                            </div>
                         ) : (
                             <ProjectTag />
                         )}
@@ -1123,19 +1062,11 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 if (isInlineEditing(record, 'task_type')) {
                     return (
                         <div onClick={(event) => event.stopPropagation()}>
-                            <Select
+                            <OperationalTaskTypeSelect
                                 autoFocus
                                 defaultOpen
-                                value={record.task_type ?? null}
-                                allowClear
+                                value={resolveTaskTypeSelectValue(task_types, record.task_type)}
                                 options={taskTypeOptions}
-                                showSearch
-                                filterOption={(inputValue, option) =>
-                                    (option?.label ?? '')
-                                        .toString()
-                                        .toLowerCase()
-                                        .includes(inputValue.toLowerCase())
-                                }
                                 onChange={(value) =>
                                     handleTaskTypeUpdate(
                                         record,
@@ -1147,7 +1078,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
                                 }}
                                 className="w-[140px]"
                                 popupClassName="w-[380px]"
-                                popupMatchSelectWidth={false}
                             />
                         </div>
                     );
@@ -1170,9 +1100,9 @@ const CRMKanban = (props: CRMKanbanProps) => {
                         }}
                     >
                         {tt ? (
-                            <Tooltip placement="top" title={tt.long_name ?? tt.name}>
-                                <Tag className="max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap bg-slate-100 border-slate-200 text-slate-700">
-                                    {tt.name ?? tt.task_id ?? ''}
+                            <Tooltip placement="top" title={taskTypeHierarchyLabel(tt) || taskTypeDisplayLabel(tt)}>
+                                <Tag className="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap bg-slate-100 border-slate-200 text-slate-700">
+                                    {taskTypeDisplayLabel(tt)}
                                 </Tag>
                             </Tooltip>
                         ) : (
@@ -1323,7 +1253,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
         compareStrings,
         compareTaskTypes,
         getTaskType,
-        projectGroupFilter,
+        props.draftCompactView,
         performers,
         historicalPerformerLabels,
         performerOptions,
@@ -1350,7 +1280,6 @@ const CRMKanban = (props: CRMKanbanProps) => {
         handleOpenComments,
         handleOpenEditor,
         handleOpenWorkHours,
-        setProjectGroupFilter,
         setEditingColumn,
         setEditingTicket,
         setEditingWorkHours,
@@ -1383,8 +1312,61 @@ const CRMKanban = (props: CRMKanbanProps) => {
         [columns, normalizedColumnKeys]
     );
 
+    const hasUnknownStatusFilter = useMemo(
+        () => effectiveStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN'),
+        [effectiveStatusFilter]
+    );
+
+    const selectedTargetStatusKeys = useMemo(
+        () =>
+            effectiveStatusFilter
+                .filter((status) => String(status || '').trim() !== 'UNKNOWN')
+                .map((status) => normalizeTargetTaskStatusKey(status))
+                .filter((status): status is NonNullable<typeof status> => Boolean(status)),
+        [effectiveStatusFilter]
+    );
+
+    const sourceRefFilterValues = useMemo(
+        () => normalizeVoiceSessionSourceRefs(props.filter.source_ref ?? []),
+        [props.filter.source_ref]
+    );
+
+    const filteredTickets = useMemo(() => {
+        let nextTickets = tickets.filter((record) => {
+            const matchesKnownStatus = matchesTargetTaskStatusKeys(record.task_status, selectedTargetStatusKeys);
+            if (matchesKnownStatus) return true;
+            if (!hasUnknownStatusFilter) return false;
+            return normalizeTargetTaskStatusKey(record.task_status) === null;
+        });
+
+        if (requestedProjectFilter.length > 0) {
+            const requestedProjectFilterSet = new Set(requestedProjectFilter);
+            nextTickets = nextTickets.filter((record) => {
+                const projectValue = resolveTicketProjectValue(record);
+                const projectDisplayName = getProjectDisplayName(record).trim().toLowerCase();
+                return requestedProjectFilterSet.has(projectValue) || requestedProjectFilterSet.has(projectDisplayName);
+            });
+        }
+
+        if (sourceRefFilterValues.length > 0) {
+            nextTickets = nextTickets.filter((record) =>
+                ticketMatchesVoiceSessionSourceRefs(record, sourceRefFilterValues)
+            );
+        }
+
+        return nextTickets;
+    }, [
+        tickets,
+        selectedTargetStatusKeys,
+        hasUnknownStatusFilter,
+        requestedProjectFilter,
+        resolveTicketProjectValue,
+        getProjectDisplayName,
+        sourceRefFilterValues,
+    ]);
+
     const recalulateStatusesStat = useCallback(() => {
-        let true_filtered_data = tickets;
+        let true_filtered_data = filteredTickets;
         for (const column of filteredColumns) {
             if (column.defaultFilteredValue && column.onFilter) {
                 for (const value of column.defaultFilteredValue) {
@@ -1393,34 +1375,11 @@ const CRMKanban = (props: CRMKanbanProps) => {
             }
         }
         calculateStatusesStat(true_filtered_data);
-    }, [tickets, filteredColumns, calculateStatusesStat]);
+    }, [calculateStatusesStat, filteredColumns, filteredTickets]);
 
     useEffect(() => {
         recalulateStatusesStat();
-    }, [tickets, recalulateStatusesStat]);
-
-    const hasUnknownStatusFilter = effectiveStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN');
-    const selectedTargetStatusKeys = effectiveStatusFilter
-        .filter((status) => String(status || '').trim() !== 'UNKNOWN')
-        .map((status) => normalizeTargetTaskStatusKey(status))
-        .filter((status): status is NonNullable<typeof status> => Boolean(status));
-    let filteredTickets = tickets.filter((record) => {
-        const matchesKnownStatus = matchesTargetTaskStatusKeys(record.task_status, selectedTargetStatusKeys);
-        if (matchesKnownStatus) return true;
-        if (!hasUnknownStatusFilter) return false;
-        return normalizeTargetTaskStatusKey(record.task_status) === null;
-    });
-    if (projectFilterValues.length > 0) {
-        filteredTickets = filteredTickets.filter((record) =>
-            projectFilterValues.includes(getProjectDisplayName(record))
-        );
-    }
-    const sourceRefFilterValues = normalizeVoiceSessionSourceRefs(props.filter.source_ref ?? []);
-    if (sourceRefFilterValues.length > 0) {
-        filteredTickets = filteredTickets.filter((record) =>
-            ticketMatchesVoiceSessionSourceRefs(record, sourceRefFilterValues)
-        );
-    }
+    }, [recalulateStatusesStat]);
 
     useEffect(() => {
         if (!isAuth || ticketsLoading || tickets_updated_at === null) return;
@@ -1448,9 +1407,19 @@ const CRMKanban = (props: CRMKanbanProps) => {
     }, [isAuth, ticketsLoading, tickets_updated_at, tickets.length, filteredTickets.length]);
 
     const isTableLoading = authLoading || ticketsLoading;
+    const visibleTickets = useMemo(() => {
+        if (!props.draftCompactView) return filteredTickets;
+        return filteredTickets
+            .slice()
+            .sort((left, right) => {
+                const leftUpdated = dayjs(left.updated_at ?? 0).valueOf();
+                const rightUpdated = dayjs(right.updated_at ?? 0).valueOf();
+                return rightUpdated - leftUpdated;
+            });
+    }, [filteredTickets, props.draftCompactView]);
 
     return (
-        <div className="crm-kanban w-full max-w-[1232px] 2xl:max-w-[1724px] mx-auto overflow-x-auto">
+        <div className="crm-kanban w-full overflow-x-auto">
             <Spin spinning={authLoading} size="large" fullscreen />
 
             {selectedRows.length > 0 ? (
@@ -1488,7 +1457,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                 <Table
                     sticky
                     columns={filteredColumns}
-                    dataSource={filteredTickets}
+                    dataSource={visibleTickets}
                     loading={false}
                     size="small"
                     scroll={{ x: 'max-content' }}

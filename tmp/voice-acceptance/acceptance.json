@@ -1,0 +1,130 @@
+{
+  "viewports": {
+    "1366x768": {
+      "viewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "sidebarWidth": 150,
+      "mainSurfacePadding": {
+        "top": "0px",
+        "right": "0px",
+        "bottom": "0px",
+        "left": "0px"
+      },
+      "workspace": {
+        "x": 150,
+        "y": 0,
+        "width": 1201,
+        "height": 12547
+      },
+      "meetingCard": {
+        "x": 150,
+        "y": 0,
+        "width": 1201,
+        "height": 165
+      },
+      "tabsShell": {
+        "x": 150,
+        "y": 177,
+        "width": 1201,
+        "height": 12280
+      },
+      "workspaceGapLeft": 150,
+      "tabsWidthVsViewport": 165,
+      "rowHeight": null,
+      "listPane": null,
+      "detailPane": null
+    },
+    "1536x864": {
+      "viewport": {
+        "width": 1536,
+        "height": 864
+      },
+      "sidebarWidth": 150,
+      "mainSurfacePadding": {
+        "top": "0px",
+        "right": "0px",
+        "bottom": "0px",
+        "left": "0px"
+      },
+      "workspace": {
+        "x": 150,
+        "y": 0,
+        "width": 1371,
+        "height": 11413
+      },
+      "meetingCard": {
+        "x": 150,
+        "y": 0,
+        "width": 1371,
+        "height": 165
+      },
+      "tabsShell": {
+        "x": 150,
+        "y": 177,
+        "width": 1371,
+        "height": 11146
+      },
+      "workspaceGapLeft": 150,
+      "tabsWidthVsViewport": 165,
+      "rowHeight": null,
+      "listPane": null,
+      "detailPane": null
+    },
+    "1920x1080": {
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "sidebarWidth": 150,
+      "mainSurfacePadding": {
+        "top": "0px",
+        "right": "0px",
+        "bottom": "0px",
+        "left": "0px"
+      },
+      "workspace": {
+        "x": 150,
+        "y": 0,
+        "width": 1755,
+        "height": 9367
+      },
+      "meetingCard": {
+        "x": 150,
+        "y": 0,
+        "width": 1755,
+        "height": 165
+      },
+      "tabsShell": {
+        "x": 150,
+        "y": 177,
+        "width": 1755,
+        "height": 9100
+      },
+      "workspaceGapLeft": 150,
+      "tabsWidthVsViewport": 165,
+      "rowHeight": null,
+      "listPane": null,
+      "detailPane": null
+    }
+  },
+  "analytics_nav": {
+    "before_sidebar_width": 150,
+    "after_sidebar_width": 150,
+    "path_after_click": "/analytics",
+    "voiceBadgePresent": false,
+    "agentsZeroPresent": true
+  },
+  "draft": {
+    "actionButtons": [
+      "Сохранить",
+      "Клонировать",
+      "Удалить"
+    ],
+    "performerOpenOnFirstClick": false,
+    "priorityOpenOnFirstClick": false,
+    "projectGroups": false,
+    "taskTypePmFormat": false
+  }
+}

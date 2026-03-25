@@ -87,7 +87,7 @@ Use these as non-negotiable implementation constraints derived from `origin/main
 - direct DB-side TypeDB constraints are now part of the contract for `task.status` and `task.priority`; do not bypass owner-level `@values(...)` with ad hoc raw-label writes.
 - Mongo task labels must normalize directly into canonical lifecycle keys and `P1..P7` priority before writing to TypeDB.
   - executor-layer ontology vocabulary is now reserved and active: `task_family`, `executor_role`, `executor_routing`, `task_execution_run`.
-  - dual-stream execution semantics are fixed in `plan/voice-dual-stream-ontology.md`: draft tasks remain `task[DRAFT_10]`, `context_enrichment` is required before launch, `human approval` is launch authorization (not final acceptance), and execution must materialize through `executor_routing` -> `task_execution_run` -> `artifact_record` -> `acceptance_evaluation`.
+  - dual-stream execution semantics are fixed in `ontology/plan/voice-dual-stream-ontology.md`: draft tasks remain `task[DRAFT_10]`, `context_enrichment` is required before launch, `human approval` is launch authorization (not final acceptance), and execution must materialize through `executor_routing` -> `task_execution_run` -> `artifact_record` -> `acceptance_evaluation`.
 
 ## Core Principles
 
@@ -220,16 +220,18 @@ Preferred engineering principles for this repo:
 - Auth sync and model sync are canonical:
   - source auth account lives in `/root/.codex/auth.json`
   - runtime auth copy lives in `agents/.codex/auth.json`
-  - runtime `default_model` is pinned to `gpt-5.4`
-  - auth recovery may restart agents and restore the same `gpt-5.4` default after sync
+  - runtime `default_model` is pinned to `gpt-5.4-mini`
+  - auth recovery may restart agents and restore the same `gpt-5.4-mini` default after sync
 - Runtime key drift baseline for OpenAI-backed production services is documented in `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md` (PM2 runtime mask vs `backend/.env.production` value vs agents Codex OAuth mode).
 
 ### Subagent Execution Policy
 - Default execution mode for this repo: track work in `bd` and prefer bounded swarm/subagent execution when practical; parent thread remains responsible for final integration and acceptance.
 - Real implementation work should be delegated to subagents when practical; the parent thread should stay focused on discovery, coordination, integration, and final acceptance.
+- When a subagent is assigned a `bd` issue, pass and execute `bd show <id> --json` up front so the child thread reads the canonical ticket payload instead of relying on a paraphrased summary.
 - Subagents MUST start with a clean history by default (`fork_context=false`); do not spawn child agents with inherited conversation history unless there is an explicit, narrow reason to preserve prior thread state.
 - Parent prompts for subagents must be short, decision-complete, and scoped to one bounded write surface.
 - Targeted verification can be delegated to subagents, but final integration verification and production deploy/smoke remain the responsibility of the parent thread after all patches are merged.
+- Browser-based acceptance is part of the canonical verification flow for UI work; restart `mcp@chrome-devtools.service` before each live browser test cycle so MCP/CDP state is fresh.
 
 ### Code Organization
 - Frontend code lives in `app/src/`.

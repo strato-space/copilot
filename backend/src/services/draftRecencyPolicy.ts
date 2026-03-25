@@ -54,6 +54,98 @@ const resolveSessionIdFromRef = (value: unknown): string => {
   return /^[a-f0-9]{24}$/i.test(sessionId.trim()) ? sessionId.trim() : '';
 };
 
+const normalizeProjectFilterValue = (value: unknown): string => {
+  const raw = toText(value);
+  return raw ? raw.toLowerCase() : '';
+};
+
+export const parseProjectFilterValues = (value: unknown): string[] => {
+  const values = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+  const normalizedValues: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of values) {
+    const normalized = normalizeProjectFilterValue(item);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    normalizedValues.push(normalized);
+  }
+
+  return normalizedValues;
+};
+
+const getTaskProjectCandidates = (task: Record<string, unknown>): string[] => {
+  const candidates = new Set<string>();
+  const addCandidate = (value: unknown): void => {
+    const normalized = normalizeProjectFilterValue(value);
+    if (normalized) candidates.add(normalized);
+  };
+
+  addCandidate(task.project_id);
+  addCandidate(task.project);
+
+  const projectData = task.project_data;
+  if (Array.isArray(projectData)) {
+    for (const projectEntry of projectData) {
+      if (!projectEntry || typeof projectEntry !== 'object') continue;
+      const projectRecord = projectEntry as Record<string, unknown>;
+      addCandidate(projectRecord._id);
+      addCandidate(projectRecord.id);
+      addCandidate(projectRecord.name);
+      addCandidate(projectRecord.title);
+    }
+  } else if (projectData && typeof projectData === 'object') {
+    const projectRecord = projectData as Record<string, unknown>;
+    addCandidate(projectRecord._id);
+    addCandidate(projectRecord.id);
+    addCandidate(projectRecord.name);
+    addCandidate(projectRecord.title);
+  }
+
+  return Array.from(candidates);
+};
+
+export const taskMatchesProjectFilters = (
+  task: Record<string, unknown>,
+  projectFilters: unknown
+): boolean => {
+  const normalizedFilters = parseProjectFilterValues(projectFilters);
+  if (normalizedFilters.length === 0) return true;
+
+  const candidateSet = new Set(getTaskProjectCandidates(task));
+  return normalizedFilters.some((filterValue) => candidateSet.has(filterValue));
+};
+
+export const filterTasksByProjectFilters = <T extends Record<string, unknown>>(
+  tasks: T[],
+  projectFilters: unknown
+): T[] => {
+  const normalizedFilters = parseProjectFilterValues(projectFilters);
+  if (normalizedFilters.length === 0) return tasks;
+
+  return tasks.filter((task) => taskMatchesProjectFilters(task, normalizedFilters));
+};
+
+const resolveTaskRecencyAnchor = (task: Record<string, unknown>): Date | null =>
+  parseDateLike(task.updated_at) || parseDateLike(task.created_at);
+
+const isTaskWithinDraftRecencyWindow = (
+  task: Record<string, unknown>,
+  {
+    draftHorizonDays,
+    now = new Date(),
+  }: {
+    draftHorizonDays?: number | null | undefined;
+    now?: Date | undefined;
+  } = {}
+): boolean => {
+  const cutoff = resolveDraftRecencyCutoff({ draftHorizonDays, now });
+  if (!cutoff) return true;
+  const anchor = resolveTaskRecencyAnchor(task);
+  if (!anchor) return false;
+  return anchor.getTime() >= cutoff.getTime();
+};
+
 export const parseDraftHorizonDays = (value: unknown): number | null => {
   if (value === undefined || value === null || value === '') return null;
   const raw =
@@ -192,7 +284,12 @@ export const filterVoiceDerivedDraftsByRecency = async ({
     new Set(draftVoiceTasks.flatMap((task) => extractVoiceLinkedSessionIds(task)))
   ).filter((sessionId) => ObjectId.isValid(sessionId));
 
-  if (sessionIds.length === 0) return tasks;
+  if (sessionIds.length === 0) {
+    return tasks.filter((task) => {
+      if (toText(task.task_status) !== TASK_STATUSES.DRAFT_10) return true;
+      return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
+    });
+  }
 
   const sessions = await db
     .collection(VOICEBOT_COLLECTIONS.SESSIONS)
@@ -233,20 +330,34 @@ export const filterVoiceDerivedDraftsByRecency = async ({
   const horizonMs = (parseDraftHorizonDays(draftHorizonDays) ?? 0) * 24 * 60 * 60 * 1000;
 
   return tasks.filter((task) => {
-    if (!isVoiceDerivedDraftTask(task)) return true;
+    if (toText(task.task_status) !== TASK_STATUSES.DRAFT_10) return true;
+    if (!isVoiceDerivedDraftTask(task)) {
+      return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
+    }
+
+    const linked = extractVoiceLinkedSessionIds(task);
+    if (linked.length === 0) {
+      return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
+    }
+
     if (referenceAnchor) {
       const window = resolveTaskDiscussionWindow({
         task,
         sessionAnchorById,
       });
-      if (!window) return true;
-      return (
-        referenceAnchor.getTime() >= window.first.getTime() - horizonMs &&
-        referenceAnchor.getTime() <= window.last.getTime() + horizonMs
-      );
+      if (window) {
+        return (
+          referenceAnchor.getTime() >= window.first.getTime() - horizonMs &&
+          referenceAnchor.getTime() <= window.last.getTime() + horizonMs
+        );
+      }
     }
-    const linked = extractVoiceLinkedSessionIds(task);
-    return linked.some((sessionId) => recentSessionIds.has(sessionId));
+
+    if (linked.some((sessionId) => recentSessionIds.has(sessionId))) {
+      return true;
+    }
+
+    return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
   });
 };
 

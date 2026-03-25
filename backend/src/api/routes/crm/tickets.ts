@@ -34,8 +34,10 @@ import {
 } from '../../../services/taskAttachments.js';
 import {
     filterVoiceDerivedDraftsByRecency,
+    filterTasksByProjectFilters,
     parseDraftHorizonDays,
     parseIncludeOlderDrafts,
+    parseProjectFilterValues,
 } from '../../../services/draftRecencyPolicy.js';
 
 dayjs.extend(customParseFormat);
@@ -105,6 +107,17 @@ const ARCHIVE_RECENCY_PREFILTER_PROJECTION = {
     updated_at: 1,
     created_at: 1,
 } as const;
+
+const buildProjectFilterMatchQuery = (projectFilters: string[]): Record<string, unknown> | null => {
+    if (projectFilters.length === 0) return null;
+
+    return {
+        $or: [
+            { project_id: { $in: projectFilters } },
+            { project: { $in: projectFilters } },
+        ],
+    };
+};
 
 const resolveDateLikeTimestamp = (value: unknown): number | null => {
     if (value instanceof Date) {
@@ -545,6 +558,7 @@ router.post('/', async (req: Request, res: Response) => {
         const rawStatuses = Array.isArray(req.body.statuses) ? req.body.statuses as string[] : [];
         const includeOlderDrafts = parseIncludeOlderDrafts(req.body?.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(req.body?.draft_horizon_days);
+        const projectFilters = parseProjectFilterValues(req.body?.project);
         const statusKeys = rawStatuses
             .map((status) => (isTaskStatusKey(status) ? status : null))
             .filter((status): status is keyof typeof TASK_STATUSES => Boolean(status));
@@ -571,6 +585,7 @@ router.post('/', async (req: Request, res: Response) => {
             Boolean(draftHorizonDays) &&
             !includeOlderDrafts &&
             isArchiveOnlyStatusRequest;
+        const projectFilterMatchQuery = buildProjectFilterMatchQuery(projectFilters);
 
         let prefilteredDraftVisibleIds: ObjectId[] | null = null;
         if (shouldUseDraftSummaryPrefilter) {
@@ -587,9 +602,14 @@ router.post('/', async (req: Request, res: Response) => {
                 )
                 .toArray();
 
+            const draftCandidatesByProject = filterTasksByProjectFilters(
+                draftCandidates as Array<Record<string, unknown>>,
+                projectFilters
+            );
+
             const visibleDrafts = await filterVoiceDerivedDraftsByRecency({
                 db,
-                tasks: draftCandidates as Array<Record<string, unknown>>,
+                tasks: draftCandidatesByProject,
                 includeOlderDrafts,
                 draftHorizonDays,
             });
@@ -619,8 +639,13 @@ router.post('/', async (req: Request, res: Response) => {
                 )
                 .toArray();
 
+            const archiveCandidatesByProject = filterTasksByProjectFilters(
+                archiveCandidates as Array<Record<string, unknown>>,
+                projectFilters
+            );
+
             const visibleArchive = filterArchivedTasksByRecency({
-                tasks: archiveCandidates as Array<Record<string, unknown>>,
+                tasks: archiveCandidatesByProject,
                 includeOlderDrafts,
                 draftHorizonDays,
             });
@@ -642,6 +667,7 @@ router.post('/', async (req: Request, res: Response) => {
                 $match: {
                     is_deleted: { $ne: true },
                     ...taskStatusQuery,
+                    ...(projectFilterMatchQuery ? projectFilterMatchQuery : {}),
                     ...(prefilteredVisibleIds
                         ? {
                             _id: { $in: prefilteredVisibleIds },
@@ -911,6 +937,8 @@ router.post('/status-counts', async (req: Request, res: Response) => {
         const db = getDb();
         const includeOlderDrafts = parseIncludeOlderDrafts(req.body?.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(req.body?.draft_horizon_days);
+        const projectFilters = parseProjectFilterValues(req.body?.project);
+        const projectFilterMatchQuery = buildProjectFilterMatchQuery(projectFilters);
 
         const aggregateRows = await db
             .collection(COLLECTIONS.TASKS)
@@ -921,6 +949,7 @@ router.post('/status-counts', async (req: Request, res: Response) => {
                         task_status: {
                             $in: TARGET_TASK_STATUS_KEYS.map((statusKey) => toStoredTaskStatusValue(statusKey)),
                         },
+                        ...(projectFilterMatchQuery ? projectFilterMatchQuery : {}),
                     },
                 },
                 {
@@ -955,7 +984,10 @@ router.post('/status-counts', async (req: Request, res: Response) => {
 
             const visibleDrafts = await filterVoiceDerivedDraftsByRecency({
                 db,
-                tasks: draftTasks as Array<Record<string, unknown>>,
+                tasks: filterTasksByProjectFilters(
+                    draftTasks as Array<Record<string, unknown>>,
+                    projectFilters
+                ),
                 includeOlderDrafts,
                 draftHorizonDays,
             });
@@ -973,7 +1005,10 @@ router.post('/status-counts', async (req: Request, res: Response) => {
                 .toArray();
 
             const visibleArchive = filterArchivedTasksByRecency({
-                tasks: archiveTasks as Array<Record<string, unknown>>,
+                tasks: filterTasksByProjectFilters(
+                    archiveTasks as Array<Record<string, unknown>>,
+                    projectFilters
+                ),
                 includeOlderDrafts,
                 draftHorizonDays,
             });

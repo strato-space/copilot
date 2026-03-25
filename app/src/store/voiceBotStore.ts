@@ -56,6 +56,25 @@ export {
     ticketMatchesVoiceSessionSourceRefs,
 };
 
+const pendingPossibleTasksRefreshCorrelationBySession = new Map<string, string>();
+
+const registerPendingPossibleTasksRefreshCorrelation = (sessionId: string, correlationId?: string | null): void => {
+    const normalizedSessionId = String(sessionId || '').trim();
+    const normalizedCorrelationId = typeof correlationId === 'string' ? correlationId.trim() : '';
+    if (!normalizedSessionId || !normalizedCorrelationId) return;
+    pendingPossibleTasksRefreshCorrelationBySession.set(normalizedSessionId, normalizedCorrelationId);
+};
+
+const consumePendingPossibleTasksRefreshCorrelation = (sessionId: string, correlationId?: string | null): boolean => {
+    const normalizedSessionId = String(sessionId || '').trim();
+    const normalizedCorrelationId = typeof correlationId === 'string' ? correlationId.trim() : '';
+    if (!normalizedSessionId || !normalizedCorrelationId) return false;
+    const expectedCorrelationId = pendingPossibleTasksRefreshCorrelationBySession.get(normalizedSessionId);
+    if (!expectedCorrelationId || expectedCorrelationId !== normalizedCorrelationId) return false;
+    pendingPossibleTasksRefreshCorrelationBySession.delete(normalizedSessionId);
+    return true;
+};
+
 interface VoiceBotSessionDataSlice {
     currentSessionId: string | null;
     voiceBotSession: VoiceBotSession | null;
@@ -1038,19 +1057,26 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                             e2e_from_click_ms: clickedAtMs !== null ? Date.now() - clickedAtMs : null,
                         });
 
-                        void get().fetchSessionPossibleTasks(activeSessionId, { silent: true })
-                            .then((items) => {
-                                console.info('possible_tasks_refreshed', {
-                                    session_id: activeSessionId,
-                                    correlation_id: correlationId,
-                                    clicked_at_ms: clickedAtMs,
-                                    e2e_from_click_ms: clickedAtMs !== null ? Date.now() - clickedAtMs : null,
-                                    items_count: items.length,
-                                });
-                            })
-                            .catch((error) => {
-                                console.error('Failed to refresh voice session possible tasks after realtime hint:', error);
+                        if (consumePendingPossibleTasksRefreshCorrelation(activeSessionId, correlationId)) {
+                            console.info('possible_tasks_refresh_skipped_self_echo', {
+                                session_id: activeSessionId,
+                                correlation_id: correlationId,
                             });
+                        } else {
+                            void get().fetchSessionPossibleTasks(activeSessionId, { silent: true })
+                                .then((items) => {
+                                    console.info('possible_tasks_refreshed', {
+                                        session_id: activeSessionId,
+                                        correlation_id: correlationId,
+                                        clicked_at_ms: clickedAtMs,
+                                        e2e_from_click_ms: clickedAtMs !== null ? Date.now() - clickedAtMs : null,
+                                        items_count: items.length,
+                                    });
+                                })
+                                .catch((error) => {
+                                    console.error('Failed to refresh voice session possible tasks after realtime hint:', error);
+                                });
+                        }
                     }
 
                     if (shouldRefreshSummary || shouldRefreshReview) {
@@ -1225,6 +1251,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         const defaultProjectId = String(get().voiceBotSession?.project_id || '').trim();
         const normalizedTasks = parsePossibleTasksResponse(tasks, defaultProjectId);
         let canonicalTasks = normalizedTasks;
+        registerPendingPossibleTasksRefreshCorrelation(normalizedSessionId, options?.refreshCorrelationId);
 
         try {
             const response = await voicebotHttp.request<unknown>(
@@ -1266,6 +1293,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         if (!normalizedSessionId) {
             throw new Error('session_id is required');
         }
+        registerPendingPossibleTasksRefreshCorrelation(normalizedSessionId, options?.refreshCorrelationId);
         const response = await voicebotHttp.request<unknown>(
             'voicebot/generate_possible_tasks',
             {

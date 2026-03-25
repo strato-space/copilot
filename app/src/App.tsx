@@ -1,4 +1,4 @@
-import { Layout, Menu, Spin, Tag } from 'antd';
+import { Button, Layout, Menu, Spin } from 'antd';
 import {
   AppstoreOutlined,
   MessageOutlined,
@@ -12,7 +12,7 @@ import {
   WalletOutlined,
 } from '@ant-design/icons';
 import { type ReactElement, useEffect, useState } from 'react';
-import { Navigate, Route, Routes, NavLink, useLocation, useParams, Outlet } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams, Outlet } from 'react-router-dom';
 import PlanFactPage from './pages/PlanFactPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import DirectoriesPage from './pages/DirectoriesPage';
@@ -52,18 +52,91 @@ import { useMCPWebSocket } from './hooks/useMCPWebSocket';
 import WebrtcFabLoader from './components/voice/WebrtcFabLoader';
 
 const { Sider, Content } = Layout;
+const SIDEBAR_WIDTH = 172;
+const SIDEBAR_COLLAPSED_WIDTH = 56;
 
-const navItems = [
-  { key: 'analytics', label: 'Analytic', to: '/analytics', icon: <LineChartOutlined />, badge: 'alpha' },
-  { key: 'agents', label: 'Agents', to: '/agents', icon: <RobotOutlined />, badge: 'dev' },
+type NavBadge = 'alpha' | 'beta' | 'zero';
+
+interface NavItem {
+  key: string;
+  label: string;
+  to: string;
+  icon: ReactElement;
+  badge?: NavBadge;
+}
+
+export const navItems: NavItem[] = [
+  { key: 'analytics', label: 'Analytics', to: '/analytics', icon: <LineChartOutlined />, badge: 'alpha' },
+  { key: 'agents', label: 'Agents', to: '/agents', icon: <RobotOutlined />, badge: 'zero' },
   { key: 'operops', label: 'OperOps', to: '/operops', icon: <SettingOutlined />, badge: 'beta' },
   { key: 'finops', label: 'FinOps', to: '/finops', icon: <WalletOutlined />, badge: 'alpha' },
-  { key: 'chatops', label: 'ChatOps', to: '/chatops', icon: <MessageOutlined />, badge: 'dev' },
-  { key: 'desops', label: 'DesOps', to: '/desops', icon: <ToolOutlined />, badge: 'dev' },
-  { key: 'voice', label: 'Voice', to: '/voice', icon: <SoundOutlined />, badge: 'dev' },
+  { key: 'chatops', label: 'ChatOps', to: '/chatops', icon: <MessageOutlined />, badge: 'zero' },
+  { key: 'desops', label: 'DesOps', to: '/desops', icon: <ToolOutlined />, badge: 'zero' },
+  { key: 'voice', label: 'Voice', to: '/voice', icon: <SoundOutlined /> },
   { key: 'admin', label: 'Admin', to: '/admin', icon: <SettingOutlined />, badge: 'beta' },
   { key: 'guides', label: 'Guides', to: '/guide', icon: <AppstoreOutlined />, badge: 'alpha' },
 ];
+
+const isMainShellRouteMatch = (pathname: string, route: string): boolean => {
+  return pathname === route || pathname.startsWith(`${route}/`);
+};
+
+export const resolveMainShellSelectedKey = (pathname: string): string => {
+  const normalizedPath = pathname === '/' ? '/analytics' : pathname;
+  return navItems.find((item): boolean => isMainShellRouteMatch(normalizedPath, item.to))?.key ?? '';
+};
+
+export const resolveMainShellContextLabel = (pathname: string): string => {
+  if (pathname.startsWith('/finops') || pathname.startsWith('/plan-fact')) {
+    return 'FinOps';
+  }
+
+  if (pathname.startsWith('/saleops')) {
+    return 'SaleOps';
+  }
+
+  if (pathname.startsWith('/hhops')) {
+    return 'HHOps';
+  }
+
+  if (pathname.startsWith('/guide')) {
+    return 'Guides';
+  }
+
+  if (pathname.startsWith('/voice')) {
+    return 'Voice';
+  }
+
+  if (pathname.startsWith('/admin')) {
+    return 'Admin';
+  }
+
+  if (pathname.startsWith('/operops')) {
+    return 'OperOps';
+  }
+
+  if (pathname.startsWith('/chatops')) {
+    return 'ChatOps';
+  }
+
+  if (pathname.startsWith('/agents')) {
+    return 'Agents';
+  }
+
+  if (pathname.startsWith('/desops')) {
+    return 'DesOps';
+  }
+
+  return navItems.find((item): boolean => isMainShellRouteMatch(pathname, item.to))?.label ?? '';
+};
+
+export const resolveNavBadgeText = (badge?: NavBadge): string | null => {
+  if (!badge) {
+    return null;
+  }
+
+  return badge;
+};
 
 function LegacyProjectRedirect(): ReactElement {
   const { projectId } = useParams();
@@ -103,51 +176,26 @@ function RequireAuth(): ReactElement {
 
 function MainLayout(): ReactElement {
   const location = useLocation();
-  const normalizedPath = location.pathname === '/' ? '/analytics' : location.pathname;
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<boolean>(false);
-  const selectedKey =
-    navItems.find((item): boolean => normalizedPath.startsWith(item.to))?.key ?? 'analytics';
+  const selectedKey = resolveMainShellSelectedKey(location.pathname);
   const setContextLabel = useNotificationStore((state) => state.setContextLabel);
-  const contextLabel = normalizedPath.startsWith('/finops') || normalizedPath.startsWith('/plan-fact')
-    ? 'FinOps'
-    : normalizedPath.startsWith('/saleops')
-      ? 'SaleOps'
-      : normalizedPath.startsWith('/hhops')
-        ? 'HHOps'
-        : normalizedPath.startsWith('/guide')
-          ? 'Guides'
-          : normalizedPath.startsWith('/voice')
-            ? 'Voice'
-            : normalizedPath.startsWith('/admin')
-              ? 'Admin'
-              : normalizedPath.startsWith('/operops')
-                ? 'OperOps'
-                : normalizedPath.startsWith('/chatops')
-                  ? 'ChatOps'
-                  : normalizedPath.startsWith('/agents')
-                    ? 'Agents'
-                    : normalizedPath.startsWith('/desops')
-                      ? 'DesOps'
-                      : normalizedPath.startsWith('/desops')
-                        ? 'DesOps'
-                        : 'Analytic';
+  const contextLabel = resolveMainShellContextLabel(location.pathname);
 
   useEffect((): void => {
     setContextLabel(contextLabel);
   }, [contextLabel, setContextLabel]);
 
   return (
-    <Layout className="min-h-screen">
+    <Layout className="app-shell-layout min-h-screen">
       <Sider
-        width={220}
-        collapsedWidth={80}
+        width={SIDEBAR_WIDTH}
+        collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
         collapsible
         collapsed={collapsed}
         trigger={null}
         onCollapse={(value): void => setCollapsed(value)}
-        breakpoint="lg"
-        onBreakpoint={(broken): void => setCollapsed(broken)}
-        className="border-r border-slate-200"
+        className="app-shell-sider border-r border-slate-200"
         style={{
           overflow: 'auto',
           height: '100vh',
@@ -158,43 +206,49 @@ function MainLayout(): ReactElement {
           background: '#ffffff',
         }}
       >
-        <div className={`py-4 ${collapsed ? 'flex justify-center' : 'px-4'}`}>
-          <div className="w-3.5 h-3.5 rounded-full bg-slate-900" aria-hidden="true" />
+        <div className={`app-shell-sider-top ${collapsed ? 'app-shell-sider-top--collapsed' : ''}`}>
+          <div className="app-shell-sider-mark" aria-hidden="true" />
+          <Button
+            type="text"
+            size="small"
+            className="app-shell-sider-toggle"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={(): void => setCollapsed((prev) => !prev)}
+          />
         </div>
         <Menu
           mode="inline"
-          className="border-r-0"
+          inlineCollapsed={collapsed}
+          className="app-shell-nav border-r-0"
           selectedKeys={selectedKey ? [selectedKey] : []}
           style={{ background: '#ffffff' }}
+          onClick={({ key }): void => {
+            const item = navItems.find((entry) => entry.key === key);
+            if (!item || location.pathname === item.to) return;
+            navigate(item.to);
+          }}
         >
-          <Menu.Item
-            key="__toggle"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={(): void => setCollapsed((prev) => !prev)}
-          >
-          </Menu.Item>
           {navItems.map((item): ReactElement => (
-            <Menu.Item key={item.key} icon={item.icon}>
-              <NavLink to={item.to} className="flex items-center gap-2 w-full">
-                <span className="min-w-0 truncate">{item.label}</span>
-                <Tag
-                  color={item.badge === 'alpha' ? 'magenta' : item.badge === 'beta' ? 'cyan' : 'default'}
-                  className="ml-auto"
-                >
-                  {item.badge === 'alpha'
-                    ? '(alpha)'
-                    : item.badge === 'beta'
-                      ? '(beta)'
-                      : '(dev)'}
-                </Tag>
-              </NavLink>
+            <Menu.Item key={item.key} icon={item.icon} title={item.label}>
+              <span className="app-shell-nav-link">
+                <span className="app-shell-nav-label">{item.label}</span>
+                {item.badge ? (
+                  <span className={`app-shell-nav-meta app-shell-nav-meta--${item.badge}`}>
+                    ({resolveNavBadgeText(item.badge)})
+                  </span>
+                ) : null}
+              </span>
             </Menu.Item>
           ))}
         </Menu>
       </Sider>
-      <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin 0.2s' }}>
-        <Content style={{ margin: '24px 16px 0', overflow: 'initial', background: '#f5f5f5' }}>
-          <div className="p-6 min-h-screen">
+      <Layout
+        className="app-shell-main"
+        style={{ marginLeft: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH, transition: 'margin 0.2s' }}
+      >
+        <Content className="app-shell-main-content" style={{ margin: '0', overflow: 'initial', background: 'transparent' }}>
+          <div className="app-shell-main-surface min-h-screen">
             <Outlet />
           </div>
         </Content>

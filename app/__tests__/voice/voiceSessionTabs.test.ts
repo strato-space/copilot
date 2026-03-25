@@ -40,7 +40,8 @@ describe('voiceSessionTabs utilities', () => {
     expect(hasPendingCategorizationMessages(messages)).toBe(true);
   });
 
-  it('tracks pending possible-tasks refresh by CREATE_TASKS processing state or newer auto_requested_at', () => {
+  it('tracks pending possible-tasks refresh by CREATE_TASKS processing state or newer fresh auto_requested_at', () => {
+    const now = Date.now();
     const messages = [{ _id: '1', transcription_text: 'need a task' }] as VoiceBotMessage[];
     const processingSession = {
       processors_data: {
@@ -49,26 +50,48 @@ describe('voiceSessionTabs utilities', () => {
         },
       },
     } as VoiceBotSession;
-    const staleSession = {
+    const freshPendingSession = {
       processors_data: {
         CREATE_TASKS: {
-          auto_requested_at: 200,
-          job_finished_timestamp: 100,
+          auto_requested_at: now - 5 * 60 * 1000,
+          job_finished_timestamp: now - 10 * 60 * 1000,
+        },
+      },
+    } as VoiceBotSession;
+    const stalePendingSession = {
+      processors_data: {
+        CREATE_TASKS: {
+          auto_requested_at: now - 40 * 60 * 1000,
+          job_finished_timestamp: now - 50 * 60 * 1000,
         },
       },
     } as VoiceBotSession;
     const settledSession = {
       processors_data: {
         CREATE_TASKS: {
-          auto_requested_at: 100,
-          job_finished_timestamp: 200,
+          auto_requested_at: now - 10 * 60 * 1000,
+          job_finished_timestamp: now - 5 * 60 * 1000,
         },
       },
     } as VoiceBotSession;
 
     expect(hasPendingPossibleTasksRefresh(processingSession, messages)).toBe(true);
-    expect(hasPendingPossibleTasksRefresh(staleSession, messages)).toBe(true);
+    expect(hasPendingPossibleTasksRefresh(freshPendingSession, messages)).toBe(true);
+    expect(hasPendingPossibleTasksRefresh(stalePendingSession, messages)).toBe(false);
     expect(hasPendingPossibleTasksRefresh(settledSession, messages)).toBe(false);
+  });
+
+  it('keeps possible-tasks pending when CREATE_TASKS is processing even before transcript rows hydrate locally', () => {
+    const messages = [] as VoiceBotMessage[];
+    const processingSession = {
+      processors_data: {
+        CREATE_TASKS: {
+          is_processing: true,
+        },
+      },
+    } as VoiceBotSession;
+
+    expect(hasPendingPossibleTasksRefresh(processingSession, messages)).toBe(true);
   });
 
   it('does not keep possible-tasks pending forever when transcript exists but CREATE_TASKS snapshot is absent', () => {

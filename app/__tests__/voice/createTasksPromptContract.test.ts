@@ -40,7 +40,8 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).toContain('/home/strato-space/copilot');
     expect(promptSource).toContain('/home/strato-space/mediagen');
     expect(promptSource).toContain('/home/strato-space/copilot/factory/harness.md');
-    expect(promptSource).toContain('/home/strato-space/copilot/plan/voice-dual-stream-ontology.md');
+    expect(promptSource).toContain('/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md');
+    expect(promptSource).toContain('/home/strato-space/copilot/plan/voice-operops-codex-taskflow-spec.md');
     expect(promptSource).toContain('fs.read_multiple_files');
     expect(promptSource).toContain('Обязательный shell entrypoint-read pass (проверяемый контракт)');
     expect(promptSource).toContain("sed -n '1,220p' /home/strato-space/copilot/AGENTS.md");
@@ -69,14 +70,30 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).toContain('to_date=project_crm_window.to_date');
     expect(promptSource).toContain('fallback: `from_date=<latest session/discussion anchor - 14d>`, `to_date=<latest session/discussion anchor>`');
     expect(promptSource).toContain('unbounded `voice.crm_tickets(project_id=...)` запрещён');
+    expect(promptSource).toContain('voice-operops-codex-taskflow-spec.md');
   });
 
   it('preserves rich draft semantics instead of collapsing back to a minimal array extractor', () => {
     expect(promptSource).toContain('full desired snapshot');
     expect(promptSource).toContain('row_id/id');
     expect(promptSource).toContain('historical похожий row/task был удалён');
+    expect(promptSource).toContain('breadth-first candidate extraction');
+    expect(promptSource).toContain('imperatives, requested artifacts, next steps, process changes, infra/runtime asks, taxonomy/spec asks и cross-project asks');
+    expect(promptSource).toContain('silent drop запрещён');
+    expect(promptSource).toContain('Сначала думай breadth-first');
+    expect(promptSource).toContain('Reuse/dedupe разрешён только после explicit candidate extraction');
+    expect(promptSource).toContain('Cross-project direction нельзя молча выбрасывать');
+    expect(promptSource).toContain('tail-pass по последним 25-30% transcript');
+    expect(promptSource).toContain('отдельный candidate bucket на каждый contour');
     expect(promptSource).toContain('Не объединяй задачи');
     expect(promptSource).toContain('different work items');
+    expect(promptSource).toContain('repo skeleton / AGENTS / docs / ticket surface');
+    expect(promptSource).toContain('Excel/Sheets output');
+    expect(promptSource).toContain('cron refresh / polling');
+    expect(promptSource).toContain('status-column readback / operator feedback loop');
+    expect(promptSource).toContain('internal candidate list');
+    expect(promptSource).toContain('cross-project directions');
+    expect(promptSource).toContain('superseded или non-goal');
     expect(promptSource).toContain('## description');
     expect(promptSource).toContain('## object_locators');
     expect(promptSource).toContain('## expected_results');

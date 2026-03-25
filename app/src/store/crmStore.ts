@@ -272,6 +272,9 @@ export const useCRMStore = create<CRMState>((set, get) => {
                     all_statuses_stat[status]++;
                 }
             }
+            if (_.isEqual(get().all_statuses_stat, all_statuses_stat)) {
+                return;
+            }
             set({ all_statuses_stat });
         },
 

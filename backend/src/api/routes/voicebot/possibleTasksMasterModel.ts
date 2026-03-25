@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import { TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
 import { normalizeDateField, toIdString, toTaskReferenceList, toTaskText } from './sessionsSharedUtils.js';
@@ -33,6 +34,28 @@ export type VoicePossibleTaskRelation = {
 
 const RELATION_TYPE_SET = new Set<string>(VOICE_POSSIBLE_TASK_RELATION_TYPES);
 const VOICE_SESSION_SOURCE_REF_REGEX = /\/voice\/session\//i;
+const GENERIC_VOICE_TASK_LOCATOR_REGEXES = [
+  /^task[-_\s]*\d+$/i,
+  /^draft[-_\s]*\d+$/i,
+  /^possible[-_\s]*task[-_\s]*\d+$/i,
+  /^item[-_\s]*\d+$/i,
+] as const;
+
+const normalizeLocatorText = (value: unknown): string =>
+  toTaskText(value)
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-z0-9а-я]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+export const normalizeVoicePossibleTaskLocatorKey = (value: unknown): string => {
+  const normalized = toTaskText(value);
+  if (!normalized) return '';
+  return GENERIC_VOICE_TASK_LOCATOR_REGEXES.some((pattern) => pattern.test(normalized))
+    ? ''
+    : normalized;
+};
 
 const toStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
@@ -250,8 +273,37 @@ export const resolveVoicePossibleTaskRowId = ({
   rawTask: Record<string, unknown>;
   index: number;
 }): string => {
-  const taskIdFromAi = toTaskText(rawTask.task_id_from_ai);
-  return toTaskText(rawTask.row_id) || toTaskText(rawTask.id) || taskIdFromAi || `task-${index + 1}`;
+  const taskIdFromAi = normalizeVoicePossibleTaskLocatorKey(rawTask.task_id_from_ai);
+  return (
+    normalizeVoicePossibleTaskLocatorKey(rawTask.row_id) ||
+    normalizeVoicePossibleTaskLocatorKey(rawTask.id) ||
+    taskIdFromAi ||
+    buildVoicePossibleTaskFallbackLocator({ rawTask, index })
+  );
+};
+
+export const buildVoicePossibleTaskFallbackLocator = ({
+  rawTask,
+  index,
+}: {
+  rawTask: Record<string, unknown>;
+  index: number;
+}): string => {
+  const rawName = toTaskText(rawTask.name);
+  const rawDescription = toTaskText(rawTask.description);
+  const rawDialogueReference = toTaskText(rawTask.dialogue_reference);
+  const slugSource = normalizeLocatorText(rawName || rawDescription || `draft ${index + 1}`);
+  const slug = slugSource.split(' ').filter(Boolean).slice(0, 8).join('-') || `draft-${index + 1}`;
+  const seed = JSON.stringify({
+    name: rawName,
+    description: rawDescription,
+    dialogue_reference: rawDialogueReference,
+    priority: toTaskText(rawTask.priority),
+    project_id: toTaskText(rawTask.project_id),
+    performer_id: toTaskText(rawTask.performer_id),
+  });
+  const digest = createHash('sha1').update(seed).digest('hex').slice(0, 10);
+  return `voice-task-${slug}-${digest}`;
 };
 
 export const collectVoicePossibleTaskLocatorKeys = (value: unknown): string[] => {
@@ -260,10 +312,11 @@ export const collectVoicePossibleTaskLocatorKeys = (value: unknown): string[] =>
   return Array.from(
     new Set(
       [
-        toTaskText(record.row_id),
-        toTaskText(record.id),
-        toTaskText(record.task_id_from_ai),
-        toTaskText((record.source_data as Record<string, unknown> | undefined)?.row_id),
+        normalizeVoicePossibleTaskLocatorKey(record.row_id),
+        normalizeVoicePossibleTaskLocatorKey(record.id),
+        normalizeVoicePossibleTaskLocatorKey(record.task_id_from_ai),
+        normalizeVoicePossibleTaskLocatorKey((record.source_data as Record<string, unknown> | undefined)?.row_id),
+        buildVoicePossibleTaskFallbackLocator({ rawTask: record, index: 0 }),
       ].filter(Boolean)
     )
   );
@@ -350,7 +403,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
 
   return {
     row_id: rowId,
-    id: toTaskText(rawTask.id) || rowId,
+    id: normalizeVoicePossibleTaskLocatorKey(rawTask.id) || rowId,
     name: toTaskText(rawTask.name) || `Задача ${index + 1}`,
     project: toTaskText(rawTask.project),
     description: toTaskText(rawTask.description),
@@ -415,7 +468,7 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
   return {
     ...(record._id != null ? { _id: toMaybeStringId(record._id) } : {}),
     row_id: rowId,
-    id: toTaskText(record.id) || rowId,
+    id: normalizeVoicePossibleTaskLocatorKey(record.id) || rowId,
     name: toTaskText(record.name),
     project: toTaskText(record.project),
     description: toTaskText(record.description),

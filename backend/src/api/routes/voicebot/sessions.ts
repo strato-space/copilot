@@ -2225,6 +2225,58 @@ const buildSessionAttachments = (messages: Array<Record<string, unknown>>): Sess
     return attachments;
 };
 
+const resolveSessionListTaskCounts = async ({
+    db,
+    session,
+}: {
+    db: Db;
+    session: Record<string, unknown>;
+}): Promise<{ tasks_count: number; codex_count: number }> => {
+    const sessionId = session._id instanceof ObjectId
+        ? session._id.toHexString()
+        : String(session._id ?? '').trim();
+    if (!ObjectId.isValid(sessionId)) {
+        return { tasks_count: 0, codex_count: 0 };
+    }
+
+    const sessionRef = voiceSessionUrlUtils.canonical(sessionId);
+    const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
+    const nonCodexTaskMatch = mergeWithRuntimeFilter(
+        {
+            is_deleted: { $ne: true },
+            codex_task: { $ne: true },
+            $and: [
+                sessionScopedTaskMatch,
+                { 'source_data.refresh_state': { $ne: 'stale' } },
+            ],
+        },
+        {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        }
+    );
+    const codexTaskMatch = mergeWithRuntimeFilter(
+        {
+            is_deleted: { $ne: true },
+            codex_task: true,
+            external_ref: sessionRef,
+        },
+        {
+            field: 'runtime_tag',
+            familyMatch: IS_PROD_RUNTIME,
+            includeLegacyInProd: IS_PROD_RUNTIME,
+        }
+    );
+
+    const [tasks_count, codex_count] = await Promise.all([
+        db.collection(COLLECTIONS.TASKS).countDocuments(nonCodexTaskMatch),
+        db.collection(COLLECTIONS.TASKS).countDocuments(codexTaskMatch),
+    ]);
+
+    return { tasks_count, codex_count };
+};
+
 const listSessions = async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
@@ -2324,8 +2376,18 @@ const listSessions = async (req: Request, res: Response) => {
         ]).toArray();
 
         // Filter sessions with messages or active status (always include deleted when explicitly requested)
-        const result = sessions.filter((session: { message_count?: number; is_active?: boolean; is_deleted?: boolean }) =>
+        const visibleSessions = sessions.filter((session: { message_count?: number; is_active?: boolean; is_deleted?: boolean }) =>
             session.is_deleted === true || (session.message_count ?? 0) > 0 || (session.is_active ?? false) !== false
+        );
+
+        const result = await Promise.all(
+            visibleSessions.map(async (session) => ({
+                ...session,
+                ...(await resolveSessionListTaskCounts({
+                    db,
+                    session: session as Record<string, unknown>,
+                })),
+            }))
         );
 
         res.status(200).json(result);

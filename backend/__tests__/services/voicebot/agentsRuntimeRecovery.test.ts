@@ -44,7 +44,7 @@ describe('attemptAgentsQuotaRecovery', () => {
     readFileMock
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))
-      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4\n'));
+      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4-mini\n'));
     mkdirMock.mockResolvedValue(undefined);
 
     const recovered = await attemptAgentsQuotaRecovery({
@@ -61,7 +61,7 @@ describe('attemptAgentsQuotaRecovery', () => {
     readFileMock
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'stale-account' } })))
-      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4\n'));
+      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4-mini\n'));
     mkdirMock.mockResolvedValue(undefined);
     copyFileMock.mockResolvedValue(undefined);
     writeFileMock.mockResolvedValue(undefined);
@@ -88,7 +88,7 @@ describe('attemptAgentsQuotaRecovery', () => {
     readFileMock
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'stale-account' } })))
-      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4\n'));
+      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4-mini\n'));
     mkdirMock.mockResolvedValue(undefined);
     copyFileMock.mockResolvedValue(undefined);
     writeFileMock.mockResolvedValue(undefined);
@@ -135,13 +135,13 @@ describe('attemptAgentsQuotaRecovery', () => {
     expect(copyFileMock).not.toHaveBeenCalled();
     expect(writeFileMock).toHaveBeenCalledWith(
       '/home/strato-space/copilot/agents/fastagent.config.yaml',
-      'default_model: gpt-5.4',
+      'default_model: gpt-5.4-mini',
       'utf8'
     );
     expect(execFileMock).toHaveBeenCalledTimes(1);
   });
 
-  it('pins gpt-5.4 regardless of auth account once recovery runs', async () => {
+  it('pins gpt-5.4-mini regardless of auth account once recovery runs', async () => {
     readFileMock
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: '4e0cfe6a-0bb7-4b6b-86c3-74a477572e49' } })))
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: '4e0cfe6a-0bb7-4b6b-86c3-74a477572e49' } })))
@@ -166,7 +166,7 @@ describe('attemptAgentsQuotaRecovery', () => {
     expect(copyFileMock).not.toHaveBeenCalled();
     expect(writeFileMock).toHaveBeenCalledWith(
       '/home/strato-space/copilot/agents/fastagent.config.yaml',
-      'default_model: gpt-5.4',
+      'default_model: gpt-5.4-mini',
       'utf8'
     );
     expect(execFileMock).toHaveBeenCalledTimes(1);
@@ -176,7 +176,7 @@ describe('attemptAgentsQuotaRecovery', () => {
     readFileMock
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'other-account' } })))
       .mockResolvedValueOnce(Buffer.from(JSON.stringify({ tokens: { account_id: 'stale-account' } })))
-      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4\n'));
+      .mockResolvedValueOnce(Buffer.from('default_model: gpt-5.4-mini\n'));
     mkdirMock.mockResolvedValue(undefined);
     copyFileMock.mockResolvedValue(undefined);
     writeFileMock.mockResolvedValue(undefined);

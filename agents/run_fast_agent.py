@@ -80,6 +80,16 @@ def register_copilot_runtime_models() -> None:
     ModelFactory.MODEL_ALIASES.setdefault("gpt54", "codexresponses.gpt-5.4")
     ModelFactory.MODEL_ALIASES.setdefault("codex54", "codexresponses.gpt-5.4")
 
+    gpt54mini_codex = gpt53_codex.model_copy(
+        update={
+            "default_provider": Provider.CODEX_RESPONSES,
+        }
+    )
+
+    ModelDatabase.register_runtime_model_params("gpt-5.4-mini", gpt54mini_codex)
+    ModelFactory.MODEL_ALIASES.setdefault("gpt54mini", "codexresponses.gpt-5.4-mini")
+    ModelFactory.MODEL_ALIASES.setdefault("codex54mini", "codexresponses.gpt-5.4-mini")
+
 
 def install_profiling_hooks() -> None:
     from fast_agent.llm.provider.openai import openresponses_streaming, responses_streaming, streaming_utils

@@ -6,12 +6,16 @@ import cn from 'classnames';
 
 import { useCRMStore } from '../../store/crmStore';
 import { useAuthStore } from '../../store/authStore';
+import { useKanbanStore } from '../../store/kanbanStore';
 import type { WeekReportItem } from '../../types/crm';
 import ProjectTag from './ProjectTag';
+import { projectDisplayName, projectSelectLabel, resolveProjectOption } from '../../utils/projectSelectOptions';
+import { resolveTaskTypeOption, taskTypeDisplayLabel } from '../../utils/taskTypeSelectOptions';
 
 const CRMReports = () => {
     const { fetchReports, week_reports } = useCRMStore();
     const { isAuth, loading: authLoading } = useAuthStore();
+    const { projectsData, task_types } = useKanbanStore();
 
     useEffect(() => {
         if (isAuth) fetchReports();
@@ -59,12 +63,22 @@ const CRMReports = () => {
             title: 'Проект',
             width: 120,
             dataIndex: 'project',
-            render: (_, record) => <ProjectTag name={record.project} tooltip={record.project} />,
+            render: (_, record) => {
+                const resolvedProject = resolveProjectOption(projectsData, record.project);
+                const projectLabel = resolvedProject
+                    ? projectDisplayName(resolvedProject)
+                    : projectSelectLabel(record.project, record.project);
+                return <ProjectTag name={projectLabel} tooltip={projectLabel} />;
+            },
         },
         {
             title: 'Тип',
             width: 80,
             dataIndex: 'type',
+            render: (value) => {
+                const resolvedTaskType = resolveTaskTypeOption(task_types, value);
+                return resolvedTaskType ? taskTypeDisplayLabel(resolvedTaskType) : '—';
+            },
         },
         {
             title: 'Задача',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Empty, Tabs, Typography, message } from 'antd';
+import { Empty, Spin, Tabs, Typography, message } from 'antd';
 import { useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -541,10 +541,24 @@ export default function SessionPage() {
 
     if (isLoading) {
         return (
-            <div className="voice-session-shell">
+            <div className="voice-session-shell voice-session-shell--workspace">
                 <div className="voice-session-shell-bg" />
                 <div className="voice-session-page">
-                    <div className="min-h-[300px] flex items-center justify-center">Загрузка...</div>
+                    <div className="voice-session-content">
+                        <div className="flex flex-1 min-w-0 flex-col gap-4">
+                            <div className="voice-meeting-glass-card">
+                                <div className="voice-session-loading-panel gap-3">
+                                    <Spin size="large" />
+                                    <span>Загрузка...</span>
+                                </div>
+                            </div>
+                            <div className="voice-session-tabs-shell">
+                                <div className="voice-session-loading-panel min-h-[420px]">
+                                    <Spin size="large" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -552,10 +566,16 @@ export default function SessionPage() {
 
     if (loadError) {
         return (
-            <div className="voice-session-shell">
+            <div className="voice-session-shell voice-session-shell--workspace">
                 <div className="voice-session-shell-bg" />
                 <div className="voice-session-page">
-                    <div className="min-h-[300px] flex items-center justify-center text-center px-6">{loadError}</div>
+                    <div className="voice-session-content">
+                        <div className="flex flex-1 min-w-0 flex-col gap-4">
+                            <div className="voice-meeting-glass-card">
+                                <div className="voice-session-loading-panel min-h-[220px] text-center px-6">{loadError}</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
@@ -563,21 +583,27 @@ export default function SessionPage() {
 
     if (!voiceBotSession) {
         return (
-            <div className="voice-session-shell">
+            <div className="voice-session-shell voice-session-shell--workspace">
                 <div className="voice-session-shell-bg" />
                 <div className="voice-session-page">
-                    <div className="min-h-[300px] flex items-center justify-center">Сессия не найдена</div>
+                    <div className="voice-session-content">
+                        <div className="flex flex-1 min-w-0 flex-col gap-4">
+                            <div className="voice-meeting-glass-card">
+                                <div className="voice-session-loading-panel min-h-[220px]">Сессия не найдена</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="voice-session-shell">
+        <div className="voice-session-shell voice-session-shell--workspace">
             <div className="voice-session-shell-bg" />
             <div className="voice-session-page">
                 <div className="voice-session-content">
-                    <div className="flex flex-col gap-3 flex-1 min-w-0">
+                    <div className="flex flex-col gap-4 flex-1 min-w-0">
                         <MeetingCard onCustomPromptResult={setCustomPromptResult} activeTab={activeTab} />
                         <div className="voice-session-tabs-shell">
                             <Tabs

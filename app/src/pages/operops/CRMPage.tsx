@@ -8,6 +8,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import _ from 'lodash';
 
 import { CRMKanban, CRMCreateTicket, CRMCreateEpic } from '../../components/crm';
+import ProjectSelect from '../../components/shared/ProjectSelect';
 import CodexIssuesTable from '../../components/codex/CodexIssuesTable';
 import { useCRMStore } from '../../store/crmStore';
 import { useKanbanStore } from '../../store/kanbanStore';
@@ -19,6 +20,7 @@ import { TARGET_TASK_STATUS_KEYS, type TaskStatusKey } from '../../constants/crm
 import { useCRMSocket } from '../../hooks/useCRMSocket';
 import { isPerformerSelectable } from '../../utils/performerLifecycle';
 import { parseCreateTasksMcpResult } from '../../utils/voicePossibleTasks';
+import { buildGroupedProjectOptions, hydrateProjectsWithRelations } from '../../utils/projectSelectOptions';
 import type { Performer, Ticket } from '../../types/crm';
 import { resolveTaskProjectName, resolveTaskSourceInfo } from './taskPageUtils';
 import { getTaskStatusDisplayLabel } from '../../utils/taskStatusSurface';
@@ -108,6 +110,16 @@ const DRAFT_HORIZON_OPTIONS = [
     { value: 'infinity', label: '∞' },
 ] as const;
 type DraftHorizonValue = (typeof DRAFT_HORIZON_OPTIONS)[number]['value'];
+const DRAFT_COMPACT_COLUMNS: string[] = [
+    'updated_at',
+    'created_at',
+    'project',
+    'title',
+    'task_type',
+    'performer',
+    'priority',
+    'edit_action',
+];
 
 const STATUS_TAB_KEYS: OperOpsStatusTabKey[] = ['draft', 'ready', 'in_progress', 'review', 'done', 'archive', 'codex'];
 
@@ -264,9 +276,9 @@ interface CRMPageUiState {
 }
 
 const CRMPage = () => {
-    const { savedFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew, setEditingTicket } = useCRMStore();
+    const { savedFilters, saveFilters, saveTab, savedTab, editingTicket, editingEpic, setEditingTicketToNew, setEditingTicket } = useCRMStore();
     const { projects, projectsData, performers, fetchDictionary, tickets_updated_at, ticketsLoading, fetchTicketById } = useKanbanStore();
-    const { customers, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
+    const { customers, projectGroups, fetchProjectGroups, fetchProjects, fetchCustomers } = useProjectsStore();
     const { api_request } = useRequestStore();
     const { sendMCPCall, waitForCompletion, waitForConnected, connectionState } = useMCPRequestStore();
     const navigate = useNavigate();
@@ -402,6 +414,32 @@ const CRMPage = () => {
         initialDataLoadedRef.current = true;
     }, [isAuth, projects.length, fetchDictionary, fetchCustomers, fetchProjectGroups, fetchProjects]);
 
+    const hydratedProjects = useMemo(
+        () => hydrateProjectsWithRelations(projectsData, projectGroups, customers),
+        [customers, projectGroups, projectsData]
+    );
+    const projectFilterOptions = useMemo(
+        () => buildGroupedProjectOptions(hydratedProjects),
+        [hydratedProjects]
+    );
+    const projectFilterValues = useMemo(() => toFilterArray(savedFilters.project), [savedFilters.project]);
+    const selectedProjectFilter = useMemo(() => {
+        const normalizedProject = Array.isArray(savedFilters.project)
+            ? coerceString(savedFilters.project[0])
+            : coerceString(savedFilters.project);
+        return normalizedProject ?? null;
+    }, [savedFilters.project]);
+    const handleProjectFilterChange = useCallback(
+        (projectId: string | null) => {
+            const nextFilters = _.omit(savedFilters, ['project']) as typeof savedFilters;
+            if (projectId) {
+                nextFilters.project = projectId;
+            }
+            saveFilters(nextFilters);
+        },
+        [saveFilters, savedFilters]
+    );
+
     const fetchVoiceSessions = useCallback(async () => {
         if (!isAuth) return;
         patchUiState({ voiceLoading: true });
@@ -423,9 +461,16 @@ const CRMPage = () => {
 
     const fetchStatusCounts = useCallback(async (options: { force?: boolean } = {}) => {
         if (!isAuth) return;
-        const requestPayload = resolvedDraftHorizonDays !== undefined ? { draft_horizon_days: resolvedDraftHorizonDays } : {};
+        const requestPayload: Record<string, unknown> = {};
+        if (resolvedDraftHorizonDays !== undefined) {
+            requestPayload.draft_horizon_days = resolvedDraftHorizonDays;
+        }
+        if (projectFilterValues && projectFilterValues.length > 0) {
+            requestPayload.project = projectFilterValues;
+        }
         const requestKey = JSON.stringify({
             draft_horizon_days: resolvedDraftHorizonDays ?? null,
+            project: projectFilterValues ?? [],
         });
         const recentlyFetched = Date.now() - statusCountsLastFetchAtRef.current < 1200;
         if (!options.force && statusCountsInFlightRef.current && statusCountsLastKeyRef.current === requestKey) {
@@ -472,7 +517,7 @@ const CRMPage = () => {
         if (statusCountsInFlightRef.current === requestPromise) {
             statusCountsInFlightRef.current = null;
         }
-    }, [api_request, isAuth, resolvedDraftHorizonDays]);
+    }, [api_request, isAuth, projectFilterValues, resolvedDraftHorizonDays]);
 
     const buildTranscriptionText = (messages: Array<Record<string, unknown>>): string => {
         return messages
@@ -715,7 +760,7 @@ const CRMPage = () => {
 
     const crmFilter = useMemo(() => {
         if (!activeTabDefinition || isCodexTab || !activeTabDefinition.taskStatuses) return null;
-        const projectFilter = toFilterArray(savedFilters.project);
+        const projectFilter = projectFilterValues;
         const performerFilter = toFilterArray(savedFilters.performer);
         const epicFilter = toFilterArray(savedFilters.epic);
         const titleFilter = toFilterArray(savedFilters.title);
@@ -726,7 +771,7 @@ const CRMPage = () => {
             ...(epicFilter ? { epic: epicFilter } : {}),
             ...(titleFilter ? { title: titleFilter } : {}),
         };
-    }, [activeTabDefinition, isCodexTab, savedFilters]);
+    }, [activeTabDefinition, isCodexTab, projectFilterValues, savedFilters]);
 
     const handleRefresh = () => {
         if (!isCodexTab) {
@@ -1121,6 +1166,18 @@ const CRMPage = () => {
                                     <SyncOutlined />
                                     <span>Данные обновляются: {tickets_updated_at ? dayjs(tickets_updated_at).format('HH:mm') : '—'}</span>
                                 </button>
+                                <div className="flex min-w-[280px] flex-wrap items-center gap-2">
+                                    <span>Проект</span>
+                                    <ProjectSelect
+                                        allowClear
+                                        className="w-[280px]"
+                                        popupClassName="w-[380px]"
+                                        options={projectFilterOptions}
+                                        placeholder="Все проекты"
+                                        value={selectedProjectFilter}
+                                        onChange={(value) => handleProjectFilterChange(value ? String(value) : null)}
+                                    />
+                                </div>
                                 {isDraftTab || isArchiveTab ? (
                                     <div className="flex items-center gap-2">
                                         <span>Draft/Archive depth</span>
@@ -1154,7 +1211,9 @@ const CRMPage = () => {
                                 key={`operops-${activeMainTab}`}
                                 filter={crmFilter}
                                 refreshToken={kanbanRefreshToken}
+                                draftCompactView={isDraftTab}
                                 draftHorizonDays={resolvedDraftHorizonDays}
+                                columns={isDraftTab ? DRAFT_COMPACT_COLUMNS : undefined}
                             />
                         ) : null}
                     </ConfigProvider>

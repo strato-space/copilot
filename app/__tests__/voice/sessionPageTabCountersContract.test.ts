@@ -48,5 +48,9 @@ describe('SessionPage tab counters and indicators contract', () => {
     expect(css).toContain('.voice-tab-processing-dot');
     expect(css).toContain('animation: voice-tab-processing-pulse 2.4s ease-in-out infinite;');
     expect(css).toContain('background: #22c55e;');
+    expect(css).toContain('.voice-session-shell .voice-meeting-meta-row > .voice-meeting-meta-chip:nth-child(2)');
+    expect(css).toContain('display: none;');
+    expect(source).toContain('className="flex flex-col gap-4 flex-1 min-w-0"');
+    expect(source).toContain('className="flex flex-1 min-w-0 flex-col gap-4"');
   });
 });

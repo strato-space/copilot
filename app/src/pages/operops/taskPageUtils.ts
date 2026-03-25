@@ -217,6 +217,23 @@ const getProjectDataName = (projectData: unknown): string => {
     return '';
 };
 
+const looksLikeOpaqueProjectToken = (value: string): boolean => {
+    const normalized = value.trim();
+    if (!normalized) return false;
+    if (/\s/.test(normalized)) return false;
+    if (/^[a-f0-9]{24}$/i.test(normalized)) return true;
+    if (/^[a-f0-9-]{16,}$/i.test(normalized)) return true;
+    if (/^[a-z]{1,4}-\d+(?:-\d+)*$/i.test(normalized)) return true;
+    if (/^[a-z]\d+$/i.test(normalized)) return true;
+    return false;
+};
+
+const toSafeProjectName = (value: unknown): string => {
+    const text = toNonEmptyString(value);
+    if (!text || looksLikeOpaqueProjectToken(text)) return '';
+    return text;
+};
+
 const getProjectByValue = (projectsData: Project[], projectValue?: unknown): Project | null => {
     const targetValue = toLookupValue(projectValue);
     if (!targetValue) return null;
@@ -242,11 +259,8 @@ export const resolveTaskProjectName = (task: Ticket, projectsData: Project[] = [
         return projectFromLookup.name;
     }
 
-    const directProject = toNonEmptyString(task.project);
+    const directProject = toSafeProjectName(task.project);
     if (directProject) return directProject;
-
-    const legacyProject = toLookupValue(task.project).trim();
-    if (legacyProject) return legacyProject;
 
     return 'N/A';
 };

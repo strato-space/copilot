@@ -30,6 +30,8 @@
     "voice:close-idle:dry": "tsx scripts/voicebot-close-inactive-sessions.ts",
     "voice:close-idle:apply": "tsx scripts/voicebot-close-inactive-sessions.ts --apply",
     "voice:session:forensics": "tsx scripts/voicebot-session-forensics.ts",
+    "voice:create-tasks:repair-stale:dry": "tsx scripts/voicebot-repair-stale-create-tasks-processing.ts",
+    "voice:create-tasks:repair-stale:apply": "tsx scripts/voicebot-repair-stale-create-tasks-processing.ts --apply",
     "voice:create-tasks-payload-to-drafts:dry": "tsx scripts/migrate-create-tasks-payload-to-drafts.ts",
     "voice:create-tasks-payload-to-drafts:apply": "tsx scripts/migrate-create-tasks-payload-to-drafts.ts --apply",
     "voice:summarize-mcp-watchdog:dry": "tsx scripts/summarize-mcp-watchdog.ts",

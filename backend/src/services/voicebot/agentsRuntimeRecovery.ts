@@ -17,7 +17,7 @@ const RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 const AGENTS_READY_TIMEOUT_MS = 30_000;
 const AGENTS_READY_POLL_INTERVAL_MS = 500;
 const AGENTS_READY_REQUEST_TIMEOUT_MS = 2_000;
-const DEFAULT_MODEL = 'gpt-5.4';
+const DEFAULT_MODEL = 'gpt-5.4-mini';
 
 let recoveryInFlight: Promise<boolean> | null = null;
 let lastRecoveryAttemptAt = 0;

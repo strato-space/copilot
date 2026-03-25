@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-03-25
+### PROBLEM SOLVED
+- **04:15** Shared selector behavior still drifted between Voice and OperOps, so project and task-type controls could collapse into flat option lists, leak raw ids, or require different click paths depending on the surface.
+- **04:15** Production UI regressed after the parity wave: `/operops/crm` could blank-render behind React error `#185`, while the left app shell became narrow enough to clip sidebar labels even though backend APIs and the database were healthy.
+- **04:15** Historical `CREATE_TASKS` runs still left stale processing markers and request-vs-finished drift in session state, which kept green pending dots and processing footers alive on old Voice sessions after the real jobs had already ended.
+
+### FEATURE IMPLEMENTED
+- **04:15** Unified project/task-type selector parity onto shared option-source helpers and shared wrappers, keeping hierarchy/labels consistent between Voice and OperOps and making first-click inline editing deterministic again.
+- **04:15** Hardened the app shell and CRM render path for production: the sidebar is readable again, CRM status-stat updates are idempotent, and `/operops/crm` plus `/voice` now render from the same stable shell without the frontend-only blank-page failure.
+- **04:15** Added a canonical stale-state repair flow for historical `CREATE_TASKS` markers and formalized the browser acceptance ritual around `systemctl restart mcp@chrome-devtools.service` before each live UI smoke cycle.
+
+### CHANGES
+- **04:15** Updated `app/src/{App.tsx,index.css}` plus `app/__tests__/shell/appShell.test.tsx` to widen the sidebar, keep `(zero)`/other meta badges readable, and align shell spacing with the current Voice/OperOps parity contract.
+- **04:15** Reworked `app/src/components/voice/PossibleTasks.tsx`, shared selector wrappers under `app/src/components/shared/`, and option builders `app/src/utils/{projectSelectOptions,taskTypeSelectOptions}.ts`; refreshed focused selector/Voice tests so project hierarchy and operational task-type labels come from one shared source.
+- **04:15** Updated `app/src/components/crm/CRMKanban.tsx`, `app/src/store/crmStore.ts`, and `app/__tests__/operops/crmStoreStatusStats.test.ts` so filtered-ticket/status-stat recomputes are memoized/idempotent and no longer trigger the React render loop that blanked `/operops/crm` on production.
+- **04:15** Added `backend/src/services/voicebot/createTasksStaleProcessingRepair.ts`, `backend/scripts/voicebot-repair-stale-create-tasks-processing.ts`, and focused backend tests to repair stale historical `CREATE_TASKS` state in place and keep session/activity indicators honest after queue completion.
+
+## 2026-03-24
+### PROBLEM SOLVED
+- **23:10** Voice session and sessions-list surfaces still wasted desktop space: loading states collapsed into giant empty canvases, widget shells carried excess outer framing, and task/detail areas relied on nested scroll instead of using the available width and height efficiently.
+- **23:10** Draft editing remained operator-hostile: inline title edits lost focus under autosave/refetch, first-click combobox editing was inconsistent, and the list/detail workspace still presented more chrome than useful task information.
+- **23:10** Summary/review/taskflow session state still diverged across manual and background refresh paths, leaving some sessions without persisted `session_name`, `review_md_text`, or clear operator forensics after the task analyzer had already finished.
+
+### FEATURE IMPLEMENTED
+- **23:10** Landed a compact Voice Draft workspace with master-detail dominance, operable inline metadata pills, top-level `Саммари` / `Ревью` tabs, and stricter task-surface semantics aligned with the dual-stream ontology.
+- **23:10** Added a forensic-grade session bundle workflow for Voice incidents, then used it to close parity gaps in composite `CREATE_TASKS` persistence and background worker side effects.
+- **23:10** Promoted the agents runtime default to `gpt-5.4-mini` while keeping the large-window `gpt-5.4` registration in the bootstrap, so the fast-agent service now starts from the canonical mini default after auth/runtime recovery.
+
+### CHANGES
+- **23:10** Updated `app/src/{pages/voice/SessionPage.tsx,pages/voice/SessionsListPage.tsx,components/voice/{MeetingCard,PossibleTasks,SessionStatusWidget}.tsx,store/voiceBotStore.ts,utils/voiceSessionTabs.ts}` and related tests so Voice tabs, pending dots, summary/review surfaces, and draft editing share one canonical UI/runtime contract.
+- **23:10** Added `backend/scripts/voicebot-session-forensics.ts`, `docs/VOICE_SESSION_FORENSICS_PLAYBOOK.md`, and session-level repair helpers so title/review/taskflow investigations produce reproducible bundles instead of ad hoc Mongo/PM2 spelunking.
+- **23:10** Updated `agents/{fastagent.config.yaml,run_fast_agent.py,README.md}`, `backend/src/services/voicebot/agentsRuntimeRecovery.ts`, and focused runtime tests to pin the default fast-agent model to `gpt-5.4-mini` after runtime/auth sync.
+
 ## 2026-03-23
 ### PROBLEM SOLVED
 - **22:47** Background `CREATE_TASKS` refreshes still applied only part of the composite analyzer output, so worker-driven recomputes could leave `summary_md_text`, `review_md_text`, generated session/project updates, and Ready+/Codex enrichment side effects missing even after draft rows were refreshed.

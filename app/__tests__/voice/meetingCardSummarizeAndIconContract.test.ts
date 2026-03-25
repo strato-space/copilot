@@ -30,6 +30,14 @@ describe('MeetingCard summarize + circle icon alignment contract', () => {
     expect(source).toContain("<span style={{ color: '#1677ff', fontSize: 16, fontWeight: 700 }}>∑</span>");
   });
 
+  it('shows the canonical green pending dot next to the title while CREATE_TASKS is recalculating taskflow', () => {
+    expect(source).toContain("const hasTaskflowPending = useMemo(");
+    expect(source).toContain("() => hasPendingPossibleTasksRefresh(voiceBotSession, voiceBotMessages),");
+    expect(source).toContain('title="Идет перерасчет заголовка, ревью и задач"');
+    expect(source).toContain('className="voice-tab-processing-dot"');
+    expect(source).toContain('aria-label="Перерасчет taskflow"');
+  });
+
   it('moves upload audio into the top icon toolbar after download transcription', () => {
     const idxDownload = source.indexOf('Tooltip title="Скачать Транскрипцию"');
     const idxUpload = source.indexOf('Tooltip title="Загрузить аудио"');

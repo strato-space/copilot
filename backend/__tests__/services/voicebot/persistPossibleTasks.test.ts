@@ -125,7 +125,7 @@ describe('persistPossibleTasksForSession', () => {
     sessionId = new ObjectId().toHexString();
   });
 
-  it('reuses existing project draft by semantic match and preserves canonical identity', async () => {
+  it('reuses existing project draft by semantic match and refreshes wording while preserving canonical identity', async () => {
     const existingDocId = new ObjectId();
     const previousSessionId = new ObjectId().toHexString();
     const tasksCollection = buildTasksCollection([
@@ -195,7 +195,7 @@ describe('persistPossibleTasksForSession', () => {
       expect.objectContaining({
         row_id: 'draft-canonical-openclaw',
         id: 'draft-canonical-openclaw',
-        name: 'Развернуть OpenClaw или выбранный оркестратор на Mac mini для тестов',
+        name: 'Развернуть OpenClaw на Mac mini для тестов оркестратора',
         project_id: 'proj-1',
         discussion_count: 2,
       }),
@@ -208,7 +208,7 @@ describe('persistPossibleTasksForSession', () => {
         _id: existingDocId,
         row_id: 'draft-canonical-openclaw',
         id: 'draft-canonical-openclaw',
-        name: 'Развернуть OpenClaw или выбранный оркестратор на Mac mini для тестов',
+        name: 'Развернуть OpenClaw на Mac mini для тестов оркестратора',
         source_data: expect.objectContaining({
           row_id: 'draft-canonical-openclaw',
           session_id: sessionId,
@@ -397,6 +397,267 @@ describe('persistPossibleTasksForSession', () => {
           last_refresh_mode: 'incremental_refresh',
         }),
       })
+    );
+  });
+
+  it('does not let two semantic candidates claim the same existing draft in one save pass', async () => {
+    const existingDocId = new ObjectId();
+    const previousSessionId = new ObjectId().toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: 'draft-project-binding',
+        id: 'draft-project-binding',
+        name: 'Автоматизировать project binding voice-сессий',
+        description: 'Настроить автоматическую привязку voice-сессий к проекту.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionId}`,
+        source_data: {
+          session_id: previousSessionId,
+          row_id: 'draft-project-binding',
+          voice_sessions: [{ session_id: previousSessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Current session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'incoming-binding-row',
+          id: 'incoming-binding-row',
+          name: 'Автоматизировать project binding для voice-сессий',
+          description: 'Стабилизировать автоматическую привязку voice-сессий к проекту.',
+          project_id: 'proj-1',
+        },
+        {
+          row_id: 'incoming-title-row',
+          id: 'incoming-title-row',
+          name: 'Автоматизировать project binding и генерацию заголовков voice-сессий',
+          description: 'Добавить заголовки и project binding в один workflow без ручных шагов.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'draft-project-binding' }),
+        expect.objectContaining({ row_id: 'incoming-title-row' }),
+      ])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    expect(persistedDocs).toHaveLength(2);
+    expect(persistedDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'draft-project-binding' }),
+        expect.objectContaining({ row_id: 'incoming-title-row' }),
+      ])
+    );
+  });
+
+  it('ignores generic task-N locators and inserts distinct drafts instead of hijacking unrelated legacy rows', async () => {
+    const previousSessionId = new ObjectId().toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: new ObjectId(),
+        row_id: 'task-4',
+        id: 'task-4',
+        name: 'Довести идею по АШ до рабочего плана',
+        description: 'Старый unrelated draft из другой сессии.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionId}`,
+        source_data: {
+          session_id: previousSessionId,
+          row_id: 'task-4',
+          voice_sessions: [{ session_id: previousSessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: new ObjectId(),
+        row_id: 'task-5',
+        id: 'task-5',
+        name: 'Отправить Никите таблицу и собрать вопросы',
+        description: 'Ещё один старый unrelated draft из другой сессии.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionId}`,
+        source_data: {
+          session_id: previousSessionId,
+          row_id: 'task-5',
+          voice_sessions: [{ session_id: previousSessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Current session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'task-4',
+          id: 'task-4',
+          name: 'Создать принимающую project-структуру для MediaGen',
+          description: 'Нужен принимающий проектный контур для MediaGen.',
+          project_id: 'proj-1',
+        },
+        {
+          row_id: 'task-5',
+          id: 'task-5',
+          name: 'Сделать project-first work surface вместо поиска в диалогах',
+          description: 'Нужен project-first surface без возврата к исходным диалогам.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Создать принимающую project-структуру для MediaGen',
+          row_id: expect.stringMatching(/^voice-task-/),
+          id: expect.stringMatching(/^voice-task-/),
+        }),
+        expect.objectContaining({
+          name: 'Сделать project-first work surface вместо поиска в диалогах',
+          row_id: expect.stringMatching(/^voice-task-/),
+          id: expect.stringMatching(/^voice-task-/),
+        }),
+      ])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    expect(persistedDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'task-4',
+          name: 'Довести идею по АШ до рабочего плана',
+        }),
+        expect.objectContaining({
+          row_id: 'task-5',
+          name: 'Отправить Никите таблицу и собрать вопросы',
+        }),
+        expect.objectContaining({
+          name: 'Создать принимающую project-структуру для MediaGen',
+          row_id: expect.stringMatching(/^voice-task-/),
+        }),
+        expect.objectContaining({
+          name: 'Сделать project-first work surface вместо поиска в диалогах',
+          row_id: expect.stringMatching(/^voice-task-/),
+        }),
+      ])
+    );
+  });
+
+  it('soft-deletes same-session legacy generic drafts when recompute replaces them with canonical voice-task locators', async () => {
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: new ObjectId(),
+        row_id: 'task-4',
+        id: 'task-4',
+        name: 'Довести идею по АШ до рабочего плана',
+        description: 'Старый stale draft этой же сессии.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'task-4',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: new ObjectId(),
+        row_id: 'task-5',
+        id: 'task-5',
+        name: 'Отправить Никите таблицу и собрать вопросы',
+        description: 'Ещё один stale draft этой же сессии.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'task-5',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Current session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'task-4',
+          id: 'task-4',
+          name: 'Создать принимающую project-структуру для MediaGen',
+          description: 'Нужен принимающий проектный контур для MediaGen.',
+          project_id: 'proj-1',
+        },
+        {
+          row_id: 'task-5',
+          id: 'task-5',
+          name: 'Сделать project-first work surface вместо поиска в диалогах',
+          description: 'Нужен project-first surface без возврата к исходным диалогам.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.removedRowIds).toHaveLength(2);
+    expect(result.removedRowIds.every((value) => /^voice-task-/.test(value))).toBe(true);
+
+    const persistedDocs = tasksCollection.snapshot();
+    const staleDocs = persistedDocs.filter((doc) => String(doc.row_id || '').startsWith('task-'));
+    const freshDocs = persistedDocs.filter((doc) => String(doc.row_id || '').startsWith('voice-task-'));
+
+    expect(staleDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'task-4', is_deleted: true }),
+        expect.objectContaining({ row_id: 'task-5', is_deleted: true }),
+      ])
+    );
+    expect(freshDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Создать принимающую project-структуру для MediaGen' }),
+        expect.objectContaining({ name: 'Сделать project-first work surface вместо поиска в диалогах' }),
+      ])
     );
   });
 });

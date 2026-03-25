@@ -314,10 +314,12 @@ const selectProjectScopedSemanticReuseDoc = ({
   incomingTask,
   projectId,
   existingDocs,
+  excludedDocIds = new Set<string>(),
 }: {
   incomingTask: Record<string, unknown>;
   projectId: string;
   existingDocs: Array<Record<string, unknown>>;
+  excludedDocIds?: Set<string>;
 }): Record<string, unknown> | undefined => {
   if (!projectId) return undefined;
   const incomingSignature = buildTaskSemanticSignature(incomingTask);
@@ -325,6 +327,8 @@ const selectProjectScopedSemanticReuseDoc = ({
   let bestScore = -1;
 
   for (const candidateDoc of existingDocs) {
+    const candidateDocId = toIdString(candidateDoc._id);
+    if (candidateDocId && excludedDocIds.has(candidateDocId)) continue;
     if (toTaskText(candidateDoc.project_id) !== projectId) continue;
     const candidateSignature = buildTaskSemanticSignature(candidateDoc);
     const score = calculateSemanticReuseScore({
@@ -411,6 +415,24 @@ const collectExistingDiscussionSessions = (doc: Record<string, unknown>): Array<
     : {};
   const voiceSessions = Array.isArray(sourceData.voice_sessions) ? sourceData.voice_sessions : [];
   return [...direct, ...voiceSessions].filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object');
+};
+
+const collectStoredPossibleTaskAliasKeys = (doc: Record<string, unknown>): string[] => {
+  const sourceData =
+    doc.source_data && typeof doc.source_data === 'object'
+      ? (doc.source_data as Record<string, unknown>)
+      : {};
+
+  return Array.from(
+    new Set(
+      [
+        toTaskText(doc.row_id),
+        toTaskText(doc.id),
+        toTaskText(doc.task_id_from_ai),
+        toTaskText(sourceData.row_id),
+      ].filter(Boolean)
+    )
+  );
 };
 
 const softDeletePossibleTaskMasterRows = async ({
@@ -599,6 +621,7 @@ export const persistPossibleTasksForSession = async ({
   const sessionObjectId = new ObjectId(sessionId);
   const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
   const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
+  const claimedSemanticReuseDocIds = new Set<string>();
 
   for (const [taskIndex, rawTask] of taskItems.entries()) {
     const incomingCanonicalRowId = resolveVoicePossibleTaskRowId({ rawTask, index: taskIndex });
@@ -606,6 +629,7 @@ export const persistPossibleTasksForSession = async ({
     if (incomingCanonicalRowId) candidateKeys.add(incomingCanonicalRowId);
 
     let existingDoc: Record<string, unknown> | undefined;
+    let matchedBySemanticReuse = false;
     for (const key of candidateKeys) {
       existingDoc = existingAliasMap.get(key);
       if (existingDoc) break;
@@ -615,7 +639,13 @@ export const persistPossibleTasksForSession = async ({
         incomingTask: rawTask,
         projectId: defaultProjectId,
         existingDocs,
+        excludedDocIds: claimedSemanticReuseDocIds,
       });
+      matchedBySemanticReuse = Boolean(existingDoc);
+    }
+    const existingDocId = toIdString(existingDoc?._id);
+    if (matchedBySemanticReuse && existingDocId) {
+      claimedSemanticReuseDocIds.add(existingDocId);
     }
 
     const existingCanonicalRowId = existingDoc
@@ -627,7 +657,7 @@ export const persistPossibleTasksForSession = async ({
           ...rawTask,
           row_id: existingCanonicalRowId || toTaskText(existingDoc.row_id) || toTaskText(existingDoc.id),
           id: toTaskText(existingDoc.id) || existingCanonicalRowId || toTaskText(existingDoc.row_id),
-          name: toTaskText(existingDoc.name) || toTaskText(rawTask.name),
+          name: toTaskText(rawTask.name) || toTaskText(existingDoc.name),
         }
       : rawTask;
 
@@ -713,13 +743,25 @@ export const persistPossibleTasksForSession = async ({
   }
 
   const nextSessionRowIds = new Set(incomingRowIds);
-  const staleRowIds = existingSessionDocs
-    .filter((doc) => !collectVoicePossibleTaskLocatorKeys(doc).some((key) => nextSessionRowIds.has(key)))
-    .flatMap((doc) => collectVoicePossibleTaskLocatorKeys(doc));
+  const staleDocs = existingSessionDocs
+    .map((doc, index) => ({
+      doc,
+      canonicalRowId: resolveVoicePossibleTaskRowId({ rawTask: doc, index }),
+    }))
+    .filter(({ canonicalRowId }) => canonicalRowId && !nextSessionRowIds.has(canonicalRowId));
+  const staleRowIds = staleDocs.map(({ canonicalRowId }) => canonicalRowId);
+  const staleMatchKeys = staleDocs.flatMap(({ doc, canonicalRowId }) =>
+    Array.from(
+      new Set([
+        canonicalRowId,
+        ...collectStoredPossibleTaskAliasKeys(doc),
+      ].filter(Boolean))
+    )
+  );
   if (refreshMode === 'incremental_refresh') {
-    await markPossibleTaskMasterRowsStale({ db, sessionId, rowIds: staleRowIds, staleAt: now });
+    await markPossibleTaskMasterRowsStale({ db, sessionId, rowIds: staleMatchKeys, staleAt: now });
   } else {
-    await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleRowIds });
+    await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleMatchKeys });
   }
 
   const refreshedMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });

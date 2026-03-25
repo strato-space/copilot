@@ -5,6 +5,7 @@ import { CloseOutlined } from '@ant-design/icons';
 
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
+import { resolveTaskProjectName } from '../../pages/operops/taskPageUtils';
 import type { Comment as CommentType, Ticket } from '../../types/crm';
 
 interface CommentFormValues {
@@ -37,7 +38,7 @@ const CommentsSidebar = () => {
         isTicketDetailLoading,
         getCustomerByProject,
         getProjectGroupByProject,
-        getProjectByName,
+        projectsData,
     } = useKanbanStore();
     const { commentedTicket, setCommentedTicket } = useCRMStore();
 
@@ -69,9 +70,7 @@ const CommentsSidebar = () => {
 
     const customerName = resolvedCommentedTicket ? getCustomerByProject(resolvedCommentedTicket.project) : '';
     const projectGroupName = resolvedCommentedTicket ? getProjectGroupByProject(resolvedCommentedTicket.project) : '';
-    const projectName = resolvedCommentedTicket
-        ? getProjectByName(resolvedCommentedTicket.project)?.name || resolvedCommentedTicket.project
-        : '';
+    const projectName = resolvedCommentedTicket ? resolveTaskProjectName(resolvedCommentedTicket, projectsData) : '';
 
     const formRef = useRef<ReturnType<typeof Form.useForm>[0]>(null);
 

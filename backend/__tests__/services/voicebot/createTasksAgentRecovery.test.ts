@@ -87,8 +87,8 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(closeSessionMock).toHaveBeenCalledTimes(2);
     expect(tasks).toEqual([
       expect.objectContaining({
-        id: 'TASK-1',
-        row_id: 'TASK-1',
+        id: expect.stringMatching(/^voice-task-/),
+        row_id: expect.stringMatching(/^voice-task-/),
         name: 'Recovered task',
         project_id: 'proj-1',
       }),
@@ -210,6 +210,56 @@ describe('runCreateTasksAgent quota fallback', () => {
         session_name: '',
       })
     );
+  });
+
+  it('assigns deterministic content-based locators when the model omits row identifiers', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'anonymous-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: '',
+              scholastic_review_md: '',
+              task_draft: [
+                {
+                  row_id: 'task-1',
+                  id: 'task-1',
+                  task_id_from_ai: 'task-1',
+                  name: 'Насытить карточку проекта контекстным словарём для матчинга',
+                  description: 'Добавить предметный словарь и context markers для project binding.',
+                  priority: 'P2',
+                  dialogue_reference: 'Нужно насытить project card словарём.',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: 'Автопривязка voice-сессий и запуск задач',
+              project_id: 'proj-anonymous',
+            }),
+          },
+        ],
+      },
+    });
+
+    const first = await runCreateTasksAgent({
+      sessionId: 'session-anonymous',
+      projectId: 'proj-anonymous',
+    });
+    const second = await runCreateTasksAgent({
+      sessionId: 'session-anonymous',
+      projectId: 'proj-anonymous',
+    });
+
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(1);
+    expect(String(first[0]?.row_id || '')).toMatch(/^voice-task-/);
+    expect(String(first[0]?.id || '')).toMatch(/^voice-task-/);
+    expect(first[0]?.row_id).not.toBe('task-1');
+    expect(second[0]?.row_id).toBe(first[0]?.row_id);
+    expect(second[0]?.id).toBe(first[0]?.id);
   });
 
   it('adds bounded project CRM window to create_tasks envelope when session timing is available', async () => {
@@ -571,8 +621,8 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(closeSessionMock).toHaveBeenCalledTimes(2);
     expect(tasks).toEqual([
       expect.objectContaining({
-        id: 'TASK-2',
-        row_id: 'TASK-2',
+        id: expect.stringMatching(/^voice-task-/),
+        row_id: expect.stringMatching(/^voice-task-/),
         name: 'Recovered after auth refresh',
         project_id: 'proj-2',
       }),

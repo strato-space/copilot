@@ -5,6 +5,8 @@ import _ from 'lodash';
 
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
+import { useHydratedProjectOptions } from '../../hooks/useHydratedProjectOptions';
+import ProjectSelect from '../shared/ProjectSelect';
 
 export default function AddParticipantModal() {
     const {
@@ -27,6 +29,7 @@ export default function AddParticipantModal() {
     } = useSessionsUIStore();
 
     const [form] = Form.useForm();
+    const { groupedProjectOptions } = useHydratedProjectOptions(prepared_projects);
 
     const currentParticipants = participantModal.currentParticipants.filter(
         (participant): participant is { _id: string } => typeof participant !== 'string' && Boolean(participant?._id)
@@ -199,13 +202,12 @@ export default function AddParticipantModal() {
                             <Input placeholder="ФИО участника" />
                         </Form.Item>
                         <Form.Item label="Проект" name="project_id">
-                            <Select placeholder="Выберите проект" allowClear>
-                                {(prepared_projects || []).map((project) => (
-                                    <Select.Option key={project._id} value={project._id}>
-                                        {project.name}
-                                    </Select.Option>
-                                ))}
-                            </Select>
+                            <ProjectSelect
+                                placeholder="Выберите проект"
+                                allowClear
+                                popupClassName="voice-project-select-popup"
+                                options={groupedProjectOptions}
+                            />
                         </Form.Item>
                         <Form.Item label="Роль" name="role">
                             <Input placeholder="Роль в проекте" />

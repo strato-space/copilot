@@ -1,0 +1,1252 @@
+{
+  "generated_at": "2026-03-24T06:00:20.595Z",
+  "session": {
+    "session_id": "69c2276cfe6799868e804021",
+    "exists": true,
+    "session": {
+      "_id": "69c2276cfe6799868e804021",
+      "session_name": "",
+      "status": "",
+      "state": "",
+      "source_type": "",
+      "session_type": "multiprompt_voice_session",
+      "is_active": true,
+      "to_finalize": false,
+      "is_deleted": false,
+      "project_id": "",
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "summary_saved_at": "",
+      "title_generated_at": "",
+      "user_id": "6863eab6a6d7b324e2df310a",
+      "chat_id": "3045664",
+      "created_at": "2026-03-24T05:55:56.093Z",
+      "updated_at": "2026-03-24T05:59:25.264Z",
+      "done_at": ""
+    },
+    "counters": {
+      "messages_total": 2,
+      "session_log_total": 0,
+      "linked_tasks_total": 0,
+      "linked_tasks_by_status": {},
+      "pm2_log_hits_total": 65,
+      "queue_job_matches_total": 0
+    },
+    "create_tasks_state": {
+      "is_processing": true,
+      "is_processed": false,
+      "has_payload_array": false,
+      "payload_items": 0,
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "job_queued_timestamp": "2026-03-24T05:58:39.498Z",
+      "job_finished_timestamp": "",
+      "auto_requested_at": "2026-03-24T05:59:25.264Z",
+      "error_message": ""
+    },
+    "session_surfaces": {
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "summary_saved_at": "",
+      "title_generated_at": ""
+    },
+    "diagnostics": {
+      "queue_snapshot_error": "redis_unreachable"
+    },
+    "anomalies": [
+      "session_name_empty",
+      "create_tasks_processing_stuck_candidate",
+      "create_tasks_processing_true_without_payload",
+      "queue_snapshot_unavailable"
+    ],
+    "slices": {
+      "recent_messages": [
+        {
+          "_id": "69c22831fe6799868e804025",
+          "created_at": "2026-03-24T05:59:13.093Z",
+          "updated_at": "2026-03-24T05:59:13.093Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "002-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c2277bfe6799868e804022",
+          "created_at": "2026-03-24T05:56:11.458Z",
+          "updated_at": "2026-03-24T05:56:11.458Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "001-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        }
+      ],
+      "recent_session_log": [],
+      "recent_linked_tasks": [],
+      "recent_pm2_log_hits": [
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "204474",
+          "line": 0,
+          "text": "56:11 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69c2277bfe6799868e804022\",\"session_id\":\"69c2276cfe6799868e804021\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "204475",
+          "line": 0,
+          "text": "56:13 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69c2277bfe6799868e804022\",\"session_id\":\"69c2276cfe6799868e804021\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":234395,\"chunks\":1}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "204516",
+          "line": 0,
+          "text": "57:19 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69c2277bfe6799868e804022\",\"session_id\":\"69c2276cfe6799868e804021\",\"model\":\"gpt-4.1\",\"items\":2}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "204582",
+          "line": 0,
+          "text": "58:39 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"359c62a5-5ec7-4e0d-871e-0b0b26ec54fc\",\"session_id\":\"69c2276cfe6799868e804021\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"session_id\",\"envelope_chars\":164,\"envelope_bytes\":164}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "204603",
+          "line": 0,
+          "text": "59:13 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69c22831fe6799868e804025\",\"session_id\":\"69c2276cfe6799868e804021\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "204608",
+          "line": 0,
+          "text": "59:25 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69c22831fe6799868e804025\",\"session_id\":\"69c2276cfe6799868e804021\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":2982746,\"chunks\":1}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "204615",
+          "line": 0,
+          "text": "59:27 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69c22831fe6799868e804025\",\"session_id\":\"69c2276cfe6799868e804021\",\"model\":\"gpt-4.1\",\"items\":2}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234063",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234065",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/auth/list-users HTTP/1.1\" 200 1094 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234066",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234067",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234068",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"JvOSD-FGO3wIyiNAAAB-\",\"session_id\":\"69c2276cfe6799868e804021\",\"room\":\"voicebot:session:69c2276cfe6799868e804021\",\"subscribers\":1}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234069",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"JvOSD-FGO3wIyiNAAAB-\",\"session_id\":\"69c2276cfe6799868e804021\",\"room\":\"voicebot:session:69c2276cfe6799868e804021\",\"subscribers\":1}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234070",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234071",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234072",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234073",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234074",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234075",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234076",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234077",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"JvOSD-FGO3wIyiNAAAB-\",\"session_id\":\"69c2276cfe6799868e804021\",\"room\":\"voicebot:session:69c2276cfe6799868e804021\",\"subscribers\":1}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234078",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234079",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234080",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234081",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234082",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234083",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234084",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234085",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234086",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234087",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234088",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234089",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234090",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234091",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234092",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234093",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234094",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234095",
+          "line": 0,
+          "text": "55:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:58 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234096",
+          "line": 0,
+          "text": "55:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:58 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234118",
+          "line": 0,
+          "text": "56:01 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:01 +0000] \"POST /api/voicebot/sessions HTTP/1.1\" 200 2393612 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234121",
+          "line": 0,
+          "text": "56:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:02 +0000] \"POST /api/voicebot/sessions/list HTTP/1.1\" 200 2393612 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234127",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47bow3_pfej23\",\"session_id\":\"69c2276cfe6799868e804021\",\"files\":[{\"name\":\"001-1.webm\",\"size\":234395,\"mime_type\":\"audio/webm\"}]}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234133",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47bow3_pfej23\",\"session_id\":\"69c2276cfe6799868e804021\",\"message_id\":\"69c2277bfe6799868e804022\",\"file_name\":\"001-1.webm\",\"file_size\":234395,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234134",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c2276cfe6799868e804021: files=1 {\"service\":\"copilot-backend\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234135",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47bow3_pfej23\",\"session_id\":\"69c2276cfe6799868e804021\",\"files_count\":1,\"results_count\":1}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234136",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:11 +0000] \"POST /api/voicebot/upload_audio HTTP/1.1\" 200 375 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234137",
+          "line": 0,
+          "text": "56:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:12 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234138",
+          "line": 0,
+          "text": "56:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:12 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234146",
+          "line": 0,
+          "text": "56:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:54 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234149",
+          "line": 0,
+          "text": "56:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:54 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234189",
+          "line": 0,
+          "text": "57:31 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:31 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234195",
+          "line": 0,
+          "text": "57:33 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:33 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234200",
+          "line": 0,
+          "text": "57:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:37 +0000] \"POST /api/voicebot/task_types HTTP/1.1\" 200 55282 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234201",
+          "line": 0,
+          "text": "57:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:37 +0000] \"POST /api/voicebot/persons/list_performers HTTP/1.1\" 200 22620 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234306",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47fk8h_ivvf83\",\"session_id\":\"69c2276cfe6799868e804021\",\"files\":[{\"name\":\"002-1.webm\",\"size\":2982746,\"mime_type\":\"audio/webm\"}]}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234313",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47fk8h_ivvf83\",\"session_id\":\"69c2276cfe6799868e804021\",\"message_id\":\"69c22831fe6799868e804025\",\"file_name\":\"002-1.webm\",\"file_size\":2982746,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234314",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c2276cfe6799868e804021: files=1 {\"service\":\"copilot-backend\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234315",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47fk8h_ivvf83\",\"session_id\":\"69c2276cfe6799868e804021\",\"files_count\":1,\"results_count\":1}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234316",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:59:13 +0000] \"POST /api/voicebot/upload_audio HTTP/1.1\" 200 376 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234319",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:59:13 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234321",
+          "line": 0,
+          "text": "59:15 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:59:15 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234342",
+          "line": 0,
+          "text": "00:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:06:00:02 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234352",
+          "line": 0,
+          "text": "00:03 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:06:00:03 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        },
+        {
+          "session_id": "69c2276cfe6799868e804021",
+          "file": "1234354",
+          "line": 0,
+          "text": "00:03 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:06:00:03 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      ],
+      "queue_snapshots": [],
+      "recent_queue_jobs": []
+    },
+    "timeline": [
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "204474",
+          "line": 0,
+          "text": "56:11 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69c2277bfe6799868e804022\",\"session_id\":\"69c2276cfe6799868e804021\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "204475",
+          "line": 0,
+          "text": "56:13 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69c2277bfe6799868e804022\",\"session_id\":\"69c2276cfe6799868e804021\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":234395,\"chunks\":1}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "204516",
+          "line": 0,
+          "text": "57:19 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69c2277bfe6799868e804022\",\"session_id\":\"69c2276cfe6799868e804021\",\"model\":\"gpt-4.1\",\"items\":2}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "204582",
+          "line": 0,
+          "text": "58:39 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"359c62a5-5ec7-4e0d-871e-0b0b26ec54fc\",\"session_id\":\"69c2276cfe6799868e804021\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"session_id\",\"envelope_chars\":164,\"envelope_bytes\":164}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "204603",
+          "line": 0,
+          "text": "59:13 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69c22831fe6799868e804025\",\"session_id\":\"69c2276cfe6799868e804021\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "204608",
+          "line": 0,
+          "text": "59:25 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69c22831fe6799868e804025\",\"session_id\":\"69c2276cfe6799868e804021\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":2982746,\"chunks\":1}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "204615",
+          "line": 0,
+          "text": "59:27 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69c22831fe6799868e804025\",\"session_id\":\"69c2276cfe6799868e804021\",\"model\":\"gpt-4.1\",\"items\":2}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234063",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234065",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/auth/list-users HTTP/1.1\" 200 1094 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234066",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234067",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234068",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"JvOSD-FGO3wIyiNAAAB-\",\"session_id\":\"69c2276cfe6799868e804021\",\"room\":\"voicebot:session:69c2276cfe6799868e804021\",\"subscribers\":1}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234069",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"JvOSD-FGO3wIyiNAAAB-\",\"session_id\":\"69c2276cfe6799868e804021\",\"room\":\"voicebot:session:69c2276cfe6799868e804021\",\"subscribers\":1}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234070",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234071",
+          "line": 0,
+          "text": "55:56 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:56 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234072",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234073",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234074",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234075",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234076",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234077",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: [voicebot-socket] subscribed {\"service\":\"copilot-backend\",\"socketId\":\"JvOSD-FGO3wIyiNAAAB-\",\"session_id\":\"69c2276cfe6799868e804021\",\"room\":\"voicebot:session:69c2276cfe6799868e804021\",\"subscribers\":1}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234078",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234079",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234080",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234081",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/sessions/get HTTP/1.1\" 200 1912 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234082",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234083",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234084",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234085",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234086",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tasks HTTP/1.1\" 200 121 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234087",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234088",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234089",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234090",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234091",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234092",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234093",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234094",
+          "line": 0,
+          "text": "55:57 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:57 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234095",
+          "line": 0,
+          "text": "55:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:58 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234096",
+          "line": 0,
+          "text": "55:58 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:55:58 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234118",
+          "line": 0,
+          "text": "56:01 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:01 +0000] \"POST /api/voicebot/sessions HTTP/1.1\" 200 2393612 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234121",
+          "line": 0,
+          "text": "56:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:02 +0000] \"POST /api/voicebot/sessions/list HTTP/1.1\" 200 2393612 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234127",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47bow3_pfej23\",\"session_id\":\"69c2276cfe6799868e804021\",\"files\":[{\"name\":\"001-1.webm\",\"size\":234395,\"mime_type\":\"audio/webm\"}]}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234133",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47bow3_pfej23\",\"session_id\":\"69c2276cfe6799868e804021\",\"message_id\":\"69c2277bfe6799868e804022\",\"file_name\":\"001-1.webm\",\"file_size\":234395,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234134",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c2276cfe6799868e804021: files=1 {\"service\":\"copilot-backend\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234135",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47bow3_pfej23\",\"session_id\":\"69c2276cfe6799868e804021\",\"files_count\":1,\"results_count\":1}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234136",
+          "line": 0,
+          "text": "56:11 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:11 +0000] \"POST /api/voicebot/upload_audio HTTP/1.1\" 200 375 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234137",
+          "line": 0,
+          "text": "56:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:12 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234138",
+          "line": 0,
+          "text": "56:12 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:12 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234146",
+          "line": 0,
+          "text": "56:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:54 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234149",
+          "line": 0,
+          "text": "56:54 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:56:54 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234189",
+          "line": 0,
+          "text": "57:31 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:31 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234195",
+          "line": 0,
+          "text": "57:33 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:33 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234200",
+          "line": 0,
+          "text": "57:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:37 +0000] \"POST /api/voicebot/task_types HTTP/1.1\" 200 55282 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234201",
+          "line": 0,
+          "text": "57:37 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:57:37 +0000] \"POST /api/voicebot/persons/list_performers HTTP/1.1\" 200 22620 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234306",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] started {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47fk8h_ivvf83\",\"session_id\":\"69c2276cfe6799868e804021\",\"files\":[{\"name\":\"002-1.webm\",\"size\":2982746,\"mime_type\":\"audio/webm\"}]}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234313",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] file_processed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47fk8h_ivvf83\",\"session_id\":\"69c2276cfe6799868e804021\",\"message_id\":\"69c22831fe6799868e804025\",\"file_name\":\"002-1.webm\",\"file_size\":2982746,\"mime_type\":\"audio/webm\",\"deduplicated_previous_count\":0}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234314",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: Audio uploaded for session 69c2276cfe6799868e804021: files=1 {\"service\":\"copilot-backend\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234315",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: [voicebot.upload_audio] completed {\"service\":\"copilot-backend\",\"request_id\":\"upl_mn47fk8h_ivvf83\",\"session_id\":\"69c2276cfe6799868e804021\",\"files_count\":1,\"results_count\":1}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234316",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:59:13 +0000] \"POST /api/voicebot/upload_audio HTTP/1.1\" 200 376 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234319",
+          "line": 0,
+          "text": "59:13 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:59:13 +0000] \"POST /api/voicebot/session_tab_counts HTTP/1.1\" 200 107 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234321",
+          "line": 0,
+          "text": "59:15 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:05:59:15 +0000] \"POST /api/crm/codex/issues HTTP/1.1\" 200 1294754 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234342",
+          "line": 0,
+          "text": "00:02 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:06:00:02 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234352",
+          "line": 0,
+          "text": "00:03 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:06:00:03 +0000] \"POST /api/voicebot/projects HTTP/1.1\" 200 28074 \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "1234354",
+          "line": 0,
+          "text": "00:03 [\u001b[32minfo\u001b[39m]: 127.0.0.1 - - [24/Mar/2026:06:00:03 +0000] \"GET /api/auth/me HTTP/1.1\" 304 - \"https://copilot.stratospace.fun/voice/session/69c2276cfe6799868e804021\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0\" {\"service\":\"copilot-backend\",\"component\":\"http\"}"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "2026-03-24T05:55:56.093Z",
+        "source": "session",
+        "kind": "session_created",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "2026-03-24T05:56:11.458Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c2277bfe6799868e804022",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "001-1.webm"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "2026-03-24T05:59:13.093Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c22831fe6799868e804025",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "002-1.webm"
+        }
+      },
+      {
+        "session_id": "69c2276cfe6799868e804021",
+        "ts": "2026-03-24T05:59:25.264Z",
+        "source": "session",
+        "kind": "session_updated",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      }
+    ]
+  }
+}

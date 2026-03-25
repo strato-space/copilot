@@ -4,8 +4,9 @@ import { ArrowLeftOutlined, CheckOutlined, DeleteOutlined } from '@ant-design/ic
 
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
-import { useProjectsStore } from '../../store/projectsStore';
-import type { Project, Epic } from '../../types/crm';
+import { useHydratedProjectOptions } from '../../hooks/useHydratedProjectOptions';
+import ProjectSelect from '../shared/ProjectSelect';
+import type { Epic } from '../../types/crm';
 
 const { TextArea } = Input;
 
@@ -21,23 +22,7 @@ const CRMCreateEpic = () => {
     const formRef = useRef(form);
     const { editingEpic, setEditingEpic } = useCRMStore();
     const { projectsData, fetchDictionary, createEpic, editEpic, deleteEpic } = useKanbanStore();
-    const { customers, projectGroups } = useProjectsStore();
-
-    // Функция для получения полной информации о проекте
-    const getProjectDisplayName = (project: Project): string => {
-        if (!project) return '';
-
-        const group = projectGroups.find(
-            (g) => g._id && project.project_group && g._id.toString() === project.project_group.toString()
-        );
-        const customer = group
-            ? customers.find(
-                (c) => c._id && group.customer && c._id.toString() === group.customer.toString()
-            )
-            : null;
-
-        return `${project.name} (${customer?.name ?? 'Unknown'} / ${group?.name ?? 'Unassigned'})`;
-    };
+    const { groupedProjectOptions } = useHydratedProjectOptions(projectsData);
 
     useEffect(() => {
         if (projectsData.length === 0) fetchDictionary();
@@ -120,15 +105,8 @@ const CRMCreateEpic = () => {
                                 className="w-[200px]"
                                 rules={[{ required: true, message: 'Выберите проект' }]}
                             >
-                                <Select
-                                    options={projectsData.map((project) => ({
-                                        value: project._id,
-                                        label: getProjectDisplayName(project),
-                                    }))}
-                                    showSearch
-                                    filterOption={(inputValue, option) =>
-                                        (option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
-                                    }
+                                <ProjectSelect
+                                    options={groupedProjectOptions}
                                 />
                             </Form.Item>
                         </div>

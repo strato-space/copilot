@@ -36,7 +36,9 @@ import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
 import { useMCPRequestStore } from '../../store/mcpRequestStore';
 import PermissionGate from '../../components/voice/PermissionGate';
-import { buildGroupedProjectOptions } from '../../components/voice/projectSelectOptions';
+import ProjectSelect from '../../components/shared/ProjectSelect';
+import { useHydratedProjectOptions } from '../../hooks/useHydratedProjectOptions';
+import { projectDisplayName } from '../../utils/projectSelectOptions';
 import { PERMISSIONS, SESSION_ACCESS_LEVELS, SESSION_ACCESS_LEVELS_NAMES } from '../../constants/permissions';
 import { readActiveSessionIdFromEvent, readVoiceFabGlobals } from '../../utils/voiceFabSync';
 import type { VoiceBotSession, VoiceBotProject } from '../../types/voice';
@@ -60,6 +62,8 @@ type SessionRow = Omit<VoiceBotSession, 'dialogue_tag'> & {
     project?: SessionProject;
     performer?: SessionPerformer;
     message_count?: number;
+    tasks_count?: number;
+    codex_count?: number;
     last_voice_timestamp?: string | number;
     done_at?: string;
     is_corrupted?: boolean;
@@ -82,7 +86,7 @@ const VoiceListLoadingPlaceholder = () => (
     <div
         role="status"
         aria-live="polite"
-        className="mx-auto flex w-full max-w-[720px] flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/80 px-5 py-6"
+        className="flex w-full flex-col gap-4 rounded-2xl border border-white/70 bg-white/72 px-5 py-6 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur-xl"
     >
         <div className="flex items-center gap-2 text-slate-700">
             <RobotOutlined style={{ color: '#2563eb', fontSize: 18 }} />
@@ -104,7 +108,7 @@ const VoiceListEmptyPlaceholder = ({
     hasFilters: boolean;
     onResetFilters: () => void;
 }) => (
-    <div className="mx-auto flex w-full max-w-[640px] flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-8 text-center">
+    <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-white/70 bg-white/78 px-5 py-8 text-center shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur-xl">
         <div className="text-sm font-medium text-slate-700">Пока нет сессий по текущим фильтрам</div>
         <div className="text-xs text-slate-500">
             Измените фильтры или дождитесь новых данных, чтобы увидеть элементы в таблице
@@ -116,6 +120,16 @@ const VoiceListEmptyPlaceholder = ({
         ) : null}
     </div>
 );
+
+const looksLikeOpaqueLookupValue = (value: string): boolean => {
+    const normalized = value.trim();
+    if (!normalized || /\s/.test(normalized)) return false;
+    if (/^[a-f0-9]{24}$/i.test(normalized)) return true;
+    if (/^[a-f0-9-]{16,}$/i.test(normalized)) return true;
+    return false;
+};
+
+const getSessionTasksTotalCount = (record: SessionRow): number => (Number(record.tasks_count) || 0) + (Number(record.codex_count) || 0);
 
 const SESSION_ID_STORAGE_KEY = 'VOICEBOT_ACTIVE_SESSION_ID';
 const SESSIONS_LIST_FILTERS_STORAGE_KEY = 'voicebot_sessions_list_filters_v1';
@@ -362,11 +376,21 @@ export default function SessionsListPage() {
         () => ((prepared_projects as SessionProject[] | null) ?? []).filter((project) => isActiveProjectChain(project)),
         [prepared_projects]
     );
-    const projectSelectOptions = useMemo(
-        () => buildGroupedProjectOptions(activePreparedProjects),
-        [activePreparedProjects]
-    );
+    const {
+        hydratedProjects: hydratedProjectRecords,
+        groupedProjectOptions: projectSelectOptions,
+        projectHierarchyLabelById,
+    } = useHydratedProjectOptions(activePreparedProjects);
     const projectFilterOptions = projectSelectOptions;
+    const projectDisplayById = useMemo(() => {
+        const map = new Map<string, string>();
+        hydratedProjectRecords.forEach((project) => {
+            const projectId = String(project._id ?? project.id ?? '').trim();
+            if (!projectId) return;
+            map.set(projectId, projectDisplayName(project));
+        });
+        return map;
+    }, [hydratedProjectRecords]);
 
     const rawProjectTab = searchParams.get(SESSIONS_QUERY_KEYS.TAB);
     const projectTab: SessionProjectTab =
@@ -805,7 +829,7 @@ export default function SessionsListPage() {
                 const sessionName = session.session_name?.trim() || 'Без названия';
                 return {
                     value: session._id,
-                    label: `${sessionName} (${session._id.slice(-6)})`,
+                    label: sessionName,
                 };
             }),
         [selectedNonDeletedSessions]
@@ -990,18 +1014,13 @@ export default function SessionsListPage() {
             filteredValue: projectFilterValue ? [projectFilterValue] : null,
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: FilterDropdownProps) => (
                 <div style={{ padding: 8, width: 350 }}>
-                    <Select
+                    <ProjectSelect
                         placeholder="Фильтр по проекту"
-                        value={(selectedKeys[0] ?? null) as string | number | null}
+                        value={typeof selectedKeys[0] === 'string' ? selectedKeys[0] : null}
                         allowClear
                         options={projectFilterOptions}
-                        showSearch
-                        filterOption={(inputValue, option) =>
-                            (option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
-                        }
                         style={{ width: '100%', marginBottom: 8 }}
                         popupClassName="w-[350px]"
-                        popupMatchSelectWidth={false}
                         onChange={(projectId) => {
                             setSelectedKeys(projectId ? [projectId] : []);
                             confirm();
@@ -1055,32 +1074,49 @@ export default function SessionsListPage() {
                 <div data-stop-row-click="true" onClick={(event) => event.stopPropagation()}>
                     <div className="h-[32px] min-h-[32px] flex items-center">
                         {hoveredRowId === record._id ? (
-                            <Select
-                                className="w-full"
-                                size="small"
-                                value={(record?.project?._id ?? record?.project_id ?? undefined) as string | undefined}
-                                onChange={(value) => {
-                                    void handleSessionProjectChange(record._id, value ?? null);
-                                }}
-                                allowClear
-                                placeholder="Выбрать проект"
-                                showSearch
-                                options={projectSelectOptions}
-                                popupClassName="voice-project-select-popup"
-                                popupMatchSelectWidth={false}
-                                optionFilterProp="label"
-                                filterOption={(inputValue, option) =>
-                                    String(option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
-                                }
-                            />
+                            (() => {
+                                const candidate = record?.project?._id ?? record?.project_id ?? null;
+                                const selectedProjectId = typeof candidate === 'string' ? candidate : null;
+                                return (
+                                    <ProjectSelect
+                                        className="w-full"
+                                        size="small"
+                                        value={selectedProjectId}
+                                        onChange={(value) => {
+                                            void handleSessionProjectChange(record._id, value ?? null);
+                                        }}
+                                        allowClear
+                                        placeholder="Выбрать проект"
+                                        options={projectSelectOptions}
+                                        popupClassName="voice-project-select-popup"
+                                    />
+                                );
+                            })()
                         ) : (
                             <div className="flex flex-col w-full">
-                                <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
-                                    {record?.project?.name ?? '-'}
-                                </div>
-                                <div className="text-black/50 text-[10px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
-                                    {record?.project?.project_group?.name ?? ''}
-                                </div>
+                                {(() => {
+                                    const projectId = String(record?.project?._id ?? record?.project_id ?? '').trim();
+                                    const hydratedProject = projectDisplayById.get(projectId);
+                                    const hierarchyLabel = projectHierarchyLabelById.get(projectId);
+                                    const embeddedProjectName = typeof record?.project?.name === 'string' ? record.project.name.trim() : '';
+                                    const visibleProjectName =
+                                        hydratedProject ||
+                                        (embeddedProjectName && !looksLikeOpaqueLookupValue(embeddedProjectName)
+                                            ? embeddedProjectName
+                                            : '');
+                                    return (
+                                        <>
+                                            <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
+                                                {visibleProjectName || '-'}
+                                            </div>
+                                            {hierarchyLabel && visibleProjectName ? (
+                                                <div className="text-black/50 text-[10px] font-normal sf-pro leading-[13px] whitespace-pre-wrap">
+                                                    {hierarchyLabel}
+                                                </div>
+                                            ) : null}
+                                        </>
+                                    );
+                                })()}
                             </div>
                         )}
                     </div>
@@ -1338,6 +1374,21 @@ export default function SessionsListPage() {
         },
         {
             title: (
+                <Tooltip title="Tasks">
+                    <RobotOutlined className="text-gray-500" />
+                </Tooltip>
+            ),
+            key: 'tasks_count',
+            align: 'right',
+            width: 84,
+            render: (_text, record) => (
+                <div className="text-black/90 text-[11px] font-normal sf-pro leading-[13px] whitespace-pre-wrap text-right">
+                    {getSessionTasksTotalCount(record)}
+                </div>
+            ),
+        },
+        {
+            title: (
                 <Tooltip title="Доступ">
                     <KeyOutlined className="text-gray-500" />
                 </Tooltip>
@@ -1517,7 +1568,9 @@ export default function SessionsListPage() {
     ];
 
     return (
-        <div style={{ width: '100%', maxWidth: 1700, margin: '0 auto', padding: '0 24px', boxSizing: 'border-box' }}>
+        <div className="voice-sessions-shell">
+            <div className="voice-sessions-shell-bg" />
+            <div className="voice-sessions-surface">
             <ConfigProvider
                 theme={{
                     components: {
@@ -1611,7 +1664,7 @@ export default function SessionsListPage() {
                         showSizeChanger: true,
                         showTotal: (total, range) => `${range[0]}-${range[1]} из ${total}`,
                         pageSizeOptions: ['10', '15', '30', '50', '100', '200'],
-                        className: 'bg-white p-4 !m-0 !mb-2 rounded-lg shadow-sm',
+                        className: '!m-0 px-3 pb-3 pt-2',
                     }}
                     dataSource={sortedSessionsList}
                     locale={{ emptyText: sessionsTableEmptyState }}
@@ -1686,10 +1739,7 @@ export default function SessionsListPage() {
                                             key={session._id}
                                             className="flex items-center justify-between border-b border-gray-100 py-1 text-[12px] last:border-b-0"
                                         >
-                                            <span className="truncate pr-2">
-                                                {sessionName}
-                                                <span className="ml-1 text-gray-500">({session._id})</span>
-                                            </span>
+                                            <span className="truncate pr-2">{sessionName}</span>
                                             {isTarget ? <Tag color="blue">Целевая</Tag> : null}
                                         </div>
                                     );
@@ -1721,6 +1771,7 @@ export default function SessionsListPage() {
                     </div>
                 </Modal>
             </ConfigProvider>
+            </div>
         </div>
     );
 }

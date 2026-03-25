@@ -6,8 +6,11 @@ describe('MeetingCard project selector contract', () => {
   const source = fs.readFileSync(componentPath, 'utf8');
 
   it('uses grouped project options helper with search enabled', () => {
-    expect(source).toContain("options={buildGroupedProjectOptions(prepared_projects)}");
-    expect(source).toContain('showSearch');
-    expect(source).toContain('optionFilterProp="label"');
+    expect(source).toContain("import ProjectSelect from '../shared/ProjectSelect';");
+    expect(source).toContain("import { useHydratedProjectOptions } from '../../hooks/useHydratedProjectOptions';");
+    expect(source).toContain('const { groupedProjectOptions } = useHydratedProjectOptions(prepared_projects);');
+    expect(source).toContain('<ProjectSelect');
+    expect(source).toContain('options={groupedProjectOptions}');
+    expect(source).toContain('popupClassName="voice-project-select-popup"');
   });
 });

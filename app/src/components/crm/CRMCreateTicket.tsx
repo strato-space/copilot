@@ -3,15 +3,25 @@ import { Form, Input, Button, Select, DatePicker, InputNumber, Divider, message,
 import { ArrowLeftOutlined, CheckOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
-import _ from 'lodash';
 import dayjs, { Dayjs } from 'dayjs';
 
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useCRMStore } from '../../store/crmStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { TARGET_TASK_STATUS_KEYS, NOTION_TICKET_PRIORITIES } from '../../constants/crm';
+import OperationalTaskTypeSelect from '../shared/OperationalTaskTypeSelect';
+import ProjectSelect from '../shared/ProjectSelect';
 import { getPerformerLabel, isPerformerSelectable } from '../../utils/performerLifecycle';
-import type { TaskAttachment, TaskType } from '../../types/crm';
+import {
+    buildGroupedProjectOptions,
+    hydrateProjectsWithRelations,
+    resolveProjectSelectValue,
+} from '../../utils/projectSelectOptions';
+import {
+    buildGroupedTaskTypeOptions,
+    resolveTaskTypeSelectValue,
+} from '../../utils/taskTypeSelectOptions';
+import type { TaskAttachment } from '../../types/crm';
 
 interface TicketFormValues {
     _id?: string | null;
@@ -70,44 +80,27 @@ const CRMCreateTicket = () => {
         Boolean(editingTicket?._id && !isTicketDetailLoaded(editingTicket)) ||
         isTicketDetailLoading(editingTicket ?? null);
 
-    // Функция для группировки проектов по project groups
-    const getGroupedProjects = () => {
-        const projectsByGroup: Record<string, Array<{ _id: string; name: string; project_group?: string | null }>> = {};
+    const hydratedProjects = useMemo(
+        () => hydrateProjectsWithRelations(projectsFromStore, projectGroups, customers),
+        [customers, projectGroups, projectsFromStore]
+    );
 
-        projects.forEach((projectName) => {
-            const project = projectsFromStore.find((p) => p.name === projectName);
-            if (!project) {
-                if (!projectsByGroup['Unknown']) {
-                    projectsByGroup['Unknown'] = [];
-                }
-                projectsByGroup['Unknown'].push({ name: projectName, _id: projectName });
-                return;
-            }
+    const groupedProjectOptions = useMemo(() => {
+        const allowedProjects =
+            projects.length > 0
+                ? hydratedProjects.filter((project) => {
+                    const projectName = typeof project.name === 'string' ? project.name : '';
+                    const projectId = typeof project._id === 'string' ? project._id : '';
+                    return projects.includes(projectName) || projects.includes(projectId);
+                })
+                : hydratedProjects;
+        return buildGroupedProjectOptions(allowedProjects);
+    }, [hydratedProjects, projects]);
 
-            const group = projectGroups.find(
-                (g) => g._id && project.project_group && g._id.toString() === project.project_group.toString()
-            );
-            const customer = group
-                ? customers.find((c) => c._id && group.customer && c._id.toString() === group.customer.toString())
-                : null;
-
-            const groupKey = group ? `${customer?.name ?? 'Unknown'} / ${group.name}` : 'Unassigned';
-
-            if (!projectsByGroup[groupKey]) {
-                projectsByGroup[groupKey] = [];
-            }
-            projectsByGroup[groupKey].push(project);
-        });
-
-        return Object.entries(projectsByGroup).map(([groupName, projs]) => ({
-            label: groupName,
-            title: groupName,
-            options: projs.map((project) => ({
-                label: project.name,
-                value: project._id,
-            })),
-        }));
-    };
+    const taskTypeOptions = useMemo(
+        () => buildGroupedTaskTypeOptions(task_types),
+        [task_types]
+    );
 
     const modules = useMemo(
         () => ({
@@ -121,14 +114,29 @@ const CRMCreateTicket = () => {
         []
     );
 
+    const initialProject = useMemo(
+        () =>
+            resolveProjectSelectValue(
+                hydratedProjects,
+                editingTicket?.project_id ??
+                    editingTicket?.project ??
+                    (editingTicket?.project_data as Record<string, unknown> | undefined)?.name ??
+                    null
+            ) ?? undefined,
+        [editingTicket?.project, editingTicket?.project_data, editingTicket?.project_id, hydratedProjects]
+    );
+    const initialPerformer = toIdString(editingTicket?.performer);
+    const initialTaskType = useMemo(
+        () => resolveTaskTypeSelectValue(task_types, editingTicket?.task_type) ?? undefined,
+        [editingTicket?.task_type, task_types]
+    );
+
     useEffect(() => {
         if (projects.length === 0) fetchTickets([...TARGET_TASK_STATUS_KEYS]);
         form.resetFields();
-        if (editingTicket?.project) {
-            setEditTiketProject(editingTicket.project);
-        }
+        setEditTiketProject(initialProject ?? '');
         setAttachments(Array.isArray(editingTicket?.attachments) ? editingTicket.attachments : []);
-    }, [projects.length, fetchTickets, editingTicket, form, setEditTiketProject]);
+    }, [projects.length, fetchTickets, editingTicket, form, initialProject, setEditTiketProject]);
 
     useEffect(() => {
         if (!editingTicket?._id) return;
@@ -151,8 +159,6 @@ const CRMCreateTicket = () => {
         () => (editingTicket ? getProjectEpics(editTiketProject ?? '').filter((e) => !e.is_deleted) : []),
         [editTiketProject, editingTicket, getProjectEpics]
     );
-    const initialPerformer = toIdString(editingTicket?.performer);
-    const initialTaskType = toIdString(editingTicket?.task_type);
     const historicalPerformerIds = useMemo(() => {
         if (!editingTicket) return [];
         const ids: string[] = [];
@@ -286,6 +292,7 @@ const CRMCreateTicket = () => {
                     layout="vertical"
                     initialValues={{
                         ...editingTicket,
+                        project: initialProject,
                         performer: initialPerformer,
                         task_type: initialTaskType,
                     }}
@@ -344,44 +351,19 @@ const CRMCreateTicket = () => {
                                         className="w-full"
                                         rules={[{ required: true, message: 'Выберите проект' }]}
                                     >
-                                        <Select
-                                            options={getGroupedProjects()}
-                                            showSearch
-                                            filterOption={(inputValue, option) =>
-                                                (option?.label ?? '').toLowerCase().includes(inputValue.toLowerCase())
-                                            }
+                                        <ProjectSelect
+                                            options={groupedProjectOptions}
                                             onChange={(value) => setEditTiketProject(value)}
                                             className="w-full"
                                             popupClassName="w-[400px]"
-                                            popupMatchSelectWidth={false}
                                         />
                                     </Form.Item>
                                     <Form.Item label="Тип:" name="task_type" className="w-full">
-                                        <Select
-                                            allowClear
+                                        <OperationalTaskTypeSelect
                                             placeholder="Выберите тип задачи"
-                                            options={Object.entries(
-                                                _.groupBy(
-                                                    Object.values(Array.isArray(task_types) ? task_types : []),
-                                                    'supertype'
-                                                )
-                                            ).map(
-                                                ([supertype, types]: [string, TaskType[]]) => ({
-                                                    label: supertype,
-                                                    title: supertype,
-                                                    options: types.map((tt) => ({
-                                                        label: `${tt.task_id ?? ''} ${tt.name}`,
-                                                        value: toIdString(tt),
-                                                    })),
-                                                })
-                                            )}
-                                            showSearch
-                                            filterOption={(inputValue, option) =>
-                                                (option?.label ?? '').toString().toLowerCase().includes(inputValue.toLowerCase())
-                                            }
+                                            options={taskTypeOptions}
                                             className="w-full"
-                                            popupClassName="w-[250px]"
-                                            popupMatchSelectWidth={false}
+                                            popupClassName="w-[380px]"
                                         />
                                     </Form.Item>
                                 </div>

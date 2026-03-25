@@ -1,5 +1,6 @@
 import { Tooltip } from 'antd';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
+import { isSessionRuntimeActive } from '../../utils/voiceSessionTabs';
 
 interface StatusFlag {
     key: string;
@@ -9,10 +10,19 @@ interface StatusFlag {
     isShown: boolean;
 }
 
+const toText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+};
+
 const getProcessorStatus = (pdata?: Record<string, unknown>): { icon: string; color: string; text: string } => {
     if (pdata?.is_processing) return { icon: '⏳', color: 'text-yellow-700', text: 'В процессе' };
+    if (pdata?.is_failed || toText(pdata?.error).length > 0 || toText(pdata?.error_message).length > 0) {
+        return { icon: '❌', color: 'text-red-700', text: 'Ошибка' };
+    }
     if (pdata?.is_processed) return { icon: '✅', color: 'text-green-700', text: 'Завершено' };
-    if (pdata?.is_failed) return { icon: '❌', color: 'text-red-700', text: 'Ошибка' };
     return { icon: '⏺️', color: 'text-gray-400', text: 'Ожидание' };
 };
 
@@ -54,13 +64,54 @@ export default function SessionStatusWidget() {
 
     const processors = (voiceBotSession.session_processors || voiceBotSession.processors || []) as string[];
     const processorsData = (voiceBotSession.processors_data || {}) as Record<string, Record<string, unknown>>;
+    const runtimeActive = isSessionRuntimeActive(voiceBotSession);
+    const processorPayloads = processors.map((proc) => asRecord(processorsData[proc]) || {});
+    const hasActiveProcessing = processorPayloads.some((pdata) => pdata.is_processing === true);
+    const hasProcessorFailure = processorPayloads.some((pdata) =>
+        pdata.is_failed === true ||
+        toText(pdata.error).length > 0 ||
+        toText(pdata.error_message).length > 0
+    );
+    const shouldShowPostprocessing = runtimeActive && Boolean(
+        voiceBotSession.is_messages_processed &&
+        (voiceBotSession.is_postprocessing || voiceBotSession.to_finalize || hasActiveProcessing)
+    );
+    const shouldShowFinalizeStatus = Boolean(
+        hasProcessorFailure ||
+        voiceBotSession.is_finalized ||
+        !runtimeActive ||
+        voiceBotSession.to_finalize ||
+        voiceBotSession.is_postprocessing ||
+        hasActiveProcessing
+    );
 
     return (
-        <div className="voice-session-status-widget w-full max-w-[1740px] mx-auto text-[12px] leading-[1.1]">
+        <div className="voice-session-status-widget w-full text-[12px] leading-[1.1]">
             <div className="voice-status-card flex justify-between items-center w-full px-3 py-2">
                 <div className="inline-flex flex-col justify-center items-start gap-1 h-auto py-2">
                     <div className="flex flex-wrap gap-2">
-                        {sessionStatus
+                        {[
+                            ...sessionStatus.filter((flag) => {
+                                if (flag.key === 'is_postprocessing') return shouldShowPostprocessing;
+                                if (flag.key === 'is_finalized') return false;
+                                return flag.isShown;
+                            }),
+                            {
+                                key: 'is_finalized',
+                                icon: hasProcessorFailure ? '❌' : runtimeActive && (voiceBotSession.to_finalize || voiceBotSession.is_postprocessing || hasActiveProcessing) ? '⏳' : '🏁',
+                                label: hasProcessorFailure
+                                    ? 'Есть ошибка обработки'
+                                    : runtimeActive && (voiceBotSession.to_finalize || voiceBotSession.is_postprocessing || hasActiveProcessing)
+                                        ? 'Сессия в процессе обработки'
+                                        : 'Сессия полностью обработана',
+                                color: hasProcessorFailure
+                                    ? 'text-red-700'
+                                    : runtimeActive && (voiceBotSession.to_finalize || voiceBotSession.is_postprocessing || hasActiveProcessing)
+                                        ? 'text-yellow-700'
+                                        : 'text-green-700',
+                                isShown: shouldShowFinalizeStatus,
+                            } satisfies StatusFlag,
+                        ]
                             .filter((flag) => flag.isShown)
                             .map((flag) => (
                                 <span

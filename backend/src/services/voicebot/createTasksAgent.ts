@@ -1,6 +1,10 @@
 import { getLogger } from '../../utils/logger.js';
 import { MCPProxyClient } from '../mcp/proxyClient.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
+import {
+  buildVoicePossibleTaskFallbackLocator,
+  normalizeVoicePossibleTaskLocatorKey,
+} from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from './agentsRuntimeRecovery.js';
 import { getDb } from '../db.js';
 import { VOICEBOT_COLLECTIONS } from '../../constants.js';
@@ -198,9 +202,10 @@ const normalizeTaskShape = (
   const record = asRecord(value);
   if (!record) return null;
 
-  const taskIdFromAi = toText(record.task_id_from_ai);
-  const id = toText(record.id) || taskIdFromAi || `task-${index + 1}`;
-  const rowId = toText(record.row_id) || id;
+  const taskIdFromAi = normalizeVoicePossibleTaskLocatorKey(record.task_id_from_ai);
+  const fallbackLocator = buildVoicePossibleTaskFallbackLocator({ rawTask: record, index });
+  const id = normalizeVoicePossibleTaskLocatorKey(record.id) || taskIdFromAi || fallbackLocator;
+  const rowId = normalizeVoicePossibleTaskLocatorKey(record.row_id) || id;
   const name = toText(record.name) || `Задача ${index + 1}`;
   const description = normalizeDraftDescription(name, toText(record.description));
 

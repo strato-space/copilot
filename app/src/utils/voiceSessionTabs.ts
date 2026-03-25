@@ -1,5 +1,7 @@
 import type { VoiceBotMessage, VoiceBotSession, VoiceMessageGroup } from '../types/voice';
 
+const CREATE_TASKS_PENDING_STALE_WINDOW_MS = 30 * 60 * 1000;
+
 const toText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -158,15 +160,15 @@ export const hasPendingPossibleTasksRefresh = (
   messages: VoiceBotMessage[]
 ): boolean => {
   if (!isSessionRuntimeActive(session)) return false;
-  if (hasPendingTranscriptionMessages(messages, session)) return true;
-
-  const hasAnyTranscript = messages.some((message) => !isDeleted(message.is_deleted) && hasTranscriptText(message));
-  if (!hasAnyTranscript) return false;
 
   const processorsData = asRecord(session?.processors_data);
   const createTasks = asRecord(processorsData?.CREATE_TASKS);
-  if (!createTasks) return false;
-  if (createTasks.is_processing === true) return true;
+  if (createTasks?.is_processing === true) return true;
+
+  if (hasPendingTranscriptionMessages(messages, session)) return true;
+
+  const hasAnyTranscript = messages.some((message) => !isDeleted(message.is_deleted) && hasTranscriptText(message));
+  if (!hasAnyTranscript || !createTasks) return false;
 
   const latestRequestedAt = Math.max(
     toEpochMs(createTasks.auto_requested_at),
@@ -178,5 +180,9 @@ export const hasPendingPossibleTasksRefresh = (
     toEpochMs(createTasks.last_generated_at),
     toEpochMs(createTasks.last_completed_at)
   );
-  return latestRequestedAt > 0 && latestRequestedAt > lastCompletedAt;
+  if (!(latestRequestedAt > 0 && latestRequestedAt > lastCompletedAt)) return false;
+
+  const requestAgeMs = Date.now() - latestRequestedAt;
+  if (requestAgeMs > CREATE_TASKS_PENDING_STALE_WINDOW_MS) return false;
+  return true;
 };

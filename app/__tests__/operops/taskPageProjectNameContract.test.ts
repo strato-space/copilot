@@ -57,7 +57,7 @@ describe('TaskPage project name contract', () => {
         expect(byArrayProjectData).toBe('Project from lookup payload');
         expect(byProjectId).toBe('Project from dictionary');
         expect(fallbackValue).toBe('Legacy project field');
-        expect(nonStringLegacyFallback).toBe('1742');
+        expect(nonStringLegacyFallback).toBe('N/A');
         expect(emptyFallback).toBe('N/A');
     });
 
