@@ -2600,7 +2600,7 @@ const listSessions = async (req: Request, res: Response) => {
             sessions: sessions as Array<Record<string, unknown>>,
         });
 
-        const sessionsWithMessageCounts = (sessions as Array<Record<string, unknown>>).map((session) => {
+        const sessionsWithMessageCounts: Array<Record<string, unknown>> = (sessions as Array<Record<string, unknown>>).map((session) => {
             const sessionId = session._id instanceof ObjectId
                 ? session._id.toHexString()
                 : String(session._id ?? '').trim();
@@ -2611,8 +2611,8 @@ const listSessions = async (req: Request, res: Response) => {
         });
 
         // Filter sessions with messages or active status (always include deleted when explicitly requested)
-        const visibleSessions = sessionsWithMessageCounts.filter((session: { message_count?: number; is_active?: boolean; is_deleted?: boolean }) =>
-            session.is_deleted === true || (session.message_count ?? 0) > 0 || (session.is_active ?? false) !== false
+        const visibleSessions: Array<Record<string, unknown>> = sessionsWithMessageCounts.filter((session) =>
+            session.is_deleted === true || (Number(session.message_count) || 0) > 0 || (session.is_active ?? false) !== false
         );
 
         const countsBySessionId = await resolveSessionListTaskCountsBatch({
