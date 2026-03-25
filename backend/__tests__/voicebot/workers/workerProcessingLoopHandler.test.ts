@@ -183,6 +183,131 @@ describe('handleProcessingLoopJob', () => {
     );
   });
 
+  it('clears invalid_api_key session block and requeues invalid_api_key transcriptions', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: sessionId,
+            is_messages_processed: false,
+            is_waiting: false,
+            is_corrupted: true,
+            error_source: 'transcription',
+            transcription_error: 'invalid_api_key',
+          },
+        ])
+      )
+      .mockImplementationOnce(() => makeFindCursor([]));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const messagesFind = jest.fn(() =>
+      makeFindCursor([
+        {
+          _id: messageId,
+          session_id: sessionId,
+          chat_id: 3045664,
+          message_id: 42,
+          message_timestamp: 1770000000,
+          is_transcribed: false,
+          transcribe_attempts: 5,
+          transcription_retry_reason: 'invalid_api_key',
+          to_transcribe: false,
+          created_at: 0,
+          transcribe_timestamp: null,
+        },
+      ])
+    );
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesCountDocuments = jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind
+              .mockImplementationOnce(() =>
+                makeFindCursor([
+                  {
+                    session_id: sessionId,
+                  },
+                ])
+              )
+              .mockImplementationOnce(() =>
+                makeFindCursor([
+                  {
+                    _id: messageId,
+                    session_id: sessionId,
+                    chat_id: 3045664,
+                    message_id: 42,
+                    message_timestamp: 1770000000,
+                    is_transcribed: false,
+                    transcribe_attempts: 5,
+                    transcription_retry_reason: 'invalid_api_key',
+                    to_transcribe: false,
+                    created_at: 0,
+                    transcribe_timestamp: null,
+                  },
+                ])
+              ),
+            updateOne: messagesUpdateOne,
+            countDocuments: messagesCountDocuments,
+          };
+        }
+        return {};
+      },
+    });
+
+    const voiceQueueAdd = jest.fn(async () => ({ id: 'voice-job-1-invalid' }));
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.VOICE]: {
+            add: voiceQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_transcriptions).toBe(1);
+
+    const invalidSessionReset = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.is_corrupted === false;
+    });
+    expect(invalidSessionReset).toBeTruthy();
+
+    const markRetryCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.to_transcribe === true;
+    });
+    expect(markRetryCall).toBeTruthy();
+
+    expect(voiceQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.TRANSCRIBE,
+      expect.objectContaining({
+        message_id: messageId.toString(),
+        message_db_id: messageId.toString(),
+        session_id: sessionId.toString(),
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+  });
+
   it('does not requeue before transcription_next_attempt_at', async () => {
     const sessionId = new ObjectId();
     const messageId = new ObjectId();

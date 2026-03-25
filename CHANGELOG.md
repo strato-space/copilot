@@ -2,6 +2,9 @@
 
 ## 2026-03-25
 ### PROBLEM SOLVED
+- **22:46** OpenAI `invalid_api_key` failures were still treated inconsistently across transcribe/categorize/processing-loop recovery paths, so sessions could stick in retry limbo with unclear operator diagnostics even after runtime credentials were repaired.
+- **22:46** Low-signal chunks (noise/garbage ASR output) still flowed through categorization and post-transcribe task generation, creating avoidable downstream queue load and draft pollution.
+- **22:46** Manual transcription retry (`POST /api/voicebot/transcription/retry`) only touched coarse session flags and did not reliably re-arm per-message retry metadata, so processing-loop retries were not deterministic.
 - **14:15** Voice session status footer (`Все сообщения обработаны`) still behaved like a viewport-pinned strip on long tab content, so `Транскрипция`, `Категоризация`, and especially `Задачи` could visually collide with the footer instead of letting the workspace grow naturally.
 - **14:15** Historical and freshly generated task priorities could still drift as decorated values like `🔥 P1`, which broke read/write validation symmetry across Voice Drafts, backend persistence, and ontology tooling.
 - **14:15** Production deploy recovery still depended on pre-existing PM2 VoiceBot entries; if `copilot-voicebot-workers-prod` disappeared entirely, deploys could leave transcription/runtime queues dead instead of recreating the worker.
@@ -17,6 +20,9 @@
 - **04:27** The migrated Draft slice still stopped at field-coverage/reversible-mapping checks, so `automation_tasks` could carry scalar value/type/domain drift inside the supposedly strict ontology-backed path.
 
 ### FEATURE IMPLEMENTED
+- **22:46** Unified OpenAI recovery handling around canonical retry codes (`insufficient_quota`, `invalid_api_key`) across worker handlers, processing-loop repair logic, and runtime recovery detection; Voice transcription UI now has explicit localized `invalid_api_key` diagnostics.
+- **22:46** Added a post-transcribe garbage-detection gate (default model `gpt-5.4-nano`) that annotates chunks with `garbage_detection` metadata and short-circuits categorization/`CREATE_TASKS` enqueue when output is classified as noise.
+- **22:46** Reworked transcription retry into a message-level rearm flow: retry route resets pending message retry state, clears session-level error markers, and returns explicit processing-loop retry diagnostics.
 - **14:15** Put the Voice footer/status widget back into normal document flow, so tab content owns the page height and the footer renders after the workspace instead of overlaying it.
 - **14:15** Reduced canonical priority storage to text-only `P1..P7` across frontend, backend, and ontology paths; urgent flame badges are now rendered visually in the UI only.
 - **14:15** Hardened the production PM2 bootstrap so deploy can recreate missing VoiceBot worker/bot runtimes instead of assuming they already exist.
@@ -32,6 +38,10 @@
 - **04:27** Extended the Draft `automation_tasks` slice with card-derived scalar validation: the registry now carries attribute value types plus owner-level `@values(...)`, the adapter can validate selected Mongo fields against those card rules, and the migrated Voice Draft path now enforces strict Draft-master invariants while leaving structured compatibility payloads explicitly deferred.
 
 ### CHANGES
+- **22:46** Updated `backend/src/workers/voicebot/handlers/{transcribeHandler,categorizeHandler,processingLoop}.ts`, `backend/src/workers/voicebot/handlers/shared/openAiErrors.ts`, and `backend/src/services/voicebot/agentsRuntimeRecovery.ts` plus focused worker/runtime tests so `invalid_api_key` joins quota-class recovery with consistent retry markers/messages and processing-loop requeue behavior.
+- **22:46** Added `backend/src/services/voicebot/{transcriptionGarbageDetector,transcriptionQueue}.ts`, wired shared transcribe enqueue usage from `backend/src/api/routes/voicebot/uploads.ts`, `backend/src/voicebot_tgbot/ingressHandlers.ts`, and processing-loop requeue, and added detector/worker regression coverage.
+- **22:46** Updated `backend/src/api/routes/voicebot/transcription.ts` so `/transcription/retry` re-arms pending message retries (`to_transcribe`, `transcribe_attempts`, `transcription_next_attempt_at`) and clears stale session transcription error fields before processing-loop pickup.
+- **22:46** Updated `app/src/components/voice/TranscriptionTableRow.tsx`, `docs/COPILOT_OPENAI_API_KEY_RUNTIME_STATE_2026-03-17.md`, and `docs/voice-bugfix-wave-dag-2026-03-25.md` for localized invalid-key diagnostics and current production-state documentation alignment.
 - **14:15** Updated `app/src/{index.css,components/voice/{Transcription,Categorization,PossibleTasks}.tsx}` and focused Voice layout contracts so tab panes grow in normal page flow, the footer is no longer viewport-fixed, and live browser acceptance now includes screenshot overlap checks for the changed surfaces.
 - **14:15** Updated `app/src/constants/crm.ts`, `backend/src/{constants.ts,api/routes/voicebot/possibleTasksMasterModel.ts,services/voicebot/persistPossibleTasks.ts}`, ontology schema/scripts/tests, and related fixtures so persisted priorities are canonical `P1..P7` values only while the frontend renders the flame accent as presentation.
 - **14:15** Updated `scripts/pm2-backend.sh` plus `backend/__tests__/scripts/pm2BackendProdBootstrap.test.ts` so `./scripts/pm2-backend.sh prod` recreates missing `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` runtimes instead of silently skipping them.

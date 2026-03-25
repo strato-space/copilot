@@ -370,21 +370,51 @@ router.post('/retry', async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Permission denied" });
         }
 
-        // TODO: Queue transcription retry via BullMQ
-        // Mark session for re-transcription
-        await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            runtimeSessionQuery({ _id: new ObjectId(session_id) }),
+        const sessionObjectId = new ObjectId(session_id);
+        const messageUpdate = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateMany(
+            runtimeMessageQuery({
+                session_id: sessionObjectId,
+                is_deleted: { $ne: true },
+                is_transcribed: { $ne: true },
+            }),
             {
                 $set: {
                     to_transcribe: true,
+                    transcribe_attempts: 0,
+                    updated_at: new Date(),
+                },
+                $unset: {
+                    transcription_next_attempt_at: 1,
+                },
+            }
+        );
+
+        // Canonical retry path: message flags are picked by worker processing loop.
+        await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+            runtimeSessionQuery({ _id: sessionObjectId }),
+            {
+                $set: {
                     is_corrupted: false,
+                    is_messages_processed: false,
                     updated_at: new Date()
+                },
+                $unset: {
+                    transcription_error: 1,
+                    error_source: 1,
+                    error_message: 1,
+                    error_timestamp: 1,
+                    error_message_id: 1,
                 }
             }
         );
 
         logger.info(`Transcription retry queued for session ${session_id}`);
-        res.status(200).json({ success: true, message: "Transcription retry queued" });
+        res.status(200).json({
+            success: true,
+            message: "Transcription retry queued",
+            processing_mode: "processing_loop",
+            messages_marked_for_retry: messageUpdate.modifiedCount ?? 0,
+        });
     } catch (error) {
         logger.error('Error in transcription/retry:', error);
         res.status(500).json({ error: String(error) });

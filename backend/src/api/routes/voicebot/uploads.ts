@@ -14,7 +14,6 @@ import type { Server as SocketIOServer } from 'socket.io';
 import {
     VOICEBOT_COLLECTIONS,
     VOICEBOT_FILE_STORAGE,
-    VOICEBOT_JOBS,
     VOICEBOT_QUEUES,
     VOICE_BOT_SESSION_ACCESS,
 } from '../../../constants.js';
@@ -25,6 +24,7 @@ import { IS_PROD_RUNTIME } from '../../../services/runtimeScope.js';
 import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
 import { getLogger } from '../../../utils/logger.js';
 import { getAudioDurationFromFile, getFileSha256FromPath } from '../../../utils/audioUtils.js';
+import { enqueueTranscribeJob } from '../../../services/voicebot/transcriptionQueue.js';
 
 const router = Router();
 const logger = getLogger();
@@ -538,21 +538,13 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
 
             if (voiceQueue) {
                 const messageId = String(op.insertedId);
-                const jobId = `${session_id}-${messageId}-TRANSCRIBE`;
-                await voiceQueue.add(
-                    VOICEBOT_JOBS.voice.TRANSCRIBE,
-                    {
-                        message_id: messageId,
-                        message_db_id: messageId,
-                        session_id,
-                        chat_id: Number.isFinite(chatId) ? chatId : (Number(performer.telegram_id) || null),
-                        job_id: jobId,
-                    },
-                    {
-                        deduplication: { id: jobId },
-                        attempts: 1,
-                    }
-                );
+                await enqueueTranscribeJob({
+                    voiceQueue,
+                    session_id,
+                    message_id: messageId,
+                    chat_id: Number.isFinite(chatId) ? chatId : (Number(performer.telegram_id) || null),
+                    attempts: 1,
+                });
             }
             socketMessages.push({
                 _id: String(op.insertedId),

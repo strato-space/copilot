@@ -143,6 +143,92 @@ describe('handleTranscribeJob', () => {
     );
   });
 
+  it('marks invalid_api_key with diagnostics context and retry metadata', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-invalid-api-key-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 1,
+      file_path: filePath,
+      message_timestamp: 1770489126,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-invalid-api-key' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
+
+    createTranscriptionMock.mockRejectedValue({
+      status: 401,
+      error: {
+        code: 'invalid_api_key',
+      },
+      message: 'Incorrect API key provided.',
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'invalid_api_key',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    const updatePayload = messagesUpdateOne.mock.calls[messagesUpdateOne.mock.calls.length - 1]?.[1] as Record<string, unknown>;
+    const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    expect(setPayload.transcription_error).toBe('invalid_api_key');
+    expect(setPayload.to_transcribe).toBe(true);
+
+    const context = setPayload.transcription_error_context as Record<string, unknown>;
+    expect(String(context.server_name || '')).not.toBe('');
+    expect(String(context.file_path || '')).toBe(filePath);
+    expect(String(context.openai_key_mask || '')).toMatch(/^sk-\.\.\.[A-Za-z0-9_-]{4}$/);
+    expect(String(context.error_code || '')).toBe('invalid_api_key');
+    expect(eventsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.events.SEND_TO_SOCKET,
+      expect.objectContaining({
+        session_id: sessionId.toString(),
+        event: 'message_update',
+        payload: expect.objectContaining({
+          message_id: messageId.toString(),
+        }),
+      })
+    );
+
+    const sessionUpdatePayload = sessionsUpdateOne.mock.calls[sessionsUpdateOne.mock.calls.length - 1]?.[1] as Record<string, unknown>;
+    const sessionSetPayload = (sessionUpdatePayload.$set as Record<string, unknown>) || {};
+    expect(sessionSetPayload.is_corrupted).toBe(false);
+    expect(String(sessionSetPayload.error_message || '')).toContain('API key is invalid');
+  });
+
   it('marks file_not_found and stores diagnostics when local file is missing', async () => {
     const messageId = new ObjectId();
     const sessionId = new ObjectId();

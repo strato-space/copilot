@@ -14,7 +14,10 @@ import {
   resolveTranscriptionText,
 } from './categorize/normalization.js';
 import { resolveUnknownErrorMessage } from './shared/errorMessage.js';
-import { isQuotaError, normalizeErrorCode } from './shared/openAiErrors.js';
+import {
+  normalizeErrorCode,
+  resolveOpenAiRecoveryErrorCode,
+} from './shared/openAiErrors.js';
 import { createOpenAiClient, runtimeQuery } from './shared/sharedRuntime.js';
 
 const logger = getLogger();
@@ -57,6 +60,12 @@ const CATEGORIZATION_MODEL = process.env.VOICEBOT_CATEGORIZATION_MODEL || 'gpt-4
 const CATEGORIZATION_MAX_ATTEMPTS = 10;
 const CATEGORIZATION_RETRY_BASE_DELAY_MS = 60 * 1000;
 const CATEGORIZATION_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
+const getOpenAiRecoveryMessage = (errorCode: string): string => {
+  if (errorCode === 'invalid_api_key') {
+    return 'OpenAI API key is invalid. Will resume automatically after credentials are fixed.';
+  }
+  return 'OpenAI quota limit reached. Will resume automatically after payment restoration.';
+};
 
 const CATEGORIZATION_PROMPT = `Ты — агент сегментации транскрипции.
 
@@ -331,9 +340,10 @@ export const handleCategorizeJob = async (
     };
   } catch (error) {
     const errorMessage = resolveUnknownErrorMessage(error, 'Unknown categorization error');
-    const quotaRetryable = isQuotaError(error, errorMessage);
+    const recoveryErrorCode = resolveOpenAiRecoveryErrorCode(error, errorMessage);
+    const quotaRetryable = Boolean(recoveryErrorCode);
     const normalizedCode = quotaRetryable
-      ? normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
+      ? recoveryErrorCode || normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
       : normalizeErrorCode(error) || 'categorization_failed';
 
     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
@@ -342,12 +352,14 @@ export const handleCategorizeJob = async (
         [`${processorKey}.is_processing`]: false,
         [`${processorKey}.is_processed`]: false,
         categorization_error: normalizedCode,
-        categorization_error_message: errorMessage,
+        categorization_error_message: quotaRetryable
+          ? getOpenAiRecoveryMessage(normalizedCode)
+          : errorMessage,
         categorization_error_timestamp: new Date(),
         categorization_timestamp: Date.now(),
         ...(quotaRetryable
           ? {
-              categorization_retry_reason: INSUFFICIENT_QUOTA_RETRY,
+              categorization_retry_reason: normalizedCode,
               categorization_next_attempt_at: new Date(nextAttemptAt),
             }
           : {}),

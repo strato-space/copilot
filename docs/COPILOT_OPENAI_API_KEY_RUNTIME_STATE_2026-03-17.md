@@ -8,7 +8,7 @@ Scope: current effective key routing for OpenAI-backed Copilot services and agen
 - Copilot production runtime is currently split across two credential mechanisms:
   - OpenAI API key for backend/workers/tgbot/miniapp.
   - Codex OAuth for `agents/` Fast-Agent runtime.
-- The effective runtime OpenAI API key does **not** match the key currently stored in `backend/.env.production`.
+- The effective runtime OpenAI API key now matches the key stored in `backend/.env.production`.
 - Registry source for OpenAI API key aliases is `/home/tools/server/.production/production.md`.
 
 ## Effective Runtime State
@@ -24,33 +24,32 @@ The following PM2 services currently use the same runtime `OPENAI_API_KEY`:
 
 Masked runtime key:
 
-- `sk-proj-vGxZ...bvYA`
+- `sk-proj-eNsO...9b4A`
 
 Registry alias match:
 
-- `call`
-- registry mask: `sk-...bvYA`
+- `tony`
+- registry mask: `sk-...9b4A`
 
 Operational consequence:
 
-- Whisper/transcription runs on alias `call`.
+- Whisper/transcription runs on alias `tony`.
 - Backend summarize/categorize/questions/custom-prompt paths also inherit the same `OPENAI_API_KEY` runtime.
 
 ### File-configured key in `backend/.env.production`
 
 Current file value (masked):
 
-- `sk-proj-4IWS...66kA`
+- `sk-proj-eNsO...9b4A`
 
 Registry alias match:
 
-- `voice 2026 02`
-- registry mask: `sk-...66kA`
+- `tony`
+- registry mask: `sk-...9b4A`
 
 Operational consequence:
 
-- `backend/.env.production` does not currently match the live PM2 runtime for OpenAI API key-backed services.
-- A PM2 restart that truly reloads from file is expected to move those services to alias `voice 2026 02`, unless another environment source overrides it again.
+- `backend/.env.production` matches the live PM2 runtime for OpenAI API key-backed services.
 
 ### Agents / Fast-Agent runtime
 
@@ -109,6 +108,6 @@ rg '^default_model:' /home/strato-space/copilot/agents/fastagent.config.yaml
 
 ## Current Answer in One Line
 
-- Backend/workers/tgbot/miniapp: alias `call`
-- `backend/.env.production`: alias `voice 2026 02`
+- Backend/workers/tgbot/miniapp: alias `tony`
+- `backend/.env.production`: alias `tony`
 - `agents/`: Codex OAuth + `codexplan`

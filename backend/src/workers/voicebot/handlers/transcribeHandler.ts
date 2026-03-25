@@ -23,12 +23,20 @@ import {
   buildSegmentsFromChunks,
   resolveMessageDurationSeconds,
 } from '../../../services/voicebot/transcriptionTimeline.js';
+import {
+  detectGarbageTranscription,
+  type GarbageDetectionResult,
+} from '../../../services/voicebot/transcriptionGarbageDetector.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import { getAudioDurationFromFile, splitAudioFileByDuration } from '../../../utils/audioUtils.js';
 import { getLogger } from '../../../utils/logger.js';
 import { buildCanonicalSessionLink } from '../../../voicebot_tgbot/sessionTelegramMessage.js';
 import { buildCanonicalTaskSourceRef } from '../../../services/taskSourceRef.js';
-import { isQuotaError, normalizeErrorCode } from './shared/openAiErrors.js';
+import { insertSessionLogEvent } from '../../../services/voicebotSessionLog.js';
+import {
+  normalizeErrorCode,
+  resolveOpenAiRecoveryErrorCode,
+} from './shared/openAiErrors.js';
 
 const logger = getLogger();
 
@@ -134,6 +142,12 @@ const TELEGRAM_EXTENSION_BY_MIME: Record<string, string> = {
   'audio/mp4': '.m4a',
   'audio/wav': '.wav',
   'audio/x-wav': '.wav',
+};
+const getOpenAiRecoveryMessage = (errorCode: string): string => {
+  if (errorCode === 'invalid_api_key') {
+    return 'OpenAI API key is invalid. Will resume automatically after credentials are fixed.';
+  }
+  return 'OpenAI quota limit reached. Will resume automatically after payment restoration.';
 };
 
 const runtimeQuery = (query: Record<string, unknown>) =>
@@ -1485,41 +1499,82 @@ export const handleTranscribeJob = async (
       fallbackTimestampMs,
     });
 
-    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
-      $set: {
-        transcribe_timestamp: Date.now(),
-        transcription_text,
+    let garbageDetection: GarbageDetectionResult | null = null;
+    try {
+      garbageDetection = await detectGarbageTranscription({
+        openaiClient: client,
+        transcriptionText: transcription_text,
+      });
+    } catch (garbageError) {
+      logger.warn('[voicebot-worker] garbage detector failed, continuing regular flow', {
+        message_id,
+        session_id,
+        error: getErrorMessage(garbageError),
+      });
+    }
+
+    const nowTs = Date.now();
+    const messageUpdateSet: Record<string, unknown> = {
+      transcribe_timestamp: nowTs,
+      transcription_text,
+      task: 'transcribe',
+      text: transcription_text,
+      transcription_raw: transcriptionRaw,
+      transcription: {
+        schema_version: 1,
+        provider: 'openai',
+        model: 'whisper-1',
         task: 'transcribe',
+        duration_seconds:
+          durationSeconds ||
+          aggregatedDurationSeconds ||
+          timeline.derivedDurationSeconds ||
+          null,
         text: transcription_text,
-        transcription_raw: transcriptionRaw,
-        transcription: {
-          schema_version: 1,
-          provider: 'openai',
-          model: 'whisper-1',
-          task: 'transcribe',
-          duration_seconds:
-            durationSeconds ||
-            aggregatedDurationSeconds ||
-            timeline.derivedDurationSeconds ||
-            null,
-          text: transcription_text,
-          segments: timeline.segments.map((segment) => ({
-            id: String(segment.id || `ch_${new ObjectId().toHexString()}`),
-            source_segment_id: null,
-            start: Number(segment.start) || 0,
-            end: Number(segment.end) || 0,
-            speaker: segment.speaker ?? null,
-            text: String(segment.text || ''),
-            is_deleted: Boolean(segment.is_deleted),
-          })),
-          usage: null,
-        },
-        transcription_chunks: transcriptionChunks,
-        is_transcribed: true,
-        transcription_method: transcriptionMethod,
-        transcribe_attempts: 0,
-        to_transcribe: false,
+        segments: timeline.segments.map((segment) => ({
+          id: String(segment.id || `ch_${new ObjectId().toHexString()}`),
+          source_segment_id: null,
+          start: Number(segment.start) || 0,
+          end: Number(segment.end) || 0,
+          speaker: segment.speaker ?? null,
+          text: String(segment.text || ''),
+          is_deleted: Boolean(segment.is_deleted),
+        })),
+        usage: null,
       },
+      transcription_chunks: transcriptionChunks,
+      is_transcribed: true,
+      transcription_method: transcriptionMethod,
+      transcribe_attempts: 0,
+      to_transcribe: false,
+    };
+
+    if (garbageDetection) {
+      messageUpdateSet.garbage_detected = Boolean(garbageDetection.is_garbage);
+      messageUpdateSet.garbage_detection = {
+        checked_at: garbageDetection.checked_at || new Date(),
+        detector_version: garbageDetection.detector_version || 'post_transcribe_garbage_v1',
+        model: garbageDetection.model || null,
+        skipped: Boolean(garbageDetection.skipped),
+        skip_reason: garbageDetection.skip_reason || null,
+        is_garbage: Boolean(garbageDetection.is_garbage),
+        code: garbageDetection.code || null,
+        reason: garbageDetection.reason || null,
+        raw_output: garbageDetection.raw_output || null,
+      };
+    }
+
+    if (garbageDetection?.is_garbage) {
+      messageUpdateSet.categorization = [];
+      messageUpdateSet.categorization_timestamp = nowTs;
+      messageUpdateSet['processors_data.categorization.is_processing'] = false;
+      messageUpdateSet['processors_data.categorization.is_processed'] = true;
+      messageUpdateSet['processors_data.categorization.is_finished'] = true;
+      messageUpdateSet['processors_data.categorization.skipped_reason'] = 'garbage_detected';
+    }
+
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+      $set: messageUpdateSet,
       $unset: {
         transcription_error: 1,
         transcription_error_context: 1,
@@ -1544,32 +1599,70 @@ export const handleTranscribeJob = async (
       },
     });
 
-    await maybeCreateCodexTaskFromVoiceCommandSafe({
-      db,
-      session,
-      sessionObjectId,
-      session_id,
-      message,
-      messageObjectId,
-      message_id,
-      transcriptionText: transcription_text,
-    });
+    if (garbageDetection?.is_garbage) {
+      try {
+        await insertSessionLogEvent({
+          db,
+          session_id: sessionObjectId,
+          message_id: messageObjectId,
+          event_name: 'transcription_garbage_detected',
+          actor: {
+            kind: 'worker',
+            id: 'workers.voicebot.transcribe',
+          },
+          source: {
+            channel: 'system',
+            transport: 'internal_queue',
+            origin_ref: VOICEBOT_JOBS.voice.TRANSCRIBE,
+          },
+          target: {
+            entity_type: 'message',
+            entity_oid: message_id,
+            stage: 'transcription',
+          },
+          metadata: {
+            detector: messageUpdateSet.garbage_detection as Record<string, unknown>,
+            drop_downstream: true,
+          },
+        });
+      } catch (logError) {
+        logger.warn('[voicebot-worker] failed to write transcription_garbage_detected log', {
+          message_id,
+          session_id,
+          error: getErrorMessage(logError),
+        });
+      }
+    }
 
-  await enqueueCategorizationIfEnabled({
-    db,
-    session,
-    session_id,
-    message_id,
-    messageObjectId,
-  });
-  await enqueueCreateTasksPostprocessingIfEnabled({
-    db,
-    session,
-    session_id,
-  });
-  await emitMessageUpdateByIdSafe({
-    db,
-    messageObjectId,
+    const isGarbage = Boolean(garbageDetection?.is_garbage);
+    if (!isGarbage) {
+      await maybeCreateCodexTaskFromVoiceCommandSafe({
+        db,
+        session,
+        sessionObjectId,
+        session_id,
+        message,
+        messageObjectId,
+        message_id,
+        transcriptionText: transcription_text,
+      });
+
+      await enqueueCategorizationIfEnabled({
+        db,
+        session,
+        session_id,
+        message_id,
+        messageObjectId,
+      });
+      await enqueueCreateTasksPostprocessingIfEnabled({
+        db,
+        session,
+        session_id,
+      });
+    }
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
       message_id,
       session_id,
     });
@@ -1590,11 +1683,12 @@ export const handleTranscribeJob = async (
     };
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    const quotaRetryable = isQuotaError(error, errorMessage);
+    const recoveryErrorCode = resolveOpenAiRecoveryErrorCode(error, errorMessage);
+    const quotaRetryable = Boolean(recoveryErrorCode);
     const payloadTooLarge = isPayloadTooLargeError(error);
     const splitFailedBySize = /oversized_segment_after_split/i.test(errorMessage);
     const normalizedCode = quotaRetryable
-      ? normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
+      ? recoveryErrorCode || normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
       : payloadTooLarge || splitFailedBySize
         ? 'audio_too_large'
         : normalizeErrorCode(error) || 'transcription_failed';
@@ -1616,7 +1710,7 @@ export const handleTranscribeJob = async (
         ...(quotaRetryable
           ? {
             to_transcribe: true,
-            transcription_retry_reason: INSUFFICIENT_QUOTA_RETRY,
+            transcription_retry_reason: normalizedCode,
             transcription_next_attempt_at: nextAttemptAt,
           }
           : {
@@ -1639,7 +1733,7 @@ export const handleTranscribeJob = async (
           is_corrupted: false,
           error_source: 'transcription',
           transcription_error: normalizedCode,
-          error_message: 'OpenAI quota limit reached. Will resume automatically after payment restoration.',
+          error_message: getOpenAiRecoveryMessage(normalizedCode),
           error_timestamp: new Date(),
           error_message_id: message_id,
           transcription_error_context: getTranscriptionErrorContext({

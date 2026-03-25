@@ -175,6 +175,59 @@ describe('handleCategorizeJob', () => {
     expect(setPayload.categorization_next_attempt_at).toBeInstanceOf(Date);
   });
 
+  it('marks invalid_api_key with retry metadata', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      transcription_text: 'Need categorization',
+      categorization_attempts: 1,
+    }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createResponseMock.mockRejectedValue({
+      status: 401,
+      error: {
+        code: 'invalid_api_key',
+      },
+      message: 'Incorrect API key provided.',
+    });
+
+    const result = await handleCategorizeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'invalid_api_key',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    const updatePayload = messagesUpdateOne.mock.calls[messagesUpdateOne.mock.calls.length - 1]?.[1] as Record<string, unknown>;
+    const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    expect(setPayload.categorization_error).toBe('invalid_api_key');
+    expect(setPayload.categorization_retry_reason).toBe('invalid_api_key');
+    expect(setPayload.categorization_next_attempt_at).toBeInstanceOf(Date);
+    expect(String(setPayload.categorization_error_message || '')).toContain('API key is invalid');
+  });
+
   it('normalizes empty start/end timestamps to 00:00', async () => {
     const messageId = new ObjectId();
     const sessionId = new ObjectId();

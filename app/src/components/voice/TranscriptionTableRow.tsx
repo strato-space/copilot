@@ -111,6 +111,7 @@ const formatTranscriptionErrorLabel = (errorCode: string): string => {
     const normalized = errorCode.trim().toLowerCase();
     const labels: Record<string, string> = {
         insufficient_quota: 'Недостаточно квоты OpenAI',
+        invalid_api_key: 'Неверный OpenAI API key',
         openai_api_key_missing: 'Не настроен OPENAI_API_KEY',
         file_not_found: 'Файл не найден на сервере',
         missing_file_path: 'Не передан путь к файлу',

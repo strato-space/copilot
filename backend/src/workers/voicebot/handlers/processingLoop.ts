@@ -9,7 +9,12 @@ import {
 import { getDb } from '../../../services/db.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
+import { enqueueTranscribeJob } from '../../../services/voicebot/transcriptionQueue.js';
 import { getLogger } from '../../../utils/logger.js';
+import {
+  OPENAI_RECOVERY_RETRY_CODES,
+  isOpenAiRecoveryRetryCode,
+} from './shared/openAiErrors.js';
 
 const logger = getLogger();
 
@@ -80,7 +85,6 @@ type TaskRecord = {
 };
 
 const PROCESSOR_STUCK_DELAY_MS = 10 * 60 * 1000;
-const INSUFFICIENT_QUOTA_RETRY = 'insufficient_quota';
 const TRANSCRIBE_MAX_ATTEMPTS = 10;
 const FIX_DELAY_MS = 10 * 60 * 1000;
 
@@ -130,13 +134,13 @@ const getProcessorQueuedAtMs = (
 const isQuotaBlockedSession = (session: SessionRecord): boolean =>
   session.is_corrupted === true &&
   session.error_source === 'transcription' &&
-  String(session.transcription_error || '').toLowerCase() === INSUFFICIENT_QUOTA_RETRY;
+  isOpenAiRecoveryRetryCode(session.transcription_error);
 
 const isQuotaBlockedMessage = (message: MessageRecord): boolean =>
-  message.transcription_retry_reason === INSUFFICIENT_QUOTA_RETRY;
+  isOpenAiRecoveryRetryCode(message.transcription_retry_reason);
 
 const isQuotaRestartingCategorization = (message: MessageRecord): boolean =>
-  message.categorization_retry_reason === INSUFFICIENT_QUOTA_RETRY;
+  isOpenAiRecoveryRetryCode(message.categorization_retry_reason);
 
 const canRetryCategorization = (message: MessageRecord, now: number): boolean => {
   if (!isQuotaRestartingCategorization(message)) return false;
@@ -193,7 +197,7 @@ export const handleProcessingLoopJob = async (
       {
         is_corrupted: true,
         error_source: 'transcription',
-        transcription_error: INSUFFICIENT_QUOTA_RETRY,
+        transcription_error: { $in: [...OPENAI_RECOVERY_RETRY_CODES] },
       },
     ],
   };
@@ -213,7 +217,7 @@ export const handleProcessingLoopJob = async (
               to_transcribe: true,
             },
             {
-              categorization_retry_reason: INSUFFICIENT_QUOTA_RETRY,
+              categorization_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] },
             },
           ],
         })
@@ -306,8 +310,8 @@ export const handleProcessingLoopJob = async (
 
     if (messages.length === 0) continue;
 
-    const quotaBlockedTranscriptionMessages = messages.filter(isQuotaBlockedMessage);
-    for (const message of quotaBlockedTranscriptionMessages) {
+    const retryableTranscriptionMessages = messages.filter(isQuotaBlockedMessage);
+    for (const message of retryableTranscriptionMessages) {
       if (message.to_transcribe) continue;
       await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
         runtimeQuery({ _id: new ObjectId(message._id) }),
@@ -403,7 +407,7 @@ export const handleProcessingLoopJob = async (
           runtimeQuery({ _id: messageObjectId }),
           {
             $set: {
-              categorization_retry_reason: INSUFFICIENT_QUOTA_RETRY,
+              categorization_retry_reason: String(message.categorization_retry_reason || 'insufficient_quota'),
               categorization_next_attempt_at: new Date(now + 60_000),
             },
           }
@@ -419,7 +423,6 @@ export const handleProcessingLoopJob = async (
       const messageObjectId = new ObjectId(message._id);
       const messageId = messageObjectId.toString();
       const sessionId = sessionObjectId.toString();
-      const jobId = `${sessionId}-${messageId}-TRANSCRIBE`;
 
       if (!voiceQueue) {
         skippedRequeueNoQueue += 1;
@@ -440,17 +443,12 @@ export const handleProcessingLoopJob = async (
           }
         );
 
-        await voiceQueue.add(
-          VOICEBOT_JOBS.voice.TRANSCRIBE,
-          {
-            message_id: messageId,
-            message_db_id: messageId,
-            session_id: sessionId,
-            chat_id: message.chat_id,
-            job_id: jobId,
-          },
-          { deduplication: { id: jobId } }
-        );
+        await enqueueTranscribeJob({
+          voiceQueue,
+          session_id: sessionId,
+          message_id: messageId,
+          chat_id: message.chat_id,
+        });
 
         requeuedTranscriptions += 1;
       } catch (error) {
@@ -623,17 +621,17 @@ export const handleProcessingLoopJob = async (
     })
   );
 
-  const pendingCategorizations = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).countDocuments(
-    runtimeQuery({
-      is_deleted: { $ne: true },
-      is_transcribed: true,
-      $or: [
-        { categorization: { $exists: false } },
-        { [`processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}.is_processed`]: { $ne: true } },
-        { categorization_retry_reason: INSUFFICIENT_QUOTA_RETRY },
-      ],
-    })
-  );
+    const pendingCategorizations = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).countDocuments(
+      runtimeQuery({
+        is_deleted: { $ne: true },
+        is_transcribed: true,
+        $or: [
+          { categorization: { $exists: false } },
+          { [`processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}.is_processed`]: { $ne: true } },
+          { categorization_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] } },
+        ],
+      })
+    );
 
   logger.info('[voicebot-worker] processing_loop scan finished', {
     scanned_sessions: sessions.length,

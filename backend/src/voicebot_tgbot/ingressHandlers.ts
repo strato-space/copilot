@@ -20,6 +20,7 @@ import { extractSessionIdFromText } from './sessionRef.js';
 import { buildCanonicalSessionLink, getPublicInterfaceOrigin } from './sessionTelegramMessage.js';
 import { ensureUniqueTaskPublicId } from '../services/taskPublicId.js';
 import { buildCanonicalTaskSourceRef } from '../services/taskSourceRef.js';
+import { enqueueTranscribeJob } from '../services/voicebot/transcriptionQueue.js';
 
 export type QueueLike = {
   add: (name: string, data: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
@@ -1063,21 +1064,13 @@ export const handleVoiceIngress = async ({
   if (deps.voiceQueue) {
     const message_id = messageObjectId.toHexString();
     const session_id = sessionId.toHexString();
-    const jobId = `${session_id}-${message_id}-TRANSCRIBE`;
-    await deps.voiceQueue.add(
-      VOICEBOT_JOBS.voice.TRANSCRIBE,
-      {
-        message_id,
-        message_db_id: message_id,
-        session_id,
-        chat_id: context.chat_id,
-        job_id: jobId,
-      },
-      {
-        deduplication: { id: jobId },
-        attempts: 1,
-      }
-    );
+    await enqueueTranscribeJob({
+      voiceQueue: deps.voiceQueue,
+      session_id,
+      message_id,
+      chat_id: context.chat_id,
+      attempts: 1,
+    });
   }
 
   logInfo(deps, '[voicebot-tgbot] voice ingress accepted', {

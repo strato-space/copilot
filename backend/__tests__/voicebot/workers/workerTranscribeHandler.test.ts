@@ -17,6 +17,8 @@ const getFileSha256FromPathMock = jest.fn(async () => 'sha256-transcribe-test');
 const splitAudioFileByDurationMock = jest.fn();
 const createTranscriptionMock = jest.fn();
 const getVoicebotQueuesMock = jest.fn();
+const detectGarbageTranscriptionMock = jest.fn();
+const insertSessionLogEventMock = jest.fn(async () => ({ _id: new ObjectId() }));
 const openAiCtorMock = jest.fn(() => ({
   audio: {
     transcriptions: {
@@ -39,6 +41,14 @@ jest.unstable_mockModule('../../../src/services/voicebotQueues.js', () => ({
   getVoicebotQueues: getVoicebotQueuesMock,
 }));
 
+jest.unstable_mockModule('../../../src/services/voicebot/transcriptionGarbageDetector.js', () => ({
+  detectGarbageTranscription: detectGarbageTranscriptionMock,
+}));
+
+jest.unstable_mockModule('../../../src/services/voicebotSessionLog.js', () => ({
+  insertSessionLogEvent: insertSessionLogEventMock,
+}));
+
 jest.unstable_mockModule('openai', () => ({
   default: openAiCtorMock,
 }));
@@ -53,6 +63,8 @@ describe('handleTranscribeJob', () => {
     splitAudioFileByDurationMock.mockReset();
     createTranscriptionMock.mockReset();
     getVoicebotQueuesMock.mockReset();
+    detectGarbageTranscriptionMock.mockReset();
+    insertSessionLogEventMock.mockReset();
     openAiCtorMock.mockClear();
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcd';
     delete process.env.TG_VOICE_BOT_TOKEN;
@@ -60,6 +72,18 @@ describe('handleTranscribeJob', () => {
     delete process.env.VOICE_WEB_INTERFACE_URL;
     getFileSha256FromPathMock.mockResolvedValue('sha256-transcribe-test');
     getVoicebotQueuesMock.mockReturnValue(null);
+    detectGarbageTranscriptionMock.mockResolvedValue({
+      checked_at: new Date('2026-03-25T12:00:00.000Z'),
+      detector_version: 'post_transcribe_garbage_v1',
+      model: 'gpt-5.4-nano',
+      skipped: false,
+      skip_reason: null,
+      is_garbage: false,
+      code: 'ok',
+      reason: 'valid_speech',
+      raw_output: '{"is_garbage":false}',
+    });
+    insertSessionLogEventMock.mockResolvedValue({ _id: new ObjectId() });
   });
 
   it('transcribes uploaded web audio and stores canonical transcription payload', async () => {
@@ -162,6 +186,102 @@ describe('handleTranscribeJob', () => {
         payload: expect.objectContaining({
           message_id: messageId.toString(),
         }),
+      })
+    );
+  });
+
+  it('drops downstream processors when post-transcribe detector marks chunk as garbage', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-garbage-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    detectGarbageTranscriptionMock.mockResolvedValueOnce({
+      checked_at: new Date('2026-03-25T12:00:00.000Z'),
+      detector_version: 'post_transcribe_garbage_v1',
+      model: 'gpt-5.4-nano',
+      skipped: false,
+      skip_reason: null,
+      is_garbage: true,
+      code: 'noise_or_garbage',
+      reason: 'repetitive_non_speech',
+      raw_output: '{"is_garbage":true}',
+    });
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      message_timestamp: 1770489126,
+      duration: 8,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValue({ text: 'some garbage output' });
+    getAudioDurationFromFileMock.mockResolvedValue(8);
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-1' }));
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'postprocessors-job-1' }));
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-1' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    const transcriptionUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.is_transcribed === true;
+    });
+    expect(transcriptionUpdateCall).toBeTruthy();
+    const updatePayload = transcriptionUpdateCall?.[1] as Record<string, unknown>;
+    const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    expect(setPayload.garbage_detected).toBe(true);
+    expect(setPayload['processors_data.categorization.is_processed']).toBe(true);
+    expect(setPayload['processors_data.categorization.skipped_reason']).toBe('garbage_detected');
+
+    expect(processorsQueueAdd).not.toHaveBeenCalled();
+    expect(postprocessorsQueueAdd).not.toHaveBeenCalled();
+    expect(eventsQueueAdd).toHaveBeenCalledTimes(1);
+    expect(insertSessionLogEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: 'transcription_garbage_detected',
       })
     );
   });
