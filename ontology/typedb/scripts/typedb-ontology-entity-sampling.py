@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,28 @@ INVENTORY_ROOT = TYPEDB_ROOT / "inventory_latest"
 DEFAULT_MAPPING_PATH = TYPEDB_ROOT / "mappings" / "mongodb_to_typedb_v1.yaml"
 DEFAULT_OUTPUT_PATH = INVENTORY_ROOT / "entity_sampling_latest.md"
 DEFAULT_JSON_OUTPUT_PATH = INVENTORY_ROOT / "entity_sampling_latest.json"
+
+
+def normalize_priority_value(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    compact = re.sub(r"[^A-Z0-9]+", "", value.upper())
+    if compact == "UNKNOWN":
+        return "UNKNOWN"
+    match = re.fullmatch(r"P?([1-7])", compact)
+    if not match:
+        return value.strip()
+    return f"P{match.group(1)}"
+
+
+def canonicalize_doc(value: Any, field_name: str | None = None) -> Any:
+    if isinstance(value, dict):
+        return {key: canonicalize_doc(item, key) for key, item in value.items()}
+    if isinstance(value, list):
+        return [canonicalize_doc(item, field_name) for item in value]
+    if field_name == "priority":
+        return normalize_priority_value(value)
+    return value
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,8 +131,8 @@ def select_toon_fields(collection_cfg: dict[str, Any], mode: str) -> list[str]:
 
 def trim_doc(doc: dict[str, Any], fields: list[str]) -> dict[str, Any]:
     if not fields:
-        return doc
-    return {field: doc.get(field) for field in fields}
+        return canonicalize_doc(doc)
+    return {field: canonicalize_doc(doc.get(field), field) for field in fields}
 
 
 def render_markdown_table(rows: list[dict[str, Any]]) -> list[str]:
@@ -162,11 +185,18 @@ def main() -> int:
         target_entity = cfg.get("target_entity")
         coll = db[coll_name]
         total = coll.count_documents({})
-        verify_docs = list(coll.find({}, sort=[("_id", -1)]).limit(args.verify_limit)) if args.mode in {"verify", "both"} else []
+        verify_docs = (
+            [canonicalize_doc(doc) for doc in list(coll.find({}, sort=[("_id", -1)]).limit(args.verify_limit))]
+            if args.mode in {"verify", "both"}
+            else []
+        )
         toon_fields = select_toon_fields(cfg, args.toon_columns)
         toon_docs = [trim_doc(doc, toon_fields) for doc in verify_docs[: args.toon_limit]] if args.mode == "both" else []
         if args.mode == "toon":
-            toon_docs = [trim_doc(doc, toon_fields) for doc in list(coll.find({}, sort=[("_id", -1)]).limit(args.toon_limit))]
+            toon_docs = [
+                trim_doc(canonicalize_doc(doc), toon_fields)
+                for doc in list(coll.find({}, sort=[("_id", -1)]).limit(args.toon_limit))
+            ]
             verify_docs = []
 
         md.append(f"## {coll_name} -> {target_entity}")

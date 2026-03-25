@@ -534,24 +534,17 @@ def normalize_task_status_key(value: Any) -> str:
     return TARGET_TASK_STATUS_KEY_BY_VALUE.get(raw, "UNKNOWN")
 
 
-TARGET_TASK_PRIORITY_BY_VALUE: dict[str, str] = {
-    "P1": "P1",
-    "🔥 P1": "P1",
-    "🔥 P1 ": "P1",
-    "P2": "P2",
-    "P3": "P3",
-    "P4": "P4",
-    "P5": "P5",
-    "P6": "P6",
-    "P7": "P7",
-}
-
-
 def normalize_task_priority(value: Any) -> str:
     raw = as_string(value)
     if not raw:
         return "UNKNOWN"
-    return TARGET_TASK_PRIORITY_BY_VALUE.get(raw, "UNKNOWN")
+    compact = re.sub(r"[^A-Z0-9]+", "", raw.upper())
+    if compact == "UNKNOWN":
+        return "UNKNOWN"
+    match = re.fullmatch(r"P?([1-7])", compact)
+    if not match:
+        return "UNKNOWN"
+    return f"P{match.group(1)}"
 
 
 def utf8_byte_length(value: str) -> int:

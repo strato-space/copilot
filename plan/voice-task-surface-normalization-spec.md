@@ -411,11 +411,11 @@ Fresh live re-check `2026-03-21` больше не показывает active `
 2. `Планирование, коммуникации по проекту, сбор обратной связи Ural БП` — project `Ural BortProvodnik` — performer `Valentin Gatitulin` — priority `P7`
 3. `Планирование, коммуникации по проекту, сбор обратной связи Metro Spot` — project `Metro Spot` — performer `Valentin Gatitulin` — priority `P7`
 4. `Планирование, коммуникации по проекту, сбор обратной связи Ural RMS` — project `Ural` — performer `Valentin Gatitulin` — priority `P7`
-5. `Отчетность Jira` — project `Andrey Q2 OKR` — performer `Андрей Сергеев` — priority `🔥 P1`
-6. `Постановка задач в CRM: Заведение и актуализация задач` — project `Andrey Q2 OKR` — performer `Андрей Сергеев` — priority `🔥 P1`
+5. `Отчетность Jira` — project `Andrey Q2 OKR` — performer `Андрей Сергеев` — priority `P1`
+6. `Постановка задач в CRM: Заведение и актуализация задач` — project `Andrey Q2 OKR` — performer `Андрей Сергеев` — priority `P1`
 7. `Metro: Исследование, стратегия, дизайн надзор.` — project `Metro Spot` — performer `Nikita Renye` — priority `P7`
 8. `Ural: Исследование, стратегия, дизайн надзор.` — project `Ural` — performer `Nikita Renye` — priority `P7`
-9. `Саппорт входящих запросов (быстрые генерация для команды)` — project `PMO` — performer `Марат Кабиров` — priority `🔥 P1`
+9. `Саппорт входящих запросов (быстрые генерация для команды)` — project `PMO` — performer `Марат Кабиров` — priority `P1`
 10. `Адаптация креативов под форматы` — project `RockStar` — performer `Ербол Тастанбеков` — priority `P3`
 
 ### 5.3 Минимальная аналитика
@@ -445,7 +445,7 @@ Fresh live re-check `2026-03-21` больше не показывает active `
 
 #### Распределение по приоритетам
 
-- `🔥 P1` = `3`
+- `P1` = `3`
 - `P3` = `1`
 - `P4` = `1`
 - `P7` = `5`

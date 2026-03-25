@@ -245,6 +245,85 @@ describe('handleCreateTasksFromChunksJob', () => {
     );
   });
 
+  it('returns and persists explicit no_task_decision when zero drafts are produced for 69c37a231f1bc03e330f9641', async () => {
+    const sessionId = new ObjectId('69c37a231f1bc03e330f9641');
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      session_name: 'Repro session',
+      project_id: 'proj-repro',
+      user_id: 'user-1',
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const eventsAdd = jest.fn(async () => ({ id: 'event-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: { add: eventsAdd },
+    });
+
+    const generatedTasks: Array<Record<string, unknown>> = [];
+    (generatedTasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] = {
+      summary_md_text: 'Summary exists',
+      scholastic_review_md: 'Review exists',
+      session_name: '',
+      project_id: 'proj-repro',
+      no_task_decision: {
+        code: 'discussion-only',
+        reason: 'No bounded owner-driven action extracted.',
+        evidence: ['Strategic discussion only'],
+      },
+    };
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [],
+      rows: [],
+      removedRowIds: [],
+    });
+
+    const result = await handleCreateTasksFromChunksJob({
+      session_id: sessionId.toHexString(),
+      chunks_to_process: [],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        session_id: sessionId.toHexString(),
+        tasks_count: 0,
+        skipped: true,
+        reason: 'no_tasks',
+        no_task_decision: expect.objectContaining({
+          code: 'discussion_only',
+          inferred: false,
+          source: 'agent_explicit',
+        }),
+      })
+    );
+
+    expect(sessionsUpdateOne).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.last_tasks_count': 0,
+          'processors_data.CREATE_TASKS.no_task_reason_code': 'discussion_only',
+          'processors_data.CREATE_TASKS.no_task_reason': 'No bounded owner-driven action extracted.',
+        }),
+      })
+    );
+    expect(eventsAdd).toHaveBeenCalledTimes(1);
+  });
+
   it('marks processor error when agent execution fails', async () => {
     const sessionId = new ObjectId();
     const sessionsFindOne = jest.fn(async () => ({

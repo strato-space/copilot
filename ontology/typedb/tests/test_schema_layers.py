@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -83,11 +84,18 @@ class SchemaLayersTest(unittest.TestCase):
         self.assertEqual(values, "# @toon values: Archive | Backlog")
 
     def test_render_toon_values_sorts_null_first_then_alphabetically(self) -> None:
+        flame = chr(0x1F525)
         values = build.render_toon_values(
             "priority",
-            {"priority": {"declared_domain": "dictionary", "max_values": 10, "values": ['"P3"', '"🔥 P1 "', "null", '"P2"', '"🔥 P1"']}},
+            {
+                "priority": {
+                    "declared_domain": "dictionary",
+                    "max_values": 10,
+                    "values": ['"P3"', json.dumps(f"{flame} P1 ", ensure_ascii=False), "null", '"P2"', json.dumps(f"{flame} P1", ensure_ascii=False)],
+                }
+            },
         )
-        self.assertEqual(values, "# @toon values: null | P2 | P3 | 🔥 P1")
+        self.assertEqual(values, "# @toon values: null | P1 | P2 | P3")
 
     def test_generated_schema_keeps_source_lines_and_separates_generated_values_with_blank_line(self) -> None:
         _, text = build.build_outputs(

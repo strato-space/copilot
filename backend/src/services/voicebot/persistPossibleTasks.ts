@@ -21,6 +21,7 @@ import {
   type OntologyMongoCollectionAdapter,
 } from '../ontology/ontologyCollectionAdapter.js';
 import { OntologyCardRegistryError } from '../ontology/ontologyCardRegistry.js';
+import { getLogger } from '../../utils/logger.js';
 
 export const POSSIBLE_TASKS_REFRESH_MODE_VALUES = ['full_recompute', 'incremental_refresh'] as const;
 export type PossibleTasksRefreshMode = (typeof POSSIBLE_TASKS_REFRESH_MODE_VALUES)[number];
@@ -79,6 +80,7 @@ const POSSIBLE_TASKS_REQUIRED_MONGO_FIELDS = ['row_id', 'id', 'task_status'] as 
 
 let possibleTaskAdapterPromise: Promise<OntologyMongoCollectionAdapter> | null = null;
 const LEGACY_COMPATIBLE_DRAFT_SOURCE_KINDS = new Set<string>(['voice_possible_task', 'voice_session']);
+const logger = getLogger();
 
 const getPossibleTaskOntologyAdapter = async (): Promise<OntologyMongoCollectionAdapter> => {
   if (!possibleTaskAdapterPromise) {
@@ -100,6 +102,29 @@ const hasPossibleTaskLineage = (document: Record<string, unknown>): boolean => {
   if (toTaskText(sourceData.session_id)) return true;
   const voiceSessions = Array.isArray(sourceData.voice_sessions) ? sourceData.voice_sessions : [];
   return voiceSessions.some((entry) => Boolean(entry) && typeof entry === 'object' && toTaskText((entry as Record<string, unknown>).session_id));
+};
+
+const normalizeLegacyDraftPriority = (value: unknown): string | null => {
+  const raw = toTaskText(value).toUpperCase();
+  if (!raw) return null;
+  const compact = raw.replace(/[^A-Z0-9]+/g, '');
+  if (!compact) return null;
+  if (compact === 'UNKNOWN') return 'UNKNOWN';
+  const match = compact.match(/^P?([1-7])$/);
+  if (!match?.[1]) return null;
+  return `P${match[1]}`;
+};
+
+const normalizeDraftMasterDocForReadCompatibility = (
+  document: Record<string, unknown>
+): Record<string, unknown> => {
+  if (!Object.prototype.hasOwnProperty.call(document, 'priority')) return document;
+  const normalizedPriority = normalizeLegacyDraftPriority(document.priority);
+  if (!normalizedPriority || normalizedPriority === document.priority) return document;
+  return {
+    ...document,
+    priority: normalizedPriority,
+  };
 };
 
 const assertPossibleTaskMongoDocumentShape = ({
@@ -200,15 +225,37 @@ export const validatePossibleTaskMasterDocs = async (
   mode: PossibleTaskValidationMode = 'read-legacy-compatible'
 ): Promise<Array<Record<string, unknown>>> => {
   const adapter = await getPossibleTaskOntologyAdapter();
+  const readCompatibilityMode = mode === 'read-legacy-compatible';
+  const validatedDocs: Array<Record<string, unknown>> = [];
+
   docs.forEach((doc, index) => {
-    assertPossibleTaskMongoDocumentShape({
-      document: doc,
-      adapter,
-      context: `${context}[${index}]`,
-      mode,
-    });
+    const normalizedDoc = readCompatibilityMode
+      ? normalizeDraftMasterDocForReadCompatibility(doc)
+      : doc;
+    try {
+      assertPossibleTaskMongoDocumentShape({
+        document: normalizedDoc,
+        adapter,
+        context: `${context}[${index}]`,
+        mode,
+      });
+      validatedDocs.push(normalizedDoc);
+    } catch (error) {
+      if (readCompatibilityMode && error instanceof OntologyCardRegistryError) {
+        logger.warn('[possible-tasks][ontology] read compatibility skipped malformed Draft master row', {
+          context,
+          index,
+          row_id: toTaskText(doc.row_id) || toTaskText(doc.id) || toIdString(doc._id),
+          priority: toTaskText(doc.priority),
+          error: error.message,
+        });
+        return;
+      }
+      throw error;
+    }
   });
-  return docs;
+
+  return validatedDocs;
 };
 
 const filterValidPossibleTaskMasterDocs = async (

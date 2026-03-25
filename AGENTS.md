@@ -188,7 +188,7 @@ Preferred engineering principles for this repo:
 - Preferred (PM2): `./scripts/pm2-backend.sh <dev|prod|local>` from repo root.
   - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` and `copilot-miniapp-backend-dev`, then starts agents via `agents/pm2-agents.sh` when available.
   - `local`: builds `app` with `build-local`, `miniapp` with `build-dev`, builds backend, starts `copilot-backend-local` and `copilot-miniapp-backend-local`, then starts agents when available.
-  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` and `copilot-miniapp-backend-prod`, then starts agents when available; when `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` already exist, the same script restarts those VoiceBot runtimes too.
+  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` and `copilot-miniapp-backend-prod`, then starts agents when available; the same script must also recreate or restart `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` so VoiceBot runtimes do not stay missing after deploy.
 - Validate environment files before startup: `./scripts/check-envs.sh`.
 - Frontend build (manual): `cd app && npm install && npm run build` (outputs to `app/dist`).
 - Miniapp build (manual): `cd miniapp && npm install && npm run build` (outputs to `miniapp/dist`).
@@ -230,6 +230,7 @@ Preferred engineering principles for this repo:
 
 ### Subagent Execution Policy
 - Default execution mode for this repo: track work in `bd` and prefer bounded swarm/subagent execution when practical; parent thread remains responsible for final integration and acceptance.
+- Default Codex subagent model for this repo is `gpt-5.3-codex`; only use a different model when there is an explicit task-specific reason, and state that reason in the parent packet.
 - Real implementation work should be delegated to subagents when practical; the parent thread should stay focused on discovery, coordination, integration, and final acceptance.
 - When a subagent is assigned a `bd` issue, pass and execute `bd show <id> --json` up front so the child thread reads the canonical ticket payload instead of relying on a paraphrased summary.
 - Parent-to-subagent issue packets must include the literal first-step command, not just a prose reminder. Required pattern:
@@ -239,6 +240,7 @@ Preferred engineering principles for this repo:
 - Parent prompts for subagents must be short, decision-complete, and scoped to one bounded write surface.
 - Targeted verification can be delegated to subagents, but final integration verification and production deploy/smoke remain the responsibility of the parent thread after all patches are merged.
 - Browser-based acceptance is part of the canonical verification flow for UI work; restart `mcp@chrome-devtools.service` before each live browser test cycle so MCP/CDP state is fresh.
+- Browser-based acceptance for layout work must include screenshot-level overlap checks; DOM/CSS assertions alone are not enough when footer/status widgets or task panes can visually collide.
 
 ### Code Organization
 - Frontend code lives in `app/src/`.

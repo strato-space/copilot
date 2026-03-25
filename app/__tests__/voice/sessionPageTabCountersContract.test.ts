@@ -53,4 +53,18 @@ describe('SessionPage tab counters and indicators contract', () => {
     expect(source).toContain('className="flex flex-col gap-4 flex-1 min-w-0"');
     expect(source).toContain('className="flex flex-1 min-w-0 flex-col gap-4"');
   });
+
+  it('keeps the status widget in normal page flow after the central workspace content', () => {
+    expect(source).toContain('<div className="voice-session-content">');
+    expect(source).toContain('<div className="voice-session-status-bottom">');
+    expect(source.indexOf('<div className="voice-session-content">')).toBeLessThan(
+      source.indexOf('<div className="voice-session-status-bottom">')
+    );
+
+    const footerBlock = css.match(/\.voice-session-status-bottom\s*\{[\s\S]*?\}/)?.[0] ?? '';
+    expect(footerBlock).toContain('width: 100%;');
+    expect(footerBlock).toContain('margin-top: 2px;');
+    expect(footerBlock).not.toContain('position: fixed;');
+    expect(footerBlock).not.toContain('position: sticky;');
+  });
 });

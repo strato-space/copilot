@@ -2,6 +2,10 @@
 
 ## 2026-03-25
 ### PROBLEM SOLVED
+- **14:15** Voice session status footer (`Все сообщения обработаны`) still behaved like a viewport-pinned strip on long tab content, so `Транскрипция`, `Категоризация`, and especially `Задачи` could visually collide with the footer instead of letting the workspace grow naturally.
+- **14:15** Historical and freshly generated task priorities could still drift as decorated values like `🔥 P1`, which broke read/write validation symmetry across Voice Drafts, backend persistence, and ontology tooling.
+- **14:15** Production deploy recovery still depended on pre-existing PM2 VoiceBot entries; if `copilot-voicebot-workers-prod` disappeared entirely, deploys could leave transcription/runtime queues dead instead of recreating the worker.
+- **14:15** Composite `CREATE_TASKS` output still drifted into English review/summary/task prose on Russian-dominant sessions, even though operators expect session artifacts to stay in the session language with Russian as the mixed-language fallback.
 - **05:08** Voice Draft desktop layout still wasted vertical space: the detail card depended on nested scroll, the task list and right panel were not height-aligned, and operators had to fight page-plus-widget double scroll to read one task.
 - **05:08** The Voice sessions list at `/voice?page=1&pageSize=100` had regressed into a multi-second load because frontend hydration retriggered the list fetch while backend `sessions/list` still did oversized joins plus per-session message/task work.
 - **04:15** Shared selector behavior still drifted between Voice and OperOps, so project and task-type controls could collapse into flat option lists, leak raw ids, or require different click paths depending on the surface.
@@ -13,6 +17,10 @@
 - **04:27** The migrated Draft slice still stopped at field-coverage/reversible-mapping checks, so `automation_tasks` could carry scalar value/type/domain drift inside the supposedly strict ontology-backed path.
 
 ### FEATURE IMPLEMENTED
+- **14:15** Put the Voice footer/status widget back into normal document flow, so tab content owns the page height and the footer renders after the workspace instead of overlaying it.
+- **14:15** Reduced canonical priority storage to text-only `P1..P7` across frontend, backend, and ontology paths; urgent flame badges are now rendered visually in the UI only.
+- **14:15** Hardened the production PM2 bootstrap so deploy can recreate missing VoiceBot worker/bot runtimes instead of assuming they already exist.
+- **14:15** Added session-language preference to the `create_tasks` analyzer contract and a Russian language-repair pass for composite summary/review/task artifacts.
 - **05:08** Landed a taller matched-height Voice Draft workspace: the list and detail panes now share the same desktop shell, the right card is readable without nested forced-height scrolling, and the overall `/voice/session/:id` tasks area no longer relies on accidental double scroll.
 - **05:08** Accelerated the Voice sessions list path by removing duplicate frontend fetches and moving backend task/message counting to bounded batch reads, preserving the existing list contract while cutting the main latency sources.
 - **04:15** Unified project/task-type selector parity onto shared option-source helpers and shared wrappers, keeping hierarchy/labels consistent between Voice and OperOps and making first-click inline editing deterministic again.
@@ -24,6 +32,10 @@
 - **04:27** Extended the Draft `automation_tasks` slice with card-derived scalar validation: the registry now carries attribute value types plus owner-level `@values(...)`, the adapter can validate selected Mongo fields against those card rules, and the migrated Voice Draft path now enforces strict Draft-master invariants while leaving structured compatibility payloads explicitly deferred.
 
 ### CHANGES
+- **14:15** Updated `app/src/{index.css,components/voice/{Transcription,Categorization,PossibleTasks}.tsx}` and focused Voice layout contracts so tab panes grow in normal page flow, the footer is no longer viewport-fixed, and live browser acceptance now includes screenshot overlap checks for the changed surfaces.
+- **14:15** Updated `app/src/constants/crm.ts`, `backend/src/{constants.ts,api/routes/voicebot/possibleTasksMasterModel.ts,services/voicebot/persistPossibleTasks.ts}`, ontology schema/scripts/tests, and related fixtures so persisted priorities are canonical `P1..P7` values only while the frontend renders the flame accent as presentation.
+- **14:15** Updated `scripts/pm2-backend.sh` plus `backend/__tests__/scripts/pm2BackendProdBootstrap.test.ts` so `./scripts/pm2-backend.sh prod` recreates missing `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` runtimes instead of silently skipping them.
+- **14:15** Updated `agents/agent-cards/create_tasks.md`, `backend/src/services/voicebot/createTasksAgent.ts`, `backend/src/services/voicebot/{createTasksCompositeSessionState,persistPossibleTasks}.ts`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts`, and focused route/worker tests so composite analyzer output carries `preferred_output_language`, surfaces explicit `no_task_decision`, and repairs Russian session artifacts when non-allowlisted English prose leaks through.
 - **05:08** Updated `AGENTS.md` and repo docs so subagent issue packets now require the literal first-step command `bd show <id> --json`, keeping child execution bound to the canonical ticket payload instead of parent paraphrase.
 - **05:08** Updated `app/src/{index.css,pages/voice/SessionPage.tsx,components/voice/PossibleTasks.tsx}` and focused Voice task-surface tests so the Draft master/detail workspace uses `100dvh` shell flow, aligned pane heights, and no forced nested detail scroller on desktop.
 - **05:08** Updated `app/src/{pages/voice/SessionsListPage.tsx,store/voiceBotStore.ts,types/voice.ts}`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/constants.ts`, and focused route/contract tests so `/api/voicebot/sessions/list` no longer refetches on hydration, store ordering is canonical, `message_count` and task counters are batched, and `automation_voice_bot_messages.session_id` is indexed for the list route.

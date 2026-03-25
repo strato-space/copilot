@@ -253,7 +253,7 @@ attribute performer, value string;
 attribute legacy_finance_income_type_ref, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute priority, value string;
-# @toon values: null |  | P1 | P2 | P3 | P4 | P5 | P6 | P7 | 🔥 P1 | 🔥 P2 | 🔥 P3 | 🔥 P4
+# @toon values: null |  | P1 | P2 | P3 | P4 | P5 | P6 | P7
 
 attribute start_date, value string;
 attribute end_date, value string;

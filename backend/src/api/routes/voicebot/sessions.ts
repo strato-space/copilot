@@ -101,8 +101,11 @@ import {
 import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
 import {
     applyCreateTasksCompositeSessionPatch,
+    extractCreateTasksLastTasksCountFromSession,
+    extractCreateTasksNoTaskDecisionFromSession,
     extractCreateTasksCompositeMeta,
     markCreateTasksProcessorSuccess,
+    resolveCreateTasksNoTaskDecisionOutcome,
     resolveCreateTasksCompositeSessionContext,
 } from '../../../services/voicebot/createTasksCompositeSessionState.js';
 import { applyCreateTasksCompositeCommentSideEffects } from '../../../services/voicebot/createTasksCompositeCommentSideEffects.js';
@@ -5342,6 +5345,13 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             dedupedCodexEnrichmentNotes = commentSideEffects.dedupedCodexEnrichmentNotes;
             unresolvedEnrichmentLookupIds = commentSideEffects.unresolvedEnrichmentLookupIds;
         }
+        const noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
+            decision: createTasksCompositeMeta?.no_task_decision,
+            extractedTaskCount: generatedTasks.length,
+            persistedTaskCount: persisted.items.length,
+            hasSummary: summarySaved,
+            hasReview: reviewSaved,
+        });
 
         logger.info('[voicebot.sessions] generate_possible_tasks_completed', {
             session_id: sessionId,
@@ -5364,12 +5374,15 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
                 typeof parsedBody.data.refresh_clicked_at_ms === 'number'
                     ? Date.now() - parsedBody.data.refresh_clicked_at_ms
                     : null,
+            no_task_reason_code: noTaskDecision?.code || null,
         });
 
         await markCreateTasksProcessorSuccess({
             db,
             sessionFilter: { _id: new ObjectId(sessionId) },
             processorKey: 'CREATE_TASKS',
+            tasksCount: persisted.items.length,
+            noTaskDecision,
         });
 
         const refreshHintArgs: Parameters<typeof emitSessionTaskflowRefreshHint>[0] = {
@@ -5406,6 +5419,7 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             deduped_enrichment_comments: dedupedEnrichmentComments,
             inserted_codex_enrichment_notes: insertedCodexEnrichmentNotes,
             deduped_codex_enrichment_notes: dedupedCodexEnrichmentNotes,
+            ...(noTaskDecision ? { no_task_decision: noTaskDecision } : {}),
             ...(unresolvedEnrichmentLookupIds.length > 0
                 ? { unresolved_enrichment_lookup_ids: unresolvedEnrichmentLookupIds }
                 : {}),
@@ -6037,6 +6051,22 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
             const items = collapseVisibleDraftRows(draftDocs)
                 .map((item) => normalizeVoicePossibleTaskDocForApi(item))
                 .filter((item): item is Record<string, unknown> => item !== null);
+            const storedNoTaskDecision = extractCreateTasksNoTaskDecisionFromSession(
+                session as Record<string, unknown>
+            );
+            const processorTaskCount = extractCreateTasksLastTasksCountFromSession(
+                session as Record<string, unknown>
+            );
+            const noTaskDecision =
+                storedNoTaskDecision || processorTaskCount !== null
+                    ? resolveCreateTasksNoTaskDecisionOutcome({
+                          decision: storedNoTaskDecision,
+                          extractedTaskCount: processorTaskCount ?? 0,
+                          persistedTaskCount: items.length,
+                          hasSummary: Boolean((session as Record<string, unknown>).summary_md_text),
+                          hasReview: Boolean((session as Record<string, unknown>).review_md_text),
+                      })
+                    : null;
 
             return res.status(200).json({
                 success: true,
@@ -6045,6 +6075,7 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
                 status_keys: ['DRAFT_10'],
                 items,
                 count: items.length,
+                ...(noTaskDecision ? { no_task_decision: noTaskDecision } : {}),
             });
         }
 

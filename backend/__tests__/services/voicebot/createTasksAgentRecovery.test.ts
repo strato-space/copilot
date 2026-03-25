@@ -5,6 +5,7 @@ const initializeSessionMock = jest.fn();
 const callToolMock = jest.fn();
 const closeSessionMock = jest.fn();
 const quotaRecoveryMock = jest.fn();
+const openAiResponsesCreateMock = jest.fn();
 
 jest.unstable_mockModule('../../../src/services/mcp/proxyClient.js', () => ({
   MCPProxyClient: jest.fn().mockImplementation(() => ({
@@ -22,6 +23,14 @@ jest.unstable_mockModule('../../../src/services/voicebot/agentsRuntimeRecovery.j
   },
 }));
 
+jest.unstable_mockModule('openai', () => ({
+  default: jest.fn().mockImplementation(() => ({
+    responses: {
+      create: openAiResponsesCreateMock,
+    },
+  })),
+}));
+
 const { runCreateTasksAgent } = await import('../../../src/services/voicebot/createTasksAgent.js');
 
 describe('runCreateTasksAgent quota fallback', () => {
@@ -30,6 +39,15 @@ describe('runCreateTasksAgent quota fallback', () => {
     callToolMock.mockReset();
     closeSessionMock.mockReset();
     quotaRecoveryMock.mockReset();
+    openAiResponsesCreateMock.mockReset();
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    openAiResponsesCreateMock.mockImplementation(async (request?: { input?: string }) => {
+      const raw = String(request?.input || '').trim();
+      const parsed = raw ? JSON.parse(raw) as { composite?: unknown } : {};
+      return {
+        output_text: JSON.stringify(parsed.composite || {}),
+      };
+    });
   });
 
   it('restarts agent runtime and retries once after quota-class failure', async () => {
@@ -212,6 +230,99 @@ describe('runCreateTasksAgent quota fallback', () => {
     );
   });
 
+  it('propagates explicit no-task decisions from composite payloads when task_draft is empty', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'no-task-explicit-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Summary exists',
+              scholastic_review_md: 'Review exists',
+              task_draft: [],
+              enrich_ready_task_comments: [],
+              no_task_decision: {
+                code: 'discussion-only',
+                reason: 'Conversation stayed at strategic framing level without actionable owners.',
+                evidence: ['No clear executor assignment', 'No bounded deliverable in transcript'],
+              },
+              session_name: '',
+              project_id: 'proj-no-task',
+            }),
+          },
+        ],
+      },
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-no-task-explicit',
+      projectId: 'proj-no-task',
+    });
+    const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
+      | Record<string, unknown>
+      | undefined;
+    const noTaskDecision = compositeMeta?.no_task_decision as Record<string, unknown> | undefined;
+
+    expect(tasks).toEqual([]);
+    expect(noTaskDecision).toEqual(
+      expect.objectContaining({
+        code: 'discussion_only',
+        reason: 'Conversation stayed at strategic framing level without actionable owners.',
+        inferred: false,
+        source: 'agent_explicit',
+        evidence: ['No clear executor assignment', 'No bounded deliverable in transcript'],
+      })
+    );
+  });
+
+  it('infers a machine-checkable no-task decision for 69c37a231f1bc03e330f9641-style zero-task responses', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'no-task-inferred-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Visible summary text',
+              scholastic_review_md: 'Visible review text',
+              task_draft: [],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-repro',
+            }),
+          },
+        ],
+      },
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: '69c37a231f1bc03e330f9641',
+      projectId: 'proj-repro',
+    });
+    const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
+      | Record<string, unknown>
+      | undefined;
+    const noTaskDecision = compositeMeta?.no_task_decision as Record<string, unknown> | undefined;
+    const evidence = Array.isArray(noTaskDecision?.evidence) ? (noTaskDecision?.evidence as string[]) : [];
+
+    expect(tasks).toEqual([]);
+    expect(noTaskDecision).toEqual(
+      expect.objectContaining({
+        code: 'no_task_reason_missing',
+        inferred: true,
+        source: 'agent_inferred',
+      })
+    );
+    expect(evidence).toEqual(
+      expect.arrayContaining(['has_summary_md_text=true', 'has_scholastic_review_md=true'])
+    );
+  });
+
   it('assigns deterministic content-based locators when the model omits row identifiers', async () => {
     initializeSessionMock.mockResolvedValue({ sessionId: 'anonymous-session' });
     closeSessionMock.mockResolvedValue(undefined);
@@ -350,9 +461,183 @@ describe('runCreateTasksAgent quota fallback', () => {
       anchor_to: lastMessageAt.toISOString(),
       source: 'message_bounds',
     });
+    expect(envelope.preferred_output_language).toBe('ru');
   });
 
-  it('retries with reduced raw_text context after wrapped create_tasks_agent_error overflow', async () => {
+  it('adds preferred_output_language=en to raw_text envelopes when the source text is english-only', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'language-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'English summary',
+              scholastic_review_md: 'English review',
+              task_draft: [],
+              enrich_ready_task_comments: [],
+              session_name: 'English only planning discussion',
+              project_id: '',
+            }),
+          },
+        ],
+      },
+    });
+
+    await runCreateTasksAgent({
+      sessionId: 'session-english',
+      rawText: 'Prepare the outreach deck and confirm the target list before Friday.',
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    const envelopeRaw = callToolMock.mock.calls[0]?.[1]?.message as string;
+    const envelope = JSON.parse(envelopeRaw) as Record<string, unknown>;
+    expect(envelope.mode).toBe('raw_text');
+    expect(envelope.preferred_output_language).toBe('en');
+    expect(openAiResponsesCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('prefers russian when session-level summaries are english but message samples contain cyrillic object-id linked transcript', async () => {
+    const sessionId = new ObjectId().toHexString();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: new ObjectId(sessionId),
+      summary_md_text: 'English summary already persisted',
+      review_md_text: 'English review already persisted',
+      session_name: 'English session title',
+    }));
+    const messagesFind = jest.fn((query: Record<string, unknown>) => {
+      const values = Array.isArray((query.session_id as { $in?: unknown[] })?.$in)
+        ? ((query.session_id as { $in?: unknown[] }).$in as unknown[])
+        : [];
+      expect(values).toEqual(
+        expect.arrayContaining([sessionId, expect.any(ObjectId)])
+      );
+      return {
+        sort: () => ({
+          limit: () => ({
+            toArray: async () => [
+              {
+                transcription_text: 'Нужно пересобрать оффер и провести разговор с клиентом.',
+              },
+            ],
+          }),
+        }),
+      };
+    });
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === 'automation_voice_bot_sessions') {
+          return { findOne: sessionFindOne };
+        }
+        if (name === 'automation_voice_bot_messages') {
+          return { find: messagesFind, findOne: jest.fn(async () => null) };
+        }
+        return { findOne: jest.fn(async () => null), find: jest.fn() };
+      },
+    };
+
+    initializeSessionMock.mockResolvedValue({ sessionId: 'language-from-message-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: '',
+              scholastic_review_md: '',
+              task_draft: [],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-msg-lang',
+            }),
+          },
+        ],
+      },
+    });
+
+    await runCreateTasksAgent({
+      sessionId,
+      projectId: 'proj-msg-lang',
+      db: dbStub as never,
+    });
+
+    const envelopeRaw = callToolMock.mock.calls[0]?.[1]?.message as string;
+    const envelope = JSON.parse(envelopeRaw) as Record<string, unknown>;
+    expect(envelope.preferred_output_language).toBe('ru');
+  });
+
+  it('repairs mixed-language russian review artifacts before returning composite metadata', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'repair-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Русский summary без проблем.',
+              scholastic_review_md:
+                '## Terms\n- `пересмотр цены` — клиентская renegotiation условий.\n\n## Logic\n- Нужен lead-pipeline и staffing review без лишней воды.',
+              task_draft: [
+                {
+                  id: 'TASK-REPAIR-1',
+                  row_id: 'TASK-REPAIR-1',
+                  name: 'Подготовить разговор с DBI',
+                  description: '## description\nСобрать позицию и тезисы.\n\n## object_locators\nНе указано',
+                  priority: 'P2',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: 'DBI: цены и новый заход',
+              project_id: 'proj-repair',
+            }),
+          },
+        ],
+      },
+    });
+    openAiResponsesCreateMock.mockResolvedValue({
+      output_text: JSON.stringify({
+        summary_md_text: 'Русский summary без проблем.',
+        scholastic_review_md:
+          '## Термины\n- `пересмотр цены` — клиентский пересмотр условий.\n\n## Логика\n- Нужен новый контур лидогенерации и пересмотр ролевой конфигурации без лишней воды.',
+        task_draft: [
+          {
+            id: 'TASK-REPAIR-1',
+            row_id: 'TASK-REPAIR-1',
+            name: 'Подготовить разговор с DBI',
+            description: '## description\nСобрать позицию и тезисы.\n\n## object_locators\nНе указано',
+            priority: 'P2',
+          },
+        ],
+        enrich_ready_task_comments: [],
+        session_name: 'DBI: цены и новый заход',
+        project_id: 'proj-repair',
+      }),
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'repair-session',
+      projectId: 'proj-repair',
+    });
+
+    const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
+      | Record<string, unknown>
+      | undefined;
+
+    expect(openAiResponsesCreateMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(openAiResponsesCreateMock.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(String(compositeMeta?.scholastic_review_md || '')).toContain('## Термины');
+    expect(String(compositeMeta?.scholastic_review_md || '')).not.toContain('## Terms');
+    expect(String(compositeMeta?.scholastic_review_md || '')).not.toContain('renegotiation');
+    expect(String(compositeMeta?.scholastic_review_md || '')).not.toContain('lead-pipeline');
+  });
+
+  it('retries once with reduced raw_text context after string_above_max_length overflow and strips top-level session_id', async () => {
     const sessionId = new ObjectId().toHexString();
     const sessionFindOne = jest.fn(async () => ({
       _id: new ObjectId(sessionId),
@@ -401,7 +686,7 @@ describe('runCreateTasksAgent quota fallback', () => {
           content: [
             {
               type: 'text',
-              text: "I hit an internal error while calling the model: codexresponses request failed for model 'gpt-5.4' (code: context_length_exceeded): Your input exceeds the context window of this model.",
+              text: "I hit an internal error while calling the model: Invalid 'input[31].output': string_above_max_length",
             },
           ],
         },
@@ -440,8 +725,12 @@ describe('runCreateTasksAgent quota fallback', () => {
     });
 
     expect(callToolMock).toHaveBeenCalledTimes(2);
+    const firstRequest = callToolMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    const secondRequest = callToolMock.mock.calls[1]?.[1] as Record<string, unknown>;
     const firstEnvelope = JSON.parse(callToolMock.mock.calls[0]?.[1]?.message as string) as Record<string, unknown>;
     const secondEnvelope = JSON.parse(callToolMock.mock.calls[1]?.[1]?.message as string) as Record<string, unknown>;
+    expect(firstRequest.session_id).toBe(sessionId);
+    expect(secondRequest).not.toHaveProperty('session_id');
     expect(firstEnvelope.mode).toBe('session_id');
     expect(secondEnvelope.mode).toBe('raw_text');
     expect(String(secondEnvelope.raw_text || '')).toContain('Reduced create_tasks context for session');
@@ -452,6 +741,83 @@ describe('runCreateTasksAgent quota fallback', () => {
         project_id: 'proj-overflow',
       }),
     ]);
+  });
+
+  it('does not perform more than one reduced-context retry when string_above_max_length repeats', async () => {
+    const sessionId = new ObjectId().toHexString();
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === 'automation_voice_bot_sessions') {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: new ObjectId(sessionId),
+              session_name: 'Repeated Overflow Session',
+              summary_md_text: 'Нужен компактный fallback.',
+            })),
+          };
+        }
+        if (name === 'automation_voice_bot_messages') {
+          return {
+            findOne: jest.fn(async () => ({
+              message_timestamp: Math.floor(new Date('2026-03-23T12:05:00.000Z').getTime() / 1000),
+              created_at: new Date('2026-03-23T12:05:00.000Z'),
+            })),
+            find: jest.fn(() => ({
+              sort: () => ({
+                limit: () => ({
+                  toArray: async () => [
+                    {
+                      message_timestamp: Math.floor(new Date('2026-03-23T12:02:00.000Z').getTime() / 1000),
+                      text: 'Нужен единственный deterministic retry.',
+                    },
+                  ],
+                }),
+              }),
+            })),
+          };
+        }
+        return { findOne: jest.fn(async () => null), find: jest.fn() };
+      },
+    };
+
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'repeat-overflow-session' })
+      .mockResolvedValueOnce({ sessionId: 'repeat-overflow-reduced-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: "I hit an internal error while calling the model: Invalid 'input[31].output': string_above_max_length",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: "I hit an internal error while calling the model: Invalid 'input[31].output': string_above_max_length",
+            },
+          ],
+        },
+      });
+
+    await expect(
+      runCreateTasksAgent({
+        sessionId,
+        db: dbStub as never,
+      })
+    ).rejects.toThrow(/string_above_max_length/i);
+
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    const secondRequest = callToolMock.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(secondRequest).not.toHaveProperty('session_id');
   });
 
   it('extracts nested context overflow from unsuccessful MCP results and retries with reduced context', async () => {

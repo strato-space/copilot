@@ -1,7 +1,7 @@
 # Dictionary-like Domain Inventory
 
-- Generated: 2026-03-25T01:00:55.300972+00:00
-- Source mapping: `/tmp/copilot-feat-ontology-persistence-v1/ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
+- Generated: 2026-03-25T09:41:13.329013+00:00
+- Source mapping: `/home/strato-space/copilot/ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
 
 This report inventories mapped fields that behave like dictionary/enum-like domains and prints distinct values from MongoDB.
 
@@ -44,11 +44,11 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
 - `role_name` <- `role`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
-  - value: `"PERFORMER"` count=`9`
+  - value: `"PERFORMER"` count=`10`
   - value: `"SUPER_ADMIN"` count=`4`
   - value: `"MANAGER"` count=`2`
-  - value: `"VIEWER"` count=`2`
   - value: `null` count=`1`
+  - value: `"VIEWER"` count=`1`
 - `salary_currency` <- `salary_currency`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
@@ -68,31 +68,26 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `"Archive"` count=`3444`
-  - value: `"Draft"` count=`2085`
+  - value: `"Draft"` count=`2100`
   - value: `"Done"` count=`369`
   - value: `"Ready"` count=`133`
   - value: `"Progress 10"` count=`7`
 - `priority` <- `priority`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
-  - value: `"P2"` count=`1766`
-  - value: `"P3"` count=`1460`
-  - value: `"P1"` count=`1026`
+  - value: `"P2"` count=`1781`
+  - value: `"P3"` count=`1463`
+  - value: `"P1"` count=`1293`
   - value: `"P7"` count=`575`
   - value: `"P5"` count=`531`
-  - value: `"🔥 P1"` count=`253`
-  - value: `"P4"` count=`212`
+  - value: `"P4"` count=`213`
   - value: `""` count=`87`
   - value: `null` count=`85`
   - value: `"P6"` count=`25`
-  - value: `"🔥 P2"` count=`9`
-  - value: `"🔥 P1 "` count=`5`
-  - value: `"🔥 P3"` count=`3`
-  - value: `"🔥 P4"` count=`1`
 - `task_type_name` <- `task_type`
   - selection: kernel-marked, heuristic
   - classification: open or mixed domain
-  - value: `null` count=`4434`
+  - value: `null` count=`4449`
   - value: `"67f846e0196efb66113f104c"` count=`418`
   - value: `"67f846e0196efb66113f104e"` count=`301`
   - value: `"67333b3a482852a4fb316e4d"` count=`95`
@@ -126,48 +121,48 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`3922`
-  - value: `"TASK"` count=`2116`
+  - value: `"TASK"` count=`2131`
 - `source_kind` <- `source_kind`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`3921`
-  - value: `"voice_possible_task"` count=`2078`
+  - value: `"voice_possible_task"` count=`2093`
   - value: `"voice_session"` count=`39`
 - `dialogue_tag` <- `dialogue_tag`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`3902`
-  - value: `"voice"` count=`2024`
+  - value: `"voice"` count=`2039`
   - value: `"call"` count=`68`
   - value: `"doc"` count=`31`
   - value: `"chat"` count=`13`
 - `issue_type` <- `issue_type`
   - selection: kernel-marked, heuristic
   - classification: null-only / no live domain
-  - value: `null` count=`6038`
+  - value: `null` count=`6053`
 
 ## automation_voice_bot_sessions -> voice_session
 - `activity_state` <- `is_active`
   - selection: kernel-marked, heuristic
   - classification: boolean-derived state domain
-  - value: `false` count=`1910`
+  - value: `false` count=`1916`
   - value: `true` count=`173`
 - `source_type` <- `session_source`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`1827`
-  - value: `"telegram"` count=`128`
-  - value: `"web"` count=`128`
+  - value: `"web"` count=`133`
+  - value: `"telegram"` count=`129`
 - `session_type` <- `session_type`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
-  - value: `"multiprompt_voice_session"` count=`2083`
+  - value: `"multiprompt_voice_session"` count=`2089`
 - `access_level` <- `access_level`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`1294`
-  - value: `"public"` count=`584`
-  - value: `"private"` count=`154`
+  - value: `"public"` count=`587`
+  - value: `"private"` count=`157`
   - value: `"restricted"` count=`51`
 
 ## automation_voice_bot_messages -> voice_message
@@ -175,18 +170,18 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`7477`
-  - value: `"web"` count=`5511`
-  - value: `"telegram"` count=`436`
+  - value: `"web"` count=`5556`
+  - value: `"telegram"` count=`438`
 - `session_type` <- `session_type`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
-  - value: `"multiprompt_voice_session"` count=`11279`
-  - value: `null` count=`2145`
+  - value: `"multiprompt_voice_session"` count=`11281`
+  - value: `null` count=`2190`
 - `message_type` <- `message_type`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`10706`
-  - value: `"voice"` count=`2644`
+  - value: `"voice"` count=`2691`
   - value: `"text"` count=`39`
   - value: `"image"` count=`26`
   - value: `"screenshot"` count=`9`
@@ -194,8 +189,8 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`10912`
-  - value: `"audio/webm"` count=`2095`
-  - value: `"application/octet-stream"` count=`392`
+  - value: `"audio/webm"` count=`2140`
+  - value: `"application/octet-stream"` count=`394`
   - value: `"audio/ogg"` count=`23`
   - value: `"audio/x-m4a"` count=`2`
 
@@ -203,17 +198,17 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
 - `event_status` <- `status`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
-  - value: `"done"` count=`2663`
-  - value: `"error"` count=`141`
-  - value: `"queued"` count=`56`
-  - value: `"pending"` count=`38`
+  - value: `"done"` count=`2697`
+  - value: `"error"` count=`153`
+  - value: `"queued"` count=`58`
+  - value: `"pending"` count=`39`
 - `event_group` <- `event_group`
   - selection: kernel-marked, heuristic
   - classification: likely enumerated/string-dictionary domain
-  - value: `"notify_webhook"` count=`2120`
-  - value: `"transcript"` count=`510`
+  - value: `"notify_webhook"` count=`2154`
+  - value: `"transcript"` count=`521`
   - value: `"categorization"` count=`144`
-  - value: `"summary"` count=`124`
+  - value: `"summary"` count=`128`
 
 ## automation_voice_bot_session_merge_log -> voice_session_merge_log
 - `operation_type` <- `operation_type`

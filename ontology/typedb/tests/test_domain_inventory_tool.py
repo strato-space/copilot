@@ -37,6 +37,13 @@ class DomainInventoryToolTest(unittest.TestCase):
         self.assertTrue(selected_status)
         self.assertFalse(selected_last_status)
 
+    def test_normalize_priority_value_reduces_decorated_labels_to_canonical_text(self) -> None:
+        flame = chr(0x1F525)
+        self.assertEqual(tool.normalize_priority_value(f"{flame} P1"), "P1")
+        self.assertEqual(tool.normalize_priority_value(f"{flame} P4 "), "P4")
+        self.assertEqual(tool.normalize_priority_value("P7"), "P7")
+        self.assertEqual(tool.normalize_priority_value("custom"), "custom")
+
 
 if __name__ == "__main__":
     unittest.main()

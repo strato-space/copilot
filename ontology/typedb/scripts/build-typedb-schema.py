@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -62,6 +63,16 @@ def load_domain_inventory(path: Path) -> dict[str, dict] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def normalize_priority_display(value: str) -> str:
+    compact = re.sub(r"[^A-Z0-9]+", "", value.upper())
+    if compact == "UNKNOWN":
+        return "UNKNOWN"
+    match = re.fullmatch(r"P?([1-7])", compact)
+    if not match:
+        return value
+    return f"P{match.group(1)}"
+
+
 def render_toon_values(attr: str | dict, inventory: dict[str, dict] | None) -> str | None:
     if isinstance(attr, dict):
         attr = str(attr.get("id"))
@@ -84,6 +95,8 @@ def render_toon_values(attr: str | dict, inventory: dict[str, dict] | None) -> s
     seen: set[str] = set()
     for value in values:
         display = str(value).strip('"').strip()
+        if attr == "priority":
+            display = normalize_priority_display(display)
         if display in seen:
             continue
         seen.add(display)

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ObjectId } from 'mongodb';
-import { TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
+import { NOTION_TICKET_PRIORITIES, TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
 import { normalizeDateField, toIdString, toTaskReferenceList, toTaskText } from './sessionsSharedUtils.js';
 import { buildCanonicalTaskSourceRef } from '../../../services/taskSourceRef.js';
 
@@ -48,6 +48,23 @@ const normalizeLocatorText = (value: unknown): string =>
     .replace(/[^a-z0-9а-я]+/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const CANONICAL_TASK_PRIORITY_SET = new Set<string>(NOTION_TICKET_PRIORITIES);
+
+const normalizeVoicePossibleTaskPriority = (value: unknown): string => {
+  const raw = toTaskText(value).toUpperCase();
+  if (!raw) return 'P3';
+
+  const compact = raw.replace(/[^A-Z0-9]+/g, '');
+  if (CANONICAL_TASK_PRIORITY_SET.has(compact)) return compact;
+
+  const rankMatch = compact.match(/^P?([1-7])$/);
+  if (rankMatch?.[1]) return `P${rankMatch[1]}`;
+
+  if (compact === 'UNKNOWN') return 'UNKNOWN';
+
+  return 'P3';
+};
 
 export const normalizeVoicePossibleTaskLocatorKey = (value: unknown): string => {
   const normalized = toTaskText(value);
@@ -407,7 +424,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
     name: toTaskText(rawTask.name) || `Задача ${index + 1}`,
     project: toTaskText(rawTask.project),
     description: toTaskText(rawTask.description),
-    priority: toTaskText(rawTask.priority) || 'P3',
+    priority: normalizeVoicePossibleTaskPriority(rawTask.priority),
     priority_reason: toTaskText(rawTask.priority_reason),
     performer_id: toTaskText(rawTask.performer_id),
     project_id: projectId,

@@ -38,6 +38,7 @@ jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js
   return {
     POSSIBLE_TASKS_REFRESH_MODE_VALUES: ['full_recompute', 'incremental_refresh'],
     persistPossibleTasksForSession: persistPossibleTasksForSessionMock,
+    validatePossibleTaskMasterDocs: jest.fn(async (docs: Array<Record<string, unknown>>) => docs),
   };
 });
 
@@ -279,5 +280,57 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     );
     expect(typeof (completionCall?.[1] as Record<string, unknown>).e2e_from_click_ms).toBe('number');
     expect(((completionCall?.[1] as Record<string, unknown>).e2e_from_click_ms as number)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns inferred no_task_decision when create_tasks yields zero persisted drafts without an explicit reason', async () => {
+    const fixture = buildFixture();
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+
+    const generatedTasks: Array<Record<string, unknown>> = [];
+    Object.defineProperty(generatedTasks, '__create_tasks_composite_meta', {
+      value: {
+        summary_md_text: 'Есть summary',
+        scholastic_review_md: 'Есть review',
+        task_draft: [],
+        enrich_ready_task_comments: [],
+        session_name: '',
+        project_id: fixture.projectId.toHexString(),
+      },
+      enumerable: false,
+      configurable: true,
+    });
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [],
+    });
+
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/generate_possible_tasks')
+      .send({ session_id: fixture.sessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.generated_count).toBe(0);
+    expect(response.body.saved_count).toBe(0);
+    expect(response.body.no_task_decision).toEqual(
+      expect.objectContaining({
+        code: 'no_task_reason_missing',
+        inferred: true,
+        source: 'agent_inferred',
+      })
+    );
+
+    const sessionsCollection = fixture.dbStub.collection(VOICEBOT_COLLECTIONS.SESSIONS) as StubCollection;
+    expect(sessionsCollection.updateOne).toHaveBeenCalledWith(
+      { _id: fixture.sessionId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.last_tasks_count': 0,
+          'processors_data.CREATE_TASKS.no_task_reason_code': 'no_task_reason_missing',
+        }),
+      })
+    );
   });
 });

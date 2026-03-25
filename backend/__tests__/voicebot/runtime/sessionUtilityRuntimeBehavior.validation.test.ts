@@ -17,6 +17,7 @@ import {
 } from './sessionUtilityRuntimeBehavior.test.helpers.js';
 
 describe('Voicebot utility routes runtime behavior', () => {
+  const flame = String.fromCodePoint(0x1f525);
   beforeEach(() => {
     resetRuntimeBehaviorMocks();
   });
@@ -993,6 +994,70 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.items).toEqual([]);
   });
 
+  it('session_tasks(Draft) surfaces machine-checkable no_task_decision when Draft is empty for 69c37a231f1bc03e330f9641', async () => {
+    const sessionId = new ObjectId('69c37a231f1bc03e330f9641');
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Repro session',
+      summary_md_text: 'Summary exists',
+      review_md_text: 'Review exists',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      processors_data: {
+        CREATE_TASKS: {
+          is_processed: true,
+          last_tasks_count: 0,
+        },
+      },
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: jest.fn(() => ({
+              sort: () => ({ toArray: async () => [] }),
+            })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({ session_id: sessionId.toHexString(), bucket: 'Draft' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.items).toEqual([]);
+    expect(response.body.no_task_decision).toEqual(
+      expect.objectContaining({
+        code: 'no_task_reason_missing',
+        inferred: true,
+        source: 'agent_inferred',
+      })
+    );
+  });
+
   it('session_tasks(Draft) prefers automation_tasks master rows linked to the voice session', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
@@ -1091,6 +1156,106 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
     expect(response.body.items).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ row_id: 'legacy-row' })])
+    );
+  });
+
+  it('session_tasks(Draft) normalizes legacy decorated priorities and does not fail for 69c27fd63b94e66785ee67da repro rows', async () => {
+    const sessionId = new ObjectId('69c27fd63b94e66785ee67da');
+    const sessionHex = sessionId.toHexString();
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Repro session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+      source_ref: `https://copilot.stratospace.fun/voice/session/${sessionHex}`,
+    }));
+
+    const masterFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => ([
+          ['voice-69c27fd63b94e66785ee67da-01', `${flame} P2`],
+          ['voice-69c27fd63b94e66785ee67da-02', `${flame} P3`],
+          ['voice-69c27fd63b94e66785ee67da-03', `${flame} P3`],
+          ['voice-69c27fd63b94e66785ee67da-04', `${flame} P3`],
+          ['voice-69c27fd63b94e66785ee67da-05', `${flame} P4`],
+        ]).map(([rowId, priority], index) => ({
+          _id: new ObjectId(),
+          row_id: rowId,
+          id: rowId,
+          name: `Repro row ${index + 1}`,
+          project: 'Repro project',
+          project_id: new ObjectId().toHexString(),
+          performer_id: new ObjectId().toHexString(),
+          task_status: TASK_STATUSES.DRAFT_10,
+          source: 'VOICE_BOT',
+          source_kind: 'voice_session',
+          source_ref: `https://copilot.stratospace.fun/operops/task/${new ObjectId().toHexString()}`,
+          external_ref: `https://copilot.stratospace.fun/voice/session/${sessionHex}`,
+          source_data: {
+            session_id: sessionHex,
+            row_id: rowId,
+            voice_sessions: [
+              {
+                session_id: sessionHex,
+                created_at: new Date(`2026-03-25T09:5${index}:00.000Z`).toISOString(),
+                role: 'primary',
+              },
+            ],
+          },
+          priority,
+          created_at: new Date(`2026-03-25T09:5${index}:00.000Z`),
+          updated_at: new Date(`2026-03-25T09:5${index}:30.000Z`),
+        })),
+      }),
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            find: masterFind,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({ session_id: sessionHex, bucket: 'Draft' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.count).toBe(5);
+    expect(response.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-01', priority: 'P2' }),
+        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-02', priority: 'P3' }),
+        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-03', priority: 'P3' }),
+        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-04', priority: 'P3' }),
+        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-05', priority: 'P4' }),
+      ])
+    );
+    expect(response.body.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ priority: expect.stringMatching(/🔥/) })])
     );
   });
 

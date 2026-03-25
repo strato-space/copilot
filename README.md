@@ -13,6 +13,7 @@ Use this as a fast guardrail before implementing anything:
 - Runtime isolation for Voice is deployment-scoped (separate DB/instance per environment); `runtime_tag` is transitional metadata and not an operational routing contract.
 - Realtime updates are required: uploads and workers must emit session/message events so Transcription/Categorization update without refresh.
 - Browser-based UI acceptance should restart `mcp@chrome-devtools.service` before each live verification cycle; stale MCP/CDP state is not an accepted explanation for skipped smoke checks.
+- Browser-based layout verification should include screenshot-level overlap checks when footer/status widgets or task panes change; CSS/DOM-only assertions are not sufficient for acceptance.
 - Shared selector parity is a product contract: project and operational task-type controls should reuse the same wrappers and option-source builders across Voice and OperOps so hierarchy/labels never degrade into flat lists or raw ids on one surface.
 - Session list contracts are user-facing:
   - quick tabs: `Все`, `Без проекта`, `Активные`, `Мои`,
@@ -242,7 +243,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Draft' }` validates the same Draft-master scalar subset plus lineage/lifecycle invariants before API normalization, but keeps read-time compatibility for legacy `source_kind='voice_session'` rows while write-time persistence remains strict on `source_kind='voice_possible_task'`,
   - structured compatibility payloads (`source_data`, `dependencies`, `dependencies_from_ai`, `status_history`, `task_status_history`, `comments_list`) and compatibility-only overlays (`relations`, `parent`, `children`, `discussion_sessions`) remain deferred outside the strict validated subset in this wave.
 - Desktop Possible Tasks is a matched-height master/detail workspace: list and detail panes should use the same taller shell, and the detail card must not depend on an inner forced full-height scroller just to be readable.
+- Voice session status footer (`Все сообщения обработаны` / processor chips) belongs to normal page flow after the central workspace content; it must not be fixed to the viewport bottom or overlap `Транскрипция`, `Категоризация`, or `Задачи`.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
+- Canonical task priorities in backend, Mongo, API payloads, and ontology surfaces are plain text `P1..P7`; urgent flame styling is presentation-only in frontend pills and must not be persisted as `🔥 P1`-style values.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - Possible Tasks creation flow now emits structured submit diagnostics in browser console:
   - `create_selected.aborted`
@@ -275,6 +278,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `copilot-voicebot-tgbot-prod` runs TypeScript runtime from `backend/dist/voicebot_tgbot/runtime.js` with `backend/.env.production` as the single env source.
 - TS tgbot runtime protects against duplicate pollers using env-stable Redis distributed lock key (`voicebot:tgbot:poller_lock` + env suffix); lock loss triggers controlled shutdown to prevent split Telegram update consumption.
 - `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.
+- Production bootstrap `./scripts/pm2-backend.sh prod` is responsible for recreating missing `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` runtimes, not only restarting already-existing PM2 entries.
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
 - TS transcribe handler never silently skips missing transport now: Telegram messages with `file_id` but without local `file_path` are marked `transcription_error=missing_transport` with diagnostics; text-only chunks without file path are transcribed via `transcription_method=text_fallback` and continue categorization pipeline.
 - TS transcribe handler additionally supports Telegram transport recovery: for `source_type=telegram` + `file_id` + missing local file path it resolves `getFile`, downloads audio into local storage, persists `file_path`, and continues transcription in the same job.

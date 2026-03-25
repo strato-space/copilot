@@ -43,6 +43,14 @@ class EntitySamplingToolTest(unittest.TestCase):
         doc = {"_id": "1", "name": "Alice", "extra": 7}
         self.assertEqual(tool.trim_doc(doc, ["_id", "name"]), {"_id": "1", "name": "Alice"})
 
+    def test_trim_doc_normalizes_priority_fields_to_canonical_text(self) -> None:
+        flame = chr(0x1F525)
+        doc = {"_id": "1", "priority": f"{flame} P2", "nested": {"priority": f"{flame} P4"}}
+        self.assertEqual(
+            tool.trim_doc(doc, []),
+            {"_id": "1", "priority": "P2", "nested": {"priority": "P4"}},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

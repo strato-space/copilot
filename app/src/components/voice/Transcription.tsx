@@ -114,22 +114,24 @@ export default function Transcription() {
     }, [sortedRows]);
 
     return (
-        <div className="flex-1 inline-flex flex-col justify-start items-start">
-            <TranscriptionTableHeader
-                ascending={transcriptionSort.ascending}
-                onToggleSort={toggleTranscriptionSort}
-            />
-            {sortedRows.map((row, idx) => (
-                <div className="flex flex-row w-full shadow-sm bg-white items-stretch" key={row._id || row.message_id || idx}>
-                    <div className="flex-1 flex flex-col h-full">
-                        <TranscriptionTableRow
-                            row={row}
-                            isLast={idx === sortedRows.length - 1}
-                            sessionBaseTimestampMs={sessionBaseTimestampMs}
-                        />
+        <div className="voice-session-scroll-pane">
+            <div className="inline-flex min-h-full w-full flex-col items-start justify-start">
+                <TranscriptionTableHeader
+                    ascending={transcriptionSort.ascending}
+                    onToggleSort={toggleTranscriptionSort}
+                />
+                {sortedRows.map((row, idx) => (
+                    <div className="flex flex-row w-full shadow-sm bg-white items-stretch" key={row._id || row.message_id || idx}>
+                        <div className="flex-1 flex flex-col h-full">
+                            <TranscriptionTableRow
+                                row={row}
+                                isLast={idx === sortedRows.length - 1}
+                                sessionBaseTimestampMs={sessionBaseTimestampMs}
+                            />
+                        </div>
                     </div>
-                </div>
-            ))}
+                ))}
+            </div>
         </div>
     );
 }

@@ -13,6 +13,8 @@ import {
 } from '../../../services/voicebot/createTasksAgent.js';
 import {
   applyCreateTasksCompositeSessionPatch,
+  type CreateTasksNoTaskDecision,
+  resolveCreateTasksNoTaskDecisionOutcome,
   extractCreateTasksCompositeMeta,
   markCreateTasksProcessorSuccess,
   resolveCreateTasksCompositeSessionContext,
@@ -43,6 +45,7 @@ type CreateTasksFromChunksResult = {
   tasks_count?: number;
   skipped?: boolean;
   reason?: string;
+  no_task_decision?: CreateTasksNoTaskDecision;
   error?: string;
 };
 
@@ -165,6 +168,13 @@ export const handleCreateTasksFromChunksJob = async (
       createdById: session.user_id ? String(session.user_id) : '',
       refreshMode,
     });
+    const noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
+      decision: compositeMeta?.no_task_decision,
+      extractedTaskCount: tasks.length,
+      persistedTaskCount: persisted.items.length,
+      hasSummary: Boolean(resolvedContext.summaryMdText),
+      hasReview: Boolean(resolvedContext.reviewMdText),
+    });
 
     await applyCreateTasksCompositeSessionPatch({
       db,
@@ -182,6 +192,8 @@ export const handleCreateTasksFromChunksJob = async (
       db,
       sessionFilter,
       processorKey: 'CREATE_TASKS',
+      tasksCount: persisted.items.length,
+      noTaskDecision,
     });
 
     await enqueuePossibleTasksRefresh({ session_id });
@@ -190,7 +202,13 @@ export const handleCreateTasksFromChunksJob = async (
       ok: true,
       session_id,
       tasks_count: persisted.items.length,
-      ...(persisted.items.length === 0 ? { skipped: true, reason: 'no_tasks' } : {}),
+      ...(persisted.items.length === 0
+        ? {
+            skipped: true,
+            reason: 'no_tasks',
+            ...(noTaskDecision ? { no_task_decision: noTaskDecision } : {}),
+          }
+        : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

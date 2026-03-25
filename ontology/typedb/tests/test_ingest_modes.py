@@ -136,8 +136,9 @@ class IngestHelpersTest(unittest.TestCase):
         self.assertEqual(ingest.normalize_task_status_key(None), "UNKNOWN")
 
     def test_normalize_task_priority_maps_raw_labels_to_canonical_values(self) -> None:
-        self.assertEqual(ingest.normalize_task_priority("🔥 P1 "), "P1")
-        self.assertEqual(ingest.normalize_task_priority("🔥 P1"), "P1")
+        flame = chr(0x1F525)
+        self.assertEqual(ingest.normalize_task_priority(f"{flame} P1 "), "P1")
+        self.assertEqual(ingest.normalize_task_priority(f"{flame} P1"), "P1")
         self.assertEqual(ingest.normalize_task_priority("P2"), "P2")
         self.assertEqual(ingest.normalize_task_priority("P7"), "P7")
         self.assertEqual(ingest.normalize_task_priority("weird"), "UNKNOWN")

@@ -122,6 +122,7 @@ const buildTasksCollection = (seedDocs: TaskDoc[]) => {
 };
 
 describe('persistPossibleTasksForSession', () => {
+  const flame = String.fromCodePoint(0x1f525);
   let sessionId: string;
 
   beforeEach(() => {
@@ -754,6 +755,72 @@ describe('persistPossibleTasksForSession', () => {
     );
   });
 
+  it('normalizes emoji-form priorities before strict ontology persistence', async () => {
+    const tasksCollection = buildTasksCollection([]);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Decorated priorities session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'draft-emoji-priority-1',
+          id: 'draft-emoji-priority-1',
+          name: 'Normalize decorated priority 1',
+          description: 'Should persist as canonical P1',
+          project_id: 'proj-1',
+          priority: `${flame} P1`,
+        },
+        {
+          row_id: 'draft-emoji-priority-2',
+          id: 'draft-emoji-priority-2',
+          name: 'Normalize decorated priority 2',
+          description: 'Should persist as canonical P2',
+          project_id: 'proj-1',
+          priority: `${flame}P2 `,
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'draft-emoji-priority-1',
+          priority: 'P1',
+        }),
+        expect.objectContaining({
+          row_id: 'draft-emoji-priority-2',
+          priority: 'P2',
+        }),
+      ])
+    );
+
+    expect(tasksCollection.snapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'draft-emoji-priority-1',
+          priority: 'P1',
+          source_kind: 'voice_possible_task',
+          task_status: TASK_STATUSES.DRAFT_10,
+        }),
+        expect.objectContaining({
+          row_id: 'draft-emoji-priority-2',
+          priority: 'P2',
+          source_kind: 'voice_possible_task',
+          task_status: TASK_STATUSES.DRAFT_10,
+        }),
+      ])
+    );
+  });
+
   it('rejects persisted rows that violate Draft master invariants', async () => {
     await expect(
       validatePossibleTaskMasterDocs([
@@ -789,8 +856,69 @@ describe('persistPossibleTasksForSession', () => {
           created_at: new Date('2026-03-23T10:00:00.000Z'),
           updated_at: new Date('2026-03-23T10:00:00.000Z'),
         },
-      ], 'persistPossibleTasks.test')
+      ], 'persistPossibleTasks.test', 'write-strict')
     ).rejects.toThrow(/violates enum domain/);
+  });
+
+  it('read compatibility normalizes decorated priorities and skips malformed legacy rows', async () => {
+    const validatedDocs = await validatePossibleTaskMasterDocs([
+      {
+        _id: new ObjectId(),
+        row_id: 'legacy-emoji-p2',
+        id: 'legacy-emoji-p2',
+        name: 'Legacy decorated priority P2',
+        priority: `${flame} P2`,
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_session',
+        external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+      {
+        _id: new ObjectId(),
+        row_id: 'legacy-emoji-p4',
+        id: 'legacy-emoji-p4',
+        name: 'Legacy decorated priority P4',
+        priority: `${flame}P4 `,
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+      {
+        _id: new ObjectId(),
+        row_id: 'legacy-invalid-p9',
+        id: 'legacy-invalid-p9',
+        name: 'Legacy invalid priority',
+        priority: 'P9',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+    ], 'persistPossibleTasks.test');
+
+    expect(validatedDocs).toHaveLength(2);
+    expect(validatedDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'legacy-emoji-p2',
+          priority: 'P2',
+        }),
+        expect.objectContaining({
+          row_id: 'legacy-emoji-p4',
+          priority: 'P4',
+        }),
+      ])
+    );
+    expect(validatedDocs).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'legacy-invalid-p9' })])
+    );
   });
 
   it('rejects persisted rows that omit required Draft master identity fields', async () => {
@@ -808,7 +936,7 @@ describe('persistPossibleTasksForSession', () => {
           created_at: new Date('2026-03-23T10:00:00.000Z'),
           updated_at: new Date('2026-03-23T10:00:00.000Z'),
         },
-      ], 'persistPossibleTasks.test')
+      ], 'persistPossibleTasks.test', 'write-strict')
     ).rejects.toThrow(/missing required Draft master field row_id/);
   });
 

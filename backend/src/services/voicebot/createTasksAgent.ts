@@ -1,3 +1,4 @@
+import OpenAI from 'openai';
 import { getLogger } from '../../utils/logger.js';
 import { MCPProxyClient } from '../mcp/proxyClient.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
@@ -6,6 +7,11 @@ import {
   normalizeVoicePossibleTaskLocatorKey,
 } from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from './agentsRuntimeRecovery.js';
+import {
+  normalizeCreateTasksNoTaskDecision,
+  resolveCreateTasksNoTaskDecisionOutcome,
+  type CreateTasksNoTaskDecision,
+} from './createTasksCompositeSessionState.js';
 import { getDb } from '../db.js';
 import { VOICEBOT_COLLECTIONS } from '../../constants.js';
 import { ObjectId, type Db } from 'mongodb';
@@ -30,6 +36,7 @@ export type CreateTasksCompositeResult = {
   scholastic_review_md: string;
   task_draft: Array<Record<string, unknown>>;
   enrich_ready_task_comments: CreateTasksCompositeEnrichmentDraft[];
+  no_task_decision: CreateTasksNoTaskDecision | null;
   session_name: string;
   project_id: string;
 };
@@ -60,6 +67,64 @@ const REDUCED_CONTEXT_MESSAGE_MAX_CHARS = 1200;
 const REDUCED_CONTEXT_MAX_MESSAGES = 8;
 const PROJECT_CRM_LOOKBACK_DAYS = 14;
 const PROJECT_CRM_LOOKBACK_MS = PROJECT_CRM_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+const LANGUAGE_SAMPLE_MAX_MESSAGES = 12;
+const CYRILLIC_RE = /[А-Яа-яЁё]/g;
+const LATIN_RE = /[A-Za-z]/g;
+const LOWERCASE_LATIN_WORD_RE = /\b[a-z][a-z-]{2,}\b/g;
+const ENGLISH_REVIEW_HEADING_RE =
+  /(^|\n)\s{0,3}#{1,6}\s*(terms|ontology check|logic|discard\s*\/\s*non-goal|minimal repair|scholastic review)\b/gim;
+const CREATE_TASKS_LANGUAGE_REPAIR_MODEL =
+  String(process.env.VOICEBOT_CREATE_TASKS_LANGUAGE_REPAIR_MODEL || '').trim() ||
+  String(process.env.VOICEBOT_SUMMARIZATION_MODEL || '').trim() ||
+  'gpt-4.1-mini';
+const RUSSIAN_ONTOLOGY_ALLOWLIST = new Set([
+  'task',
+  'voice_session',
+  'processing_run',
+  'task_execution_run',
+  'context_enrichment',
+  'execution_context',
+  'human_approval',
+  'authority_scope',
+  'executor_role',
+  'performer_profile',
+  'coding_agent',
+  'object_locator',
+  'outcome_record',
+  'settled_decision',
+  'artifact_record',
+  'result_artifact',
+  'acceptance_evaluation',
+  'goal_process',
+  'goal_product',
+  'business_need',
+  'requirement',
+  'issue',
+  'risk',
+  'constraint',
+  'change_proposal',
+  'kpi',
+  'kpi_observation',
+  'codex_task',
+  'system_of_interest',
+  'producing_system',
+  'project',
+  'task_type',
+  'task_classification',
+  'task_family',
+  'task_intake_pool',
+  'executor_routing',
+  'acceptance_criterion',
+  'evidence_link',
+  'writeback_decision',
+  'patch',
+  'seed_context_base',
+  'discussion_linkage',
+  'draft_recency_horizon',
+  'active_draft_window',
+  'discussion_window',
+  'deliverable',
+]);
 
 type ProjectCrmWindow = {
   from_date: string;
@@ -90,6 +155,12 @@ const normalizeWhitespace = (value: string): string =>
 
 const normalizeSummaryMarkdown = (value: unknown): string =>
   normalizeWhitespace(toText(value));
+
+const createOpenAiClient = (): OpenAI | null => {
+  const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
+  if (!apiKey) return null;
+  return new OpenAI({ apiKey });
+};
 
 const countWords = (value: string): number =>
   value
@@ -364,6 +435,20 @@ const clipText = (value: string, limit: number): string => {
   return `${normalized.slice(0, Math.max(0, limit - 1)).trim()}…`;
 };
 
+const countPattern = (value: string, pattern: RegExp): number => {
+  const matches = value.match(pattern);
+  return matches ? matches.length : 0;
+};
+
+const inferPreferredOutputLanguageFromText = (value: string): 'ru' | 'en' => {
+  const normalized = value.trim();
+  if (!normalized) return 'ru';
+  const cyrillicCount = countPattern(normalized, CYRILLIC_RE);
+  const latinCount = countPattern(normalized, LATIN_RE);
+  if (cyrillicCount === 0 && latinCount > 0) return 'en';
+  return 'ru';
+};
+
 const resolveDbForFallback = (db?: Db): Db | null => {
   if (db) return db;
   try {
@@ -385,6 +470,7 @@ const deriveProjectCrmWindow = async ({
   }
 
   const sessionObjectId = new ObjectId(sessionId);
+  const messageSessionFilter = { $in: [sessionId, sessionObjectId] };
   const [sessionDoc, firstMessageDoc, lastMessageDoc] = await Promise.all([
     db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
       { _id: sessionObjectId },
@@ -400,7 +486,7 @@ const deriveProjectCrmWindow = async ({
     ),
     db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
       {
-        session_id: sessionId,
+        session_id: messageSessionFilter,
         is_deleted: { $ne: true },
       },
       {
@@ -415,7 +501,7 @@ const deriveProjectCrmWindow = async ({
     ),
     db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne(
       {
-        session_id: sessionId,
+        session_id: messageSessionFilter,
         is_deleted: { $ne: true },
       },
       {
@@ -462,6 +548,267 @@ const deriveProjectCrmWindow = async ({
   };
 };
 
+const derivePreferredOutputLanguage = async ({
+  db,
+  sessionId,
+  rawText,
+}: {
+  db: Db | null;
+  sessionId: string;
+  rawText?: string;
+}): Promise<'ru' | 'en'> => {
+  const rawTextValue = toText(rawText);
+  if (rawTextValue) {
+    return inferPreferredOutputLanguageFromText(rawTextValue);
+  }
+
+  if (!db || !ObjectId.isValid(sessionId)) {
+    return 'ru';
+  }
+
+  const sessionObjectId = new ObjectId(sessionId);
+  const messageSessionFilter = { $in: [sessionId, sessionObjectId] };
+  const messagesCollection = db.collection(VOICEBOT_COLLECTIONS.MESSAGES) as {
+    find?: (
+      query: Record<string, unknown>,
+      options: { projection: Record<string, number> }
+    ) => {
+      sort: (value: Record<string, number>) => {
+        limit: (value: number) => {
+          toArray: () => Promise<unknown[]>;
+        };
+      };
+    };
+  };
+  const messageDocsPromise =
+    typeof messagesCollection.find === 'function'
+      ? messagesCollection
+          .find(
+            {
+              session_id: messageSessionFilter,
+              is_deleted: { $ne: true },
+            },
+            {
+              projection: {
+                transcription_text: 1,
+                text: 1,
+              },
+            }
+          )
+          .sort({ message_timestamp: -1, _id: -1 })
+          .limit(LANGUAGE_SAMPLE_MAX_MESSAGES)
+          .toArray()
+      : Promise.resolve([]);
+
+  const [sessionDoc, messageDocs] = await Promise.all([
+    db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+      { _id: sessionObjectId },
+      {
+        projection: {
+          summary_md_text: 1,
+          review_md_text: 1,
+          session_name: 1,
+        },
+      }
+    ),
+    messageDocsPromise,
+  ]);
+
+  const samples: string[] = [];
+  const sessionRecord = asRecord(sessionDoc);
+  if (sessionRecord) {
+    for (const field of ['summary_md_text', 'review_md_text', 'session_name'] as const) {
+      const text = toText(sessionRecord[field]);
+      if (text) samples.push(text);
+    }
+  }
+
+  for (const message of messageDocs) {
+    const record = asRecord(message);
+    if (!record) continue;
+    const text = toText(record.transcription_text) || toText(record.text);
+    if (text) samples.push(text);
+  }
+
+  return inferPreferredOutputLanguageFromText(samples.join('\n'));
+};
+
+const scrubLanguageCheckText = (value: string): string =>
+  value
+    .replace(/https?:\/\/\S+/g, ' ')
+      .replace(/`[^`]+`/g, ' ')
+      .replace(/\[[^\]]+\]\([^)]+\)/g, ' ');
+
+const collectUnexpectedEnglishTokensForRussian = (value: string): string[] => {
+  const normalized = scrubLanguageCheckText(value);
+  if (!normalized) return [];
+
+  const issues: string[] = [];
+  if (ENGLISH_REVIEW_HEADING_RE.test(normalized)) {
+    issues.push('[english-heading]');
+  }
+  ENGLISH_REVIEW_HEADING_RE.lastIndex = 0;
+
+  for (const token of normalized.match(LOWERCASE_LATIN_WORD_RE) || []) {
+    if (!RUSSIAN_ONTOLOGY_ALLOWLIST.has(token)) {
+      issues.push(token);
+    }
+  }
+
+  return Array.from(new Set(issues));
+};
+
+const taskDescriptionLanguageCheckText = (value: string): string =>
+  scrubLanguageCheckText(
+    value
+      .split('\n')
+      .filter((line) => !/^##\s+(description|object_locators|expected_results|acceptance_criteria|evidence_links|executor_routing_hints|open_questions)\s*$/i.test(line.trim()))
+      .join('\n')
+  );
+
+const hasUnexpectedEnglishForRussian = (value: string): boolean => {
+  return collectUnexpectedEnglishTokensForRussian(value).length > 0;
+};
+
+const needsRussianLanguageRepair = (composite: CreateTasksCompositeResult): boolean => {
+  if (hasUnexpectedEnglishForRussian(composite.summary_md_text)) return true;
+  if (hasUnexpectedEnglishForRussian(composite.scholastic_review_md)) return true;
+  if (hasUnexpectedEnglishForRussian(composite.session_name)) return true;
+
+  for (const draft of composite.task_draft) {
+    if (hasUnexpectedEnglishForRussian(toText(draft.name))) return true;
+    if (hasUnexpectedEnglishForRussian(toText(draft.dialogue_reference))) return true;
+    if (hasUnexpectedEnglishForRussian(taskDescriptionLanguageCheckText(toText(draft.description)))) return true;
+  }
+
+  for (const comment of composite.enrich_ready_task_comments) {
+    if (hasUnexpectedEnglishForRussian(comment.comment)) return true;
+  }
+
+  return false;
+};
+
+const repairCompositeLanguageIfNeeded = async ({
+  composite,
+  preferredOutputLanguage,
+  sessionId,
+  defaultProjectId,
+}: {
+  composite: CreateTasksCompositeResult;
+  preferredOutputLanguage: 'ru' | 'en';
+  sessionId: string;
+  defaultProjectId: string;
+}): Promise<CreateTasksCompositeResult> => {
+  if (preferredOutputLanguage !== 'ru') {
+    return composite;
+  }
+  if (!needsRussianLanguageRepair(composite)) {
+    return composite;
+  }
+
+  const client = createOpenAiClient();
+  if (!client) {
+    logger.warn('[voicebot-worker] create_tasks language repair skipped: OPENAI_API_KEY missing', {
+      session_id: sessionId,
+    });
+    return composite;
+  }
+
+  try {
+    const languageViolations = [
+      ...collectUnexpectedEnglishTokensForRussian(composite.summary_md_text),
+      ...collectUnexpectedEnglishTokensForRussian(composite.scholastic_review_md),
+      ...collectUnexpectedEnglishTokensForRussian(composite.session_name),
+      ...composite.task_draft.flatMap((draft) => [
+        ...collectUnexpectedEnglishTokensForRussian(toText(draft.name)),
+        ...collectUnexpectedEnglishTokensForRussian(toText(draft.dialogue_reference)),
+        ...collectUnexpectedEnglishTokensForRussian(taskDescriptionLanguageCheckText(toText(draft.description))),
+      ]),
+      ...composite.enrich_ready_task_comments.flatMap((comment) =>
+        collectUnexpectedEnglishTokensForRussian(comment.comment)
+      ),
+    ];
+    const uniqueViolations = Array.from(new Set(languageViolations)).slice(0, 40);
+    logger.warn('[voicebot-worker] create_tasks language repair started', {
+      session_id: sessionId,
+      model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
+      violations: uniqueViolations,
+    });
+
+    const runRepair = async (
+      candidate: CreateTasksCompositeResult,
+      previousViolations: string[],
+      attempt: number
+    ): Promise<CreateTasksCompositeResult> => {
+      const response = await client.responses.create({
+        model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
+        instructions: [
+          'Ты deterministic JSON language normalizer.',
+          'На входе create_tasks composite JSON.',
+          'Верни только один JSON-объект того же shape с теми же ключами и той же структурой массивов.',
+          'Перепиши все human-facing natural-language поля строго на русский язык.',
+          'Не оставляй английские headings или англоязычные пояснительные слова, кроме canonical ontology terms из allowlist.',
+          'Если предыдущая версия оставила forbidden tokens, убери их полностью.',
+          'Сохрани ids, row_id, public ids, project_id, URLs, ObjectId-подобные строки, имена файлов, markdown-секции task description и собственные имена/акронимы.',
+          'Ничего не удаляй, не схлопывай массивы и не меняй смысл.',
+        ].join(' '),
+        input: JSON.stringify({
+          preferred_output_language: preferredOutputLanguage,
+          allow_english_terms: Array.from(RUSSIAN_ONTOLOGY_ALLOWLIST).sort(),
+          forbidden_tokens_detected: previousViolations,
+          attempt,
+          composite: candidate,
+        }),
+        store: false,
+      });
+
+      return parseCreateTasksCompositeResult(
+        (response as { output_text?: string }).output_text || '',
+        defaultProjectId
+      );
+    };
+
+    let repaired = await runRepair(composite, uniqueViolations, 1);
+    if (needsRussianLanguageRepair(repaired)) {
+      const remainingViolations = Array.from(
+        new Set([
+          ...collectUnexpectedEnglishTokensForRussian(repaired.summary_md_text),
+          ...collectUnexpectedEnglishTokensForRussian(repaired.scholastic_review_md),
+          ...collectUnexpectedEnglishTokensForRussian(repaired.session_name),
+          ...repaired.task_draft.flatMap((draft) => [
+            ...collectUnexpectedEnglishTokensForRussian(toText(draft.name)),
+            ...collectUnexpectedEnglishTokensForRussian(toText(draft.dialogue_reference)),
+            ...collectUnexpectedEnglishTokensForRussian(taskDescriptionLanguageCheckText(toText(draft.description))),
+          ]),
+          ...repaired.enrich_ready_task_comments.flatMap((comment) =>
+            collectUnexpectedEnglishTokensForRussian(comment.comment)
+          ),
+        ])
+      ).slice(0, 40);
+      logger.warn('[voicebot-worker] create_tasks language repair retry', {
+        session_id: sessionId,
+        model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
+        remaining_violations: remainingViolations,
+      });
+      repaired = await runRepair(repaired, remainingViolations, 2);
+    }
+
+    logger.info('[voicebot-worker] create_tasks language repair completed', {
+      session_id: sessionId,
+      model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
+      repaired_review: Boolean(repaired.scholastic_review_md),
+    });
+
+    return repaired;
+  } catch (error) {
+    logger.warn('[voicebot-worker] create_tasks language repair failed', {
+      session_id: sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return composite;
+  }
+};
+
 const buildReducedCreateTasksRawText = async ({
   db,
   sessionId,
@@ -486,11 +833,12 @@ const buildReducedCreateTasksRawText = async ({
   );
 
   const summary = toText((session as Record<string, unknown> | null)?.summary_md_text);
+  const sessionObjectId = new ObjectId(sessionId);
   const messageDocs = await db
     .collection(VOICEBOT_COLLECTIONS.MESSAGES)
     .find(
       {
-        session_id: sessionId,
+        session_id: { $in: [sessionId, sessionObjectId] },
         is_deleted: { $ne: true },
       },
       {
@@ -538,6 +886,7 @@ const toEmptyCompositeResult = (defaultProjectId = ''): CreateTasksCompositeResu
   scholastic_review_md: '',
   task_draft: [],
   enrich_ready_task_comments: [],
+  no_task_decision: null,
   session_name: '',
   project_id: defaultProjectId,
 });
@@ -563,6 +912,24 @@ const normalizeCompositeResult = (
   const enrichComments = parseEnrichmentDrafts(record.enrich_ready_task_comments);
   const summaryMdText = normalizeSummaryMarkdown(record.summary_md_text);
   const scholasticReview = toText(record.scholastic_review_md);
+  const noTaskDecisionCandidate =
+    record.no_task_decision ??
+    ((Object.prototype.hasOwnProperty.call(record, 'no_task_reason') ||
+      Object.prototype.hasOwnProperty.call(record, 'no_task_reason_code') ||
+      Object.prototype.hasOwnProperty.call(record, 'no_task_evidence'))
+      ? {
+          code: record.no_task_reason_code,
+          reason: record.no_task_reason,
+          evidence: record.no_task_evidence,
+        }
+      : null);
+  const noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
+    decision: normalizeCreateTasksNoTaskDecision(noTaskDecisionCandidate),
+    extractedTaskCount: taskDraft.length,
+    persistedTaskCount: taskDraft.length,
+    hasSummary: Boolean(summaryMdText),
+    hasReview: Boolean(scholasticReview),
+  });
   const sessionName = normalizeCompositeSessionName(record.session_name);
   const projectId = toText(record.project_id) || defaultProjectId;
 
@@ -571,6 +938,7 @@ const normalizeCompositeResult = (
     scholastic_review_md: scholasticReview,
     task_draft: taskDraft,
     enrich_ready_task_comments: enrichComments,
+    no_task_decision: noTaskDecision,
     session_name: sessionName,
     project_id: projectId,
   };
@@ -648,7 +1016,8 @@ export const parseCreateTasksCompositeResult = (
       normalizedComposite.summary_md_text ||
       normalizedComposite.task_draft.length > 0 ||
       normalizedComposite.enrich_ready_task_comments.length > 0 ||
-      normalizedComposite.scholastic_review_md
+      normalizedComposite.scholastic_review_md ||
+      normalizedComposite.no_task_decision
     ) {
       return normalizedComposite;
     }
@@ -668,6 +1037,7 @@ const attachCompositeMetaToDraft = (
     summary_md_text: composite.summary_md_text,
     scholastic_review_md: composite.scholastic_review_md,
     enrich_ready_task_comments: composite.enrich_ready_task_comments,
+    no_task_decision: composite.no_task_decision,
     session_name: composite.session_name,
     project_id: composite.project_id,
   };
@@ -700,6 +1070,11 @@ export const runCreateTasksCompositeAgent = async ({
   const normalizedProjectId = toText(projectId);
   const contextDb = resolveDbForFallback(db);
   let projectCrmWindow: ProjectCrmWindow | null = null;
+  const preferredOutputLanguage = await derivePreferredOutputLanguage({
+    db: contextDb,
+    sessionId,
+    ...(rawText !== undefined ? { rawText } : {}),
+  });
 
   if (normalizedProjectId && contextDb) {
     try {
@@ -722,6 +1097,7 @@ export const runCreateTasksCompositeAgent = async ({
           raw_text: text.trim(),
           session_url: canonicalSessionUrl,
           project_id: normalizedProjectId,
+          preferred_output_language: preferredOutputLanguage,
           ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
         }
       : {
@@ -729,6 +1105,7 @@ export const runCreateTasksCompositeAgent = async ({
           session_id: sessionId,
           session_url: canonicalSessionUrl,
           project_id: normalizedProjectId,
+          preferred_output_language: preferredOutputLanguage,
           ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
         };
 
@@ -747,13 +1124,14 @@ export const runCreateTasksCompositeAgent = async ({
         envelope_chars: envelopeMetrics.chars,
         envelope_bytes: envelopeMetrics.bytes,
       });
+      const createTasksRequest = {
+        message: serializedEnvelope,
+        profile_run_id: profileRunId,
+        ...(envelopeMode === 'session_id' ? { session_id: sessionId } : {}),
+      };
       const result = await mcpClient.callTool(
         'create_tasks',
-        {
-          message: serializedEnvelope,
-          session_id: sessionId,
-          profile_run_id: profileRunId,
-        },
+        createTasksRequest,
         session.sessionId,
         { timeout: 15 * 60 * 1000 }
       );
@@ -763,7 +1141,13 @@ export const runCreateTasksCompositeAgent = async ({
         throw new Error(nestedFailure || result.error || 'create_tasks_mcp_failed');
       }
 
-      return parseCreateTasksCompositeResult(result.data, normalizedProjectId);
+      const parsedComposite = parseCreateTasksCompositeResult(result.data, normalizedProjectId);
+      return repairCompositeLanguageIfNeeded({
+        composite: parsedComposite,
+        preferredOutputLanguage,
+        sessionId,
+        defaultProjectId: normalizedProjectId,
+      });
     } finally {
       await mcpClient.closeSession(session.sessionId).catch((error) => {
         logger.warn('[voicebot-worker] create_tasks agent session close failed', {
@@ -783,6 +1167,7 @@ export const runCreateTasksCompositeAgent = async ({
         has_summary_md_text: Boolean(composite.summary_md_text),
         ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
         has_scholastic_review_md: Boolean(composite.scholastic_review_md),
+        no_task_reason_code: composite.no_task_decision?.code || null,
         mcp_server: mcpServerUrl,
         mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
       });
@@ -818,6 +1203,7 @@ export const runCreateTasksCompositeAgent = async ({
           has_summary_md_text: Boolean(composite.summary_md_text),
           ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
           has_scholastic_review_md: Boolean(composite.scholastic_review_md),
+          no_task_reason_code: composite.no_task_decision?.code || null,
           mcp_server: mcpServerUrl,
           mode: 'raw_text_reduced',
         });
@@ -846,6 +1232,7 @@ export const runCreateTasksCompositeAgent = async ({
       has_summary_md_text: Boolean(composite.summary_md_text),
       ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
       has_scholastic_review_md: Boolean(composite.scholastic_review_md),
+      no_task_reason_code: composite.no_task_decision?.code || null,
       mcp_server: mcpServerUrl,
       mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
     });

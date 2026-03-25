@@ -104,113 +104,115 @@ export default function Categorization() {
     return (
         <>
             {contextHolder}
-            <div className="w-full overflow-x-auto">
-                {selectedCategorizationRows.length > 0 && (
-                    <div className="flex justify-between mb-2 p-2 bg-blue-50 border-t border-b border-blue-200">
-                        <div className="text-sm">
-                            Выделено строк: <strong>{selectedCategorizationRows.length}</strong>
-                            <button
-                                onClick={clearSelectedCategorizationRows}
-                                className="ml-2 text-blue-600 hover:text-blue-800 underline"
-                            >
-                                Снять выделение
-                            </button>
+            <div className="voice-session-scroll-pane">
+                <div className="w-full overflow-x-auto">
+                    {selectedCategorizationRows.length > 0 && (
+                        <div className="flex justify-between mb-2 p-2 bg-blue-50 border-t border-b border-blue-200">
+                            <div className="text-sm">
+                                Выделено строк: <strong>{selectedCategorizationRows.length}</strong>
+                                <button
+                                    onClick={clearSelectedCategorizationRows}
+                                    className="ml-2 text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    Снять выделение
+                                </button>
+                            </div>
+                            <PermissionGate permission={PERMISSIONS.PROJECTS.UPDATE} showFallback={false}>
+                                <Button onClick={handleCreateTasks}>Создать задачи</Button>
+                            </PermissionGate>
                         </div>
-                        <PermissionGate permission={PERMISSIONS.PROJECTS.UPDATE} showFallback={false}>
-                            <Button onClick={handleCreateTasks}>Создать задачи</Button>
-                        </PermissionGate>
-                    </div>
-                )}
-                <table className="w-full border-collapse bg-white shadow-sm">
-                    <thead className="border-b border-t border-black/30">
-                        <tr>
-                            <th className="align-top">
-                                <div className="flex items-center gap-2 py-2 px-1">
-                                    <button
-                                        onClick={toggleCategorizationSort}
-                                        className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100 transition-colors"
-                                        title={`Сортировка: ${categorizationSort.ascending ? 'по возрастанию' : 'по убыванию'}`}
-                                    >
-                                        {categorizationSort.ascending ? (
-                                            <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path
-                                                    fillRule="evenodd"
-                                                    d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"
-                                                    clipRule="evenodd"
-                                                />
-                                            </svg>
-                                        ) : (
-                                            <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path
-                                                    fillRule="evenodd"
-                                                    d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z"
-                                                    clipRule="evenodd"
-                                                />
-                                            </svg>
-                                        )}
-                                    </button>
-                                    <CategorizationTableHeader />
-                                </div>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {groups.map((group, idx) => {
-                            const sortedRows = categorizationSort.ascending
-                                ? _.sortBy(group.rows, ['timeEnd'])
-                                : _.reverse(_.sortBy(group.rows, ['timeEnd']));
-                            const materials = Array.isArray(group.materials)
-                                ? group.materials.filter((material) =>
-                                    typeof material.imageUrl === 'string' && material.imageUrl.trim().length > 0
-                                )
-                                : [];
-                            const metadataSignature = buildCategorizationBlockMetadataSignature({
-                                rows: sortedRows,
-                                materials,
-                                messageTimestamp: group.message_timestamp,
-                            });
-                            const rowsToRender = sortedRows.length > 0
-                                ? sortedRows
-                                : materials.length > 0
-                                    ? [
-                                        {
-                                            avatar: '',
-                                            name: '',
-                                            text: '',
-                                            kind: 'text' as const,
-                                            message_id: group.message_id,
-                                            message_timestamp: group.message_timestamp,
-                                            row_index: 0,
-                                        },
-                                    ]
+                    )}
+                    <table className="w-full border-collapse bg-white shadow-sm">
+                        <thead className="border-b border-t border-black/30">
+                            <tr>
+                                <th className="align-top">
+                                    <div className="flex items-center gap-2 py-2 px-1">
+                                        <button
+                                            onClick={toggleCategorizationSort}
+                                            className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100 transition-colors"
+                                            title={`Сортировка: ${categorizationSort.ascending ? 'по возрастанию' : 'по убыванию'}`}
+                                        >
+                                            {categorizationSort.ascending ? (
+                                                <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path
+                                                        fillRule="evenodd"
+                                                        d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"
+                                                        clipRule="evenodd"
+                                                    />
+                                                </svg>
+                                            ) : (
+                                                <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path
+                                                        fillRule="evenodd"
+                                                        d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z"
+                                                        clipRule="evenodd"
+                                                    />
+                                                </svg>
+                                            )}
+                                        </button>
+                                        <CategorizationTableHeader />
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {groups.map((group, idx) => {
+                                const sortedRows = categorizationSort.ascending
+                                    ? _.sortBy(group.rows, ['timeEnd'])
+                                    : _.reverse(_.sortBy(group.rows, ['timeEnd']));
+                                const materials = Array.isArray(group.materials)
+                                    ? group.materials.filter((material) =>
+                                        typeof material.imageUrl === 'string' && material.imageUrl.trim().length > 0
+                                    )
                                     : [];
+                                const metadataSignature = buildCategorizationBlockMetadataSignature({
+                                    rows: sortedRows,
+                                    materials,
+                                    messageTimestamp: group.message_timestamp,
+                                });
+                                const rowsToRender = sortedRows.length > 0
+                                    ? sortedRows
+                                    : materials.length > 0
+                                        ? [
+                                            {
+                                                avatar: '',
+                                                name: '',
+                                                text: '',
+                                                kind: 'text' as const,
+                                                message_id: group.message_id,
+                                                message_timestamp: group.message_timestamp,
+                                                row_index: 0,
+                                            },
+                                        ]
+                                        : [];
 
-                            return (
-                                <tr key={group.message_id || idx} className="align-top border-b border-black/20">
-                                    <td className="align-top p-0">
-                                        {rowsToRender.map((row, i) => {
-                                            const rowWithMessageId = group.message_id ? { ...row, message_id: group.message_id } : row;
-                                            const rowId = getCategorizationRowIdentity(rowWithMessageId);
-                                            return (
-                                                <CategorizationTableRow
-                                                    row={rowWithMessageId}
-                                                    materials={i === 0 ? materials : []}
-                                                    key={rowId}
-                                                    rowId={rowId}
-                                                />
-                                            );
-                                        })}
-                                        {metadataSignature ? (
-                                            <div className="px-1 pb-1 text-black/45 text-[9px] font-normal leading-3">
-                                                {metadataSignature}
-                                            </div>
-                                        ) : null}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                return (
+                                    <tr key={group.message_id || idx} className="align-top border-b border-black/20">
+                                        <td className="align-top p-0">
+                                            {rowsToRender.map((row, i) => {
+                                                const rowWithMessageId = group.message_id ? { ...row, message_id: group.message_id } : row;
+                                                const rowId = getCategorizationRowIdentity(rowWithMessageId);
+                                                return (
+                                                    <CategorizationTableRow
+                                                        row={rowWithMessageId}
+                                                        materials={i === 0 ? materials : []}
+                                                        key={rowId}
+                                                        rowId={rowId}
+                                                    />
+                                                );
+                                            })}
+                                            {metadataSignature ? (
+                                                <div className="px-1 pb-1 text-black/45 text-[9px] font-normal leading-3">
+                                                    {metadataSignature}
+                                                </div>
+                                            ) : null}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </>
     );

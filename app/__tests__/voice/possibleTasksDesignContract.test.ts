@@ -22,12 +22,14 @@ describe('PossibleTasks design contract', () => {
     expect(source).toContain("rounded-[5px] border px-0.5 py-0 text-left transition");
     expect(source).toContain("rounded-[12px] border border-white/70 bg-white/82 p-1.5");
     expect(source).toContain("rounded-[12px] border border-white/70 bg-white/84 p-2");
-    expect(source).toContain('min-h-[58vh] self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/82 p-1.5');
-    expect(source).toContain('min-h-[58vh] self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/84 p-2');
+    expect(source).toContain('self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/82 p-1.5');
+    expect(source).toContain('self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/84 p-2');
+    expect(source).not.toContain('min-h-[58vh]');
     expect(source).not.toContain('lg:h-full lg:min-h-0');
     expect(source).not.toContain('h-full overflow-y-auto pr-0.5');
-    expect(source).toContain('flex h-full flex-col gap-0.5 overflow-y-auto pr-0.5');
+    expect(source).toContain('flex flex-col gap-0.5 pr-0.5');
     expect(source).toContain('<div className="pr-0.5">');
+    expect(source).toContain('className="flex flex-col gap-2"');
   });
 
   it('renders inline-editable title, conditional project chip, performer pill, and priority pill in the list', () => {

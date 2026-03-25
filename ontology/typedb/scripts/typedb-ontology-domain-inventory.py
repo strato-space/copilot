@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,18 @@ CANDIDATE_TOKENS = {
 }
 EXCLUDE_SUFFIXES = ('_id', '_ref')
 EXCLUDE_ATTRS = {'source_ref', 'external_ref', 'source_data', 'notes', 'summary', 'description'}
+
+
+def normalize_priority_value(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    compact = re.sub(r"[^A-Z0-9]+", "", value.upper())
+    if compact == "UNKNOWN":
+        return "UNKNOWN"
+    match = re.fullmatch(r"P?([1-7])", compact)
+    if not match:
+        return value.strip()
+    return f"P{match.group(1)}"
 
 
 def parse_args() -> argparse.Namespace:
@@ -112,6 +125,12 @@ def classify(values: list[Any]) -> str:
     return 'open or mixed domain'
 
 
+def canonicalize_attr_value(attr: str, value: Any) -> Any:
+    if attr == 'priority':
+        return normalize_priority_value(value)
+    return value
+
+
 def main() -> int:
     load_operator_env()
     args = parse_args()
@@ -158,6 +177,15 @@ def main() -> int:
                 {'$group': {'_id': f'${src}', 'count': {'$sum':1}}},
                 {'$sort': {'count': -1, '_id': 1}},
             ]))
+            if attr == 'priority':
+                normalized_counter: Counter[str] = Counter()
+                for row in rows:
+                    normalized_value = canonicalize_attr_value(attr, row['_id'])
+                    normalized_counter[_freeze(normalized_value)] += int(row['count'])
+                rows = [
+                    {'_id': json.loads(value), 'count': count}
+                    for value, count in sorted(normalized_counter.items(), key=lambda item: (-item[1], item[0]))
+                ]
             values = [r['_id'] for r in rows]
             meta = marked_attrs.get(attr, {})
             bucket = attr_rollup.setdefault(

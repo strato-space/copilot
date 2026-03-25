@@ -108,7 +108,7 @@
             "title": "Авторизация",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -123,7 +123,7 @@
             "title": "Пользователи / Список пользователей",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -138,7 +138,7 @@
             "title": "Пользователи / Список / Создание нового п-ля",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -210,7 +210,7 @@
             "title": "App CrewApp: Рейс / Отслеживанию движения самолетов",
             "owner": "Егор Назаревский",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -225,7 +225,7 @@
             "title": "Рейс / Проведение предполетного брифинга или подготовка",
             "owner": "Егор Назаревский",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -240,7 +240,7 @@
             "title": "App CrewApp / Просмотр базовых параметров рейса",
             "owner": "Егор Назаревский",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -261,7 +261,7 @@
             "title": "Авторизация (регистрация) в приложении",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -276,7 +276,7 @@
             "title": "Авторизация — альтернативные ветки",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "done_definition": "Нужна ссылка на результат",
             "links": [],
             "missing": {
@@ -405,7 +405,7 @@
                 "title": "Собрать список мастер страниц, заполнить таблицу",
                 "project": "Metro Spot",
                 "status": "Progress 10",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 4.0
               },
               {
@@ -419,14 +419,14 @@
                 "title": "Пользователи / Список / Создание нового п-ля",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 10.0
               },
               {
                 "title": "Тарифы / Добавление тарифа",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 10.0
               },
               {
@@ -440,7 +440,7 @@
                 "title": "FAQ / Категории / Список категорий",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
@@ -482,7 +482,7 @@
                 "title": "Сборка мастер-экранов",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               }
             ]
@@ -516,14 +516,14 @@
                 "title": "Пользователи / Список / Удаление пользователя",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 4.0
               },
               {
                 "title": "Тарифы / Редактирование тарифа",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 10.0
               },
               {
@@ -537,7 +537,7 @@
                 "title": "FAQ / Категории / Добавление кактегорий",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 10.0
               },
               {
@@ -551,7 +551,7 @@
                 "title": "Авторизация (регистрация) в приложении",
                 "project": "T2 Mobile",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
@@ -579,7 +579,7 @@
                 "title": "Проверка состояний",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               }
             ]
@@ -592,14 +592,14 @@
                 "title": "Отгрузка: Кликабельный прототип.",
                 "project": "Metro Spot",
                 "status": "Review / Ready",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "Авторизация",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 13.0
               },
               {
@@ -620,21 +620,21 @@
                 "title": "Тарифы / Удаление тарифа",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 4.0
               },
               {
                 "title": "Системные файлы / Список файлов",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
                 "title": "FAQ / Вопросы / Список вопросов",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
@@ -648,7 +648,7 @@
                 "title": "Авторизация — альтернативные ветки",
                 "project": "T2 Mobile",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
@@ -689,7 +689,7 @@
                 "title": "Добавление целей (акцентирование обязательных возможностей)",
                 "project": "Metro MAPS",
                 "status": "Progress 10",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
@@ -724,14 +724,14 @@
                 "title": "Системные файлы / Список файлов / Новый файл",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
                 "title": "FAQ / Вопросы / Добавление вопроса",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 11.0
               },
               {
@@ -766,7 +766,7 @@
                 "title": "Аудит компонентов",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               }
             ]
@@ -793,14 +793,14 @@
                 "title": "Пользователи / Список пользователей",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
                 "title": "Тарифы / Список тарифов",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
@@ -814,14 +814,14 @@
                 "title": "Системные файлы / Список файлов / Удаление файлов",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 4.0
               },
               {
                 "title": "Заказы / Список заказов",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               },
               {
@@ -856,7 +856,7 @@
                 "title": "Настройка Ant библиотеки",
                 "project": "T2 Web",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 8.0
               }
             ]
@@ -1373,7 +1373,7 @@
                 "title": "Оповещения исполнителям через бота",
                 "project": "CRM miniapp",
                 "status": "Backlog",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 4.0
               }
             ]
@@ -1507,21 +1507,21 @@
                 "title": "App CrewApp / Просмотр базовых параметров рейса",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "App CrewApp: Рейс / Доработка чеклиста",
                 "project": "Ural BortProvodnik",
                 "status": "Ready",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "Собрать список мастер страниц, заполнить таблицу",
                 "project": "Ural BortProvodnik",
                 "status": "Ready",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               }
             ]
@@ -1534,21 +1534,21 @@
                 "title": "Ural BP - Проработка комментариев MVP-1",
                 "project": "Ural BortProvodnik",
                 "status": "Review / Ready",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "Рейс / Проведение предполетного брифинга или подготовка",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "App CrewApp: Рейс / Движение воздушных суден",
                 "project": "Ural BortProvodnik",
                 "status": "Progress 10",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               }
             ]
@@ -1561,14 +1561,14 @@
                 "title": "WEB CrewApp: Уведомления по отчетам / Мгновенное информирование об инцидентах и сбоях",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "App CrewApp: Рейс / Отслеживанию движения самолетов",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
@@ -1588,14 +1588,14 @@
                 "title": "WEB CrewApp: Переработка архитектуры веб-интерфейса для повышения операционной эффективности",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "App CrewApp: Рейс / Контроля питания",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
@@ -1615,14 +1615,14 @@
                 "title": "App CrewApp / Список событий",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
                 "title": "App CrewApp: Рейс / Журнала неисправностей и дефектов кабинного оборудования CLB (Cabin Log Book)",
                 "project": "Ural BortProvodnik",
                 "status": "New / Request",
-                "priority": "🔥 P1",
+                "priority": "P1",
                 "estimated_h": 2.0
               },
               {
@@ -1648,19 +1648,19 @@
           {
             "title": "Авторизация",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Илья Каляшманов"
           },
           {
             "title": "Пользователи / Список пользователей",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Илья Каляшманов"
           },
           {
             "title": "Пользователи / Список / Создание нового п-ля",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Илья Каляшманов"
           }
         ]
@@ -1707,19 +1707,19 @@
           {
             "title": "App CrewApp: Рейс / Отслеживанию движения самолетов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Егор Назаревский"
           },
           {
             "title": "Рейс / Проведение предполетного брифинга или подготовка",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Егор Назаревский"
           },
           {
             "title": "App CrewApp / Просмотр базовых параметров рейса",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Егор Назаревский"
           }
         ]
@@ -1734,13 +1734,13 @@
           {
             "title": "Авторизация (регистрация) в приложении",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Илья Каляшманов"
           },
           {
             "title": "Авторизация — альтернативные ветки",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "performer": "Илья Каляшманов"
           },
           {
@@ -1961,7 +1961,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:22+03:00",
@@ -2150,7 +2150,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:23+03:00",
@@ -2177,7 +2177,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:23+03:00",
@@ -2204,7 +2204,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:23+03:00",
@@ -2285,7 +2285,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:23+03:00",
@@ -2312,7 +2312,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:23+03:00",
@@ -2339,7 +2339,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:23+03:00",
@@ -2366,7 +2366,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:23+03:00",
@@ -2501,7 +2501,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:24+03:00",
@@ -2528,7 +2528,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:24+03:00",
@@ -2555,7 +2555,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:24+03:00",
@@ -2582,7 +2582,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:24+03:00",
@@ -2609,7 +2609,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:24+03:00",
@@ -2636,7 +2636,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:25+03:00",
@@ -2663,7 +2663,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:25+03:00",
@@ -2690,7 +2690,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:25+03:00",
@@ -2879,7 +2879,7 @@
         "project": "T2 Mobile",
         "project_id": "6968cf0b07c864fc085ce90d",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:26+03:00",
@@ -2906,7 +2906,7 @@
         "project": "T2 Mobile",
         "project_id": "6968cf0b07c864fc085ce90d",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:26+03:00",
@@ -3338,7 +3338,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:28+03:00",
@@ -3365,7 +3365,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:28+03:00",
@@ -3392,7 +3392,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:28+03:00",
@@ -3419,7 +3419,7 @@
         "project": "T2 Web",
         "project_id": "6968cebf07c864fc085ce90b",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T14:40:28+03:00",
@@ -5660,7 +5660,7 @@
         "project": "Andrey Q2 OKR",
         "project_id": "67ea784a49dead0aa726a2db",
         "status": "Periodic",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Андрей Сергеев",
         "performer_id": "9dfc7c4e-cbcc-4a75-af53-5642e33522ec",
         "created_at": "2025-04-11T12:08:06+03:00",
@@ -5687,7 +5687,7 @@
         "project": "Andrey Q2 OKR",
         "project_id": "67ea784a49dead0aa726a2db",
         "status": "Periodic",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Андрей Сергеев",
         "performer_id": "9dfc7c4e-cbcc-4a75-af53-5642e33522ec",
         "created_at": "2025-06-03T11:21:56+03:00",
@@ -5768,7 +5768,7 @@
         "project": "Metro Spot",
         "project_id": "672315cb537994d86e1c68be",
         "status": "Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-12T11:57:18+03:00",
@@ -5795,7 +5795,7 @@
         "project": "CRM miniapp",
         "project_id": "672315cb537994d86e1c68ad",
         "status": "Review / Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Ербол Тастанбеков",
         "performer_id": "112d872b-594c-8125-86a4-0002eefb2886",
         "created_at": "2026-01-12T12:09:25+03:00",
@@ -5822,7 +5822,7 @@
         "project": "CRM miniapp",
         "project_id": "672315cb537994d86e1c68ad",
         "status": "Review / Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-12T12:09:44+03:00",
@@ -5849,7 +5849,7 @@
         "project": "RockStar Hearts",
         "project_id": "6926caec34968b218a7f85ed",
         "status": "Review / Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-12T12:29:13+03:00",
@@ -5876,7 +5876,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "Review / Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-12T13:25:11+03:00",
@@ -5930,7 +5930,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-12T14:00:46+03:00",
@@ -5957,7 +5957,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-13T08:40:40+03:00",
@@ -5984,7 +5984,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-13T08:42:47+03:00",
@@ -6011,7 +6011,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-13T08:49:09+03:00",
@@ -6038,7 +6038,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-13T08:52:13+03:00",
@@ -6065,7 +6065,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-13T08:53:37+03:00",
@@ -6092,7 +6092,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-13T08:55:06+03:00",
@@ -6119,7 +6119,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Никита Ренье",
         "performer_id": "85fa1202-93a6-45d2-a81e-fc13cc10a3b0",
         "created_at": "2026-01-13T08:57:09+03:00",
@@ -6146,7 +6146,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-13T08:58:35+03:00",
@@ -6173,7 +6173,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "New / Request",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Никита Ренье",
         "performer_id": "85fa1202-93a6-45d2-a81e-fc13cc10a3b0",
         "created_at": "2026-01-13T09:00:23+03:00",
@@ -6200,7 +6200,7 @@
         "project": "Jabula",
         "project_id": "6863b60f18fb3e43aafbc278",
         "status": "Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Ербол Тастанбеков",
         "performer_id": "112d872b-594c-8125-86a4-0002eefb2886",
         "created_at": "2026-01-13T10:50:46+03:00",
@@ -6227,7 +6227,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-14T06:25:57+03:00",
@@ -6254,7 +6254,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "Progress 10",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-14T06:27:18+03:00",
@@ -6416,7 +6416,7 @@
         "project": "RockStar Hearts",
         "project_id": "6926caec34968b218a7f85ed",
         "status": "Progress 10",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-14T06:48:41+03:00",
@@ -6578,7 +6578,7 @@
         "project": "Metro Spot",
         "project_id": "672315cb537994d86e1c68be",
         "status": "Review / Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-14T07:33:18+03:00",
@@ -6632,7 +6632,7 @@
         "project": "Metro MAPS",
         "project_id": "6809faae30d84c45aa1a168f",
         "status": "Progress 10",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T07:23:35+03:00",
@@ -6686,7 +6686,7 @@
         "project": "Jabula",
         "project_id": "6863b60f18fb3e43aafbc278",
         "status": "Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-15T07:48:13+03:00",
@@ -6911,7 +6911,7 @@
         "project": "1XBet",
         "project_id": "683ed1012e8505e511939544",
         "status": "Review / Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Ербол Тастанбеков",
         "performer_id": "112d872b-594c-8125-86a4-0002eefb2886",
         "created_at": "2025-12-24T07:32:48+03:00",
@@ -6939,7 +6939,7 @@
         "project": "RockStar Hearts",
         "project_id": "6926caec34968b218a7f85ed",
         "status": "Review / Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-12T12:29:13+03:00",
@@ -6995,7 +6995,7 @@
         "project": "Jabula",
         "project_id": "6863b60f18fb3e43aafbc278",
         "status": "Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Ербол Тастанбеков",
         "performer_id": "112d872b-594c-8125-86a4-0002eefb2886",
         "created_at": "2026-01-13T10:50:46+03:00",
@@ -7079,7 +7079,7 @@
         "project": "RockStar Hearts",
         "project_id": "6926caec34968b218a7f85ed",
         "status": "Progress 10",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-14T06:48:41+03:00",
@@ -7107,7 +7107,7 @@
         "project": "Metro MAPS",
         "project_id": "6809faae30d84c45aa1a168f",
         "status": "Progress 10",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T07:23:35+03:00",
@@ -7163,7 +7163,7 @@
         "project": "Jabula",
         "project_id": "6863b60f18fb3e43aafbc278",
         "status": "Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Марат Кабиров",
         "performer_id": "7868e610-45f5-11f0-a662-3dc3df5fb906",
         "created_at": "2026-01-15T07:48:13+03:00",
@@ -7247,7 +7247,7 @@
         "project": "Ural BortProvodnik",
         "project_id": "6865fae618fb3e43aafbc29a",
         "status": "Ready",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Егор Назаревский",
         "performer_id": "86367490-0195-4a24-b057-348fbb4c9131",
         "created_at": "2026-01-15T11:15:24+03:00",
@@ -7275,7 +7275,7 @@
         "project": "Metro Spot",
         "project_id": "672315cb537994d86e1c68be",
         "status": "Progress 10",
-        "priority": "🔥 P1",
+        "priority": "P1",
         "performer": "Илья Каляшманов",
         "performer_id": "112d872b-594c-8110-8702-00027e5ae7ed",
         "created_at": "2026-01-15T12:31:36+03:00",
@@ -7552,7 +7552,7 @@
             "title": "Авторизация",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7565,7 +7565,7 @@
             "title": "Пользователи / Список пользователей",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7578,7 +7578,7 @@
             "title": "Пользователи / Список / Создание нового п-ля",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7591,7 +7591,7 @@
             "title": "Пользователи / Список / Удаление пользователя",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7611,7 +7611,7 @@
             "title": "Авторизация",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7624,7 +7624,7 @@
             "title": "Пользователи / Список пользователей",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7637,7 +7637,7 @@
             "title": "Пользователи / Список / Создание нового п-ля",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7650,7 +7650,7 @@
             "title": "Пользователи / Список / Удаление пользователя",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7670,7 +7670,7 @@
             "title": "Авторизация",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7683,7 +7683,7 @@
             "title": "Пользователи / Список пользователей",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7696,7 +7696,7 @@
             "title": "Пользователи / Список / Создание нового п-ля",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7709,7 +7709,7 @@
             "title": "Пользователи / Список / Удаление пользователя",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7729,7 +7729,7 @@
             "title": "Авторизация",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7742,7 +7742,7 @@
             "title": "Пользователи / Список пользователей",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7755,7 +7755,7 @@
             "title": "Пользователи / Список / Создание нового п-ля",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,
@@ -7768,7 +7768,7 @@
             "title": "Пользователи / Список / Удаление пользователя",
             "owner": "Илья Каляшманов",
             "status": "New / Request",
-            "priority": "🔥 P1",
+            "priority": "P1",
             "missing": {
               "project": false,
               "project_id": false,

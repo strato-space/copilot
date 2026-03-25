@@ -1,7 +1,7 @@
 # Dictionary-like Domain Inventory
 
-- Generated: 2026-03-08T09:55:10.530905+00:00
-- Source mapping: `../ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
+- Generated: 2026-03-25T09:41:13.327824+00:00
+- Source mapping: `/home/strato-space/copilot/ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`
 
 This report inventories mapped fields that behave like dictionary/enum-like domains and prints distinct values from MongoDB.
 
@@ -9,8 +9,8 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
 - `activity_state` <- `is_active`
   - selection: kernel-marked
   - classification: boolean-derived state domain
-  - value: `true` count=`8`
-  - value: `false` count=`3`
+  - value: `true` count=`10`
+  - value: `false` count=`4`
 
 ## automation_clients -> legacy_client
 - `activity_state` <- `is_active`
@@ -24,13 +24,13 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - selection: kernel-marked
   - classification: boolean-derived state domain
   - value: `false` count=`79`
-  - value: `true` count=`24`
+  - value: `true` count=`28`
 
 ## automation_project_groups -> project_group
 - `activity_state` <- `is_active`
   - selection: kernel-marked
   - classification: boolean-derived state domain
-  - value: `true` count=`12`
+  - value: `true` count=`15`
   - value: `false` count=`11`
 
 ## automation_task_types_tree -> task_type_tree
@@ -40,53 +40,54 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - value: `"TASK"` count=`57`
   - value: `"FUNCTIONALITY"` count=`36`
 
-## automation_performers -> person
+## automation_performers -> performer_profile
 - `role_name` <- `role`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `"PERFORMER"` count=`9`
+  - value: `"PERFORMER"` count=`10`
   - value: `"SUPER_ADMIN"` count=`4`
   - value: `"MANAGER"` count=`2`
-  - value: `"VIEWER"` count=`2`
   - value: `null` count=`1`
+  - value: `"VIEWER"` count=`1`
 - `salary_currency` <- `salary_currency`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
   - value: `"RUB"` count=`10`
   - value: `null` count=`8`
 
+## automation_telegram_chats -> telegram_chat
+- `source_kind` <- `source_kind`
+  - selection: kernel-marked
+  - classification: likely enumerated/string-dictionary domain
+  - value: `"project_chat"` count=`7`
+  - value: `"performer_chat"` count=`4`
+  - value: `"general_design_chat"` count=`1`
+
 ## automation_tasks -> task
 - `status` <- `task_status`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `"Archive"` count=`3439`
-  - value: `"Complete"` count=`210`
-  - value: `"Backlog"` count=`116`
-  - value: `"Done"` count=`78`
-  - value: `"Review / Ready"` count=`55`
-  - value: `"Ready"` count=`35`
-  - value: `"Periodic"` count=`10`
-  - value: `"Progress 10"` count=`5`
-  - value: `null` count=`4`
-  - value: `"Plan / Approval"` count=`1`
-  - value: `"Plan / Performer"` count=`1`
+  - value: `"Archive"` count=`3444`
+  - value: `"Draft"` count=`2100`
+  - value: `"Done"` count=`369`
+  - value: `"Ready"` count=`133`
+  - value: `"Progress 10"` count=`7`
 - `priority` <- `priority`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `"P3"` count=`1024`
-  - value: `"🔥 P1 "` count=`771`
-  - value: `"P2"` count=`673`
+  - value: `"P2"` count=`1781`
+  - value: `"P3"` count=`1463`
+  - value: `"P1"` count=`1293`
   - value: `"P7"` count=`575`
-  - value: `"P5"` count=`526`
-  - value: `"P4"` count=`168`
+  - value: `"P5"` count=`531`
+  - value: `"P4"` count=`213`
   - value: `""` count=`87`
   - value: `null` count=`85`
   - value: `"P6"` count=`25`
-  - value: `"🔥 P1"` count=`20`
 - `task_type_name` <- `task_type`
   - selection: kernel-marked
   - classification: open or mixed domain
-  - value: `null` count=`2366`
+  - value: `null` count=`4449`
   - value: `"67f846e0196efb66113f104c"` count=`418`
   - value: `"67f846e0196efb66113f104e"` count=`301`
   - value: `"67333b3a482852a4fb316e4d"` count=`95`
@@ -100,6 +101,7 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - value: `"67f846e0196efb66113f105f"` count=`27`
   - value: `"67f846e0196efb66113f1053"` count=`25`
   - value: `"67334ed7abb0be924bd6fd2a"` count=`23`
+  - value: `"67f846e0196efb66113f104e"` count=`18`
   - value: `"67333b38482852a4fb316e40"` count=`17`
   - value: `"67f846e0196efb66113f1074"` count=`17`
   - value: `"67333b38482852a4fb316e42"` count=`16`
@@ -107,7 +109,6 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - value: `"67f846e0196efb66113f1065"` count=`16`
   - value: `"67f846e0196efb66113f1044"` count=`15`
   - value: `"67f846e0196efb66113f1046"` count=`14`
-  - value: `"67f846e0196efb66113f104e"` count=`12`
   - value: `"67333b3b482852a4fb316e50"` count=`12`
   - value: `"67f846e0196efb66113f106b"` count=`12`
   - value: `"67f846e0196efb66113f104b"` count=`10`
@@ -119,48 +120,49 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
 - `type_class` <- `type_class`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `null` count=`3908`
-  - value: `"TASK"` count=`46`
+  - value: `null` count=`3922`
+  - value: `"TASK"` count=`2131`
 - `source_kind` <- `source_kind`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `null` count=`3907`
-  - value: `"voice_possible_task"` count=`38`
-  - value: `"voice_session"` count=`9`
+  - value: `null` count=`3921`
+  - value: `"voice_possible_task"` count=`2093`
+  - value: `"voice_session"` count=`39`
 - `dialogue_tag` <- `dialogue_tag`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `null` count=`3888`
-  - value: `"voice"` count=`62`
-  - value: `"call"` count=`2`
-  - value: `"chat"` count=`2`
+  - value: `null` count=`3902`
+  - value: `"voice"` count=`2039`
+  - value: `"call"` count=`68`
+  - value: `"doc"` count=`31`
+  - value: `"chat"` count=`13`
 - `issue_type` <- `issue_type`
   - selection: kernel-marked
   - classification: null-only / no live domain
-  - value: `null` count=`3954`
+  - value: `null` count=`6053`
 
 ## automation_voice_bot_sessions -> voice_session
 - `activity_state` <- `is_active`
   - selection: kernel-marked
   - classification: boolean-derived state domain
-  - value: `false` count=`1813`
-  - value: `true` count=`144`
+  - value: `false` count=`1916`
+  - value: `true` count=`173`
 - `source_type` <- `session_source`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`1827`
-  - value: `"web"` count=`82`
-  - value: `"telegram"` count=`48`
+  - value: `"web"` count=`133`
+  - value: `"telegram"` count=`129`
 - `session_type` <- `session_type`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `"multiprompt_voice_session"` count=`1957`
+  - value: `"multiprompt_voice_session"` count=`2089`
 - `access_level` <- `access_level`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`1294`
-  - value: `"public"` count=`543`
-  - value: `"private"` count=`69`
+  - value: `"public"` count=`587`
+  - value: `"private"` count=`157`
   - value: `"restricted"` count=`51`
 
 ## automation_voice_bot_messages -> voice_message
@@ -168,44 +170,45 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`7477`
-  - value: `"web"` count=`4752`
-  - value: `"telegram"` count=`146`
+  - value: `"web"` count=`5556`
+  - value: `"telegram"` count=`438`
 - `session_type` <- `session_type`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `"multiprompt_voice_session"` count=`10989`
-  - value: `null` count=`1386`
+  - value: `"multiprompt_voice_session"` count=`11281`
+  - value: `null` count=`2190`
 - `message_type` <- `message_type`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
   - value: `null` count=`10706`
-  - value: `"voice"` count=`1615`
-  - value: `"image"` count=`24`
-  - value: `"text"` count=`21`
+  - value: `"voice"` count=`2691`
+  - value: `"text"` count=`39`
+  - value: `"image"` count=`26`
   - value: `"screenshot"` count=`9`
 - `mime_type` <- `mime_type`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `null` count=`10892`
-  - value: `"audio/webm"` count=`1349`
-  - value: `"application/octet-stream"` count=`111`
+  - value: `null` count=`10912`
+  - value: `"audio/webm"` count=`2140`
+  - value: `"application/octet-stream"` count=`394`
   - value: `"audio/ogg"` count=`23`
+  - value: `"audio/x-m4a"` count=`2`
 
 ## automation_voice_bot_session_log -> history_step
 - `event_status` <- `status`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `"done"` count=`1868`
-  - value: `"error"` count=`30`
-  - value: `"pending"` count=`11`
-  - value: `"queued"` count=`11`
+  - value: `"done"` count=`2697`
+  - value: `"error"` count=`153`
+  - value: `"queued"` count=`58`
+  - value: `"pending"` count=`39`
 - `event_group` <- `event_group`
   - selection: kernel-marked
   - classification: likely enumerated/string-dictionary domain
-  - value: `"notify_webhook"` count=`1427`
-  - value: `"transcript"` count=`331`
-  - value: `"categorization"` count=`138`
-  - value: `"summary"` count=`24`
+  - value: `"notify_webhook"` count=`2154`
+  - value: `"transcript"` count=`521`
+  - value: `"categorization"` count=`144`
+  - value: `"summary"` count=`128`
 
 ## automation_voice_bot_session_merge_log -> voice_session_merge_log
 - `operation_type` <- `operation_type`
@@ -273,13 +276,10 @@ This report inventories mapped fields that behave like dictionary/enum-like doma
   - value: `"application/x-zip-compressed"` count=`1`
   - value: `"image/jpeg"` count=`1`
 
-## automation_finances_income -> legacy_finance_income
-- `task_type_name` <- `task_type`
+## automation_reasoning_items -> reasoning_item
+- `status` <- `status`
   - selection: kernel-marked
-  - classification: likely enumerated/string-dictionary domain
-  - value: `"67d291186fafcdcf7eff2f68"` count=`10`
-  - value: `"67d291466fafcdcf7eff2f69"` count=`5`
-  - value: `"67d2915c6fafcdcf7eff2f6a"` count=`2`
+  - classification: null-only / no live domain
 
 ## forecasts_project_month -> forecast_project_month
 - `source_type` <- `type`
