@@ -580,7 +580,8 @@ h5 {
 
 .voice-session-shell {
   position: relative;
-  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
   padding: 0;
   color: var(--voice-text-main);
   overflow: hidden;
@@ -589,7 +590,8 @@ h5 {
 .voice-session-shell--workspace {
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
 }
 
 .voice-session-shell-bg {
@@ -607,17 +609,21 @@ h5 {
   position: relative;
   z-index: 1;
   width: 100%;
-  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px 14px;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  overflow: hidden;
 }
 
 .voice-session-content {
   display: flex;
   gap: 12px;
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .voice-session-tabs-shell {
@@ -628,6 +634,10 @@ h5 {
   padding: 6px;
   box-shadow: var(--voice-glass-shadow);
   backdrop-filter: blur(22px) saturate(1.35);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .voice-session-shell .voice-meeting-meta-row > .voice-meeting-meta-chip:nth-child(2) {
@@ -652,6 +662,44 @@ h5 {
 
 .voice-session-tabs-shell .ant-tabs-content-holder {
   background: transparent;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.voice-session-main-tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.voice-session-main-tabs.ant-tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.voice-session-main-tabs .ant-tabs-content,
+.voice-session-main-tabs .ant-tabs-tabpane,
+.voice-session-main-tabs .ant-tabs-tabpane-active {
+  height: 100%;
+  min-height: 0;
+}
+
+.voice-session-operops-pane {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.voice-session-operops-pane-nav {
+  flex: 0 0 auto;
+}
+
+.voice-session-operops-pane-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .voice-session-status-bottom {
@@ -1072,8 +1120,25 @@ h5 {
   }
 
   .voice-session-page {
+    min-height: auto;
+    height: auto;
     padding: 10px 12px 12px;
     gap: 10px;
+    overflow: visible;
+  }
+
+  .voice-session-shell,
+  .voice-session-shell--workspace {
+    min-height: 100vh;
+    height: auto;
+  }
+
+  .voice-session-content,
+  .voice-session-tabs-shell,
+  .voice-session-main-tabs,
+  .voice-session-operops-pane,
+  .voice-session-operops-pane-body {
+    min-height: auto;
   }
 
   .voice-sessions-shell {

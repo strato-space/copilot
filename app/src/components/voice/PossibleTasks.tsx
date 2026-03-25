@@ -810,7 +810,7 @@ function PossibleTasksSessionScope() {
 
   return (
     <div className="grid w-full items-stretch gap-3 lg:grid-cols-[minmax(0,5.5fr)_minmax(420px,2.25fr)] xl:grid-cols-[minmax(0,5.15fr)_minmax(560px,2.45fr)]">
-      <div className="self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/82 p-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl lg:h-[calc(100vh-232px)] lg:min-h-0">
+      <div className="min-h-[58vh] self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/82 p-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
         <div className="flex h-full flex-col gap-0.5 overflow-y-auto pr-0.5">
           {rowsWithMeta.map((row) => {
               const isActive = row.row_id === activeRow?.row_id;
@@ -1047,9 +1047,9 @@ function PossibleTasksSessionScope() {
         </div>
       </div>
 
-      <div className="self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/84 p-2 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl lg:h-[calc(100vh-232px)] lg:min-h-0">
+      <div className="min-h-[58vh] self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/84 p-2 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
         {activeRow ? (
-          <div className="h-full overflow-y-auto pr-0.5">
+          <div className="pr-0.5">
             <div className="flex h-full flex-col gap-2">
               <div className="flex flex-wrap items-start justify-end gap-2">
                 <Space size={8} wrap>

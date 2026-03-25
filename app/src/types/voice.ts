@@ -17,6 +17,7 @@ export interface VoiceBotSession {
     dialogue_tag?: string;
     created_at?: string;
     updated_at?: string;
+    last_voice_timestamp?: string | number | Date;
     project_id?: string | null;
     show_in_crm?: boolean;
     is_postprocessing?: boolean;

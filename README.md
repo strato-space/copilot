@@ -215,6 +215,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice sessions list supports deleted-session mode (`include_deleted` / `Показывать удаленные`); creator/participant filters suppress numeric identity placeholders and keep only human-readable labels.
 - Voice sessions list now persists active tab + filter set in local storage and restores them on reopen; current quick tabs are `Все`, `Без проекта`, `Активные`, `Мои`.
 - Voice sessions list forces a mode-sync refetch when `showDeletedSessions` intent changes during an in-flight load (`force=true` bypasses loading short-circuit for this case).
+- Voice sessions list fetch must remain independent from project/person hydration; metadata warm-up should not retrigger `/api/voicebot/sessions/list`, and canonical row ordering now lives in the store.
+- Voice sessions list backend path now batches `message_count` and session task counters instead of doing per-row fan-out work; startup indexes must include `automation_voice_bot_messages.session_id` for this route.
 - Voice sessions list supports bulk delete for selected active rows (`Удалить выбранные`) with confirmation and safe exclusion of already deleted sessions.
 - Voice sessions list state marker is now a dedicated pictogram column aligned with session state semantics (`recording`, `cutting`, `paused`, `final_uploading`, `closed`, `ready`, `error`).
 - Session read path normalizes stale categorization rows linked to deleted transcript segments (including punctuation/spacing variants) and saves cleaned `processed_data`.
@@ -239,6 +241,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `POST /api/voicebot/save_possible_tasks` writes task core fields through the card-backed `automation_tasks` adapter,
   - `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Draft' }` validates the same Draft-master scalar subset plus lineage/lifecycle invariants before API normalization, but keeps read-time compatibility for legacy `source_kind='voice_session'` rows while write-time persistence remains strict on `source_kind='voice_possible_task'`,
   - structured compatibility payloads (`source_data`, `dependencies`, `dependencies_from_ai`, `status_history`, `task_status_history`, `comments_list`) and compatibility-only overlays (`relations`, `parent`, `children`, `discussion_sessions`) remain deferred outside the strict validated subset in this wave.
+- Desktop Possible Tasks is a matched-height master/detail workspace: list and detail panes should use the same taller shell, and the detail card must not depend on an inner forced full-height scroller just to be readable.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - Possible Tasks creation flow now emits structured submit diagnostics in browser console:

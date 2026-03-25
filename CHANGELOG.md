@@ -2,6 +2,8 @@
 
 ## 2026-03-25
 ### PROBLEM SOLVED
+- **05:08** Voice Draft desktop layout still wasted vertical space: the detail card depended on nested scroll, the task list and right panel were not height-aligned, and operators had to fight page-plus-widget double scroll to read one task.
+- **05:08** The Voice sessions list at `/voice?page=1&pageSize=100` had regressed into a multi-second load because frontend hydration retriggered the list fetch while backend `sessions/list` still did oversized joins plus per-session message/task work.
 - **04:15** Shared selector behavior still drifted between Voice and OperOps, so project and task-type controls could collapse into flat option lists, leak raw ids, or require different click paths depending on the surface.
 - **04:15** Production UI regressed after the parity wave: `/operops/crm` could blank-render behind React error `#185`, while the left app shell became narrow enough to clip sidebar labels even though backend APIs and the database were healthy.
 - **04:15** Historical `CREATE_TASKS` runs still left stale processing markers and request-vs-finished drift in session state, which kept green pending dots and processing footers alive on old Voice sessions after the real jobs had already ended.
@@ -11,6 +13,8 @@
 - **04:27** The migrated Draft slice still stopped at field-coverage/reversible-mapping checks, so `automation_tasks` could carry scalar value/type/domain drift inside the supposedly strict ontology-backed path.
 
 ### FEATURE IMPLEMENTED
+- **05:08** Landed a taller matched-height Voice Draft workspace: the list and detail panes now share the same desktop shell, the right card is readable without nested forced-height scrolling, and the overall `/voice/session/:id` tasks area no longer relies on accidental double scroll.
+- **05:08** Accelerated the Voice sessions list path by removing duplicate frontend fetches and moving backend task/message counting to bounded batch reads, preserving the existing list contract while cutting the main latency sources.
 - **04:15** Unified project/task-type selector parity onto shared option-source helpers and shared wrappers, keeping hierarchy/labels consistent between Voice and OperOps and making first-click inline editing deterministic again.
 - **04:15** Hardened the app shell and CRM render path for production: the sidebar is readable again, CRM status-stat updates are idempotent, and `/operops/crm` plus `/voice` now render from the same stable shell without the frontend-only blank-page failure.
 - **04:15** Added a canonical stale-state repair flow for historical `CREATE_TASKS` markers and formalized the browser acceptance ritual around `systemctl restart mcp@chrome-devtools.service` before each live UI smoke cycle.
@@ -20,6 +24,9 @@
 - **04:27** Extended the Draft `automation_tasks` slice with card-derived scalar validation: the registry now carries attribute value types plus owner-level `@values(...)`, the adapter can validate selected Mongo fields against those card rules, and the migrated Voice Draft path now enforces strict Draft-master invariants while leaving structured compatibility payloads explicitly deferred.
 
 ### CHANGES
+- **05:08** Updated `AGENTS.md` and repo docs so subagent issue packets now require the literal first-step command `bd show <id> --json`, keeping child execution bound to the canonical ticket payload instead of parent paraphrase.
+- **05:08** Updated `app/src/{index.css,pages/voice/SessionPage.tsx,components/voice/PossibleTasks.tsx}` and focused Voice task-surface tests so the Draft master/detail workspace uses `100dvh` shell flow, aligned pane heights, and no forced nested detail scroller on desktop.
+- **05:08** Updated `app/src/{pages/voice/SessionsListPage.tsx,store/voiceBotStore.ts,types/voice.ts}`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/constants.ts`, and focused route/contract tests so `/api/voicebot/sessions/list` no longer refetches on hydration, store ordering is canonical, `message_count` and task counters are batched, and `automation_voice_bot_messages.session_id` is indexed for the list route.
 - **04:15** Updated `app/src/{App.tsx,index.css}` plus `app/__tests__/shell/appShell.test.tsx` to widen the sidebar, keep `(zero)`/other meta badges readable, and align shell spacing with the current Voice/OperOps parity contract.
 - **04:15** Reworked `app/src/components/voice/PossibleTasks.tsx`, shared selector wrappers under `app/src/components/shared/`, and option builders `app/src/utils/{projectSelectOptions,taskTypeSelectOptions}.ts`; refreshed focused selector/Voice tests so project hierarchy and operational task-type labels come from one shared source.
 - **04:15** Updated `app/src/components/crm/CRMKanban.tsx`, `app/src/store/crmStore.ts`, and `app/__tests__/operops/crmStoreStatusStats.test.ts` so filtered-ticket/status-stat recomputes are memoized/idempotent and no longer trigger the React render loop that blanked `/operops/crm` on production.

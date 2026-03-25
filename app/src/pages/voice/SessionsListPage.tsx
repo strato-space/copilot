@@ -657,20 +657,28 @@ export default function SessionsListPage() {
         if (!persons_list) {
             void fetchPersonsList();
         }
+    }, [
+        isAuth,
+        prepared_projects,
+        persons_list,
+        fetchPreparedProjects,
+        fetchPersonsList,
+    ]);
+
+    useEffect(() => {
+        if (!isAuth) return;
         const shouldForceSyncIncludeDeleted =
             sessionsListIncludeDeleted !== null && sessionsListIncludeDeleted !== showDeletedSessions;
+        const shouldFetchSessionsList = sessionsListIncludeDeleted === null || shouldForceSyncIncludeDeleted;
+        if (!shouldFetchSessionsList) return;
         void fetchVoiceBotSessionsList({
             includeDeleted: showDeletedSessions,
             force: shouldForceSyncIncludeDeleted,
         });
     }, [
         isAuth,
-        prepared_projects,
-        persons_list,
         sessionsListIncludeDeleted,
         showDeletedSessions,
-        fetchPreparedProjects,
-        fetchPersonsList,
         fetchVoiceBotSessionsList,
     ]);
 
@@ -710,23 +718,7 @@ export default function SessionsListPage() {
         return enrichedSessionsList;
     }, [enrichedSessionsList, projectTab, user?.id]);
 
-    const sortedSessionsList = useMemo<SessionRow[]>(() => {
-        return [...filteredSessionsList].sort((left, right) => {
-            const leftCreatedTs = parseSessionTimestamp(left.created_at);
-            const rightCreatedTs = parseSessionTimestamp(right.created_at);
-            if (leftCreatedTs !== rightCreatedTs) {
-                return rightCreatedTs - leftCreatedTs;
-            }
-
-            const leftLastVoiceTs = parseSessionTimestamp(left.last_voice_timestamp);
-            const rightLastVoiceTs = parseSessionTimestamp(right.last_voice_timestamp);
-            if (leftLastVoiceTs !== rightLastVoiceTs) {
-                return rightLastVoiceTs - leftLastVoiceTs;
-            }
-
-            return String(right._id ?? '').localeCompare(String(left._id ?? ''));
-        });
-    }, [filteredSessionsList]);
+    const sortedSessionsList = filteredSessionsList;
 
     const selectableSessionIds = useMemo(
         () => new Set(filteredSessionsList.filter((session) => !session.is_deleted).map((session) => session._id)),

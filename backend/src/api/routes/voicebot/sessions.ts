@@ -2226,30 +2226,132 @@ const buildSessionAttachments = (messages: Array<Record<string, unknown>>): Sess
     return attachments;
 };
 
-const resolveSessionListTaskCounts = async ({
-    db,
-    session,
-}: {
-    db: Db;
-    session: Record<string, unknown>;
-}): Promise<{ tasks_count: number; codex_count: number }> => {
-    const sessionId = session._id instanceof ObjectId
-        ? session._id.toHexString()
-        : String(session._id ?? '').trim();
-    if (!ObjectId.isValid(sessionId)) {
-        return { tasks_count: 0, codex_count: 0 };
+const SESSION_LIST_TASK_MATCH_FIELDS = [
+    'external_ref',
+    'session_id',
+    'session_db_id',
+    'source.voice_session_id',
+    'source.session_id',
+    'source.session_db_id',
+    'source_data.voice_session_id',
+    'source_data.session_id',
+    'source_data.session_db_id',
+    'source_data.voice_sessions.session_id',
+    'source_data.payload.session_id',
+    'source_data.payload.session_db_id',
+] as const;
+
+const collectPathValues = (value: unknown, out: string[]): void => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+        value.forEach((entry) => collectPathValues(entry, out));
+        return;
+    }
+    if (value instanceof ObjectId) {
+        out.push(value.toHexString());
+        return;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+        out.push(String(value));
+    }
+};
+
+const getPathValues = (record: Record<string, unknown>, path: string): string[] => {
+    const segments = path.split('.');
+    let cursor: unknown[] = [record];
+
+    for (const segment of segments) {
+        const nextCursor: unknown[] = [];
+        for (const node of cursor) {
+            if (Array.isArray(node)) {
+                node.forEach((entry) => {
+                    if (entry && typeof entry === 'object') {
+                        nextCursor.push((entry as Record<string, unknown>)[segment]);
+                    }
+                });
+                continue;
+            }
+            if (node && typeof node === 'object') {
+                nextCursor.push((node as Record<string, unknown>)[segment]);
+            }
+        }
+        cursor = nextCursor;
+        if (cursor.length === 0) return [];
     }
 
-    const sessionRef = voiceSessionUrlUtils.canonical(sessionId);
-    const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
+    const result: string[] = [];
+    cursor.forEach((entry) => collectPathValues(entry, result));
+    return result;
+};
+
+const resolveSessionListTaskCountsBatch = async ({
+    db,
+    sessions,
+}: {
+    db: Db;
+    sessions: Array<Record<string, unknown>>;
+}): Promise<Map<string, { tasks_count: number; codex_count: number }>> => {
+    const countsBySessionId = new Map<string, { tasks_count: number; codex_count: number }>();
+    const scopedSessions: Array<{
+        sessionId: string;
+        sessionRef: string;
+        refs: string[];
+        legacyVoiceSourceRefs: string[];
+    }> = [];
+
+    for (const session of sessions) {
+        const sessionId = session._id instanceof ObjectId
+            ? session._id.toHexString()
+            : String(session._id ?? '').trim();
+        countsBySessionId.set(sessionId, { tasks_count: 0, codex_count: 0 });
+        if (!ObjectId.isValid(sessionId)) continue;
+
+        const refs = buildSessionScopedTaskRefs({ sessionId, session });
+        scopedSessions.push({
+            sessionId,
+            sessionRef: voiceSessionUrlUtils.canonical(sessionId),
+            refs,
+            legacyVoiceSourceRefs: refs.filter((ref) => isVoiceSessionSourceRef(ref)),
+        });
+    }
+
+    if (scopedSessions.length === 0) return countsBySessionId;
+
+    const allRefs = new Set<string>();
+    const allLegacyVoiceSourceRefs = new Set<string>();
+    const allSessionRefs = new Set<string>();
+    const generalRefToSessionIds = new Map<string, Set<string>>();
+    const legacyRefToSessionIds = new Map<string, Set<string>>();
+
+    for (const scopedSession of scopedSessions) {
+        allSessionRefs.add(scopedSession.sessionRef);
+        scopedSession.refs.forEach((ref) => {
+            allRefs.add(ref);
+            const linkedSessionIds = generalRefToSessionIds.get(ref) ?? new Set<string>();
+            linkedSessionIds.add(scopedSession.sessionId);
+            generalRefToSessionIds.set(ref, linkedSessionIds);
+        });
+        scopedSession.legacyVoiceSourceRefs.forEach((ref) => {
+            allLegacyVoiceSourceRefs.add(ref);
+            const linkedSessionIds = legacyRefToSessionIds.get(ref) ?? new Set<string>();
+            linkedSessionIds.add(scopedSession.sessionId);
+            legacyRefToSessionIds.set(ref, linkedSessionIds);
+        });
+    }
+
+    const allRefsList = Array.from(allRefs);
+    const allLegacyVoiceSourceRefsList = Array.from(allLegacyVoiceSourceRefs);
+    const nonCodexTaskOrMatch: Record<string, unknown>[] = SESSION_LIST_TASK_MATCH_FIELDS.map((field) => ({ [field]: { $in: allRefsList } }));
+    if (allLegacyVoiceSourceRefsList.length > 0) {
+        nonCodexTaskOrMatch.push({ source_ref: { $in: allLegacyVoiceSourceRefsList } });
+    }
+
     const nonCodexTaskMatch = mergeWithRuntimeFilter(
         {
             is_deleted: { $ne: true },
             codex_task: { $ne: true },
-            $and: [
-                sessionScopedTaskMatch,
-                { 'source_data.refresh_state': { $ne: 'stale' } },
-            ],
+            'source_data.refresh_state': { $ne: 'stale' },
+            $or: nonCodexTaskOrMatch,
         },
         {
             field: 'runtime_tag',
@@ -2257,11 +2359,67 @@ const resolveSessionListTaskCounts = async ({
             includeLegacyInProd: IS_PROD_RUNTIME,
         }
     );
+
+    const nonCodexTasks = await db.collection(COLLECTIONS.TASKS).aggregate([
+        { $match: nonCodexTaskMatch },
+        {
+            $project: {
+                external_ref: 1,
+                source_ref: 1,
+                session_id: 1,
+                session_db_id: 1,
+                source: {
+                    voice_session_id: 1,
+                    session_id: 1,
+                    session_db_id: 1,
+                },
+                source_data: {
+                    voice_session_id: 1,
+                    session_id: 1,
+                    session_db_id: 1,
+                    voice_sessions: 1,
+                    payload: {
+                        session_id: 1,
+                        session_db_id: 1,
+                    },
+                },
+            },
+        },
+    ]).toArray() as Array<Record<string, unknown>>;
+
+    for (const task of nonCodexTasks) {
+        const matchedSessionIds = new Set<string>();
+        for (const field of SESSION_LIST_TASK_MATCH_FIELDS) {
+            const values = getPathValues(task, field);
+            values.forEach((value) => {
+                const linkedSessionIds = generalRefToSessionIds.get(value);
+                if (!linkedSessionIds) return;
+                linkedSessionIds.forEach((sessionId) => matchedSessionIds.add(sessionId));
+            });
+        }
+
+        const sourceRefValues = getPathValues(task, 'source_ref');
+        sourceRefValues.forEach((value) => {
+            const linkedSessionIds = legacyRefToSessionIds.get(value);
+            if (!linkedSessionIds) return;
+            linkedSessionIds.forEach((sessionId) => matchedSessionIds.add(sessionId));
+        });
+
+        matchedSessionIds.forEach((sessionId) => {
+            const current = countsBySessionId.get(sessionId);
+            if (!current) return;
+            countsBySessionId.set(sessionId, {
+                ...current,
+                tasks_count: current.tasks_count + 1,
+            });
+        });
+    }
+
     const codexTaskMatch = mergeWithRuntimeFilter(
         {
             is_deleted: { $ne: true },
             codex_task: true,
-            external_ref: sessionRef,
+            external_ref: { $in: Array.from(allSessionRefs) },
         },
         {
             field: 'runtime_tag',
@@ -2270,12 +2428,61 @@ const resolveSessionListTaskCounts = async ({
         }
     );
 
-    const [tasks_count, codex_count] = await Promise.all([
-        db.collection(COLLECTIONS.TASKS).countDocuments(nonCodexTaskMatch),
-        db.collection(COLLECTIONS.TASKS).countDocuments(codexTaskMatch),
-    ]);
+    const codexTaskCounts = await db.collection(COLLECTIONS.TASKS).aggregate([
+        { $match: codexTaskMatch },
+        { $group: { _id: '$external_ref', count: { $sum: 1 } } },
+    ]).toArray() as Array<{ _id: string; count: number }>;
 
-    return { tasks_count, codex_count };
+    const sessionRefToSessionId = new Map<string, string>();
+    scopedSessions.forEach((scopedSession) => sessionRefToSessionId.set(scopedSession.sessionRef, scopedSession.sessionId));
+    codexTaskCounts.forEach((entry) => {
+        const sessionId = sessionRefToSessionId.get(String(entry._id));
+        if (!sessionId) return;
+        const current = countsBySessionId.get(sessionId);
+        if (!current) return;
+        countsBySessionId.set(sessionId, {
+            ...current,
+            codex_count: Number.isFinite(entry.count) ? entry.count : 0,
+        });
+    });
+
+    return countsBySessionId;
+};
+
+const resolveSessionListMessageCounts = async ({
+    rawDb,
+    sessions,
+}: {
+    rawDb: Db;
+    sessions: Array<Record<string, unknown>>;
+}): Promise<Map<string, number>> => {
+    const sessionIds = sessions
+        .map((session) => (session._id instanceof ObjectId ? session._id : toObjectIdOrNull(session._id)))
+        .filter((sessionId): sessionId is ObjectId => sessionId instanceof ObjectId);
+
+    if (sessionIds.length === 0) {
+        return new Map();
+    }
+
+    const rows = await rawDb.collection(VOICEBOT_COLLECTIONS.MESSAGES).aggregate([
+        {
+            $match: {
+                session_id: { $in: sessionIds },
+            },
+        },
+        {
+            $group: {
+                _id: '$session_id',
+                count: { $sum: 1 },
+            },
+        },
+    ]).toArray() as Array<{ _id?: ObjectId; count?: number }>;
+
+    return new Map(
+        rows
+            .filter((row) => row._id instanceof ObjectId)
+            .map((row) => [row._id!.toHexString(), Number(row.count) || 0])
+    );
 };
 
 const listSessions = async (req: Request, res: Response) => {
@@ -2309,24 +2516,57 @@ const listSessions = async (req: Request, res: Response) => {
             {
                 $lookup: {
                     from: VOICEBOT_COLLECTIONS.PERFORMERS,
-                    localField: "chat_id_str",
-                    foreignField: "telegram_id",
+                    let: { chatIdStr: "$chat_id_str" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$telegram_id", "$$chatIdStr"] } } },
+                        {
+                            $project: {
+                                _id: 1,
+                                real_name: 1,
+                                name: 1,
+                                telegram_id: 1,
+                            },
+                        },
+                        { $limit: 1 },
+                    ],
                     as: "performer"
                 }
             },
             {
                 $lookup: {
                     from: VOICEBOT_COLLECTIONS.PROJECTS,
-                    localField: "project_id",
-                    foreignField: "_id",
+                    let: { projectId: "$project_id" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$projectId"] } } },
+                        {
+                            $project: {
+                                _id: 1,
+                                name: 1,
+                                is_active: 1,
+                            },
+                        },
+                        { $limit: 1 },
+                    ],
                     as: "project"
                 }
             },
             {
                 $lookup: {
                     from: VOICEBOT_COLLECTIONS.PERSONS,
-                    localField: "participants",
-                    foreignField: "_id",
+                    let: { participantIds: "$participants" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $in: ["$_id", { $ifNull: ["$$participantIds", []] }] },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 1,
+                                name: 1,
+                            },
+                        },
+                    ],
                     as: "participants_data"
                 }
             },
@@ -2341,55 +2581,54 @@ const listSessions = async (req: Request, res: Response) => {
                             in: {
                                 _id: "$$participant._id",
                                 name: "$$participant.name",
-                                contacts: "$$participant.contacts"
                             }
                         }
                     }
                 }
             },
             {
-                $lookup: {
-                    from: VOICEBOT_COLLECTIONS.MESSAGES,
-                    let: { sessionId: "$_id" },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: { $eq: ["$session_id", "$$sessionId"] },
-                            },
-                        },
-                        { $count: "count" }
-                    ],
-                    as: "message_count_arr"
-                }
-            },
-            {
-                $addFields: {
-                    message_count: { $ifNull: [{ $arrayElemAt: ["$message_count_arr.count", 0] }, 0] }
-                }
-            },
-            {
                 $project: {
-                    message_count_arr: 0,
                     participants_data: 0,
                     processors_data: 0,
+                    chat_id_str: 0,
                 }
             }
         ]).toArray();
 
+        const messageCounts = await resolveSessionListMessageCounts({
+            rawDb,
+            sessions: sessions as Array<Record<string, unknown>>,
+        });
+
+        const sessionsWithMessageCounts = (sessions as Array<Record<string, unknown>>).map((session) => {
+            const sessionId = session._id instanceof ObjectId
+                ? session._id.toHexString()
+                : String(session._id ?? '').trim();
+            return {
+                ...session,
+                message_count: messageCounts.get(sessionId) ?? 0,
+            };
+        });
+
         // Filter sessions with messages or active status (always include deleted when explicitly requested)
-        const visibleSessions = sessions.filter((session: { message_count?: number; is_active?: boolean; is_deleted?: boolean }) =>
+        const visibleSessions = sessionsWithMessageCounts.filter((session: { message_count?: number; is_active?: boolean; is_deleted?: boolean }) =>
             session.is_deleted === true || (session.message_count ?? 0) > 0 || (session.is_active ?? false) !== false
         );
 
-        const result = await Promise.all(
-            visibleSessions.map(async (session) => ({
+        const countsBySessionId = await resolveSessionListTaskCountsBatch({
+            db,
+            sessions: visibleSessions as Array<Record<string, unknown>>,
+        });
+        const result = visibleSessions.map((session) => {
+            const sessionId = session._id instanceof ObjectId
+                ? session._id.toHexString()
+                : String(session._id ?? '').trim();
+            const counts = countsBySessionId.get(sessionId) ?? { tasks_count: 0, codex_count: 0 };
+            return {
                 ...session,
-                ...(await resolveSessionListTaskCounts({
-                    db,
-                    session: session as Record<string, unknown>,
-                })),
-            }))
-        );
+                ...counts,
+            };
+        });
 
         res.status(200).json(result);
     } catch (error) {

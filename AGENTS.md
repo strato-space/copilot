@@ -232,6 +232,9 @@ Preferred engineering principles for this repo:
 - Default execution mode for this repo: track work in `bd` and prefer bounded swarm/subagent execution when practical; parent thread remains responsible for final integration and acceptance.
 - Real implementation work should be delegated to subagents when practical; the parent thread should stay focused on discovery, coordination, integration, and final acceptance.
 - When a subagent is assigned a `bd` issue, pass and execute `bd show <id> --json` up front so the child thread reads the canonical ticket payload instead of relying on a paraphrased summary.
+- Parent-to-subagent issue packets must include the literal first-step command, not just a prose reminder. Required pattern:
+  - `1. Run \`bd show <id> --json\` and read it before any repo reads/edits.`
+  - `2. Use that ticket as the canonical scope; do not rely on the parent summary when it conflicts with the ticket payload.`
 - Subagents MUST start with a clean history by default (`fork_context=false`); do not spawn child agents with inherited conversation history unless there is an explicit, narrow reason to preserve prior thread state.
 - Parent prompts for subagents must be short, decision-complete, and scoped to one bounded write surface.
 - Targeted verification can be delegated to subagents, but final integration verification and production deploy/smoke remain the responsibility of the parent thread after all patches are merged.
@@ -455,6 +458,8 @@ Preferred engineering principles for this repo:
 - Voice workers schedule `CLEANUP_EMPTY_SESSIONS` on `VOICEBOT_QUEUES.COMMON`; cleanup marks stale empty sessions (`message_count=0`) as `is_deleted=true` with configurable cadence/age/batch limits via env.
 - Voice sessions list supports `include_deleted` server filter and frontend `Показывать удаленные`; creator/participant filters drop numeric identity placeholders so only human labels are shown.
 - Voice sessions list must force a refetch when `include_deleted` intent changes during an in-flight list load; loading guard should not block `force=true` mode sync.
+- Voice sessions list fetch must stay single-shot with respect to metadata hydration: project/person hydration must not retrigger `sessions/list`, and canonical row ordering belongs in the store rather than in an extra page-level resort pass.
+- Voice sessions list backend contract must avoid per-row fan-out work: `message_count` and session task counters should be resolved in bounded batch reads, and `automation_voice_bot_messages.session_id` is a required startup index for the list path.
 - Voice sessions list supports bulk delete for selected non-deleted rows (`Удалить выбранные` with confirmation) while preserving row-click navigation behavior.
 - Voice session task subtabs are new-contract only: backend `voicebot/session_tab_counts` must return ordered `status_counts`, and clients must not rely on legacy `tasks_work_count` / `tasks_review_count` fields or hardcoded `Work/Review` splits.
 - Frontend session task tabs must map backend status labels back to canonical CRM status keys before passing filters into `CRMKanban`; do not pass human-readable labels directly as task-status filter values.
@@ -830,6 +835,8 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - Updated regression contract `app/__tests__/voice/webrtcSessionDoneSocketContract.test.ts` to lock fallback namespace attempts and non-silent failed-close behavior.
 - Added sessions-list persistence contract: quick tabs (`all/without_project/active/mine`) and filter state are restored from local storage between page opens.
 - Added dedicated session-state pictogram column in Voice sessions list and removed legacy active-dot semantics from date-cell rendering contracts.
+- Fixed Voice Draft workspace height contract: desktop master/detail panes now share a taller aligned shell, avoid page-plus-widget double scroll, and keep the right detail card readable without forcing a nested full-height scroller.
+- Optimized Voice sessions list loading path: hydration no longer causes duplicate `/voicebot/sessions/list` fetches, store-side ordering is canonical, backend task/message counts are batched, and `automation_voice_bot_messages.session_id` is indexed for the list route.
 - Added merge-session API/store scaffolding (`voicebot/sessions/merge`, `mergeSessions(...)`) with explicit confirmation phrase and merge-log collection constant (`automation_voice_bot_session_merge_log`).
 - Added TS transcribe Telegram transport recovery flow (`getFile` -> download -> persist `file_path` -> transcribe) and matching regression coverage in `workerTranscribeHandler` tests.
 - Added planning draft `plan/voice-operops-codex-taskflow-spec.md` with confirmed defaults for Codex performer, `@task` auto-session creation, deferred review worker strategy, and session-tab filtering contracts.

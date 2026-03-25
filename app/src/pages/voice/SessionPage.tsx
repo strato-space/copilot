@@ -484,8 +484,8 @@ export default function SessionPage() {
                 showCount: sessionOperOpsTasksCount !== null,
             }),
             children: (
-                <div className="flex flex-col gap-3">
-                    <>
+                <div className="voice-session-operops-pane">
+                    <div className="voice-session-operops-pane-nav">
                         <Tabs
                             activeKey={sessionTasksSubTab}
                             onChange={(nextTab) => setSessionTasksSubTab(nextTab)}
@@ -496,6 +496,8 @@ export default function SessionPage() {
                                 label: renderTabLabel(entry.label, entry.count),
                             }))}
                         />
+                    </div>
+                    <div className="voice-session-operops-pane-body">
                         {isDraftSessionTaskSubTab ? (
                             <PossibleTasks />
                         ) : (
@@ -509,7 +511,7 @@ export default function SessionPage() {
                                 columns={[...VOICE_SESSION_TASK_COLUMNS]}
                             />
                         )}
-                    </>
+                    </div>
                 </div>
             ),
         },
@@ -610,7 +612,7 @@ export default function SessionPage() {
                                 activeKey={activeTab}
                                 onChange={setActiveTab}
                                 defaultActiveKey="2"
-                                className="bg-transparent"
+                                className="voice-session-main-tabs bg-transparent"
                                 items={tabs}
                             />
                         </div>

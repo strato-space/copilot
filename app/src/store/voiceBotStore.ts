@@ -676,6 +676,43 @@ const toFiniteNumber = (value: unknown): number | null => {
     return Number.isFinite(parsed) ? parsed : null;
 };
 
+const parseSessionTimestamp = (value: unknown): number => {
+    if (value instanceof Date) {
+        const timestamp = value.getTime();
+        return Number.isFinite(timestamp) ? timestamp : 0;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value > 1_000_000_000_000 ? value : value * 1000;
+    }
+    if (typeof value === 'string') {
+        const normalized = value.trim();
+        if (!normalized) return 0;
+        const numeric = Number(normalized);
+        if (Number.isFinite(numeric)) {
+            return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+        }
+        const parsed = Date.parse(normalized);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+};
+
+const compareSessionsListOrder = (left: VoiceBotSession, right: VoiceBotSession): number => {
+    const leftCreatedTs = parseSessionTimestamp(left.created_at);
+    const rightCreatedTs = parseSessionTimestamp(right.created_at);
+    if (leftCreatedTs !== rightCreatedTs) {
+        return rightCreatedTs - leftCreatedTs;
+    }
+
+    const leftLastVoiceTs = parseSessionTimestamp(left.last_voice_timestamp);
+    const rightLastVoiceTs = parseSessionTimestamp(right.last_voice_timestamp);
+    if (leftLastVoiceTs !== rightLastVoiceTs) {
+        return rightLastVoiceTs - leftLastVoiceTs;
+    }
+
+    return String(right._id ?? '').localeCompare(String(left._id ?? ''));
+};
+
 const normalizeSessionAttachment = (value: unknown): VoiceSessionAttachment | null => {
     if (!value || typeof value !== 'object') return null;
     const item = value as Record<string, unknown>;
@@ -1634,7 +1671,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
     fetchVoiceBotSessionsList: async (options) => {
         const includeDeleted = options?.includeDeleted === true;
         const { force = false } = options ?? {};
-        const { isSessionsListLoading, sessionsListIncludeDeleted } = get();
+        const { isSessionsListLoading } = get();
         if (isSessionsListLoading && !force) return;
 
         set({ isSessionsListLoading: true });
@@ -1643,11 +1680,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 include_deleted: includeDeleted,
             });
             if (response && Array.isArray(response)) {
-                const sorted = [...response].sort((a, b) => {
-                    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-                    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-                    return bTime - aTime;
-                });
+                const sorted = [...response].sort(compareSessionsListOrder);
                 set({
                     voiceBotSessionsList: sorted,
                     sessionsListLoadedAt: Date.now(),

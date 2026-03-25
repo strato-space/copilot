@@ -10,7 +10,15 @@ describe('Voice sessions include_deleted sync contract', () => {
   it('forces list refetch when store includeDeleted differs from URL flag', () => {
     expect(pageSource).toContain('const shouldForceSyncIncludeDeleted =');
     expect(pageSource).toContain('sessionsListIncludeDeleted !== null && sessionsListIncludeDeleted !== showDeletedSessions');
+    expect(pageSource).toContain('const shouldFetchSessionsList = sessionsListIncludeDeleted === null || shouldForceSyncIncludeDeleted;');
+    expect(pageSource).toContain('if (!shouldFetchSessionsList) return;');
     expect(pageSource).toContain('force: shouldForceSyncIncludeDeleted');
+  });
+
+  it('does not refetch sessions list just because projects/persons hydration finished', () => {
+    expect(pageSource).toContain('if (!prepared_projects) {');
+    expect(pageSource).toContain('if (!persons_list) {');
+    expect(pageSource).not.toContain('prepared_projects,\n        persons_list,\n        sessionsListIncludeDeleted,\n        showDeletedSessions,');
   });
 
   it('allows forced fetch while sessions list loading is in progress', () => {
@@ -21,14 +29,16 @@ describe('Voice sessions include_deleted sync contract', () => {
     expect(storeSource).not.toContain('if (!force && sessionsListLoadedAt && sessionsListIncludeDeleted === includeDeleted) return;');
   });
 
-  it('sorts sessions by created_at before last_voice_timestamp to keep date ordering stable', () => {
+  it('keeps sessions ordering logic in store and avoids page-level resorting', () => {
     const createdSortSnippet = 'const leftCreatedTs = parseSessionTimestamp(left.created_at);';
     const lastVoiceSortSnippet = 'const leftLastVoiceTs = parseSessionTimestamp(left.last_voice_timestamp);';
-    const activeSortSnippet = 'const leftActive = left.is_active === true ? 1 : 0;';
-    expect(pageSource).toContain(createdSortSnippet);
-    expect(pageSource).toContain(lastVoiceSortSnippet);
-    expect(pageSource).not.toContain(activeSortSnippet);
-    expect(pageSource.indexOf(createdSortSnippet)).toBeLessThan(pageSource.indexOf(lastVoiceSortSnippet));
+    expect(storeSource).toContain('const compareSessionsListOrder = (left: VoiceBotSession, right: VoiceBotSession): number => {');
+    expect(storeSource).toContain(createdSortSnippet);
+    expect(storeSource).toContain(lastVoiceSortSnippet);
+    expect(storeSource).toContain('const sorted = [...response].sort(compareSessionsListOrder);');
+    expect(pageSource).toContain('const sortedSessionsList = filteredSessionsList;');
+    expect(pageSource).not.toContain('return [...filteredSessionsList].sort((left, right) => {');
+    expect(storeSource.indexOf(createdSortSnippet)).toBeLessThan(storeSource.indexOf(lastVoiceSortSnippet));
   });
 
   it('renders state pictogram column and removes legacy active red dot in date cell', () => {

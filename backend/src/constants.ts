@@ -148,6 +148,7 @@ export const MONGO_INDEX_NAMES = {
   VOICE_SESSIONS_CREATED_AT_ID: 'idx_voice_sessions_created_at_id',
   VOICE_MESSAGES_UPDATED_AT_ID: 'idx_voice_messages_updated_at_id',
   VOICE_MESSAGES_CREATED_AT_ID: 'idx_voice_messages_created_at_id',
+  VOICE_MESSAGES_SESSION_ID: 'idx_voice_messages_session_id',
   WORK_HOURS_TICKET_DB_ID_RUNTIME_TAG: 'idx_work_hours_ticket_db_id_runtime_tag',
   PROJECT_PERFORMER_LINKS_PROJECT_PERFORMER_ACTIVE: 'idx_project_performer_links_project_performer_active',
   TELEGRAM_CHATS_CHAT_ID: 'idx_telegram_chats_chat_id',
@@ -239,6 +240,13 @@ export const MONGO_STARTUP_INDEXES = [
     key: {
       created_at: 1,
       _id: 1,
+    },
+  },
+  {
+    collection: COLLECTIONS.VOICE_BOT_MESSAGES,
+    name: MONGO_INDEX_NAMES.VOICE_MESSAGES_SESSION_ID,
+    key: {
+      session_id: 1,
     },
   },
   {

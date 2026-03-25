@@ -8,8 +8,9 @@ const getRawDbMock = jest.fn();
 const getUserPermissionsMock = jest.fn();
 const generateDataFilterMock = jest.fn();
 
-const countDocumentsMock = jest.fn();
-const aggregateMock = jest.fn();
+const sessionsAggregateMock = jest.fn();
+const tasksAggregateMock = jest.fn();
+const messagesAggregateMock = jest.fn();
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -60,36 +61,71 @@ describe('Voicebot sessions list route', () => {
     getRawDbMock.mockReset();
     getUserPermissionsMock.mockReset();
     generateDataFilterMock.mockReset();
-    countDocumentsMock.mockReset();
-    aggregateMock.mockReset();
+    sessionsAggregateMock.mockReset();
+    tasksAggregateMock.mockReset();
+    messagesAggregateMock.mockReset();
 
-    aggregateMock.mockReturnValue({
+    sessionsAggregateMock.mockReturnValue({
       toArray: async () => [
         {
           _id: sessionId,
           chat_id: 123456,
           session_name: 'List Session',
-          message_count: 5,
           is_active: true,
           is_deleted: false,
         },
       ],
     });
 
-    countDocumentsMock
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(3);
+    messagesAggregateMock.mockReturnValue({
+      toArray: async () => [
+        {
+          _id: sessionId,
+          count: 5,
+        },
+      ],
+    });
+
+    tasksAggregateMock
+      .mockReturnValueOnce({
+        toArray: async () => [
+          {
+            external_ref: sessionRef,
+          },
+          {
+            source_data: {
+              session_id: sessionId.toHexString(),
+            },
+          },
+          {
+            external_ref: 'https://copilot.stratospace.fun/voice/session/other',
+          },
+        ],
+      })
+      .mockReturnValueOnce({
+        toArray: async () => [
+          {
+            _id: sessionRef,
+            count: 3,
+          },
+        ],
+      });
 
     const dbStub = {
       collection: (name: string) => {
         if (name === COLLECTIONS.TASKS) {
           return {
-            countDocuments: countDocumentsMock,
+            aggregate: tasksAggregateMock,
           };
         }
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
           return {
-            aggregate: aggregateMock,
+            aggregate: sessionsAggregateMock,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            aggregate: messagesAggregateMock,
           };
         }
         return {
@@ -117,26 +153,39 @@ describe('Voicebot sessions list route', () => {
         _id: sessionId.toHexString(),
         session_name: 'List Session',
         message_count: 5,
-        tasks_count: 4,
+        tasks_count: 2,
         codex_count: 3,
       }),
     ]);
 
-    expect(countDocumentsMock).toHaveBeenNthCalledWith(
+    expect(tasksAggregateMock).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({
-        is_deleted: { $ne: true },
-        codex_task: { $ne: true },
-        $and: expect.any(Array),
-      })
+      expect.arrayContaining([
+        expect.objectContaining({
+          $match: expect.objectContaining({
+            is_deleted: { $ne: true },
+            codex_task: { $ne: true },
+            $or: expect.any(Array),
+          }),
+        }),
+      ])
     );
-    expect(countDocumentsMock).toHaveBeenNthCalledWith(
+    expect(tasksAggregateMock).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({
-        is_deleted: { $ne: true },
-        codex_task: true,
-        external_ref: sessionRef,
-      })
+      expect.arrayContaining([
+        expect.objectContaining({
+          $match: expect.objectContaining({
+            is_deleted: { $ne: true },
+            codex_task: true,
+            external_ref: { $in: [sessionRef] },
+          }),
+        }),
+        expect.objectContaining({
+          $group: expect.objectContaining({
+            _id: '$external_ref',
+          }),
+        }),
+      ])
     );
   });
 });

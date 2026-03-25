@@ -12,6 +12,8 @@ describe('SessionPage OperOps tasks tab contract', () => {
     expect(source).toContain('const isDraftSessionTaskSubTab = activeSessionTaskStatuses.includes(\'DRAFT_10\');');
     expect(source).toContain('<PossibleTasks />');
     expect(source).toContain('<CRMKanban');
+    expect(source).toContain('className="voice-session-operops-pane"');
+    expect(source).toContain('className="voice-session-operops-pane-body"');
     expect(source).toContain('buildVoiceSessionTaskSourceRefs(sessionId, voiceBotSession)');
     expect(source).toContain("'voicebot/session_tab_counts'");
     expect(source).toContain('status_counts?: Array<{ status?: unknown; label?: unknown; count?: unknown }>;');
