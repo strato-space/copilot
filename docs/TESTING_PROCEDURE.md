@@ -69,6 +69,19 @@ Backend split execution contract:
 - `backend` default `npm run test` now executes two explicit groups: `test:parallel-safe` then `test:serialized`.
 - `test:parallel-safe` runs with bounded workers (`BACKEND_JEST_MAX_WORKERS`, default `50%`) and excludes `/__tests__/smoke/`.
 - `test:serialized` runs only `/__tests__/smoke/` via `--runInBand`.
+- targeted voice runtime suites that rely on VM modules should be invoked with `NODE_OPTIONS='--experimental-vm-modules'`.
+
+Ontology persistence validation stack:
+- runtime/card unit checks:
+  - `cd backend && npx jest --runTestsByPath __tests__/services/ontologyCardRegistry.test.ts __tests__/services/ontologyPersistenceBridge.test.ts __tests__/services/ontologyCollectionAdapter.test.ts __tests__/services/voicebot/persistPossibleTasks.test.ts`
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runTestsByPath __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts -t "session_tasks\\(Draft\\)|save_possible_tasks"`
+- contract/data checks:
+  - `cd backend && npm run ontology:typedb:build`
+  - `cd backend && npm run ontology:typedb:contract-check`
+  - `cd backend && npm run ontology:typedb:domain-inventory`
+  - `cd backend && npm run ontology:typedb:entity-sampling`
+  - `cd backend && npm run ontology:typedb:ingest:dry`
+- `cd backend && npm run ontology:typedb:validate` additionally requires a reachable TypeDB server (default local endpoint `127.0.0.1:1729`).
 
 Playwright sharding contract:
 - `app` non-voice e2e set is split in suites via `test:e2e:shard:1of2` and `test:e2e:shard:2of2`.

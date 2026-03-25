@@ -130,6 +130,11 @@
         "collection": "automation_tasks",
         "target_entity": "task",
         "source_field": "task_status"
+      },
+      {
+        "collection": "automation_reasoning_items",
+        "target_entity": "reasoning_item",
+        "source_field": "status"
       }
     ],
     "values": [
@@ -137,7 +142,6 @@
       "\"Draft\"",
       "\"Done\"",
       "\"Ready\"",
-      "\"Review / Ready\"",
       "\"Progress 10\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
@@ -155,7 +159,7 @@
     "values": [
       "\"P2\"",
       "\"P3\"",
-      "\"🔥 P1 \"",
+      "\"P1\"",
       "\"P7\"",
       "\"P5\"",
       "\"🔥 P1\"",
@@ -163,7 +167,10 @@
       "\"\"",
       "null",
       "\"P6\"",
-      "\"P1\""
+      "\"🔥 P2\"",
+      "\"🔥 P1 \"",
+      "\"🔥 P3\"",
+      "\"🔥 P4\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },
@@ -227,6 +234,7 @@
       "\"67f846e0196efb66113f1052\"",
       "\"67f846e0196efb66113f105e\"",
       "\"67fdfeb86f6c9c68fe04b21f\"",
+      "\"67f846e0196efb66113f1069\"",
       "\"67333b39482852a4fb316e44\"",
       "\"67333b3b482852a4fb316e53\"",
       "\"67f846e0196efb66113f1057\"",
@@ -312,8 +320,9 @@
     "values": [
       "null",
       "\"voice\"",
-      "\"chat\"",
-      "\"call\""
+      "\"call\"",
+      "\"doc\"",
+      "\"chat\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },
@@ -444,6 +453,7 @@
       "\"audio/webm\"",
       "\"application/octet-stream\"",
       "\"audio/ogg\"",
+      "\"audio/x-m4a\"",
       "\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\"",
       "\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\"",
       "\"image/png\"",
@@ -484,8 +494,8 @@
     "values": [
       "\"done\"",
       "\"error\"",
-      "\"pending\"",
-      "\"queued\""
+      "\"queued\"",
+      "\"pending\""
     ],
     "classification": "likely enumerated/string-dictionary domain"
   },

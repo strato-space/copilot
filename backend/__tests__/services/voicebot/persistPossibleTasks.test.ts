@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 import { COLLECTIONS, TASK_STATUSES } from '../../../src/constants.js';
-import { persistPossibleTasksForSession } from '../../../src/services/voicebot/persistPossibleTasks.js';
+import {
+  persistPossibleTasksForSession,
+  validatePossibleTaskMasterDocs,
+} from '../../../src/services/voicebot/persistPossibleTasks.js';
 
 type TaskDoc = Record<string, unknown>;
 
@@ -137,7 +140,7 @@ describe('persistPossibleTasksForSession', () => {
         description: 'Поднять окружение на mac mini для smoke и perf проверки',
         project_id: 'proj-1',
         task_status: TASK_STATUSES.DRAFT_10,
-        source_kind: 'voice_possible_task',
+        source_kind: 'voice_session',
         external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionId}`,
         source_data: {
           session_id: previousSessionId,
@@ -209,6 +212,7 @@ describe('persistPossibleTasksForSession', () => {
         row_id: 'draft-canonical-openclaw',
         id: 'draft-canonical-openclaw',
         name: 'Развернуть OpenClaw на Mac mini для тестов оркестратора',
+        source_kind: 'voice_possible_task',
         source_data: expect.objectContaining({
           row_id: 'draft-canonical-openclaw',
           session_id: sessionId,
@@ -657,6 +661,282 @@ describe('persistPossibleTasksForSession', () => {
       expect.arrayContaining([
         expect.objectContaining({ name: 'Создать принимающую project-структуру для MediaGen' }),
         expect.objectContaining({ name: 'Сделать project-first work surface вместо поиска в диалогах' }),
+      ])
+    );
+  });
+
+  it('soft-deletes missing draft rows on full recompute with ontology-backed delete fields', async () => {
+    const existingDocA = new ObjectId();
+    const existingDocB = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocA,
+        row_id: 'draft-a',
+        id: 'draft-a',
+        name: 'Оставить актуальный draft',
+        description: 'Описание A',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-a',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+      {
+        _id: existingDocB,
+        row_id: 'draft-b',
+        id: 'draft-b',
+        name: 'Удалить при full recompute',
+        description: 'Описание B',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-b',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-23T10:00:00.000Z'),
+        updated_at: new Date('2026-03-23T10:00:00.000Z'),
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Full recompute session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'draft-a',
+          id: 'draft-a',
+          name: 'Оставить актуальный draft',
+          description: 'Обновлённое описание A',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.removedRowIds).toEqual(['draft-b']);
+
+    const persistedDocs = tasksCollection.snapshot();
+    const refreshedDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
+    const deletedDocB = persistedDocs.find((doc) => String(doc._id) === String(existingDocB));
+
+    expect(refreshedDocA).toEqual(
+      expect.objectContaining({
+        _id: existingDocA,
+        row_id: 'draft-a',
+        is_deleted: false,
+      })
+    );
+
+    expect(deletedDocB).toEqual(
+      expect.objectContaining({
+        _id: existingDocB,
+        row_id: 'draft-b',
+        is_deleted: true,
+        deleted_at: expect.any(Date),
+        updated_at: expect.any(Date),
+      })
+    );
+  });
+
+  it('rejects persisted rows that violate Draft master invariants', async () => {
+    await expect(
+      validatePossibleTaskMasterDocs([
+        {
+          _id: new ObjectId(),
+          row_id: 'draft-invalid',
+          id: 'draft-invalid',
+          name: 'Неверный row',
+          project_id: 'proj-1',
+          task_status: TASK_STATUSES.DRAFT_10,
+          source_kind: 'voice_session',
+          external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+          created_at: new Date('2026-03-23T10:00:00.000Z'),
+          updated_at: new Date('2026-03-23T10:00:00.000Z'),
+        },
+      ], 'persistPossibleTasks.test', 'write-strict')
+    ).rejects.toThrow(/source_kind must be voice_possible_task/);
+  });
+
+  it('rejects persisted rows that violate card-derived scalar domains inside the strict Draft subset', async () => {
+    await expect(
+      validatePossibleTaskMasterDocs([
+        {
+          _id: new ObjectId(),
+          row_id: 'draft-invalid-priority',
+          id: 'draft-invalid-priority',
+          name: 'Неверный priority',
+          priority: 'P9',
+          project_id: 'proj-1',
+          task_status: TASK_STATUSES.DRAFT_10,
+          source_kind: 'voice_possible_task',
+          external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+          created_at: new Date('2026-03-23T10:00:00.000Z'),
+          updated_at: new Date('2026-03-23T10:00:00.000Z'),
+        },
+      ], 'persistPossibleTasks.test')
+    ).rejects.toThrow(/violates enum domain/);
+  });
+
+  it('rejects persisted rows that omit required Draft master identity fields', async () => {
+    await expect(
+      validatePossibleTaskMasterDocs([
+        {
+          _id: new ObjectId(),
+          id: 'draft-missing-row-id',
+          name: 'Неполный row',
+          priority: 'P3',
+          project_id: 'proj-1',
+          task_status: TASK_STATUSES.DRAFT_10,
+          source_kind: 'voice_possible_task',
+          external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+          created_at: new Date('2026-03-23T10:00:00.000Z'),
+          updated_at: new Date('2026-03-23T10:00:00.000Z'),
+        },
+      ], 'persistPossibleTasks.test')
+    ).rejects.toThrow(/missing required Draft master field row_id/);
+  });
+
+  it('accepts compatibility overlays while validating the strict Draft subset', async () => {
+    await expect(
+      validatePossibleTaskMasterDocs([
+        {
+          _id: new ObjectId(),
+          row_id: 'draft-valid',
+          id: 'draft-valid',
+          name: 'Совместимый row',
+          project: 'Project One',
+          priority: 'P3',
+          project_id: 'proj-1',
+          task_status: TASK_STATUSES.DRAFT_10,
+          source_kind: 'voice_possible_task',
+          dialogue_tag: 'voice',
+          status_update_checked: false,
+          is_deleted: false,
+          external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+          source_data: {
+            session_id: 'session-1',
+            row_id: 'draft-valid',
+          },
+          dependencies_from_ai: ['draft-prev'],
+          task_status_history: [],
+          relations: [{ id: 'draft-prev', type: 'relates_to' }],
+          parent: { id: 'draft-parent', type: 'parent-child' },
+          parent_id: 'draft-parent',
+          children: [{ id: 'draft-child', type: 'parent-child' }],
+          discussion_sessions: [{ session_id: 'session-1', role: 'primary' }],
+          created_at: new Date('2026-03-23T10:00:00.000Z'),
+          updated_at: new Date('2026-03-23T10:00:00.000Z'),
+        },
+      ], 'persistPossibleTasks.test')
+    ).resolves.toHaveLength(1);
+  });
+
+  it('accepts legacy voice_session source_kind during read-time Draft compatibility validation', async () => {
+    await expect(
+      validatePossibleTaskMasterDocs([
+        {
+          _id: new ObjectId(),
+          row_id: 'draft-legacy-source-kind',
+          id: 'draft-legacy-source-kind',
+          name: 'Legacy row',
+          priority: 'P3',
+          project_id: 'proj-1',
+          task_status: TASK_STATUSES.DRAFT_10,
+          source_kind: 'voice_session',
+          external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
+          created_at: new Date('2026-03-23T10:00:00.000Z'),
+          updated_at: new Date('2026-03-23T10:00:00.000Z'),
+        },
+      ], 'persistPossibleTasks.test')
+    ).resolves.toHaveLength(1);
+  });
+
+  it('ignores invalid project-wide Draft candidates instead of aborting the current session persist', async () => {
+    const previousSessionId = new ObjectId().toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: new ObjectId(),
+        row_id: 'legacy-invalid-manual',
+        id: 'legacy-invalid-manual',
+        name: 'Manual draft outside voice taskflow',
+        description: 'Should not abort current session persist',
+        priority: 'P9',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'manual',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionId}`,
+        source_data: {
+          session_id: previousSessionId,
+          row_id: 'legacy-invalid-manual',
+          voice_sessions: [{ session_id: previousSessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-20T10:00:00.000Z'),
+        updated_at: new Date('2026-03-20T10:00:00.000Z'),
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Current session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'draft-new-row',
+          id: 'draft-new-row',
+          name: 'Новый draft поверх шумного проекта',
+          description: 'Текущая сессия не должна падать из-за мусорного кандидата',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'incremental_refresh',
+    });
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'draft-new-row',
+          id: 'draft-new-row',
+          project_id: 'proj-1',
+        }),
+      ])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    expect(persistedDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'legacy-invalid-manual',
+          priority: 'P9',
+          source_kind: 'manual',
+        }),
+        expect.objectContaining({
+          row_id: 'draft-new-row',
+          source_kind: 'voice_possible_task',
+        }),
       ])
     );
   });

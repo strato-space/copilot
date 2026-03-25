@@ -2,7 +2,6 @@ import { ObjectId, type Db } from 'mongodb';
 import {
   COLLECTIONS,
   TASK_STATUSES,
-  VOICEBOT_COLLECTIONS,
 } from '../../constants.js';
 import { IS_PROD_RUNTIME, mergeWithRuntimeFilter } from '../runtimeScope.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
@@ -17,9 +16,224 @@ import {
   resolveVoicePossibleTaskRowId,
 } from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { toIdString, toTaskText } from '../../api/routes/voicebot/sessionsSharedUtils.js';
+import {
+  createOntologyMongoCollectionAdapter,
+  type OntologyMongoCollectionAdapter,
+} from '../ontology/ontologyCollectionAdapter.js';
+import { OntologyCardRegistryError } from '../ontology/ontologyCardRegistry.js';
 
 export const POSSIBLE_TASKS_REFRESH_MODE_VALUES = ['full_recompute', 'incremental_refresh'] as const;
 export type PossibleTasksRefreshMode = (typeof POSSIBLE_TASKS_REFRESH_MODE_VALUES)[number];
+type PossibleTaskValidationMode = 'write-strict' | 'read-legacy-compatible' | 'candidate-pool-loose';
+
+const POSSIBLE_TASKS_COMPATIBILITY_MONGO_FIELDS = new Set<string>([
+  'relations',
+  'parent',
+  'children',
+  'discussion_sessions',
+]);
+
+const POSSIBLE_TASKS_STRUCTURED_DEFERRED_MONGO_FIELDS = [
+  'source_data',
+  'dependencies',
+  'dependencies_from_ai',
+  'status_history',
+  'task_status_history',
+  'comments_list',
+] as const;
+
+const POSSIBLE_TASKS_VALIDATED_MONGO_FIELDS = [
+  'row_id',
+  'id',
+  'name',
+  'project',
+  'description',
+  'priority',
+  'priority_reason',
+  'performer_id',
+  'project_id',
+  'task_type_id',
+  'dialogue_tag',
+  'task_id_from_ai',
+  'dialogue_reference',
+  'last_status_update',
+  'planned_time',
+  'score_min_hours',
+  'score_max_hours',
+  'order',
+  'source',
+  'source_kind',
+  'source_ref',
+  'external_ref',
+  'parent_id',
+  'type_class',
+  'status_update_checked',
+  'is_deleted',
+  'created_by',
+  'created_by_name',
+  'created_at',
+  'updated_at',
+] as const;
+
+const POSSIBLE_TASKS_REQUIRED_MONGO_FIELDS = ['row_id', 'id', 'task_status'] as const;
+
+let possibleTaskAdapterPromise: Promise<OntologyMongoCollectionAdapter> | null = null;
+const LEGACY_COMPATIBLE_DRAFT_SOURCE_KINDS = new Set<string>(['voice_possible_task', 'voice_session']);
+
+const getPossibleTaskOntologyAdapter = async (): Promise<OntologyMongoCollectionAdapter> => {
+  if (!possibleTaskAdapterPromise) {
+    possibleTaskAdapterPromise = createOntologyMongoCollectionAdapter(COLLECTIONS.TASKS);
+  }
+  return await possibleTaskAdapterPromise;
+};
+
+const hasPossibleTaskLineage = (document: Record<string, unknown>): boolean => {
+  const sourceRef = toTaskText(document.source_ref);
+  if (sourceRef) return true;
+  const externalRef = toTaskText(document.external_ref);
+  if (externalRef) return true;
+  const sourceData =
+    document.source_data && typeof document.source_data === 'object'
+      ? (document.source_data as Record<string, unknown>)
+      : null;
+  if (!sourceData) return false;
+  if (toTaskText(sourceData.session_id)) return true;
+  const voiceSessions = Array.isArray(sourceData.voice_sessions) ? sourceData.voice_sessions : [];
+  return voiceSessions.some((entry) => Boolean(entry) && typeof entry === 'object' && toTaskText((entry as Record<string, unknown>).session_id));
+};
+
+const assertPossibleTaskMongoDocumentShape = ({
+  document,
+  adapter,
+  context,
+  mode = 'write-strict',
+}: {
+  document: Record<string, unknown>;
+  adapter: OntologyMongoCollectionAdapter;
+  context: string;
+  mode?: PossibleTaskValidationMode;
+}): void => {
+  const allowedMongoFields = new Set<string>([
+    ...adapter.allowedMongoFields,
+    ...POSSIBLE_TASKS_COMPATIBILITY_MONGO_FIELDS,
+  ]);
+  const unknownFields = Object.keys(document).filter((key) => !allowedMongoFields.has(key));
+  if (unknownFields.length > 0) {
+    throw new OntologyCardRegistryError(
+      `[possible-tasks][ontology] ${context} contains fields outside task card coverage: ${unknownFields.join(', ')}`
+    );
+  }
+
+  const ontologyBackedSubset = Object.fromEntries(
+    Object.entries(document).filter(([key]) => adapter.allowedMongoFields.includes(key))
+  );
+  void adapter.fromMongoDocument(ontologyBackedSubset);
+  adapter.assertValidMongoDocument(ontologyBackedSubset, {
+    validatedMongoFields: [...POSSIBLE_TASKS_VALIDATED_MONGO_FIELDS],
+    allowedMongoStructuredStringFields: [...POSSIBLE_TASKS_STRUCTURED_DEFERRED_MONGO_FIELDS],
+  });
+
+  for (const field of POSSIBLE_TASKS_REQUIRED_MONGO_FIELDS) {
+    const value = document[field];
+    if (!toTaskText(value)) {
+      throw new OntologyCardRegistryError(
+        `[possible-tasks][ontology] ${context} is missing required Draft master field ${field}`
+      );
+    }
+  }
+
+  if (!hasPossibleTaskLineage(document)) {
+    throw new OntologyCardRegistryError(
+      `[possible-tasks][ontology] ${context} is missing required Draft lineage markers (source_ref, external_ref, or source_data session linkage)`
+    );
+  }
+
+  const taskStatus = toTaskText(document.task_status);
+  if (taskStatus && taskStatus !== TASK_STATUSES.DRAFT_10) {
+    throw new OntologyCardRegistryError(
+      `[possible-tasks][ontology] ${context} violates Draft master invariant: task_status must be ${TASK_STATUSES.DRAFT_10}, received ${taskStatus}`
+    );
+  }
+
+  const sourceKind = toTaskText(document.source_kind);
+  if (sourceKind) {
+    if (mode === 'write-strict' && sourceKind !== 'voice_possible_task') {
+      throw new OntologyCardRegistryError(
+        `[possible-tasks][ontology] ${context} violates Draft master invariant: source_kind must be voice_possible_task, received ${sourceKind}`
+      );
+    }
+    if (mode === 'read-legacy-compatible' && !LEGACY_COMPATIBLE_DRAFT_SOURCE_KINDS.has(sourceKind)) {
+      throw new OntologyCardRegistryError(
+        `[possible-tasks][ontology] ${context} violates Draft read invariant: source_kind must stay within voice draft compatibility markers, received ${sourceKind}`
+      );
+    }
+  }
+};
+
+const canonicalizePossibleTaskMongoDocument = ({
+  rawDocument,
+  adapter,
+  context,
+}: {
+  rawDocument: Record<string, unknown>;
+  adapter: OntologyMongoCollectionAdapter;
+  context: string;
+}): Record<string, unknown> => {
+  assertPossibleTaskMongoDocumentShape({ document: rawDocument, adapter, context, mode: 'write-strict' });
+
+  const ontologyBackedSubset = Object.fromEntries(
+    Object.entries(rawDocument).filter(([key]) => adapter.allowedMongoFields.includes(key))
+  );
+  const compatibilityOverlay = Object.fromEntries(
+    Object.entries(rawDocument).filter(([key]) => POSSIBLE_TASKS_COMPATIBILITY_MONGO_FIELDS.has(key))
+  );
+
+  return {
+    ...adapter.toMongoDocument(adapter.fromMongoDocument(ontologyBackedSubset)),
+    ...compatibilityOverlay,
+  };
+};
+
+export const validatePossibleTaskMasterDocs = async (
+  docs: Array<Record<string, unknown>>,
+  context: string = 'possible-task master read',
+  mode: PossibleTaskValidationMode = 'read-legacy-compatible'
+): Promise<Array<Record<string, unknown>>> => {
+  const adapter = await getPossibleTaskOntologyAdapter();
+  docs.forEach((doc, index) => {
+    assertPossibleTaskMongoDocumentShape({
+      document: doc,
+      adapter,
+      context: `${context}[${index}]`,
+      mode,
+    });
+  });
+  return docs;
+};
+
+const filterValidPossibleTaskMasterDocs = async (
+  docs: Array<Record<string, unknown>>,
+  context: string,
+  mode: PossibleTaskValidationMode
+): Promise<Array<Record<string, unknown>>> => {
+  const adapter = await getPossibleTaskOntologyAdapter();
+  return docs.filter((doc, index) => {
+    try {
+      assertPossibleTaskMongoDocumentShape({
+        document: doc,
+        adapter,
+        context: `${context}[${index}]`,
+        mode,
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof OntologyCardRegistryError) {
+        return false;
+      }
+      throw error;
+    }
+  });
+};
 
 const runtimeTaskQuery = (query: Record<string, unknown>) =>
   mergeWithRuntimeFilter(query, {
@@ -33,6 +247,7 @@ const POSSIBLE_TASK_MASTER_PROJECTION = {
   row_id: 1,
   id: 1,
   name: 1,
+  project: 1,
   description: 1,
   priority: 1,
   priority_reason: 1,
@@ -51,7 +266,10 @@ const POSSIBLE_TASK_MASTER_PROJECTION = {
   task_status: 1,
   created_at: 1,
   updated_at: 1,
+  source_ref: 1,
+  external_ref: 1,
   source_data: 1,
+  discussion_sessions: 1,
 } as const;
 
 const toSortedTaskCursor = (
@@ -113,7 +331,10 @@ const listPossibleTaskMasterDocs = async ({
     { projection: POSSIBLE_TASK_MASTER_PROJECTION }
   );
   if (!cursor) return [];
-  return await cursor.toArray();
+  return await validatePossibleTaskMasterDocs(
+    await cursor.toArray(),
+    `persistPossibleTasksForSession(listPossibleTaskMasterDocs:${sessionId})`
+  );
 };
 
 const buildProjectScopedPossibleTaskRuntimeQuery = ({
@@ -368,14 +589,26 @@ const listPossibleTaskSaveMatchDocs = async ({
     buildProjectScopedPossibleTaskRuntimeQuery({ projectId, rowIds: normalizedRowIds }),
     { projection: POSSIBLE_TASK_MASTER_PROJECTION }
   );
-  const projectDocs = projectCursor ? await projectCursor.toArray() : [];
+  const projectDocs = projectCursor
+    ? await filterValidPossibleTaskMasterDocs(
+        await projectCursor.toArray(),
+        `persistPossibleTasksForSession(projectLocatorDocs:${projectId})`,
+        'candidate-pool-loose'
+      )
+    : [];
 
   const projectSemanticCursor = toSortedTaskCursor(
     db.collection(COLLECTIONS.TASKS),
     buildProjectScopedPossibleTaskSemanticRuntimeQuery({ projectId }),
     { projection: POSSIBLE_TASK_MASTER_PROJECTION }
   );
-  const projectSemanticDocs = projectSemanticCursor ? await projectSemanticCursor.toArray() : [];
+  const projectSemanticDocs = projectSemanticCursor
+    ? await filterValidPossibleTaskMasterDocs(
+        await projectSemanticCursor.toArray(),
+        `persistPossibleTasksForSession(projectSemanticDocs:${projectId})`,
+        'candidate-pool-loose'
+      )
+    : [];
 
   const mergedByKey = new Map<string, Record<string, unknown>>();
   for (const doc of [...sessionDocs, ...projectDocs, ...projectSemanticDocs]) {
@@ -446,6 +679,7 @@ const softDeletePossibleTaskMasterRows = async ({
 }): Promise<void> => {
   const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
   if (normalizedRowIds.length === 0) return;
+  const adapter = await getPossibleTaskOntologyAdapter();
 
   const cursor = toSortedTaskCursor(
     db.collection(COLLECTIONS.TASKS),
@@ -488,13 +722,18 @@ const softDeletePossibleTaskMasterRows = async ({
         { _id: docObjectId },
         {
           $set: {
-            source_ref: buildCanonicalTaskSourceRef(docObjectId),
-            external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
+            ...adapter.toMongoDocument({
+              source_ref: buildCanonicalTaskSourceRef(docObjectId),
+              external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
+              updated_at: new Date(),
+            }),
             discussion_sessions: remainingVoiceSessions,
-            'source_data.session_id': toTaskText(nextPrimary.session_id),
-            'source_data.session_name': toTaskText(nextPrimary.session_name),
-            'source_data.voice_sessions': remainingVoiceSessions,
-            updated_at: new Date(),
+            source_data: {
+              ...sourceData,
+              session_id: toTaskText(nextPrimary.session_id),
+              session_name: toTaskText(nextPrimary.session_name),
+              voice_sessions: remainingVoiceSessions,
+            },
           },
         }
       );
@@ -503,13 +742,10 @@ const softDeletePossibleTaskMasterRows = async ({
 
     await db.collection(COLLECTIONS.TASKS).updateOne(
       { _id: docObjectId },
-      {
-        $set: {
-          is_deleted: true,
-          deleted_at: new Date(),
-          updated_at: new Date(),
-        },
-      }
+      adapter.buildSoftDeleteMongoUpdate({
+        deleted_at: new Date(),
+        updated_at: new Date(),
+      })
     );
   }
 };
@@ -527,6 +763,7 @@ const markPossibleTaskMasterRowsStale = async ({
 }): Promise<void> => {
   const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
   if (normalizedRowIds.length === 0) return;
+  const adapter = await getPossibleTaskOntologyAdapter();
 
   const cursor = toSortedTaskCursor(
     db.collection(COLLECTIONS.TASKS),
@@ -564,7 +801,7 @@ const markPossibleTaskMasterRowsStale = async ({
     await db.collection(COLLECTIONS.TASKS).updateOne(
       { _id: docObjectId },
       {
-        $set: {
+        $set: adapter.toMongoDocument({
           source_data: {
             ...sourceData,
             refresh_state: 'stale',
@@ -572,7 +809,7 @@ const markPossibleTaskMasterRowsStale = async ({
             last_refresh_mode: 'incremental_refresh',
           },
           updated_at: staleAt,
-        },
+        }),
         $unset: {
           'source_data.superseded_at': 1,
         },
@@ -603,6 +840,7 @@ export const persistPossibleTasksForSession = async ({
   items: Array<Record<string, unknown>>;
   removedRowIds: string[];
 }> => {
+  const adapter = await getPossibleTaskOntologyAdapter();
   const incomingRowIds = taskItems
     .map((task, index) => resolveVoicePossibleTaskRowId({ rawTask: task, index }))
     .filter(Boolean);
@@ -689,43 +927,48 @@ export const persistPossibleTasksForSession = async ({
     const discussionSessions = normalizeVoiceTaskDiscussionSessions(mergedVoiceSessions);
     const taskObjectId = existingDoc?._id instanceof ObjectId ? existingDoc._id : new ObjectId();
 
-    const nextDoc = {
-      _id: taskObjectId,
-      ...buildVoicePossibleTaskMasterDoc({
-        rawTask: persistedTaskForMasterDoc,
-        index: taskIndex,
-        defaultProjectId: defaultProjectId || '',
-        sessionId,
-        sessionObjectId,
-        externalRef: canonicalExternalRef,
-        sourceRef: buildCanonicalTaskSourceRef(taskObjectId),
-        now,
-        createdBy: {
-          ...(createdById ? { id: createdById } : {}),
-          ...(createdByName ? { name: createdByName } : {}),
+    const nextDoc = canonicalizePossibleTaskMongoDocument({
+      adapter,
+      context: `persistPossibleTasksForSession(nextDoc:${canonicalRowId || taskIndex})`,
+      rawDocument: {
+        _id: taskObjectId,
+        ...buildVoicePossibleTaskMasterDoc({
+          rawTask: persistedTaskForMasterDoc,
+          index: taskIndex,
+          defaultProjectId: defaultProjectId || '',
+          sessionId,
+          sessionObjectId,
+          externalRef: canonicalExternalRef,
+          sourceRef: buildCanonicalTaskSourceRef(taskObjectId),
+          now,
+          createdBy: {
+            ...(createdById ? { id: createdById } : {}),
+            ...(createdByName ? { name: createdByName } : {}),
+          },
+          existingCreatedAt: existingDoc?.created_at,
+        }),
+        external_ref: canonicalExternalRef,
+        source_data: {
+          ...persistedSourceData,
+          session_id: sessionId,
+          ...(sessionName ? { session_name: sessionName } : {}),
+          voice_task_kind: 'possible_task',
+          row_id: canonicalRowId,
+          voice_sessions: discussionSessions,
+          last_refresh_mode: refreshMode,
         },
-        existingCreatedAt: existingDoc?.created_at,
-      }),
-      external_ref: canonicalExternalRef,
-      source_data: {
-        ...persistedSourceData,
-        session_id: sessionId,
-        ...(sessionName ? { session_name: sessionName } : {}),
-        voice_task_kind: 'possible_task',
-        row_id: canonicalRowId,
-        voice_sessions: discussionSessions,
-        last_refresh_mode: refreshMode,
+        discussion_sessions: discussionSessions,
       },
-      discussion_sessions: discussionSessions,
-    };
+    });
 
     if (existingDoc?._id instanceof ObjectId) {
+      const updateDocument = { ...nextDoc };
+      delete updateDocument._id;
       await db.collection(COLLECTIONS.TASKS).updateOne(
         { _id: existingDoc._id },
         {
           $set: {
-            ...nextDoc,
-            updated_at: now,
+            ...updateDocument,
             is_deleted: false,
           },
           $unset: {

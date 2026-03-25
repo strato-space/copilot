@@ -284,7 +284,6 @@ collections:
       last_status: last_status
       last_status_update: last_status_update
       due_at: deadline
-      priority_rank: priority
       priority: priority
       project_id: project_id
       project_ref: project
@@ -305,6 +304,7 @@ collections:
       source_ref: source_ref
       external_ref: external_ref
       source_data: source_data
+      parent_id: parent_id
       dialogue_reference: dialogue_reference
       dialogue_tag: dialogue_tag
       dependencies: dependencies
@@ -355,6 +355,7 @@ collections:
       status_update_checked: status_update_checked
       stop_comment_parsing: stop_comment_parsing
       is_deleted: is_deleted
+      deleted_at: deleted_at
       updated_at: updated_at
       created_at: created_at
     coalesce:

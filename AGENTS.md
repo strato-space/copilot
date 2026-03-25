@@ -84,6 +84,10 @@ Use these as non-negotiable implementation constraints derived from `origin/main
   - performance notes for the 2026-03-15 rollout tuning live in `ontology/typedb/docs/ingest_performance_profile_2026-03-15.md`.
   - `copilot` ontology is the common kernel; project-local ontologies must extend it rather than fork it.
   - semantic markdown (`SemanticCards`) is a required companion surface for key ontology objects and should live in project-local AFS plus the platform glossary.
+- Semantic-card persistence runtime is now active on backend boot:
+  - startup must load the checked TQL card registry plus the Mongo->card persistence bridge before serving requests,
+  - `ontology/typedb/schema/fragments/*` remains the editable authority for card-backed runtime coverage,
+  - strict Mongo adapters are allowed only for collections with card-backed coverage; `schema-only-unchecked` collections must not be marketed as fully card-backed.
 - direct DB-side TypeDB constraints are now part of the contract for `task.status` and `task.priority`; do not bypass owner-level `@values(...)` with ad hoc raw-label writes.
 - Mongo task labels must normalize directly into canonical lifecycle keys and `P1..P7` priority before writing to TypeDB.
   - executor-layer ontology vocabulary is now reserved and active: `task_family`, `executor_role`, `executor_routing`, `task_execution_run`.
@@ -415,6 +419,7 @@ Preferred engineering principles for this repo:
   - the agent may enrich context through MCP `voice` and `gsh`,
   - manual refresh carries `refresh_correlation_id` / `refresh_clicked_at_ms` from UI click to backend completion log and realtime hint for end-to-end latency diagnostics,
   - backend persists possible tasks into `automation_tasks` through `generate_possible_tasks` / `save_possible_tasks` / `process_possible_tasks`,
+  - in the current wave, `save_possible_tasks` and `session_tasks(bucket='Draft')` are the first real ontology-backed runtime slice for `automation_tasks`: write-time persistence uses the strict Draft-master scalar subset through the card-backed collection adapter with card-derived value/type/domain checks, while read-time validation keeps legacy compatibility for historical `source_kind='voice_session'` rows and candidate-pool scans may drop invalid/unrelated Draft rows instead of aborting the current session persist; structured compatibility payloads (`source_data`, `dependencies`, `dependencies_from_ai`, `status_history`, `task_status_history`, `comments_list`) and overlays (`relations`, `parent`, `children`, `discussion_sessions`) remain manual until their ontology contract is promoted,
   - `process_possible_tasks` now promotes selected rows into `READY_10` while keeping draft rows in `DRAFT_10`,
   - selected rows leave draft views without being soft-deleted,
   - the resulting UI semantics are unified under `Задачи` rather than a separate `Возможные задачи` tab,

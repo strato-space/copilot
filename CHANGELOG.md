@@ -5,17 +5,42 @@
 - **04:15** Shared selector behavior still drifted between Voice and OperOps, so project and task-type controls could collapse into flat option lists, leak raw ids, or require different click paths depending on the surface.
 - **04:15** Production UI regressed after the parity wave: `/operops/crm` could blank-render behind React error `#185`, while the left app shell became narrow enough to clip sidebar labels even though backend APIs and the database were healthy.
 - **04:15** Historical `CREATE_TASKS` runs still left stale processing markers and request-vs-finished drift in session state, which kept green pending dots and processing footers alive on old Voice sessions after the real jobs had already ended.
+- **01:12** The annotated-TQL persistence work had only a startup prototype: backend could load ontology cards, but no production Voice write/read path actually enforced the card-backed task contract on `automation_tasks`.
+- **01:12** The new ontology adapter layer still had two silent drift risks: reverse Mongo translation could overwrite duplicate field mappings without error, and card inheritance depended on the accidental equality `semantic-card id == type label`.
+- **01:12** Repo/operator docs did not yet explain the new semantic-card runtime, the first migrated `automation_tasks` slice, or the exact ontology validation/test commands needed to verify it.
+- **04:27** The migrated Draft slice still stopped at field-coverage/reversible-mapping checks, so `automation_tasks` could carry scalar value/type/domain drift inside the supposedly strict ontology-backed path.
 
 ### FEATURE IMPLEMENTED
 - **04:15** Unified project/task-type selector parity onto shared option-source helpers and shared wrappers, keeping hierarchy/labels consistent between Voice and OperOps and making first-click inline editing deterministic again.
 - **04:15** Hardened the app shell and CRM render path for production: the sidebar is readable again, CRM status-stat updates are idempotent, and `/operops/crm` plus `/voice` now render from the same stable shell without the frontend-only blank-page failure.
 - **04:15** Added a canonical stale-state repair flow for historical `CREATE_TASKS` markers and formalized the browser acceptance ritual around `systemctl restart mcp@chrome-devtools.service` before each live UI smoke cycle.
+- **01:12** Landed the first real card-backed persistence slice for Voice Draft tasks: backend now boots a semantic-card registry plus a checked/unchecked Mongo-card bridge, `save_possible_tasks` writes task core fields through the strict `automation_tasks` adapter, and `session_tasks(bucket='Draft')` checks Draft master rows against the same card-backed field-coverage/mapping contract before returning them.
+- **01:12** Hardened the ontology runtime to fail fast on ambiguous reverse Mongo mappings and to resolve inherited card owns by supertype label rather than by accidental card-id equality.
+- **01:12** Synced repo/operator docs and test runbooks to the new runtime contract, including focused ontology runtime Jest suites and the TypeDB contract/data validation stack.
+- **04:27** Extended the Draft `automation_tasks` slice with card-derived scalar validation: the registry now carries attribute value types plus owner-level `@values(...)`, the adapter can validate selected Mongo fields against those card rules, and the migrated Voice Draft path now enforces strict Draft-master invariants while leaving structured compatibility payloads explicitly deferred.
 
 ### CHANGES
 - **04:15** Updated `app/src/{App.tsx,index.css}` plus `app/__tests__/shell/appShell.test.tsx` to widen the sidebar, keep `(zero)`/other meta badges readable, and align shell spacing with the current Voice/OperOps parity contract.
 - **04:15** Reworked `app/src/components/voice/PossibleTasks.tsx`, shared selector wrappers under `app/src/components/shared/`, and option builders `app/src/utils/{projectSelectOptions,taskTypeSelectOptions}.ts`; refreshed focused selector/Voice tests so project hierarchy and operational task-type labels come from one shared source.
 - **04:15** Updated `app/src/components/crm/CRMKanban.tsx`, `app/src/store/crmStore.ts`, and `app/__tests__/operops/crmStoreStatusStats.test.ts` so filtered-ticket/status-stat recomputes are memoized/idempotent and no longer trigger the React render loop that blanked `/operops/crm` on production.
 - **04:15** Added `backend/src/services/voicebot/createTasksStaleProcessingRepair.ts`, `backend/scripts/voicebot-repair-stale-create-tasks-processing.ts`, and focused backend tests to repair stale historical `CREATE_TASKS` state in place and keep session/activity indicators honest after queue completion.
+- **01:12** Added backend ontology runtime services under `backend/src/services/ontology/{ontologyCardRegistry,ontologyPersistenceBridge,ontologyCollectionAdapter}.ts` plus focused suites `backend/__tests__/services/{ontologyCardRegistry,ontologyPersistenceBridge,ontologyCollectionAdapter}.test.ts`.
+- **01:12** Updated `backend/src/services/voicebot/persistPossibleTasks.ts`, `backend/src/api/routes/voicebot/sessions.ts`, and `backend/__tests__/services/voicebot/persistPossibleTasks.test.ts` so the canonical Draft master-row path now round-trips task core fields through the ontology adapter while keeping `relations` / `parent` / `children` / `discussion_sessions` as compatibility overlays.
+- **01:12** Extended the task ontology/mapping surface for the migrated path (`parent_id`, `deleted_at`), removed the ambiguous `priority_rank <- priority` reverse mapping from `ontology/typedb/mappings/mongodb_to_typedb_v1.yaml`, regenerated inventory artifacts, and refreshed `ontology/README.md`, `README.md`, `AGENTS.md`, `docs/VOICEBOT_API.md`, `docs/VOICEBOT_API_TESTS.md`, and `docs/TESTING_PROCEDURE.md`.
+- **04:27** Updated `backend/src/services/ontology/ontologyCardRegistry.ts` to extract attribute value types and owner-level enum domains from TQL, updated `backend/src/services/ontology/ontologyCollectionAdapter.ts` with opt-in Mongo-field validation, and narrowed `backend/src/services/voicebot/persistPossibleTasks.ts` to a strict Draft-master scalar subset plus explicit defers for structured compatibility payloads.
+- **04:27** Kept the migrated Draft slice legacy-safe: write-time invariants still require `source_kind=voice_possible_task`, but read-time validation now accepts legacy `voice_session` markers and project-wide Draft candidate pools drop invalid/unrelated rows instead of aborting the current session persist.
+- **04:27** Added regression coverage for card-derived attribute specs, adapter value/type/domain enforcement, Draft invariant failures, compatibility-overlay pass-through, and route-level `session_tasks(Draft)` / `save_possible_tasks` behavior under the tightened ontology contract.
+- **01:12** Verification passed except for the environment-blocked TypeDB endpoint gate:
+  - `cd backend && npm run build`
+  - `cd backend && npx jest --runTestsByPath __tests__/services/ontologyCardRegistry.test.ts __tests__/services/ontologyPersistenceBridge.test.ts __tests__/services/ontologyCollectionAdapter.test.ts __tests__/services/voicebot/persistPossibleTasks.test.ts`
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runTestsByPath __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts -t "session_tasks\\(Draft\\)|save_possible_tasks"`
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runTestsByPath __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts -t "save_possible_tasks stores master rows in automation_tasks|session_tasks\\(Draft\\) prefers automation_tasks master rows linked to the voice session|respects draft recency window override when include_older_drafts is true"`
+  - `cd backend && npm run ontology:typedb:build`
+  - `cd backend && npm run ontology:typedb:contract-check`
+  - `cd backend && npm run ontology:typedb:domain-inventory`
+  - `cd backend && npm run ontology:typedb:entity-sampling`
+  - `cd backend && npm run ontology:typedb:ingest:dry`
+  - `cd backend && npm run ontology:typedb:validate` remains environment-blocked without a reachable local TypeDB endpoint (`127.0.0.1:1729`)
 
 ## 2026-03-24
 ### PROBLEM SOLVED

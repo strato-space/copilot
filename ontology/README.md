@@ -17,6 +17,7 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - `typedb/schema/str-ontology.tql` — canonical generated TypeQL schema.
 - `typedb/schema/fragments/*/*.tql` — canonical editable ontology source fragments (`kernel`, `as_is`, `to_be`, `bridges`).
 - `typedb/mappings/mongodb_to_typedb_v1.yaml` — mapping contract from Mongo collections to TypeDB entities/relations.
+- `backend/src/services/ontology/{ontologyCardRegistry,ontologyPersistenceBridge,ontologyCollectionAdapter}.ts` — runtime semantic-card loader, Mongo/card bridge, and strict collection adapters for card-backed collections.
 - `typedb/queries/validation_v1.tql` — validation/smoke queries.
 - `typedb/docs/rollout_plan_v1.md` — rollout and migration notes.
 - `plan/ontology-and-operations.md` — implemented architecture roadmap for the object-bound ontology model.
@@ -40,6 +41,9 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - Treat `ontology/*` as source of truth for conceptual model and TypeDB scaffolding.
 - Do not place new ontology scripts back under `backend/scripts`; use `ontology/typedb/scripts/*`.
 - Keep schema/mapping updates synchronized with docs and changelog.
+- Keep semantic-card runtime and TypeDB assets synchronized:
+  - if a collection is declared `card-backed`, its mapped ontology attributes must exist in the referenced semantic card,
+  - reverse field translation must stay unambiguous for strict adapters; one Mongo field may not silently stand in for two ontology attributes.
 - Keep the voice/persistence document family internally separated by role:
   - `voice-dual-stream-ontology.md` = domain ontology,
   - `ontology-persistence-system-needs.*` = generic persistence requirements,
@@ -51,6 +55,29 @@ This directory is the canonical home for ERD and ontology artifacts used by Copi
 - Human/operator context: `ontology/AGENTS.md`
 - TypeDB tooling usage: `ontology/typedb/README.md`
 - TypeDB editing/ops constraints: `ontology/typedb/AGENTS.md`
+
+## Runtime Persistence Slice (2026-03-25)
+
+- Backend boot now loads the semantic-card registry from `typedb/schema/fragments/*` and binds it to `typedb/mappings/mongodb_to_typedb_v1.yaml` before serving requests.
+- Current migrated runtime slice:
+  - collection: `automation_tasks`
+  - write path: `POST /api/voicebot/save_possible_tasks`
+  - read path: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Draft' }`
+- Current scope boundary:
+  - strict card-backed scalar Draft-master fields now flow through the ontology collection adapter with card-derived value/type/domain checks on write and legacy-compatible validation on read,
+  - structured compatibility payloads (`source_data`, `dependencies`, `dependencies_from_ai`, `status_history`, `task_status_history`, `comments_list`) plus overlays (`relations`, `parent`, `children`, `discussion_sessions`) remain outside the strict validated subset in this wave.
+
+## Validation Snapshot (2026-03-25)
+
+- Passed:
+  1. `cd /home/strato-space/copilot/backend && npm run build`
+  2. `cd /home/strato-space/copilot/backend && npm run ontology:typedb:build`
+  3. `cd /home/strato-space/copilot/backend && npm run ontology:typedb:contract-check`
+  4. `cd /home/strato-space/copilot/backend && npm run ontology:typedb:domain-inventory`
+  5. `cd /home/strato-space/copilot/backend && npm run ontology:typedb:entity-sampling`
+  6. `cd /home/strato-space/copilot/backend && npm run ontology:typedb:ingest:dry`
+- Environment note:
+  - `ontology:typedb:validate` still requires a reachable TypeDB server endpoint; without local TypeDB on `127.0.0.1:1729`, the command fails on connection rather than on schema contract.
 
 ## Session Outcome (2026-02-28)
 

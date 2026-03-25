@@ -96,6 +96,7 @@ import {
     persistPossibleTasksForSession,
     POSSIBLE_TASKS_REFRESH_MODE_VALUES,
     type PossibleTasksRefreshMode,
+    validatePossibleTaskMasterDocs,
 } from '../../../services/voicebot/persistPossibleTasks.js';
 import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
 import {
@@ -5572,7 +5573,40 @@ const listSessionScopedDraftTasks = async ({
                 familyMatch: IS_PROD_RUNTIME,
                 includeLegacyInProd: IS_PROD_RUNTIME,
             }
-        )
+        ),
+        {
+            projection: {
+                _id: 1,
+                row_id: 1,
+                id: 1,
+                name: 1,
+                project: 1,
+                description: 1,
+                priority: 1,
+                priority_reason: 1,
+                performer_id: 1,
+                project_id: 1,
+                task_type_id: 1,
+                dialogue_tag: 1,
+                task_id_from_ai: 1,
+                dependencies_from_ai: 1,
+                dialogue_reference: 1,
+                relations: 1,
+                dependencies: 1,
+                parent: 1,
+                parent_id: 1,
+                children: 1,
+                task_status: 1,
+                source: 1,
+                source_kind: 1,
+                source_ref: 1,
+                external_ref: 1,
+                source_data: 1,
+                discussion_sessions: 1,
+                created_at: 1,
+                updated_at: 1,
+            },
+        }
     ) as {
         sort?: (value: Record<string, unknown>) => { toArray?: () => Promise<Array<Record<string, unknown>>> };
         toArray?: () => Promise<Array<Record<string, unknown>>>;
@@ -5582,24 +5616,30 @@ const listSessionScopedDraftTasks = async ({
         const sortedCursor = cursor.sort({ created_at: 1, _id: 1 });
         if (sortedCursor && typeof sortedCursor.toArray === 'function') {
             const docs = await sortedCursor.toArray();
-            return await filterVoiceDerivedDraftsByRecency({
+            return await validatePossibleTaskMasterDocs(
+                await filterVoiceDerivedDraftsByRecency({
+                    db,
+                    tasks: docs,
+                    includeOlderDrafts,
+                    draftHorizonDays,
+                    referenceSession: session,
+                }),
+                `session_tasks(Draft:${sessionId})`
+            );
+        }
+    }
+    if (typeof cursor.toArray === 'function') {
+        const docs = await cursor.toArray();
+        return await validatePossibleTaskMasterDocs(
+            await filterVoiceDerivedDraftsByRecency({
                 db,
                 tasks: docs,
                 includeOlderDrafts,
                 draftHorizonDays,
                 referenceSession: session,
-            });
-        }
-    }
-    if (typeof cursor.toArray === 'function') {
-        const docs = await cursor.toArray();
-        return await filterVoiceDerivedDraftsByRecency({
-            db,
-            tasks: docs,
-            includeOlderDrafts,
-            draftHorizonDays,
-            referenceSession: session,
-        });
+            }),
+            `session_tasks(Draft:${sessionId})`
+        );
     }
     return [];
 };

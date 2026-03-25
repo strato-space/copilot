@@ -31,6 +31,8 @@ import { metricsMiddleware, metricsHandler, setHealthStatus } from './api/middle
 import { initLogger, getLogger } from './utils/logger.js';
 import { connectDb, closeDb } from './services/db.js';
 import { connectRedis, closeRedis } from './services/redis.js';
+import { loadOntologyCardRegistry } from './services/ontology/ontologyCardRegistry.js';
+import { loadOntologyPersistenceBridge } from './services/ontology/ontologyPersistenceBridge.js';
 import {
   initVoicebotQueues,
   closeVoicebotQueues,
@@ -188,6 +190,21 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 // Start server
 const startServer = async () => {
   try {
+    const ontologyCardRegistry = await loadOntologyCardRegistry();
+    logger.info('Ontology card registry loaded', {
+      card_count: ontologyCardRegistry.cardCount,
+      registry_hash: ontologyCardRegistry.registryHash,
+      fragments_root: ontologyCardRegistry.fragmentsRoot,
+    });
+
+    const ontologyPersistenceBridge = await loadOntologyPersistenceBridge();
+    logger.info('Ontology persistence bridge loaded with explicit checked/unchecked coverage', {
+      collection_count: ontologyPersistenceBridge.collectionCount,
+      card_backed_collections: ontologyPersistenceBridge.cardBackedCollections,
+      schema_only_collections: ontologyPersistenceBridge.schemaOnlyCollections,
+      mapping_path: ontologyPersistenceBridge.mappingPath,
+    });
+
     // Connect to MongoDB
     await connectDb();
     logger.info('MongoDB connected');

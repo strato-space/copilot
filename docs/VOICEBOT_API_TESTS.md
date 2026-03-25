@@ -30,6 +30,11 @@ Voice-heavy focused suites usually live under:
 - `__tests__/voicebot/workers`
 - `__tests__/voicebot/tg`
 - `__tests__/voicebot/session`
+- ontology runtime suites now also live under:
+  - `__tests__/services/ontologyCardRegistry.test.ts`
+  - `__tests__/services/ontologyPersistenceBridge.test.ts`
+  - `__tests__/services/ontologyCollectionAdapter.test.ts`
+  - `__tests__/services/voicebot/persistPossibleTasks.test.ts`
 
 ## Frontend
 
@@ -107,6 +112,23 @@ Draft visibility policy coverage:
 - runtime session route coverage now includes:
   - `session_tasks(bucket='Draft', draft_horizon_days=...)`
   - `include_older_drafts=true` override
+  - `session_tasks(bucket='Draft')` using `automation_tasks` master rows checked against the strict Draft-master scalar subset plus invariants
+  - `save_possible_tasks` soft-delete/update semantics through ontology-backed scalar field translation
+
+Focused command set used for the ontology-backed Draft migration:
+
+```bash
+cd /home/strato-space/copilot/backend
+npx jest --runTestsByPath \
+  __tests__/services/ontologyCardRegistry.test.ts \
+  __tests__/services/ontologyPersistenceBridge.test.ts \
+  __tests__/services/ontologyCollectionAdapter.test.ts \
+  __tests__/services/voicebot/persistPossibleTasks.test.ts
+
+NODE_OPTIONS='--experimental-vm-modules' npx jest --runTestsByPath \
+  __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts \
+  -t "save_possible_tasks|session_tasks\\(Draft\\)|respects draft recency window override when include_older_drafts is true"
+```
 
 ## Notes
 

@@ -13,7 +13,7 @@ attribute external_id, value string;
 attribute name, value string;
 # @toon inventory=inspect domain=dictionary max_values=50
 attribute status, value string;
-# @toon values: Archive | Done | Draft | Progress 10 | Ready | Review / Ready
+# @toon values: Archive | Done | Draft | Progress 10 | Ready
 
 # @toon inventory=inspect domain=state max_values=10
 attribute activity_state, value string;
@@ -135,7 +135,7 @@ attribute runtime_source, value string;
 attribute dialogue_reference, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute dialogue_tag, value string;
-# @toon values: null | call | chat | voice
+# @toon values: null | call | chat | doc | voice
 
 attribute dependencies, value string;
 attribute dependencies_from_ai, value string;
@@ -253,7 +253,7 @@ attribute performer, value string;
 attribute legacy_finance_income_type_ref, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute priority, value string;
-# @toon values: null |  | P1 | P2 | P3 | P4 | P5 | P6 | P7 | 🔥 P1
+# @toon values: null |  | P1 | P2 | P3 | P4 | P5 | P6 | P7 | 🔥 P1 | 🔥 P2 | 🔥 P3 | 🔥 P4
 
 attribute start_date, value string;
 attribute end_date, value string;
@@ -381,7 +381,7 @@ attribute file_size, value integer;
 attribute parents, value string;
 # @toon inventory=inspect domain=dictionary max_values=30
 attribute mime_type, value string;
-# @toon values: null | application/msword | application/octet-stream | application/pdf | application/postscript | application/vnd.google-apps.document | application/vnd.google-apps.folder | application/vnd.google-apps.form | application/vnd.google-apps.presentation | application/vnd.google-apps.shortcut | application/vnd.google-apps.spreadsheet | application/vnd.oasis.opendocument.text | application/vnd.openxmlformats-officedocument.presentationml.presentation | application/vnd.openxmlformats-officedocument.spreadsheetml.sheet | application/vnd.openxmlformats-officedocument.wordprocessingml.document | application/x-font-ttf | application/x-xfig | application/x-zip-compressed | audio/ogg | audio/webm | image/gif | image/jpeg | image/png | image/svg+xml | text/html | text/x-markdown | video/mp4 | video/quicktime
+# @toon values: null | application/msword | application/octet-stream | application/pdf | application/postscript | application/vnd.google-apps.document | application/vnd.google-apps.folder | application/vnd.google-apps.form | application/vnd.google-apps.presentation | application/vnd.google-apps.shortcut | application/vnd.google-apps.spreadsheet | application/vnd.oasis.opendocument.text | application/vnd.openxmlformats-officedocument.presentationml.presentation | application/vnd.openxmlformats-officedocument.spreadsheetml.sheet | application/vnd.openxmlformats-officedocument.wordprocessingml.document | application/x-font-ttf | application/x-xfig | application/x-zip-compressed | audio/ogg | audio/webm | audio/x-m4a | image/gif | image/jpeg | image/png | image/svg+xml | text/html | text/x-markdown | video/mp4 | video/quicktime
 
 attribute drive_folder_id, value string;
 attribute forecast_hours, value double;
@@ -794,6 +794,7 @@ entity telegram_chat,
   owns updated_at,
   plays project_has_telegram_chat_source:source_chat,
   plays telegram_chat_has_member:telegram_chat;
+# --- </semantic-card> ---
 
 # --- <semantic-card id="telegram_user"> ---
 # kind: operational-record
@@ -815,6 +816,7 @@ entity telegram_user,
   plays telegram_chat_has_member:telegram_user,
   plays telegram_user_maps_to_person:telegram_user,
   plays telegram_user_maps_to_performer_profile:telegram_user;
+# --- </semantic-card> ---
 
 # --- <semantic-card id="project_performer_link"> ---
 # kind: operational-record
@@ -1061,6 +1063,7 @@ entity agreement,
 # field source_ref: primary source reference used for task/session lineage joins.
 # field external_ref: secondary external source reference used for lineage joins.
 # field source_data: raw structured lineage/context payload kept for compatibility.
+# field parent_id: scalar parent task locator retained alongside richer parent relation payloads.
 # field dialogue_reference: quoted transcript/dialogue fragment explaining why task exists.
 # field dialogue_tag: analyzer/runtime tag for discussion slice or task class.
 # field dependencies: normalized dependency payload.
@@ -1103,6 +1106,7 @@ entity agreement,
 # field codex_review_approval_card_cancel_callback: callback token for approval cancel action.
 # field runtime_tag: legacy runtime isolation tag kept for compatibility/transition.
 # field is_deleted: soft-delete flag.
+# field deleted_at: soft-delete timestamp when the task leaves the active runtime surface.
 # field stop_comment_parsing: flag disabling automatic comment parsing for this task.
 # field created_at: creation timestamp.
 # field updated_at: last update timestamp.
@@ -1183,6 +1187,8 @@ entity task,
   owns external_ref,
   # normalized JSON payload with lineage and compatibility metadata
   owns source_data,
+  # scalar parent task locator mirrored from richer parent relation payloads
+  owns parent_id,
   # transcript excerpt / phrase that evidences why the task exists
   owns dialogue_reference,
   # dialogue/task tag used by voice taskflow
@@ -1267,6 +1273,8 @@ entity task,
   owns runtime_tag,
   # soft-delete flag
   owns is_deleted,
+  # timestamp when the row was soft-deleted
+  owns deleted_at,
   # legacy flag that comment parsing should stop for this task
   owns stop_comment_parsing,
   # creation timestamp
@@ -3063,6 +3071,7 @@ entity evidence_link,
   owns updated_at,
   plays task_cites_evidence_link:evidence_link,
   plays visual_observation_cites_evidence_link:evidence_link;
+# --- </semantic-card> ---
 
 # --- <semantic-card id="evidence_observation"> ---
 # kind: evidence-observation
@@ -3248,7 +3257,6 @@ entity object_manifest,
   plays object_manifest_assembled_for_context_bundle:object_manifest;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="writeback_decision"> ---
 # --- <semantic-card id="change_proposal"> ---
 # kind: change-proposal
 # fpf_basis:
@@ -3759,7 +3767,6 @@ relation task_must_satisfy_acceptance_criterion,
   relates acceptance_criterion;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="task_targets_object_locator"> ---
 # --- <semantic-card id="task_classified_as_task_family"> ---
 # kind: classification-relation
 # fpf_basis:

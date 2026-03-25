@@ -40,6 +40,10 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 ## Draft Taskflow Endpoints
 
 - Legacy endpoint names still contain `possible_tasks` for compatibility, but the runtime contract is Draft-first (`DRAFT_10` -> `READY_10+`) with strict bucket reads (`Draft / Ready+ / Codex`).
+- Current ontology-backed runtime slice:
+  - `save_possible_tasks` writes task core fields through the card-backed `automation_tasks` adapter before Mongo persistence.
+  - `session_tasks(bucket='Draft')` validates the same Draft-master scalar subset plus lineage/lifecycle invariants before API normalization, but keeps read-time compatibility for legacy `source_kind='voice_session'` rows while fresh writes remain strict on `source_kind='voice_possible_task'`.
+  - structured compatibility payloads (`source_data`, `dependencies`, `dependencies_from_ai`, `status_history`, `task_status_history`, `comments_list`) and overlays (`relations`, `parent`, `children`, `discussion_sessions`) remain outside the strict validated subset in this wave.
 
 | Endpoint | Method | Purpose |
 |---|---|---|

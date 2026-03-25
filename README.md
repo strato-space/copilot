@@ -45,6 +45,10 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Canonical generated ontology output is `ontology/typedb/schema/str-ontology.tql`; editable source fragments live in `ontology/typedb/schema/fragments/*.tql`.
 - Generated inventory and sampling artifacts live in `ontology/typedb/inventory_latest/*`.
 - Ontology operator workflow now includes `ontology:typedb:{build,contract-check,domain-inventory,entity-sampling,ingest:*,sync:*}`.
+- Backend now boots a checked semantic-card runtime before Mongo/Redis:
+  - `backend/src/services/ontology/ontologyCardRegistry.ts` loads annotated TQL `semantic-card` blocks from `ontology/typedb/schema/fragments/*`,
+  - `backend/src/services/ontology/ontologyPersistenceBridge.ts` binds Mongo mapping entries to card-backed vs schema-only coverage,
+  - `backend/src/services/ontology/ontologyCollectionAdapter.ts` is the strict field-translation surface for collections that already have card-backed coverage.
 - Ontology architecture and rollout roadmap live in `ontology/plan/ontology-and-operations.md`.
 - `copilot` ontology is the kernel/common layer; projects are expected to extend it via per-project overlays and SemanticCards under `/home/strato-space/<project-slug>/`.
 - Direct TypeDB write discipline now uses DB-side owner-level `@values(...)` constraints for `task.status` and `task.priority` plus key TO-BE execution objects; Mongo task labels are normalized directly into canonical lifecycle keys and `P1..P7` priority before writing.
@@ -231,6 +235,10 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Web pasted images are persisted via backend upload endpoint (`POST /api/voicebot/upload_attachment`, alias `/api/voicebot/attachment`) into `backend/uploads/voicebot/attachments/<session_id>/<file_unique_id>.<ext>`.
 - Session page no longer has a separate `Возможные задачи` top tab; draft rows are rendered inside unified `Задачи` when the selected lifecycle subtab is `DRAFT_10`.
 - Possible tasks are persisted as master Mongo tasks in `automation_tasks` with `task_status=DRAFT_10`; session-local taskflow payloads are not a valid Draft read source.
+- The first production write/read slice now runs through the ontology runtime:
+  - `POST /api/voicebot/save_possible_tasks` writes task core fields through the card-backed `automation_tasks` adapter,
+  - `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Draft' }` validates the same Draft-master scalar subset plus lineage/lifecycle invariants before API normalization, but keeps read-time compatibility for legacy `source_kind='voice_session'` rows while write-time persistence remains strict on `source_kind='voice_possible_task'`,
+  - structured compatibility payloads (`source_data`, `dependencies`, `dependencies_from_ai`, `status_history`, `task_status_history`, `comments_list`) and compatibility-only overlays (`relations`, `parent`, `children`, `discussion_sessions`) remain deferred outside the strict validated subset in this wave.
 - Possible Tasks validation no longer requires `task_type_id`; blocking required fields are `name`, `description`, `performer_id`, and `priority`.
 - Possible Tasks session table no longer exposes editable `task_type_id` and `dialogue_tag` columns; create payload stays canonical for required operational fields.
 - Possible Tasks creation flow now emits structured submit diagnostics in browser console:

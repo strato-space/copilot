@@ -622,6 +622,7 @@ entity evidence_link,
   owns updated_at,
   plays task_cites_evidence_link:evidence_link,
   plays visual_observation_cites_evidence_link:evidence_link;
+# --- </semantic-card> ---
 
 # --- <semantic-card id="evidence_observation"> ---
 # kind: evidence-observation
@@ -807,7 +808,6 @@ entity object_manifest,
   plays object_manifest_assembled_for_context_bundle:object_manifest;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="writeback_decision"> ---
 # --- <semantic-card id="change_proposal"> ---
 # kind: change-proposal
 # fpf_basis:
@@ -1318,7 +1318,6 @@ relation task_must_satisfy_acceptance_criterion,
   relates acceptance_criterion;
 # --- </semantic-card> ---
 
-# --- <semantic-card id="task_targets_object_locator"> ---
 # --- <semantic-card id="task_classified_as_task_family"> ---
 # kind: classification-relation
 # fpf_basis:

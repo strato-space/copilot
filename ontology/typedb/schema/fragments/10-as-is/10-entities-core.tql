@@ -212,6 +212,7 @@ entity telegram_chat,
   owns updated_at,
   plays project_has_telegram_chat_source:source_chat,
   plays telegram_chat_has_member:telegram_chat;
+# --- </semantic-card> ---
 
 # --- <semantic-card id="telegram_user"> ---
 # kind: operational-record
@@ -233,6 +234,7 @@ entity telegram_user,
   plays telegram_chat_has_member:telegram_user,
   plays telegram_user_maps_to_person:telegram_user,
   plays telegram_user_maps_to_performer_profile:telegram_user;
+# --- </semantic-card> ---
 
 # --- <semantic-card id="project_performer_link"> ---
 # kind: operational-record
@@ -479,6 +481,7 @@ entity agreement,
 # field source_ref: primary source reference used for task/session lineage joins.
 # field external_ref: secondary external source reference used for lineage joins.
 # field source_data: raw structured lineage/context payload kept for compatibility.
+# field parent_id: scalar parent task locator retained alongside richer parent relation payloads.
 # field dialogue_reference: quoted transcript/dialogue fragment explaining why task exists.
 # field dialogue_tag: analyzer/runtime tag for discussion slice or task class.
 # field dependencies: normalized dependency payload.
@@ -521,6 +524,7 @@ entity agreement,
 # field codex_review_approval_card_cancel_callback: callback token for approval cancel action.
 # field runtime_tag: legacy runtime isolation tag kept for compatibility/transition.
 # field is_deleted: soft-delete flag.
+# field deleted_at: soft-delete timestamp when the task leaves the active runtime surface.
 # field stop_comment_parsing: flag disabling automatic comment parsing for this task.
 # field created_at: creation timestamp.
 # field updated_at: last update timestamp.
@@ -601,6 +605,8 @@ entity task,
   owns external_ref,
   # normalized JSON payload with lineage and compatibility metadata
   owns source_data,
+  # scalar parent task locator mirrored from richer parent relation payloads
+  owns parent_id,
   # transcript excerpt / phrase that evidences why the task exists
   owns dialogue_reference,
   # dialogue/task tag used by voice taskflow
@@ -685,6 +691,8 @@ entity task,
   owns runtime_tag,
   # soft-delete flag
   owns is_deleted,
+  # timestamp when the row was soft-deleted
+  owns deleted_at,
   # legacy flag that comment parsing should stop for this task
   owns stop_comment_parsing,
   # creation timestamp

@@ -1795,9 +1795,15 @@ describe('Voicebot utility routes runtime behavior', () => {
       expect.objectContaining({ _id: staleMasterId }),
       expect.objectContaining({
         $set: expect.objectContaining({
-          is_deleted: true,
-          deleted_at: expect.any(Date),
           updated_at: expect.any(Date),
+          source_data: expect.objectContaining({
+            refresh_state: 'stale',
+            stale_since: expect.any(String),
+            last_refresh_mode: 'incremental_refresh',
+          }),
+        }),
+        $unset: expect.objectContaining({
+          'source_data.superseded_at': 1,
         }),
       })
     );
