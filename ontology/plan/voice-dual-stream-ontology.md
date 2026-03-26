@@ -103,7 +103,7 @@ Production emphasis:
 - `discussion_window` — derived time range `[first_linked_session_at, last_linked_session_at]` over voice sessions linked to one task.
 - Для global Draft workqueue главным recency anchor practically служит `last_linked_session_at`.
 - Для session-local views окно должно оцениваться в обе стороны от текущей session относительно linked `discussion_window`.
-- Draft recency не должна определяться по `task.updated_at`, потому что recount/writeback может искусственно омолодить task row.
+- В recall-first policy Draft recency допускается определять по `task.updated_at` как mutation-anchor; риск artificial rejuvenation из recount/writeback трактуется как допустимый false positive ради строгого запрета false negatives.
 - `result_artifact` нормализуется в `artifact_record`; human-facing alias допускается, в ontology second object — нет.
 - Нормализованная mutation chain такова: `change_proposal -> writeback_decision -> patch -> history_step`.
 - FPF-aligned split сохраняется:
@@ -318,7 +318,7 @@ Concrete counterexample:
 - `project` не равен `system_of_interest`, а `system_of_interest` не равен `producing_system`;
 - `task_intake_pool` и `executor_routing` должны возникать поверх `task` plane: входящие `task[DRAFT_10]` сначала попадают в intake surface, а затем `executor_routing` маршрутизирует их по `executor_role` к `performer_profile`, `coding_agent` или в mixed contour;
 - ширина active `task[DRAFT_10]` queue может ограничиваться через caller-provided `draft_recency_horizon` без изменения ontology самого `task`; если policy не задана, Draft baseline остаётся полным;
-- Draft recency не должна определяться по `task.updated_at`, потому что recount/writeback может искусственно “омолодить” row; корректный anchor — linked `discussion_window`;
+- В recall-first policy Draft recency допускается определять по `task.updated_at` как mutation-anchor; риск artificial rejuvenation из recount/writeback трактуется как допустимый false positive ради строгого запрета false negatives; linked `discussion_window` остаётся корректным anchor для linkage-focused срезов;
 - task routing должен использовать явную сегментацию между `task_family` и `executor_role`, а не один плоский undifferentiated queue;
 - `DevFigma / FigmaFlow` должен служить ближайшим `seed_context_base` для `executor_role`, process templates, skills и `artifact_record` families при bootstrap executor layer;
 - ближайший validation path должен быть practical, а не abstract: текущий `FigmaFlow lowres` и два реальных microprojects (`mriya2` hotels и real estate) — это ожидаемый полигон для проверки `task` connection, `executor_routing` и `task_execution_run`.
