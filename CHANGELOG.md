@@ -7,6 +7,7 @@
 - **22:47** WebRTC `New/Rec/Done` flows could race each other and stale active-session fallbacks could revive already-closed sessions, which let the UI drift away from backend `session_inactive` truth and made close/start behavior nondeterministic.
 - **22:47** Voice task refresh still assumed categorization always queued successfully; when categorization could not be queued, `CREATE_TASKS` could refresh with ambiguous zero-task outcomes instead of preserving an explicit no-task decision and session lineage.
 - **22:47** CRM/OperOps transport and detail rendering still drifted: `/api/crm/tickets` legacy aliases were informal, replayed mutations could move `updated_at` backwards, and task descriptions could misrender Markdown or unsafe HTML fragments.
+- **22:59** Legacy Draft master rows with numeric `updated_at` could still be skipped by read compatibility, which let full-recompute inserts duplicate a historical possible-task row instead of reusing and canonicalizing it.
 
 ### FEATURE IMPLEMENTED
 - **05:52** Stabilized stale marker semantics for `CREATE_TASKS`: explicit processor markers now have priority, with `_id` used only as fallback when explicit markers are absent.
@@ -14,6 +15,7 @@
 - **22:47** Serialized WebRTC lifecycle transitions with correlation ids, fail-fast inactive-session handling, and awaited REST `session_done` propagation so host/FAB/page controls share one deterministic close/start contract.
 - **22:47** Added canonical `no_task_decision` persistence for categorization-not-queued flows across web ingress, Telegram ingress, worker transcribe reuse, and processing-loop recovery; Voice possible-task persistence now keeps `discussion_sessions[]` lineage and monotonic timestamps.
 - **22:47** Canonicalized CRM tickets transport onto `statuses/project/response_mode/from_date/to_date`, removed legacy frontend `includeOlderDrafts` coupling from Kanban fetches, and upgraded OperOps `TaskPage` to Markdown-first sanitized description rendering.
+- **22:59** Extended Draft read compatibility to normalize numeric `updated_at` values into canonical `Date` instances before reuse/filtering, preserving monotonic replay behavior for historical possible-task rows.
 
 ### CHANGES
 - **05:52** Updated `backend/src/services/voicebot/createTasksStaleProcessingRepair.ts` and `backend/__tests__/services/voicebot/createTasksStaleProcessingRepair.test.ts` to enforce explicit marker precedence, remove `ObjectId-now` test drift, and add focused regression cases for marker-priority semantics.
@@ -30,6 +32,10 @@
   - `cd app && npm run test:serial -- __tests__/operops/crmKanbanTransportContract.test.ts __tests__/operops/taskPageMarkdownRenderContract.test.ts __tests__/voice/doneStartRaceLockContract.test.ts __tests__/voice/webrtcStartTransitionContract.test.ts __tests__/voice/activateSessionResilienceContract.test.ts __tests__/voice/possibleTasksPostCreateContract.test.ts __tests__/voice/transcriptionFallbackErrorSignatureContract.test.ts __tests__/voice/codexTasksInlineDetailsContract.test.ts` (`8` suites, `33` tests, passed)
   - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/api/crmTicketsTransportLegacyContract.test.ts __tests__/services/taskUpdatedAt.test.ts __tests__/voicebot/runtime/activateSessionRoute.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.addTextParity.test.ts __tests__/voicebot/runtime/uploadAudioRoute.test.ts __tests__/voicebot/runtime/tgIngressHandlers.baseFlows.test.ts __tests__/voicebot/workers/workerTranscribeHandler.test.ts __tests__/voicebot/workers/workerProcessingLoopHandler.test.ts __tests__/voicebot/session/sessionDoneFlowService.test.ts __tests__/services/voicebot/persistPossibleTasks.test.ts` (`10` suites, `96` tests, passed)
   - `cd app && npm run build`
+  - `cd backend && npm run build`
+- **22:59** Updated `backend/src/services/voicebot/persistPossibleTasks.ts` so non-write Draft reads normalize legacy numeric `updated_at` values before validation/reuse, keeping session/project candidate pools compatible with historical master rows.
+- **22:59** Verification:
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/services/voicebot/persistPossibleTasks.test.ts`
   - `cd backend && npm run build`
 
 ## 2026-03-25

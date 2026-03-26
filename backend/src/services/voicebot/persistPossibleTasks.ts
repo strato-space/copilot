@@ -25,7 +25,7 @@ import {
 } from '../ontology/ontologyCollectionAdapter.js';
 import { OntologyCardRegistryError } from '../ontology/ontologyCardRegistry.js';
 import { getLogger } from '../../utils/logger.js';
-import { resolveMonotonicUpdatedAtNext } from '../taskUpdatedAt.js';
+import { resolveDateLikeEpochMs, resolveMonotonicUpdatedAtNext } from '../taskUpdatedAt.js';
 
 export const POSSIBLE_TASKS_REFRESH_MODE_VALUES = ['full_recompute', 'incremental_refresh'] as const;
 export type PossibleTasksRefreshMode = (typeof POSSIBLE_TASKS_REFRESH_MODE_VALUES)[number];
@@ -122,13 +122,29 @@ const normalizeLegacyDraftPriority = (value: unknown): string | null => {
 const normalizeDraftMasterDocForReadCompatibility = (
   document: Record<string, unknown>
 ): Record<string, unknown> => {
-  if (!Object.prototype.hasOwnProperty.call(document, 'priority')) return document;
-  const normalizedPriority = normalizeLegacyDraftPriority(document.priority);
-  if (!normalizedPriority || normalizedPriority === document.priority) return document;
-  return {
-    ...document,
-    priority: normalizedPriority,
-  };
+  let normalizedDocument = document;
+
+  if (Object.prototype.hasOwnProperty.call(document, 'priority')) {
+    const normalizedPriority = normalizeLegacyDraftPriority(document.priority);
+    if (normalizedPriority && normalizedPriority !== document.priority) {
+      normalizedDocument = {
+        ...normalizedDocument,
+        priority: normalizedPriority,
+      };
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(document, 'updated_at')) {
+    const normalizedUpdatedAt = resolveDateLikeEpochMs(document.updated_at);
+    if (normalizedUpdatedAt !== null && !(document.updated_at instanceof Date)) {
+      normalizedDocument = {
+        ...normalizedDocument,
+        updated_at: new Date(normalizedUpdatedAt),
+      };
+    }
+  }
+
+  return normalizedDocument;
 };
 
 const assertPossibleTaskMongoDocumentShape = ({
@@ -269,9 +285,12 @@ const filterValidPossibleTaskMasterDocs = async (
 ): Promise<Array<Record<string, unknown>>> => {
   const adapter = await getPossibleTaskOntologyAdapter();
   return docs.filter((doc, index) => {
+    const normalizedDoc = mode === 'write-strict'
+      ? doc
+      : normalizeDraftMasterDocForReadCompatibility(doc);
     try {
       assertPossibleTaskMongoDocumentShape({
-        document: doc,
+        document: normalizedDoc,
         adapter,
         context: `${context}[${index}]`,
         mode,
