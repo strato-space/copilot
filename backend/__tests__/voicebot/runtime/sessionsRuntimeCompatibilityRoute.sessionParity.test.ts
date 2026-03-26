@@ -8,6 +8,7 @@ import {
   getDbMock,
   getRawDbMock,
   buildApp,
+  createStableMessagesCountAggregateMock,
   resetSessionsRuntimeCompatibilityMocks,
 } from './sessionsRuntimeCompatibilityRoute.test.helpers.js';
 
@@ -18,15 +19,18 @@ describe('VoiceBot sessions runtime compatibility (runtime-tag agnostic)', () =>
 
   it('POST /voicebot/list keeps access filter only without runtime_tag clauses', async () => {
     const aggregatePipelineCalls: Array<Array<Record<string, unknown>>> = [];
+    const visibleSessionId = new ObjectId();
     const aggregateMock = jest.fn(async () => [
       {
-        _id: new ObjectId(),
+        _id: visibleSessionId,
         chat_id: 123456,
         session_name: 'Prod session',
-        message_count: 1,
         is_active: false,
       },
     ]);
+    const messageCountsAggregate = createStableMessagesCountAggregateMock({
+      [visibleSessionId.toHexString()]: 1,
+    });
 
     const rawDbStub = {
       collection: (name: string) => {
@@ -36,6 +40,11 @@ describe('VoiceBot sessions runtime compatibility (runtime-tag agnostic)', () =>
               aggregatePipelineCalls.push(pipeline);
               return { toArray: () => aggregateMock() };
             }),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            aggregate: messageCountsAggregate,
           };
         }
         return {
@@ -56,20 +65,66 @@ describe('VoiceBot sessions runtime compatibility (runtime-tag agnostic)', () =>
 
     const [pipeline] = aggregatePipelineCalls;
     expect(pipeline?.[0]).toEqual({ $match: {} });
+    expect(JSON.stringify(pipeline ?? [])).not.toContain('runtime_tag');
 
-    const lookupStage = pipeline?.find((stage) => {
-      const lookup = (stage as { $lookup?: { from?: string } })?.$lookup;
-      return lookup?.from === VOICEBOT_COLLECTIONS.MESSAGES;
-    }) as
-      | { $lookup?: { from?: string; pipeline?: Array<Record<string, unknown>> } }
-      | undefined;
-    expect(lookupStage?.$lookup?.from).toBe(VOICEBOT_COLLECTIONS.MESSAGES);
-    const lookupMatchStage = lookupStage?.$lookup?.pipeline?.find((stage) =>
-      Object.prototype.hasOwnProperty.call(stage, '$match')
-    ) as { $match?: Record<string, unknown> } | undefined;
-    expect(lookupMatchStage?.$match).toEqual({
-      $expr: { $eq: ['$session_id', '$$sessionId'] },
-    });
+    expect(messageCountsAggregate).toHaveBeenCalledTimes(1);
+    const [messageCountPipeline] = messageCountsAggregate.mock.calls[0] as [
+      Array<Record<string, unknown>>,
+    ];
+    expect(messageCountPipeline).toEqual([
+      {
+        $match: {
+          session_id: { $in: [visibleSessionId] },
+        },
+      },
+      {
+        $group: {
+          _id: '$session_id',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+  });
+
+  it('POST /voicebot/list hides inactive sessions with zero messages when not deleted', async () => {
+    const hiddenSessionId = new ObjectId();
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            aggregate: jest.fn(() => ({
+              toArray: async () => [
+                {
+                  _id: hiddenSessionId,
+                  chat_id: 999888,
+                  session_name: 'Inactive empty session',
+                  is_active: false,
+                  is_deleted: false,
+                },
+              ],
+            })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            aggregate: createStableMessagesCountAggregateMock({}),
+          };
+        }
+        return {
+          aggregate: jest.fn(() => ({ toArray: async () => [] })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(rawDbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app).post('/voicebot/list').send({});
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body).toHaveLength(0);
   });
 
   it('POST /voicebot/session reads by id without runtime_tag filter wrappers', async () => {

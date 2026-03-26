@@ -73,3 +73,33 @@ export const resetSessionsRuntimeCompatibilityMocks = () => {
   generateDataFilterMock.mockResolvedValue({});
   getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
 };
+
+type AggregatePipelineStage = Record<string, unknown>;
+
+const extractSessionIdsFromMessagesCountPipeline = (
+  pipeline: Array<AggregatePipelineStage> = []
+): ObjectId[] => {
+  const matchStage = pipeline.find((stage) =>
+    Object.prototype.hasOwnProperty.call(stage, '$match')
+  ) as { $match?: { session_id?: { $in?: unknown[] } } } | undefined;
+
+  const inValues = matchStage?.$match?.session_id?.$in;
+  if (!Array.isArray(inValues)) {
+    return [];
+  }
+
+  return inValues.filter((value): value is ObjectId => value instanceof ObjectId);
+};
+
+export const createStableMessagesCountAggregateMock = (
+  countsBySessionId: Record<string, number> = {}
+) =>
+  jest.fn((pipeline: Array<AggregatePipelineStage> = []) => ({
+    toArray: async () =>
+      extractSessionIdsFromMessagesCountPipeline(pipeline)
+        .map((sessionId) => ({
+          _id: sessionId,
+          count: Number(countsBySessionId[sessionId.toHexString()] ?? 0),
+        }))
+        .filter((row) => row.count > 0),
+  }));

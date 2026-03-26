@@ -35,6 +35,7 @@ These decisions are part of the current platform contract and must be preserved 
   - accepted materialized rows must not be soft-deleted by possible-task cleanup,
   - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
   - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate.
+  - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent.
 
 ## Critical Interfaces To Preserve
 
@@ -462,6 +463,7 @@ Preferred engineering principles for this repo:
 - TS transcribe worker deduplicates repeated chunk uploads by file hash (`file_hash`/`file_unique_id`/`hash_sha256`) and reuses existing transcription payload before calling OpenAI.
 - Voice workers schedule `CLEANUP_EMPTY_SESSIONS` on `VOICEBOT_QUEUES.COMMON`; cleanup marks stale empty sessions (`message_count=0`) as `is_deleted=true` with configurable cadence/age/batch limits via env.
 - Voice sessions list supports `include_deleted` server filter and frontend `Показывать удаленные`; creator/participant filters drop numeric identity placeholders so only human labels are shown.
+- Sessions-list visibility contract is canonical in runtime and tests: non-deleted sessions with `is_active=false` and `message_count=0` remain hidden; parity fixtures must mock message-count aggregates explicitly.
 - Voice sessions list must force a refetch when `include_deleted` intent changes during an in-flight list load; loading guard should not block `force=true` mode sync.
 - Voice sessions list fetch must stay single-shot with respect to metadata hydration: project/person hydration must not retrigger `sessions/list`, and canonical row ordering belongs in the store rather than in an extra page-level resort pass.
 - Voice sessions list backend contract must avoid per-row fan-out work: `message_count` and session task counters should be resolved in bounded batch reads, and `automation_voice_bot_messages.session_id` is a required startup index for the list path.

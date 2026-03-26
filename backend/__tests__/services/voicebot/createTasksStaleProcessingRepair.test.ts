@@ -51,6 +51,13 @@ const emptyQueueScanResult = (): CreateTasksQueueScanResult => ({
   truncated_states: [],
 });
 
+const objectIdFromDate = (iso: string, suffix: string): ObjectId => {
+  const secondsHex = Math.floor(new Date(iso).getTime() / 1000)
+    .toString(16)
+    .padStart(8, '0');
+  return new ObjectId(`${secondsHex}${suffix}`);
+};
+
 describe('repairStaleCreateTasksProcessing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -58,7 +65,7 @@ describe('repairStaleCreateTasksProcessing', () => {
 
   it('reports stale CREATE_TASKS processing sessions in dry-run without mutating DB', async () => {
     const now = new Date('2026-03-24T10:00:00.000Z');
-    const sessionId = new ObjectId();
+    const sessionId = objectIdFromDate('2026-03-24T07:00:00.000Z', 'aaaaaaaaaaaaaaaa');
     const fixture = buildDbFixture([
       {
         _id: sessionId,
@@ -104,7 +111,7 @@ describe('repairStaleCreateTasksProcessing', () => {
 
   it('applies repair by resetting CREATE_TASKS.is_processing when queue has no active work', async () => {
     const now = new Date('2026-03-24T12:00:00.000Z');
-    const sessionId = new ObjectId();
+    const sessionId = objectIdFromDate('2026-03-24T09:00:00.000Z', 'bbbbbbbbbbbbbbbb');
     const fixture = buildDbFixture([
       {
         _id: sessionId,
@@ -156,7 +163,7 @@ describe('repairStaleCreateTasksProcessing', () => {
 
   it('applies repair for stale unresolved CREATE_TASKS requests even when is_processing is already false', async () => {
     const now = new Date('2026-03-24T12:00:00.000Z');
-    const sessionId = new ObjectId();
+    const sessionId = objectIdFromDate('2026-03-24T08:00:00.000Z', 'cccccccccccccccc');
     const fixture = buildDbFixture([
       {
         _id: sessionId,
@@ -210,7 +217,7 @@ describe('repairStaleCreateTasksProcessing', () => {
 
   it('skips repair when queue still has active session work', async () => {
     const now = new Date('2026-03-24T12:00:00.000Z');
-    const sessionId = new ObjectId();
+    const sessionId = objectIdFromDate('2026-03-24T09:30:00.000Z', 'dddddddddddddddd');
     const sessionIdText = sessionId.toHexString();
     const fixture = buildDbFixture([
       {
@@ -265,7 +272,7 @@ describe('repairStaleCreateTasksProcessing', () => {
   it('skips repair when processing marker is too recent', async () => {
     const now = new Date('2026-03-24T12:00:00.000Z');
     const recentAt = Date.parse('2026-03-24T11:55:00.000Z');
-    const sessionId = new ObjectId();
+    const sessionId = objectIdFromDate('2026-03-24T11:55:00.000Z', 'eeeeeeeeeeeeeeee');
     const fixture = buildDbFixture([
       {
         _id: sessionId,
@@ -303,7 +310,7 @@ describe('repairStaleCreateTasksProcessing', () => {
 
   it('skips repair when queue scan is truncated and strict mode is enabled', async () => {
     const now = new Date('2026-03-24T12:00:00.000Z');
-    const sessionId = new ObjectId();
+    const sessionId = objectIdFromDate('2026-03-24T08:00:00.000Z', 'ffffffffffffffff');
     const fixture = buildDbFixture([
       {
         _id: sessionId,
@@ -340,5 +347,75 @@ describe('repairStaleCreateTasksProcessing', () => {
       })
     );
     expect(fixture.sessionsUpdateOne).not.toHaveBeenCalled();
+  });
+
+  it('prioritizes explicit CREATE_TASKS markers over a newer _id timestamp', async () => {
+    const now = new Date('2026-03-24T12:00:00.000Z');
+    const staleMarkerAt = Date.parse('2026-03-24T09:00:00.000Z');
+    const sessionId = objectIdFromDate('2026-03-24T11:59:00.000Z', '1111111111111111');
+    const fixture = buildDbFixture([
+      {
+        _id: sessionId,
+        session_name: 'Explicit marker wins',
+        processors_data: {
+          CREATE_TASKS: {
+            is_processing: true,
+            is_processed: false,
+            job_queued_timestamp: staleMarkerAt,
+          },
+        },
+      },
+    ]);
+
+    const result = await repairStaleCreateTasksProcessing({
+      db: fixture.db,
+      now,
+      staleMinutes: 30,
+      apply: false,
+      queueScan: async () => emptyQueueScanResult(),
+    });
+
+    expect(result.candidates).toBe(1);
+    expect(result.skipped_recent).toBe(0);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        decision: 'repair',
+        repaired: false,
+      })
+    );
+  });
+
+  it('falls back to _id marker only when explicit CREATE_TASKS markers are absent', async () => {
+    const now = new Date('2026-03-24T12:00:00.000Z');
+    const sessionId = objectIdFromDate('2026-03-24T11:59:00.000Z', '2222222222222222');
+    const fixture = buildDbFixture([
+      {
+        _id: sessionId,
+        session_name: 'Fallback marker',
+        processors_data: {
+          CREATE_TASKS: {
+            is_processing: true,
+            is_processed: false,
+          },
+        },
+      },
+    ]);
+
+    const result = await repairStaleCreateTasksProcessing({
+      db: fixture.db,
+      now,
+      staleMinutes: 30,
+      apply: false,
+      queueScan: async () => emptyQueueScanResult(),
+    });
+
+    expect(result.candidates).toBe(0);
+    expect(result.skipped_recent).toBe(1);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        decision: 'skip_recent',
+        repaired: false,
+      })
+    );
   });
 });

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-03-26
+### PROBLEM SOLVED
+- **05:52** `test:parallel-safe` was unstable because stale `CREATE_TASKS` repair tests implicitly depended on fresh `ObjectId` timestamps, causing false `skip_recent` decisions instead of deterministic stale repair verdicts.
+- **05:52** Sessions-list runtime parity tests still assumed legacy visibility behavior and could fail against the canonical contract where inactive non-deleted sessions with zero messages are filtered out.
+
+### FEATURE IMPLEMENTED
+- **05:52** Stabilized stale marker semantics for `CREATE_TASKS`: explicit processor markers now have priority, with `_id` used only as fallback when explicit markers are absent.
+- **05:52** Realigned sessions-list parity coverage to the current visibility policy and added reusable message-count aggregate mocking for deterministic runtime tests.
+
+### CHANGES
+- **05:52** Updated `backend/src/services/voicebot/createTasksStaleProcessingRepair.ts` and `backend/__tests__/services/voicebot/createTasksStaleProcessingRepair.test.ts` to enforce explicit marker precedence, remove `ObjectId-now` test drift, and add focused regression cases for marker-priority semantics.
+- **05:52** Updated `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts` and `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.test.helpers.ts` so parity assertions use canonical message-count aggregation and explicitly test the hidden inactive-zero-message visibility branch.
+- **05:52** Verification:
+  - `NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/services/voicebot/createTasksStaleProcessingRepair.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts`
+  - `npm run test:parallel-safe` (`128` suites, `586` tests, all passed).
+
 ## 2026-03-25
 ### PROBLEM SOLVED
 - **22:46** OpenAI `invalid_api_key` failures were still treated inconsistently across transcribe/categorize/processing-loop recovery paths, so sessions could stick in retry limbo with unclear operator diagnostics even after runtime credentials were repaired.

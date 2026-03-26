@@ -168,15 +168,26 @@ const extractSessionIdsFromJobData = (data: unknown): string[] => {
 
 const resolveLatestCreateTasksMarkerMs = (session: SessionDoc): number | null => {
   const createTasks = session.processors_data?.CREATE_TASKS;
-  const points = [
+  const explicitCreateTasksPoints = [
     parseDateMs(createTasks?.job_queued_timestamp),
     parseDateMs(createTasks?.auto_requested_at),
+    parseDateMs(createTasks?.requested_at),
+    parseDateMs(createTasks?.last_requested_at),
     parseDateMs(createTasks?.job_finished_timestamp),
+    parseDateMs(createTasks?.last_generated_at),
+    parseDateMs(createTasks?.last_completed_at),
+  ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+
+  if (explicitCreateTasksPoints.length > 0) {
+    return Math.max(...explicitCreateTasksPoints);
+  }
+
+  const fallbackPoints = [
     parseDateMs(session.updated_at),
     parseDateMs(session._id),
   ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-  if (points.length === 0) return null;
-  return Math.max(...points);
+  if (fallbackPoints.length === 0) return null;
+  return Math.max(...fallbackPoints);
 };
 
 const toFiniteOrZero = (value: number | null): number =>
