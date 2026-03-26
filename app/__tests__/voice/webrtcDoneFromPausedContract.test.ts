@@ -19,7 +19,7 @@ describe('webrtc fab done double-click contract', () => {
   });
 
   it('keeps page Done enabled in Paused when active/session context exists', () => {
-    expect(source).toContain("const canPageDone = hasToken && !finalUploading && (hasPageSession || hasActiveSession || hasSession);");
+    expect(source).toContain("const canPageDone = hasToken && !finalUploading && !pageDoneInFlight && !startTransitionBusy && !doneTransitionBusy && (hasPageSession || hasActiveSession || hasSession);");
   });
 
 });

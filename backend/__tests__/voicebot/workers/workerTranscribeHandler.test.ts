@@ -10,6 +10,13 @@ import {
   VOICEBOT_JOBS,
   VOICEBOT_QUEUES,
 } from '../../../src/constants.js';
+import {
+  buildIngressDeps as buildTgIngressDeps,
+  getActiveVoiceSessionForUserMock,
+  handleTextIngress,
+  makeDb as makeIngressDb,
+  resetTgIngressMocks,
+} from '../runtime/tgIngressHandlers.test.helpers.js';
 
 const getDbMock = jest.fn();
 const getAudioDurationFromFileMock = jest.fn();
@@ -57,6 +64,7 @@ const { handleTranscribeJob } = await import('../../../src/workers/voicebot/hand
 
 describe('handleTranscribeJob', () => {
   beforeEach(() => {
+    resetTgIngressMocks();
     getDbMock.mockReset();
     getAudioDurationFromFileMock.mockReset();
     getFileSha256FromPathMock.mockReset();
@@ -284,6 +292,607 @@ describe('handleTranscribeJob', () => {
         event_name: 'transcription_garbage_detected',
       })
     );
+  });
+
+  it('skips CREATE_TASKS auto refresh when categorization is not queued after transcribe', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-no-categorize-queue-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      message_timestamp: 1770489126,
+      duration: 10,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      processors: ['transcription', 'categorization'],
+      session_processors: ['CREATE_TASKS'],
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValue({ text: 'queue parity payload' });
+    getAudioDurationFromFileMock.mockResolvedValue(10);
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'postprocessors-job-1' }));
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-1' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    expect(postprocessorsQueueAdd).not.toHaveBeenCalled();
+    const createTasksRefreshCall = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return Object.prototype.hasOwnProperty.call(setPayload, 'processors_data.CREATE_TASKS.auto_requested_at');
+    });
+    expect(createTasksRefreshCall).toBeUndefined();
+    const noTaskDecisionPersistCall = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload['processors_data.CREATE_TASKS.no_task_reason_code'] === 'categorization_not_queued';
+    });
+    expect(noTaskDecisionPersistCall).toBeTruthy();
+  });
+
+  it('keeps CREATE_TASKS auto refresh enabled when categorization is disabled after transcribe', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-categorization-disabled-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      message_timestamp: 1770489126,
+      duration: 10,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      processors: ['transcription'],
+      session_processors: ['CREATE_TASKS'],
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValue({ text: 'disabled categorization parity payload' });
+    getAudioDurationFromFileMock.mockResolvedValue(10);
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-1' }));
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'postprocessors-job-1' }));
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-1' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: postprocessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    expect(processorsQueueAdd).not.toHaveBeenCalled();
+    expect(postprocessorsQueueAdd).toHaveBeenCalledTimes(1);
+    const createTasksRefreshCall = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return Object.prototype.hasOwnProperty.call(setPayload, 'processors_data.CREATE_TASKS.auto_requested_at');
+    });
+    expect(createTasksRefreshCall).toBeTruthy();
+  });
+
+  it('keeps voice and text garbage decisions equivalent for downstream categorization/create_tasks', async () => {
+    const parityText = 'garbage parity fixture';
+    const garbageDecision = {
+      checked_at: new Date('2026-03-25T12:00:00.000Z'),
+      detector_version: 'post_transcribe_garbage_v1',
+      model: 'gpt-5.4-nano',
+      skipped: false,
+      skip_reason: null,
+      is_garbage: true,
+      code: 'noise_or_garbage',
+      reason: 'repetitive_non_speech',
+      raw_output: '{"is_garbage":true}',
+    };
+
+    const voiceMessageId = new ObjectId();
+    const voiceSessionId = new ObjectId();
+    const voiceDir = mkdtempSync(join(tmpdir(), 'copilot-parity-voice-garbage-'));
+    const voiceFilePath = join(voiceDir, 'chunk.webm');
+    writeFileSync(voiceFilePath, 'fake-audio');
+    detectGarbageTranscriptionMock.mockResolvedValueOnce(garbageDecision);
+
+    const voiceMessagesFindOne = jest.fn(async () => ({
+      _id: voiceMessageId,
+      session_id: voiceSessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: voiceFilePath,
+      message_timestamp: 1770489126,
+      duration: 8,
+    }));
+    const voiceMessagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const voiceSessionsFindOne = jest.fn(async () => ({ _id: voiceSessionId }));
+    const voiceSessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: voiceMessagesFindOne,
+            updateOne: voiceMessagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: voiceSessionsFindOne,
+            updateOne: voiceSessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValueOnce({ text: parityText });
+    getAudioDurationFromFileMock.mockResolvedValue(8);
+    const voiceProcessorsQueueAdd = jest.fn(async () => ({ id: 'voice-processors-job' }));
+    const voicePostprocessorsQueueAdd = jest.fn(async () => ({ id: 'voice-postprocessors-job' }));
+    const voiceEventsQueueAdd = jest.fn(async () => ({ id: 'voice-events-job' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: voiceProcessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: voicePostprocessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: voiceEventsQueueAdd,
+      },
+    });
+
+    const voiceResult = await handleTranscribeJob({ message_id: voiceMessageId.toString() });
+    expect(voiceResult).toMatchObject({
+      ok: true,
+      message_id: voiceMessageId.toString(),
+      session_id: voiceSessionId.toString(),
+    });
+    expect(voiceProcessorsQueueAdd).not.toHaveBeenCalled();
+    expect(voicePostprocessorsQueueAdd).not.toHaveBeenCalled();
+
+    const voiceTranscriptionUpdateCall = voiceMessagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.is_transcribed === true;
+    });
+    expect(voiceTranscriptionUpdateCall).toBeTruthy();
+    const voiceSetPayload = (((voiceTranscriptionUpdateCall?.[1] as Record<string, unknown>)?.$set || {}) as Record<
+      string,
+      unknown
+    >);
+
+    const textSessionId = new ObjectId();
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: textSessionId,
+    });
+    const { db: ingressDb, spies: ingressSpies } = makeIngressDb({
+      performer: { _id: new ObjectId(), telegram_id: '9911' },
+      activeSession: {
+        _id: textSessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+        processors: ['transcription', 'categorization'],
+        session_processors: ['CREATE_TASKS'],
+      },
+    });
+    const textProcessorsQueueAdd = jest.fn(async () => ({ id: 'text-processors-job' }));
+    const textPostprocessorsQueueAdd = jest.fn(async () => ({ id: 'text-postprocessors-job' }));
+
+    const textResult = await handleTextIngress({
+      deps: buildTgIngressDeps({
+        db: ingressDb as any,
+        queues: {
+          [VOICEBOT_QUEUES.PROCESSORS]: {
+            add: textProcessorsQueueAdd,
+          },
+          [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+            add: textPostprocessorsQueueAdd,
+          },
+        },
+        garbageDetector: async () => garbageDecision,
+      }),
+      input: {
+        telegram_user_id: 9911,
+        chat_id: 9911,
+        username: 'parity-user',
+        message_id: 6401,
+        message_timestamp: 1770509191,
+        text: parityText,
+      },
+    });
+    expect(textResult.ok).toBe(true);
+    expect(textProcessorsQueueAdd).not.toHaveBeenCalled();
+    expect(textPostprocessorsQueueAdd).not.toHaveBeenCalled();
+
+    const insertedText = ingressSpies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(insertedText.garbage_detected).toBe(true);
+    const textCategorizationState = ((insertedText.processors_data as Record<string, unknown>)?.categorization ||
+      {}) as Record<string, unknown>;
+    expect(textCategorizationState.is_processed).toBe(true);
+    expect(textCategorizationState.skipped_reason).toBe('garbage_detected');
+    expect(textCategorizationState.skipped_reason).toBe(voiceSetPayload['processors_data.categorization.skipped_reason']);
+  });
+
+  it('keeps voice and text non-garbage downstream behavior equivalent for same valid content', async () => {
+    const parityText = 'valid parity fixture content';
+    const nonGarbageDecision = {
+      checked_at: new Date('2026-03-25T12:00:00.000Z'),
+      detector_version: 'post_transcribe_garbage_v1',
+      model: 'gpt-5.4-nano',
+      skipped: false,
+      skip_reason: null,
+      is_garbage: false,
+      code: 'ok',
+      reason: 'valid_speech',
+      raw_output: '{"is_garbage":false}',
+    };
+
+    const voiceMessageId = new ObjectId();
+    const voiceSessionId = new ObjectId();
+    const voiceDir = mkdtempSync(join(tmpdir(), 'copilot-parity-voice-valid-'));
+    const voiceFilePath = join(voiceDir, 'chunk.webm');
+    writeFileSync(voiceFilePath, 'fake-audio');
+    detectGarbageTranscriptionMock.mockResolvedValueOnce(nonGarbageDecision);
+
+    const voiceMessagesFindOne = jest.fn(async () => ({
+      _id: voiceMessageId,
+      session_id: voiceSessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: voiceFilePath,
+      message_timestamp: 1770489126,
+      duration: 11,
+    }));
+    const voiceMessagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const voiceSessionsFindOne = jest.fn(async () => ({
+      _id: voiceSessionId,
+      processors: ['transcription', 'categorization'],
+      session_processors: ['CREATE_TASKS'],
+    }));
+    const voiceSessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: voiceMessagesFindOne,
+            updateOne: voiceMessagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: voiceSessionsFindOne,
+            updateOne: voiceSessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValueOnce({ text: parityText });
+    getAudioDurationFromFileMock.mockResolvedValue(11);
+    const voiceProcessorsQueueAdd = jest.fn(async () => ({ id: 'voice-processors-job' }));
+    const voicePostprocessorsQueueAdd = jest.fn(async () => ({ id: 'voice-postprocessors-job' }));
+    const voiceEventsQueueAdd = jest.fn(async () => ({ id: 'voice-events-job' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: voiceProcessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+        add: voicePostprocessorsQueueAdd,
+      },
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: voiceEventsQueueAdd,
+      },
+    });
+
+    const voiceResult = await handleTranscribeJob({ message_id: voiceMessageId.toString() });
+    expect(voiceResult).toMatchObject({
+      ok: true,
+      message_id: voiceMessageId.toString(),
+      session_id: voiceSessionId.toString(),
+    });
+    expect(voiceProcessorsQueueAdd).toHaveBeenCalledTimes(1);
+    expect(voicePostprocessorsQueueAdd).toHaveBeenCalledTimes(1);
+    expect(voicePostprocessorsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+      expect.objectContaining({
+        session_id: voiceSessionId.toHexString(),
+        refresh_mode: 'incremental_refresh',
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+
+    const voiceRefreshStateCall = voiceSessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return Object.prototype.hasOwnProperty.call(setPayload, 'processors_data.CREATE_TASKS.auto_requested_at');
+    });
+    expect(voiceRefreshStateCall).toBeTruthy();
+    const voiceRefreshUpdate = voiceRefreshStateCall?.[1] as Record<string, unknown>;
+    expect((voiceRefreshUpdate.$set as Record<string, unknown>)['processors_data.CREATE_TASKS.is_processed']).toBe(false);
+    expect((voiceRefreshUpdate.$set as Record<string, unknown>)['processors_data.CREATE_TASKS.is_processing']).toBe(false);
+    expect((voiceRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.error']).toBe(1);
+    expect((voiceRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.no_task_reason_code']).toBe(1);
+    expect((voiceRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.no_task_decision']).toBe(1);
+    expect((voiceRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.last_tasks_count']).toBe(1);
+
+    const textSessionId = new ObjectId();
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: textSessionId,
+    });
+    const { db: ingressDb, spies: ingressSpies } = makeIngressDb({
+      performer: { _id: new ObjectId(), telegram_id: '9922' },
+      activeSession: {
+        _id: textSessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+        processors: ['transcription', 'categorization'],
+        session_processors: ['CREATE_TASKS'],
+      },
+    });
+    const textProcessorsQueueAdd = jest.fn(async () => ({ id: 'text-processors-job' }));
+    const textPostprocessorsQueueAdd = jest.fn(async () => ({ id: 'text-postprocessors-job' }));
+
+    const textResult = await handleTextIngress({
+      deps: buildTgIngressDeps({
+        db: ingressDb as any,
+        queues: {
+          [VOICEBOT_QUEUES.PROCESSORS]: {
+            add: textProcessorsQueueAdd,
+          },
+          [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+            add: textPostprocessorsQueueAdd,
+          },
+        },
+        garbageDetector: async () => nonGarbageDecision,
+      }),
+      input: {
+        telegram_user_id: 9922,
+        chat_id: 9922,
+        username: 'valid-parity-user',
+        message_id: 6402,
+        message_timestamp: 1770509292,
+        text: parityText,
+      },
+    });
+    expect(textResult.ok).toBe(true);
+    expect(textProcessorsQueueAdd).toHaveBeenCalledTimes(1);
+    expect(textPostprocessorsQueueAdd).toHaveBeenCalledTimes(1);
+    expect(textPostprocessorsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+      expect.objectContaining({
+        session_id: textSessionId.toHexString(),
+        refresh_mode: 'incremental_refresh',
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+
+    const textRefreshStateCall = ingressSpies.sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return Object.prototype.hasOwnProperty.call(setPayload, 'processors_data.CREATE_TASKS.auto_requested_at');
+    });
+    expect(textRefreshStateCall).toBeTruthy();
+    const textRefreshUpdate = textRefreshStateCall?.[1] as Record<string, unknown>;
+    expect((textRefreshUpdate.$set as Record<string, unknown>)['processors_data.CREATE_TASKS.is_processed']).toBe(false);
+    expect((textRefreshUpdate.$set as Record<string, unknown>)['processors_data.CREATE_TASKS.is_processing']).toBe(false);
+    expect((textRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.error']).toBe(1);
+    expect((textRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.no_task_reason_code']).toBe(1);
+    expect((textRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.no_task_decision']).toBe(1);
+    expect((textRefreshUpdate.$unset as Record<string, unknown>)['processors_data.CREATE_TASKS.last_tasks_count']).toBe(1);
+  });
+
+  it('persists no-task decision in reuse_by_hash branch when categorization is not queued', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const reusedMessageId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-reuse-no-queue-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const messagesFindOne = jest.fn()
+      .mockResolvedValueOnce({
+        _id: messageId,
+        session_id: sessionId,
+        is_transcribed: false,
+        transcribe_attempts: 0,
+        file_path: filePath,
+        file_hash: 'shared-hash',
+        message_timestamp: 1770489126,
+        duration: 10,
+      })
+      .mockResolvedValueOnce({
+        _id: reusedMessageId,
+        is_transcribed: true,
+        task: 'transcribe',
+        text: 'reused text payload',
+        transcription_text: 'reused text payload',
+        transcription_raw: { provider: 'legacy' },
+        transcription: { provider: 'legacy', model: 'ready_text' },
+        transcription_chunks: [{ text: 'reused text payload' }],
+      });
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      processors: ['transcription', 'categorization'],
+      session_processors: ['CREATE_TASKS'],
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: jest.fn(async () => ({ id: 'events-job-1' })),
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toHexString() });
+    expect(result).toMatchObject({
+      ok: true,
+      skipped: true,
+      reason: 'reused_transcription_by_hash',
+      message_id: messageId.toHexString(),
+      session_id: sessionId.toHexString(),
+    });
+    const noTaskDecisionPersistCall = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload['processors_data.CREATE_TASKS.no_task_reason_code'] === 'categorization_not_queued';
+    });
+    expect(noTaskDecisionPersistCall).toBeTruthy();
+  });
+
+  it('persists no-task decision in text_fallback branch when categorization is not queued', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: '',
+      text: 'fallback text payload',
+      message_timestamp: 1770489126,
+      duration: 0,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      processors: ['transcription', 'categorization'],
+      session_processors: ['CREATE_TASKS'],
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: jest.fn(async () => ({ id: 'events-job-1' })),
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toHexString() });
+    expect(result).toMatchObject({
+      ok: true,
+      skipped: true,
+      reason: 'text_fallback',
+      message_id: messageId.toHexString(),
+      session_id: sessionId.toHexString(),
+    });
+    const noTaskDecisionPersistCall = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload['processors_data.CREATE_TASKS.no_task_reason_code'] === 'categorization_not_queued';
+    });
+    expect(noTaskDecisionPersistCall).toBeTruthy();
   });
 
   it('does not enqueue CREATE_TASKS auto refresh when session_processors explicitly exclude it', async () => {

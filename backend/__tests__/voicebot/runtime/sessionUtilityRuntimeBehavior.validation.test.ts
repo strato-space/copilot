@@ -423,8 +423,11 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.created_task_ids).toEqual(['stored-row']);
-    expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
-    const updatePayload = taskUpdateOneSpy.mock.calls[0]?.[1] as { $set: Record<string, unknown> };
+    const lineageUpdateCall = taskUpdateOneSpy.mock.calls.find(
+      ([filter]) => String((filter as Record<string, unknown>)._id || '') === acceptedTaskId.toHexString()
+    );
+    expect(lineageUpdateCall).toBeDefined();
+    const updatePayload = lineageUpdateCall?.[1] as { $set: Record<string, unknown> };
     expect(updatePayload).toEqual(
       expect.objectContaining({
         $set: expect.objectContaining({
@@ -1055,6 +1058,14 @@ describe('Voicebot utility routes runtime behavior', () => {
         inferred: true,
         source: 'agent_inferred',
       })
+    );
+    expect(response.body.no_task_decision.evidence).toEqual(
+      expect.arrayContaining([
+        'extracted_task_count=0',
+        'persisted_task_count=0',
+        'has_summary_md_text=true',
+        'has_scholastic_review_md=true',
+      ])
     );
   });
 
@@ -2520,8 +2531,11 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.created_task_ids).toEqual(['stored-row']);
     expect(response.body.removed_row_ids).toBeUndefined();
     expect(insertManySpy).not.toHaveBeenCalled();
-    expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
-    expect(taskUpdateOneSpy).toHaveBeenCalledWith(
+    const masterUpdateCall = taskUpdateOneSpy.mock.calls.find(
+      ([filter]) => String((filter as Record<string, unknown>)._id || '') === masterTaskId.toHexString()
+    );
+    expect(masterUpdateCall).toBeDefined();
+    expect(masterUpdateCall).toEqual([
       { _id: masterTaskId },
       expect.objectContaining({
         $set: expect.objectContaining({
@@ -2532,7 +2546,7 @@ describe('Voicebot utility routes runtime behavior', () => {
           accepted_from_row_id: 'stored-row',
         }),
       })
-    );
+    ]);
   });
 
   it('process_possible_tasks reuses accepted task row by accepted_from_row_id lineage when payload has no _id', async () => {
@@ -2781,7 +2795,13 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.created_task_ids).toEqual(['stored-row']);
-    expect(taskUpdateOneSpy).toHaveBeenCalledTimes(1);
+    expect(taskUpdateOneSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const acceptedUpdateCall = taskUpdateOneSpy.mock.calls.find(
+      ([filter, update]) =>
+        String((filter as Record<string, unknown>)._id || '') === masterTaskId.toHexString() &&
+        Boolean((update as Record<string, unknown>)?.$set)
+    );
+    expect(acceptedUpdateCall).toBeDefined();
   });
 
   it('delete_task_from_session supports alias locators and returns idempotent counters', async () => {

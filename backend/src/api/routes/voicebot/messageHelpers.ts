@@ -26,6 +26,7 @@ type VoiceBotTranscription = Record<string, unknown> & {
 type VoiceBotMessageDocument = Record<string, unknown> & {
   _id: ObjectId;
   session_id?: ObjectId;
+  speaker?: unknown;
   transcription?: VoiceBotTranscription;
   transcription_chunks?: unknown[];
   transcription_text?: string;
@@ -46,6 +47,70 @@ export const normalizeSegmentsText = (segments: VoiceBotSegment[] | undefined): 
     .map((seg) => (typeof seg?.text === 'string' ? seg.text.trim() : ''))
     .filter(Boolean)
     .join(' ');
+};
+
+export const buildCanonicalReadyTextTranscription = ({
+  text,
+  messageTimestampSec,
+  speaker = null,
+  durationSeconds = 0,
+}: {
+  text: string;
+  messageTimestampSec: number;
+  speaker?: string | null;
+  durationSeconds?: number;
+}) => {
+  const transcriptionText = String(text || '').trim();
+  const normalizedDurationSeconds = Number.isFinite(Number(durationSeconds))
+    ? Math.max(0, Number(durationSeconds))
+    : 0;
+  const safeTimestampMs = Number.isFinite(Number(messageTimestampSec)) && Number(messageTimestampSec) > 0
+    ? Number(messageTimestampSec) * 1000
+    : Date.now();
+  const segmentId = generateSegmentOid();
+
+  return {
+    transcription_text: transcriptionText,
+    task: 'transcribe',
+    text: transcriptionText,
+    transcription_raw: {
+      provider: 'legacy',
+      model: 'ready_text',
+      segmented: false,
+      text: transcriptionText,
+    },
+    transcription: {
+      schema_version: 1,
+      provider: 'legacy',
+      model: 'ready_text',
+      task: 'transcribe',
+      duration_seconds: normalizedDurationSeconds,
+      text: transcriptionText,
+      segments: [
+        {
+          id: segmentId,
+          source_segment_id: null,
+          start: 0,
+          end: normalizedDurationSeconds,
+          speaker: speaker || null,
+          text: transcriptionText,
+          is_deleted: false,
+        },
+      ],
+      usage: null,
+    },
+    transcription_chunks: [
+      {
+        segment_index: 0,
+        id: segmentId,
+        text: transcriptionText,
+        timestamp: new Date(safeTimestampMs),
+        duration_seconds: normalizedDurationSeconds,
+      },
+    ],
+    is_transcribed: true,
+    transcription_method: 'ready_text',
+  };
 };
 
 export const runtimeMessageQuery = (query: Record<string, unknown> = {}) =>
@@ -382,39 +447,15 @@ export const ensureMessageCanonicalTranscription = async ({
     };
     transcriptionChanged = true;
   } else if (typeof message.transcription_text === 'string') {
-    const segOid = generateSegmentOid();
-    const durationSeconds = typeof message?.duration === 'number' ? message.duration : 0;
-    transcription = {
-      schema_version: 1,
-      provider: 'legacy',
-      model: 'legacy_text',
-      task: 'transcribe',
-      duration_seconds: durationSeconds,
+    const durationSeconds = Number.isFinite(Number(message?.duration)) ? Math.max(0, Number(message.duration)) : 0;
+    const canonicalReadyText = buildCanonicalReadyTextTranscription({
       text: message.transcription_text,
-      segments: [
-        {
-          id: segOid,
-          source_segment_id: null,
-          start: 0,
-          end: typeof durationSeconds === 'number' ? durationSeconds : 0,
-          speaker: message?.speaker || null,
-          text: message.transcription_text,
-          is_deleted: false,
-        },
-      ],
-      usage: null,
-    };
-    chunks = [
-      {
-        segment_index: 0,
-        id: segOid,
-        text: message.transcription_text,
-        timestamp: Number(message?.message_timestamp)
-          ? new Date(Number(message.message_timestamp) * 1000)
-          : new Date(),
-        duration_seconds: durationSeconds,
-      },
-    ];
+      messageTimestampSec: Number(message?.message_timestamp),
+      durationSeconds,
+      speaker: typeof message?.speaker === 'string' ? message.speaker : null,
+    });
+    transcription = canonicalReadyText.transcription as VoiceBotTranscription;
+    chunks = canonicalReadyText.transcription_chunks as unknown[];
     transcriptionChanged = true;
     chunksChanged = true;
   }

@@ -3,6 +3,8 @@ import { ObjectId, type Db } from 'mongodb';
 import { COLLECTIONS, TASK_STATUSES, VOICEBOT_COLLECTIONS } from '../constants.js';
 import { isVoiceSessionSourceRef } from './taskSourceRef.js';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const toText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -133,17 +135,26 @@ const isTaskWithinDraftRecencyWindow = (
   task: Record<string, unknown>,
   {
     draftHorizonDays,
+    axisDate,
     now = new Date(),
   }: {
     draftHorizonDays?: number | null | undefined;
+    axisDate?: unknown;
     now?: Date | undefined;
   } = {}
 ): boolean => {
-  const cutoff = resolveDraftRecencyCutoff({ draftHorizonDays, now });
-  if (!cutoff) return true;
+  const interval = resolveDraftRecencyInterval({
+    draftHorizonDays,
+    axisDate,
+    now,
+  });
+  if (!interval) return true;
   const anchor = resolveTaskRecencyAnchor(task);
   if (!anchor) return false;
-  return anchor.getTime() >= cutoff.getTime();
+  return (
+    anchor.getTime() >= interval.from.getTime() &&
+    anchor.getTime() <= interval.to.getTime()
+  );
 };
 
 export const parseDraftHorizonDays = (value: unknown): number | null => {
@@ -154,6 +165,31 @@ export const parseDraftHorizonDays = (value: unknown): number | null => {
   return Math.floor(raw);
 };
 
+export type DraftRecencyInterval = {
+  from: Date;
+  to: Date;
+  axisDate: Date;
+};
+
+export const resolveDraftRecencyInterval = ({
+  draftHorizonDays,
+  axisDate,
+  now = new Date(),
+}: {
+  draftHorizonDays?: number | null | undefined;
+  axisDate?: unknown;
+  now?: Date;
+}): DraftRecencyInterval | null => {
+  const days = parseDraftHorizonDays(draftHorizonDays);
+  if (!days) return null;
+  const resolvedAxisDate = parseDateLike(axisDate) ?? now;
+  return {
+    from: new Date(resolvedAxisDate.getTime() - days * DAY_MS),
+    to: new Date(resolvedAxisDate.getTime() + days * DAY_MS),
+    axisDate: resolvedAxisDate,
+  };
+};
+
 export const resolveDraftRecencyCutoff = ({
   draftHorizonDays,
   now = new Date(),
@@ -161,9 +197,12 @@ export const resolveDraftRecencyCutoff = ({
   draftHorizonDays?: number | null | undefined;
   now?: Date;
 }): Date | null => {
-  const days = parseDraftHorizonDays(draftHorizonDays);
-  if (!days) return null;
-  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const interval = resolveDraftRecencyInterval({
+    draftHorizonDays,
+    axisDate: now,
+    now,
+  });
+  return interval?.from ?? null;
 };
 
 export const resolveSessionDiscussionAnchor = (session: Record<string, unknown>): Date | null =>
@@ -175,17 +214,26 @@ export const isSessionWithinDraftRecencyWindow = (
   session: Record<string, unknown>,
   {
     draftHorizonDays,
+    axisDate,
     now = new Date(),
   }: {
     draftHorizonDays?: number | null | undefined;
+    axisDate?: unknown;
     now?: Date | undefined;
   } = {}
 ): boolean => {
-  const cutoff = resolveDraftRecencyCutoff({ draftHorizonDays, now });
-  if (!cutoff) return true;
+  const interval = resolveDraftRecencyInterval({
+    draftHorizonDays,
+    axisDate,
+    now,
+  });
+  if (!interval) return true;
   const anchor = resolveSessionDiscussionAnchor(session);
   if (!anchor) return false;
-  return anchor.getTime() >= cutoff.getTime();
+  return (
+    anchor.getTime() >= interval.from.getTime() &&
+    anchor.getTime() <= interval.to.getTime()
+  );
 };
 
 export const isVoiceDerivedDraftTask = (task: Record<string, unknown>): boolean => {
@@ -279,6 +327,17 @@ export const filterVoiceDerivedDraftsByRecency = async ({
 }): Promise<Array<Record<string, unknown>>> => {
   if (includeOlderDrafts || !parseDraftHorizonDays(draftHorizonDays)) return tasks;
 
+  const referenceAnchor =
+    referenceSession && typeof referenceSession === 'object'
+      ? resolveSessionDiscussionAnchor(referenceSession)
+      : null;
+  const axisDate = referenceAnchor ?? now;
+  const interval = resolveDraftRecencyInterval({
+    draftHorizonDays,
+    axisDate,
+    now,
+  });
+
   const draftVoiceTasks = tasks.filter((task) => isVoiceDerivedDraftTask(task));
   const sessionIds = Array.from(
     new Set(draftVoiceTasks.flatMap((task) => extractVoiceLinkedSessionIds(task)))
@@ -287,7 +346,7 @@ export const filterVoiceDerivedDraftsByRecency = async ({
   if (sessionIds.length === 0) {
     return tasks.filter((task) => {
       if (toText(task.task_status) !== TASK_STATUSES.DRAFT_10) return true;
-      return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
+      return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, axisDate, now });
     });
   }
 
@@ -318,38 +377,37 @@ export const filterVoiceDerivedDraftsByRecency = async ({
     if (id && anchor) {
       sessionAnchorById.set(id, anchor);
     }
-    if (isSessionWithinDraftRecencyWindow(record, { draftHorizonDays, now })) {
+    if (isSessionWithinDraftRecencyWindow(record, { draftHorizonDays, axisDate, now })) {
       if (id) recentSessionIds.add(id);
     }
   }
 
-  const referenceAnchor =
-    referenceSession && typeof referenceSession === 'object'
-      ? resolveSessionDiscussionAnchor(referenceSession)
-      : null;
-  const horizonMs = (parseDraftHorizonDays(draftHorizonDays) ?? 0) * 24 * 60 * 60 * 1000;
-
   return tasks.filter((task) => {
     if (toText(task.task_status) !== TASK_STATUSES.DRAFT_10) return true;
+    const taskRecencyMatch = isTaskWithinDraftRecencyWindow(task, {
+      draftHorizonDays,
+      axisDate,
+      now,
+    });
     if (!isVoiceDerivedDraftTask(task)) {
-      return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
+      return taskRecencyMatch;
     }
 
     const linked = extractVoiceLinkedSessionIds(task);
     if (linked.length === 0) {
-      return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
+      return taskRecencyMatch;
     }
 
-    if (referenceAnchor) {
+    if (referenceAnchor && interval) {
       const window = resolveTaskDiscussionWindow({
         task,
         sessionAnchorById,
       });
       if (window) {
-        return (
-          referenceAnchor.getTime() >= window.first.getTime() - horizonMs &&
-          referenceAnchor.getTime() <= window.last.getTime() + horizonMs
-        );
+        const linkageWindowMatch =
+          window.last.getTime() >= interval.from.getTime() &&
+          window.first.getTime() <= interval.to.getTime();
+        return linkageWindowMatch || taskRecencyMatch;
       }
     }
 
@@ -357,7 +415,7 @@ export const filterVoiceDerivedDraftsByRecency = async ({
       return true;
     }
 
-    return isTaskWithinDraftRecencyWindow(task, { draftHorizonDays, now });
+    return taskRecencyMatch;
   });
 };
 

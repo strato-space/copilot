@@ -4,22 +4,23 @@ import path from 'node:path';
 describe('OperOps tasks source filter contract', () => {
   const componentPath = path.resolve(process.cwd(), 'src/components/crm/CRMKanban.tsx');
   const source = fs.readFileSync(componentPath, 'utf8');
+  const expectPattern = (pattern: RegExp): void => {
+    expect(source).toMatch(pattern);
+  };
 
   it('uses shared voice-session source matcher for ticket filtering', () => {
-    expect(source).toContain('normalizeVoiceSessionSourceRefs(props.filter.source_ref ?? [])');
-    expect(source).toContain(
-      'ticketMatchesVoiceSessionSourceRefs(record, sourceRefFilterValues)'
-    );
+    expectPattern(/normalizeVoiceSessionSourceRefs\(\s*props\.filter\.source_ref\s*\?\?\s*\[\]\s*\)/);
+    expectPattern(/ticketMatchesVoiceSessionSourceRefs\(\s*record\s*,\s*sourceRefFilterValues\s*\)/);
   });
 
   it('treats UNKNOWN as a real session-task filter bucket for statuses outside target axis', () => {
-    expect(source).toContain('const effectiveStatusFilter = props.filter.task_status ?? statusFilter;');
-    expect(source).toContain("const hasUnknownStatusFilter = effectiveStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN');");
-    expect(source).toContain("const requestedStatusFilter = useMemo(() => {");
-    expect(source).toContain("return nextStatusFilter.some((status) => String(status || '').trim() === 'UNKNOWN') ? [] : nextStatusFilter;");
-    expect(source).toContain(".filter((status) => String(status || '').trim() !== 'UNKNOWN')");
-    expect(source).toContain('return normalizeTargetTaskStatusKey(record.task_status) === null;');
-    expect(source).toContain('fetchTickets(requestedStatusFilter);');
+    expectPattern(/effectiveStatusFilter\s*=\s*props\.filter\.task_status\s*\?\?\s*statusFilter/);
+    expectPattern(/requestedStatusFilter\s*=\s*useMemo\(/);
+    expectPattern(/some\(\(status\)\s*=>\s*String\(status\s*\|\|\s*''\)\.trim\(\)\s*===\s*'UNKNOWN'\)\s*\?\s*\[\]\s*:\s*nextStatusFilter/);
+    expectPattern(/hasUnknownStatusFilter\s*=\s*useMemo\(\s*\(\)\s*=>\s*effectiveStatusFilter\.some\(/);
+    expectPattern(/\.filter\(\(status\)\s*=>\s*String\(status\s*\|\|\s*''\)\.trim\(\)\s*!==\s*'UNKNOWN'\)/);
+    expectPattern(/normalizeTargetTaskStatusKey\(record\.task_status\)\s*===\s*null/);
+    expectPattern(/fetchTickets\(\s*requestedStatusFilter/);
     expect(source).not.toContain('if (tickets.length < 1)');
   });
 });

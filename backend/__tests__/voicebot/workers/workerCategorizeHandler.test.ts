@@ -280,6 +280,132 @@ describe('handleCategorizeJob', () => {
     expect(categorization[0]?.end).toBe('00:00');
   });
 
+  it('produces equivalent normalized categorization for voice and ready_text sources with same content', async () => {
+    const sessionId = new ObjectId();
+    const voiceMessageId = new ObjectId();
+    const textMessageId = new ObjectId();
+    const sharedText = 'Discussed pricing reset and outreach pipeline.';
+
+    const messagesStore = new Map<string, Record<string, unknown>>([
+      [voiceMessageId.toHexString(), {
+        _id: voiceMessageId,
+        session_id: sessionId,
+        transcription_text: sharedText,
+        transcription_method: 'direct',
+        transcription: {
+          provider: 'openai',
+          model: 'gpt-4o-transcribe',
+          text: sharedText,
+        },
+        categorization_attempts: 0,
+        speaker: 'Alex',
+      }],
+      [textMessageId.toHexString(), {
+        _id: textMessageId,
+        session_id: sessionId,
+        transcription_text: sharedText,
+        transcription_method: 'ready_text',
+        transcription: {
+          provider: 'legacy',
+          model: 'ready_text',
+          text: sharedText,
+        },
+        categorization_attempts: 0,
+        speaker: 'Alex',
+      }],
+    ]);
+
+    const updatesByMessageId = new Map<string, Record<string, unknown>>();
+    const messagesFindOne = jest.fn(async (query: Record<string, unknown>) => {
+      const key = String((query?._id as ObjectId | undefined)?.toHexString?.() || '');
+      return messagesStore.get(key) || null;
+    });
+    const messagesUpdateOne = jest.fn(async (query: Record<string, unknown>, update: Record<string, unknown>) => {
+      const key = String((query?._id as ObjectId | undefined)?.toHexString?.() || '');
+      updatesByMessageId.set(key, update);
+      return { matchedCount: 1, modifiedCount: 1 };
+    });
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const eventsQueueAdd = jest.fn(async () => ({ id: 'events-job-parity' }));
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: {
+        add: eventsQueueAdd,
+      },
+    });
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createResponseMock.mockResolvedValue({
+      output_text: JSON.stringify([
+        {
+          topic_keywords: ['pricing', 'pipeline'],
+          keywords_grouped: { sales: ['pricing', 'pipeline'] },
+          mentioned_roles: ['PM'],
+          referenced_systems: ['CRM'],
+          certainty_level: 'high',
+          start: '0',
+          end: '30',
+          text: 'Discussed pricing reset and outreach pipeline.',
+          related_goal: 'Align commercial plan',
+        },
+      ]),
+    });
+
+    const voiceResult = await handleCategorizeJob({ message_id: voiceMessageId.toHexString() });
+    const textResult = await handleCategorizeJob({ message_id: textMessageId.toHexString() });
+
+    expect(voiceResult.ok).toBe(true);
+    expect(textResult.ok).toBe(true);
+
+    const voiceUpdate = updatesByMessageId.get(voiceMessageId.toHexString()) || {};
+    const textUpdate = updatesByMessageId.get(textMessageId.toHexString()) || {};
+    const voiceSetPayload = (voiceUpdate.$set as Record<string, unknown>) || {};
+    const textSetPayload = (textUpdate.$set as Record<string, unknown>) || {};
+
+    const pickCategorizationFields = (entry: Record<string, unknown>) => ({
+      topic_keywords: entry.topic_keywords,
+      keywords_grouped: entry.keywords_grouped,
+      mentioned_roles: entry.mentioned_roles,
+      referenced_systems: entry.referenced_systems,
+      certainty_level: entry.certainty_level,
+      start: entry.start,
+      end: entry.end,
+      text: entry.text,
+      related_goal: entry.related_goal,
+      speaker: entry.speaker,
+    });
+
+    const voiceCategorization = ((voiceSetPayload.categorization as Array<Record<string, unknown>>) || [])
+      .map(pickCategorizationFields);
+    const textCategorization = ((textSetPayload.categorization as Array<Record<string, unknown>>) || [])
+      .map(pickCategorizationFields);
+
+    expect(voiceCategorization).toEqual(textCategorization);
+    expect(eventsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.events.SEND_TO_SOCKET,
+      expect.objectContaining({
+        session_id: sessionId.toHexString(),
+        event: 'message_update',
+      })
+    );
+  });
+
   it('marks openai_api_key_missing when key is absent', async () => {
     const messageId = new ObjectId();
     const sessionId = new ObjectId();

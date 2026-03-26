@@ -219,6 +219,196 @@ describe('POST /voicebot/upload_audio', () => {
     expect((persisted.file_metadata as Record<string, unknown>)?.mime_type).toBe('audio/webm');
   });
 
+  it('rejects uploads for inactive/finalized sessions with session_inactive', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439016');
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const sessionUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: sessionId,
+              chat_id: 123456,
+              user_id: performerId.toString(),
+              access_level: 'private',
+              is_deleted: false,
+              is_active: false,
+              to_finalize: true,
+              done_at: new Date(),
+            })),
+            updateOne: sessionUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            insertOne,
+            find: jest.fn(() => ({
+              project: jest.fn(() => ({
+                toArray: jest.fn(async () => []),
+              })),
+            })),
+            updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '123456',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'audio/webm',
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('session_inactive');
+    expect(response.body.request_id).toEqual(expect.any(String));
+    expect(insertOne).not.toHaveBeenCalled();
+    expect(sessionUpdateOne).not.toHaveBeenCalled();
+  });
+
+  it('drops post-insert chunk and returns session_inactive when session closes during upload flow', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439017');
+    const insertedId = new ObjectId('507f1f77bcf86cd7994390aa');
+    const insertOne = jest.fn(async () => ({ insertedId }));
+    const messageUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    let sessionFindOneCall = 0;
+    const activeSessionDoc = {
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toString(),
+      access_level: 'private',
+      is_deleted: false,
+      is_active: true,
+      to_finalize: false,
+      done_at: null,
+    };
+    const inactiveSessionDoc = {
+      ...activeSessionDoc,
+      is_active: false,
+      to_finalize: true,
+      done_at: new Date(),
+    };
+
+    const sessionFindOne = jest.fn(async () => {
+      sessionFindOneCall += 1;
+      if (sessionFindOneCall <= 2) return activeSessionDoc;
+      return inactiveSessionDoc;
+    });
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionFindOne,
+            updateOne: sessionUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            insertOne,
+            updateOne: messageUpdateOne,
+            find: jest.fn(() => ({
+              project: jest.fn(() => ({
+                toArray: jest.fn(async () => []),
+              })),
+            })),
+            updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const voiceQueueAddMock = jest.fn(async () => ({ id: 'job-race' }));
+
+    const app = express();
+    app.use(express.json());
+    app.set('voicebotQueues', {
+      [VOICEBOT_QUEUES.VOICE]: {
+        add: voiceQueueAddMock,
+      },
+    });
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '123456',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'audio/webm',
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('session_inactive');
+    expect(insertOne).toHaveBeenCalledTimes(1);
+    expect(messageUpdateOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _id: insertedId,
+      }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          is_deleted: true,
+          dedup_reason: 'session_inactive_post_insert',
+        }),
+      })
+    );
+    expect(voiceQueueAddMock).not.toHaveBeenCalled();
+    expect(sessionUpdateOne).not.toHaveBeenCalled();
+  });
+
   it('enqueues transcribe job when voice queue is available', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439019');

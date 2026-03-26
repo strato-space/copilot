@@ -131,4 +131,63 @@ describe('POST /voicebot/upload_attachment', () => {
     const directoryPath = filePath.slice(0, filePath.lastIndexOf('/'));
     createdDirs.push(directoryPath);
   });
+
+  it('rejects upload_attachment for inactive/finalized sessions with session_inactive', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd799439012');
+    const sessionDoc = {
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toString(),
+      access_level: 'private',
+      is_deleted: false,
+      is_active: false,
+      to_finalize: true,
+      done_at: new Date(),
+    };
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => sessionDoc),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '123456',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_attachment')
+      .field('session_id', sessionId.toString())
+      .attach('attachment', Buffer.from('fake-png-content'), {
+        filename: 'clipboard.png',
+        contentType: 'image/png',
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('session_inactive');
+  });
 });

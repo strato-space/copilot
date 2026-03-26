@@ -734,6 +734,11 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(firstEnvelope.mode).toBe('session_id');
     expect(secondEnvelope.mode).toBe('raw_text');
     expect(String(secondEnvelope.raw_text || '')).toContain('Reduced create_tasks context for session');
+    const secondSerializedMessage = String(callToolMock.mock.calls[1]?.[1]?.message || '');
+    expect(secondSerializedMessage).not.toContain('"mode":"session_id"');
+    expect(secondSerializedMessage).not.toMatch(/"session_id"\s*:/);
+    expect(String(secondEnvelope.raw_text || '').length).toBeLessThanOrEqual(12000);
+    expect(Buffer.byteLength(secondSerializedMessage, 'utf8')).toBeLessThanOrEqual(14000);
     expect(tasks).toEqual([
       expect.objectContaining({
         id: 'TASK-R1',
@@ -741,6 +746,103 @@ describe('runCreateTasksAgent quota fallback', () => {
         project_id: 'proj-overflow',
       }),
     ]);
+  });
+
+  it('keeps reduced raw_text retry envelope bounded even when source transcript chunks are very large', async () => {
+    const sessionId = new ObjectId().toHexString();
+    const hugeChunk = `START_MARKER ${'A'.repeat(220000)} END_MARKER`;
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === 'automation_voice_bot_sessions') {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: new ObjectId(sessionId),
+              session_name: 'Huge Context Session',
+              project_id: 'proj-huge',
+              summary_md_text: `SUMMARY_START ${'B'.repeat(80000)} SUMMARY_END`,
+            })),
+          };
+        }
+        if (name === 'automation_voice_bot_messages') {
+          return {
+            findOne: jest.fn(async () => ({
+              message_timestamp: Math.floor(new Date('2026-03-23T12:05:00.000Z').getTime() / 1000),
+              created_at: new Date('2026-03-23T12:05:00.000Z'),
+            })),
+            find: jest.fn(() => ({
+              sort: () => ({
+                limit: () => ({
+                  toArray: async () => [
+                    { message_timestamp: 1, transcription_text: hugeChunk },
+                    { message_timestamp: 2, transcription_text: hugeChunk },
+                    { message_timestamp: 3, transcription_text: hugeChunk },
+                  ],
+                }),
+              }),
+            })),
+          };
+        }
+        return { findOne: jest.fn(async () => null), find: jest.fn() };
+      },
+    };
+
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'huge-session' })
+      .mockResolvedValueOnce({ sessionId: 'huge-reduced-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: "I hit an internal error while calling the model: Invalid 'input[31].output': string_above_max_length",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [],
+                no_task_decision: {
+                  code: 'discussion-only',
+                  reason: 'No bounded tasks in reduced context',
+                  evidence: ['large_context_reduced'],
+                },
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-huge',
+              }),
+            },
+          ],
+        },
+      });
+
+    await runCreateTasksAgent({
+      sessionId,
+      projectId: 'proj-huge',
+      db: dbStub as never,
+    });
+
+    const secondEnvelope = JSON.parse(callToolMock.mock.calls[1]?.[1]?.message as string) as Record<string, unknown>;
+    const secondSerializedMessage = String(callToolMock.mock.calls[1]?.[1]?.message || '');
+    const reducedText = String(secondEnvelope.raw_text || '');
+
+    expect(secondEnvelope.mode).toBe('raw_text');
+    expect(secondSerializedMessage).not.toMatch(/"session_id"\s*:/);
+    expect(reducedText.length).toBeLessThanOrEqual(12000);
+    expect(Buffer.byteLength(secondSerializedMessage, 'utf8')).toBeLessThanOrEqual(14000);
+    expect(reducedText).toContain('START_MARKER');
+    expect(reducedText).not.toContain('END_MARKER');
+    expect(reducedText).toContain('Reduced create_tasks context for session');
   });
 
   it('does not perform more than one reduced-context retry when string_above_max_length repeats', async () => {

@@ -4,10 +4,16 @@
 ### PROBLEM SOLVED
 - **05:52** `test:parallel-safe` was unstable because stale `CREATE_TASKS` repair tests implicitly depended on fresh `ObjectId` timestamps, causing false `skip_recent` decisions instead of deterministic stale repair verdicts.
 - **05:52** Sessions-list runtime parity tests still assumed legacy visibility behavior and could fail against the canonical contract where inactive non-deleted sessions with zero messages are filtered out.
+- **22:47** WebRTC `New/Rec/Done` flows could race each other and stale active-session fallbacks could revive already-closed sessions, which let the UI drift away from backend `session_inactive` truth and made close/start behavior nondeterministic.
+- **22:47** Voice task refresh still assumed categorization always queued successfully; when categorization could not be queued, `CREATE_TASKS` could refresh with ambiguous zero-task outcomes instead of preserving an explicit no-task decision and session lineage.
+- **22:47** CRM/OperOps transport and detail rendering still drifted: `/api/crm/tickets` legacy aliases were informal, replayed mutations could move `updated_at` backwards, and task descriptions could misrender Markdown or unsafe HTML fragments.
 
 ### FEATURE IMPLEMENTED
 - **05:52** Stabilized stale marker semantics for `CREATE_TASKS`: explicit processor markers now have priority, with `_id` used only as fallback when explicit markers are absent.
 - **05:52** Realigned sessions-list parity coverage to the current visibility policy and added reusable message-count aggregate mocking for deterministic runtime tests.
+- **22:47** Serialized WebRTC lifecycle transitions with correlation ids, fail-fast inactive-session handling, and awaited REST `session_done` propagation so host/FAB/page controls share one deterministic close/start contract.
+- **22:47** Added canonical `no_task_decision` persistence for categorization-not-queued flows across web ingress, Telegram ingress, worker transcribe reuse, and processing-loop recovery; Voice possible-task persistence now keeps `discussion_sessions[]` lineage and monotonic timestamps.
+- **22:47** Canonicalized CRM tickets transport onto `statuses/project/response_mode/from_date/to_date`, removed legacy frontend `includeOlderDrafts` coupling from Kanban fetches, and upgraded OperOps `TaskPage` to Markdown-first sanitized description rendering.
 
 ### CHANGES
 - **05:52** Updated `backend/src/services/voicebot/createTasksStaleProcessingRepair.ts` and `backend/__tests__/services/voicebot/createTasksStaleProcessingRepair.test.ts` to enforce explicit marker precedence, remove `ObjectId-now` test drift, and add focused regression cases for marker-priority semantics.
@@ -15,6 +21,16 @@
 - **05:52** Verification:
   - `NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/services/voicebot/createTasksStaleProcessingRepair.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts`
   - `npm run test:parallel-safe` (`128` suites, `586` tests, all passed).
+- **22:47** Updated `app/public/webrtc/webrtc-voicebot-lib.js`, `app/src/store/voiceBotStore.ts`, and `app/src/components/voice/MeetingCard.tsx` so start/done transitions are serialized, `session_done` requests carry transition correlation ids, and `session_inactive` stops local activation fallback.
+- **22:47** Updated `backend/src/api/routes/voicebot/{sessions,uploads}.ts`, `backend/src/workers/voicebot/handlers/{transcribeHandler,processingLoop}.ts`, `backend/src/voicebot_tgbot/ingressHandlers.ts`, `backend/src/services/voicebot/{createTasksCompositeSessionState,persistPossibleTasks}.ts`, and `backend/src/api/routes/voicebot/possibleTasksMasterModel.ts` so categorization-not-queued flows persist explicit no-task decisions, `CREATE_TASKS` refreshes re-arm with `incremental_refresh`, inactive sessions fail fast before/after insert, and Voice draft lineage keeps `discussion_sessions[]`.
+- **22:47** Updated `backend/src/api/routes/crm/tickets.ts`, `backend/src/services/taskUpdatedAt.ts`, `app/src/store/kanbanStore.ts`, and `app/src/pages/operops/TaskPage.tsx` so CRM transport aliases resolve canonically with warning telemetry, `updated_at` stays monotonic across task/attachment mutations, and TaskPage descriptions render Markdown with sanitized HTML fallback.
+- **22:47** Added regression coverage in `app/__tests__/operops/{crmKanbanTransportContract,taskPageMarkdownRenderContract}.test.ts`, `app/__tests__/voice/{doneStartRaceLockContract,webrtcStartTransitionContract}.test.ts`, `backend/__tests__/api/crmTicketsTransportLegacyContract.test.ts`, `backend/__tests__/services/taskUpdatedAt.test.ts`, `backend/__tests__/voicebot/runtime/{activateSessionRoute,sessionsRuntimeCompatibilityRoute.addTextParity}.test.ts`, and refreshed related Voice/CRM runtime suites.
+- **22:47** Accepted pending local artifacts in this closeout package: `project`, `statuses`.
+- **22:47** Verification:
+  - `cd app && npm run test:serial -- __tests__/operops/crmKanbanTransportContract.test.ts __tests__/operops/taskPageMarkdownRenderContract.test.ts __tests__/voice/doneStartRaceLockContract.test.ts __tests__/voice/webrtcStartTransitionContract.test.ts __tests__/voice/activateSessionResilienceContract.test.ts __tests__/voice/possibleTasksPostCreateContract.test.ts __tests__/voice/transcriptionFallbackErrorSignatureContract.test.ts __tests__/voice/codexTasksInlineDetailsContract.test.ts` (`8` suites, `33` tests, passed)
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/api/crmTicketsTransportLegacyContract.test.ts __tests__/services/taskUpdatedAt.test.ts __tests__/voicebot/runtime/activateSessionRoute.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.addTextParity.test.ts __tests__/voicebot/runtime/uploadAudioRoute.test.ts __tests__/voicebot/runtime/tgIngressHandlers.baseFlows.test.ts __tests__/voicebot/workers/workerTranscribeHandler.test.ts __tests__/voicebot/workers/workerProcessingLoopHandler.test.ts __tests__/voicebot/session/sessionDoneFlowService.test.ts __tests__/services/voicebot/persistPossibleTasks.test.ts` (`10` suites, `96` tests, passed)
+  - `cd app && npm run build`
+  - `cd backend && npm run build`
 
 ## 2026-03-25
 ### PROBLEM SOLVED

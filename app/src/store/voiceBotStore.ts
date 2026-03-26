@@ -114,7 +114,7 @@ interface VoiceBotSessionCrudActionsSlice {
     fetchActiveSession: () => Promise<Record<string, unknown> | null>;
     activateSession: (sessionId: string) => Promise<boolean>;
     updateSessionProject: (sessionId: string, projectId: string | null) => Promise<void>;
-    finishSession: (sessionId: string) => void;
+    finishSession: (sessionId: string) => Promise<void>;
     updateSessionAccessLevel: (sessionId: string, accessLevel: string) => Promise<void>;
     restartCorruptedSession: (sessionId: string) => Promise<unknown>;
     setHighlightedMessageId: (messageId: string | null) => void;
@@ -1208,12 +1208,24 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         const normalizedSessionId = String(sessionId || '').trim();
         if (!normalizedSessionId) return false;
         const maxAttempts = 3;
+        let blockedByInactiveSession = false;
+
+        const isSessionInactiveConflict = (error: unknown): boolean => {
+            if (!axios.isAxiosError(error)) return false;
+            if (Number(error.response?.status) !== 409) return false;
+            const responseData = error.response?.data as Record<string, unknown> | undefined;
+            const responseError = String(responseData?.error || '').trim().toLowerCase();
+            return responseError === 'session_inactive';
+        };
 
         for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
             try {
                 await voicebotHttp.request('voicebot/activate_session', { session_id: normalizedSessionId });
                 return true;
             } catch (error) {
+                if (isSessionInactiveConflict(error)) {
+                    blockedByInactiveSession = true;
+                }
                 const shouldRetry = attempt < maxAttempts && voicebotHttp.isTransientError(error);
                 if (!shouldRetry) {
                     console.error('Ошибка при активации сессии:', error);
@@ -1228,6 +1240,13 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 });
                 await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
             }
+        }
+
+        if (blockedByInactiveSession) {
+            console.warn('Локальный fallback активации отменен: сессия уже закрыта на сервере', {
+                sessionId: normalizedSessionId,
+            });
+            return false;
         }
 
         const currentSessionId = String(get().voiceBotSession?._id || '').trim();
@@ -1591,47 +1610,46 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
         }
     },
 
-    finishSession: (sessionId) => {
+    finishSession: async (sessionId) => {
         const normalizedSessionId = String(sessionId || '').trim();
         if (!normalizedSessionId) return;
 
-        void (async () => {
-            try {
-                await voicebotHttp.request('voicebot/session_done', { session_id: normalizedSessionId });
-                const doneAtIso = new Date().toISOString();
-                set((state) => ({
-                    voiceBotSession:
-                        state.voiceBotSession && String(state.voiceBotSession._id || '').trim() === normalizedSessionId
-                            ? {
-                                ...state.voiceBotSession,
-                                is_active: false,
-                                to_finalize: true,
-                                done_at: doneAtIso,
-                                updated_at: doneAtIso,
-                            }
-                            : state.voiceBotSession,
-                    voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
-                        String(session._id || '').trim() === normalizedSessionId
-                            ? {
-                                ...session,
-                                is_active: false,
-                                to_finalize: true,
-                                done_at: doneAtIso,
-                                updated_at: doneAtIso,
-                            }
-                            : session
-                    ),
-                }));
-            } catch (error) {
-                const axiosErrorData = axios.isAxiosError(error)
-                    ? (error.response?.data as Record<string, unknown> | undefined)
-                    : null;
-                const backendError = typeof axiosErrorData?.error === 'string' ? axiosErrorData.error.trim() : '';
-                const fallbackError = error instanceof Error ? error.message : '';
-                const errorText = backendError || fallbackError;
-                message.error(errorText ? `Done failed: ${errorText}` : 'Done failed');
-            }
-        })();
+        try {
+            await voicebotHttp.request('voicebot/session_done', { session_id: normalizedSessionId });
+            const doneAtIso = new Date().toISOString();
+            set((state) => ({
+                voiceBotSession:
+                    state.voiceBotSession && String(state.voiceBotSession._id || '').trim() === normalizedSessionId
+                        ? {
+                            ...state.voiceBotSession,
+                            is_active: false,
+                            to_finalize: true,
+                            done_at: doneAtIso,
+                            updated_at: doneAtIso,
+                        }
+                        : state.voiceBotSession,
+                voiceBotSessionsList: state.voiceBotSessionsList.map((session) =>
+                    String(session._id || '').trim() === normalizedSessionId
+                        ? {
+                            ...session,
+                            is_active: false,
+                            to_finalize: true,
+                            done_at: doneAtIso,
+                            updated_at: doneAtIso,
+                        }
+                        : session
+                ),
+            }));
+        } catch (error) {
+            const axiosErrorData = axios.isAxiosError(error)
+                ? (error.response?.data as Record<string, unknown> | undefined)
+                : null;
+            const backendError = typeof axiosErrorData?.error === 'string' ? axiosErrorData.error.trim() : '';
+            const fallbackError = error instanceof Error ? error.message : '';
+            const errorText = backendError || fallbackError;
+            message.error(errorText ? `Done failed: ${errorText}` : 'Done failed');
+            throw error;
+        }
     },
 
     updateSessionAccessLevel: async (sessionId, accessLevel) => {

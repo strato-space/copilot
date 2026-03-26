@@ -98,6 +98,40 @@ describe('draftRecencyPolicy', () => {
     expect(visible).toHaveLength(1);
   });
 
+  it('keeps linked drafts visible when linkage window misses but task recency overlaps the interval', async () => {
+    const linkedDraft = {
+      task_status: TASK_STATUSES.DRAFT_10,
+      source_kind: 'voice_possible_task',
+      source_data: {
+        voice_sessions: [
+          { session_id: 'cccccccccccccccccccccccc' },
+          { session_id: 'dddddddddddddddddddddddd' },
+        ],
+      },
+      updated_at: '2026-03-05T00:00:00.000Z',
+    };
+
+    const mockDb = {
+      collection: () => ({
+        find: () => ({
+          toArray: async () => [
+            { _id: new ObjectId('cccccccccccccccccccccccc'), created_at: '2026-05-01T00:00:00.000Z' },
+            { _id: new ObjectId('dddddddddddddddddddddddd'), created_at: '2026-05-10T00:00:00.000Z' },
+          ],
+        }),
+      }),
+    } as never;
+
+    const visible = await filterVoiceDerivedDraftsByRecency({
+      db: mockDb,
+      tasks: [linkedDraft],
+      draftHorizonDays: 30,
+      referenceSession: { created_at: '2026-03-10T00:00:00.000Z' },
+    });
+
+    expect(visible).toEqual([linkedDraft]);
+  });
+
   it('applies the draft horizon to all draft tasks and falls back to task timestamps when links are absent', async () => {
     const recentVoiceDraft = {
       task_status: TASK_STATUSES.DRAFT_10,
@@ -140,6 +174,42 @@ describe('draftRecencyPolicy', () => {
     });
 
     expect(visible).toEqual([recentVoiceDraft, recentManualDraft, readyTask]);
+    expect(mockDb.collection).not.toHaveBeenCalled();
+  });
+
+  it('normalizes draft_horizon_days around the reference session axis for unlinked drafts', async () => {
+    const nearAxisDraft = {
+      task_status: TASK_STATUSES.DRAFT_10,
+      source_kind: 'voice_possible_task',
+      source_data: { session_id: 'legacy-session-alpha' },
+      updated_at: '2024-01-20T00:00:00.000Z',
+    };
+    const farFromAxisDraft = {
+      task_status: TASK_STATUSES.DRAFT_10,
+      source_kind: 'voice_possible_task',
+      source_data: { session_id: 'legacy-session-beta' },
+      updated_at: '2024-04-20T00:00:00.000Z',
+    };
+
+    const mockDb = {
+      collection: jest.fn(() => ({
+        find: jest.fn(() => ({
+          toArray: async () => {
+            throw new Error('session lookup should not run for unlinked legacy session ids');
+          },
+        })),
+      })),
+    } as never;
+
+    const visible = await filterVoiceDerivedDraftsByRecency({
+      db: mockDb,
+      tasks: [nearAxisDraft, farFromAxisDraft],
+      draftHorizonDays: 30,
+      referenceSession: { created_at: '2024-01-15T00:00:00.000Z' },
+      now: new Date('2026-03-21T00:00:00.000Z'),
+    });
+
+    expect(visible).toEqual([nearAxisDraft]);
     expect(mockDb.collection).not.toHaveBeenCalled();
   });
 

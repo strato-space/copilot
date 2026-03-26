@@ -472,6 +472,15 @@ bd sync
 
 See `AGENTS.md` for the full workflow (including `bd doctor` guidance).
 
+## Execution workflow
+- Use bounded subagent roles consistently when delegating repo work:
+  - `worker_*` for one write surface,
+  - `postreview_*` for independent code review,
+  - `fix_*` for forensics-backed incidents,
+  - `scholastic_*` for ontology-first spec review with `greek-scholastic`.
+- Bugfix and QA-first waves follow one order: digital forensics first, then implementation swarm, then independent review, then verification gates, then `bd` synchronization.
+- Every worker packet must start with the literal command `bd show <id> --json` so child execution reads the canonical issue payload before any repo edits.
+
 ## Telegram closeout messages
 - When sending executive updates through `tgbot__send_bot_message` with `parse_mode=MARKDOWNV2`, first materialize the payload as a fully escaped local string or temp-file draft, then inspect the final escaped text before the live send.
 - Treat Telegram MarkdownV2 as a strict output contract, not a forgiving renderer: escape dynamic text, especially `>`, `_`, `*`, `[`, `]`, `(`, `)`, `-`, `.`, `!`, and backslashes, to avoid first-send failures such as `Can't parse entities`.
@@ -533,6 +542,11 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-26 22:47):
+  - Hardened WebRTC lifecycle concurrency and inactive-session fail-fast behavior: transition-correlation IDs now trace `New/Rec/Done`, `finishSession` awaits backend errors instead of swallowing them, and stale `session_inactive` responses no longer trigger local activation fallback.
+  - Canonicalized Voice task-refresh semantics around categorization availability: web ingress, Telegram ingress, worker transcribe reuse, and processing-loop recovery now persist explicit `no_task_decision` metadata when categorization is not queued, while possible-task persistence keeps `discussion_sessions[]` lineage and monotonic `updated_at`.
+  - Canonicalized CRM transport/request drift and OperOps rendering: `/api/crm/tickets` now resolves legacy aliases with warning telemetry, ticket mutations preserve monotonic `updated_at`, Kanban fetch no longer depends on legacy `includeOlderDrafts`, and `TaskPage` renders Markdown-first descriptions with sanitized HTML fallback.
+  - Accepted pending local artifacts in this closeout package: `project`, `statuses`.
 - Close-session refresh (2026-03-16 22:02):
   - Added taskflow refresh correlation telemetry for live possible-task saves: the frontend now forwards optional click metadata (`refresh_correlation_id`, `refresh_clicked_at_ms`) through `createPossibleTasksForSession` into `save_possible_tasks`, and backend socket hints/logs now preserve this metadata end-to-end.
   - Updated docs/contracts (`CHANGELOG.md`, `README.md`, `AGENTS.md`) for the correlation-aware refresh semantics; no behavior rollback or fallback paths were introduced.

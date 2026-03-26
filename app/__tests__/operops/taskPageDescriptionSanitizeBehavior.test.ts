@@ -1,6 +1,16 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { TextDecoder, TextEncoder } from 'node:util';
 
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }: { children: unknown }) => children,
+}));
+
+jest.mock('remark-gfm', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 jest.mock('../../src/store/kanbanStore', () => ({
   useKanbanStore: () => ({
     performers: [],
@@ -87,5 +97,15 @@ describe('TaskPage description sanitization behavior', () => {
     expect(sanitized).not.toContain('data:image/png');
     expect(sanitized).toContain('src="http://copilot.stratospace.fun/image.png"');
     expect(sanitized).toContain('src="https://copilot.stratospace.fun/image.png"');
+  });
+
+  it('preserves allowed inline formatting tags used by legacy html descriptions', async () => {
+    const sanitizeTaskDescriptionHtml = await getSanitizeTaskDescriptionHtml();
+    const html = '<p>Legacy <strong>bold</strong> and <em>italic</em></p>';
+
+    const sanitized = sanitizeTaskDescriptionHtml(html);
+
+    expect(sanitized).toContain('<strong>bold</strong>');
+    expect(sanitized).toContain('<em>italic</em>');
   });
 });

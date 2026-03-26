@@ -8,7 +8,8 @@ describe('WebRTC session_done REST contract', () => {
   it('uses a dedicated REST close helper and session_done endpoint', () => {
     expect(source).toContain('async function closeSessionViaRest(sessionId, opts = {})');
     expect(source).toContain('const resp = await fetch(endpoints.closeSession(), {');
-    expect(source).toContain("body: JSON.stringify({ session_id: sid })");
+    expect(source).toContain('const requestPayload = withTransitionTraceFields(transitionId, { session_id: sid });');
+    expect(source).toContain('body: JSON.stringify(requestPayload)');
     expect(source).toContain("closeSession: () => `${API_BASE.replace(/\\/$/, '')}/voicebot/session_done`");
     expect(source).not.toContain('sessionDoneBrowser(');
   });
@@ -20,7 +21,7 @@ describe('WebRTC session_done REST contract', () => {
   });
 
   it('routes all done-close entry points through REST close helper', () => {
-    expect(source).toContain('const closeOk = await closeSessionViaRest(prevSid, { timeoutMs: 4000 });');
+    expect(source).toContain('const closeOk = await closeSessionViaRest(prevSid, withTransitionTraceFields(transitionId, { timeoutMs: 4000 }));');
     expect(source).toContain('const closed = await closeSessionViaRest(sid, { timeoutMs: 4000 });');
     expect(source).toContain('await closeSessionViaRest(sid, { timeoutMs: 3000 });');
   });

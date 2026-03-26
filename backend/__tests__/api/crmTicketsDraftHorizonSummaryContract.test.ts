@@ -28,9 +28,10 @@ describe('CRM tickets draft horizon summary contract', () => {
   it('prefilters draft-only summary horizon queries using lightweight candidate projection', () => {
     expect(source).toContain('const DRAFT_RECENCY_PREFILTER_PROJECTION = {');
     expect(source).toContain('const buildProjectFilterMatchQuery = (projectFilters: string[]): Record<string, unknown> | null => {');
+    expect(source).toContain('const transportPayload = resolveCrmTicketsTransportPayload(req.body);');
     expect(source).toContain('const shouldUseDraftSummaryPrefilter =');
     expect(source).toContain("statusKeys.length === 1 && statusKeys[0] === 'DRAFT_10'");
-    expect(source).toContain('const projectFilters = parseProjectFilterValues(req.body?.project);');
+    expect(source).toContain('const projectFilters = parseProjectFilterValues(transportPayload.project);');
     expect(source).toContain('const projectFilterMatchQuery = buildProjectFilterMatchQuery(projectFilters);');
     expect(source).toContain('projection: DRAFT_RECENCY_PREFILTER_PROJECTION,');
     expect(source).toContain('const draftCandidatesByProject = filterTasksByProjectFilters(');

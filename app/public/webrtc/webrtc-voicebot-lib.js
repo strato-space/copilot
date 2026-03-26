@@ -61,6 +61,26 @@
         function logApi(label, detail = {}) {
             try { console.log(`[api] ${label}`, detail); } catch {}
         }
+        function normalizeTransitionId(value) {
+            return String(value || '').trim();
+        }
+        function createTransitionCorrelationId() {
+            try {
+                if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {
+                    return `tr_${crypto.randomUUID()}`;
+                }
+            } catch {}
+            return `tr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+        }
+        function withTransitionTraceFields(transitionId, extra = {}) {
+            const normalized = normalizeTransitionId(transitionId);
+            if (!normalized) return extra;
+            return {
+                ...extra,
+                transition_id: normalized,
+                correlation_id: normalized,
+            };
+        }
         function isCableLabel(label) {
             return /(cable output|virtual cable)/i.test(String(label || ''));
         }
@@ -129,9 +149,17 @@
         let panelGear = null;
         let fabShiftX = 0;
         let fabShiftY = 0;
-        let fabCuttingUntil = 0;
-        let cutFlashTimer = null;
-        let suppressStatePersist = true;
+	        let fabCuttingUntil = 0;
+	        let cutFlashTimer = null;
+	        let suppressStatePersist = true;
+                let currentRecordingSessionId = '';
+                let startTransitionPromise = null;
+                let startTransitionAction = '';
+                let doneTransitionPromise = null;
+                let doneTransitionAction = '';
+                let pageDoneInFlight = false;
+                let queuedStartAction = '';
+                let queuedStartPromise = null;
         function updateFabDockPosition() {
             try {
                 if (!fabWrap) return;
@@ -629,22 +657,28 @@
                 } catch {}
             }
 
-            const hasToken = !!AUTH_TOKEN;
-            const hasSession = !!getSessionIdValue();
-            const hasActiveSession = !!getActiveSessionIdValue();
-            const hasPageSession = !!getPageSessionIdValue();
+	            const hasToken = !!AUTH_TOKEN;
+	            const hasSession = !!getSessionIdValue();
+	            const hasActiveSession = !!getActiveSessionIdValue();
+	            const hasPageSession = !!getPageSessionIdValue();
+                    const startTransitionBusy = Boolean(startTransitionPromise);
+                    const doneTransitionBusy = Boolean(doneTransitionPromise);
+                    const inFlightDoneAction = String(doneTransitionAction || '').trim().toLowerCase();
+                    const canQueueStartDuringDone = doneTransitionBusy && inFlightDoneAction !== '' && inFlightDoneAction !== 'logout';
+                    const startBlockedByDoneTransition = doneTransitionBusy && !canQueueStartDuringDone;
+                    const startBlockedByFinalUploading = finalUploading && !canQueueStartDuringDone;
 
-            const canStart = hasToken && !finalUploading && !rec;
-            const canRecord = hasToken && !finalUploading && !rec;
-            const canPause = hasToken && !finalUploading && rec;
-            const canCut = hasToken && !finalUploading && (rec || paused);
-            const canFabDone = hasToken && !finalUploading && hasActiveSession;
-            // Settings/Monitoring iframe does not have pageSession in URL; Done must stay enabled
-            // as long as there is an active/session context, including Paused state.
-            const canPageDone = hasToken && !finalUploading && (hasPageSession || hasActiveSession || hasSession);
-            const canReset = !finalUploading;
-            const canLogout = hasToken && !finalUploading;
-            const canUploadAll = hasToken && !finalUploading && hasSession;
+	            const canStart = hasToken && !startBlockedByFinalUploading && !pageDoneInFlight && !startTransitionBusy && !startBlockedByDoneTransition && !rec;
+	            const canRecord = hasToken && !startBlockedByFinalUploading && !pageDoneInFlight && !startTransitionBusy && !startBlockedByDoneTransition && !rec;
+	            const canPause = hasToken && !finalUploading && !pageDoneInFlight && !doneTransitionBusy && rec;
+	            const canCut = hasToken && !finalUploading && !pageDoneInFlight && !doneTransitionBusy && (rec || paused);
+	            const canFabDone = hasToken && !finalUploading && !pageDoneInFlight && !startTransitionBusy && !doneTransitionBusy && hasActiveSession;
+	            // Settings/Monitoring iframe does not have pageSession in URL; Done must stay enabled
+	            // as long as there is an active/session context, including Paused state.
+	            const canPageDone = hasToken && !finalUploading && !pageDoneInFlight && !startTransitionBusy && !doneTransitionBusy && (hasPageSession || hasActiveSession || hasSession);
+	            const canReset = !finalUploading && !pageDoneInFlight;
+	            const canLogout = hasToken && !finalUploading && !pageDoneInFlight && !startTransitionBusy && !doneTransitionBusy;
+	            const canUploadAll = hasToken && !finalUploading && hasSession;
 
             if (startBtn) startBtn.disabled = !canStart;
             if (recordBtn) recordBtn.disabled = !canRecord;
@@ -1197,9 +1231,14 @@
             const sid = String(sessionId || '').trim();
             if (!sid || !AUTH_TOKEN) return false;
             const timeoutMs = Math.max(500, Number(opts.timeoutMs || 5000));
+            const transitionId = normalizeTransitionId(
+                opts?.transition_id || opts?.transitionId || opts?.correlation_id || opts?.correlationId
+            );
             const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
             const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
             try {
+                const requestPayload = withTransitionTraceFields(transitionId, { session_id: sid });
+                try { logApi('session_done.request', requestPayload); } catch {}
                 const resp = await fetch(endpoints.closeSession(), {
                     method: 'POST',
                     headers: {
@@ -1207,21 +1246,25 @@
                         'Accept': 'application/json',
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ session_id: sid }),
+                    body: JSON.stringify(requestPayload),
                     ...(controller ? { signal: controller.signal } : {}),
                 });
                 const payload = await resp.json().catch(() => ({}));
                 if (!resp.ok) {
                     try { console.warn('[closeSessionViaRest] close failed', { status: resp.status, payload, session_id: sid }); } catch {}
+                    try { logApi('session_done.error', withTransitionTraceFields(transitionId, { status: resp.status, session_id: sid })); } catch {}
                     return false;
                 }
                 if (payload && typeof payload === 'object' && payload.error) {
                     try { console.warn('[closeSessionViaRest] close rejected', { payload, session_id: sid }); } catch {}
+                    try { logApi('session_done.rejected', withTransitionTraceFields(transitionId, { session_id: sid, payload })); } catch {}
                     return false;
                 }
+                try { logApi('session_done.ok', withTransitionTraceFields(transitionId, { session_id: sid })); } catch {}
                 return true;
             } catch (e) {
                 try { console.warn('[closeSessionViaRest] request failed', { error: String(e?.message || e), session_id: sid }); } catch {}
+                try { logApi('session_done.error', withTransitionTraceFields(transitionId, { session_id: sid, message: String(e?.message || e) })); } catch {}
                 return false;
             } finally {
                 if (timeoutId) clearTimeout(timeoutId);
@@ -1586,6 +1629,9 @@
         async function ensureSessionIdForRecording(opts = {}) {
             const forceCreate = Boolean(opts?.forceCreate);
             const openInMainAppOnCreate = Boolean(opts?.openInMainApp);
+            const transitionId = normalizeTransitionId(
+                opts?.transition_id || opts?.transitionId || opts?.correlation_id || opts?.correlationId
+            );
             let sid = forceCreate ? '' : getSessionIdValue();
             if (sid) {
                 ACTIVE_SESSION_ID = sid;
@@ -1598,13 +1644,14 @@
                 return '';
             }
             try {
-                logApi('create_session.request', { chat_id: '2820582847' });
+                const requestPayload = withTransitionTraceFields(transitionId, { chat_id: '2820582847' });
+                logApi('create_session.request', requestPayload);
                 const resp = await fetch(endpoints.createSession(), {
                     method: 'POST',
                     headers: { 'X-Authorization': AUTH_TOKEN, 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: '2820582847' })
+                    body: JSON.stringify(requestPayload)
                 });
-                logApi('create_session', { status: resp.status, ok: resp.ok });
+                logApi('create_session', withTransitionTraceFields(transitionId, { status: resp.status, ok: resp.ok }));
                 if (!resp.ok) throw new Error(await resp.text() || `status ${resp.status}`);
                 const newSess = await resp.json();
                 const newId = String(newSess?.session_id || newSess?._id || newSess?.id || '');
@@ -1629,7 +1676,7 @@
                     lines.push(link);
                     showFabToast(lines.join('\n'), 3000);
                 }
-                logApi('create_session.ok', { session_id: newId, name: shortName || '' });
+                logApi('create_session.ok', withTransitionTraceFields(transitionId, { session_id: newId, name: shortName || '' }));
                 try { invalidateSessionsCache(); } catch {}
                 if (openInMainAppOnCreate) {
                     try { openSessionInMainApp(newId); } catch {}
@@ -1647,7 +1694,7 @@
                 return newId;
             } catch (e) {
                 console.error('Failed to create session', e);
-                logApi('create_session.error', { message: String(e || '') });
+                logApi('create_session.error', withTransitionTraceFields(transitionId, { message: String(e || '') }));
                 alert('Failed to create session: ' + e);
                 return '';
             }
@@ -2071,28 +2118,39 @@
             }
         }
 
-        async function handlePageDoneAction() {
-            const pageSid = String(getPageSessionIdValue() || '').trim();
-            if (!pageSid) {
-                try { showFabToast('Page session is empty', 1800); } catch {}
-                return;
-            }
-            const activeSid = String(getActiveSessionIdValue() || '').trim();
-            if (activeSid && pageSid === activeSid) {
-                await handleDoneAction({ logout: false });
-                return;
-            }
+	        async function handlePageDoneAction() {
+	            const pageSid = String(getPageSessionIdValue() || '').trim();
+	            if (!pageSid) {
+	                try { showFabToast('Page session is empty', 1800); } catch {}
+	                return;
+	            }
+                    if (pageDoneInFlight) {
+                        try { showFabToast('Session close in progress', 1500); } catch {}
+                        return;
+                    }
+	            const activeSid = String(getActiveSessionIdValue() || '').trim();
+	            if (activeSid && pageSid === activeSid) {
+	                await handleDoneAction({ logout: false });
+	                return;
+	            }
             if (!AUTH_TOKEN) {
                 try { showFabToast('Login required', 1600); } catch {}
                 return;
             }
-            const ok = await closePageSessionOnly(pageSid);
-            if (ok) {
-                try { showFabToast('Page session closed', 1800); } catch {}
-            } else {
-                try { showFabToast('Failed to close page session', 2200); } catch {}
-            }
-        }
+                    pageDoneInFlight = true;
+                    syncControlState();
+                    try {
+	                const ok = await closePageSessionOnly(pageSid);
+	                if (ok) {
+	                    try { showFabToast('Page session closed', 1800); } catch {}
+	                } else {
+	                    try { showFabToast('Failed to close page session', 2200); } catch {}
+	                }
+                    } finally {
+                        pageDoneInFlight = false;
+                        syncControlState();
+                    }
+	        }
 
         // Page Done button closes pageSessionId. FAB Done closes active session.
         (function initDoneButton() {
@@ -3475,11 +3533,12 @@
 	                const endedAtMs = Math.max(endedRaw || startedAtMs, startedAtMs);
 	                const durationMs = Math.max(0, endedAtMs - startedAtMs);
 	                const label = `${fileName} (${(durationMs / 1000).toFixed(1)}s)`;
-	                const { li, upBtn } = createChunkListItem(seg.blob, label, null, fileName, doc);
+	                const { li, upBtn } = createChunkListItem(seg.blob, label, null, fileName, doc, { sessionId: sid });
 	                try {
 	                    li.dataset.trackKind = 'full_track';
 	                    li.dataset.trackKey = String(seg?.key || '');
 	                    li.dataset.sessionId = sid;
+                            li.dataset.sessionBinding = 'recording';
 	                    if (Number.isFinite(seg?.mic) && seg.mic > 0) li.dataset.mic = String(seg.mic);
 	                    if (startedAtMs > 0) li.dataset.startedAtMs = String(startedAtMs);
 	                    if (endedAtMs > 0) li.dataset.endedAtMs = String(endedAtMs);
@@ -3599,7 +3658,7 @@
 	        }
 
 	        function startArchiveTrackRecorders(opts = {}) {
-	            const sid = String(opts.sessionId || getSessionIdValue() || '').trim();
+	            const sid = String(opts.sessionId || currentRecordingSessionId || getSessionIdValue() || '').trim();
 	            if (!sid) return { started: 0, reason: 'no_session' };
 	            if (!audioContext || !Array.isArray(micGainNodes)) return { started: 0, reason: 'no_audio_graph' };
 
@@ -3747,14 +3806,74 @@
 	            return { total, uploaded, failed, skipped };
 	        }
 
-        function getHostSessionIdFromPath() {
-            try {
-                if (PAGE_MODE !== 'host') return '';
-                const match = String(location.pathname || '').match(/\/session\/([0-9a-fA-F]{24})(?:\/|$)/);
-                return match && match[1] ? String(match[1]).trim() : '';
-            } catch {}
-            return '';
-        }
+	        function getHostSessionIdFromPath() {
+	            try {
+	                if (PAGE_MODE !== 'host') return '';
+	                const match = String(location.pathname || '').match(/\/session\/([0-9a-fA-F]{24})(?:\/|$)/);
+	                return match && match[1] ? String(match[1]).trim() : '';
+	            } catch {}
+	            return '';
+	        }
+
+                function runStartTransitionSingleFlight(action, run) {
+                    const normalizedAction = String(action || '').trim() || 'start';
+                    if (startTransitionPromise) {
+                        try {
+                            logUi('start-transition.reused', {
+                                action: normalizedAction,
+                                in_flight_action: startTransitionAction || normalizedAction,
+                            });
+                        } catch {}
+                        return startTransitionPromise;
+                    }
+                    startTransitionAction = normalizedAction;
+                    try {
+                        logUi('start-transition.begin', { action: normalizedAction });
+                    } catch {}
+                    const transitionPromise = Promise.resolve()
+                        .then(() => run())
+                        .finally(() => {
+                            try {
+                                logUi('start-transition.end', { action: startTransitionAction || normalizedAction });
+                            } catch {}
+                            startTransitionAction = '';
+                            startTransitionPromise = null;
+                            syncControlState();
+                        });
+                    startTransitionPromise = transitionPromise;
+                    syncControlState();
+                    return transitionPromise;
+                }
+
+                function runDoneTransitionSingleFlight(action, run) {
+                    const normalizedAction = String(action || '').trim() || 'done';
+                    if (doneTransitionPromise) {
+                        try {
+                            logUi('done-transition.reused', {
+                                action: normalizedAction,
+                                in_flight_action: doneTransitionAction || normalizedAction,
+                            });
+                        } catch {}
+                        return doneTransitionPromise;
+                    }
+                    doneTransitionAction = normalizedAction;
+                    try {
+                        logUi('done-transition.begin', { action: normalizedAction });
+                    } catch {}
+                    const transitionPromise = Promise.resolve()
+                        .then(() => run())
+                        .finally(() => {
+                            try {
+                                logUi('done-transition.end', { action: doneTransitionAction || normalizedAction });
+                            } catch {}
+                            doneTransitionAction = '';
+                            doneTransitionPromise = null;
+                            syncControlState();
+                        });
+                    doneTransitionPromise = transitionPromise;
+                    syncControlState();
+                    return transitionPromise;
+                }
 
         async function handleNewAction() {
             if (isFinalUploading) return;
@@ -3764,14 +3883,54 @@
                 try { syncFabAuthState(); } catch {}
                 return;
             }
-            if (!isRecording) {
-                try { persistVoicebotState('recording'); } catch {}
+            if (pageDoneInFlight) {
+                try { showFabToast('Session close in progress', 1500); } catch {}
+                return;
             }
-            if (!isRecording) {
-                // New always creates a brand-new active session and opens it in the main app.
-                isPaused = false;
-                await startRecording({ forceCreate: true, openInMainApp: true });
+            const prevSid = String(getActiveSessionIdValue() || '').trim();
+            const transitionId = createTransitionCorrelationId();
+            try {
+                logUi('transition.start_new.begin', withTransitionTraceFields(transitionId, {
+                    old_session_id: prevSid || null,
+                }));
+            } catch {}
+            if (prevSid || isRecording || isPaused) {
+                const closed = await runDoneTransitionSingleFlight(
+                    'done-for-new',
+                    () => handleDoneAction(withTransitionTraceFields(transitionId, { logout: false }))
+                );
+                if (!closed) {
+                    try { showFabToast('Failed to close session. Retry Done.', 2600); } catch {}
+                    return;
+                }
             }
+            try { persistVoicebotState('recording'); } catch {}
+            // New always finalizes active session (if any), then creates a brand-new session and records into it.
+            isPaused = false;
+            await startRecording(withTransitionTraceFields(transitionId, {
+                forceCreate: true,
+                openInMainApp: true,
+                previousSessionId: prevSid || '',
+            }));
+            const newSessionId = String(currentRecordingSessionId || '').trim();
+            try {
+                logUi('new_session_created', withTransitionTraceFields(transitionId, {
+                    old_session_id: prevSid || null,
+                    new_session_id: newSessionId || null,
+                }));
+            } catch {}
+            try {
+                logUi('recording_attached', withTransitionTraceFields(transitionId, {
+                    old_session_id: prevSid || null,
+                    new_session_id: newSessionId || null,
+                }));
+                logUi('start-transition.new.recording-attached', {
+                    session_id: newSessionId,
+                    previous_session_id: prevSid,
+                    transition_id: transitionId,
+                    correlation_id: transitionId,
+                });
+            } catch {}
         }
 
         async function handleRecAction() {
@@ -3780,6 +3939,10 @@
                 try { openSidePanel('settings'); } catch {}
                 try { showFabToast('Login required', 1600); } catch {}
                 try { syncFabAuthState(); } catch {}
+                return;
+            }
+            if (pageDoneInFlight) {
+                try { showFabToast('Session close in progress', 1500); } catch {}
                 return;
             }
             if (!isRecording) {
@@ -3833,7 +3996,8 @@
 
         async function handleDoneAction(opts = {}) {
             const isLogout = !!opts.logout;
-            if (isFinalUploading) return;
+            const transitionId = normalizeTransitionId(opts?.transition_id || opts?.transitionId || opts?.correlation_id || opts?.correlationId);
+            if (isFinalUploading) return false;
 
             if (!AUTH_TOKEN) {
                 if (isLogout) {
@@ -3843,16 +4007,17 @@
                 } else {
                     setFabState('unauthorized');
                 }
-                return;
+                return false;
             }
 
             const prevSid = String(getActiveSessionIdValue() || '').trim();
-            if (!prevSid) {
-                try {
-                    await stopArchiveTrackRecorders({ reason: isLogout ? 'logout-no-session' : 'done-no-session', timeoutMs: 1500, pollMs: 60 });
-                    clearArchiveTrackStore({ keepSession: false });
-                } catch {}
-                // Nothing to close; for Logout still clear token.
+	            if (!prevSid) {
+	                try {
+	                    await stopArchiveTrackRecorders({ reason: isLogout ? 'logout-no-session' : 'done-no-session', timeoutMs: 1500, pollMs: 60 });
+	                    clearArchiveTrackStore({ keepSession: false });
+	                } catch {}
+                        currentRecordingSessionId = '';
+	                // Nothing to close; for Logout still clear token.
                 if (isLogout) {
                     try {
                         AUTH_TOKEN = '';
@@ -3869,7 +4034,7 @@
                 } else {
                     setFabState('idle');
                 }
-                return;
+                return true;
             }
 
             isFinalUploading = true;
@@ -3931,12 +4096,20 @@
                 }
 
                 // Close session (best-effort).
-                const closeOk = await closeSessionViaRest(prevSid, { timeoutMs: 4000 });
+                const closeOk = await closeSessionViaRest(prevSid, withTransitionTraceFields(transitionId, { timeoutMs: 4000 }));
                 if (!closeOk) throw new Error('session_done_failed');
+                if (transitionId) {
+                    try {
+                        logUi('old_session_closed', withTransitionTraceFields(transitionId, {
+                            old_session_id: prevSid,
+                        }));
+                    } catch {}
+                }
 
-                clearActiveSessionUi();
-                clearSessionInfoStorage();
-                clearArchiveTrackStore({ keepSession: false });
+	                clearActiveSessionUi();
+	                clearSessionInfoStorage();
+	                clearArchiveTrackStore({ keepSession: false });
+                        currentRecordingSessionId = '';
 
                 // Reset ring to 0 after completion.
                 try { fabStartTs = 0; fabPausedTs = 0; fabPausedMs = 0; } catch {}
@@ -3962,6 +4135,7 @@
                     setFabState('idle');
                     try { showFabToast('Session closed', 1800); } catch {}
                 }
+                return true;
             } catch (e) {
                 console.error('[Done] failed', e);
                 const closeFailed = String(e?.message || '').includes('session_done_failed');
@@ -3978,6 +4152,7 @@
                 if (!closeFailed) {
                     try { setFabState(AUTH_TOKEN ? 'idle' : 'unauthorized'); } catch {}
                 }
+                return false;
             } finally {
                 isFinalUploading = false;
                 try { syncFabAuthState(); } catch {}
@@ -3992,6 +4167,48 @@
             return raw;
         }
 
+        function queueStartActionAfterDone(action) {
+            const normalizedQueuedAction = normalizeControlAction(action);
+            if (normalizedQueuedAction !== 'new' && normalizedQueuedAction !== 'rec') {
+                return doneTransitionPromise || Promise.resolve(false);
+            }
+
+            queuedStartAction = normalizedQueuedAction;
+            try {
+                logUi('control.queued-start', {
+                    action: normalizedQueuedAction,
+                    in_flight_action: doneTransitionAction || 'done',
+                });
+            } catch {}
+
+            if (queuedStartPromise) return queuedStartPromise;
+
+            const donePromise = doneTransitionPromise;
+            queuedStartPromise = Promise.resolve(donePromise)
+                .catch((error) => {
+                    console.warn('[queued-start] done transition failed', error);
+                    return false;
+                })
+                .then((doneResult) => {
+                    const nextAction = String(queuedStartAction || '').trim();
+                    queuedStartAction = '';
+                    if (!nextAction) return doneResult;
+                    if (!doneResult && nextAction !== 'new') return false;
+                    if (!doneResult && nextAction === 'new') {
+                        try {
+                            logUi('control.queued-start.retry-after-done-failure', { action: nextAction });
+                        } catch {}
+                    }
+                    try { logUi('control.queued-start.execute', { action: nextAction }); } catch {}
+                    return dispatchControlAction(nextAction);
+                })
+                .finally(() => {
+                    queuedStartPromise = null;
+                });
+
+            return queuedStartPromise;
+        }
+
         function dispatchControlAction(action) {
             const normalizedAction = normalizeControlAction(action);
             logUi('control', { action: normalizedAction, original_action: action, isRecording, isPaused, embedded: IS_EMBEDDED });
@@ -4004,8 +4221,41 @@
                     }
                 } catch {}
             }
-            if (normalizedAction === 'new') return handleNewAction();
-            if (normalizedAction === 'rec') return handleRecAction();
+            const isStartAction = normalizedAction === 'new' || normalizedAction === 'rec';
+            const isDoneAction = normalizedAction === 'done' || normalizedAction === 'logout';
+            if (pageDoneInFlight && isStartAction) {
+                try { showFabToast('Session close in progress', 1500); } catch {}
+                return Promise.resolve(false);
+            }
+            if (doneTransitionPromise && isStartAction) {
+                const inFlightDoneAction = String(doneTransitionAction || '').trim().toLowerCase();
+                try {
+                    logUi('control.blocked', {
+                        action: normalizedAction,
+                        reason: 'done-transition-in-flight',
+                        in_flight_action: inFlightDoneAction || 'done',
+                    });
+                } catch {}
+                if (inFlightDoneAction !== 'logout') {
+                    try { showFabToast('Session close in progress. Start queued.', 1800); } catch {}
+                    return queueStartActionAfterDone(normalizedAction);
+                }
+                try { showFabToast('Session close in progress', 1500); } catch {}
+                return doneTransitionPromise;
+            }
+            if (startTransitionPromise && isDoneAction) {
+                try {
+                    logUi('control.blocked', {
+                        action: normalizedAction,
+                        reason: 'start-transition-in-flight',
+                        in_flight_action: startTransitionAction || 'start',
+                    });
+                } catch {}
+                try { showFabToast('Start in progress', 1400); } catch {}
+                return startTransitionPromise;
+            }
+	            if (normalizedAction === 'new') return runStartTransitionSingleFlight('new', handleNewAction);
+	            if (normalizedAction === 'rec') return runStartTransitionSingleFlight('rec', handleRecAction);
             if (normalizedAction === 'pause') return pauseRecording();
             if (normalizedAction === 'cut') {
                 if (isRecording || (IS_EMBEDDED && window.parent?.__voicebotState?.get?.()?.isRecording)) {
@@ -4013,8 +4263,8 @@
                     try { if (!IS_EMBEDDED) showFabToast('Chunk cut'); } catch {}
                 }
             }
-            if (normalizedAction === 'done') return handleDoneAction({ logout: false });
-            if (normalizedAction === 'logout') return handleDoneAction({ logout: true });
+            if (normalizedAction === 'done') return runDoneTransitionSingleFlight('done', () => handleDoneAction({ logout: false }));
+            if (normalizedAction === 'logout') return runDoneTransitionSingleFlight('logout', () => handleDoneAction({ logout: true }));
         }
 
         function sendControlToSettingsIframe(action) {
@@ -4046,13 +4296,28 @@
             try { updateParamsUI(); } catch {}
             try { syncMicUI(); } catch {}
             let sid = '';
-            try {
-                sid = await ensureSessionIdForRecording(opts);
-            } catch (e) {
-                preserveAudioContext = false;
-                throw e;
-            }
-            if (!sid) { preserveAudioContext = false; return; }
+	            try {
+	                sid = await ensureSessionIdForRecording(opts);
+	            } catch (e) {
+	                preserveAudioContext = false;
+                        currentRecordingSessionId = '';
+	                throw e;
+	            }
+	            if (!sid) {
+                        preserveAudioContext = false;
+                        currentRecordingSessionId = '';
+                        return;
+                    }
+                    currentRecordingSessionId = sid;
+                    try {
+                        const transitionId = normalizeTransitionId(opts?.transition_id || opts?.transitionId || opts?.correlation_id || opts?.correlationId);
+                        logUi('start-recording.session-bound', {
+                            session_id: sid,
+                            force_create: Boolean(opts?.forceCreate),
+                            action: startTransitionAction || 'start',
+                            ...(transitionId ? { transition_id: transitionId, correlation_id: transitionId } : {}),
+                        });
+                    } catch {}
 
             try {
             const sepEl = document.getElementById('tog-separate-tracks');
@@ -4206,7 +4471,7 @@
                 const base = `${String(chunkIndex).padStart(3,'0')}${ext}`;
                 const label = `${base} (${(durationMs/1000).toFixed(1)}s)`;
                 const { list, doc } = resolveChunkListTarget();
-                const { li, upBtn } = createChunkListItem(blob, label, (speechMs/1000), base, doc);
+	                const { li, upBtn } = createChunkListItem(blob, label, (speechMs/1000), base, doc, { sessionId: sid });
                 try {
                     const startedAtMs = Math.max(0, Math.round(lastChunkStart || Date.now() - durationMs));
                     const endedAtMs = Math.max(startedAtMs, startedAtMs + Math.max(0, Math.round(durationMs)));
@@ -4328,12 +4593,13 @@
             if (window._counterTimer) clearInterval(window._counterTimer);
             window._counterTimer = setInterval(updateCounters, 100);
             logUi('start-recording.ok', { mode: recordingMode });
-            } catch (e) {
-                console.error('[startRecording] failed', e);
-                logUi('start-recording.error', { message: String(e || '') });
-                alert('Failed to start recording: ' + e);
-            }
-        }
+	            } catch (e) {
+	                console.error('[startRecording] failed', e);
+	                logUi('start-recording.error', { message: String(e || '') });
+                        currentRecordingSessionId = '';
+	                alert('Failed to start recording: ' + e);
+	            }
+	        }
 
         let separateFinalizePromise = null;
         function scheduleFinalizeChunkSeparate(opts = {}) {
@@ -4402,7 +4668,15 @@
                     const ext = guessAudioExtFromMime(blobType);
                     const base = micNumStr ? `${idxP}-${micNumStr}${ext}` : `${idxP}${ext}`;
                     const label = `${base} (${(durationMs/1000).toFixed(1)}s)`;
-                    const { li, upBtn } = createChunkListItem(blob, label, (speechMs/1000), base, doc);
+	                    const boundSessionId = String(currentRecordingSessionId || '').trim();
+	                    const { li, upBtn } = createChunkListItem(
+                                blob,
+                                label,
+                                (speechMs/1000),
+                                base,
+                                doc,
+                                boundSessionId ? { sessionId: boundSessionId } : {}
+                            );
                     try {
                         const startedAtMs = Math.max(0, Math.round(lastChunkStart || Date.now() - durationMs));
                         const endedAtMs = Math.max(startedAtMs, startedAtMs + Math.max(0, Math.round(durationMs)));
@@ -6233,24 +6507,32 @@
         }
 
         // Helper to upload a blob and update corresponding list item UI
-        async function uploadBlobForLi(blob, li, upBtn, statusMark, opts = {}) {
-          let success = false;
-          const silent = !!opts?.silent;
-          try {
+	        async function uploadBlobForLi(blob, li, upBtn, statusMark, opts = {}) {
+	          let success = false;
+	          const silent = !!opts?.silent;
+                  let sessionId = '';
+	          try {
             if (upBtn) upBtn.disabled = true;
             if (statusMark) {
                 statusMark.textContent = ' · uploading...';
                 statusMark.style.color = '#2563eb';
             }
-            const fname = (li && li.dataset && li.dataset.filename) ? li.dataset.filename : undefined;
-            const speaker = inferSpeakerForLi(li);
-            let sessionId = li?.dataset?.sessionId ? String(li.dataset.sessionId).trim() : '';
-            if (!sessionId && li && li.ownerDocument) {
-                sessionId = getSessionIdValue() || getSessionIdFromDoc(li.ownerDocument);
-                if (sessionId && li?.dataset) li.dataset.sessionId = sessionId;
-            }
-            const uploadOpts = {};
-            if (sessionId) uploadOpts.sessionId = sessionId;
+	            const fname = (li && li.dataset && li.dataset.filename) ? li.dataset.filename : undefined;
+	            const speaker = inferSpeakerForLi(li);
+                    const sessionBinding = String(li?.dataset?.sessionBinding || '').trim();
+	            sessionId = li?.dataset?.sessionId ? String(li.dataset.sessionId).trim() : '';
+	            if (!sessionId && li && li.ownerDocument) {
+                        sessionId = getSessionIdFromDoc(li.ownerDocument);
+	            }
+                    if (!sessionId && sessionBinding !== 'recording') {
+                        sessionId = getSessionIdValue();
+                    }
+                    if (!sessionId && sessionBinding === 'recording') {
+                        throw new Error('Chunk upload blocked: recording session binding is missing');
+                    }
+                    if (sessionId && li?.dataset && !li.dataset.sessionId) li.dataset.sessionId = sessionId;
+	            const uploadOpts = {};
+	            if (sessionId) uploadOpts.sessionId = sessionId;
             if (speaker) uploadOpts.speaker = speaker;
             try {
                 const startedAtMs = Number(li?.dataset?.startedAtMs || 0);
@@ -6310,12 +6592,12 @@
                 li.dataset.uploadError = msg;
                 li.dataset.chunkState = 'upload_failed';
             }
-            try {
-                const detail = {
-                    session_id: String(li?.dataset?.sessionId || getSessionIdValue() || '').trim(),
-                    chunk: String(li?.dataset?.filename || '').trim(),
-                    message: msg,
-                    backend_unavailable: isBackendUnavailable,
+	            try {
+	                const detail = {
+	                    session_id: String(sessionId || li?.dataset?.sessionId || '').trim(),
+	                    chunk: String(li?.dataset?.filename || '').trim(),
+	                    message: msg,
+	                    backend_unavailable: isBackendUnavailable,
                     unloading: Boolean(isUnloading),
                     ts: Date.now(),
                 };
@@ -6342,15 +6624,21 @@
         }
 
         // Build a chunk list item with playback and download controls
-        function createChunkListItem(blob, label, speechSeconds, filenameOpt, targetDoc = null) {
-          const doc = targetDoc || document;
-          let url = URL.createObjectURL(blob);
-          const li = doc.createElement('li');
-          li._blob = blob;
-          try {
-              const sid = getSessionIdValue() || getSessionIdFromDoc(doc);
-              if (sid) li.dataset.sessionId = sid;
-          } catch {}
+	        function createChunkListItem(blob, label, speechSeconds, filenameOpt, targetDoc = null, opts = {}) {
+	          const doc = targetDoc || document;
+	          let url = URL.createObjectURL(blob);
+	          const li = doc.createElement('li');
+	          li._blob = blob;
+	          try {
+                      const explicitSessionId = String(opts?.sessionId || '').trim();
+                      if (explicitSessionId) {
+                          li.dataset.sessionId = explicitSessionId;
+                          li.dataset.sessionBinding = 'recording';
+                      } else {
+	                  const sid = getSessionIdValue() || getSessionIdFromDoc(doc);
+	                  if (sid) li.dataset.sessionId = sid;
+                      }
+	          } catch {}
           let durationSeconds = null;
           try {
             const m = /\((\d+(?:\.\d+)?)s\)\s*$/.exec(String(label || ''));
@@ -7753,6 +8041,24 @@
                         };
 	                    },
 	                };
+                    // Deterministic runtime upload probe for browser E2E.
+                    // Invokes production uploadBlob path without MediaRecorder timing dependency.
+                    window.__voicebotTestUpload = async (opts = {}) => {
+                        const payload = (opts && typeof opts === 'object') ? opts : {};
+                        const sid = String(payload.session_id || payload.sessionId || getSessionIdValue() || '').trim();
+                        if (!sid) throw new Error('session_id is required');
+                        const mimeType = String(payload.mime_type || payload.mimeType || 'audio/webm').trim() || 'audio/webm';
+                        const filename = String(payload.filename || 'playwright-probe.webm').trim() || 'playwright-probe.webm';
+                        const bytes = Number(payload.bytes);
+                        const safeBytes = Number.isFinite(bytes) && bytes > 0 ? Math.max(1, Math.round(bytes)) : 16;
+                        const body = new Uint8Array(safeBytes);
+                        for (let i = 0; i < body.length; i += 1) body[i] = 65 + (i % 26);
+                        const blob = new Blob([body], { type: mimeType });
+                        return uploadBlob(blob, filename, {
+                            sessionId: sid,
+                            allowWhileUnloading: true,
+                        });
+                    };
 	            } catch {}
 	            try {
 	                // Repair/validate existing chunk blobs in-place (useful for debugging corrupted headers).
@@ -7795,6 +8101,7 @@
 
                     try { delete window.__voicebotControl; } catch {}
                     try { delete window.__voicebotState; } catch {}
+                    try { delete window.__voicebotTestUpload; } catch {}
                     try { delete window.__voicebotFabCleanup; } catch {}
                 };
             } catch {}

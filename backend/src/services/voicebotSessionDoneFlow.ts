@@ -178,37 +178,45 @@ export const completeSessionDoneFlow = async ({
     )) as Record<string, unknown> | null);
   if (!session) return { ok: false, error: 'session_not_found' };
 
-  const chat_id = chatIdInput !== undefined ? chatIdInput : (session.chat_id as unknown);
+  let sessionRecord = session;
+  const chat_id = chatIdInput !== undefined ? chatIdInput : (sessionRecord.chat_id as unknown);
   const normalizedTelegramUserId = normalizeTelegramUserId(telegram_user_id);
-  const existingSummaryCorrelationId =
-    normalizeSummaryCorrelationId(session.summary_correlation_id) ||
-    normalizeSummaryCorrelationId(session.summary_flow_correlation_id);
-  const summaryCorrelationId = existingSummaryCorrelationId || randomUUID();
+  const initialSummaryCorrelationId =
+    normalizeSummaryCorrelationId(sessionRecord.summary_correlation_id) ||
+    normalizeSummaryCorrelationId(sessionRecord.summary_flow_correlation_id);
+  let summaryCorrelationId = initialSummaryCorrelationId || randomUUID();
   const commonQueue = queues?.[VOICEBOT_QUEUES.COMMON];
   const eventsQueue = queues?.[VOICEBOT_QUEUES.EVENTS];
   const preview =
     notify_preview ||
     (await buildDoneNotifyPreview({
       db,
-      session,
+      session: sessionRecord,
       eventName: notify_event_name,
     }));
 
-  const sessionAlreadyClosed =
+  let sessionAlreadyClosed =
     already_closed ||
-    session.is_active === false ||
-    session.to_finalize === true ||
-    Boolean(session.done_at);
+    sessionRecord.is_active === false ||
+    sessionRecord.to_finalize === true ||
+    Boolean(sessionRecord.done_at);
+  let shouldDispatchDone = false;
 
   if (!sessionAlreadyClosed) {
-    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-      runtimeSessionQuery({ _id: sessionObjectId }),
+    const closeResult = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+      runtimeSessionQuery({
+        _id: sessionObjectId,
+        is_active: { $ne: false },
+        to_finalize: { $ne: true },
+        done_flow_requested_at: { $exists: false },
+      }),
       {
         $set: {
           is_active: false,
           to_finalize: true,
           done_at: new Date(),
           summary_correlation_id: summaryCorrelationId,
+          done_flow_requested_at: new Date(),
           updated_at: new Date(),
         },
         $inc: {
@@ -216,21 +224,43 @@ export const completeSessionDoneFlow = async ({
         },
       }
     );
-  } else if (!existingSummaryCorrelationId) {
-    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-      runtimeSessionQuery({ _id: sessionObjectId }),
+    shouldDispatchDone = (closeResult.modifiedCount ?? 0) > 0;
+    sessionAlreadyClosed = !shouldDispatchDone;
+  }
+
+  if (sessionAlreadyClosed && !shouldDispatchDone) {
+    const claimResult = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+      runtimeSessionQuery({
+        _id: sessionObjectId,
+        done_flow_requested_at: { $exists: false },
+      }),
       {
         $set: {
           summary_correlation_id: summaryCorrelationId,
+          done_flow_requested_at: new Date(),
           updated_at: new Date(),
         },
       }
     );
+    shouldDispatchDone = (claimResult.modifiedCount ?? 0) > 0;
   }
+
+  sessionRecord =
+    ((await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+      runtimeSessionQuery({
+        _id: sessionObjectId,
+        is_deleted: { $ne: true },
+      })
+    )) as Record<string, unknown> | null) || sessionRecord;
+
+  summaryCorrelationId =
+    normalizeSummaryCorrelationId(sessionRecord.summary_correlation_id) ||
+    normalizeSummaryCorrelationId(sessionRecord.summary_flow_correlation_id) ||
+    summaryCorrelationId;
 
   let mode: DoneFlowMode = 'fallback';
 
-  if (commonQueue && hasValidChatId(chat_id)) {
+  if (shouldDispatchDone && commonQueue && hasValidChatId(chat_id)) {
     await commonQueue.add(VOICEBOT_JOBS.common.DONE_MULTIPROMPT, {
       session_id,
       chat_id,
@@ -240,11 +270,13 @@ export const completeSessionDoneFlow = async ({
       already_closed: true,
     });
     mode = 'queued';
-  } else if (commonQueue && !hasValidChatId(chat_id) && !fallbackDoneHandler) {
+  } else if (shouldDispatchDone && commonQueue && !hasValidChatId(chat_id) && !fallbackDoneHandler) {
     return { ok: false, error: 'chat_id_missing' };
+  } else if (!shouldDispatchDone && commonQueue && hasValidChatId(chat_id)) {
+    mode = 'queued';
   }
 
-  if (mode !== 'queued' && fallbackDoneHandler) {
+  if (shouldDispatchDone && mode !== 'queued' && fallbackDoneHandler) {
     const fallbackResult = await fallbackDoneHandler({
       session_id,
       chat_id: hasValidChatId(chat_id) ? (chat_id as string | number) : null,
@@ -255,6 +287,8 @@ export const completeSessionDoneFlow = async ({
     if (!fallbackResult.ok) {
       return { ok: false, error: fallbackResult.error || 'done_fallback_failed' };
     }
+    mode = 'fallback_handler';
+  } else if (!shouldDispatchDone && fallbackDoneHandler && mode !== 'queued') {
     mode = 'fallback_handler';
   }
 
@@ -277,17 +311,19 @@ export const completeSessionDoneFlow = async ({
     await clearActiveVoiceSessionForUser({ db, telegram_user_id: normalizedTelegramUserId });
   }
 
-  await writeDoneNotifyRequestedLog({
-    db,
-    session_id: sessionObjectId,
-    session,
-    actor,
-    source: {
-      ...(source || {}),
-      mode,
-    },
-    preview,
-  });
+  if (shouldDispatchDone) {
+    await writeDoneNotifyRequestedLog({
+      db,
+      session_id: sessionObjectId,
+      session: sessionRecord,
+      actor,
+      source: {
+        ...(source || {}),
+        mode,
+      },
+      preview,
+    });
+  }
 
   const statusPayload: SessionDoneStatusPayload = {
     session_id,

@@ -400,6 +400,48 @@ const checkSessionAccess = async ({
     return { status: 200, session };
 };
 
+const isSessionInactive = (session: Record<string, unknown>): boolean =>
+    session.is_active === false ||
+    session.to_finalize === true ||
+    Boolean(session.done_at);
+
+const loadSessionActivityState = async ({
+    db,
+    sessionId,
+}: {
+    db: ReturnType<typeof getDb>;
+    sessionId: string;
+}): Promise<Record<string, unknown> | null> => {
+    if (!ObjectId.isValid(sessionId)) return null;
+    return await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+        runtimeSessionQuery({
+            _id: new ObjectId(sessionId),
+            is_deleted: { $ne: true },
+        }),
+        {
+            projection: {
+                _id: 1,
+                is_active: 1,
+                to_finalize: 1,
+                done_at: 1,
+                runtime_tag: 1,
+            },
+        }
+    ) as Record<string, unknown> | null;
+};
+
+const isSessionWritableNow = async ({
+    db,
+    sessionId,
+}: {
+    db: ReturnType<typeof getDb>;
+    sessionId: string;
+}): Promise<boolean> => {
+    const state = await loadSessionActivityState({ db, sessionId });
+    if (!state) return false;
+    return !isSessionInactive(state);
+};
+
 const uploadAudioHandler = async (req: Request, res: Response) => {
     const ureq = req as UploadsRequest;
     const { performer } = ureq;
@@ -432,6 +474,9 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             return res.status(sessionCheck.status).json({ error: sessionCheck.error, request_id: requestId });
         }
         const session = sessionCheck.session as Record<string, unknown>;
+        if (isSessionInactive(session)) {
+            return res.status(409).json({ error: 'session_inactive', request_id: requestId });
+        }
         const chatId = Number(session.chat_id);
         const sessionRuntimeTag = typeof session.runtime_tag === 'string' ? session.runtime_tag.trim() : '';
         const voiceQueue = (req.app.get('voicebotQueues') as Record<string, VoiceQueueLike> | undefined)?.[VOICEBOT_QUEUES.VOICE];
@@ -444,6 +489,11 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         const results: Array<Record<string, unknown>> = [];
         const socketMessages: Array<Record<string, unknown>> = [];
         for (const file of filesArray) {
+            const writableBeforeInsert = await isSessionWritableNow({ db, sessionId: session_id });
+            if (!writableBeforeInsert) {
+                return res.status(409).json({ error: 'session_inactive', request_id: requestId });
+            }
+
             const createdAt = new Date();
             const absoluteFilePath = resolve(file.path);
             const fileHash = await getFileSha256FromPath(absoluteFilePath);
@@ -500,6 +550,24 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             }
 
             const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
+            const writableAfterInsert = await isSessionWritableNow({ db, sessionId: session_id });
+            if (!writableAfterInsert) {
+                await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+                    runtimeMessageQuery({
+                        _id: op.insertedId,
+                        is_deleted: { $ne: true },
+                    }),
+                    {
+                        $set: {
+                            is_deleted: true,
+                            deleted_at: new Date(),
+                            updated_at: new Date(),
+                            dedup_reason: 'session_inactive_post_insert',
+                        },
+                    }
+                );
+                return res.status(409).json({ error: 'session_inactive', request_id: requestId });
+            }
 
             // Keep only the latest upload for identical content inside one session.
             // This deduplicates repeated WebRTC uploads/retries of the same blob.
@@ -685,6 +753,10 @@ const uploadAttachmentHandler = async (req: Request, res: Response) => {
         const sessionCheck = await checkSessionAccess({ sessionId: session_id, req: ureq });
         if (sessionCheck.status !== 200) {
             return res.status(sessionCheck.status).json({ error: sessionCheck.error });
+        }
+        const session = sessionCheck.session as Record<string, unknown>;
+        if (isSessionInactive(session)) {
+            return res.status(409).json({ error: 'session_inactive' });
         }
 
         const file = req.file;

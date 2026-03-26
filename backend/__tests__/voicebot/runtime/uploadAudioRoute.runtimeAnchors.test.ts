@@ -154,7 +154,7 @@ describe('POST /voicebot/upload_audio', () => {
     expect(updateQuery).not.toHaveProperty('$and');
   });
 
-  it('accepts upload for inactive (closed) sessions when session is not deleted', async () => {
+  it('rejects upload for inactive (closed) sessions with session_inactive', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439021');
     const insertedMessages: Array<Record<string, unknown>> = [];
@@ -214,12 +214,8 @@ describe('POST /voicebot/upload_audio', () => {
         contentType: 'audio/webm',
       });
 
-    expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
-    expect(insertedMessages).toHaveLength(1);
-
-    const persisted = insertedMessages[0] ?? {};
-    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
-    if (storedPath) uploadedFilePaths.add(storedPath);
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('session_inactive');
+    expect(insertedMessages).toHaveLength(0);
   });
 });

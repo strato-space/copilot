@@ -48,6 +48,7 @@ export const makeDb = ({
   createdSessionId?: ObjectId;
 }) => {
   const messagesInsertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+  const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
   const sessionsInsertOne = jest.fn(async () => ({ insertedId: createdSessionId || new ObjectId() }));
   const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
   const tasksFindOne = jest.fn(async () => null);
@@ -108,6 +109,7 @@ export const makeDb = ({
       if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
         return {
           insertOne: messagesInsertOne,
+          updateOne: messagesUpdateOne,
         };
       }
       if (name === VOICEBOT_COLLECTIONS.PROJECTS) {
@@ -133,6 +135,7 @@ export const makeDb = ({
       sessionsInsertOne,
       sessionsUpdateOne,
       messagesInsertOne,
+      messagesUpdateOne,
       tasksFindOne,
       tasksInsertOne,
       projectsFindOne,

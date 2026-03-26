@@ -1,25 +1,45 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { TARGET_EDITABLE_TASK_STATUS_KEYS, TARGET_TASK_STATUS_LABELS, TASK_STATUSES } from '../../src/constants/crm';
+import { getTaskStatusDisplayLabel, matchesTargetTaskStatusKeys, normalizeTargetTaskStatusKey } from '../../src/utils/taskStatusSurface';
 
 describe('CRMKanban status options contract', () => {
-  const kanbanPath = path.resolve(process.cwd(), 'src/components/crm/CRMKanban.tsx');
-  const constantsPath = path.resolve(process.cwd(), 'src/constants/crm.ts');
-  const source = fs.readFileSync(kanbanPath, 'utf8');
-  const constantsSource = fs.readFileSync(constantsPath, 'utf8');
+  it('renders user-facing status labels for both status keys and backend status values', () => {
+    const expected = [
+      { key: 'DRAFT_10', backend: TASK_STATUSES.DRAFT_10, label: 'Draft' },
+      { key: 'READY_10', backend: TASK_STATUSES.READY_10, label: 'Ready' },
+      { key: 'PROGRESS_10', backend: TASK_STATUSES.PROGRESS_10, label: 'In Progress' },
+      { key: 'REVIEW_10', backend: TASK_STATUSES.REVIEW_10, label: 'Review' },
+      { key: 'DONE_10', backend: TASK_STATUSES.DONE_10, label: 'Done' },
+      { key: 'ARCHIVE', backend: TASK_STATUSES.ARCHIVE, label: 'Archive' },
+    ] as const;
 
-  it('uses the target editable task status subset instead of the full TASK_STATUSES dictionary', () => {
-    expect(constantsSource).toContain('export const TARGET_EDITABLE_TASK_STATUS_KEYS = [');
-    expect(constantsSource).toContain("'DRAFT_10'");
-    expect(constantsSource).toContain("'READY_10'");
-    expect(constantsSource).toContain("'PROGRESS_10'");
-    expect(constantsSource).toContain("'REVIEW_10'");
-    expect(constantsSource).toContain("'DONE_10'");
-    expect(constantsSource).toContain("'ARCHIVE'");
+    for (const item of expected) {
+      expect(TARGET_TASK_STATUS_LABELS[item.key]).toBe(item.label);
+      expect(getTaskStatusDisplayLabel(item.key)).toBe(item.label);
+      expect(getTaskStatusDisplayLabel(item.backend)).toBe(item.label);
+      expect(normalizeTargetTaskStatusKey(item.key)).toBe(item.key);
+      expect(normalizeTargetTaskStatusKey(item.backend)).toBe(item.key);
+    }
+  });
 
-    expect(source).toContain('TARGET_EDITABLE_TASK_STATUSES');
-    expect(source).toContain('const statusOptions = useMemo(');
-    expect(source).toContain('TARGET_EDITABLE_TASK_STATUSES.map((value) => ({');
-    expect(source).not.toContain('options={Object.values(TASK_STATUSES).map((value) => ({ value, label: value }))}');
+  it('keeps editable status selector options canonical and deterministic', () => {
+    const options = TARGET_EDITABLE_TASK_STATUS_KEYS.map((key) => ({
+      value: key,
+      label: TARGET_TASK_STATUS_LABELS[key],
+    }));
+
+    expect(options).toEqual([
+      { value: 'DRAFT_10', label: 'Draft' },
+      { value: 'READY_10', label: 'Ready' },
+      { value: 'PROGRESS_10', label: 'In Progress' },
+      { value: 'REVIEW_10', label: 'Review' },
+      { value: 'DONE_10', label: 'Done' },
+      { value: 'ARCHIVE', label: 'Archive' },
+    ]);
+  });
+
+  it('does not treat unknown statuses as editable target statuses', () => {
+    expect(normalizeTargetTaskStatusKey('UNKNOWN_STATUS')).toBeNull();
+    expect(matchesTargetTaskStatusKeys('UNKNOWN_STATUS', TARGET_EDITABLE_TASK_STATUS_KEYS)).toBe(false);
+    expect(matchesTargetTaskStatusKeys('Progress 10', ['PROGRESS_10'])).toBe(true);
   });
 });
-

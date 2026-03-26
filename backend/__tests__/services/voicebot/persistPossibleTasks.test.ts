@@ -7,9 +7,33 @@ import {
 } from '../../../src/services/voicebot/persistPossibleTasks.js';
 
 type TaskDoc = Record<string, unknown>;
+const toEpochMsForAssert = (value: unknown): number => {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Date.parse(value);
+  return Number.NaN;
+};
 
 const buildTasksCollection = (seedDocs: TaskDoc[]) => {
   let docs = seedDocs.map((doc) => ({ ...doc }));
+  const toEpochMs = (value: unknown): number | null => {
+    if (value instanceof Date) {
+      const ms = value.getTime();
+      return Number.isFinite(ms) ? ms : null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value >= 1e12 ? Math.trunc(value) : Math.trunc(value * 1000);
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const asNumber = Number(trimmed);
+      if (Number.isFinite(asNumber)) return toEpochMs(asNumber);
+      const parsed = Date.parse(trimmed);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
 
   const find = (filter: Record<string, unknown>) => {
     const serialized = JSON.stringify(filter);
@@ -35,7 +59,30 @@ const buildTasksCollection = (seedDocs: TaskDoc[]) => {
       });
       return nested;
     };
+    const collectObjectIdInStrings = (value: unknown): string[] => {
+      if (Array.isArray(value)) {
+        return value.flatMap((entry) => collectObjectIdInStrings(entry));
+      }
+      if (!value || typeof value !== 'object') return [];
+      const record = value as Record<string, unknown>;
+      const nested = Object.entries(record).flatMap(([key, entry]) => {
+        if (key === '_id' && entry && typeof entry === 'object' && !Array.isArray(entry)) {
+          const inValues = Array.isArray((entry as Record<string, unknown>).$in)
+            ? ((entry as Record<string, unknown>).$in as unknown[])
+                .map((candidate) => {
+                  if (candidate instanceof ObjectId) return candidate.toHexString();
+                  return String(candidate || '').trim();
+                })
+                .filter(Boolean)
+            : [];
+          return inValues;
+        }
+        return collectObjectIdInStrings(entry);
+      });
+      return nested;
+    };
     const rowIdMatches = Array.from(new Set(collectLocatorInStrings(filter)));
+    const objectIdMatches = Array.from(new Set(collectObjectIdInStrings(filter)));
 
     const matchesSession = (doc: TaskDoc, sessionId: string): boolean => {
       const externalRef = String(doc.external_ref || '');
@@ -65,17 +112,30 @@ const buildTasksCollection = (seedDocs: TaskDoc[]) => {
         String(sourceData.row_id || '') === value
       );
     };
+    const matchesObjectIdFilter = (doc: TaskDoc): boolean => {
+      if (objectIdMatches.length === 0) return true;
+      return objectIdMatches.includes(String(doc._id || ''));
+    };
 
     if (hasProjectFilter) {
       const projectId = serialized.includes('"project_id":"proj-2"') ? 'proj-2' : 'proj-1';
       if (hasRowIdMatch) {
         results = [];
       } else {
-        results = docs.filter((doc) => String(doc.project_id || '') === projectId && doc.is_deleted !== true);
+        results = docs.filter(
+          (doc) =>
+            String(doc.project_id || '') === projectId &&
+            matchesObjectIdFilter(doc) &&
+            doc.is_deleted !== true
+        );
       }
     } else if (sessionIdMatch) {
       results = docs.filter(
-        (doc) => matchesSession(doc, sessionIdMatch) && matchesRowIdFilter(doc) && doc.is_deleted !== true
+        (doc) =>
+          matchesSession(doc, sessionIdMatch) &&
+          matchesRowIdFilter(doc) &&
+          matchesObjectIdFilter(doc) &&
+          doc.is_deleted !== true
       );
     }
 
@@ -105,6 +165,17 @@ const buildTasksCollection = (seedDocs: TaskDoc[]) => {
       if (update.$unset && typeof update.$unset === 'object') {
         Object.keys(update.$unset as Record<string, unknown>).forEach((key) => {
           delete (nextDoc as Record<string, unknown>)[key];
+        });
+      }
+      if (update.$max && typeof update.$max === 'object') {
+        Object.entries(update.$max as Record<string, unknown>).forEach(([key, candidateValue]) => {
+          const candidateMs = toEpochMs(candidateValue);
+          if (candidateMs === null) return;
+          const currentValue = (nextDoc as Record<string, unknown>)[key];
+          const currentMs = toEpochMs(currentValue);
+          if (currentMs === null || candidateMs > currentMs) {
+            (nextDoc as Record<string, unknown>)[key] = candidateValue;
+          }
         });
       }
       return nextDoc;
@@ -307,6 +378,388 @@ describe('persistPossibleTasksForSession', () => {
     );
   });
 
+  it('keeps canonical draft identity on full recompute reruns when incoming row_id drifts', async () => {
+    const tasksCollection = buildTasksCollection([]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const firstPass = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Canonical baseline session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'incoming-row-pass-1',
+          id: 'incoming-row-pass-1',
+          name: 'Автоматизировать project binding voice-сессий для Copilot',
+          description: 'Убрать ручной выбор проекта при сохранении возможных задач из voice.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(firstPass.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-row-pass-1', id: 'incoming-row-pass-1' })])
+    );
+
+    const secondPass = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Canonical baseline session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'incoming-row-pass-2',
+          id: 'incoming-row-pass-2',
+          name: 'Автоматизировать project binding voice-сессий для Copilot',
+          description: 'Убрать ручной выбор проекта при сохранении возможных задач из voice.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(secondPass.removedRowIds).toEqual([]);
+    expect(secondPass.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-row-pass-1', id: 'incoming-row-pass-1' })])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    expect(persistedDocs).toHaveLength(1);
+    expect(persistedDocs[0]).toEqual(
+      expect.objectContaining({
+        row_id: 'incoming-row-pass-1',
+        id: 'incoming-row-pass-1',
+        is_deleted: false,
+      })
+    );
+  });
+
+  it('prefers canonical locator matches over foreign source_data.row_id alias collisions', async () => {
+    const foreignDocId = new ObjectId();
+    const canonicalDocId = new ObjectId();
+    const previousSessionA = new ObjectId().toHexString();
+    const previousSessionB = new ObjectId().toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: foreignDocId,
+        row_id: 'foreign-stale-row',
+        id: 'foreign-stale-row',
+        name: 'Старый foreign stale draft',
+        description: 'Не должен выигрывать canonical match.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionA}`,
+        source_data: {
+          session_id: previousSessionA,
+          row_id: 'canonical-row',
+          voice_sessions: [{ session_id: previousSessionA, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: canonicalDocId,
+        row_id: 'canonical-row',
+        id: 'canonical-row',
+        name: 'Канонический draft',
+        description: 'Должен быть обновлён входящим таском.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionB}`,
+        source_data: {
+          session_id: previousSessionB,
+          row_id: 'canonical-row',
+          voice_sessions: [{ session_id: previousSessionB, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Canonical precedence session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'canonical-row',
+          id: 'canonical-row',
+          name: 'Обновить канонический draft по canonical row',
+          description: 'Новый текст canonical задачи.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'canonical-row', id: 'canonical-row' })])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    const foreignDoc = persistedDocs.find((doc) => String(doc._id) === String(foreignDocId));
+    const canonicalDoc = persistedDocs.find((doc) => String(doc._id) === String(canonicalDocId));
+
+    expect(canonicalDoc).toEqual(
+      expect.objectContaining({
+        _id: canonicalDocId,
+        row_id: 'canonical-row',
+        name: 'Обновить канонический draft по canonical row',
+        source_data: expect.objectContaining({
+          session_id: sessionId,
+          row_id: 'canonical-row',
+        }),
+      })
+    );
+    expect(foreignDoc).toEqual(
+      expect.objectContaining({
+        _id: foreignDocId,
+        row_id: 'foreign-stale-row',
+        name: 'Старый foreign stale draft',
+      })
+    );
+  });
+
+  it('does not let foreign source_data.row_id aliases hijack a new canonical row match', async () => {
+    const foreignDocId = new ObjectId();
+    const previousSessionId = new ObjectId().toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: foreignDocId,
+        row_id: 'foreign-stale-row',
+        id: 'foreign-stale-row',
+        name: 'Старый stale draft',
+        description: 'Нерелевантный stale документ.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionId}`,
+        source_data: {
+          session_id: previousSessionId,
+          row_id: 'incoming-canonical-row',
+          voice_sessions: [{ session_id: previousSessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Alias collision safety session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'incoming-canonical-row',
+          id: 'incoming-canonical-row',
+          name: 'Создать новый канонический draft',
+          description: 'Этот draft не должен перезаписывать foreign stale строку.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-canonical-row', id: 'incoming-canonical-row' })])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    expect(persistedDocs).toHaveLength(2);
+    expect(persistedDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: foreignDocId,
+          row_id: 'foreign-stale-row',
+          id: 'foreign-stale-row',
+          source_data: expect.objectContaining({
+            session_id: previousSessionId,
+          }),
+        }),
+        expect.objectContaining({
+          row_id: 'incoming-canonical-row',
+          id: 'incoming-canonical-row',
+          source_data: expect.objectContaining({
+            session_id: sessionId,
+            row_id: 'incoming-canonical-row',
+          }),
+        }),
+      ])
+    );
+  });
+
+  it('ignores same-session stale source_data.row_id aliases when canonical keys disagree', async () => {
+    const staleSessionDocId = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: staleSessionDocId,
+        row_id: 'foreign-stale-row',
+        id: 'foreign-stale-row',
+        name: 'Старый stale draft из текущей сессии',
+        description: 'Наследованный stale документ с alias в source_data.row_id.',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'incoming-canonical-row',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Same-session stale alias collision',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'incoming-canonical-row',
+          id: 'incoming-canonical-row',
+          name: 'Новый канонический draft',
+          description: 'Должен сохраниться как новый canonical row.',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-canonical-row', id: 'incoming-canonical-row' })])
+    );
+    expect(result.removedRowIds).toEqual(['foreign-stale-row']);
+
+    const persistedDocs = tasksCollection.snapshot();
+    const staleDoc = persistedDocs.find((doc) => String(doc._id) === String(staleSessionDocId));
+    const canonicalDoc = persistedDocs.find((doc) => String(doc._id) !== String(staleSessionDocId));
+
+    expect(staleDoc).toEqual(
+      expect.objectContaining({
+        _id: staleSessionDocId,
+        row_id: 'foreign-stale-row',
+        is_deleted: true,
+      })
+    );
+    expect(canonicalDoc).toEqual(
+      expect.objectContaining({
+        row_id: 'incoming-canonical-row',
+        id: 'incoming-canonical-row',
+        is_deleted: false,
+        source_data: expect.objectContaining({
+          session_id: sessionId,
+          row_id: 'incoming-canonical-row',
+        }),
+      })
+    );
+  });
+
+  it('does not leak stale cleanup through foreign-style source_data.row_id aliases', async () => {
+    const existingDocA = new ObjectId();
+    const existingDocB = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocA,
+        row_id: 'draft-a-stable',
+        id: 'draft-a-stable',
+        name: 'Оставить актуальный draft A',
+        description: 'Описание A',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-a-stable',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: existingDocB,
+        row_id: 'draft-b-stale',
+        id: 'draft-b-stale',
+        name: 'Удалить stale draft B',
+        description: 'Описание B',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-a-stable',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Leakage guard session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'draft-a-stable',
+          id: 'draft-a-stable',
+          name: 'Оставить актуальный draft A',
+          description: 'Обновлённое описание A',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.removedRowIds).toEqual(['draft-b-stale']);
+
+    const persistedDocs = tasksCollection.snapshot();
+    const keptDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
+    const staleDocB = persistedDocs.find((doc) => String(doc._id) === String(existingDocB));
+
+    expect(keptDocA).toEqual(
+      expect.objectContaining({
+        _id: existingDocA,
+        row_id: 'draft-a-stable',
+        is_deleted: false,
+      })
+    );
+    expect(staleDocB).toEqual(
+      expect.objectContaining({
+        _id: existingDocB,
+        row_id: 'draft-b-stale',
+        is_deleted: true,
+      })
+    );
+  });
+
   it('marks missing draft rows as stale instead of deleting them during incremental refresh', async () => {
     const existingDocA = new ObjectId();
     const existingDocB = new ObjectId();
@@ -397,6 +850,87 @@ describe('persistPossibleTasksForSession', () => {
         row_id: 'draft-b',
         source_data: expect.objectContaining({
           row_id: 'draft-b',
+          refresh_state: 'stale',
+          stale_since: expect.any(String),
+          last_refresh_mode: 'incremental_refresh',
+        }),
+      })
+    );
+  });
+
+  it('incremental refresh stale cleanup prefers stale _id targets over colliding aliases', async () => {
+    const existingDocA = new ObjectId();
+    const existingDocB = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocA,
+        row_id: 'draft-a-stable',
+        id: 'draft-b-stale',
+        name: 'Keep fresh draft A',
+        description: 'A description',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-a-stable',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: existingDocB,
+        row_id: 'draft-b-stale',
+        id: 'draft-b-stale',
+        name: 'Mark stale draft B',
+        description: 'B description',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-b-stale',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Incremental alias collision session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'draft-a-stable',
+          id: 'draft-a-stable',
+          name: 'Keep fresh draft A',
+          description: 'A description updated',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'incremental_refresh',
+    });
+
+    expect(result.removedRowIds).toEqual(['draft-b-stale']);
+
+    const persistedDocs = tasksCollection.snapshot();
+    const keptDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
+    const staleDocB = persistedDocs.find((doc) => String(doc._id) === String(existingDocB));
+
+    expect((keptDocA?.source_data as Record<string, unknown>).refresh_state).toBeUndefined();
+    expect((keptDocA?.source_data as Record<string, unknown>).stale_since).toBeUndefined();
+    expect(staleDocB).toEqual(
+      expect.objectContaining({
+        _id: existingDocB,
+        row_id: 'draft-b-stale',
+        source_data: expect.objectContaining({
           refresh_state: 'stale',
           stale_since: expect.any(String),
           last_refresh_mode: 'incremental_refresh',
@@ -755,6 +1289,170 @@ describe('persistPossibleTasksForSession', () => {
     );
   });
 
+  it('keeps existing draft rows untouched when full recompute receives zero extracted tasks', async () => {
+    const existingDocA = new ObjectId();
+    const existingDocB = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocA,
+        row_id: 'draft-a',
+        id: 'draft-a',
+        name: 'Оставить draft A',
+        description: 'Описание A',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-a',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: existingDocB,
+        row_id: 'draft-b',
+        id: 'draft-b',
+        name: 'Оставить draft B',
+        description: 'Описание B',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-b',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Zero extraction pass',
+      defaultProjectId: 'proj-1',
+      taskItems: [],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.removedRowIds).toEqual([]);
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ row_id: 'draft-a', id: 'draft-a' }),
+        expect.objectContaining({ row_id: 'draft-b', id: 'draft-b' }),
+      ])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    const persistedDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
+    const persistedDocB = persistedDocs.find((doc) => String(doc._id) === String(existingDocB));
+    expect(persistedDocA).toEqual(expect.objectContaining({ _id: existingDocA, row_id: 'draft-a' }));
+    expect(persistedDocB).toEqual(expect.objectContaining({ _id: existingDocB, row_id: 'draft-b' }));
+    expect(persistedDocA?.is_deleted).not.toBe(true);
+    expect(persistedDocB?.is_deleted).not.toBe(true);
+  });
+
+  it('matches existing drafts by task_id_from_ai when it is the only incoming locator', async () => {
+    const canonicalDocId = new ObjectId();
+    const staleDocId = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: canonicalDocId,
+        row_id: 'stable-row',
+        id: 'stable-row',
+        task_id_from_ai: 'T1',
+        name: 'Canonical saved row',
+        description: 'Исходное описание',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'stable-row',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: staleDocId,
+        row_id: 'stale-row',
+        id: 'stale-row',
+        task_id_from_ai: 'T2',
+        name: 'Stale row',
+        description: 'Должен стать удалённым',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'stale-row',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'task_id only locator pass',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          task_id_from_ai: 'T1',
+          name: 'Canonical row refreshed by AI id only',
+          description: 'Обновлённое описание',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.removedRowIds).toEqual(['stale-row']);
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          row_id: 'stable-row',
+          id: 'stable-row',
+          task_id_from_ai: 'T1',
+          name: 'Canonical row refreshed by AI id only',
+        }),
+      ])
+    );
+
+    const persistedDocs = tasksCollection.snapshot();
+    expect(persistedDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: canonicalDocId,
+          row_id: 'stable-row',
+          task_id_from_ai: 'T1',
+          is_deleted: false,
+        }),
+        expect.objectContaining({
+          _id: staleDocId,
+          row_id: 'stale-row',
+          is_deleted: true,
+        }),
+      ])
+    );
+  });
+
   it('normalizes emoji-form priorities before strict ontology persistence', async () => {
     const tasksCollection = buildTasksCollection([]);
     const dbStub = {
@@ -1067,5 +1765,222 @@ describe('persistPossibleTasksForSession', () => {
         }),
       ])
     );
+  });
+
+  it('keeps updated_at monotonic on retry replay for the same draft payload', async () => {
+    const tasksCollection = buildTasksCollection([]);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Retry replay session',
+      defaultProjectId: 'proj-1',
+      taskItems: [{
+        row_id: 'draft-retry',
+        id: 'draft-retry',
+        name: 'Retry-safe draft',
+        description: 'Must stay monotonic across replay',
+        project_id: 'proj-1',
+      }],
+      refreshMode: 'full_recompute',
+    });
+
+    const firstDoc = tasksCollection.snapshot().find((doc) => doc.row_id === 'draft-retry');
+    const firstUpdatedAtMs = toEpochMsForAssert(firstDoc?.updated_at);
+
+    await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Retry replay session',
+      defaultProjectId: 'proj-1',
+      taskItems: [{
+        row_id: 'draft-retry',
+        id: 'draft-retry',
+        name: 'Retry-safe draft',
+        description: 'Must stay monotonic across replay',
+        project_id: 'proj-1',
+      }],
+      refreshMode: 'full_recompute',
+    });
+
+    const secondDoc = tasksCollection.snapshot().find((doc) => doc.row_id === 'draft-retry');
+    const secondUpdatedAtMs = toEpochMsForAssert(secondDoc?.updated_at);
+
+    expect(Number.isFinite(firstUpdatedAtMs)).toBe(true);
+    expect(Number.isFinite(secondUpdatedAtMs)).toBe(true);
+    expect(secondUpdatedAtMs).toBeGreaterThanOrEqual(firstUpdatedAtMs);
+  });
+
+  it('does not decrease updated_at when replay mutation_effective_at is older than existing timestamp', async () => {
+    const futureUpdatedAt = new Date('2099-01-01T00:00:00.000Z');
+    const existingDocId = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: 'draft-monotonic-existing',
+        id: 'draft-monotonic-existing',
+        name: 'Monotonic existing draft',
+        description: 'Should keep future updated_at',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-monotonic-existing',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-01T00:00:00.000Z'),
+        updated_at: futureUpdatedAt,
+      },
+    ]);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Clock skew replay',
+      defaultProjectId: 'proj-1',
+      taskItems: [{
+        row_id: 'draft-monotonic-existing',
+        id: 'draft-monotonic-existing',
+        name: 'Monotonic existing draft',
+        description: 'Replay payload must not move updated_at backwards',
+        project_id: 'proj-1',
+      }],
+      refreshMode: 'full_recompute',
+    });
+
+    const persistedDoc = tasksCollection.snapshot().find((doc) => String(doc._id) === String(existingDocId));
+    expect(persistedDoc).toEqual(expect.objectContaining({ is_deleted: false }));
+    expect(toEpochMsForAssert(persistedDoc?.updated_at)).toBe(futureUpdatedAt.getTime());
+  });
+
+  it('canonicalizes legacy numeric updated_at rows to Date while keeping monotonic value', async () => {
+    const futureUpdatedAtMs = Date.parse('2099-02-01T00:00:00.000Z');
+    const existingDocId = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: 'draft-legacy-number-updated-at',
+        id: 'draft-legacy-number-updated-at',
+        name: 'Legacy numeric updated_at draft',
+        description: 'Historical rows may store updated_at as epoch number',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-legacy-number-updated-at',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        created_at: new Date('2026-03-01T00:00:00.000Z'),
+        updated_at: futureUpdatedAtMs,
+      },
+    ]);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Legacy numeric replay',
+      defaultProjectId: 'proj-1',
+      taskItems: [{
+        row_id: 'draft-legacy-number-updated-at',
+        id: 'draft-legacy-number-updated-at',
+        name: 'Legacy numeric updated_at draft',
+        description: 'Replay must not decrease updated_at',
+        project_id: 'proj-1',
+      }],
+      refreshMode: 'full_recompute',
+    });
+
+    const persistedDoc = tasksCollection.snapshot().find((doc) => String(doc._id) === String(existingDocId));
+    expect(persistedDoc).toEqual(expect.objectContaining({ is_deleted: false }));
+    expect(persistedDoc?.updated_at).toBeInstanceOf(Date);
+    expect(toEpochMsForAssert(persistedDoc?.updated_at)).toBe(futureUpdatedAtMs);
+  });
+
+  it('keeps monotonic updated_at on full-recompute soft delete under clock skew', async () => {
+    const futureUpdatedAt = new Date('2099-06-01T00:00:00.000Z');
+    const staleDocId = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: new ObjectId(),
+        row_id: 'draft-active',
+        id: 'draft-active',
+        name: 'Active draft',
+        description: 'Keep active',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-active',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        updated_at: new Date('2026-03-01T00:00:00.000Z'),
+      },
+      {
+        _id: staleDocId,
+        row_id: 'draft-stale',
+        id: 'draft-stale',
+        name: 'Stale draft',
+        description: 'Should be soft-deleted without decreasing updated_at',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: 'draft-stale',
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        updated_at: futureUpdatedAt,
+      },
+    ]);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Skewed delete session',
+      defaultProjectId: 'proj-1',
+      taskItems: [{
+        row_id: 'draft-active',
+        id: 'draft-active',
+        name: 'Active draft',
+        description: 'Keep active',
+        project_id: 'proj-1',
+      }],
+      refreshMode: 'full_recompute',
+    });
+
+    const staleDoc = tasksCollection.snapshot().find((doc) => String(doc._id) === String(staleDocId));
+    expect(staleDoc).toEqual(expect.objectContaining({ is_deleted: true }));
+    expect(toEpochMsForAssert(staleDoc?.updated_at)).toBe(futureUpdatedAt.getTime());
   });
 });

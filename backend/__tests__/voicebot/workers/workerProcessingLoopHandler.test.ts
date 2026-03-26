@@ -593,4 +593,349 @@ describe('handleProcessingLoopJob', () => {
       expect.objectContaining({ deduplication: expect.any(Object) })
     );
   });
+
+  it('recovers uncategorized transcribed messages and refreshes create_tasks postprocessing', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: sessionId,
+            is_messages_processed: false,
+            processors: ['transcription', 'categorization'],
+            session_processors: ['CREATE_TASKS'],
+          },
+        ])
+      )
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: true,
+            to_transcribe: false,
+            transcription_text: 'Recovered transcribed text',
+            processors_data: {
+              categorization: {
+                is_processing: false,
+                is_processed: false,
+                is_finished: false,
+              },
+            },
+            categorization_attempts: 0,
+          },
+        ])
+      );
+
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-recovery-job' }));
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'create-tasks-recovery-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: messagesUpdateOne,
+            countDocuments: jest.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(1),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.PROCESSORS]: {
+            add: processorsQueueAdd,
+          },
+          [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+            add: postprocessorsQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    const pendingMessagesQuery = messagesFind.mock.calls[0]?.[0] as Record<string, unknown>;
+    const pendingOr = Array.isArray(pendingMessagesQuery?.$or) ? (pendingMessagesQuery.$or as Record<string, unknown>[]) : [];
+    const uncategorizedRecoveryBranch = pendingOr.find((branch) => {
+      const andClauses = Array.isArray((branch as { $and?: unknown[] }).$and)
+        ? ((branch as { $and: Record<string, unknown>[] }).$and)
+        : [];
+      return andClauses.some((clause) => clause.is_transcribed === true);
+    });
+    expect(uncategorizedRecoveryBranch).toBeDefined();
+    const uncategorizedRecoveryBranchJson = JSON.stringify(uncategorizedRecoveryBranch);
+    expect(uncategorizedRecoveryBranchJson).toContain('"processors_data.categorization.is_processed":{"$ne":true}');
+    expect(uncategorizedRecoveryBranchJson).toContain('"categorization_attempts":{"$lte":0}');
+    expect(uncategorizedRecoveryBranchJson).toContain('"categorization_retry_reason":{"$exists":false}');
+
+    expect(result.requeued_categorizations).toBe(1);
+    expect(processorsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.CATEGORIZE,
+      expect.objectContaining({
+        message_id: messageId.toHexString(),
+        session_id: sessionId.toHexString(),
+      }),
+      expect.objectContaining({
+        deduplication: expect.any(Object),
+      })
+    );
+    expect(postprocessorsQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+      expect.objectContaining({
+        session_id: sessionId.toHexString(),
+        refresh_mode: 'incremental_refresh',
+      }),
+      expect.objectContaining({
+        deduplication: expect.any(Object),
+      })
+    );
+
+    const categoryRecoveryUpdate = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload['processors_data.categorization.is_processing'] === true;
+    });
+    expect(categoryRecoveryUpdate).toBeTruthy();
+
+    const createTasksRefreshUpdate = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return typeof setPayload['processors_data.CREATE_TASKS.auto_requested_at'] === 'number';
+    });
+    expect(createTasksRefreshUpdate).toBeTruthy();
+    const createTasksRefreshUnset = ((createTasksRefreshUpdate?.[1] as Record<string, unknown>)?.$unset || {}) as Record<string, unknown>;
+    expect(createTasksRefreshUnset['processors_data.CREATE_TASKS.no_task_decision']).toBe(1);
+    expect(createTasksRefreshUnset['processors_data.CREATE_TASKS.no_task_reason_code']).toBe(1);
+    expect(createTasksRefreshUnset['processors_data.CREATE_TASKS.last_tasks_count']).toBe(1);
+  });
+
+  it('rolls back uncategorized recovery categorization lock when queue enqueue fails', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: sessionId,
+            is_messages_processed: false,
+            processors: ['transcription', 'categorization'],
+            session_processors: ['CREATE_TASKS'],
+          },
+        ])
+      )
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: true,
+            to_transcribe: false,
+            transcription_text: 'Recovered transcribed text',
+            processors_data: {
+              categorization: {
+                is_processing: false,
+                is_processed: false,
+                is_finished: false,
+              },
+            },
+            categorization_attempts: 0,
+          },
+        ])
+      );
+
+    const processorsQueueAdd = jest.fn(async () => {
+      throw new Error('processors queue degraded');
+    });
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'create-tasks-recovery-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: messagesUpdateOne,
+            countDocuments: jest.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(1),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.PROCESSORS]: {
+            add: processorsQueueAdd,
+          },
+          [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+            add: postprocessorsQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_categorizations).toBe(0);
+    expect(postprocessorsQueueAdd).not.toHaveBeenCalled();
+
+    const setProcessingCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload['processors_data.categorization.is_processing'] === true;
+    });
+    expect(setProcessingCall).toBeTruthy();
+
+    const rollbackCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      const unsetPayload = (update?.$unset || {}) as Record<string, unknown>;
+      return setPayload['processors_data.categorization.is_processing'] === false
+        && setPayload['processors_data.categorization.is_processed'] === false
+        && setPayload['processors_data.categorization.is_finished'] === false
+        && unsetPayload['processors_data.categorization.job_queued_timestamp'] === 1;
+    });
+    expect(rollbackCall).toBeTruthy();
+  });
+
+  it('keeps create_tasks recovery gated off when categorization queue is unavailable', async () => {
+    const sessionId = new ObjectId();
+    const messageId = new ObjectId();
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: sessionId,
+            is_messages_processed: false,
+            processors: ['transcription', 'categorization'],
+            session_processors: ['CREATE_TASKS'],
+          },
+        ])
+      )
+      .mockImplementationOnce(() => makeFindCursor([]));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: sessionId,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: messageId,
+            session_id: sessionId,
+            is_transcribed: true,
+            to_transcribe: false,
+            transcription_text: 'Recovered transcribed text',
+            processors_data: {
+              categorization: {
+                is_processing: false,
+                is_processed: false,
+                is_finished: false,
+              },
+            },
+            categorization_attempts: 0,
+          },
+        ])
+      );
+
+    const postprocessorsQueueAdd = jest.fn(async () => ({ id: 'create-tasks-recovery-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: messagesUpdateOne,
+            countDocuments: jest.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(1),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.POSTPROCESSORS]: {
+            add: postprocessorsQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_categorizations).toBe(0);
+    expect(result.skipped_requeue_no_processors).toBeGreaterThanOrEqual(1);
+    expect(postprocessorsQueueAdd).not.toHaveBeenCalled();
+
+    const createTasksRefreshUpdate = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return typeof setPayload['processors_data.CREATE_TASKS.auto_requested_at'] === 'number';
+    });
+    expect(createTasksRefreshUpdate).toBeUndefined();
+  });
 });

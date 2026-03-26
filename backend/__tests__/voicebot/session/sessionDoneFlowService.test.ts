@@ -218,4 +218,95 @@ describe('completeSessionDoneFlow summary correlation/idempotency', () => {
       })
     );
   });
+
+  it('is idempotent for duplicate concurrent calls and does not double enqueue done notify', async () => {
+    const sessionId = new ObjectId();
+    const sessionState: Record<string, unknown> = {
+      _id: sessionId,
+      chat_id: 7070,
+      is_active: true,
+      to_finalize: false,
+      done_count: 0,
+    };
+    const sessionsUpdateOne = jest.fn(
+      async (filter: Record<string, unknown>, update: Record<string, unknown>) => {
+        const requiredIsActive = (filter.is_active as Record<string, unknown> | undefined)?.$ne;
+        const requiredToFinalize = (filter.to_finalize as Record<string, unknown> | undefined)?.$ne;
+        const doneFlowRequestedFilter = filter.done_flow_requested_at as
+          | Record<string, unknown>
+          | undefined;
+        const requiresMissingDoneFlowRequest = doneFlowRequestedFilter?.$exists === false;
+
+        if (requiredIsActive === false && sessionState.is_active === false) {
+          return { matchedCount: 0, modifiedCount: 0 };
+        }
+        if (requiredToFinalize === true && sessionState.to_finalize === true) {
+          return { matchedCount: 0, modifiedCount: 0 };
+        }
+        if (requiresMissingDoneFlowRequest && sessionState.done_flow_requested_at !== undefined) {
+          return { matchedCount: 0, modifiedCount: 0 };
+        }
+
+        const setPayload = (update.$set || {}) as Record<string, unknown>;
+        const incPayload = (update.$inc || {}) as Record<string, unknown>;
+
+        Object.assign(sessionState, setPayload);
+        if (typeof incPayload.done_count === 'number') {
+          sessionState.done_count = Number(sessionState.done_count || 0) + incPayload.done_count;
+        }
+
+        return { matchedCount: 1, modifiedCount: 1 };
+      }
+    );
+
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({ ...sessionState })),
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.TG_VOICE_SESSIONS) {
+          return {
+            updateMany: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        return {
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+    const commonAdd = jest.fn(async () => ({ id: 'job-done-once' }));
+
+    const [firstCall, secondCall] = await Promise.all([
+      completeSessionDoneFlow({
+        session_id: sessionId.toHexString(),
+        db: db as any,
+        queues: {
+          [VOICEBOT_QUEUES.COMMON]: { add: commonAdd },
+        },
+        telegram_user_id: '7070',
+      }),
+      completeSessionDoneFlow({
+        session_id: sessionId.toHexString(),
+        db: db as any,
+        queues: {
+          [VOICEBOT_QUEUES.COMMON]: { add: commonAdd },
+        },
+        telegram_user_id: '7070',
+      }),
+    ]);
+
+    expect(firstCall.ok).toBe(true);
+    expect(secondCall.ok).toBe(true);
+    expect(sessionState.done_count).toBe(1);
+
+    const doneMultipromptCalls = commonAdd.mock.calls.filter(
+      (call) => call[0] === VOICEBOT_JOBS.common.DONE_MULTIPROMPT
+    );
+    expect(doneMultipromptCalls).toHaveLength(1);
+
+    expect(writeDoneNotifyRequestedLogMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -74,6 +74,27 @@ export const normalizeVoicePossibleTaskLocatorKey = (value: unknown): string => 
     : normalized;
 };
 
+const normalizeTaskIdFromAiLocatorKey = ({
+  rowId,
+  id,
+  taskIdFromAi,
+}: {
+  rowId: unknown;
+  id: unknown;
+  taskIdFromAi: unknown;
+}): string => {
+  const normalizedTaskId = normalizeVoicePossibleTaskLocatorKey(taskIdFromAi);
+  if (normalizedTaskId) return normalizedTaskId;
+
+  const hasCanonicalRowLocator =
+    Boolean(normalizeVoicePossibleTaskLocatorKey(rowId)) ||
+    Boolean(normalizeVoicePossibleTaskLocatorKey(id));
+  if (hasCanonicalRowLocator) return '';
+
+  // Preserve legacy compatibility when task_id_from_ai is the only locator field.
+  return toTaskText(taskIdFromAi);
+};
+
 const toStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => toTaskText(entry)).filter(Boolean);
@@ -290,12 +311,40 @@ export const resolveVoicePossibleTaskRowId = ({
   rawTask: Record<string, unknown>;
   index: number;
 }): string => {
-  const taskIdFromAi = normalizeVoicePossibleTaskLocatorKey(rawTask.task_id_from_ai);
+  const taskIdFromAi = normalizeTaskIdFromAiLocatorKey({
+    rowId: rawTask.row_id,
+    id: rawTask.id,
+    taskIdFromAi: rawTask.task_id_from_ai,
+  });
   return (
     normalizeVoicePossibleTaskLocatorKey(rawTask.row_id) ||
     normalizeVoicePossibleTaskLocatorKey(rawTask.id) ||
     taskIdFromAi ||
     buildVoicePossibleTaskFallbackLocator({ rawTask, index })
+  );
+};
+
+export const collectVoicePossibleTaskCanonicalLocatorKeys = (value: unknown): string[] => {
+  if (!value || typeof value !== 'object') return [];
+  const record = value as Record<string, unknown>;
+  const rowId = normalizeVoicePossibleTaskLocatorKey(record.row_id);
+  const id = normalizeVoicePossibleTaskLocatorKey(record.id);
+  const primaryKeys = [rowId, id].filter(Boolean);
+  if (primaryKeys.length > 0) {
+    return Array.from(new Set(primaryKeys));
+  }
+
+  const taskIdFromAi = normalizeTaskIdFromAiLocatorKey({
+    rowId: record.row_id,
+    id: record.id,
+    taskIdFromAi: record.task_id_from_ai,
+  });
+  return Array.from(
+    new Set(
+      [
+        taskIdFromAi,
+      ].filter(Boolean)
+    )
   );
 };
 
@@ -323,17 +372,79 @@ export const buildVoicePossibleTaskFallbackLocator = ({
   return `voice-task-${slug}-${digest}`;
 };
 
-export const collectVoicePossibleTaskLocatorKeys = (value: unknown): string[] => {
+export const collectVoicePossibleTaskAliasLocatorKeys = (
+  value: unknown,
+  options: {
+    includeSourceDataRowId?: boolean;
+    includeFallbackLocator?: boolean;
+  } = {}
+): string[] =>
+  collectVoicePossibleTaskAliasLocatorEntries(value, options).map((entry) => entry.key);
+
+export type VoicePossibleTaskAliasLocatorSource = 'source_data.row_id' | 'fallback_locator' | 'task_id_from_ai';
+
+export type VoicePossibleTaskAliasLocatorEntry = {
+  key: string;
+  sources: VoicePossibleTaskAliasLocatorSource[];
+};
+
+export const collectVoicePossibleTaskAliasLocatorEntries = (
+  value: unknown,
+  {
+    includeSourceDataRowId = true,
+    includeFallbackLocator = true,
+    includeTaskIdFromAi = false,
+  }: {
+    includeSourceDataRowId?: boolean;
+    includeFallbackLocator?: boolean;
+    includeTaskIdFromAi?: boolean;
+  } = {}
+): VoicePossibleTaskAliasLocatorEntry[] => {
   if (!value || typeof value !== 'object') return [];
   const record = value as Record<string, unknown>;
+  const byKey = new Map<string, Set<VoicePossibleTaskAliasLocatorSource>>();
+  const addEntry = (key: string, source: VoicePossibleTaskAliasLocatorSource): void => {
+    if (!key) return;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.add(source);
+      return;
+    }
+    byKey.set(key, new Set([source]));
+  };
+
+  if (includeSourceDataRowId) {
+    addEntry(
+      normalizeVoicePossibleTaskLocatorKey((record.source_data as Record<string, unknown> | undefined)?.row_id),
+      'source_data.row_id'
+    );
+  }
+  if (includeFallbackLocator) {
+    addEntry(buildVoicePossibleTaskFallbackLocator({ rawTask: record, index: 0 }), 'fallback_locator');
+  }
+  if (includeTaskIdFromAi) {
+    addEntry(
+      normalizeTaskIdFromAiLocatorKey({
+        rowId: record.row_id,
+        id: record.id,
+        taskIdFromAi: record.task_id_from_ai,
+      }),
+      'task_id_from_ai'
+    );
+  }
+
+  return Array.from(byKey.entries()).map(([key, sources]) => ({
+    key,
+    sources: Array.from(sources.values()),
+  }));
+};
+
+export const collectVoicePossibleTaskLocatorKeys = (value: unknown): string[] => {
   return Array.from(
     new Set(
       [
-        normalizeVoicePossibleTaskLocatorKey(record.row_id),
-        normalizeVoicePossibleTaskLocatorKey(record.id),
-        normalizeVoicePossibleTaskLocatorKey(record.task_id_from_ai),
-        normalizeVoicePossibleTaskLocatorKey((record.source_data as Record<string, unknown> | undefined)?.row_id),
-        buildVoicePossibleTaskFallbackLocator({ rawTask: record, index: 0 }),
+        ...collectVoicePossibleTaskCanonicalLocatorKeys(value),
+        ...collectVoicePossibleTaskAliasLocatorKeys(value),
       ].filter(Boolean)
     )
   );

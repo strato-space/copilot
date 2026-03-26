@@ -3,6 +3,16 @@ import { test, expect, type Page } from '@playwright/test';
 const SESSION_ID = '507f1f77bcf86cd799439011';
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3002';
 
+function extractMultipartFormField(postBody: Buffer | null | undefined, fieldName: string): string | null {
+  if (!postBody || !fieldName) return null;
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const text = postBody.toString('utf8');
+  const match = text.match(new RegExp(`name="${escaped}"\\r\\n\\r\\n([^\\r\\n]+)`, 'i'));
+  if (!match || !match[1]) return null;
+  const value = String(match[1]).trim();
+  return value ? value : null;
+}
+
 interface SessionPageOptions {
   permissions?: string[];
   path?: string;
@@ -319,7 +329,8 @@ test.describe('Voice FAB lifecycle parity', () => {
     });
     await expect(page.locator('#fab-wrap')).toBeVisible();
 
-    await page.getByRole('link', { name: /Analytic/i }).click();
+    await page.goto('/analytics', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => undefined);
     await expect(page).toHaveURL(/\/analytics$/);
     await expect(page.locator('#fab-wrap')).toBeVisible();
 
@@ -482,7 +493,16 @@ test.describe('Voice FAB lifecycle parity', () => {
 
   test('@unauth Done button routes action into FAB control', async ({ page }) => {
     await voiceFab.openSessionPage(page);
+    let closePayload: Record<string, unknown> | null = null;
     await page.route('**/api/voicebot/activate_session', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+    await page.route('**/api/voicebot/session_done', async (route) => {
+      closePayload = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -493,8 +513,8 @@ test.describe('Voice FAB lifecycle parity', () => {
     await voiceFab.attachFabControlRecorder(page);
     await expect(voiceFab.actionButton(page, 'New')).toBeVisible();
     await expect(voiceFab.actionButton(page, 'Done')).toBeVisible();
-    const calls = await voiceFab.clickActionAndGetCalls(page, 'Done');
-    expect(calls).toContain('done');
+    await voiceFab.actionButton(page, 'Done').click();
+    await expect.poll(() => closePayload?.session_id).toBe(SESSION_ID);
   });
 
   test('@unauth sessions cleanup flow deletes created test session row', async ({ page }) => {
@@ -653,4 +673,214 @@ test.describe('Voice FAB paused done runtime behavior', () => {
     await expect.poll(() => activateCalls).toBe(0);
     await expect(fabWrap).toHaveAttribute('data-state', 'idle');
   });
+});
+
+test.describe('Voice FAB done/start transition routing', () => {
+  test('@unauth rapid Done→Start queues start and binds new session id', async ({ page }) => {
+    const oldSessionId = SESSION_ID;
+    const newSessionId = '507f1f77bcf86cd7994390aa';
+    const requestOrder: string[] = [];
+    const uploadedSessionIds: string[] = [];
+    let closeCalls = 0;
+    let createCalls = 0;
+    let uploadCalls = 0;
+    let closePayload: Record<string, unknown> | null = null;
+    let createPayload: Record<string, unknown> | null = null;
+
+    await page.addInitScript(({ sessionId }) => {
+      window.localStorage.setItem('VOICEBOT_AUTH_TOKEN', 'playwright-auth-token');
+      window.localStorage.setItem('VOICEBOT_ACTIVE_SESSION_ID', sessionId);
+      window.localStorage.setItem('VOICEBOT_STATE', 'paused');
+      window.localStorage.setItem('VOICEBOT_PAUSED_HINT', '1');
+      window.localStorage.setItem('VOICEBOT_API_URL', `${window.location.origin}/api`);
+    }, { sessionId: oldSessionId });
+
+    await page.route('**/api/auth/me**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            user: {
+              id: '507f1f77bcf86cd799439099',
+              email: 'test@stratospace.fun',
+              role: 'ADMIN',
+              permissions: [],
+            },
+          },
+        }),
+      });
+    });
+    await page.route('**/api/voicebot/projects', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route('**/api/voicebot/sessions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            _id: oldSessionId,
+            session_name: 'Rapid done/start session',
+            is_active: true,
+            access_level: 'private',
+            participants: [],
+            allowed_users: [],
+            created_at: '2026-03-15T07:00:00.000Z',
+          },
+        ]),
+      });
+    });
+    await page.route('**/api/voicebot/session_done', async (route) => {
+      requestOrder.push('session_done');
+      closeCalls += 1;
+      closePayload = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
+      await page.waitForTimeout(180);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+    await page.route('**/api/voicebot/create_session', async (route) => {
+      requestOrder.push('create_session');
+      createCalls += 1;
+      createPayload = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          session_id: newSessionId,
+          session_name: 'New session after done',
+        }),
+      });
+    });
+    await page.route('**/api/voicebot/upload_audio', async (route) => {
+      uploadCalls += 1;
+      const sid = extractMultipartFormField(route.request().postDataBuffer(), 'session_id');
+      if (sid) uploadedSessionIds.push(sid);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, request_id: 'playwright-upload-probe' }),
+      });
+    });
+
+    await page.goto('/webrtc/index.html', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => undefined);
+
+    await page.evaluate(() => {
+      const control = (window as unknown as { __voicebotControl?: (action: string) => void }).__voicebotControl;
+      control?.('done');
+      control?.('new');
+    });
+
+    await expect.poll(() => closeCalls).toBe(1);
+    await expect.poll(() => createCalls).toBe(1);
+    await expect.poll(() => closePayload?.session_id).toBe(oldSessionId);
+    await expect.poll(() => createPayload?.chat_id).toBe('2820582847');
+    expect(requestOrder.slice(0, 2)).toEqual(['session_done', 'create_session']);
+
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('VOICEBOT_ACTIVE_SESSION_ID'))).toBe(newSessionId);
+    await page.evaluate(async () => {
+      const w = window as unknown as {
+        __voicebotTestUpload?: (opts?: Record<string, unknown>) => Promise<unknown>;
+      };
+      if (typeof w.__voicebotTestUpload !== 'function') {
+        throw new Error('__voicebotTestUpload helper is not available');
+      }
+      await w.__voicebotTestUpload({
+        filename: 'probe-after-transition.webm',
+        bytes: 32,
+        mime_type: 'audio/webm',
+      });
+    });
+    await expect.poll(() => uploadCalls).toBe(1);
+    expect(uploadedSessionIds).toEqual([newSessionId]);
+    expect(uploadedSessionIds).not.toContain(oldSessionId);
+  });
+
+  test('@unauth double Start uses single-flight create_session', async ({ page }) => {
+    const newSessionId = '507f1f77bcf86cd7994390ab';
+    let createCalls = 0;
+    let closeCalls = 0;
+
+    await page.addInitScript(() => {
+      window.localStorage.setItem('VOICEBOT_AUTH_TOKEN', 'playwright-auth-token');
+      window.localStorage.removeItem('VOICEBOT_ACTIVE_SESSION_ID');
+      window.localStorage.setItem('VOICEBOT_STATE', 'idle');
+      window.localStorage.setItem('VOICEBOT_API_URL', `${window.location.origin}/api`);
+    });
+
+    await page.route('**/api/auth/me**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            user: {
+              id: '507f1f77bcf86cd799439099',
+              email: 'test@stratospace.fun',
+              role: 'ADMIN',
+              permissions: [],
+            },
+          },
+        }),
+      });
+    });
+    await page.route('**/api/voicebot/projects', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route('**/api/voicebot/sessions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route('**/api/voicebot/session_done', async (route) => {
+      closeCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+    await page.route('**/api/voicebot/create_session', async (route) => {
+      createCalls += 1;
+      await page.waitForTimeout(180);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          session_id: newSessionId,
+          session_name: 'Single-flight start session',
+        }),
+      });
+    });
+
+    await page.goto('/webrtc/index.html', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => undefined);
+
+    await page.evaluate(() => {
+      const control = (window as unknown as { __voicebotControl?: (action: string) => void }).__voicebotControl;
+      control?.('new');
+      control?.('new');
+    });
+
+    await expect.poll(() => createCalls).toBe(1);
+    await expect.poll(() => closeCalls).toBe(0);
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('VOICEBOT_ACTIVE_SESSION_ID'))).toBe(newSessionId);
+  });
+
 });

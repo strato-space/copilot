@@ -5,12 +5,14 @@
 
 session_ready_to_summarize:
   # Use absolute path to avoid PATH differences under PM2/systemd.
-  - cmd: /usr/local/bin/uv
+  - cmd: /usr/bin/env
     args:
+      - CODEX_AUTH_JSON_PATH=/home/strato-space/copilot/agents/.codex/auth.json
+      - /usr/local/bin/uv
       - --directory
       - /home/strato-space/prompt/StratoProject/app
       - run
       - StratoProject.py
       - --model
-      - codex
+      - codexplan
       - -m

@@ -21,6 +21,15 @@ import { buildCanonicalSessionLink, getPublicInterfaceOrigin } from './sessionTe
 import { ensureUniqueTaskPublicId } from '../services/taskPublicId.js';
 import { buildCanonicalTaskSourceRef } from '../services/taskSourceRef.js';
 import { enqueueTranscribeJob } from '../services/voicebot/transcriptionQueue.js';
+import { buildCanonicalReadyTextTranscription } from '../api/routes/voicebot/messageHelpers.js';
+import {
+  detectGarbageTranscription,
+  type GarbageDetectionResult,
+} from '../services/voicebot/transcriptionGarbageDetector.js';
+import {
+  buildCreateTasksCategorizationNotQueuedDecision,
+  persistCreateTasksNoTaskDecision,
+} from '../services/voicebot/createTasksCompositeSessionState.js';
 
 export type QueueLike = {
   add: (name: string, data: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
@@ -76,6 +85,8 @@ export const ingressAttachmentSchema = ingressBaseSchema.extend({
 type IngressSession = {
   _id: ObjectId;
   session_type?: string;
+  processors?: unknown[];
+  session_processors?: unknown[];
   chat_id?: number;
   user_id?: ObjectId | null;
   project_id?: ObjectId | string | null;
@@ -153,10 +164,19 @@ type IngressDeps = {
   db: Db;
   commonQueue?: QueueLike;
   voiceQueue?: QueueLike;
+  processorsQueue?: QueueLike;
+  postprocessorsQueue?: QueueLike;
+  garbageDetector?: (params: { transcriptionText: string }) => Promise<GarbageDetectionResult>;
   logger?: {
     info?: (msg: string, meta?: Record<string, unknown>) => void;
     warn?: (msg: string, meta?: Record<string, unknown>) => void;
     error?: (msg: string, meta?: Record<string, unknown>) => void;
+  };
+};
+
+type OpenAiResponsesClient = {
+  responses?: {
+    create: (params: Record<string, unknown>) => Promise<unknown>;
   };
 };
 
@@ -200,6 +220,7 @@ const TASK_SIGNATURE_REPLACE_PATTERN = /(^|\s)@task\b/gi;
 const DEFAULT_CODEX_TASK_TITLE = 'Telegram @task';
 const DEFAULT_CODEX_TASK_DESCRIPTION = 'Created from @task payload.';
 const CANONICAL_PUBLIC_ATTACHMENT_PREFIX = '/api/voicebot/public_attachment/';
+const OPENAI_KEY_ENV_NAMES = ['OPENAI_API_KEY'] as const;
 const LEGACY_PUBLIC_ATTACHMENT_PREFIXES = [
   CANONICAL_PUBLIC_ATTACHMENT_PREFIX,
   '/voicebot/public_attachment/',
@@ -965,51 +986,304 @@ const updateSessionAfterMessage = async (
   );
 };
 
-const buildReadyTextTranscription = (text: string, messageTimestampSec: number) => {
-  const transcriptionText = text.trim();
-  const segmentId = `ch_${new ObjectId().toHexString()}`;
-  return {
-    transcription_text: transcriptionText,
-    task: 'transcribe',
-    text: transcriptionText,
-    transcription_raw: {
-      provider: 'legacy',
-      model: 'ready_text',
-      segmented: false,
-      text: transcriptionText,
-    },
-    transcription: {
-      schema_version: 1,
-      provider: 'legacy',
-      model: 'ready_text',
-      task: 'transcribe',
-      duration_seconds: 0,
-      text: transcriptionText,
-      segments: [
-        {
-          id: segmentId,
-          source_segment_id: null,
-          start: 0,
-          end: 0,
-          speaker: null,
-          text: transcriptionText,
-          is_deleted: false,
-        },
-      ],
-      usage: null,
-    },
-    transcription_chunks: [
-      {
-        segment_index: 0,
-        id: segmentId,
-        text: transcriptionText,
-        timestamp: new Date(messageTimestampSec * 1000),
-        duration_seconds: 0,
+const normalizeProcessorList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
+
+const isCategorizationEnabledForSession = (session: IngressSession): boolean => {
+  const processors = normalizeProcessorList(session.processors);
+  return processors.length === 0 || processors.includes(VOICEBOT_PROCESSORS.CATEGORIZATION);
+};
+
+const isCreateTasksEnabledForSession = (session: IngressSession): boolean => {
+  const sessionProcessors = normalizeProcessorList(session.session_processors);
+  return sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_JOBS.postprocessing.CREATE_TASKS);
+};
+
+type CategorizationEnqueueOutcome = 'queued' | 'disabled' | 'not_queued';
+
+const getOpenAIKeySource = (): string => {
+  for (const key of OPENAI_KEY_ENV_NAMES) {
+    if (normalizeString(process.env[key])) return key;
+  }
+  return OPENAI_KEY_ENV_NAMES[0];
+};
+
+const createOpenAiResponsesClient = async (): Promise<OpenAiResponsesClient | null> => {
+  const source = getOpenAIKeySource();
+  const key = normalizeString(process.env[source]);
+  if (!key) return null;
+  const { default: OpenAI } = await import('openai');
+  return new OpenAI({ apiKey: key });
+};
+
+const buildCanonicalGarbageDetection = (garbageDetection: GarbageDetectionResult): Record<string, unknown> => ({
+  checked_at: garbageDetection.checked_at || new Date(),
+  detector_version: garbageDetection.detector_version || 'post_transcribe_garbage_v1',
+  model: garbageDetection.model || null,
+  skipped: Boolean(garbageDetection.skipped),
+  skip_reason: garbageDetection.skip_reason || null,
+  is_garbage: Boolean(garbageDetection.is_garbage),
+  code: garbageDetection.code || null,
+  reason: garbageDetection.reason || null,
+  raw_output: garbageDetection.raw_output || null,
+});
+
+const resolveCanonicalTextGarbageDetection = async ({
+  deps,
+  transcriptionText,
+  sessionId,
+  ingressSource,
+}: {
+  deps: IngressDeps;
+  transcriptionText: string;
+  sessionId: ObjectId;
+  ingressSource: string;
+}): Promise<GarbageDetectionResult | null> => {
+  try {
+    if (deps.garbageDetector) {
+      return await deps.garbageDetector({ transcriptionText });
+    }
+
+    const openAiClient = await createOpenAiResponsesClient();
+    if (!openAiClient) return null;
+
+    return await detectGarbageTranscription({
+      openaiClient: openAiClient,
+      transcriptionText,
+    });
+  } catch (error) {
+    logWarn(deps, `[voicebot-tgbot] garbage detector failed for ${ingressSource}, continuing regular flow`, {
+      session_id: sessionId.toHexString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+};
+
+const enqueueCategorizationForTranscribedMessage = async ({
+  deps,
+  session,
+  sessionId,
+  messageObjectId,
+  ingressSource,
+}: {
+  deps: IngressDeps;
+  session: IngressSession;
+  sessionId: ObjectId;
+  messageObjectId: ObjectId;
+  ingressSource: string;
+}): Promise<CategorizationEnqueueOutcome> => {
+  if (!isCategorizationEnabledForSession(session)) return 'disabled';
+  if (!deps.processorsQueue) {
+    logWarn(deps, `[voicebot-tgbot] processors queue unavailable for ${ingressSource} categorization`, {
+      session_id: sessionId.toHexString(),
+      message_id: messageObjectId.toHexString(),
+    });
+    return 'not_queued';
+  }
+
+  const sessionHex = sessionId.toHexString();
+  const messageHex = messageObjectId.toHexString();
+  const processorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
+  const now = Date.now();
+  const jobId = `${sessionHex}-${messageHex}-CATEGORIZE`;
+
+  await deps.db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+    runtimeQuery({ _id: messageObjectId }),
+    {
+      $set: {
+        [`${processorKey}.is_processing`]: true,
+        [`${processorKey}.is_processed`]: false,
+        [`${processorKey}.is_finished`]: false,
+        [`${processorKey}.job_queued_timestamp`]: now,
       },
-    ],
-    is_transcribed: true,
-    transcription_method: 'ready_text',
-  };
+      $unset: {
+        categorization_error: 1,
+        categorization_error_message: 1,
+        categorization_error_timestamp: 1,
+        categorization_retry_reason: 1,
+        categorization_next_attempt_at: 1,
+      },
+    }
+  );
+
+  try {
+    await deps.processorsQueue.add(
+      VOICEBOT_JOBS.voice.CATEGORIZE,
+      {
+        message_id: messageHex,
+        session_id: sessionHex,
+        job_id: jobId,
+      },
+      { deduplication: { id: jobId } }
+    );
+  } catch (error) {
+    await deps.db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+      runtimeQuery({ _id: messageObjectId }),
+      {
+        $set: {
+          [`${processorKey}.is_processing`]: false,
+          [`${processorKey}.is_processed`]: false,
+          [`${processorKey}.is_finished`]: false,
+        },
+        $unset: {
+          [`${processorKey}.job_queued_timestamp`]: 1,
+        },
+      }
+    );
+    throw error;
+  }
+
+  return 'queued';
+};
+
+const enqueueCreateTasksRefreshForSession = async ({
+  deps,
+  session,
+  sessionId,
+  ingressSource,
+}: {
+  deps: IngressDeps;
+  session: IngressSession;
+  sessionId: ObjectId;
+  ingressSource: string;
+}): Promise<void> => {
+  if (!isCreateTasksEnabledForSession(session)) return;
+
+  const requestedAt = Date.now();
+  const sessionHex = sessionId.toHexString();
+  await deps.db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+    runtimeQuery({ _id: sessionId }),
+    {
+      $set: {
+        'processors_data.CREATE_TASKS.auto_requested_at': requestedAt,
+        'processors_data.CREATE_TASKS.is_processed': false,
+        'processors_data.CREATE_TASKS.is_processing': false,
+        updated_at: new Date(),
+      },
+      $unset: {
+        'processors_data.CREATE_TASKS.error': 1,
+        'processors_data.CREATE_TASKS.error_message': 1,
+        'processors_data.CREATE_TASKS.error_timestamp': 1,
+        'processors_data.CREATE_TASKS.no_task_decision': 1,
+        'processors_data.CREATE_TASKS.no_task_reason_code': 1,
+        'processors_data.CREATE_TASKS.no_task_reason': 1,
+        'processors_data.CREATE_TASKS.no_task_evidence': 1,
+        'processors_data.CREATE_TASKS.no_task_inferred': 1,
+        'processors_data.CREATE_TASKS.no_task_source': 1,
+        'processors_data.CREATE_TASKS.last_tasks_count': 1,
+      },
+    }
+  );
+
+  if (!deps.postprocessorsQueue) {
+    logWarn(deps, `[voicebot-tgbot] postprocessors queue unavailable for ${ingressSource} create_tasks refresh`, {
+      session_id: sessionHex,
+    });
+    return;
+  }
+
+  await deps.postprocessorsQueue.add(
+    VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+    {
+      session_id: sessionHex,
+      auto_requested_at: requestedAt,
+      refresh_mode: 'incremental_refresh',
+    },
+    { deduplication: { id: `${sessionHex}-CREATE_TASKS-AUTO` } }
+  );
+};
+
+const runCanonicalTextIngressPostprocessing = async ({
+  deps,
+  session,
+  sessionId,
+  messageObjectId,
+  ingressSource,
+  skipCategorizationReason = null,
+}: {
+  deps: IngressDeps;
+  session: IngressSession;
+  sessionId: ObjectId;
+  messageObjectId: ObjectId;
+  ingressSource: string;
+  skipCategorizationReason?: string | null;
+}): Promise<void> => {
+  if (skipCategorizationReason) {
+    if (isCreateTasksEnabledForSession(session)) {
+      logWarn(
+        deps,
+        `[voicebot-tgbot] skipping ${ingressSource} create_tasks refresh because categorization was not queued`,
+        {
+          session_id: sessionId.toHexString(),
+          message_id: messageObjectId.toHexString(),
+          reason: skipCategorizationReason,
+        }
+      );
+    }
+    return;
+  }
+
+  let categorizationOutcome: CategorizationEnqueueOutcome = 'not_queued';
+  try {
+    categorizationOutcome = await enqueueCategorizationForTranscribedMessage({
+      deps,
+      session,
+      sessionId,
+      messageObjectId,
+      ingressSource,
+    });
+  } catch (error) {
+    logWarn(deps, `[voicebot-tgbot] failed to enqueue ${ingressSource} categorization`, {
+      session_id: sessionId.toHexString(),
+      message_id: messageObjectId.toHexString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  if (categorizationOutcome === 'not_queued' && isCreateTasksEnabledForSession(session)) {
+    try {
+      await persistCreateTasksNoTaskDecision({
+        db: deps.db,
+        sessionFilter: runtimeQuery({ _id: sessionId }),
+        noTaskDecision: buildCreateTasksCategorizationNotQueuedDecision({
+          path: `tg_ingress_${ingressSource}`,
+        }),
+        tasksCount: 0,
+      });
+    } catch (error) {
+      logWarn(deps, `[voicebot-tgbot] failed to persist ${ingressSource} create_tasks no-task decision`, {
+        session_id: sessionId.toHexString(),
+        message_id: messageObjectId.toHexString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    logWarn(
+      deps,
+      `[voicebot-tgbot] skipping ${ingressSource} create_tasks refresh because categorization was not queued`,
+      {
+        session_id: sessionId.toHexString(),
+        message_id: messageObjectId.toHexString(),
+        reason: categorizationOutcome,
+      }
+    );
+    return;
+  }
+
+  try {
+    await enqueueCreateTasksRefreshForSession({
+      deps,
+      session,
+      sessionId,
+      ingressSource,
+    });
+  } catch (error) {
+    logWarn(deps, `[voicebot-tgbot] failed to enqueue ${ingressSource} create_tasks refresh`, {
+      session_id: sessionId.toHexString(),
+      message_id: messageObjectId.toHexString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
 export const handleVoiceIngress = async ({
@@ -1108,7 +1382,18 @@ export const handleTextIngress = async ({
   });
   const sessionId = new ObjectId(session._id);
 
-  const transcriptionPayload = buildReadyTextTranscription(parsed.data.text, context.message_timestamp);
+  const transcriptionPayload = buildCanonicalReadyTextTranscription({
+    text: parsed.data.text,
+    messageTimestampSec: context.message_timestamp,
+    speaker: parsed.data.speaker ?? null,
+  });
+  const garbageDetection = await resolveCanonicalTextGarbageDetection({
+    deps,
+    transcriptionText: transcriptionPayload.transcription_text,
+    sessionId,
+    ingressSource: 'text ingress',
+  });
+  const nowTs = Date.now();
 
   const doc: Record<string, unknown> = {
     chat_id: context.chat_id,
@@ -1126,6 +1411,26 @@ export const handleTextIngress = async ({
     session_type: session.session_type || VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     created_at: Date.now(),
     ...transcriptionPayload,
+    ...(garbageDetection
+      ? {
+        garbage_detected: Boolean(garbageDetection.is_garbage),
+        garbage_detection: buildCanonicalGarbageDetection(garbageDetection),
+      }
+      : {}),
+    ...(garbageDetection?.is_garbage
+      ? {
+        categorization: [],
+        categorization_timestamp: nowTs,
+        processors_data: {
+          categorization: {
+            is_processing: false,
+            is_processed: true,
+            is_finished: true,
+            skipped_reason: 'garbage_detected',
+          },
+        },
+      }
+      : {}),
     ...(parsed.data.speaker ? { speaker: parsed.data.speaker } : {}),
   };
 
@@ -1133,6 +1438,15 @@ export const handleTextIngress = async ({
   const messageObjectId = insert.insertedId;
 
   await updateSessionAfterMessage(deps, sessionId, context);
+
+  await runCanonicalTextIngressPostprocessing({
+    deps,
+    session,
+    sessionId,
+    messageObjectId,
+    ingressSource: 'text ingress',
+    skipCategorizationReason: garbageDetection?.is_garbage ? 'garbage_detected' : null,
+  });
 
   try {
     await processTaskSignatureIngress({
@@ -1206,6 +1520,15 @@ export const handleAttachmentIngress = async ({
   const sessionId = new ObjectId(session._id);
 
   const attachments = normalizeAttachments(parsed.data.attachments);
+  const garbageDetection = messageText
+    ? await resolveCanonicalTextGarbageDetection({
+      deps,
+      transcriptionText: messageText,
+      sessionId,
+      ingressSource: 'attachment ingress',
+    })
+    : null;
+  const nowTs = Date.now();
 
   const doc: Record<string, unknown> = {
     chat_id: context.chat_id,
@@ -1222,7 +1545,10 @@ export const handleAttachmentIngress = async ({
     session_id: sessionId,
     session_type: session.session_type || VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     created_at: new Date(),
-    ...(messageText ? buildReadyTextTranscription(messageText, context.message_timestamp) : {
+    ...(messageText ? buildCanonicalReadyTextTranscription({
+      text: messageText,
+      messageTimestampSec: context.message_timestamp,
+    }) : {
       transcription_text: '',
       transcription_raw: {
         provider: 'legacy',
@@ -1242,12 +1568,43 @@ export const handleAttachmentIngress = async ({
         usage: null,
       },
     }),
+    ...(garbageDetection
+      ? {
+        garbage_detected: Boolean(garbageDetection.is_garbage),
+        garbage_detection: buildCanonicalGarbageDetection(garbageDetection),
+      }
+      : {}),
+    ...(garbageDetection?.is_garbage
+      ? {
+        categorization: [],
+        categorization_timestamp: nowTs,
+        processors_data: {
+          categorization: {
+            is_processing: false,
+            is_processed: true,
+            is_finished: true,
+            skipped_reason: 'garbage_detected',
+          },
+        },
+      }
+      : {}),
   };
 
   const insert = await deps.db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(doc);
   const messageObjectId = insert.insertedId;
 
   await updateSessionAfterMessage(deps, sessionId, context);
+
+  if (messageText) {
+    await runCanonicalTextIngressPostprocessing({
+      deps,
+      session,
+      sessionId,
+      messageObjectId,
+      ingressSource: 'attachment ingress',
+      skipCategorizationReason: garbageDetection?.is_garbage ? 'garbage_detected' : null,
+    });
+  }
 
   try {
     await processTaskSignatureIngress({
@@ -1286,19 +1643,26 @@ export const handleAttachmentIngress = async ({
 export const buildIngressDeps = ({
   db,
   queues,
+  garbageDetector,
   logger,
 }: {
   db: Db;
   queues?: Partial<Record<string, QueueLike>>;
+  garbageDetector?: IngressDeps['garbageDetector'];
   logger?: IngressDeps['logger'];
 }): IngressDeps => {
   const commonQueue = getQueueByName(queues, VOICEBOT_QUEUES.COMMON);
   const voiceQueue = getQueueByName(queues, VOICEBOT_QUEUES.VOICE);
+  const processorsQueue = getQueueByName(queues, VOICEBOT_QUEUES.PROCESSORS);
+  const postprocessorsQueue = getQueueByName(queues, VOICEBOT_QUEUES.POSTPROCESSORS);
 
   return {
     db,
     ...(commonQueue ? { commonQueue } : {}),
     ...(voiceQueue ? { voiceQueue } : {}),
+    ...(processorsQueue ? { processorsQueue } : {}),
+    ...(postprocessorsQueue ? { postprocessorsQueue } : {}),
+    ...(garbageDetector ? { garbageDetector } : {}),
     ...(logger ? { logger } : {}),
   };
 };

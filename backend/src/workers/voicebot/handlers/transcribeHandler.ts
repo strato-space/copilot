@@ -37,6 +37,10 @@ import {
   normalizeErrorCode,
   resolveOpenAiRecoveryErrorCode,
 } from './shared/openAiErrors.js';
+import {
+  buildCreateTasksCategorizationNotQueuedDecision,
+  persistCreateTasksNoTaskDecision,
+} from '../../../services/voicebot/createTasksCompositeSessionState.js';
 
 const logger = getLogger();
 
@@ -768,6 +772,15 @@ const shouldUseTranscriptionReuse = (message: VoiceMessageRecord): boolean => {
   return hasText || hasChunks || hasPayload;
 };
 
+type CategorizationEnqueueOutcome = 'queued' | 'disabled' | 'not_queued';
+
+const isCreateTasksEnabledForSession = (session: VoiceSessionRecord): boolean => {
+  const sessionProcessors = Array.isArray(session.session_processors)
+    ? session.session_processors.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
+  return sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_JOBS.postprocessing.CREATE_TASKS);
+};
+
 const enqueueCategorizationIfEnabled = async ({
   db,
   session,
@@ -780,14 +793,14 @@ const enqueueCategorizationIfEnabled = async ({
   session_id: string;
   message_id: string;
   messageObjectId: ObjectId;
-}): Promise<void> => {
+}): Promise<CategorizationEnqueueOutcome> => {
   const sessionProcessors = Array.isArray(session.processors)
     ? session.processors.map((value) => String(value || '').trim()).filter(Boolean)
     : [];
   const categorizationEnabled =
     sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_PROCESSORS.CATEGORIZATION);
 
-  if (!categorizationEnabled) return;
+  if (!categorizationEnabled) return 'disabled';
 
   const queues = getVoicebotQueues();
   const processorsQueue = queues?.[VOICEBOT_QUEUES.PROCESSORS];
@@ -796,17 +809,18 @@ const enqueueCategorizationIfEnabled = async ({
       message_id,
       session_id,
     });
-    return;
+    return 'not_queued';
   }
 
   const processorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
   const jobId = `${session_id}-${message_id}-CATEGORIZE`;
+  const queuedAt = Date.now();
   await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
     $set: {
       [`${processorKey}.is_processing`]: true,
       [`${processorKey}.is_processed`]: false,
       [`${processorKey}.is_finished`]: false,
-      [`${processorKey}.job_queued_timestamp`]: Date.now(),
+      [`${processorKey}.job_queued_timestamp`]: queuedAt,
     },
     $unset: {
       categorization_retry_reason: 1,
@@ -817,15 +831,36 @@ const enqueueCategorizationIfEnabled = async ({
     },
   });
 
-  await processorsQueue.add(
-    VOICEBOT_JOBS.voice.CATEGORIZE,
-    {
+  try {
+    await processorsQueue.add(
+      VOICEBOT_JOBS.voice.CATEGORIZE,
+      {
+        message_id,
+        session_id,
+        job_id: jobId,
+      },
+      { deduplication: { id: jobId } }
+    );
+  } catch (error) {
+    logger.warn('[voicebot-worker] failed to enqueue categorization after transcribe', {
       message_id,
       session_id,
-      job_id: jobId,
-    },
-    { deduplication: { id: jobId } }
-  );
+      error: getErrorMessage(error),
+    });
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+      $set: {
+        [`${processorKey}.is_processing`]: false,
+        [`${processorKey}.is_processed`]: false,
+        [`${processorKey}.is_finished`]: false,
+      },
+      $unset: {
+        [`${processorKey}.job_queued_timestamp`]: 1,
+      },
+    });
+    return 'not_queued';
+  }
+
+  return 'queued';
 };
 
 const enqueueCreateTasksPostprocessingIfEnabled = async ({
@@ -837,11 +872,7 @@ const enqueueCreateTasksPostprocessingIfEnabled = async ({
   session: VoiceSessionRecord;
   session_id: string;
 }): Promise<void> => {
-  const sessionProcessors = Array.isArray(session.session_processors)
-    ? session.session_processors.map((value) => String(value || '').trim()).filter(Boolean)
-    : [];
-  const createTasksEnabled =
-    sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_JOBS.postprocessing.CREATE_TASKS);
+  const createTasksEnabled = isCreateTasksEnabledForSession(session);
 
   if (!createTasksEnabled) return;
 
@@ -852,7 +883,21 @@ const enqueueCreateTasksPostprocessingIfEnabled = async ({
   await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: session._id }), {
     $set: {
       'processors_data.CREATE_TASKS.auto_requested_at': requestedAt,
+      'processors_data.CREATE_TASKS.is_processed': false,
+      'processors_data.CREATE_TASKS.is_processing': false,
       updated_at: new Date(),
+    },
+    $unset: {
+      'processors_data.CREATE_TASKS.error': 1,
+      'processors_data.CREATE_TASKS.error_message': 1,
+      'processors_data.CREATE_TASKS.error_timestamp': 1,
+      'processors_data.CREATE_TASKS.no_task_decision': 1,
+      'processors_data.CREATE_TASKS.no_task_reason_code': 1,
+      'processors_data.CREATE_TASKS.no_task_reason': 1,
+      'processors_data.CREATE_TASKS.no_task_evidence': 1,
+      'processors_data.CREATE_TASKS.no_task_inferred': 1,
+      'processors_data.CREATE_TASKS.no_task_source': 1,
+      'processors_data.CREATE_TASKS.last_tasks_count': 1,
     },
   });
 
@@ -868,11 +913,68 @@ const enqueueCreateTasksPostprocessingIfEnabled = async ({
     {
       session_id,
       auto_requested_at: requestedAt,
+      refresh_mode: 'incremental_refresh',
     },
     {
       deduplication: { id: `${session_id}-CREATE_TASKS-AUTO` },
     }
   );
+};
+
+const processCategorizationAndCreateTasks = async ({
+  db,
+  session,
+  sessionObjectId,
+  session_id,
+  messageObjectId,
+  message_id,
+  path,
+}: {
+  db: ReturnType<typeof getDb>;
+  session: VoiceSessionRecord;
+  sessionObjectId: ObjectId;
+  session_id: string;
+  messageObjectId: ObjectId;
+  message_id: string;
+  path: string;
+}): Promise<void> => {
+  const categorizationOutcome = await enqueueCategorizationIfEnabled({
+    db,
+    session,
+    session_id,
+    message_id,
+    messageObjectId,
+  });
+  if (categorizationOutcome === 'not_queued') {
+    if (isCreateTasksEnabledForSession(session)) {
+      try {
+        await persistCreateTasksNoTaskDecision({
+          db,
+          sessionFilter: runtimeQuery({ _id: sessionObjectId }),
+          noTaskDecision: buildCreateTasksCategorizationNotQueuedDecision({ path }),
+          tasksCount: 0,
+        });
+      } catch (decisionPersistError) {
+        logger.warn('[voicebot-worker] failed to persist create_tasks no-task decision after transcribe', {
+          message_id,
+          session_id,
+          error: getErrorMessage(decisionPersistError),
+        });
+      }
+      logger.warn('[voicebot-worker] skipping create_tasks auto refresh because categorization was not queued', {
+        message_id,
+        session_id,
+        reason: categorizationOutcome,
+      });
+    }
+    return;
+  }
+
+  await enqueueCreateTasksPostprocessingIfEnabled({
+    db,
+    session,
+    session_id,
+  });
 };
 
 const queueMessageUpdateEvent = async ({
@@ -1061,17 +1163,14 @@ export const handleTranscribeJob = async (
         transcriptionText: reusedText,
       });
 
-      await enqueueCategorizationIfEnabled({
+      await processCategorizationAndCreateTasks({
         db,
         session,
+        sessionObjectId,
         session_id,
-        message_id,
         messageObjectId,
-      });
-      await enqueueCreateTasksPostprocessingIfEnabled({
-        db,
-        session,
-        session_id,
+        message_id,
+        path: 'worker_transcribe_reuse_by_hash',
       });
       await emitMessageUpdateByIdSafe({
         db,
@@ -1134,17 +1233,14 @@ export const handleTranscribeJob = async (
         transcriptionText: textFallback,
       });
 
-      await enqueueCategorizationIfEnabled({
+      await processCategorizationAndCreateTasks({
         db,
         session,
+        sessionObjectId,
         session_id,
-        message_id,
         messageObjectId,
-      });
-      await enqueueCreateTasksPostprocessingIfEnabled({
-        db,
-        session,
-        session_id,
+        message_id,
+        path: 'worker_transcribe_text_fallback',
       });
       await emitMessageUpdateByIdSafe({
         db,
@@ -1647,17 +1743,14 @@ export const handleTranscribeJob = async (
         transcriptionText: transcription_text,
       });
 
-      await enqueueCategorizationIfEnabled({
+      await processCategorizationAndCreateTasks({
         db,
         session,
+        sessionObjectId,
         session_id,
-        message_id,
         messageObjectId,
-      });
-      await enqueueCreateTasksPostprocessingIfEnabled({
-        db,
-        session,
-        session_id,
+        message_id,
+        path: 'worker_transcribe',
       });
     }
     await emitMessageUpdateByIdSafe({

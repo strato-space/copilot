@@ -333,4 +333,118 @@ describe('POST /voicebot/generate_possible_tasks', () => {
       })
     );
   });
+
+  it('returns persistence-inferred no_persistable_drafts when extracted drafts collapse to zero persisted rows', async () => {
+    const fixture = buildFixture();
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+
+    const generatedTasks: Array<Record<string, unknown>> = [
+      { row_id: 'ai-row-1', id: 'ai-row-1', name: 'AI draft 1', priority: 'P2' },
+    ];
+    Object.defineProperty(generatedTasks, '__create_tasks_composite_meta', {
+      value: {
+        summary_md_text: '',
+        scholastic_review_md: '',
+        task_draft: [],
+        enrich_ready_task_comments: [],
+        session_name: '',
+        project_id: fixture.projectId.toHexString(),
+      },
+      enumerable: false,
+      configurable: true,
+    });
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [],
+    });
+
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/generate_possible_tasks')
+      .send({ session_id: fixture.sessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.generated_count).toBe(1);
+    expect(response.body.saved_count).toBe(0);
+    expect(response.body.no_task_decision).toEqual(
+      expect.objectContaining({
+        code: 'no_persistable_drafts',
+        inferred: true,
+        source: 'persistence_inferred',
+      })
+    );
+    expect(response.body.no_task_decision.evidence).toEqual(
+      expect.arrayContaining(['extracted_task_count=1', 'persisted_task_count=0'])
+    );
+
+    const completionCall = loggerInfoMock.mock.calls.find(
+      ([eventName]) => eventName === '[voicebot.sessions] generate_possible_tasks_completed'
+    );
+    expect(completionCall?.[1]).toEqual(
+      expect.objectContaining({
+        no_task_reason_code: 'no_persistable_drafts',
+        generated_count: 1,
+        saved_count: 0,
+      })
+    );
+
+    const sessionsCollection = fixture.dbStub.collection(VOICEBOT_COLLECTIONS.SESSIONS) as StubCollection;
+    expect(sessionsCollection.updateOne).toHaveBeenCalledWith(
+      { _id: fixture.sessionId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.last_tasks_count': 0,
+          'processors_data.CREATE_TASKS.no_task_reason_code': 'no_persistable_drafts',
+        }),
+      })
+    );
+  });
+
+  it('does not infer no_task_decision when zero extraction keeps existing persisted drafts', async () => {
+    const fixture = buildFixture();
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+
+    const generatedTasks: Array<Record<string, unknown>> = [];
+    Object.defineProperty(generatedTasks, '__create_tasks_composite_meta', {
+      value: {
+        summary_md_text: '',
+        scholastic_review_md: '',
+        task_draft: [],
+        enrich_ready_task_comments: [],
+        session_name: '',
+        project_id: fixture.projectId.toHexString(),
+      },
+      enumerable: false,
+      configurable: true,
+    });
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [{ row_id: 'existing-draft-row', id: 'existing-draft-row', name: 'Existing draft row' }],
+    });
+
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/generate_possible_tasks')
+      .send({ session_id: fixture.sessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.generated_count).toBe(0);
+    expect(response.body.saved_count).toBe(1);
+    expect(response.body.no_task_decision).toBeUndefined();
+
+    const completionCall = loggerInfoMock.mock.calls.find(
+      ([eventName]) => eventName === '[voicebot.sessions] generate_possible_tasks_completed'
+    );
+    expect(completionCall?.[1]).toEqual(
+      expect.objectContaining({
+        no_task_reason_code: null,
+        generated_count: 0,
+        saved_count: 1,
+      })
+    );
+  });
 });

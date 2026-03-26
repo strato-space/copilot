@@ -8,8 +8,11 @@ import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.
 import { buildCanonicalTaskSourceRef } from '../taskSourceRef.js';
 import {
   ACTIVE_VOICE_DRAFT_STATUSES,
+  type VoicePossibleTaskAliasLocatorSource,
   buildVoicePossibleTaskMasterDoc,
   buildVoicePossibleTaskMasterQuery,
+  collectVoicePossibleTaskAliasLocatorEntries,
+  collectVoicePossibleTaskCanonicalLocatorKeys,
   collectVoicePossibleTaskLocatorKeys,
   normalizeVoicePossibleTaskDocForApi,
   normalizeVoiceTaskDiscussionSessions,
@@ -22,6 +25,7 @@ import {
 } from '../ontology/ontologyCollectionAdapter.js';
 import { OntologyCardRegistryError } from '../ontology/ontologyCardRegistry.js';
 import { getLogger } from '../../utils/logger.js';
+import { resolveMonotonicUpdatedAtNext } from '../taskUpdatedAt.js';
 
 export const POSSIBLE_TASKS_REFRESH_MODE_VALUES = ['full_recompute', 'incremental_refresh'] as const;
 export type PossibleTasksRefreshMode = (typeof POSSIBLE_TASKS_REFRESH_MODE_VALUES)[number];
@@ -674,18 +678,72 @@ const listPossibleTaskSaveMatchDocs = async ({
   };
 };
 
-const buildPossibleTaskMasterAliasMap = (
-  docs: Array<Record<string, unknown>>
-): Map<string, Record<string, unknown>> => {
-  const aliasMap = new Map<string, Record<string, unknown>>();
+const buildPossibleTaskMasterLocatorMaps = ({
+  docs,
+  sessionDocIds,
+}: {
+  docs: Array<Record<string, unknown>>;
+  sessionDocIds: Set<string>;
+}): {
+  canonicalKeyMap: Map<string, Record<string, unknown>>;
+  aliasKeyMap: Map<string, { doc: Record<string, unknown>; sources: Set<VoicePossibleTaskAliasLocatorSource> }>;
+} => {
+  const canonicalKeyMap = new Map<string, Record<string, unknown>>();
+  const aliasKeyMap = new Map<string, { doc: Record<string, unknown>; sources: Set<VoicePossibleTaskAliasLocatorSource> }>();
+
   docs.forEach((doc) => {
-    collectVoicePossibleTaskLocatorKeys(doc).forEach((key) => {
-      if (!aliasMap.has(key)) {
-        aliasMap.set(key, doc);
+    collectVoicePossibleTaskCanonicalLocatorKeys(doc).forEach((key) => {
+      if (!canonicalKeyMap.has(key)) {
+        canonicalKeyMap.set(key, doc);
       }
     });
   });
-  return aliasMap;
+
+  docs.forEach((doc) => {
+    const docId = toIdString(doc._id);
+    const includeSourceDataRowIdAlias = Boolean(docId) && (docId ? sessionDocIds.has(docId) : false);
+    collectVoicePossibleTaskAliasLocatorEntries(doc, {
+      includeSourceDataRowId: includeSourceDataRowIdAlias,
+      includeFallbackLocator: true,
+      includeTaskIdFromAi: includeSourceDataRowIdAlias,
+    }).forEach((entry) => {
+      const canonicalOwner = canonicalKeyMap.get(entry.key);
+      if (canonicalOwner && canonicalOwner !== doc) return;
+      const existingAlias = aliasKeyMap.get(entry.key);
+      if (existingAlias) {
+        const collidesOnTaskIdAlias =
+          existingAlias.doc !== doc &&
+          existingAlias.sources.has('task_id_from_ai') &&
+          entry.sources.includes('task_id_from_ai');
+        if (collidesOnTaskIdAlias) {
+          aliasKeyMap.delete(entry.key);
+        }
+        return;
+      }
+      aliasKeyMap.set(entry.key, { doc, sources: new Set(entry.sources) });
+    });
+  });
+
+  return { canonicalKeyMap, aliasKeyMap };
+};
+
+const shouldSkipForeignSourceDataAliasMatch = ({
+  aliasSources,
+  incomingCanonicalKeys,
+  candidateDoc,
+}: {
+  aliasSources: Set<VoicePossibleTaskAliasLocatorSource>;
+  incomingCanonicalKeys: Set<string>;
+  candidateDoc: Record<string, unknown>;
+}): boolean => {
+  if (!aliasSources.has('source_data.row_id')) return false;
+  if (incomingCanonicalKeys.size === 0) return false;
+
+  const candidateCanonicalKeys = new Set(collectVoicePossibleTaskCanonicalLocatorKeys(candidateDoc));
+  for (const key of incomingCanonicalKeys) {
+    if (candidateCanonicalKeys.has(key)) return false;
+  }
+  return true;
 };
 
 const collectExistingDiscussionSessions = (doc: Record<string, unknown>): Array<Record<string, unknown>> => {
@@ -698,18 +756,13 @@ const collectExistingDiscussionSessions = (doc: Record<string, unknown>): Array<
 };
 
 const collectStoredPossibleTaskAliasKeys = (doc: Record<string, unknown>): string[] => {
-  const sourceData =
-    doc.source_data && typeof doc.source_data === 'object'
-      ? (doc.source_data as Record<string, unknown>)
-      : {};
-
+  const canonicalKeys = collectVoicePossibleTaskCanonicalLocatorKeys(doc);
+  if (canonicalKeys.length > 0) return canonicalKeys;
+  const legacyTaskId = toTaskText(doc.task_id_from_ai);
   return Array.from(
     new Set(
       [
-        toTaskText(doc.row_id),
-        toTaskText(doc.id),
-        toTaskText(doc.task_id_from_ai),
-        toTaskText(sourceData.row_id),
+        legacyTaskId,
       ].filter(Boolean)
     )
   );
@@ -718,41 +771,81 @@ const collectStoredPossibleTaskAliasKeys = (doc: Record<string, unknown>): strin
 const softDeletePossibleTaskMasterRows = async ({
   db,
   sessionId,
-  rowIds,
+  docIds = [],
+  rowIds = [],
 }: {
   db: Db;
   sessionId: string;
-  rowIds: string[];
+  docIds?: Array<ObjectId | string>;
+  rowIds?: string[];
 }): Promise<void> => {
+  const normalizedDocObjectIds = Array.from(
+    new Set(
+      docIds
+        .map((value) => {
+          if (value instanceof ObjectId) return value.toHexString();
+          const normalized = String(value || '').trim();
+          if (!normalized || !ObjectId.isValid(normalized)) return '';
+          return new ObjectId(normalized).toHexString();
+        })
+        .filter(Boolean)
+    )
+  ).map((value) => new ObjectId(value));
   const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
-  if (normalizedRowIds.length === 0) return;
+  if (normalizedDocObjectIds.length === 0 && normalizedRowIds.length === 0) return;
   const adapter = await getPossibleTaskOntologyAdapter();
 
-  const cursor = toSortedTaskCursor(
-    db.collection(COLLECTIONS.TASKS),
-    {
-      $and: [
-        buildPossibleTaskMasterRuntimeQuery(sessionId),
-        {
-          $or: [
-            { row_id: { $in: normalizedRowIds } },
-            { id: { $in: normalizedRowIds } },
-            { task_id_from_ai: { $in: normalizedRowIds } },
-            { 'source_data.row_id': { $in: normalizedRowIds } },
-          ],
-        },
-      ],
-    },
-    {
-      projection: {
-        _id: 1,
-        source_ref: 1,
-        external_ref: 1,
-        source_data: 1,
+  let docs: Array<Record<string, unknown>> = [];
+  if (normalizedDocObjectIds.length > 0) {
+    const docCursor = toSortedTaskCursor(
+      db.collection(COLLECTIONS.TASKS),
+      {
+        $and: [
+          buildPossibleTaskMasterRuntimeQuery(sessionId),
+          { _id: { $in: normalizedDocObjectIds } },
+        ],
       },
-    }
-  );
-  const docs = cursor ? await cursor.toArray() as Array<Record<string, unknown>> : [];
+      {
+        projection: {
+          _id: 1,
+          source_ref: 1,
+          external_ref: 1,
+          source_data: 1,
+          updated_at: 1,
+        },
+      }
+    );
+    docs = docCursor ? await docCursor.toArray() as Array<Record<string, unknown>> : [];
+  }
+
+  if (docs.length === 0 && normalizedDocObjectIds.length === 0 && normalizedRowIds.length > 0) {
+    const legacyCursor = toSortedTaskCursor(
+      db.collection(COLLECTIONS.TASKS),
+      {
+        $and: [
+          buildPossibleTaskMasterRuntimeQuery(sessionId),
+          {
+            $or: [
+              { row_id: { $in: normalizedRowIds } },
+              { id: { $in: normalizedRowIds } },
+              { task_id_from_ai: { $in: normalizedRowIds } },
+              { 'source_data.row_id': { $in: normalizedRowIds } },
+            ],
+          },
+        ],
+      },
+      {
+        projection: {
+          _id: 1,
+          source_ref: 1,
+          external_ref: 1,
+          source_data: 1,
+          updated_at: 1,
+        },
+      }
+    );
+    docs = legacyCursor ? await legacyCursor.toArray() as Array<Record<string, unknown>> : [];
+  }
 
   for (const doc of docs) {
     const docObjectId = doc._id instanceof ObjectId ? doc._id : null;
@@ -765,6 +858,9 @@ const softDeletePossibleTaskMasterRows = async ({
 
     if (remainingVoiceSessions.length > 0) {
       const nextPrimary = remainingVoiceSessions[0]!;
+      const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+        previousUpdatedAt: doc.updated_at,
+      });
       await db.collection(COLLECTIONS.TASKS).updateOne(
         { _id: docObjectId },
         {
@@ -772,7 +868,6 @@ const softDeletePossibleTaskMasterRows = async ({
             ...adapter.toMongoDocument({
               source_ref: buildCanonicalTaskSourceRef(docObjectId),
               external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
-              updated_at: new Date(),
             }),
             discussion_sessions: remainingVoiceSessions,
             source_data: {
@@ -781,18 +876,31 @@ const softDeletePossibleTaskMasterRows = async ({
               session_name: toTaskText(nextPrimary.session_name),
               voice_sessions: remainingVoiceSessions,
             },
+            updated_at: nextUpdatedAt,
           },
         }
       );
       continue;
     }
 
+    const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+      previousUpdatedAt: doc.updated_at,
+    });
+    const softDeleteUpdate = adapter.buildSoftDeleteMongoUpdate({
+      deleted_at: new Date(),
+    }) as {
+      $set?: Record<string, unknown>;
+      $unset?: Record<string, unknown>;
+    };
     await db.collection(COLLECTIONS.TASKS).updateOne(
       { _id: docObjectId },
-      adapter.buildSoftDeleteMongoUpdate({
-        deleted_at: new Date(),
-        updated_at: new Date(),
-      })
+      {
+        $set: {
+          ...(softDeleteUpdate.$set ?? {}),
+          updated_at: nextUpdatedAt,
+        },
+        ...(softDeleteUpdate.$unset ? { $unset: softDeleteUpdate.$unset } : {}),
+      }
     );
   }
 };
@@ -800,41 +908,79 @@ const softDeletePossibleTaskMasterRows = async ({
 const markPossibleTaskMasterRowsStale = async ({
   db,
   sessionId,
-  rowIds,
+  docIds = [],
+  rowIds = [],
   staleAt,
 }: {
   db: Db;
   sessionId: string;
-  rowIds: string[];
+  docIds?: Array<ObjectId | string>;
+  rowIds?: string[];
   staleAt: Date;
 }): Promise<void> => {
+  const normalizedDocObjectIds = Array.from(
+    new Set(
+      docIds
+        .map((value) => {
+          if (value instanceof ObjectId) return value.toHexString();
+          const normalized = String(value || '').trim();
+          if (!normalized || !ObjectId.isValid(normalized)) return '';
+          return new ObjectId(normalized).toHexString();
+        })
+        .filter(Boolean)
+    )
+  ).map((value) => new ObjectId(value));
   const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
-  if (normalizedRowIds.length === 0) return;
+  if (normalizedDocObjectIds.length === 0 && normalizedRowIds.length === 0) return;
   const adapter = await getPossibleTaskOntologyAdapter();
 
-  const cursor = toSortedTaskCursor(
-    db.collection(COLLECTIONS.TASKS),
-    {
-      $and: [
-        buildPossibleTaskMasterRuntimeQuery(sessionId),
-        {
-          $or: [
-            { row_id: { $in: normalizedRowIds } },
-            { id: { $in: normalizedRowIds } },
-            { task_id_from_ai: { $in: normalizedRowIds } },
-            { 'source_data.row_id': { $in: normalizedRowIds } },
-          ],
-        },
-      ],
-    },
-    {
-      projection: {
-        _id: 1,
-        source_data: 1,
+  let docs: Array<Record<string, unknown>> = [];
+  if (normalizedDocObjectIds.length > 0) {
+    const docCursor = toSortedTaskCursor(
+      db.collection(COLLECTIONS.TASKS),
+      {
+        $and: [
+          buildPossibleTaskMasterRuntimeQuery(sessionId),
+          { _id: { $in: normalizedDocObjectIds } },
+        ],
       },
-    }
-  );
-  const docs = cursor ? await cursor.toArray() as Array<Record<string, unknown>> : [];
+      {
+        projection: {
+          _id: 1,
+          source_data: 1,
+          updated_at: 1,
+        },
+      }
+    );
+    docs = docCursor ? await docCursor.toArray() as Array<Record<string, unknown>> : [];
+  }
+
+  if (docs.length === 0 && normalizedDocObjectIds.length === 0 && normalizedRowIds.length > 0) {
+    const legacyCursor = toSortedTaskCursor(
+      db.collection(COLLECTIONS.TASKS),
+      {
+        $and: [
+          buildPossibleTaskMasterRuntimeQuery(sessionId),
+          {
+            $or: [
+              { row_id: { $in: normalizedRowIds } },
+              { id: { $in: normalizedRowIds } },
+              { task_id_from_ai: { $in: normalizedRowIds } },
+              { 'source_data.row_id': { $in: normalizedRowIds } },
+            ],
+          },
+        ],
+      },
+      {
+        projection: {
+          _id: 1,
+          source_data: 1,
+          updated_at: 1,
+        },
+      }
+    );
+    docs = legacyCursor ? await legacyCursor.toArray() as Array<Record<string, unknown>> : [];
+  }
 
   for (const doc of docs) {
     const docObjectId = doc._id instanceof ObjectId ? doc._id : null;
@@ -845,6 +991,10 @@ const markPossibleTaskMasterRowsStale = async ({
         ? (doc.source_data as Record<string, unknown>)
         : {};
 
+    const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+      previousUpdatedAt: doc.updated_at,
+      mutationEffectiveAt: staleAt,
+    });
     await db.collection(COLLECTIONS.TASKS).updateOne(
       { _id: docObjectId },
       {
@@ -855,7 +1005,7 @@ const markPossibleTaskMasterRowsStale = async ({
             stale_since: staleAt.toISOString(),
             last_refresh_mode: 'incremental_refresh',
           },
-          updated_at: staleAt,
+          updated_at: nextUpdatedAt,
         }),
         $unset: {
           'source_data.superseded_at': 1,
@@ -902,22 +1052,47 @@ export const persistPossibleTasksForSession = async ({
   });
 
   const newDocs: Array<Record<string, unknown>> = [];
+  const persistedCanonicalRowIds = new Set<string>();
   const now = new Date();
   const sessionObjectId = new ObjectId(sessionId);
   const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
-  const existingAliasMap = buildPossibleTaskMasterAliasMap(existingDocs);
+  const existingSessionDocIds = new Set<string>(
+    existingSessionDocs
+      .map((doc) => toIdString(doc._id))
+      .filter((value): value is string => Boolean(value))
+  );
+  const { canonicalKeyMap, aliasKeyMap } = buildPossibleTaskMasterLocatorMaps({
+    docs: existingDocs,
+    sessionDocIds: existingSessionDocIds,
+  });
   const claimedSemanticReuseDocIds = new Set<string>();
 
   for (const [taskIndex, rawTask] of taskItems.entries()) {
     const incomingCanonicalRowId = resolveVoicePossibleTaskRowId({ rawTask, index: taskIndex });
+    const incomingCanonicalKeys = new Set<string>(collectVoicePossibleTaskCanonicalLocatorKeys(rawTask));
     const candidateKeys = new Set<string>(collectVoicePossibleTaskLocatorKeys(rawTask));
     if (incomingCanonicalRowId) candidateKeys.add(incomingCanonicalRowId);
 
     let existingDoc: Record<string, unknown> | undefined;
     let matchedBySemanticReuse = false;
     for (const key of candidateKeys) {
-      existingDoc = existingAliasMap.get(key);
+      existingDoc = canonicalKeyMap.get(key);
       if (existingDoc) break;
+    }
+    if (!existingDoc) {
+      for (const key of candidateKeys) {
+        const aliasMatch = aliasKeyMap.get(key);
+        if (!aliasMatch) continue;
+        if (shouldSkipForeignSourceDataAliasMatch({
+          aliasSources: aliasMatch.sources,
+          incomingCanonicalKeys,
+          candidateDoc: aliasMatch.doc,
+        })) {
+          continue;
+        }
+        existingDoc = aliasMatch.doc;
+        break;
+      }
     }
     if (!existingDoc && defaultProjectId) {
       existingDoc = selectProjectScopedSemanticReuseDoc({
@@ -1007,16 +1182,25 @@ export const persistPossibleTasksForSession = async ({
         discussion_sessions: discussionSessions,
       },
     });
+    const persistedCanonicalRowId = resolveVoicePossibleTaskRowId({ rawTask: nextDoc, index: taskIndex });
+    if (persistedCanonicalRowId) {
+      persistedCanonicalRowIds.add(persistedCanonicalRowId);
+    }
 
     if (existingDoc?._id instanceof ObjectId) {
       const updateDocument = { ...nextDoc };
       delete updateDocument._id;
+      delete updateDocument.updated_at;
       await db.collection(COLLECTIONS.TASKS).updateOne(
         { _id: existingDoc._id },
         {
           $set: {
             ...updateDocument,
             is_deleted: false,
+            updated_at: resolveMonotonicUpdatedAtNext({
+              previousUpdatedAt: existingDoc.updated_at,
+              mutationEffectiveAt: nextDoc.updated_at,
+            }),
           },
           $unset: {
             deleted_at: 1,
@@ -1032,7 +1216,7 @@ export const persistPossibleTasksForSession = async ({
     await db.collection(COLLECTIONS.TASKS).insertMany(newDocs);
   }
 
-  const nextSessionRowIds = new Set(incomingRowIds);
+  const nextSessionRowIds = persistedCanonicalRowIds;
   const staleDocs = existingSessionDocs
     .map((doc, index) => ({
       doc,
@@ -1040,6 +1224,9 @@ export const persistPossibleTasksForSession = async ({
     }))
     .filter(({ canonicalRowId }) => canonicalRowId && !nextSessionRowIds.has(canonicalRowId));
   const staleRowIds = staleDocs.map(({ canonicalRowId }) => canonicalRowId);
+  const staleDocIds = staleDocs
+    .map(({ doc }) => (doc._id instanceof ObjectId ? doc._id : null))
+    .filter((value): value is ObjectId => value instanceof ObjectId);
   const staleMatchKeys = staleDocs.flatMap(({ doc, canonicalRowId }) =>
     Array.from(
       new Set([
@@ -1048,10 +1235,13 @@ export const persistPossibleTasksForSession = async ({
       ].filter(Boolean))
     )
   );
-  if (refreshMode === 'incremental_refresh') {
-    await markPossibleTaskMasterRowsStale({ db, sessionId, rowIds: staleMatchKeys, staleAt: now });
-  } else {
-    await softDeletePossibleTaskMasterRows({ db, sessionId, rowIds: staleMatchKeys });
+  const shouldSkipFullRecomputeCleanup = refreshMode === 'full_recompute' && taskItems.length === 0;
+  if (!shouldSkipFullRecomputeCleanup) {
+    if (refreshMode === 'incremental_refresh') {
+      await markPossibleTaskMasterRowsStale({ db, sessionId, docIds: staleDocIds, rowIds: staleMatchKeys, staleAt: now });
+    } else {
+      await softDeletePossibleTaskMasterRows({ db, sessionId, docIds: staleDocIds, rowIds: staleMatchKeys });
+    }
   }
 
   const refreshedMasterDocs = await listPossibleTaskMasterDocs({ db, sessionId });
@@ -1061,6 +1251,6 @@ export const persistPossibleTasksForSession = async ({
 
   return {
     items: refreshedItems,
-    removedRowIds: Array.from(new Set(staleRowIds)),
+    removedRowIds: shouldSkipFullRecomputeCleanup ? [] : Array.from(new Set(staleRowIds)),
   };
 };

@@ -4,6 +4,9 @@ import { VOICEBOT_COLLECTIONS } from '../../constants.js';
 export const DEFAULT_CREATE_TASKS_COMPOSITE_META_KEY = '__create_tasks_composite_meta' as const;
 export const CREATE_TASKS_NO_TASK_REASON_MISSING_CODE = 'no_task_reason_missing' as const;
 export const CREATE_TASKS_NO_PERSISTABLE_DRAFTS_CODE = 'no_persistable_drafts' as const;
+export const CREATE_TASKS_CATEGORIZATION_NOT_QUEUED_CODE = 'categorization_not_queued' as const;
+export const CREATE_TASKS_CATEGORIZATION_NOT_QUEUED_REASON =
+  'create_tasks refresh skipped because categorization was not queued' as const;
 
 export type CreateTasksNoTaskDecision = {
   code: string;
@@ -84,6 +87,22 @@ const normalizeNoTaskEvidence = (value: unknown): string[] => {
   const singleValue = toText(value);
   return singleValue ? [singleValue] : [];
 };
+
+export const buildCreateTasksCategorizationNotQueuedDecision = ({
+  path,
+}: {
+  path: string;
+}): CreateTasksNoTaskDecision => ({
+  code: CREATE_TASKS_CATEGORIZATION_NOT_QUEUED_CODE,
+  reason: CREATE_TASKS_CATEGORIZATION_NOT_QUEUED_REASON,
+  evidence: [
+    'categorization_enqueue_outcome=not_queued',
+    'create_tasks_refresh=skipped',
+    `path=${normalizeNoTaskReasonCode(path)}`,
+  ],
+  inferred: true,
+  source: 'persistence_inferred',
+});
 
 export const normalizeCreateTasksNoTaskDecision = (
   value: unknown
@@ -338,4 +357,38 @@ export const markCreateTasksProcessorSuccess = async ({
       $unset: unsetPayload,
     }
   );
+};
+
+export const persistCreateTasksNoTaskDecision = async ({
+  db,
+  sessionFilter,
+  processorKey = 'CREATE_TASKS',
+  noTaskDecision,
+  tasksCount = 0,
+}: {
+  db: Db;
+  sessionFilter: Record<string, unknown>;
+  processorKey?: string;
+  noTaskDecision: CreateTasksNoTaskDecision;
+  tasksCount?: number | null;
+}): Promise<void> => {
+  const normalizedTasksCount = toFiniteNumber(tasksCount);
+  const setPayload: Record<string, unknown> = {
+    [`processors_data.${processorKey}.no_task_decision`]: noTaskDecision,
+    [`processors_data.${processorKey}.no_task_reason_code`]: noTaskDecision.code,
+    [`processors_data.${processorKey}.no_task_reason`]: noTaskDecision.reason,
+    [`processors_data.${processorKey}.no_task_evidence`]: noTaskDecision.evidence,
+    [`processors_data.${processorKey}.no_task_inferred`]: noTaskDecision.inferred,
+    [`processors_data.${processorKey}.no_task_source`]: noTaskDecision.source,
+    updated_at: new Date(),
+  };
+  if (normalizedTasksCount !== null) {
+    setPayload[`processors_data.${processorKey}.last_tasks_count`] = Math.max(
+      0,
+      Math.trunc(normalizedTasksCount)
+    );
+  }
+  await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(sessionFilter, {
+    $set: setPayload,
+  });
 };

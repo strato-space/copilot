@@ -475,9 +475,18 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
             }
         }
 
-        const control = (window as { __voicebotControl?: (nextAction: string) => Promise<void> | void }).__voicebotControl;
+        const control = (window as {
+            __voicebotControl?: (nextAction: string) => Promise<boolean | void> | boolean | void;
+        }).__voicebotControl;
         if (typeof control === 'function') {
-            await Promise.resolve(control(action));
+            const controlResult = await Promise.resolve(control(action));
+            if (controlResult === false) {
+                if (typeof fallback === 'function') {
+                    await fallback();
+                    return { handled: true, via: 'fallback' };
+                }
+                return { handled: false, via: 'none' };
+            }
             return { handled: true, via: 'fab' };
         }
 
@@ -887,11 +896,11 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                                     if (shouldFinalizeViaFab) {
                                         const result = await runFabControlAction({ action: 'done' });
                                         if (!result.handled) {
-                                            finishSession(pageSessionId);
+                                            await finishSession(pageSessionId);
                                         }
                                     } else {
                                         // Session-page Done must close explicit pageSessionId (spec contract).
-                                        finishSession(pageSessionId);
+                                        await finishSession(pageSessionId);
                                     }
                                 } catch (error) {
                                     messageApi.error(`Done failed: ${String(error)}`);

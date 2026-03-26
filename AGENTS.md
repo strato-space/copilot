@@ -48,6 +48,7 @@ These decisions are part of the current platform contract and must be preserved 
 
 ## Minimal Agent Context (From 2026-02-26 and 2026-02-27)
 
+
 Use these as non-negotiable implementation constraints derived from `origin/main` + `CHANGELOG.md`:
 
 - Voice close path:
@@ -242,6 +243,38 @@ Preferred engineering principles for this repo:
 - Targeted verification can be delegated to subagents, but final integration verification and production deploy/smoke remain the responsibility of the parent thread after all patches are merged.
 - Browser-based acceptance is part of the canonical verification flow for UI work; restart `mcp@chrome-devtools.service` before each live browser test cycle so MCP/CDP state is fresh.
 - Browser-based acceptance for layout work must include screenshot-level overlap checks; DOM/CSS assertions alone are not enough when footer/status widgets or task panes can visually collide.
+
+### Subagent Type Contract
+- `worker_*` — bounded implementation agent for one write surface.
+- `postreview_*` — independent code-review agent for implemented diffs (must not be the same thread as the worker).
+- `fix_*` — focused incident/bugfix implementation worker when the issue scope is already forensics-backed.
+- `scholastic_*` — spec/reasoning reviewer that runs ontology-first critique using `greek-scholastic`.
+
+### Scholastic Spec-Review Agent (`scholastic_*`)
+- Use this type for spec/prompt/requirements review where ontology correctness and category-mistake detection are required before implementation.
+- Mandatory skill: `greek-scholastic: /root/.agents/skills/greek-scholastic/SKILL.md`.
+- Default model remains `gpt-5.3-codex` unless explicitly overridden by the parent with rationale.
+
+### Digital Forensics + Swarm Delivery Protocol
+- This protocol is mandatory for bug-fix waves and QA-first execution.
+- Step 1: **Digital forensics first** (before edits):
+  - reproduce the bug in browser/runtime (prefer MCP Chrome tunnel for UI/console/network evidence),
+  - inspect related code paths and check `bd` issues/changes for the previous 48h to avoid duplicate/fixed incidents,
+  - record forensic evidence in `bd` (symptoms, repro steps, logs, affected endpoints/files, candidate root-cause).
+- Step 2: **Implementation swarm**:
+  - delegate bounded write-scope fixes to worker subagents (default `gpt-5.3-codex`),
+  - each worker packet must start with `bd show <id> --json`,
+  - parent thread integrates patches and resolves cross-file conflicts.
+- Step 3: **Independent code-review swarm**:
+  - run separate review subagents (not the same worker thread) on implemented changes,
+  - require severity-ordered findings with file/line references and deploy readiness verdict.
+- Step 4: **Verification gates**:
+  - run isolated/targeted tests for each fixed bug first,
+  - then run full relevant test packs (`backend` and/or `app`),
+  - for UI bugs, include screenshot-based overlap/layout validation.
+- Step 5: **BD synchronization**:
+  - update each `bd` issue with what was reproduced, what was changed, review verdict, and exact test commands/results,
+  - only mark as ready/closed after all gates pass; if not reproducible, log “not reproduced” with evidence and keep decision trace.
 
 ### Code Organization
 - Frontend code lives in `app/src/`.
@@ -723,6 +756,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-26 22:47):
+  - Hardened WebRTC lifecycle concurrency and inactive-session fail-fast behavior: transition-correlation IDs now trace `New/Rec/Done`, `finishSession` awaits backend errors instead of swallowing them, and stale `session_inactive` responses no longer trigger local activation fallback.
+  - Canonicalized Voice task-refresh semantics around categorization availability: web ingress, Telegram ingress, worker transcribe reuse, and processing-loop recovery now persist explicit `no_task_decision` metadata when categorization is not queued, while possible-task persistence keeps `discussion_sessions[]` lineage and monotonic `updated_at`.
+  - Canonicalized CRM transport/request drift and OperOps rendering: `/api/crm/tickets` now resolves legacy aliases with warning telemetry, ticket mutations preserve monotonic `updated_at`, Kanban fetch no longer depends on legacy `includeOlderDrafts`, and `TaskPage` renders Markdown-first descriptions with sanitized HTML fallback.
+  - Accepted pending local artifacts in this closeout package: `project`, `statuses`.
 - Close-session refresh (2026-03-16 22:02):
   - Added correlation-aware possible-task refresh telemetry across frontend and backend: `createPossibleTasksForSession` now forwards optional `refresh_correlation_id` / `refresh_clicked_at_ms`, and `session_update.taskflow_refresh` includes the same fields for deterministic click-to-refresh latency tracing.
   - Updated route-level logging in `POST /api/voicebot/save_possible_tasks` and the socket refresh emitter to log/emit correlation metadata without changing the existing taskflow mutation semantics.

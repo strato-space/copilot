@@ -71,6 +71,7 @@ import {
 } from './possibleTasksMasterModel.js';
 import {
   buildActorFromPerformer,
+  buildCanonicalReadyTextTranscription,
   buildCategorizationCleanupPayload,
   ensureMessageCanonicalTranscription,
   getOptionalTrimmedString,
@@ -98,13 +99,19 @@ import {
     type PossibleTasksRefreshMode,
     validatePossibleTaskMasterDocs,
 } from '../../../services/voicebot/persistPossibleTasks.js';
+import {
+    detectGarbageTranscription,
+    type GarbageDetectionResult,
+} from '../../../services/voicebot/transcriptionGarbageDetector.js';
 import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
 import {
     applyCreateTasksCompositeSessionPatch,
+    buildCreateTasksCategorizationNotQueuedDecision,
     extractCreateTasksLastTasksCountFromSession,
     extractCreateTasksNoTaskDecisionFromSession,
     extractCreateTasksCompositeMeta,
     markCreateTasksProcessorSuccess,
+    persistCreateTasksNoTaskDecision,
     resolveCreateTasksNoTaskDecisionOutcome,
     resolveCreateTasksCompositeSessionContext,
 } from '../../../services/voicebot/createTasksCompositeSessionState.js';
@@ -115,6 +122,7 @@ import {
     parseIncludeOlderDrafts,
 } from '../../../services/draftRecencyPolicy.js';
 import { writeSummaryAuditLog } from '../../../services/voicebot/voicebotDoneNotify.js';
+import { resolveMonotonicUpdatedAtNext } from '../../../services/taskUpdatedAt.js';
 
 // NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -878,7 +886,6 @@ const collectSessionTaskMutationLocatorKeys = (value: unknown): string[] => {
     const canonicalKeys = [
         toTaskText(record.row_id),
         toTaskText(record.id),
-        toTaskText((record.source_data as Record<string, unknown> | undefined)?.row_id),
     ].filter(Boolean);
 
     if (canonicalKeys.length > 0) {
@@ -886,7 +893,10 @@ const collectSessionTaskMutationLocatorKeys = (value: unknown): string[] => {
     }
 
     const legacyKey = toTaskText(record.task_id_from_ai);
-    return legacyKey ? [legacyKey] : [];
+    if (legacyKey) return [legacyKey];
+
+    const sourceDataRowId = toTaskText((record.source_data as Record<string, unknown> | undefined)?.row_id);
+    return sourceDataRowId ? [sourceDataRowId] : [];
 };
 
 const normalizeSessionPossibleTaskForApi = (value: unknown): Record<string, unknown> | null => {
@@ -1093,10 +1103,41 @@ const buildPossibleTaskMasterAliasMap = (
     docs: Array<Record<string, unknown>>
 ): Map<string, Record<string, unknown>> => {
     const aliasMap = new Map<string, Record<string, unknown>>();
+    const aliasRank = new Map<string, number>();
+    const docSortRank = (doc: Record<string, unknown>, key: string): number => {
+        const rowId = toTaskText(doc.row_id);
+        const id = toTaskText(doc.id);
+        const legacy = toTaskText(doc.task_id_from_ai);
+        const sourceDataRowId = toTaskText((doc.source_data as Record<string, unknown> | undefined)?.row_id);
+        if (key && (key === rowId || key === id)) return 4;
+        if (key && key === legacy) return 3;
+        if (key && key === sourceDataRowId) return 1;
+        return 0;
+    };
+    const docUpdatedAtMs = (doc: Record<string, unknown>): number => {
+        const raw = doc.updated_at ?? doc.created_at;
+        if (raw instanceof Date) return raw.getTime();
+        const parsed = Date.parse(String(raw || ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
     docs.forEach((doc) => {
         collectSessionTaskMutationLocatorKeys(doc).forEach((key) => {
-            if (!aliasMap.has(key)) {
+            const nextRank = docSortRank(doc, key);
+            const currentDoc = aliasMap.get(key);
+            if (!currentDoc) {
                 aliasMap.set(key, doc);
+                aliasRank.set(key, nextRank);
+                return;
+            }
+            const currentRank = aliasRank.get(key) ?? docSortRank(currentDoc, key);
+            if (nextRank > currentRank) {
+                aliasMap.set(key, doc);
+                aliasRank.set(key, nextRank);
+                return;
+            }
+            if (nextRank === currentRank && docUpdatedAtMs(doc) >= docUpdatedAtMs(currentDoc)) {
+                aliasMap.set(key, doc);
+                aliasRank.set(key, nextRank);
             }
         });
     });
@@ -1114,97 +1155,26 @@ const softDeletePossibleTaskMasterRows = async ({
 }): Promise<void> => {
     const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
     if (normalizedRowIds.length === 0) return;
+    const sessionDocs = await listPossibleTaskMasterDocs({ db, sessionId });
+    const aliasMap = buildPossibleTaskMasterAliasMap(sessionDocs);
+    const docsById = new Map<string, Record<string, unknown>>();
+    normalizedRowIds.forEach((rowId) => {
+        const matched = aliasMap.get(rowId);
+        if (!matched) return;
+        const matchedObjectId = toObjectIdOrNull(matched._id);
+        if (!matchedObjectId) return;
+        docsById.set(matchedObjectId.toHexString(), matched);
+    });
+    const docs = Array.from(docsById.values());
+    if (docs.length === 0) return;
+
     const tasksCollection = db.collection(COLLECTIONS.TASKS) as {
-        find?: (
-            filter: Record<string, unknown>,
-            options?: Record<string, unknown>
-        ) => { toArray?: () => Promise<Array<Record<string, unknown>>> };
-        updateMany?: (
-            filter: Record<string, unknown>,
-            update: Record<string, unknown>
-        ) => Promise<unknown>;
         updateOne?: (
             filter: Record<string, unknown>,
             update: Record<string, unknown>
         ) => Promise<unknown>;
     };
-    if (typeof tasksCollection.find !== 'function') {
-        if (typeof tasksCollection.updateMany !== 'function') return;
-        await tasksCollection.updateMany(
-            {
-                $and: [
-                    buildPossibleTaskMasterRuntimeQuery(sessionId),
-                    {
-                        $or: [
-                            { row_id: { $in: normalizedRowIds } },
-                            { id: { $in: normalizedRowIds } },
-                            { task_id_from_ai: { $in: normalizedRowIds } },
-                            { 'source_data.row_id': { $in: normalizedRowIds } },
-                        ],
-                    },
-                ],
-            },
-            {
-                $set: {
-                    is_deleted: true,
-                    deleted_at: new Date(),
-                    updated_at: new Date(),
-                },
-            }
-        );
-        return;
-    }
-
-    const cursor = tasksCollection.find(
-            {
-                $and: [
-                    buildPossibleTaskMasterRuntimeQuery(sessionId),
-                    {
-                        $or: [
-                            { row_id: { $in: normalizedRowIds } },
-                            { id: { $in: normalizedRowIds } },
-                            { task_id_from_ai: { $in: normalizedRowIds } },
-                            { 'source_data.row_id': { $in: normalizedRowIds } },
-                        ],
-                    },
-                ],
-            },
-            {
-                projection: {
-                    _id: 1,
-                    source_ref: 1,
-                    external_ref: 1,
-                    source_data: 1,
-                },
-            }
-        );
-    if (!cursor || typeof cursor.toArray !== 'function') {
-        if (typeof tasksCollection.updateMany !== 'function') return;
-        await tasksCollection.updateMany(
-            {
-                $and: [
-                    buildPossibleTaskMasterRuntimeQuery(sessionId),
-                    {
-                        $or: [
-                            { row_id: { $in: normalizedRowIds } },
-                            { id: { $in: normalizedRowIds } },
-                            { task_id_from_ai: { $in: normalizedRowIds } },
-                            { 'source_data.row_id': { $in: normalizedRowIds } },
-                        ],
-                    },
-                ],
-            },
-            {
-                $set: {
-                    is_deleted: true,
-                    deleted_at: new Date(),
-                    updated_at: new Date(),
-                },
-            }
-        );
-        return;
-    }
-    const docs = await cursor.toArray() as Array<Record<string, unknown>>;
+    if (typeof tasksCollection.updateOne !== 'function') return;
 
     for (const doc of docs) {
         const docObjectId = toObjectIdOrNull(doc._id);
@@ -1219,6 +1189,9 @@ const softDeletePossibleTaskMasterRows = async ({
 
         if (remainingVoiceSessions.length > 0) {
             const nextPrimary = remainingVoiceSessions[0]!;
+            const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+                previousUpdatedAt: doc.updated_at,
+            });
             if (typeof tasksCollection.updateOne !== 'function') continue;
             await tasksCollection.updateOne(
                 { _id: docObjectId },
@@ -1229,13 +1202,16 @@ const softDeletePossibleTaskMasterRows = async ({
                         'source_data.session_id': toTaskText(nextPrimary.session_id),
                         'source_data.session_name': toTaskText(nextPrimary.session_name),
                         'source_data.voice_sessions': remainingVoiceSessions,
-                        updated_at: new Date(),
+                        updated_at: nextUpdatedAt,
                     },
                 }
             );
             continue;
         }
 
+        const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+            previousUpdatedAt: doc.updated_at,
+        });
         if (typeof tasksCollection.updateOne !== 'function') continue;
         await tasksCollection.updateOne(
             { _id: docObjectId },
@@ -1243,7 +1219,7 @@ const softDeletePossibleTaskMasterRows = async ({
                 $set: {
                     is_deleted: true,
                     deleted_at: new Date(),
-                    updated_at: new Date(),
+                    updated_at: nextUpdatedAt,
                 },
             }
         );
@@ -2088,6 +2064,82 @@ const emitSessionSummaryRefreshHint = ({
     });
 };
 
+const normalizeProcessorList = (value: unknown): string[] =>
+    Array.isArray(value) ? value.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
+
+const isCreateTasksEnabledForSession = (session: VoiceSessionRecord): boolean => {
+    const sessionProcessors = normalizeProcessorList(session.session_processors);
+    return sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_JOBS.postprocessing.CREATE_TASKS);
+};
+
+type CategorizationRequestOutcome = 'queued' | 'disabled' | 'not_queued';
+type OpenAiResponsesClient = {
+    responses?: {
+        create: (params: Record<string, unknown>) => Promise<unknown>;
+    };
+};
+
+const OPENAI_KEY_ENV_NAMES = ['OPENAI_API_KEY'] as const;
+const GARBAGE_CATEGORIZATION_SKIPPED_REASON = 'garbage_detected' as const;
+let cachedOpenAiResponsesClient: { apiKey: string; client: OpenAiResponsesClient } | null = null;
+
+const resolveOpenAiApiKey = (): string => {
+    for (const keyName of OPENAI_KEY_ENV_NAMES) {
+        const value = String(process.env[keyName] || '').trim();
+        if (value) return value;
+    }
+    return '';
+};
+
+const getOpenAiResponsesClient = async (): Promise<OpenAiResponsesClient | null> => {
+    const apiKey = resolveOpenAiApiKey();
+    if (!apiKey) return null;
+    if (cachedOpenAiResponsesClient?.apiKey === apiKey) {
+        return cachedOpenAiResponsesClient.client;
+    }
+    const { default: OpenAI } = await import('openai');
+    const client = new OpenAI({ apiKey }) as unknown as OpenAiResponsesClient;
+    cachedOpenAiResponsesClient = { apiKey, client };
+    return client;
+};
+
+const buildCanonicalGarbageDetection = (garbageDetection: GarbageDetectionResult): Record<string, unknown> => ({
+    checked_at: garbageDetection.checked_at || new Date(),
+    detector_version: garbageDetection.detector_version || 'post_transcribe_garbage_v1',
+    model: garbageDetection.model || null,
+    skipped: Boolean(garbageDetection.skipped),
+    skip_reason: garbageDetection.skip_reason || null,
+    is_garbage: Boolean(garbageDetection.is_garbage),
+    code: garbageDetection.code || null,
+    reason: garbageDetection.reason || null,
+    raw_output: garbageDetection.raw_output || null,
+});
+
+const resolveCanonicalTextGarbageDetection = async ({
+    transcriptionText,
+    sessionId,
+    ingressSource,
+}: {
+    transcriptionText: string;
+    sessionId: string;
+    ingressSource: string;
+}): Promise<GarbageDetectionResult | null> => {
+    try {
+        const openAiClient = await getOpenAiResponsesClient();
+        if (!openAiClient) return null;
+        return await detectGarbageTranscription({
+            openaiClient: openAiClient,
+            transcriptionText,
+        });
+    } catch (error) {
+        logger.warn(`[voicebot.sessions] garbage detector failed for ${ingressSource}, continuing regular flow`, {
+            session_id: sessionId,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+    }
+};
+
 const requestSessionPossibleTasksRefresh = async ({
     db,
     sessionId,
@@ -2112,6 +2164,13 @@ const requestSessionPossibleTasksRefresh = async ({
                 'processors_data.CREATE_TASKS.error': 1,
                 'processors_data.CREATE_TASKS.error_message': 1,
                 'processors_data.CREATE_TASKS.error_timestamp': 1,
+                'processors_data.CREATE_TASKS.no_task_decision': 1,
+                'processors_data.CREATE_TASKS.no_task_reason_code': 1,
+                'processors_data.CREATE_TASKS.no_task_reason': 1,
+                'processors_data.CREATE_TASKS.no_task_evidence': 1,
+                'processors_data.CREATE_TASKS.no_task_inferred': 1,
+                'processors_data.CREATE_TASKS.no_task_source': 1,
+                'processors_data.CREATE_TASKS.last_tasks_count': 1,
             },
         }
     );
@@ -2139,6 +2198,85 @@ const requestSessionPossibleTasksRefresh = async ({
     );
 
     return requestedAt;
+};
+
+const requestMessageCategorization = async ({
+    db,
+    session,
+    sessionId,
+    messageObjectId,
+}: {
+    db: Db;
+    session: VoiceSessionRecord;
+    sessionId: string;
+    messageObjectId: ObjectId;
+}): Promise<CategorizationRequestOutcome> => {
+    const sessionProcessors = normalizeProcessorList(session.processors);
+    const categorizationEnabled =
+        sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_PROCESSORS.CATEGORIZATION);
+    if (!categorizationEnabled) return 'disabled';
+
+    const queues = getVoicebotQueues();
+    const processorsQueue = queues?.[VOICEBOT_QUEUES.PROCESSORS];
+    if (!processorsQueue) {
+        logger.warn('[voicebot.sessions] categorization queue unavailable', {
+            session_id: sessionId,
+            message_id: messageObjectId.toHexString(),
+        });
+        return 'not_queued';
+    }
+
+    const processorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
+    const queuedAt = Date.now();
+    const messageId = messageObjectId.toHexString();
+    const jobId = `${sessionId}-${messageId}-CATEGORIZE`;
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+        runtimeMessageQuery({ _id: messageObjectId }),
+        {
+            $set: {
+                [`${processorKey}.is_processing`]: true,
+                [`${processorKey}.is_processed`]: false,
+                [`${processorKey}.is_finished`]: false,
+                [`${processorKey}.job_queued_timestamp`]: queuedAt,
+            },
+            $unset: {
+                categorization_error: 1,
+                categorization_error_message: 1,
+                categorization_error_timestamp: 1,
+                categorization_retry_reason: 1,
+                categorization_next_attempt_at: 1,
+            },
+        }
+    );
+
+    try {
+        await processorsQueue.add(
+            VOICEBOT_JOBS.voice.CATEGORIZE,
+            {
+                message_id: messageId,
+                session_id: sessionId,
+                job_id: jobId,
+            },
+            { deduplication: { id: jobId } }
+        );
+    } catch (error) {
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+            runtimeMessageQuery({ _id: messageObjectId }),
+            {
+                $set: {
+                    [`${processorKey}.is_processing`]: false,
+                    [`${processorKey}.is_processed`]: false,
+                    [`${processorKey}.is_finished`]: false,
+                },
+                $unset: {
+                    [`${processorKey}.job_queued_timestamp`]: 1,
+                },
+            }
+        );
+        throw error;
+    }
+
+    return 'queued';
 };
 
 const voicebotApiAttachmentPath = (path: string): string => `/api/voicebot${path}`;
@@ -2843,6 +2981,13 @@ router.post('/activate_session', async (req: Request, res: Response) => {
         });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+        const isInactive = session.is_active === false;
+        const isFinalized = session.is_finalized === true
+            || session.to_finalize === true
+            || Boolean(session.done_at);
+        if (isInactive || isFinalized) {
+            return res.status(409).json({ error: 'session_inactive' });
+        }
 
         await activeSessionMappingUtils.set({ db, performer, sessionId });
         return res.status(200).json({
@@ -3252,6 +3397,70 @@ router.post('/auth/list-users', async (_req: Request, res: Response) => {
     }
 });
 
+const isSessionInactiveForWrite = (session: Record<string, unknown>): boolean =>
+    session.is_active === false
+    || session.to_finalize === true
+    || Boolean(session.done_at);
+
+const loadSessionActivityStateForWrite = async ({
+    db,
+    sessionObjectId,
+}: {
+    db: Db;
+    sessionObjectId: ObjectId;
+}): Promise<Record<string, unknown> | null> =>
+    await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+        runtimeSessionQuery({
+            _id: sessionObjectId,
+            is_deleted: { $ne: true },
+        }),
+        {
+            projection: {
+                _id: 1,
+                is_active: 1,
+                to_finalize: 1,
+                done_at: 1,
+                runtime_tag: 1,
+            },
+        }
+    ) as Record<string, unknown> | null;
+
+const isSessionWritableAfterInsert = async ({
+    db,
+    sessionObjectId,
+}: {
+    db: Db;
+    sessionObjectId: ObjectId;
+}): Promise<boolean> => {
+    const sessionState = await loadSessionActivityStateForWrite({ db, sessionObjectId });
+    if (!sessionState) return false;
+    return !isSessionInactiveForWrite(sessionState);
+};
+
+const rollbackInsertedMessageForInactiveSession = async ({
+    db,
+    messageObjectId,
+}: {
+    db: Db;
+    messageObjectId: ObjectId;
+}): Promise<void> => {
+    const rollbackTimestamp = new Date();
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+        runtimeMessageQuery({
+            _id: messageObjectId,
+            is_deleted: { $ne: true },
+        }),
+        {
+            $set: {
+                is_deleted: true,
+                deleted_at: rollbackTimestamp,
+                updated_at: rollbackTimestamp,
+                dedup_reason: 'session_inactive_post_insert',
+            },
+        }
+    );
+};
+
 router.post('/add_text', async (req: Request, res: Response) => {
     const vreq = req as VoicebotRequest;
     const { performer } = vreq;
@@ -3282,6 +3491,10 @@ router.post('/add_text', async (req: Request, res: Response) => {
         });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+        const sessionIsInactive = isSessionInactiveForWrite(session as Record<string, unknown>);
+        if (sessionIsInactive) {
+            return res.status(409).json({ error: 'session_inactive' });
+        }
         const sessionObjectId = new ObjectId(sessionId);
         let resolvedLinkedMessageRef: string | null = null;
         if (hasImageAttachment && linkedMessageRef) {
@@ -3297,10 +3510,24 @@ router.post('/add_text', async (req: Request, res: Response) => {
 
         const sessionRecord = session as VoiceSessionRecord;
         const createdAt = new Date();
+        const canonicalTextPayload = text
+            ? buildCanonicalReadyTextTranscription({
+                text,
+                messageTimestampSec: Math.floor(createdAt.getTime() / 1000),
+                speaker: speaker || null,
+            })
+            : null;
+        const garbageDetection = canonicalTextPayload
+            ? await resolveCanonicalTextGarbageDetection({
+                transcriptionText: canonicalTextPayload.transcription_text,
+                sessionId,
+                ingressSource: 'web add_text',
+            })
+            : null;
+        const nowTs = Date.now();
         const messageDoc: Record<string, unknown> = {
             session_id: sessionObjectId,
             chat_id: Number(sessionRecord.chat_id),
-            text,
             source_type: 'web',
             message_type: attachments.length > 0 ? String(req.body?.kind || 'document') : 'text',
             attachments,
@@ -3310,8 +3537,32 @@ router.post('/add_text', async (req: Request, res: Response) => {
             timestamp: Date.now(),
             user_id: performer._id,
             processors_data: {},
-            is_transcribed: true,
-            transcription_text: text,
+            ...(canonicalTextPayload ?? {
+                text,
+                is_transcribed: true,
+                transcription_text: '',
+                transcription_chunks: [],
+            }),
+            ...(garbageDetection
+                ? {
+                    garbage_detected: Boolean(garbageDetection.is_garbage),
+                    garbage_detection: buildCanonicalGarbageDetection(garbageDetection),
+                }
+                : {}),
+            ...(garbageDetection?.is_garbage
+                ? {
+                    categorization: [],
+                    categorization_timestamp: nowTs,
+                    processors_data: {
+                        categorization: {
+                            is_processing: false,
+                            is_processed: true,
+                            is_finished: true,
+                            skipped_reason: GARBAGE_CATEGORIZATION_SKIPPED_REASON,
+                        },
+                    },
+                }
+                : {}),
             to_transcribe: false,
             runtime_tag: RUNTIME_TAG,
             created_at: createdAt,
@@ -3322,6 +3573,18 @@ router.post('/add_text', async (req: Request, res: Response) => {
 
         const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
         const insertedMessageId = String(op.insertedId);
+        const insertedMessageObjectId = op.insertedId;
+        const writableAfterInsert = await isSessionWritableAfterInsert({
+            db,
+            sessionObjectId,
+        });
+        if (!writableAfterInsert) {
+            await rollbackInsertedMessageForInactiveSession({
+                db,
+                messageObjectId: insertedMessageObjectId,
+            });
+            return res.status(409).json({ error: 'session_inactive' });
+        }
         messageDoc._id = op.insertedId;
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
             mergeWithProdAwareRuntimeFilter({ _id: sessionObjectId }),
@@ -3339,6 +3602,76 @@ router.post('/add_text', async (req: Request, res: Response) => {
                 },
             }
         );
+
+        const skipCategorizationReason = garbageDetection?.is_garbage
+            ? GARBAGE_CATEGORIZATION_SKIPPED_REASON
+            : null;
+
+        if (text && !skipCategorizationReason) {
+            let categorizationOutcome: CategorizationRequestOutcome = 'not_queued';
+            try {
+                categorizationOutcome = await requestMessageCategorization({
+                    db,
+                    session: sessionRecord,
+                    sessionId,
+                    messageObjectId: insertedMessageObjectId,
+                });
+            } catch (categorizationQueueError) {
+                logger.warn('[voicebot.sessions] failed to enqueue categorization after add_text', {
+                    session_id: sessionId,
+                    message_id: insertedMessageId,
+                    error: categorizationQueueError instanceof Error
+                        ? categorizationQueueError.message
+                        : String(categorizationQueueError),
+                });
+            }
+
+            const shouldQueueCreateTasks =
+                categorizationOutcome === 'queued' || categorizationOutcome === 'disabled';
+            if (isCreateTasksEnabledForSession(sessionRecord) && shouldQueueCreateTasks) {
+                try {
+                    await requestSessionPossibleTasksRefresh({
+                        db,
+                        sessionId,
+                        refreshMode: 'incremental_refresh',
+                    });
+                } catch (refreshError) {
+                    logger.warn('[voicebot.sessions] failed to enqueue create_tasks refresh after add_text', {
+                        session_id: sessionId,
+                        message_id: insertedMessageId,
+                        error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+                    });
+                }
+            } else if (isCreateTasksEnabledForSession(sessionRecord)) {
+                try {
+                    await persistCreateTasksNoTaskDecision({
+                        db,
+                        sessionFilter: runtimeSessionQuery({ _id: sessionObjectId }),
+                        noTaskDecision: buildCreateTasksCategorizationNotQueuedDecision({
+                            path: 'sessions_add_text',
+                        }),
+                        tasksCount: 0,
+                    });
+                } catch (decisionPersistError) {
+                    logger.warn('[voicebot.sessions] failed to persist create_tasks no-task decision after add_text', {
+                        session_id: sessionId,
+                        message_id: insertedMessageId,
+                        error: decisionPersistError instanceof Error ? decisionPersistError.message : String(decisionPersistError),
+                    });
+                }
+                logger.warn('[voicebot.sessions] skipped create_tasks refresh after add_text (categorization not queued)', {
+                    session_id: sessionId,
+                    message_id: insertedMessageId,
+                });
+            }
+        } else if (text && skipCategorizationReason && isCreateTasksEnabledForSession(sessionRecord)) {
+            logger.warn('[voicebot.sessions] skipping add_text create_tasks refresh because categorization was not queued', {
+                session_id: sessionId,
+                message_id: insertedMessageId,
+                reason: skipCategorizationReason,
+            });
+        }
+
         emitSessionRealtimeUpdate({
             req,
             sessionId,
@@ -3390,6 +3723,10 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
         });
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
+        const sessionIsInactive = isSessionInactiveForWrite(session as Record<string, unknown>);
+        if (sessionIsInactive) {
+            return res.status(409).json({ error: 'session_inactive' });
+        }
         const sessionObjectId = new ObjectId(sessionId);
         let resolvedLinkedMessageRef: string | null = null;
         if (hasImageAttachment && linkedMessageRef) {
@@ -3405,10 +3742,24 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
 
         const sessionRecord = session as VoiceSessionRecord;
         const createdAt = new Date();
+        const canonicalTextPayload = text
+            ? buildCanonicalReadyTextTranscription({
+                text,
+                messageTimestampSec: Math.floor(createdAt.getTime() / 1000),
+                speaker: null,
+            })
+            : null;
+        const garbageDetection = canonicalTextPayload
+            ? await resolveCanonicalTextGarbageDetection({
+                transcriptionText: canonicalTextPayload.transcription_text,
+                sessionId,
+                ingressSource: 'web add_attachment',
+            })
+            : null;
+        const nowTs = Date.now();
         const messageDoc: Record<string, unknown> = {
             session_id: sessionObjectId,
             chat_id: Number(sessionRecord.chat_id),
-            text,
             source_type: 'web',
             message_type: kind,
             attachments,
@@ -3418,7 +3769,32 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
             timestamp: Date.now(),
             user_id: performer._id,
             processors_data: {},
-            is_transcribed: false,
+            ...(canonicalTextPayload ?? {
+                text,
+                is_transcribed: false,
+                transcription_text: '',
+                transcription_chunks: [],
+            }),
+            ...(garbageDetection
+                ? {
+                    garbage_detected: Boolean(garbageDetection.is_garbage),
+                    garbage_detection: buildCanonicalGarbageDetection(garbageDetection),
+                }
+                : {}),
+            ...(garbageDetection?.is_garbage
+                ? {
+                    categorization: [],
+                    categorization_timestamp: nowTs,
+                    processors_data: {
+                        categorization: {
+                            is_processing: false,
+                            is_processed: true,
+                            is_finished: true,
+                            skipped_reason: GARBAGE_CATEGORIZATION_SKIPPED_REASON,
+                        },
+                    },
+                }
+                : {}),
             to_transcribe: false,
             runtime_tag: RUNTIME_TAG,
             created_at: createdAt,
@@ -3429,6 +3805,18 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
 
         const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
         const insertedMessageId = String(op.insertedId);
+        const insertedMessageObjectId = op.insertedId;
+        const writableAfterInsert = await isSessionWritableAfterInsert({
+            db,
+            sessionObjectId,
+        });
+        if (!writableAfterInsert) {
+            await rollbackInsertedMessageForInactiveSession({
+                db,
+                messageObjectId: insertedMessageObjectId,
+            });
+            return res.status(409).json({ error: 'session_inactive' });
+        }
         messageDoc._id = op.insertedId;
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
             mergeWithProdAwareRuntimeFilter({ _id: sessionObjectId }),
@@ -3446,6 +3834,76 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
                 },
             }
         );
+
+        const skipCategorizationReason = garbageDetection?.is_garbage
+            ? GARBAGE_CATEGORIZATION_SKIPPED_REASON
+            : null;
+
+        if (text && !skipCategorizationReason) {
+            let categorizationOutcome: CategorizationRequestOutcome = 'not_queued';
+            try {
+                categorizationOutcome = await requestMessageCategorization({
+                    db,
+                    session: sessionRecord,
+                    sessionId,
+                    messageObjectId: insertedMessageObjectId,
+                });
+            } catch (categorizationQueueError) {
+                logger.warn('[voicebot.sessions] failed to enqueue categorization after add_attachment', {
+                    session_id: sessionId,
+                    message_id: insertedMessageId,
+                    error: categorizationQueueError instanceof Error
+                        ? categorizationQueueError.message
+                        : String(categorizationQueueError),
+                });
+            }
+
+            const shouldQueueCreateTasks =
+                categorizationOutcome === 'queued' || categorizationOutcome === 'disabled';
+            if (isCreateTasksEnabledForSession(sessionRecord) && shouldQueueCreateTasks) {
+                try {
+                    await requestSessionPossibleTasksRefresh({
+                        db,
+                        sessionId,
+                        refreshMode: 'incremental_refresh',
+                    });
+                } catch (refreshError) {
+                    logger.warn('[voicebot.sessions] failed to enqueue create_tasks refresh after add_attachment', {
+                        session_id: sessionId,
+                        message_id: insertedMessageId,
+                        error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+                    });
+                }
+            } else if (isCreateTasksEnabledForSession(sessionRecord)) {
+                try {
+                    await persistCreateTasksNoTaskDecision({
+                        db,
+                        sessionFilter: runtimeSessionQuery({ _id: sessionObjectId }),
+                        noTaskDecision: buildCreateTasksCategorizationNotQueuedDecision({
+                            path: 'sessions_add_attachment',
+                        }),
+                        tasksCount: 0,
+                    });
+                } catch (decisionPersistError) {
+                    logger.warn('[voicebot.sessions] failed to persist create_tasks no-task decision after add_attachment', {
+                        session_id: sessionId,
+                        message_id: insertedMessageId,
+                        error: decisionPersistError instanceof Error ? decisionPersistError.message : String(decisionPersistError),
+                    });
+                }
+                logger.warn('[voicebot.sessions] skipped create_tasks refresh after add_attachment (categorization not queued)', {
+                    session_id: sessionId,
+                    message_id: insertedMessageId,
+                });
+            }
+        } else if (text && skipCategorizationReason && isCreateTasksEnabledForSession(sessionRecord)) {
+            logger.warn('[voicebot.sessions] skipping add_attachment create_tasks refresh because categorization was not queued', {
+                session_id: sessionId,
+                message_id: insertedMessageId,
+                reason: skipCategorizationReason,
+            });
+        }
+
         emitSessionRealtimeUpdate({
             req,
             sessionId,
@@ -4593,39 +5051,59 @@ router.post('/restart_create_tasks', async (req: Request, res: Response) => {
         }
 
         const canonicalExternalRef = voiceSessionUrlUtils.canonical(session_id);
-        await db.collection(COLLECTIONS.TASKS).updateMany(
-            mergeWithRuntimeFilter(
-                {
-                    is_deleted: { $ne: true },
-                    codex_task: { $ne: true },
-                    task_status: TASK_STATUSES.DRAFT_10,
-                    $or: [
-                        { external_ref: canonicalExternalRef },
-                        {
-                            $and: [
-                                { source_ref: canonicalExternalRef },
-                                { source_ref: /\/voice\/session\//i },
-                            ],
-                        },
-                        { 'source_data.session_id': new ObjectId(session_id) },
-                        { 'source_data.session_id': session_id },
-                        { 'source_data.voice_sessions.session_id': session_id },
-                    ],
-                },
-                {
-                    field: 'runtime_tag',
-                    familyMatch: IS_PROD_RUNTIME,
-                    includeLegacyInProd: IS_PROD_RUNTIME,
-                }
-            ),
+        const restartFilter = mergeWithRuntimeFilter(
             {
-                $set: {
-                    is_deleted: true,
-                    deleted_at: new Date(),
-                    updated_at: new Date(),
-                },
+                is_deleted: { $ne: true },
+                codex_task: { $ne: true },
+                task_status: TASK_STATUSES.DRAFT_10,
+                $or: [
+                    { external_ref: canonicalExternalRef },
+                    {
+                        $and: [
+                            { source_ref: canonicalExternalRef },
+                            { source_ref: /\/voice\/session\//i },
+                        ],
+                    },
+                    { 'source_data.session_id': new ObjectId(session_id) },
+                    { 'source_data.session_id': session_id },
+                    { 'source_data.voice_sessions.session_id': session_id },
+                ],
+            },
+            {
+                field: 'runtime_tag',
+                familyMatch: IS_PROD_RUNTIME,
+                includeLegacyInProd: IS_PROD_RUNTIME,
             }
         );
+        const tasksCollection = db.collection(COLLECTIONS.TASKS);
+        const rowsToDelete = await tasksCollection.find(
+            restartFilter,
+            { projection: { _id: 1, updated_at: 1 } }
+        ).toArray() as Array<Record<string, unknown>>;
+        if (rowsToDelete.length > 0) {
+            await tasksCollection.bulkWrite(
+                rowsToDelete
+                    .map((row) => toObjectIdOrNull(row._id))
+                    .filter((value): value is ObjectId => value instanceof ObjectId)
+                    .map((taskObjectId) => {
+                        const previousRow = rowsToDelete.find((row) => toIdString(row._id) === taskObjectId.toHexString());
+                        return {
+                            updateOne: {
+                                filter: { _id: taskObjectId },
+                                update: {
+                                    $set: {
+                                        is_deleted: true,
+                                        deleted_at: new Date(),
+                                        updated_at: resolveMonotonicUpdatedAtNext({
+                                            previousUpdatedAt: previousRow?.updated_at,
+                                        }),
+                                    },
+                                },
+                            },
+                        };
+                    })
+            );
+        }
 
         res.status(200).json({ success: true });
 
@@ -4667,6 +5145,7 @@ const materializeSessionTickets = async ({
         sourceTaskId: string;
         task: Record<string, unknown>;
         existingTaskId?: ObjectId | null;
+        previousUpdatedAt?: unknown;
         preserveCreatedAt?: boolean;
         materializedTaskId: ObjectId;
     }> = [];
@@ -4889,15 +5368,15 @@ const materializeSessionTickets = async ({
         const isAcceptedFromPossibleTask = refreshReason === 'process_possible_tasks';
         const acceptedBy = String(creatorId || creatorEmail || creatorName || '').trim();
 
-            tasksToSave.push({
-                sourceTaskId: ticketId,
-                existingTaskId,
-                materializedTaskId,
-                preserveCreatedAt,
-                task: {
-                    id: publicTaskId,
-                    row_id: canonicalRowId,
-                    name,
+        tasksToSave.push({
+            sourceTaskId: ticketId,
+            existingTaskId,
+            materializedTaskId,
+            preserveCreatedAt,
+            task: {
+                id: publicTaskId,
+                row_id: canonicalRowId,
+                name,
                 project_id: projectId,
                 project: projectName,
                 description,
@@ -4908,46 +5387,50 @@ const materializeSessionTickets = async ({
                 performer: taskPerformer,
                 created_at: now,
                 updated_at: now,
-                    task_status: targetTaskStatus,
-                    task_status_history: [],
-                    last_status_update: now,
-                    status_update_checked: false,
+                task_status: targetTaskStatus,
+                task_status_history: [],
+                last_status_update: now,
+                status_update_checked: false,
                 task_id_from_ai: ticket.task_id_from_ai || null,
                 dependencies_from_ai: Array.isArray(ticket.dependencies_from_ai) ? ticket.dependencies_from_ai : [],
                 dialogue_reference: ticket.dialogue_reference || null,
                 dialogue_tag: ticket.dialogue_tag || null,
                 ...(relationPayload.length > 0 ? { relations: relationPayload } : {}),
                 ...(dependencyRelations.length > 0 ? { dependencies: dependencyRelations } : {}),
-                ...(parentRelation ? { parent: { id: parentRelation.id, type: parentRelation.type }, parent_id: parentRelation.id } : {}),
+                ...(parentRelation
+                    ? { parent: { id: parentRelation.id, type: parentRelation.type }, parent_id: parentRelation.id }
+                    : {}),
                 ...(childRelations.length > 0 ? { children: childRelations } : {}),
                 source: 'VOICE_BOT',
                 source_kind: 'voice_session',
                 source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
                 external_ref: canonicalExternalRef,
-                    discussion_sessions: discussionSessions,
-                    source_data: {
-                        ...incomingSourceData,
-                        row_id: canonicalRowId,
-                        session_name: toTaskText(incomingSourceData.session_name) || String((session as Record<string, unknown>).session_name || ''),
-                        session_id: toTaskText(incomingSourceData.session_id) || sessionId,
-                        voice_sessions: discussionSessions,
-                    },
-                    ...(isAcceptedFromPossibleTask
-                        ? {
-                            accepted_from_possible_task: true,
-                            accepted_from_row_id: canonicalRowId,
-                            accepted_at: now,
-                            ...(acceptedBy ? { accepted_by: acceptedBy } : {}),
-                            ...(creatorName ? { accepted_by_name: creatorName } : {}),
-                        }
-                        : {}),
-                    ...(creatorId ? { created_by: creatorId } : {}),
-                    ...(creatorName ? { created_by_name: creatorName } : {}),
-                    ...(parentRelation ? { parent: parentRelation, parent_id: parentRelation.id } : {}),
-                    ...(childRelations.length > 0 ? { children: childRelations } : {}),
-                    ...(dependencyRelations.length > 0 ? { dependencies: dependencyRelations } : {}),
+                discussion_sessions: discussionSessions,
+                source_data: {
+                    ...incomingSourceData,
+                    row_id: canonicalRowId,
+                    session_name:
+                        toTaskText(incomingSourceData.session_name) ||
+                        String((session as Record<string, unknown>).session_name || ''),
+                    session_id: toTaskText(incomingSourceData.session_id) || sessionId,
+                    voice_sessions: discussionSessions,
                 },
-            });
+                ...(isAcceptedFromPossibleTask
+                    ? {
+                        accepted_from_possible_task: true,
+                        accepted_from_row_id: canonicalRowId,
+                        accepted_at: now,
+                        ...(acceptedBy ? { accepted_by: acceptedBy } : {}),
+                        ...(creatorName ? { accepted_by_name: creatorName } : {}),
+                    }
+                    : {}),
+                ...(creatorId ? { created_by: creatorId } : {}),
+                ...(creatorName ? { created_by_name: creatorName } : {}),
+                ...(parentRelation ? { parent: parentRelation, parent_id: parentRelation.id } : {}),
+                ...(childRelations.length > 0 ? { children: childRelations } : {}),
+                ...(dependencyRelations.length > 0 ? { dependencies: dependencyRelations } : {}),
+            },
+        });
         }
 
     if (tasksToSave.length === 0 && codexTasksToSync.length === 0) {
@@ -4990,11 +5473,14 @@ const materializeSessionTickets = async ({
     const existingTasksToUpdate = filteredTasksToSave.filter(({ existingTaskId }) => existingTaskId instanceof ObjectId);
     const newTasksToInsert = filteredTasksToSave.filter(({ existingTaskId }) => !(existingTaskId instanceof ObjectId));
 
-    for (const { sourceTaskId, existingTaskId, materializedTaskId, task, preserveCreatedAt } of existingTasksToUpdate) {
+    for (const { sourceTaskId, existingTaskId, materializedTaskId, task, preserveCreatedAt, previousUpdatedAt } of existingTasksToUpdate) {
         const updateSet: Record<string, unknown> = {
             ...task,
             source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
-            updated_at: now,
+            updated_at: resolveMonotonicUpdatedAtNext({
+                previousUpdatedAt,
+                mutationEffectiveAt: now,
+            }),
             is_deleted: false,
             deleted_at: null,
         };
@@ -5003,7 +5489,9 @@ const materializeSessionTickets = async ({
         }
         await db.collection(COLLECTIONS.TASKS).updateOne(
             { _id: existingTaskId as ObjectId },
-            { $set: updateSet },
+            {
+                $set: updateSet,
+            },
         );
         insertedCount += 1;
         if (sourceTaskId) createdTaskIds.add(sourceTaskId);
@@ -5800,19 +6288,24 @@ const listSessionScopedAcceptedTasks = async ({
 const listSessionScopedDraftTasks = async ({
     db,
     sessionId,
+    session,
     includeOlderDrafts,
     draftHorizonDays,
 }: {
     db: Db;
     sessionId: string;
+    session?: Record<string, unknown> | null;
     includeOlderDrafts?: boolean;
     draftHorizonDays?: number | null;
 }): Promise<Array<Record<string, unknown>>> => {
-    const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
-        { _id: new ObjectId(sessionId), is_deleted: { $ne: true } }
-    ) as Record<string, unknown> | null;
-    if (!session) return [];
-    const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session });
+    const resolvedSession =
+        session && typeof session === 'object'
+            ? session
+            : await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
+                { _id: new ObjectId(sessionId), is_deleted: { $ne: true } }
+            ) as Record<string, unknown> | null;
+    if (!resolvedSession) return [];
+    const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: resolvedSession });
     const cursor = db.collection(COLLECTIONS.TASKS).find(
         mergeWithRuntimeFilter(
             {
@@ -5875,7 +6368,7 @@ const listSessionScopedDraftTasks = async ({
                     tasks: docs,
                     includeOlderDrafts,
                     draftHorizonDays,
-                    referenceSession: session,
+                    referenceSession: resolvedSession,
                 }),
                 `session_tasks(Draft:${sessionId})`
             );
@@ -5889,7 +6382,7 @@ const listSessionScopedDraftTasks = async ({
                 tasks: docs,
                 includeOlderDrafts,
                 draftHorizonDays,
-                referenceSession: session,
+                referenceSession: resolvedSession,
             }),
             `session_tasks(Draft:${sessionId})`
         );
@@ -5935,6 +6428,8 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         const sessionRecord = session as Record<string, unknown>;
         const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: sessionRecord });
         const externalRef = voiceSessionUrlUtils.canonical(sessionId);
+        const includeOlderDrafts = parseIncludeOlderDrafts(parsedBody.data.include_older_drafts);
+        const draftHorizonDays = parseDraftHorizonDays(parsedBody.data.draft_horizon_days);
 
         const nonCodexSessionTaskMatch = mergeWithRuntimeFilter(
             {
@@ -5952,7 +6447,7 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             }
         );
 
-        const [sessionTasks, codex_count] = await Promise.all([
+        const [sessionTasks, codex_count, draftDocs] = await Promise.all([
             db.collection(COLLECTIONS.TASKS)
                 .find(nonCodexSessionTaskMatch, { projection: { task_status: 1, recurrence_mode: 1, row_id: 1, id: 1, source_kind: 1, source_data: 1, created_at: 1, updated_at: 1 } })
                 .toArray() as Promise<Array<{ task_status?: unknown; recurrence_mode?: unknown }>>,
@@ -5970,11 +6465,19 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
                     }
                 )
             ),
+            listSessionScopedDraftTasks({
+                db,
+                sessionId,
+                session: sessionRecord,
+                includeOlderDrafts,
+                draftHorizonDays,
+            }),
         ]);
 
         const visibleSessionTasks = sessionTasks.filter(
             (task) => normalizeVoiceSessionTaskBucketKey(task.task_status) !== 'DRAFT_10'
         );
+        const draft_count = collapseVisibleDraftRows(draftDocs).length;
 
         const groupedStatusCounts = visibleSessionTasks.reduce((acc, task) => {
             const statusKey = normalizeVoiceSessionTaskBucketKey(task.task_status);
@@ -6000,12 +6503,28 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             });
 
         const tasks_count = status_counts.reduce((sum, entry) => sum + entry.count, 0);
+        let noTaskDecision: ReturnType<typeof resolveCreateTasksNoTaskDecisionOutcome> = null;
+        if (tasks_count === 0) {
+            const storedNoTaskDecision = extractCreateTasksNoTaskDecisionFromSession(sessionRecord);
+            const processorTaskCount = extractCreateTasksLastTasksCountFromSession(sessionRecord);
+            if (storedNoTaskDecision || processorTaskCount !== null) {
+                noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
+                    decision: storedNoTaskDecision,
+                    extractedTaskCount: processorTaskCount ?? 0,
+                    persistedTaskCount: draft_count,
+                    hasSummary: Boolean(sessionRecord.summary_md_text),
+                    hasReview: Boolean(sessionRecord.review_md_text),
+                });
+            }
+        }
         return res.status(200).json({
             success: true,
             session_id: sessionId,
             tasks_count,
+            draft_count,
             codex_count,
             status_counts,
+            ...(noTaskDecision ? { no_task_decision: noTaskDecision } : {}),
         });
     } catch (error) {
         logger.error('Error in session_tab_counts:', error);
@@ -6045,6 +6564,7 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
             const draftDocs = await listSessionScopedDraftTasks({
                 db,
                 sessionId,
+                session: session as Record<string, unknown>,
                 includeOlderDrafts,
                 draftHorizonDays,
             });

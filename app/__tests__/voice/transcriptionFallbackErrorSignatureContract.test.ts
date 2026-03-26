@@ -1,43 +1,228 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import React, { act, type ReactElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+
+import TranscriptionTableRow from '../../src/components/voice/TranscriptionTableRow';
+import type { VoiceBotMessage } from '../../src/types/voice';
+import { formatVoiceMetadataSignature } from '../../src/utils/voiceMetadataSignature';
+
+const mockVoiceBotStoreState = {
+  voiceBotSession: { _id: 'session-1' },
+  fetchVoiceBotSession: jest.fn(async () => undefined),
+  fetchSessionLog: jest.fn(async () => undefined),
+  editTranscriptChunk: jest.fn(async () => undefined),
+  deleteTranscriptChunk: jest.fn(async () => undefined),
+};
+
+const mockSessionsUiStoreState = {
+  materialTargetMessageId: null as string | null,
+  setMaterialTargetMessageId: jest.fn(),
+};
+
+jest.mock('../../src/store/voiceBotStore', () => ({
+  useVoiceBotStore: (selector: (state: typeof mockVoiceBotStoreState) => unknown) => selector(mockVoiceBotStoreState),
+}));
+
+jest.mock('../../src/store/sessionsUIStore', () => ({
+  useSessionsUIStore: (selector: (state: typeof mockSessionsUiStoreState) => unknown) =>
+    selector(mockSessionsUiStoreState),
+}));
+
+type RenderHandle = {
+  container: HTMLDivElement;
+  rerender: (nextNode: ReactElement) => void;
+  unmount: () => void;
+};
+
+const renderIntoDom = (node: ReactElement): RenderHandle => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root: Root = createRoot(container);
+
+  act(() => {
+    root.render(node);
+  });
+
+  return {
+    container,
+    rerender: (nextNode: ReactElement) => {
+      act(() => {
+        root.render(nextNode);
+      });
+    },
+    unmount: () => {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    },
+  };
+};
+
+const asVoiceMessage = (patch: Partial<VoiceBotMessage>): VoiceBotMessage =>
+  ({
+    _id: 'msg-1',
+    message_id: 'msg-1',
+    ...patch,
+  }) as VoiceBotMessage;
 
 describe('Transcription fallback error signature contract', () => {
-  const rowPath = path.resolve(process.cwd(), 'src/components/voice/TranscriptionTableRow.tsx');
-  const rowSource = fs.readFileSync(rowPath, 'utf8');
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
+      writable: true,
+      value: true,
+    });
 
-  it('renders metadata signature line for fallback error rows via shared formatter', () => {
-    expect(rowSource).toContain('const resolveFallbackErrorSignature = (');
-    expect(rowSource).toContain("const plainText = typeof row.text === 'string' ? row.text.trim() : '';");
-    expect(rowSource).toContain('if (plainText) return null;');
-    expect(rowSource).toContain('const errorCode = getTranscriptionErrorCode(row);');
-    expect(rowSource).toContain('if (!errorCode) return null;');
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: jest.fn().mockImplementation(() => ({
+        matches: false,
+        media: '',
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      })),
+    });
 
-    expect(rowSource).toContain('return formatVoiceMetadataSignature({');
-    expect(rowSource).toContain('startSeconds: relativeStartSeconds');
-    expect(rowSource).toContain('endSeconds: relativeStartSeconds');
-    expect(rowSource).toContain('sourceFileName: extractSourceFileName(row)');
-    expect(rowSource).toContain('absoluteTimestampMs: messageTimestampMs');
+    class ResizeObserverMock {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
 
-    expect(rowSource).toContain('const fallbackErrorSignature = resolveFallbackErrorSignature(row, sessionBaseTimestampMs);');
-    expect(rowSource).toContain('{fallbackErrorSignature ? (');
-    expect(rowSource).toContain('{fallbackErrorSignature}');
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      writable: true,
+      value: ResizeObserverMock,
+    });
   });
 
-  it('prioritizes transcription_text so websocket message_update replaces quota placeholder in-place', () => {
-    expect(rowSource).toContain("if (typeof msg.transcription_text === 'string' && msg.transcription_text.trim()) {");
-    expect(rowSource).toContain('return [{ text: msg.transcription_text }];');
-
-    const fallbackBodyTextIndex = rowSource.indexOf('const resolveFallbackBodyText = (row: VoiceBotMessage): string => {');
-    const fallbackBodyErrorIndex = rowSource.indexOf('const errorCode = getTranscriptionErrorCode(row);');
-    const fallbackBodyTranscriptionTextIndex = rowSource.indexOf('const transcriptionText = getTranscriptionText(row);');
-    expect(fallbackBodyTextIndex).toBeGreaterThan(-1);
-    expect(fallbackBodyTranscriptionTextIndex).toBeGreaterThan(fallbackBodyTextIndex);
-    expect(fallbackBodyErrorIndex).toBeGreaterThan(fallbackBodyTranscriptionTextIndex);
+  afterEach(() => {
+    mockVoiceBotStoreState.fetchVoiceBotSession.mockClear();
+    mockVoiceBotStoreState.fetchSessionLog.mockClear();
+    mockVoiceBotStoreState.editTranscriptChunk.mockClear();
+    mockVoiceBotStoreState.deleteTranscriptChunk.mockClear();
+    mockSessionsUiStoreState.setMaterialTargetMessageId.mockClear();
   });
 
-  it('keeps non-error fallback states unchanged', () => {
-    expect(rowSource).toContain("return '⏳ Обработка аудио...';");
-    expect(rowSource).toContain("return '—';");
-    expect(rowSource).toContain("return '⏳ Ожидание транскрибации...';");
+  it('shows fallback error text and metadata signature for transcription errors without plain text/transcription text', () => {
+    const messageTimestampMs = 1710000015000;
+    const sessionBaseTimestampMs = 1710000000000;
+    const row = asVoiceMessage({
+      file_name: 'call-42.mp3',
+      message_timestamp: messageTimestampMs,
+      transcription_error: 'insufficient_quota',
+      text: '',
+      transcription_text: '',
+    });
+
+    const expectedSignature = formatVoiceMetadataSignature({
+      startSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000,
+      endSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000,
+      sourceFileName: 'call-42.mp3',
+      absoluteTimestampMs: messageTimestampMs,
+      omitZeroRange: false,
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('⚠ Недостаточно квоты OpenAI');
+      expect(expectedSignature).not.toBeNull();
+      expect(view.container.textContent).toContain(expectedSignature as string);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('short-circuits to plain text and hides fallback error signature when row.text is present', () => {
+    const row = asVoiceMessage({
+      file_name: 'call-43.mp3',
+      message_timestamp: 1710000055000,
+      transcription_error: 'insufficient_quota',
+      text: 'Текст оператора важнее fallback',
+      transcription_text: '',
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs: 1710000000000,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Текст оператора важнее fallback');
+      expect(view.container.textContent).not.toContain('⚠ Недостаточно квоты OpenAI');
+      expect(view.container.textContent).not.toContain('call-43.mp3');
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('prioritizes transcription_text over plain text/error placeholders for in-place websocket updates', () => {
+    const row = asVoiceMessage({
+      transcription_text: 'Готовая транскрипция из websocket',
+      text: 'Старый placeholder',
+      transcription_error: 'insufficient_quota',
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs: null,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Готовая транскрипция из websocket');
+      expect(view.container.textContent).not.toContain('Старый placeholder');
+      expect(view.container.textContent).not.toContain('⚠ Недостаточно квоты OpenAI');
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('keeps non-error fallback states user-visible for processing/transcribed/waiting paths', () => {
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row: asVoiceMessage({ to_transcribe: true }),
+        isLast: false,
+        sessionBaseTimestampMs: null,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('⏳ Обработка аудио...');
+
+      view.rerender(
+        React.createElement(TranscriptionTableRow, {
+          row: asVoiceMessage({ is_transcribed: true, to_transcribe: false }),
+          isLast: false,
+          sessionBaseTimestampMs: null,
+        })
+      );
+      expect(view.container.textContent).toContain('—');
+
+      view.rerender(
+        React.createElement(TranscriptionTableRow, {
+          row: asVoiceMessage({ is_transcribed: false, to_transcribe: false }),
+          isLast: false,
+          sessionBaseTimestampMs: null,
+        })
+      );
+      expect(view.container.textContent).toContain('⏳ Ожидание транскрибации...');
+    } finally {
+      view.unmount();
+    }
   });
 });

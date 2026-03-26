@@ -345,7 +345,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
     let lastTicketsFetchPayload: {
         statuses?: string[];
         draftHorizonDays?: number | null;
-        includeOlderDrafts?: boolean;
     } = {};
     const pendingTicketDetails = new Map<string, Promise<Ticket | null>>();
     let isFetchingPaymentsTree = false;
@@ -403,12 +402,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         const useLastPayload = statuses === undefined && Object.keys(options).length === 0;
         const resolvedStatuses = useLastPayload ? lastTicketsFetchPayload.statuses : statuses;
         const resolvedDraftHorizonDays = useLastPayload ? lastTicketsFetchPayload.draftHorizonDays : options.draftHorizonDays;
-        const resolvedIncludeOlderDrafts = useLastPayload ? lastTicketsFetchPayload.includeOlderDrafts : options.includeOlderDrafts;
+        const legacyIncludeOlderDraftsRequested = Boolean(options.includeOlderDrafts);
 
         const key = JSON.stringify({
             statuses: resolvedStatuses ?? [],
             draftHorizonDays: resolvedDraftHorizonDays ?? null,
-            includeOlderDrafts: Boolean(resolvedIncludeOlderDrafts),
         });
         const now = Date.now();
         const recentlyFetched = key === lastTicketsFetchKey && now - lastTicketsFetchAt < 5000;
@@ -420,7 +418,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         console.info('[crm.perf] tickets.fetch.start', {
             statuses: resolvedStatuses ?? [],
             draft_horizon_days: resolvedDraftHorizonDays ?? null,
-            include_older_drafts: Boolean(resolvedIncludeOlderDrafts),
+            legacy_include_older_drafts_requested: legacyIncludeOlderDraftsRequested,
             fetch_key: key,
         });
 
@@ -430,7 +428,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         lastTicketsFetchPayload = {
             ...(resolvedStatuses ? { statuses: resolvedStatuses } : {}),
             ...(resolvedDraftHorizonDays !== undefined ? { draftHorizonDays: resolvedDraftHorizonDays } : {}),
-            ...(resolvedIncludeOlderDrafts !== undefined ? { includeOlderDrafts: resolvedIncludeOlderDrafts } : {}),
         };
 
         let fetchTicketCount = 0;
@@ -445,9 +442,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
             };
             if (typeof resolvedDraftHorizonDays === 'number' && Number.isFinite(resolvedDraftHorizonDays) && resolvedDraftHorizonDays > 0) {
                 requestPayload.draft_horizon_days = resolvedDraftHorizonDays;
-            }
-            if (resolvedIncludeOlderDrafts !== undefined) {
-                requestPayload.include_older_drafts = resolvedIncludeOlderDrafts;
             }
             const response = await api_request<Ticket[]>('tickets', requestPayload);
             const previousTickets = get().tickets;
@@ -498,7 +492,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
                 duration_ms: Number((getPerfNow() - fetchPerfStartedAt).toFixed(2)),
                 statuses: resolvedStatuses ?? [],
                 draft_horizon_days: resolvedDraftHorizonDays ?? null,
-                include_older_drafts: Boolean(resolvedIncludeOlderDrafts),
+                legacy_include_older_drafts_requested: legacyIncludeOlderDraftsRequested,
                 fetch_key: key,
                 tickets_count: fetchTicketCount,
                 tickets_updated_at: ticketsUpdatedAt,

@@ -12,7 +12,7 @@ import { getDb } from '../../../services/db.js';
 import { getLogger } from '../../../utils/logger.js';
 import { AppError } from '../../middleware/error.js';
 import { normalizeTicketDbId } from '../../../utils/crmMiniappShared.js';
-import { COLLECTIONS, TASK_STATUSES } from '../../../constants.js';
+import { COLLECTIONS, RUNTIME_TAG, TASK_STATUSES } from '../../../constants.js';
 import { ensureUniqueTaskPublicId } from '../../../services/taskPublicId.js';
 import {
     TARGET_EDITABLE_TASK_STATUS_KEYS,
@@ -39,6 +39,7 @@ import {
     parseIncludeOlderDrafts,
     parseProjectFilterValues,
 } from '../../../services/draftRecencyPolicy.js';
+import { resolveDateLikeEpochMs, resolveMonotonicUpdatedAtNext } from '../../../services/taskUpdatedAt.js';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(isSameOrAfter);
@@ -119,26 +120,8 @@ const buildProjectFilterMatchQuery = (projectFilters: string[]): Record<string, 
     };
 };
 
-const resolveDateLikeTimestamp = (value: unknown): number | null => {
-    if (value instanceof Date) {
-        const dateMs = value.getTime();
-        return Number.isFinite(dateMs) ? dateMs : null;
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        return value > 1e12 ? value : value * 1000;
-    }
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (!trimmed) return null;
-        const numeric = Number(trimmed);
-        if (Number.isFinite(numeric)) {
-            return resolveDateLikeTimestamp(numeric);
-        }
-        const parsed = Date.parse(trimmed);
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
-};
+const resolveDateLikeTimestamp = (value: unknown): number | null =>
+    resolveDateLikeEpochMs(value);
 
 const resolveArchiveAnchorTimestamp = (task: Record<string, unknown>): number | null => {
     return resolveDateLikeTimestamp(task.updated_at) ?? resolveDateLikeTimestamp(task.created_at);
@@ -246,6 +229,204 @@ const toNonEmptyString = (value: unknown): string | undefined => {
     if (typeof value !== 'string') return undefined;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+};
+
+type CrmTicketsLegacyAliasWarning = {
+    legacy_param: string;
+    canonical_param: string;
+    conflict: boolean;
+    canonical_present: boolean;
+    legacy_present: boolean;
+    canonical_preview: unknown;
+    legacy_preview: unknown;
+};
+
+type ResolvedCrmTicketsTransportPayload = {
+    statuses: unknown;
+    project: unknown;
+    response_mode: unknown;
+    from_date: unknown;
+    to_date: unknown;
+    axis_date: unknown;
+    range_mode: unknown;
+    draft_horizon_days: unknown;
+    include_older_drafts: unknown;
+    legacy_warnings: CrmTicketsLegacyAliasWarning[];
+};
+
+const hasOwnProperty = (value: Record<string, unknown>, key: string): boolean =>
+    Object.prototype.hasOwnProperty.call(value, key);
+
+const toTelemetryPreview = (value: unknown): unknown => {
+    if (value === undefined) return null;
+    if (value === null) return null;
+    if (typeof value === 'string') return value.slice(0, 120);
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    if (Array.isArray(value)) return value.slice(0, 10);
+    if (typeof value === 'object') {
+        try {
+            return JSON.stringify(value).slice(0, 240);
+        } catch {
+            return '[unserializable]';
+        }
+    }
+    return String(value).slice(0, 120);
+};
+
+const resolveCanonicalOverLegacyField = ({
+    body,
+    canonicalKey,
+    legacyKey,
+}: {
+    body: Record<string, unknown>;
+    canonicalKey: string;
+    legacyKey: string;
+}): { value: unknown; warning: CrmTicketsLegacyAliasWarning | null } => {
+    const canonicalPresent = hasOwnProperty(body, canonicalKey) && body[canonicalKey] !== undefined;
+    const legacyPresent = hasOwnProperty(body, legacyKey) && body[legacyKey] !== undefined;
+
+    const canonicalValue = canonicalPresent ? body[canonicalKey] : undefined;
+    const legacyValue = legacyPresent ? body[legacyKey] : undefined;
+    const value = canonicalPresent ? canonicalValue : legacyValue;
+    const conflict = canonicalPresent && legacyPresent && !_.isEqual(canonicalValue, legacyValue);
+
+    return {
+        value,
+        warning: legacyPresent
+            ? {
+                legacy_param: legacyKey,
+                canonical_param: canonicalKey,
+                conflict,
+                canonical_present: canonicalPresent,
+                legacy_present: legacyPresent,
+                canonical_preview: toTelemetryPreview(canonicalValue),
+                legacy_preview: toTelemetryPreview(legacyValue),
+            }
+            : null,
+    };
+};
+
+export const resolveCrmTicketsTransportPayload = (rawBody: unknown): ResolvedCrmTicketsTransportPayload => {
+    const body = rawBody && typeof rawBody === 'object'
+        ? (rawBody as Record<string, unknown>)
+        : {};
+
+    const warnings: CrmTicketsLegacyAliasWarning[] = [];
+    const statusesResolution = resolveCanonicalOverLegacyField({
+        body,
+        canonicalKey: 'statuses',
+        legacyKey: 'task_statuses',
+    });
+    if (statusesResolution.warning) warnings.push(statusesResolution.warning);
+
+    const projectResolution = resolveCanonicalOverLegacyField({
+        body,
+        canonicalKey: 'project',
+        legacyKey: 'project_id',
+    });
+    if (projectResolution.warning) warnings.push(projectResolution.warning);
+
+    const responseModeResolution = resolveCanonicalOverLegacyField({
+        body,
+        canonicalKey: 'response_mode',
+        legacyKey: 'mode',
+    });
+    if (responseModeResolution.warning) warnings.push(responseModeResolution.warning);
+
+    const fromDateResolution = resolveCanonicalOverLegacyField({
+        body,
+        canonicalKey: 'from_date',
+        legacyKey: 'from',
+    });
+    if (fromDateResolution.warning) warnings.push(fromDateResolution.warning);
+
+    const toDateResolution = resolveCanonicalOverLegacyField({
+        body,
+        canonicalKey: 'to_date',
+        legacyKey: 'to',
+    });
+    if (toDateResolution.warning) warnings.push(toDateResolution.warning);
+
+    const includeOlderDraftsPresent =
+        hasOwnProperty(body, 'include_older_drafts') && body.include_older_drafts !== undefined;
+    if (includeOlderDraftsPresent) {
+        const draftHorizonPresent = hasOwnProperty(body, 'draft_horizon_days') && body.draft_horizon_days !== undefined;
+        warnings.push({
+            legacy_param: 'include_older_drafts',
+            canonical_param: 'draft_horizon_days(omit_for_unbounded)',
+            conflict: draftHorizonPresent,
+            canonical_present: draftHorizonPresent,
+            legacy_present: true,
+            canonical_preview: toTelemetryPreview(draftHorizonPresent ? body.draft_horizon_days : undefined),
+            legacy_preview: toTelemetryPreview(body.include_older_drafts),
+        });
+    }
+
+    return {
+        statuses: statusesResolution.value,
+        project: projectResolution.value,
+        response_mode: responseModeResolution.value ?? body.responseMode,
+        from_date: fromDateResolution.value,
+        to_date: toDateResolution.value,
+        axis_date: body.axis_date,
+        range_mode: body.range_mode,
+        draft_horizon_days: body.draft_horizon_days,
+        include_older_drafts: body.include_older_drafts,
+        legacy_warnings: warnings,
+    };
+};
+
+const CRM_TICKETS_LEGACY_SUNSET_DEFAULT_ZERO_USAGE_DAYS = 14;
+
+const resolveCrmTicketsLegacySunsetZeroUsageDays = (): number => {
+    const raw = Number(process.env.CRM_TICKETS_LEGACY_ZERO_USAGE_DAYS);
+    if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
+    return CRM_TICKETS_LEGACY_SUNSET_DEFAULT_ZERO_USAGE_DAYS;
+};
+
+const resolveCrmTicketsLegacyCaller = (req: Request): string => {
+    const explicitCaller =
+        toNonEmptyString(resolveHeaderValue(req.headers['x-caller'])) ??
+        toNonEmptyString(resolveHeaderValue(req.headers['x-client'])) ??
+        toNonEmptyString(resolveHeaderValue(req.headers['x-source']));
+    if (explicitCaller) return explicitCaller;
+
+    const actor = resolveRequestActor(req);
+    return actor.id ?? actor.name ?? 'unknown';
+};
+
+const logCrmTicketsLegacyTransportWarnings = ({
+    req,
+    endpoint,
+    warnings,
+}: {
+    req: Request;
+    endpoint: '/api/crm/tickets' | '/api/crm/tickets/status-counts';
+    warnings: CrmTicketsLegacyAliasWarning[];
+}): void => {
+    if (!warnings.length) return;
+
+    const caller = resolveCrmTicketsLegacyCaller(req);
+    const requestId = resolveRequestId(req);
+    const zeroUsageDays = resolveCrmTicketsLegacySunsetZeroUsageDays();
+
+    for (const warning of warnings) {
+        logger.warn('[crm.tickets.legacy_transport]', {
+            legacy_param: warning.legacy_param,
+            canonical_param: warning.canonical_param,
+            endpoint,
+            runtime_tag: RUNTIME_TAG,
+            caller,
+            conflict: warning.conflict,
+            canonical_present: warning.canonical_present,
+            legacy_present: warning.legacy_present,
+            canonical_preview: warning.canonical_preview,
+            legacy_preview: warning.legacy_preview,
+            sunset_gate: 'zero_usage_gte_n_days_before_hard_fail',
+            sunset_zero_usage_days: zeroUsageDays,
+            ...(requestId ? { request_id: requestId } : {}),
+        });
+    }
 };
 
 const toObjectId = (value: unknown): ObjectId | undefined => {
@@ -438,7 +619,12 @@ const parseTicketsResponseMode = (rawMode: unknown): TicketsResponseMode | null 
     if (normalizedMode.length === 0 || normalizedMode === 'detail' || normalizedMode === 'full') {
         return 'detail';
     }
-    if (normalizedMode === 'summary' || normalizedMode === 'list') {
+    if (
+        normalizedMode === 'summary' ||
+        normalizedMode === 'list' ||
+        normalizedMode === 'compact' ||
+        normalizedMode === 'table'
+    ) {
         return 'summary';
     }
     return null;
@@ -550,15 +736,22 @@ router.post('/', async (req: Request, res: Response) => {
     const requestStartedAt = Date.now();
     try {
         const db = getDb();
-        const responseMode = parseTicketsResponseMode(req.body?.response_mode ?? req.body?.responseMode);
+        const transportPayload = resolveCrmTicketsTransportPayload(req.body);
+        logCrmTicketsLegacyTransportWarnings({
+            req,
+            endpoint: '/api/crm/tickets',
+            warnings: transportPayload.legacy_warnings,
+        });
+
+        const responseMode = parseTicketsResponseMode(transportPayload.response_mode);
         if (!responseMode) {
             res.status(400).json({ error: 'response_mode must be one of: detail, summary' });
             return;
         }
-        const rawStatuses = Array.isArray(req.body.statuses) ? req.body.statuses as string[] : [];
-        const includeOlderDrafts = parseIncludeOlderDrafts(req.body?.include_older_drafts);
-        const draftHorizonDays = parseDraftHorizonDays(req.body?.draft_horizon_days);
-        const projectFilters = parseProjectFilterValues(req.body?.project);
+        const rawStatuses = Array.isArray(transportPayload.statuses) ? transportPayload.statuses as string[] : [];
+        const includeOlderDrafts = parseIncludeOlderDrafts(transportPayload.include_older_drafts);
+        const draftHorizonDays = parseDraftHorizonDays(transportPayload.draft_horizon_days);
+        const projectFilters = parseProjectFilterValues(transportPayload.project);
         const statusKeys = rawStatuses
             .map((status) => (isTaskStatusKey(status) ? status : null))
             .filter((status): status is keyof typeof TASK_STATUSES => Boolean(status));
@@ -935,9 +1128,16 @@ router.post('/status-counts', async (req: Request, res: Response) => {
     const requestStartedAt = Date.now();
     try {
         const db = getDb();
-        const includeOlderDrafts = parseIncludeOlderDrafts(req.body?.include_older_drafts);
-        const draftHorizonDays = parseDraftHorizonDays(req.body?.draft_horizon_days);
-        const projectFilters = parseProjectFilterValues(req.body?.project);
+        const transportPayload = resolveCrmTicketsTransportPayload(req.body);
+        logCrmTicketsLegacyTransportWarnings({
+            req,
+            endpoint: '/api/crm/tickets/status-counts',
+            warnings: transportPayload.legacy_warnings,
+        });
+
+        const includeOlderDrafts = parseIncludeOlderDrafts(transportPayload.include_older_drafts);
+        const draftHorizonDays = parseDraftHorizonDays(transportPayload.draft_horizon_days);
+        const projectFilters = parseProjectFilterValues(transportPayload.project);
         const projectFilterMatchQuery = buildProjectFilterMatchQuery(projectFilters);
 
         const aggregateRows = await db
@@ -1162,6 +1362,10 @@ router.post('/update', async (req: Request, res: Response) => {
         if (Object.prototype.hasOwnProperty.call(updateProps, 'attachments')) {
             updateProps.attachments = normalizeTaskAttachments(updateProps.attachments);
         }
+        const mutationEffectiveAt = updateProps.updated_at;
+        if (Object.prototype.hasOwnProperty.call(updateProps, 'updated_at')) {
+            delete updateProps.updated_at;
+        }
 
         logger.info('[crm.tickets.update] normalized ticket update payload', {
             ticket: ticketId,
@@ -1172,11 +1376,26 @@ router.post('/update', async (req: Request, res: Response) => {
             attachments_count: Array.isArray(updateProps.attachments) ? updateProps.attachments.length : undefined,
         });
 
-        updateProps.updated_at = Date.now();
+        const tasksCollection = db.collection(COLLECTIONS.TASKS);
+        const existingTask = await tasksCollection.findOne(
+            { _id: new ObjectId(ticketId) },
+            { projection: { updated_at: 1 } }
+        );
+        const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+            previousUpdatedAt: existingTask?.updated_at,
+            mutationEffectiveAt,
+        });
 
-        await db
-            .collection(COLLECTIONS.TASKS)
-            .updateOne({ _id: new ObjectId(ticketId) }, { $set: updateProps });
+        await tasksCollection
+            .updateOne(
+                { _id: new ObjectId(ticketId) },
+                {
+                    $set: {
+                        ...updateProps,
+                        updated_at: nextUpdatedAt,
+                    },
+                }
+            );
 
         res.status(200).json({ result: 'ok' });
     } catch (error) {
@@ -1204,7 +1423,7 @@ router.post('/create', async (req: Request, res: Response) => {
             return;
         }
 
-        const now = Date.now();
+        const now = new Date();
         const newTicket: Record<string, unknown> = {
             ...ticket,
             task_status: TASK_STATUSES.READY_10,
@@ -1339,9 +1558,18 @@ router.post(
 
             const normalizedAttachments = normalizeTaskAttachments(ticket.attachments);
             const nextAttachments = [...normalizedAttachments, attachment];
+            const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+                previousUpdatedAt: ticket.updated_at,
+                mutationEffectiveAt: attachment.uploaded_at,
+            });
             await db.collection(COLLECTIONS.TASKS).updateOne(
                 { _id: ticketObjectId },
-                { $set: { attachments: nextAttachments, updated_at: Date.now() } }
+                {
+                    $set: {
+                        attachments: nextAttachments,
+                        updated_at: nextUpdatedAt,
+                    },
+                }
             );
 
             res.status(200).json({
@@ -1451,9 +1679,17 @@ router.post('/delete-attachment', async (req: Request, res: Response) => {
         const nextAttachments = attachments.filter(
             (item) => item.attachment_id !== target.attachment_id
         );
+        const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+            previousUpdatedAt: ticket.updated_at,
+        });
         await db.collection(COLLECTIONS.TASKS).updateOne(
             { _id: ticketObjectId },
-            { $set: { attachments: nextAttachments, updated_at: Date.now() } }
+            {
+                $set: {
+                    attachments: nextAttachments,
+                    updated_at: nextUpdatedAt,
+                },
+            }
         );
         removeTaskAttachmentFile(target);
 
@@ -1493,16 +1729,33 @@ router.post('/bulk-change-status', async (req: Request, res: Response) => {
         const newStatus = toStoredTaskStatusValue(newStatusKey);
 
         const objectIds = ticketIds.map((id) => new ObjectId(id));
-
-        const dbRes = await db.collection(COLLECTIONS.TASKS).updateMany(
+        const tasksCollection = db.collection(COLLECTIONS.TASKS);
+        const existingTasks = await tasksCollection.find(
             { _id: { $in: objectIds } },
             {
-                $set: {
-                    task_status: newStatus,
-                    updated_at: Date.now(),
-                },
+                projection: { _id: 1, updated_at: 1 },
             }
-        );
+        ).toArray();
+        const operations = existingTasks.map((task) => ({
+            updateOne: {
+                filter: { _id: task._id },
+                update: {
+                    $set: {
+                        task_status: newStatus,
+                        updated_at: resolveMonotonicUpdatedAtNext({
+                            previousUpdatedAt: task.updated_at,
+                        }),
+                    },
+                },
+            },
+        }));
+        const dbRes = operations.length > 0
+            ? await tasksCollection.bulkWrite(operations)
+            : {
+                acknowledged: true,
+                matchedCount: 0,
+                modifiedCount: 0,
+            };
 
         res.status(200).json({ db_op_result: dbRes });
     } catch (error) {
@@ -1565,6 +1818,16 @@ router.post('/add-comment', async (req: Request, res: Response) => {
         };
 
         const dbRes = await db.collection(COLLECTIONS.COMMENTS).insertOne(newComment);
+        const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+            previousUpdatedAt: ticket.updated_at,
+            mutationEffectiveAt: rawCommentPayload?.created_at ?? now,
+        });
+        await db.collection(COLLECTIONS.TASKS).updateOne(
+            { _id: ticketObjectId },
+            {
+                $set: { updated_at: nextUpdatedAt },
+            }
+        );
 
         res.status(200).json({ db_op_result: dbRes, comment: { ...newComment, _id: dbRes.insertedId } });
     } catch (error) {
@@ -1617,6 +1880,24 @@ router.post('/add-work-hours', async (req: Request, res: Response) => {
         };
 
         const dbRes = await db.collection(COLLECTIONS.WORK_HOURS).insertOne(newWorkHour);
+        if (ObjectId.isValid(ticketDbId)) {
+            const ticketObjectId = new ObjectId(ticketDbId);
+            const existingTask = await db.collection(COLLECTIONS.TASKS).findOne(
+                { _id: ticketObjectId },
+                { projection: { updated_at: 1 } }
+            );
+            await db.collection(COLLECTIONS.TASKS).updateOne(
+                { _id: ticketObjectId },
+                {
+                    $set: {
+                        updated_at: resolveMonotonicUpdatedAtNext({
+                            previousUpdatedAt: existingTask?.updated_at,
+                            mutationEffectiveAt: workHour.created_at ?? now,
+                        }),
+                    },
+                }
+            );
+        }
 
         res.status(200).json({ db_op_result: dbRes });
     } catch (error) {
@@ -1640,9 +1921,45 @@ router.post('/edit-work-hour', async (req: Request, res: Response) => {
             return;
         }
 
+        const existingWorkHour = await db
+            .collection(COLLECTIONS.WORK_HOURS)
+            .findOne({ _id: new ObjectId(workHourId) });
+        if (!existingWorkHour) {
+            res.status(404).json({ error: 'work_hour not found' });
+            return;
+        }
+
         const dbRes = await db
             .collection(COLLECTIONS.WORK_HOURS)
             .updateOne({ _id: new ObjectId(workHourId) }, { $set: updateProps });
+
+        const previousTicketDbId = normalizeTicketDbId((existingWorkHour as Record<string, unknown>).ticket_db_id);
+        const nextTicketDbId = normalizeTicketDbId(updateProps.ticket_db_id) ?? previousTicketDbId;
+        const ticketIdsToBump = Array.from(
+            new Set([previousTicketDbId, nextTicketDbId].filter((value): value is string => Boolean(value)))
+        );
+        const mutationEffectiveAt = updateProps.updated_at;
+        await Promise.all(
+            ticketIdsToBump.map(async (taskId) => {
+                if (!ObjectId.isValid(taskId)) return;
+                const taskObjectId = new ObjectId(taskId);
+                const existingTask = await db.collection(COLLECTIONS.TASKS).findOne(
+                    { _id: taskObjectId },
+                    { projection: { updated_at: 1 } }
+                );
+                await db.collection(COLLECTIONS.TASKS).updateOne(
+                    { _id: taskObjectId },
+                    {
+                        $set: {
+                            updated_at: resolveMonotonicUpdatedAtNext({
+                                previousUpdatedAt: existingTask?.updated_at,
+                                mutationEffectiveAt,
+                            }),
+                        },
+                    }
+                );
+            })
+        );
 
         res.status(200).json({ db_op_result: dbRes });
     } catch (error) {
@@ -1665,9 +1982,24 @@ router.post('/delete', async (req: Request, res: Response) => {
             return;
         }
 
-        await db
-            .collection(COLLECTIONS.TASKS)
-            .updateOne({ _id: new ObjectId(ticketId) }, { $set: { is_deleted: true } });
+        const tasksCollection = db.collection(COLLECTIONS.TASKS);
+        const existingTask = await tasksCollection.findOne(
+            { _id: new ObjectId(ticketId) },
+            { projection: { updated_at: 1 } }
+        );
+        const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+            previousUpdatedAt: existingTask?.updated_at,
+        });
+        await tasksCollection
+            .updateOne(
+                { _id: new ObjectId(ticketId) },
+                {
+                    $set: {
+                        is_deleted: true,
+                        updated_at: nextUpdatedAt,
+                    },
+                }
+            );
 
         res.status(200).json({ result: 'ok' });
     } catch (error) {

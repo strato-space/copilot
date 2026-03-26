@@ -30,6 +30,8 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import sanitizeHtml from 'sanitize-html';
 import _ from 'lodash';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { useKanbanStore } from '../../store/kanbanStore';
 import { useAuthStore } from '../../store/authStore';
@@ -45,7 +47,7 @@ import {
 
 dayjs.extend(relativeTime);
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 const taskDescriptionSanitizerOptions: sanitizeHtml.IOptions = {
     allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
@@ -64,6 +66,16 @@ const taskDescriptionSanitizerOptions: sanitizeHtml.IOptions = {
         a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer' }, true),
     },
 };
+
+const taskDescriptionAllowedTags = Array.isArray(taskDescriptionSanitizerOptions.allowedTags)
+    ? taskDescriptionSanitizerOptions.allowedTags
+    : [];
+
+const taskDescriptionAllowedTagSet = new Set(
+    taskDescriptionAllowedTags
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map((tag) => tag.toLowerCase())
+);
 
 export const sanitizeTaskDescriptionHtml = (description?: string | null): string => {
     if (!description) {
@@ -139,6 +151,89 @@ const renderSanitizedHtml = (sanitizedHtml: string): ReactNode[] => {
         .filter((child): child is Exclude<ReactNode, boolean | null | undefined> =>
             child !== null && child !== undefined && child !== false
         );
+};
+
+const normalizeEscapedNewLines = (value: string): string =>
+    value.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+
+const normalizeMarkdownText = (value?: string | null): string => {
+    if (!value) return '';
+    return normalizeEscapedNewLines(value);
+};
+
+const stripMarkdownCodeLiterals = (value: string): string =>
+    value
+        // fenced code blocks first
+        .replace(/```[\s\S]*?```/g, '')
+        // then inline code spans
+        .replace(/`[^`\n]*`/g, '');
+
+const markdownSignalPatterns: RegExp[] = [
+    /`[^`\n]+`/m,
+    /(^|\n)\s{0,3}(?:[-*+]|\d+\.)\s+/m,
+    /(^|\n)\s{0,3}>+\s+/m,
+    /(^|\n)\s{0,3}#{1,6}\s+/m,
+    /\[[^\]]+\]\([^)]+\)/m,
+    /(?:\*\*|__|\*|_)[^*_`]+(?:\*\*|__|\*|_)/m,
+];
+
+const containsMarkdownSignals = (value: string): boolean =>
+    markdownSignalPatterns.some((pattern) => pattern.test(value));
+
+// Keep legacy rich-text HTML rendering support for task descriptions edited via HTML editors.
+const containsKnownHtmlTags = (value: string): boolean => {
+    const valueWithoutCodeLiterals = stripMarkdownCodeLiterals(value);
+    const tagMatches = valueWithoutCodeLiterals.matchAll(/<\s*\/?\s*([a-z][a-z0-9-]*)\b[^>]*>/gi);
+    for (const match of tagMatches) {
+        const tagName = match[1]?.toLowerCase();
+        if (tagName && taskDescriptionAllowedTagSet.has(tagName)) {
+            return true;
+        }
+    }
+    return false;
+};
+
+export const shouldRenderLegacyHtmlDescriptionText = (value?: string | null): boolean => {
+    const normalized = normalizeMarkdownText(value);
+    if (!normalized.trim()) return false;
+    if (containsMarkdownSignals(normalized)) return false;
+    const valueWithoutCodeLiterals = stripMarkdownCodeLiterals(normalized);
+    if (!containsKnownHtmlTags(valueWithoutCodeLiterals)) return false;
+    return true;
+};
+
+const renderMarkdownBlock = (value: string): ReactNode => (
+    <div className="prose prose-sm max-w-none">
+        <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+                p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+                ul: ({ children }) => <ul className="mb-2 list-disc pl-5">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-2 list-decimal pl-5">{children}</ol>,
+                li: ({ children }) => <li className="mb-1">{children}</li>,
+                code: ({ children }) => <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px]">{children}</code>,
+                pre: ({ children }) => <pre className="overflow-x-auto rounded bg-slate-100 p-3 text-[12px]">{children}</pre>,
+                a: ({ href, children }) => (
+                    <a href={href} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+                        {children}
+                    </a>
+                ),
+                blockquote: ({ children }) => <blockquote className="border-l-4 border-slate-300 pl-3 text-slate-600">{children}</blockquote>,
+                table: ({ children }) => <table className="mb-2 w-full border-collapse text-sm">{children}</table>,
+                thead: ({ children }) => <thead className="bg-slate-50">{children}</thead>,
+                th: ({ children }) => <th className="border border-slate-200 px-2 py-1 text-left">{children}</th>,
+                td: ({ children }) => <td className="border border-slate-200 px-2 py-1 align-top">{children}</td>,
+            }}
+        >
+            {value}
+        </ReactMarkdown>
+    </div>
+);
+
+const renderMarkdownOrText = (value?: string | null): ReactNode => {
+    const normalized = normalizeMarkdownText(value);
+    if (!normalized) return <Text type="secondary">No content</Text>;
+    return renderMarkdownBlock(normalized);
 };
 
 interface TaskTypeInfo {
@@ -288,6 +383,7 @@ const TaskPage = () => {
     const sourceInfo = resolveTaskSourceInfo(task);
     const safeTaskDescription = sanitizeTaskDescriptionHtml(task.description);
     const safeTaskDescriptionNodes = renderSanitizedHtml(safeTaskDescription);
+    const shouldRenderLegacyHtmlDescription = shouldRenderLegacyHtmlDescriptionText(task.description);
     const attachments = Array.isArray(task.attachments) ? task.attachments : [];
 
     const formatFileSize = (size: number): string => {
@@ -472,7 +568,11 @@ const TaskPage = () => {
                     {/* Description */}
                     <Card title="Description" bordered={false}>
                         {task.description ? (
-                            <div className="prose max-w-none">{safeTaskDescriptionNodes}</div>
+                            shouldRenderLegacyHtmlDescription ? (
+                                <div className="prose max-w-none">{safeTaskDescriptionNodes}</div>
+                            ) : (
+                                renderMarkdownOrText(task.description)
+                            )
                         ) : (
                             <Text type="secondary">No description provided</Text>
                         )}
@@ -557,7 +657,7 @@ const TaskPage = () => {
                                                 <Text strong>{typeof comment.author === 'object' ? comment.author?.name : comment.author ?? 'Unknown'}</Text>
                                                 <Text type="secondary">{dayjs(comment.created_at).format('DD.MM.YYYY HH:mm')}</Text>
                                             </div>
-                                            <Paragraph>{comment.comment}</Paragraph>
+                                            {renderMarkdownOrText(comment.comment)}
                                         </div>
                                     ),
                                 }))}

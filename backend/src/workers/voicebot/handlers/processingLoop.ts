@@ -51,6 +51,7 @@ type ProcessingLoopOptions = {
 
 type SessionRecord = {
   _id: ObjectId;
+  processors?: unknown[];
   is_corrupted?: boolean;
   error_source?: string;
   transcription_error?: string;
@@ -77,7 +78,11 @@ type MessageRecord = {
   transcription_next_attempt_at?: number | Date | string;
   categorization_retry_reason?: string;
   categorization_next_attempt_at?: number | Date | string;
+  categorization?: unknown;
+  categorization_attempts?: number;
   processors_data?: Record<string, unknown>;
+  transcription_text?: string;
+  text?: string;
 };
 
 type TaskRecord = {
@@ -149,6 +154,73 @@ const canRetryCategorization = (message: MessageRecord, now: number): boolean =>
   return true;
 };
 
+const normalizeProcessorList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
+
+const isCategorizationEnabledForSession = (session: SessionRecord): boolean => {
+  const processors = normalizeProcessorList(session.processors);
+  return processors.length === 0 || processors.includes(VOICEBOT_PROCESSORS.CATEGORIZATION);
+};
+
+const isCreateTasksEnabledForSession = (session: SessionRecord): boolean => {
+  const sessionProcessors = normalizeProcessorList(session.session_processors);
+  return sessionProcessors.length === 0 || sessionProcessors.includes(VOICEBOT_JOBS.postprocessing.CREATE_TASKS);
+};
+
+const hasTranscribedText = (message: MessageRecord): boolean =>
+  Boolean(String(message.transcription_text || message.text || '').trim());
+
+const shouldRecoverUncategorizedTranscribedMessage = (message: MessageRecord): boolean => {
+  if (!message.is_transcribed || message.to_transcribe) return false;
+  if (Array.isArray(message.categorization)) return false;
+  if (!hasTranscribedText(message)) return false;
+
+  const processorData = (message.processors_data?.[VOICEBOT_PROCESSORS.CATEGORIZATION] ||
+    {}) as Record<string, unknown>;
+  if (processorData.is_processing === true || processorData.is_processed === true) return false;
+
+  const attempts = Number(message.categorization_attempts || 0) || 0;
+  if (attempts > 0) return false;
+  if (String(message.categorization_retry_reason || '').trim()) return false;
+
+  return true;
+};
+
+const uncategorizedRecoveryPrioritizationPredicate = (): Record<string, unknown> => ({
+  $and: [
+    { is_transcribed: true },
+    { to_transcribe: { $ne: true } },
+    {
+      $or: [
+        { categorization: { $exists: false } },
+        { categorization: null },
+        { $expr: { $not: { $isArray: '$categorization' } } },
+      ],
+    },
+    {
+      $or: [
+        { transcription_text: { $type: 'string', $ne: '' } },
+        { text: { $type: 'string', $ne: '' } },
+      ],
+    },
+    { 'processors_data.categorization.is_processing': { $ne: true } },
+    { 'processors_data.categorization.is_processed': { $ne: true } },
+    {
+      $or: [
+        { categorization_attempts: { $exists: false } },
+        { categorization_attempts: { $lte: 0 } },
+      ],
+    },
+    {
+      $or: [
+        { categorization_retry_reason: { $exists: false } },
+        { categorization_retry_reason: '' },
+        { categorization_retry_reason: null },
+      ],
+    },
+  ],
+});
+
 const canRetryTranscribe = (message: MessageRecord, now: number): boolean => {
   const attempts = Number(message.transcribe_attempts || 0) || 0;
   const isQuotaRetry = isQuotaBlockedMessage(message);
@@ -188,6 +260,8 @@ export const handleProcessingLoopJob = async (
   const voiceQueue = options.queues?.[VOICEBOT_QUEUES.VOICE] || runtimeQueues?.[VOICEBOT_QUEUES.VOICE] || null;
   const processorsQueue =
     options.queues?.[VOICEBOT_QUEUES.PROCESSORS] || runtimeQueues?.[VOICEBOT_QUEUES.PROCESSORS] || null;
+  const postprocessorsQueue =
+    options.queues?.[VOICEBOT_QUEUES.POSTPROCESSORS] || runtimeQueues?.[VOICEBOT_QUEUES.POSTPROCESSORS] || null;
 
   const sessionsScanBaseFilter: Record<string, unknown> = {
     is_deleted: { $ne: true },
@@ -219,6 +293,7 @@ export const handleProcessingLoopJob = async (
             {
               categorization_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] },
             },
+            uncategorizedRecoveryPrioritizationPredicate(),
           ],
         })
       )
@@ -283,6 +358,7 @@ export const handleProcessingLoopJob = async (
 
   for (const session of sessions) {
     const sessionObjectId = new ObjectId(session._id);
+    const sessionId = sessionObjectId.toString();
 
     if (isQuotaBlockedSession(session)) {
       await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
@@ -356,11 +432,15 @@ export const handleProcessingLoopJob = async (
     }
 
     const categorizationsToRetry = messages.filter((message) => canRetryCategorization(message, now));
+    const shouldRecoverUncategorized = isCategorizationEnabledForSession(session);
+    const uncategorizedTranscribedMessages = shouldRecoverUncategorized
+      ? messages.filter((message) => shouldRecoverUncategorizedTranscribedMessage(message))
+      : [];
+    const uncategorizedRecoveredMessageIds = new Set<string>();
 
     for (const message of categorizationsToRetry) {
       const messageObjectId = new ObjectId(message._id);
       const messageId = messageObjectId.toString();
-      const sessionId = sessionObjectId.toString();
       const categorizeJobId = `${sessionId}-${messageId}-CATEGORIZE`;
       const categorizationProcessorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
 
@@ -415,6 +495,124 @@ export const handleProcessingLoopJob = async (
       }
     }
 
+    for (const message of uncategorizedTranscribedMessages) {
+      const messageObjectId = new ObjectId(message._id);
+      const messageId = messageObjectId.toString();
+      const categorizeJobId = `${sessionId}-${messageId}-CATEGORIZE`;
+      const categorizationProcessorKey = `processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}`;
+
+      if (!processorsQueue) {
+        skippedRequeueNoProcessors += 1;
+        continue;
+      }
+
+      try {
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+          runtimeQuery({ _id: messageObjectId }),
+          {
+            $set: {
+              [`${categorizationProcessorKey}.is_processing`]: true,
+              [`${categorizationProcessorKey}.is_processed`]: false,
+              [`${categorizationProcessorKey}.is_finished`]: false,
+              [`${categorizationProcessorKey}.job_queued_timestamp`]: now,
+            },
+            $unset: {
+              categorization_next_attempt_at: 1,
+              categorization_retry_reason: 1,
+              categorization_error: 1,
+              categorization_error_message: 1,
+              categorization_error_timestamp: 1,
+            },
+          }
+        );
+
+        await processorsQueue.add(
+          VOICEBOT_JOBS.voice.CATEGORIZE,
+          {
+            message_id: messageId,
+            session_id: sessionId,
+            job_id: categorizeJobId,
+          },
+          { deduplication: { id: categorizeJobId } }
+        );
+
+        requeuedCategorizations += 1;
+        uncategorizedRecoveredMessageIds.add(messageId);
+      } catch (error) {
+        logger.error('[voicebot-worker] processing_loop uncategorized transcribed recovery enqueue failed', {
+          session_id: sessionId,
+          message_id: messageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+          runtimeQuery({ _id: messageObjectId }),
+          {
+            $set: {
+              [`${categorizationProcessorKey}.is_processing`]: false,
+              [`${categorizationProcessorKey}.is_processed`]: false,
+              [`${categorizationProcessorKey}.is_finished`]: false,
+            },
+            $unset: {
+              [`${categorizationProcessorKey}.job_queued_timestamp`]: 1,
+            },
+          }
+        );
+      }
+    }
+
+    if (uncategorizedRecoveredMessageIds.size > 0 && isCreateTasksEnabledForSession(session)) {
+      const requestedAt = Date.now();
+      await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+        runtimeQuery({ _id: sessionObjectId }),
+        {
+          $set: {
+            'processors_data.CREATE_TASKS.auto_requested_at': requestedAt,
+            'processors_data.CREATE_TASKS.is_processed': false,
+            'processors_data.CREATE_TASKS.is_processing': false,
+            updated_at: new Date(),
+          },
+          $unset: {
+            'processors_data.CREATE_TASKS.error': 1,
+            'processors_data.CREATE_TASKS.error_message': 1,
+            'processors_data.CREATE_TASKS.error_timestamp': 1,
+            'processors_data.CREATE_TASKS.no_task_decision': 1,
+            'processors_data.CREATE_TASKS.no_task_reason_code': 1,
+            'processors_data.CREATE_TASKS.no_task_reason': 1,
+            'processors_data.CREATE_TASKS.no_task_evidence': 1,
+            'processors_data.CREATE_TASKS.no_task_inferred': 1,
+            'processors_data.CREATE_TASKS.no_task_source': 1,
+            'processors_data.CREATE_TASKS.last_tasks_count': 1,
+          },
+        }
+      );
+
+      if (postprocessorsQueue) {
+        try {
+          await postprocessorsQueue.add(
+            VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
+            {
+              session_id: sessionId,
+              auto_requested_at: requestedAt,
+              refresh_mode: 'incremental_refresh',
+            },
+            {
+              deduplication: { id: `${sessionId}-CREATE_TASKS-AUTO` },
+            }
+          );
+        } catch (error) {
+          logger.error('[voicebot-worker] processing_loop create_tasks recovery enqueue failed', {
+            session_id: sessionId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      } else {
+        logger.warn('[voicebot-worker] processing_loop create_tasks recovery queue unavailable', {
+          session_id: sessionId,
+        });
+      }
+    }
+
     const untranscribedMessages = messages.filter(
       (message) => !message.is_transcribed && canRetryTranscribe(message, now)
     );
@@ -422,7 +620,6 @@ export const handleProcessingLoopJob = async (
     for (const message of untranscribedMessages) {
       const messageObjectId = new ObjectId(message._id);
       const messageId = messageObjectId.toString();
-      const sessionId = sessionObjectId.toString();
 
       if (!voiceQueue) {
         skippedRequeueNoQueue += 1;
