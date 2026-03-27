@@ -13,6 +13,6 @@ describe('voice row material targeting route contract', () => {
   });
 
   it('propagates explicit linked target into new_message realtime payload', () => {
-    expect(source).toContain('image_anchor_linked_message_id: messageDoc.image_anchor_linked_message_id ?? null,');
+    expect(source).toContain('image_anchor_linked_message_id: normalizedMessageDoc.image_anchor_linked_message_id ?? null,');
   });
 });

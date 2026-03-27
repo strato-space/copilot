@@ -66,6 +66,54 @@ const hasVisibleTranscriptionContent = (message: Record<string, unknown>): boole
         typeof message.transcription_error === 'string' && message.transcription_error.trim().length > 0;
     if (hasTranscriptionError) return true;
 
+    const processingStateRaw =
+        (typeof message.transcription_processing_state === 'string' && message.transcription_processing_state) ||
+        (typeof message.transcriptionProcessingState === 'string' && message.transcriptionProcessingState) ||
+        (typeof message.transcription_state === 'string' && message.transcription_state) ||
+        '';
+    const processingState = processingStateRaw.trim().toLowerCase();
+    if (
+        processingState === 'pending_classification' ||
+        processingState === 'pending_transcription' ||
+        processingState === 'classified_skip' ||
+        processingState === 'transcription_error' ||
+        processingState === 'transcribed'
+    ) {
+        return true;
+    }
+
+    const hasProjection = [
+        message.primary_payload_media_kind,
+        message.primaryPayloadMediaKind,
+        message.payload_media_kind,
+        message.payloadMediaKind,
+        message.primary_transcription_attachment_index,
+        message.primaryTranscriptionAttachmentIndex,
+        message.transcription_eligibility,
+        message.transcriptionEligibility,
+        message.classification_resolution_state,
+        message.classificationResolutionState,
+    ].some((value) => value != null && String(value).trim().length > 0);
+    if (hasProjection) return true;
+
+    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    const hasAttachmentProjection = attachments.some((attachment) => {
+        if (!attachment || typeof attachment !== 'object') return false;
+        const record = attachment as Record<string, unknown>;
+        return [
+            record.payload_media_kind,
+            record.classification_resolution_state,
+            record.transcription_eligibility,
+            record.transcription_processing_state,
+            record.transcription_skip_reason,
+            record.transcription_text,
+            record.transcription_error,
+            record.file_id,
+            record.file_unique_id,
+        ].some((value) => value != null && String(value).trim().length > 0);
+    });
+    if (hasAttachmentProjection) return true;
+
     return message.is_transcribed === true;
 };
 

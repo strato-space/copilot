@@ -395,6 +395,336 @@ describe('voicebot tgbot ingress handlers', () => {
     expect(setActiveVoiceSessionMock).toHaveBeenCalledTimes(1);
   });
 
+  it('classifies telemost-style webm attachment as pending media without legacy transcript fallback', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '1301' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+      },
+    });
+
+    const result = await handleAttachmentIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 1301,
+        chat_id: 1301,
+        username: 'telemost-user',
+        message_id: 5201,
+        message_timestamp: 1770511111,
+        message_type: 'document',
+        attachments: [
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'telemost-file-1',
+            file_unique_id: 'telemost-uniq-1',
+            name: 'telemost-recording.webm',
+            mimeType: 'video/webm',
+            size: 4_096_000,
+            duration_ms: 85_000,
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(inserted.is_transcribed).toBe(false);
+    expect(inserted.to_transcribe).toBe(false);
+    expect(inserted.transcribe_attempts).toBe(0);
+    expect(inserted.source_note_text).toBeNull();
+    expect(inserted.primary_payload_media_kind).toBe('video');
+    expect(inserted.primary_transcription_attachment_index).toBeNull();
+    expect(inserted.classification_resolution_state).toBe('pending');
+    expect(inserted.transcription_eligibility).toBeNull();
+    expect(inserted.transcription_processing_state).toBe('pending_classification');
+    expect(inserted.file_id).toBe('telemost-file-1');
+    expect(inserted.file_unique_id).toBe('telemost-uniq-1');
+    expect(inserted.file_name).toBe('telemost-recording.webm');
+    expect(inserted.mime_type).toBe('video/webm');
+    expect(inserted.transcription_method).toBeUndefined();
+    expect(inserted.transcription_text).toBeUndefined();
+    expect(inserted.transcription).toBeUndefined();
+
+    const insertedAttachments = inserted.attachments as Array<Record<string, unknown>>;
+    expect(Array.isArray(insertedAttachments)).toBe(true);
+    expect(insertedAttachments[0]).toEqual(
+      expect.objectContaining({
+        payload_media_kind: 'video',
+        speech_bearing_assessment: 'unresolved',
+        classification_resolution_state: 'pending',
+        transcription_eligibility: null,
+        transcription_eligibility_basis: 'ingress_requires_speech_probe',
+      })
+    );
+  });
+
+  it('stores telemost caption as source note without fabricating transcript while media stays pending', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '1302' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+      },
+    });
+
+    const result = await handleAttachmentIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 1302,
+        chat_id: 1302,
+        username: 'telemost-caption-user',
+        message_id: 5202,
+        message_timestamp: 1770512222,
+        message_type: 'document',
+        caption: 'meeting recap from sender',
+        attachments: [
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'telemost-file-2',
+            file_unique_id: 'telemost-uniq-2',
+            name: 'telemost-caption.webm',
+            mimeType: 'video/webm',
+            size: 4_096_100,
+            duration_ms: 95_000,
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(inserted.source_note_text).toBe('meeting recap from sender');
+    expect(inserted.classification_resolution_state).toBe('pending');
+    expect(inserted.transcription_eligibility).toBeNull();
+    expect(inserted.transcription_processing_state).toBe('pending_classification');
+    expect(inserted.is_transcribed).toBe(false);
+    expect(inserted.to_transcribe).toBe(false);
+    expect(inserted.transcription_method).toBeUndefined();
+    expect(inserted.transcription_text).toBeUndefined();
+    expect(inserted.transcription).toBeUndefined();
+  });
+
+  it('classifies video document without audio track as ineligible with no_audio_track skip reason', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '1304' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+      },
+    });
+
+    const result = await handleAttachmentIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 1304,
+        chat_id: 1304,
+        username: 'video-no-audio-user',
+        message_id: 5204,
+        message_timestamp: 1770514444,
+        message_type: 'document',
+        attachments: [
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'video-no-audio-file-1',
+            file_unique_id: 'video-no-audio-uniq-1',
+            name: 'silent-recording.webm',
+            mimeType: 'video/webm',
+            size: 1_024_000,
+            has_audio: false,
+            audio_track_state: 'missing',
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(inserted.primary_transcription_attachment_index).toBe(0);
+    expect(inserted.primary_payload_media_kind).toBe('video');
+    expect(inserted.classification_resolution_state).toBe('resolved');
+    expect(inserted.transcription_eligibility).toBe('ineligible');
+    expect(inserted.transcription_processing_state).toBe('classified_skip');
+    expect(inserted.transcription_skip_reason).toBe('no_audio_track');
+    expect(inserted.to_transcribe).toBe(false);
+    expect(inserted.is_transcribed).toBe(false);
+    const insertedAttachments = inserted.attachments as Array<Record<string, unknown>>;
+    expect(insertedAttachments[0]).toEqual(
+      expect.objectContaining({
+        payload_media_kind: 'video',
+        classification_resolution_state: 'resolved',
+        transcription_eligibility: 'ineligible',
+        transcription_skip_reason: 'no_audio_track',
+        transcription_eligibility_basis: 'ingress_video_no_audio_track',
+      })
+    );
+  });
+
+  it('treats extension-only .webm without audio as video and skips transcription', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '1305' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+      },
+    });
+
+    const result = await handleAttachmentIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 1305,
+        chat_id: 1305,
+        username: 'silent-webm-no-mime-user',
+        message_id: 5205,
+        message_timestamp: 1770515555,
+        message_type: 'document',
+        attachments: [
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'video-no-audio-file-2',
+            file_unique_id: 'video-no-audio-uniq-2',
+            name: 'silent-extension-only.webm',
+            size: 1_024_001,
+            has_audio: false,
+            audio_track_state: 'none',
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(inserted.primary_payload_media_kind).toBe('video');
+    expect(inserted.transcription_eligibility).toBe('ineligible');
+    expect(inserted.transcription_processing_state).toBe('classified_skip');
+    expect(inserted.transcription_skip_reason).toBe('no_audio_track');
+    expect(inserted.to_transcribe).toBe(false);
+  });
+
+  it('projects deterministic primary attachment for all-ineligible multi-attachment ingress', async () => {
+    const performerId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    getActiveVoiceSessionForUserMock.mockResolvedValue({
+      active_session_id: sessionId,
+    });
+
+    const { db, spies } = makeDb({
+      performer: { _id: performerId, telegram_id: '1303' },
+      activeSession: {
+        _id: sessionId,
+        session_type: 'multiprompt_voice_session',
+        is_active: true,
+      },
+    });
+
+    const result = await handleAttachmentIngress({
+      deps: buildIngressDeps({ db }),
+      input: {
+        telegram_user_id: 1303,
+        chat_id: 1303,
+        username: 'multi-ineligible-user',
+        message_id: 5203,
+        message_timestamp: 1770513333,
+        message_type: 'document',
+        attachments: [
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'doc-file-idx0',
+            file_unique_id: 'doc-uniq-idx0',
+            name: 'a.pdf',
+            mimeType: 'application/pdf',
+            duration_ms: 30_000,
+            size: 500,
+          },
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'doc-file-idx1',
+            file_unique_id: 'doc-uniq-idx1',
+            name: 'b.docx',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            duration_ms: 30_000,
+            size: 900,
+          },
+          {
+            kind: 'file',
+            source: 'telegram',
+            file_id: 'doc-file-idx2',
+            file_unique_id: 'doc-uniq-idx2',
+            name: 'c.xlsx',
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            duration_ms: 30_000,
+            size: 900,
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const inserted = spies.messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(inserted.primary_transcription_attachment_index).toBe(1);
+    expect(inserted.primary_payload_media_kind).toBe('binary_document');
+    expect(inserted.classification_resolution_state).toBe('resolved');
+    expect(inserted.transcription_eligibility).toBe('ineligible');
+    expect(inserted.transcription_processing_state).toBe('classified_skip');
+    expect(inserted.transcription_skip_reason).toBe('ineligible_payload_media_kind');
+    expect(inserted.file_id).toBe('doc-file-idx1');
+    expect(inserted.file_unique_id).toBe('doc-uniq-idx1');
+    expect(inserted.file_name).toBe('b.docx');
+    expect(inserted.mime_type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(inserted.transcription_text).toBeUndefined();
+    expect(inserted.transcription).toBeUndefined();
+    const insertedAttachments = inserted.attachments as Array<Record<string, unknown>>;
+    expect(insertedAttachments.map((attachment) => attachment.transcription_eligibility)).toEqual([
+      'ineligible',
+      'ineligible',
+      'ineligible',
+    ]);
+    expect(insertedAttachments.map((attachment) => attachment.classification_resolution_state)).toEqual([
+      'resolved',
+      'resolved',
+      'resolved',
+    ]);
+  });
+
   it('queues categorization and create_tasks refresh for add_attachment text with canonical transcription shape', async () => {
     const performerId = new ObjectId();
     const sessionId = new ObjectId();

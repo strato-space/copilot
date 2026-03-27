@@ -2,6 +2,7 @@ import { Db, ObjectId } from 'mongodb';
 import type { Request } from 'express';
 import { VOICEBOT_COLLECTIONS, VOICEBOT_PROCESSORS } from '../../../constants.js';
 import { buildSegmentsFromChunks, resolveMessageDurationSeconds } from '../../../services/voicebot/transcriptionTimeline.js';
+import { resolveRetryOrchestrationState } from '../../../workers/voicebot/handlers/shared/retryOrchestrationState.js';
 
 const SEGMENT_TIME_EPSILON = 1e-6;
 
@@ -548,4 +549,416 @@ export const getOptionalTrimmedString = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed || null;
+};
+
+type PayloadMediaKind = 'audio' | 'video' | 'image' | 'binary_document' | 'unknown';
+type TranscriptionEligibility = 'eligible' | 'ineligible' | null;
+type ClassificationResolutionState = 'resolved' | 'pending';
+type TranscriptionProcessingState =
+  | 'pending_classification'
+  | 'pending_transcription'
+  | 'transcribed'
+  | 'classified_skip'
+  | 'transcription_error';
+type SpeechBearingAssessment = 'speech' | 'non_speech' | 'unresolved';
+
+const AUDIO_EXTENSIONS = new Set([
+  'aac', 'aiff', 'alac', 'amr', 'flac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'webm', 'wma',
+]);
+const VIDEO_EXTENSIONS = new Set([
+  'avi', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'webm', 'wmv',
+]);
+const IMAGE_EXTENSIONS = new Set([
+  'avif', 'bmp', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp',
+]);
+
+const toTrimmedLowerString = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+};
+
+const toNullableTrimmedString = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const parseAttachmentIndex = (value: unknown, attachmentCount: number): number | null => {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) return null;
+  if (attachmentCount <= 0) return null;
+  if (numeric >= attachmentCount) return null;
+  return numeric;
+};
+
+const parsePayloadMediaKind = (value: unknown): PayloadMediaKind | null => {
+  const normalized = toTrimmedLowerString(value);
+  if (normalized === 'audio' || normalized === 'video' || normalized === 'image' || normalized === 'binary_document' || normalized === 'unknown') {
+    return normalized;
+  }
+  return null;
+};
+
+const parseTranscriptionEligibility = (value: unknown): TranscriptionEligibility => {
+  const normalized = toTrimmedLowerString(value);
+  if (normalized === 'eligible') return 'eligible';
+  if (normalized === 'ineligible') return 'ineligible';
+  return null;
+};
+
+const parseClassificationResolutionState = (value: unknown): ClassificationResolutionState | null => {
+  const normalized = toTrimmedLowerString(value);
+  if (normalized === 'resolved' || normalized === 'pending') return normalized;
+  return null;
+};
+
+const parseTranscriptionProcessingState = (value: unknown): TranscriptionProcessingState | null => {
+  const normalized = toTrimmedLowerString(value);
+  if (
+    normalized === 'pending_classification'
+    || normalized === 'pending_transcription'
+    || normalized === 'transcribed'
+    || normalized === 'classified_skip'
+    || normalized === 'transcription_error'
+  ) {
+    return normalized;
+  }
+  return null;
+};
+
+const parseSpeechBearingAssessment = (value: unknown): SpeechBearingAssessment | null => {
+  const normalized = toTrimmedLowerString(value);
+  if (normalized === 'speech' || normalized === 'non_speech' || normalized === 'unresolved') {
+    return normalized;
+  }
+  if (normalized === 'unknown') return 'unresolved';
+  if (normalized === 'not_speech_bearing') return 'non_speech';
+  return null;
+};
+
+const inferPayloadMediaKind = ({
+  payloadMediaKind,
+  mimeType,
+  fileName,
+  kind,
+  messageType,
+}: {
+  payloadMediaKind: unknown;
+  mimeType: unknown;
+  fileName: unknown;
+  kind: unknown;
+  messageType: unknown;
+}): PayloadMediaKind => {
+  const explicit = parsePayloadMediaKind(payloadMediaKind);
+  if (explicit) return explicit;
+
+  const normalizedKind = toTrimmedLowerString(kind);
+  if (normalizedKind === 'voice' || normalizedKind === 'audio') return 'audio';
+  if (normalizedKind === 'video') return 'video';
+  if (normalizedKind === 'image' || normalizedKind === 'photo') return 'image';
+
+  const normalizedType = toTrimmedLowerString(messageType);
+  if (normalizedType === 'voice' || normalizedType === 'audio') return 'audio';
+  if (normalizedType === 'video') return 'video';
+  if (normalizedType === 'image' || normalizedType === 'photo') return 'image';
+
+  const normalizedMimeType = toTrimmedLowerString(mimeType);
+  if (normalizedMimeType.startsWith('audio/')) return 'audio';
+  if (normalizedMimeType.startsWith('video/')) return 'video';
+  if (normalizedMimeType.startsWith('image/')) return 'image';
+  if (normalizedMimeType.startsWith('application/')) return 'binary_document';
+
+  const normalizedFileName = toTrimmedLowerString(fileName);
+  const extension = normalizedFileName.includes('.')
+    ? normalizedFileName.slice(normalizedFileName.lastIndexOf('.') + 1)
+    : '';
+  if (AUDIO_EXTENSIONS.has(extension)) return 'audio';
+  if (VIDEO_EXTENSIONS.has(extension)) return 'video';
+  if (IMAGE_EXTENSIONS.has(extension)) return 'image';
+
+  if (normalizedKind === 'document' || normalizedType === 'document') return 'binary_document';
+  return 'unknown';
+};
+
+const hasTranscriptionError = (value: unknown): boolean => {
+  if (!value) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (typeof value === 'object') return true;
+  return false;
+};
+
+const deriveProcessingState = ({
+  explicit,
+  resolutionState,
+  eligibility,
+  isTranscribed,
+  toTranscribe,
+  transcriptionError,
+}: {
+  explicit: TranscriptionProcessingState | null;
+  resolutionState: ClassificationResolutionState;
+  eligibility: TranscriptionEligibility;
+  isTranscribed: boolean;
+  toTranscribe: boolean;
+  transcriptionError: boolean;
+}): TranscriptionProcessingState => {
+  if (explicit) return explicit;
+  if (resolutionState === 'pending') return 'pending_classification';
+  if (isTranscribed) return 'transcribed';
+  if (eligibility === 'ineligible') return 'classified_skip';
+  if (transcriptionError) return 'transcription_error';
+  if (eligibility === 'eligible' || toTranscribe) return 'pending_transcription';
+  return 'pending_classification';
+};
+
+const deriveEligibility = ({
+  explicit,
+  resolutionState,
+  processingState,
+  isTranscribed,
+  toTranscribe,
+}: {
+  explicit: TranscriptionEligibility;
+  resolutionState: ClassificationResolutionState;
+  processingState: TranscriptionProcessingState;
+  isTranscribed: boolean;
+  toTranscribe: boolean;
+}): TranscriptionEligibility => {
+  if (resolutionState === 'pending') return null;
+  if (explicit) return explicit;
+  if (processingState === 'classified_skip') return 'ineligible';
+  if (processingState === 'pending_transcription' || processingState === 'transcribed' || processingState === 'transcription_error') {
+    return 'eligible';
+  }
+  if (isTranscribed || toTranscribe) return 'eligible';
+  return 'ineligible';
+};
+
+const deriveSpeechBearingAssessment = ({
+  explicit,
+  eligibility,
+  skipReason,
+  processingState,
+}: {
+  explicit: SpeechBearingAssessment | null;
+  eligibility: TranscriptionEligibility;
+  skipReason: string | null;
+  processingState: TranscriptionProcessingState;
+}): SpeechBearingAssessment => {
+  if (explicit) return explicit;
+  if (processingState === 'pending_classification' || eligibility === null) return 'unresolved';
+  if (eligibility === 'eligible') return 'speech';
+  if (skipReason === 'no_speech_audio') return 'non_speech';
+  return 'unresolved';
+};
+
+export const normalizeMessageAttachmentTranscriptionContract = (
+  inputMessage: Record<string, unknown>
+): Record<string, unknown> => {
+  const message = isObject(inputMessage) ? inputMessage : {};
+  const rawAttachments = Array.isArray(message.attachments)
+    ? message.attachments.filter((item): item is Record<string, unknown> => isObject(item))
+    : [];
+
+  const explicitPrimaryIndex = parseAttachmentIndex(
+    message.primary_transcription_attachment_index,
+    rawAttachments.length
+  );
+  const hasAnyClassificationSignals = rawAttachments.some((attachment) =>
+    attachment.transcription_eligibility != null
+    || attachment.classification_resolution_state != null
+    || attachment.payload_media_kind != null
+    || attachment.transcription_processing_state != null
+  ) || message.transcription_eligibility != null
+    || message.classification_resolution_state != null
+    || message.primary_payload_media_kind != null
+    || message.transcription_processing_state != null;
+
+  const eligibleAttachmentIndex = rawAttachments.findIndex(
+    (attachment) => parseTranscriptionEligibility(attachment.transcription_eligibility) === 'eligible'
+  );
+  const hasPendingAttachment = rawAttachments.some(
+    (attachment) => parseClassificationResolutionState(attachment.classification_resolution_state) === 'pending'
+  );
+  const primaryIndex = explicitPrimaryIndex
+    ?? (eligibleAttachmentIndex >= 0
+      ? eligibleAttachmentIndex
+      : (!hasPendingAttachment && rawAttachments.length === 1 && hasAnyClassificationSignals ? 0 : null));
+  const primaryAttachment = primaryIndex != null ? rawAttachments[primaryIndex] ?? null : null;
+
+  const primaryPayloadMediaKind = inferPayloadMediaKind({
+    payloadMediaKind: message.primary_payload_media_kind ?? primaryAttachment?.payload_media_kind,
+    mimeType: message.mime_type ?? primaryAttachment?.mime_type ?? primaryAttachment?.mimeType,
+    fileName: message.file_name ?? primaryAttachment?.file_name ?? primaryAttachment?.name ?? primaryAttachment?.filename,
+    kind: primaryAttachment?.kind,
+    messageType: message.message_type,
+  });
+
+  const explicitResolutionState = parseClassificationResolutionState(message.classification_resolution_state);
+  const explicitProcessingState = parseTranscriptionProcessingState(message.transcription_processing_state);
+  const explicitEligibility = parseTranscriptionEligibility(message.transcription_eligibility);
+  const orchestrationState = resolveRetryOrchestrationState(message);
+  const inferredIsTranscribed = Boolean(message.is_transcribed);
+  const toTranscribe = Boolean(message.to_transcribe);
+  const transcriptionError = hasTranscriptionError(message.transcription_error);
+  const hasResolvedLegacySignal =
+    explicitEligibility != null
+    || inferredIsTranscribed
+    || toTranscribe
+    || transcriptionError
+    || explicitProcessingState === 'transcribed'
+    || explicitProcessingState === 'pending_transcription'
+    || explicitProcessingState === 'transcription_error'
+    || explicitProcessingState === 'classified_skip';
+
+  let classificationResolutionState: ClassificationResolutionState = explicitResolutionState
+    ?? (hasResolvedLegacySignal
+      ? 'resolved'
+      : (rawAttachments.length > 0 ? 'pending' : 'resolved'));
+  let transcriptionEligibility: TranscriptionEligibility = deriveEligibility({
+    explicit: explicitEligibility,
+    resolutionState: classificationResolutionState,
+    processingState: explicitProcessingState ?? 'pending_classification',
+    isTranscribed: inferredIsTranscribed,
+    toTranscribe,
+  });
+  let transcriptionProcessingState: TranscriptionProcessingState = deriveProcessingState({
+    explicit: explicitProcessingState,
+    resolutionState: classificationResolutionState,
+    eligibility: transcriptionEligibility,
+    isTranscribed: inferredIsTranscribed,
+    toTranscribe,
+    transcriptionError,
+  });
+
+  if (classificationResolutionState === 'pending') {
+    transcriptionEligibility = null;
+    transcriptionProcessingState = 'pending_classification';
+  } else {
+    transcriptionEligibility = deriveEligibility({
+      explicit: explicitEligibility,
+      resolutionState: classificationResolutionState,
+      processingState: transcriptionProcessingState,
+      isTranscribed: inferredIsTranscribed,
+      toTranscribe,
+    });
+    classificationResolutionState = 'resolved';
+  }
+
+  if (!hasAnyClassificationSignals) {
+    classificationResolutionState = orchestrationState.classificationResolutionState;
+    transcriptionEligibility = orchestrationState.transcriptionEligibility;
+    transcriptionProcessingState = orchestrationState.processingState;
+  }
+
+  const skipReason = (() => {
+    const explicit = toNullableTrimmedString(message.transcription_skip_reason);
+    if (explicit) return explicit;
+    if (transcriptionProcessingState === 'classified_skip') return 'ineligible_unclassified';
+    return null;
+  })();
+  const eligibilityBasis = toNullableTrimmedString(message.transcription_eligibility_basis)
+    ?? (() => {
+      if (classificationResolutionState === 'pending') return 'legacy_pending_classification';
+      if (transcriptionEligibility === 'eligible') return 'legacy_eligible_projection';
+      if (transcriptionEligibility === 'ineligible') return 'legacy_ineligible_projection';
+      return null;
+    })();
+  const classificationRuleRef = toNullableTrimmedString(message.classification_rule_ref);
+  const normalizedTranscriptionError =
+    transcriptionProcessingState === 'transcription_error' ? message.transcription_error : null;
+  const normalizedTranscriptionErrorContext =
+    transcriptionProcessingState === 'transcription_error' ? message.transcription_error_context : null;
+
+  const sourceNoteText = toNullableTrimmedString(message.source_note_text)
+    ?? toNullableTrimmedString(message.caption)
+    ?? toNullableTrimmedString(primaryAttachment?.caption)
+    ?? (rawAttachments.length > 0 ? toNullableTrimmedString(message.text) : null);
+
+  const resolvedPrimaryIndex = primaryIndex;
+  const topLevelMimeType = toNullableTrimmedString(message.mime_type)
+    ?? toNullableTrimmedString(primaryAttachment?.mime_type)
+    ?? toNullableTrimmedString(primaryAttachment?.mimeType);
+  const topLevelFileName = toNullableTrimmedString(message.file_name)
+    ?? toNullableTrimmedString(primaryAttachment?.file_name)
+    ?? toNullableTrimmedString(primaryAttachment?.name)
+    ?? toNullableTrimmedString(primaryAttachment?.filename);
+  const topLevelFileId = toNullableTrimmedString(message.file_id)
+    ?? toNullableTrimmedString(primaryAttachment?.file_id);
+  const topLevelFileUniqueId = toNullableTrimmedString(message.file_unique_id)
+    ?? toNullableTrimmedString(primaryAttachment?.file_unique_id);
+  const topLevelFileSize = Number.isFinite(Number(message.file_size))
+    ? Number(message.file_size)
+    : (Number.isFinite(Number(primaryAttachment?.file_size))
+      ? Number(primaryAttachment?.file_size)
+      : (Number.isFinite(Number(primaryAttachment?.size)) ? Number(primaryAttachment?.size) : null));
+
+  const normalizedAttachments = rawAttachments.map((attachment, index) => {
+    const attachmentPayloadMediaKind = inferPayloadMediaKind({
+      payloadMediaKind: attachment.payload_media_kind,
+      mimeType: attachment.mime_type ?? attachment.mimeType,
+      fileName: attachment.file_name ?? attachment.name ?? attachment.filename,
+      kind: attachment.kind,
+      messageType: message.message_type,
+    });
+    const attachmentResolutionState = parseClassificationResolutionState(attachment.classification_resolution_state)
+      ?? classificationResolutionState;
+    const attachmentProcessingState = parseTranscriptionProcessingState(attachment.transcription_processing_state)
+      ?? (index === resolvedPrimaryIndex ? transcriptionProcessingState : (attachmentResolutionState === 'pending' ? 'pending_classification' : 'classified_skip'));
+    const attachmentEligibility = deriveEligibility({
+      explicit: parseTranscriptionEligibility(attachment.transcription_eligibility),
+      resolutionState: attachmentResolutionState,
+      processingState: attachmentProcessingState,
+      isTranscribed: Boolean(attachment.is_transcribed),
+      toTranscribe: Boolean(attachment.to_transcribe),
+    });
+    const attachmentSkipReason = toNullableTrimmedString(attachment.transcription_skip_reason)
+      ?? (attachmentProcessingState === 'classified_skip' ? skipReason : null);
+    const attachmentSpeechAssessment = deriveSpeechBearingAssessment({
+      explicit: parseSpeechBearingAssessment(attachment.speech_bearing_assessment),
+      eligibility: attachmentEligibility,
+      skipReason: attachmentSkipReason,
+      processingState: attachmentProcessingState,
+    });
+    const attachmentBasis = toNullableTrimmedString(attachment.transcription_eligibility_basis) ?? eligibilityBasis;
+    const attachmentRuleRef = toNullableTrimmedString(attachment.classification_rule_ref) ?? classificationRuleRef;
+    const attachmentSourceNoteText = toNullableTrimmedString(attachment.source_note_text)
+      ?? toNullableTrimmedString(attachment.caption)
+      ?? sourceNoteText;
+
+    return {
+      ...attachment,
+      payload_media_kind: attachmentPayloadMediaKind,
+      speech_bearing_assessment: attachmentSpeechAssessment,
+      classification_resolution_state: attachmentResolutionState,
+      transcription_eligibility: attachmentEligibility,
+      transcription_processing_state: attachmentProcessingState,
+      transcription_skip_reason: attachmentSkipReason,
+      transcription_eligibility_basis: attachmentBasis,
+      classification_rule_ref: attachmentRuleRef,
+      source_note_text: attachmentSourceNoteText,
+    };
+  });
+
+  return {
+    ...message,
+    attachments: normalizedAttachments,
+    primary_payload_media_kind: primaryPayloadMediaKind,
+    primary_transcription_attachment_index: resolvedPrimaryIndex,
+    transcription_eligibility: transcriptionEligibility,
+    classification_resolution_state: classificationResolutionState,
+    transcription_processing_state: transcriptionProcessingState,
+    is_transcribed: transcriptionProcessingState === 'transcribed',
+    transcription_skip_reason: transcriptionProcessingState === 'classified_skip' ? skipReason : null,
+    transcription_eligibility_basis: eligibilityBasis,
+    classification_rule_ref: classificationRuleRef,
+    transcription_error: normalizedTranscriptionError,
+    transcription_error_context: normalizedTranscriptionErrorContext,
+    source_note_text: sourceNoteText,
+    file_id: topLevelFileId,
+    file_unique_id: topLevelFileUniqueId,
+    file_name: topLevelFileName,
+    file_size: topLevelFileSize,
+    mime_type: topLevelMimeType,
+  };
 };

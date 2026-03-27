@@ -70,8 +70,12 @@ const attachmentSchema = z.object({
   name: z.string().optional().nullable(),
   mimeType: z.string().optional().nullable(),
   size: z.number().optional().nullable(),
+  duration: z.number().optional().nullable(),
+  duration_ms: z.number().optional().nullable(),
   width: z.number().optional().nullable(),
   height: z.number().optional().nullable(),
+  has_audio: z.boolean().optional().nullable(),
+  audio_track_state: z.string().optional().nullable(),
   url: z.string().optional().nullable(),
   uri: z.string().optional().nullable(),
 });
@@ -1492,11 +1496,345 @@ const normalizeAttachments = (attachments: z.infer<typeof attachmentSchema>[]) =
     ...(normalizeString(item.name) ? { name: normalizeString(item.name) } : {}),
     ...(normalizeString(item.mimeType) ? { mimeType: normalizeString(item.mimeType) } : {}),
     ...(Number.isFinite(Number(item.size)) ? { size: Number(item.size) } : {}),
+    ...(Number.isFinite(Number(item.duration_ms))
+      ? { duration_ms: Math.max(0, Number(item.duration_ms)) }
+      : Number.isFinite(Number(item.duration))
+        ? { duration_ms: Math.max(0, Math.round(Number(item.duration) * 1000)) }
+        : {}),
     ...(Number.isFinite(Number(item.width)) ? { width: Number(item.width) } : {}),
     ...(Number.isFinite(Number(item.height)) ? { height: Number(item.height) } : {}),
+    ...(typeof item.has_audio === 'boolean' ? { has_audio: item.has_audio } : {}),
+    ...(normalizeString(item.audio_track_state) ? { audio_track_state: normalizeString(item.audio_track_state) } : {}),
     ...(normalizeString(item.url) ? { url: normalizeString(item.url) } : {}),
     ...(normalizeString(item.uri) ? { uri: normalizeString(item.uri) } : {}),
   }));
+
+type PayloadMediaKind = 'audio' | 'video' | 'image' | 'binary_document' | 'unknown';
+type ClassificationResolutionState = 'resolved' | 'pending';
+type TranscriptionEligibility = 'eligible' | 'ineligible' | null;
+type IngressAttachmentClassification = {
+  payload_media_kind: PayloadMediaKind;
+  speech_bearing_assessment: string;
+  classification_resolution_state: ClassificationResolutionState;
+  transcription_eligibility: TranscriptionEligibility;
+  transcription_eligibility_basis: string;
+  classification_rule_ref: string;
+  transcription_skip_reason: string | null;
+};
+
+type PrimaryProjection = {
+  primary_transcription_attachment_index: number | null;
+  primary_payload_media_kind: PayloadMediaKind;
+  classification_resolution_state: ClassificationResolutionState;
+  transcription_eligibility: TranscriptionEligibility;
+  transcription_eligibility_basis: string;
+  classification_rule_ref: string;
+  transcription_processing_state: 'pending_classification' | 'pending_transcription' | 'classified_skip';
+  transcription_skip_reason: string | null;
+  file_id: string | null;
+  file_unique_id: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+};
+
+const INGRESS_CLASSIFICATION_RULE = 'tg_attachment_ingress_media_kind_v1';
+const AUDIO_MIME_PREFIX = 'audio/';
+const VIDEO_MIME_PREFIX = 'video/';
+const IMAGE_MIME_PREFIX = 'image/';
+const AUDIO_EXTENSIONS = new Set([
+  '.aac',
+  '.flac',
+  '.m4a',
+  '.mp3',
+  '.ogg',
+  '.oga',
+  '.opus',
+  '.wav',
+  '.weba',
+]);
+const VIDEO_EXTENSIONS = new Set([
+  '.3gp',
+  '.avi',
+  '.m4v',
+  '.mov',
+  '.mp4',
+  '.mpeg',
+  '.mpg',
+  '.webm',
+  '.mkv',
+]);
+const IMAGE_EXTENSIONS = new Set([
+  '.avif',
+  '.bmp',
+  '.gif',
+  '.heic',
+  '.jpeg',
+  '.jpg',
+  '.png',
+  '.svg',
+  '.webp',
+]);
+const BINARY_DOCUMENT_EXTENSIONS = new Set([
+  '.7z',
+  '.csv',
+  '.doc',
+  '.docx',
+  '.epub',
+  '.gz',
+  '.json',
+  '.odt',
+  '.pdf',
+  '.ppt',
+  '.pptx',
+  '.rar',
+  '.rtf',
+  '.tar',
+  '.txt',
+  '.xls',
+  '.xlsx',
+  '.xml',
+  '.zip',
+]);
+
+const normalizeExtension = (value: unknown): string => {
+  const raw = normalizeString(value).toLowerCase();
+  if (!raw) return '';
+  const extension = raw.includes('.') ? raw.slice(raw.lastIndexOf('.')) : raw;
+  if (!extension) return '';
+  return extension.startsWith('.') ? extension : `.${extension}`;
+};
+
+const classifyAttachmentPayloadMediaKind = (attachment: Record<string, unknown>): PayloadMediaKind => {
+  const kind = normalizeString(attachment.kind).toLowerCase();
+  const mimeType = normalizeString(attachment.mimeType).toLowerCase();
+  const extension = normalizeExtension(attachment.name);
+
+  if (mimeType.startsWith(AUDIO_MIME_PREFIX)) return 'audio';
+  if (mimeType.startsWith(VIDEO_MIME_PREFIX)) return 'video';
+  if (mimeType.startsWith(IMAGE_MIME_PREFIX)) return 'image';
+
+  if (AUDIO_EXTENSIONS.has(extension)) return 'audio';
+  if (VIDEO_EXTENSIONS.has(extension)) return 'video';
+  if (IMAGE_EXTENSIONS.has(extension)) return 'image';
+  if (BINARY_DOCUMENT_EXTENSIONS.has(extension)) return 'binary_document';
+
+  if (kind === 'voice' || kind === 'audio') return 'audio';
+  if (kind === 'video' || kind === 'video_note' || kind === 'animation') return 'video';
+  if (kind === 'photo' || kind === 'image' || kind === 'sticker') return 'image';
+  if (kind === 'document' || kind === 'file') return 'binary_document';
+
+  return 'unknown';
+};
+
+const classifyIngressAttachment = (attachment: Record<string, unknown>): IngressAttachmentClassification => {
+  const payloadMediaKind = classifyAttachmentPayloadMediaKind(attachment);
+  if (payloadMediaKind === 'audio' || payloadMediaKind === 'video') {
+    const hasAudioFlag = typeof attachment.has_audio === 'boolean' ? attachment.has_audio : null;
+    const audioTrackState = normalizeString(attachment.audio_track_state).toLowerCase();
+    const noAudioTrackByState = [
+      'none',
+      'missing',
+      'no_audio',
+      'no_audio_track',
+      'without_audio',
+      'mute',
+      'muted',
+    ].includes(audioTrackState);
+    if (payloadMediaKind === 'video' && (hasAudioFlag === false || noAudioTrackByState)) {
+      return {
+        payload_media_kind: payloadMediaKind,
+        speech_bearing_assessment: 'non_speech',
+        classification_resolution_state: 'resolved',
+        transcription_eligibility: 'ineligible',
+        transcription_eligibility_basis: 'ingress_video_no_audio_track',
+        classification_rule_ref: INGRESS_CLASSIFICATION_RULE,
+        transcription_skip_reason: 'no_audio_track',
+      };
+    }
+    return {
+      payload_media_kind: payloadMediaKind,
+      speech_bearing_assessment: 'unresolved',
+      classification_resolution_state: 'pending',
+      transcription_eligibility: null,
+      transcription_eligibility_basis: 'ingress_requires_speech_probe',
+      classification_rule_ref: INGRESS_CLASSIFICATION_RULE,
+      transcription_skip_reason: null,
+    };
+  }
+
+  if (payloadMediaKind === 'image' || payloadMediaKind === 'binary_document') {
+    return {
+      payload_media_kind: payloadMediaKind,
+      speech_bearing_assessment: 'non_speech',
+      classification_resolution_state: 'resolved',
+      transcription_eligibility: 'ineligible',
+      transcription_eligibility_basis: 'ingress_non_speech_payload_media',
+      classification_rule_ref: INGRESS_CLASSIFICATION_RULE,
+      transcription_skip_reason: 'ineligible_payload_media_kind',
+    };
+  }
+
+  return {
+    payload_media_kind: 'unknown',
+    speech_bearing_assessment: 'unresolved',
+    classification_resolution_state: 'pending',
+    transcription_eligibility: null,
+    transcription_eligibility_basis: 'ingress_payload_media_unknown',
+    classification_rule_ref: INGRESS_CLASSIFICATION_RULE,
+    transcription_skip_reason: null,
+  };
+};
+
+const rankAttachmentCandidate = (attachment: Record<string, unknown>, attachmentIndex: number): [number, number, number] => {
+  const duration = Number.isFinite(Number(attachment.duration_ms)) ? Number(attachment.duration_ms) : -1;
+  const size = Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : -1;
+  return [duration, size, -attachmentIndex];
+};
+
+const compareAttachmentRank = (
+  left: [number, number, number],
+  right: [number, number, number]
+): number => {
+  if (left[0] !== right[0]) return right[0] - left[0];
+  if (left[1] !== right[1]) return right[1] - left[1];
+  return right[2] - left[2];
+};
+
+const selectPrimaryAttachmentIndex = (attachments: Array<Record<string, unknown>>): number | null => {
+  if (!attachments.length) return null;
+
+  const pickByState = (
+    predicate: (attachment: Record<string, unknown>) => boolean
+  ): number | null => {
+    const candidates = attachments
+      .map((attachment, attachmentIndex) => ({
+        attachmentIndex,
+        rank: rankAttachmentCandidate(attachment, attachmentIndex),
+        attachment,
+      }))
+      .filter((entry) => predicate(entry.attachment))
+      .sort((left, right) => compareAttachmentRank(left.rank, right.rank));
+    return candidates.length > 0 ? candidates[0]?.attachmentIndex ?? null : null;
+  };
+
+  const eligible = pickByState((attachment) => attachment.transcription_eligibility === 'eligible');
+  if (Number.isInteger(eligible)) return eligible;
+
+  const hasPending = attachments.some((attachment) => attachment.classification_resolution_state === 'pending');
+  if (hasPending) return null;
+
+  return pickByState(() => true);
+};
+
+const buildPrimaryAttachmentProjection = ({
+  attachments,
+  primaryIndex,
+}: {
+  attachments: Array<Record<string, unknown>>;
+  primaryIndex: number | null;
+}): PrimaryProjection => {
+  const fallback: PrimaryProjection = {
+    primary_transcription_attachment_index: null,
+    primary_payload_media_kind: 'unknown',
+    classification_resolution_state: 'pending',
+    transcription_eligibility: null,
+    transcription_eligibility_basis: 'ingress_payload_media_unknown',
+    classification_rule_ref: INGRESS_CLASSIFICATION_RULE,
+    transcription_processing_state: 'pending_classification',
+    transcription_skip_reason: null,
+    file_id: null,
+    file_unique_id: null,
+    file_name: null,
+    file_size: null,
+    mime_type: null,
+  };
+  if (
+    typeof primaryIndex !== 'number' ||
+    !Number.isInteger(primaryIndex) ||
+    primaryIndex < 0 ||
+    primaryIndex >= attachments.length
+  ) {
+    if (!attachments.length) {
+      return fallback;
+    }
+    const bestCandidate = attachments
+      .map((attachment, attachmentIndex) => ({
+        attachment,
+        rank: rankAttachmentCandidate(attachment, attachmentIndex),
+      }))
+      .sort((left, right) => compareAttachmentRank(left.rank, right.rank))[0]?.attachment;
+    const payloadMediaKindRaw = String(bestCandidate?.payload_media_kind || '').trim();
+    const payloadMediaKind: PayloadMediaKind = (
+      payloadMediaKindRaw === 'audio' ||
+      payloadMediaKindRaw === 'video' ||
+      payloadMediaKindRaw === 'image' ||
+      payloadMediaKindRaw === 'binary_document' ||
+      payloadMediaKindRaw === 'unknown'
+    )
+      ? payloadMediaKindRaw
+      : 'unknown';
+    return {
+      ...fallback,
+      primary_payload_media_kind: payloadMediaKind,
+      transcription_eligibility_basis:
+        normalizeString(bestCandidate?.transcription_eligibility_basis) || fallback.transcription_eligibility_basis,
+      classification_rule_ref: normalizeString(bestCandidate?.classification_rule_ref) || INGRESS_CLASSIFICATION_RULE,
+      file_id: normalizeString(bestCandidate?.file_id) || null,
+      file_unique_id: normalizeString(bestCandidate?.file_unique_id) || null,
+      file_name: normalizeString(bestCandidate?.name) || null,
+      file_size: Number.isFinite(Number(bestCandidate?.size)) ? Number(bestCandidate?.size) : null,
+      mime_type: normalizeString(bestCandidate?.mimeType) || null,
+    };
+  }
+
+  const primary = attachments[primaryIndex] || {};
+  const classificationResolutionState =
+    String(primary.classification_resolution_state || '').trim() === 'resolved' ? 'resolved' : 'pending';
+  const transcriptionEligibilityRaw = String(primary.transcription_eligibility || '').trim();
+  const transcriptionEligibility: TranscriptionEligibility = transcriptionEligibilityRaw === 'eligible'
+    ? 'eligible'
+    : transcriptionEligibilityRaw === 'ineligible'
+      ? 'ineligible'
+      : null;
+  const payloadMediaKindRaw = String(primary.payload_media_kind || '').trim();
+  const payloadMediaKind: PayloadMediaKind = (
+    payloadMediaKindRaw === 'audio' ||
+    payloadMediaKindRaw === 'video' ||
+    payloadMediaKindRaw === 'image' ||
+    payloadMediaKindRaw === 'binary_document' ||
+    payloadMediaKindRaw === 'unknown'
+  )
+    ? payloadMediaKindRaw
+    : 'unknown';
+
+  const transcriptionProcessingState: PrimaryProjection['transcription_processing_state'] =
+    classificationResolutionState === 'pending'
+      ? 'pending_classification'
+      : transcriptionEligibility === 'eligible'
+        ? 'pending_transcription'
+        : 'classified_skip';
+
+  return {
+    primary_transcription_attachment_index: primaryIndex,
+    primary_payload_media_kind: payloadMediaKind,
+    classification_resolution_state: classificationResolutionState,
+    transcription_eligibility: transcriptionEligibility,
+    transcription_eligibility_basis:
+      normalizeString(primary.transcription_eligibility_basis) || fallback.transcription_eligibility_basis,
+    classification_rule_ref: normalizeString(primary.classification_rule_ref) || INGRESS_CLASSIFICATION_RULE,
+    transcription_processing_state: transcriptionProcessingState,
+    transcription_skip_reason:
+      transcriptionProcessingState === 'classified_skip'
+        ? (normalizeString(primary.transcription_skip_reason) || 'ineligible_payload_media_kind')
+        : null,
+    file_id: normalizeString(primary.file_id) || null,
+    file_unique_id: normalizeString(primary.file_unique_id) || null,
+    file_name: normalizeString(primary.name) || null,
+    file_size: Number.isFinite(Number(primary.size)) ? Number(primary.size) : null,
+    mime_type: normalizeString(primary.mimeType) || null,
+  };
+};
 
 export const handleAttachmentIngress = async ({
   deps,
@@ -1519,11 +1857,28 @@ export const handleAttachmentIngress = async ({
   });
   const sessionId = new ObjectId(session._id);
 
-  const attachments = normalizeAttachments(parsed.data.attachments);
-  const garbageDetection = messageText
+  const attachments = normalizeAttachments(parsed.data.attachments).map((attachment) => ({
+    ...attachment,
+    ...classifyIngressAttachment(attachment),
+  }));
+  const primaryAttachmentIndex = selectPrimaryAttachmentIndex(attachments);
+  const primaryProjection = buildPrimaryAttachmentProjection({
+    attachments,
+    primaryIndex: primaryAttachmentIndex,
+  });
+  const shouldPersistReadyText =
+    messageText.length > 0 && primaryProjection.transcription_processing_state === 'classified_skip';
+  const readyTextPayload = shouldPersistReadyText
+    ? buildCanonicalReadyTextTranscription({
+      text: messageText,
+      messageTimestampSec: context.message_timestamp,
+      speaker: null,
+    })
+    : null;
+  const garbageDetection = readyTextPayload
     ? await resolveCanonicalTextGarbageDetection({
       deps,
-      transcriptionText: messageText,
+      transcriptionText: readyTextPayload.transcription_text,
       sessionId,
       ingressSource: 'attachment ingress',
     })
@@ -1542,32 +1897,14 @@ export const handleAttachmentIngress = async ({
     ...(context.forwarded_context ? { forwarded_context: context.forwarded_context } : {}),
     message_type: normalizeString(parsed.data.message_type) || 'screenshot',
     attachments,
+    source_note_text: messageText || null,
     session_id: sessionId,
     session_type: session.session_type || VOICEBOT_SESSION_TYPES.MULTIPROMPT_VOICE_SESSION,
     created_at: new Date(),
-    ...(messageText ? buildCanonicalReadyTextTranscription({
-      text: messageText,
-      messageTimestampSec: context.message_timestamp,
-    }) : {
-      transcription_text: '',
-      transcription_raw: {
-        provider: 'legacy',
-        model: 'legacy_attachment',
-        segmented: false,
-        text: '',
-      },
-      transcription_chunks: [],
-      transcription: {
-        schema_version: 1,
-        provider: 'legacy',
-        model: 'legacy_attachment',
-        task: 'transcribe',
-        duration_seconds: 0,
-        text: '',
-        segments: [],
-        usage: null,
-      },
-    }),
+    is_transcribed: false,
+    to_transcribe: false,
+    transcribe_attempts: 0,
+    ...(readyTextPayload ?? {}),
     ...(garbageDetection
       ? {
         garbage_detected: Boolean(garbageDetection.is_garbage),
@@ -1588,14 +1925,26 @@ export const handleAttachmentIngress = async ({
         },
       }
       : {}),
+    primary_payload_media_kind: primaryProjection.primary_payload_media_kind,
+    primary_transcription_attachment_index: primaryProjection.primary_transcription_attachment_index,
+    classification_resolution_state: primaryProjection.classification_resolution_state,
+    transcription_eligibility: primaryProjection.transcription_eligibility,
+    transcription_eligibility_basis: primaryProjection.transcription_eligibility_basis,
+    classification_rule_ref: primaryProjection.classification_rule_ref,
+    transcription_processing_state: primaryProjection.transcription_processing_state,
+    transcription_skip_reason: primaryProjection.transcription_skip_reason,
+    file_id: primaryProjection.file_id,
+    file_unique_id: primaryProjection.file_unique_id,
+    file_name: primaryProjection.file_name,
+    file_size: primaryProjection.file_size,
+    mime_type: primaryProjection.mime_type,
   };
 
   const insert = await deps.db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(doc);
   const messageObjectId = insert.insertedId;
 
   await updateSessionAfterMessage(deps, sessionId, context);
-
-  if (messageText) {
+  if (readyTextPayload) {
     await runCanonicalTextIngressPostprocessing({
       deps,
       session,
@@ -1630,6 +1979,10 @@ export const handleAttachmentIngress = async ({
     message_id: messageObjectId.toHexString(),
     created_session: created,
     attachments: attachments.length,
+    primary_attachment_index: primaryProjection.primary_transcription_attachment_index,
+    primary_payload_media_kind: primaryProjection.primary_payload_media_kind,
+    classification_resolution_state: primaryProjection.classification_resolution_state,
+    transcription_processing_state: primaryProjection.transcription_processing_state,
   });
 
   return {

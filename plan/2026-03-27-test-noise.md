@@ -1,15 +1,15 @@
 
 # 2026-03-27 Test Noise
 
-## Status
+## Status 🟡In Progress
 
-- Analysis complete; the test-noise report is decomposed into separate `bd` issues rather than one mixed bucket.
-- Umbrella epic for the cleanup campaign tracked from this document: `copilot-8h9u`.
-- Frontend AntD `Card.bordered` warning noise: `copilot-s2lw` (closed).
-- Backend winston console transport noise in passing Jest runs: `copilot-hclu` (closed).
-- Backend transitive `punycode` deprecation noise on Google Drive test surface: `copilot-vjau` (open).
-- Backend Jest ESM runtime `ExperimentalWarning: VM Modules` noise: `copilot-2int` (closed).
-- Independent ticket review status: `go`.
+- Epic ticket (`copilot-8h9u`): ⚪Open 1
+- Task-surface ticket line (`2026-03-27` campaign child issues): ⚪Open 5  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 4
+- Causal-class split: migration bugs `copilot-8h9u.1`, `copilot-8h9u.2`, `copilot-8h9u.3` remain open; actual render defect `copilot-8h9u.4` remains open as `P1`; harness/logging boundary issue `copilot-8h9u.5` remains open.
+- Closed original wave: `copilot-s2lw`, `copilot-hclu`, `copilot-vjau`, `copilot-2int`.
+- Plan status: mixed ticket state; original frontend/backend cleanup wave is closed, while the rerun-discovered app-side follow-up wave remains in progress under the umbrella epic.
+- Independent ticket review: `go`
+- Snapshot date: 2026-03-27
 
 ## Greek-Scholastic Review
 

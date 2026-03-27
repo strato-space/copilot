@@ -41,7 +41,7 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).toContain('/home/strato-space/mediagen');
     expect(promptSource).toContain('/home/strato-space/copilot/factory/harness.md');
     expect(promptSource).toContain('/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md');
-    expect(promptSource).toContain('/home/strato-space/copilot/plan/voice-operops-codex-taskflow-spec.md');
+    expect(promptSource).toContain('/home/strato-space/copilot/plan/closed/voice-operops-codex-taskflow-spec.md');
     expect(promptSource).toContain('fs.read_multiple_files');
     expect(promptSource).toContain('Обязательный shell entrypoint-read pass (проверяемый контракт)');
     expect(promptSource).toContain("sed -n '1,220p' /home/strato-space/copilot/AGENTS.md");

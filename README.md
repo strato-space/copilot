@@ -122,7 +122,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - the `Draft` tab still renders the orphan/session-grouped possible-task backlog above the CRM table as presentation-only grouping,
   - accepted Voice tasks are treated as `Ready` work, not as a separate `Backlog` semantic bucket.
 - OperOps Draft/Archive visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default fast list/count surface is `1d`, while `∞` means an unbounded read.
-- Temporal coverage/date-depth planning wave is closed: `plan/2026-26-03-voice-date-depth-and-range-fix-spec.md` is `Status ✅Closed`, and epic `copilot-xmcm` with child line `copilot-xmcm.*` is fully closed in `bd`.
+- Temporal coverage/date-depth planning wave is closed: `plan/closed/2026-26-03-voice-date-depth-and-range-fix-spec.md` is `Status ✅Closed`, and epic `copilot-xmcm` with child line `copilot-xmcm.*` is fully closed in `bd`.
 - Media-bearing attachment transcription planning now has an explicit BD DAG decomposition in `plan/2026-03-27-voice-media-attachment-transcription-spec.md` (`copilot-qtcp` + `.1..7`) and should be executed as bounded swarm waves.
 - OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open; Draft/Archive summary and status-count reads may prefilter recency through lightweight source/timestamp projections before trimming transient linkage fields from response payloads.
 
@@ -291,6 +291,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
 - TS transcribe handler never silently skips missing transport now: Telegram messages with `file_id` but without local `file_path` are marked `transcription_error=missing_transport` with diagnostics; text-only chunks without file path are transcribed via `transcription_method=text_fallback` and continue categorization pipeline.
 - TS transcribe handler additionally supports Telegram transport recovery: for `source_type=telegram` + `file_id` + missing local file path it resolves `getFile`, downloads audio into local storage, persists `file_path`, and continues transcription in the same job.
+- Attachment-origin audio/video payloads now use the same normalized projection contract as voice chunks: reads and realtime payloads expose `primary_payload_media_kind`, `primary_transcription_attachment_index`, `classification_resolution_state`, `transcription_eligibility`, `transcription_processing_state`, and attachment-level classification/skip metadata instead of treating `message_type=document` as a hard ASR skip.
+- Pending attachment classification is explicit: `POST /api/voicebot/transcription/resolve_classification` is the operator/manual-review path, `processingLoop` and `restart_corrupted_session` preserve `pending_classification | pending_transcription | classified_skip | transcription_error` states, and ineligible media remains a deterministic skip until resolution changes.
+- TS transcribe handler now supports media-bearing attachments end-to-end: nested attachment transport anchors can be promoted to top-level fields, video payloads are staged to mono 16k Opus via `ffmpeg` before ASR, deterministic `transcription_job_key` guards demote stale attachment jobs atomically, and legacy `legacy_attachment` placeholders can be repaired through `POST /api/voicebot/repair_legacy_attachment_media`.
 - Voice backend exposes session-merge scaffolding (`voicebot/sessions/merge`) with explicit confirmation phrase and merge-log collection support (`automation_voice_bot_session_merge_log`).
 
 ### Voice TypeScript migration status (from closed BD issues)
@@ -311,15 +314,15 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Current open migration backlog is tracked only in `bd`; as of the latest refresh there are no open P1 frontend migration tasks.
 - Legacy implementation history remains in external repo: `/home/strato-space/voicebot`
 - Synced legacy planning references copied for context now live in `plan/session-managment.md` and `plan/gpt-4o-transcribe-diarize-plan.md`.
-- Unified draft for next implementation wave lives in `plan/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
-- Current Voice task surface contract lives in `plan/voice-task-surface-normalization-spec.md`; active runtime semantics use only the canonical six lifecycle statuses and strict status-key filtering.
+- Unified draft for next implementation wave lives in `plan/closed/voice-operops-codex-taskflow-spec.md` (Voice ↔ OperOps ↔ Codex contract and rollout phases).
+- Current Voice task surface contract lives in `plan/closed/voice-task-surface-normalization-spec.md`; active runtime semantics use only the canonical six lifecycle statuses and strict status-key filtering.
 - Voice session task edit parity with OperOps CRM is tracked separately in `plan/voice-session-task-edit-parity-spec.md`.
-- Status-first Voice/OperOps surface convergence now lives in `plan/voice-task-surface-normalization-spec.md` as the active contract; the old as-built Voice status plan is archived in `plan/archive/voice-task-status-normalization-plan.legacy.md`.
+- Status-first Voice/OperOps surface convergence now lives in `plan/closed/voice-task-surface-normalization-spec.md` as the active contract; the old as-built Voice status plan is archived in `plan/archive/voice-task-status-normalization-plan.legacy.md`.
 - Discussion-linking / ontology follow-up specs for the current Voice task wave live in:
   - `ontology/plan/voice-dual-stream-ontology.md`
-  - `plan/voice-task-session-discussion-linking-spec.md`
+  - `plan/2026-03-18-voice-task-session-discussion-linking-spec.md`
   - `plan/voice-non-draft-discussion-analyzer-contract.md`
-  - `plan/voice-task-surface-normalization-spec-2.md`
+  - `plan/2026-03-21-voice-task-surface-normalization-spec-2.md`
 - Local delivery/process scratchpad lives in `methodology/index.md`.
 - MPIC methodology review and artifact-graph corrections are documented in `ontology/plan/mpic-process-review.md`.
 

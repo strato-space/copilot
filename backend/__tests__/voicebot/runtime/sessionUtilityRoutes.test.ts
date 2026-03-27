@@ -24,6 +24,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain("router.post('/upload_file_to_project'");
     expect(source).toContain("router.post('/get_file_content'");
     expect(source).toContain("router.post('/upload_progress/:message_id'");
+    expect(source).toContain("router.post('/repair_legacy_attachment_media'");
   });
 
   it('routes codex tasks via bd sync and keeps runtime-aware metadata for non-codex tasks', () => {
@@ -48,6 +49,13 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('correlation_id: parsedBody.data.refresh_correlation_id || null');
     expect(source).toContain('clicked_at_ms:');
     expect(source).toContain('e2e_from_click_ms:');
+  });
+
+  it('exposes manual legacy attachment projection repair path', () => {
+    expect(source).toContain("repairLegacyAttachmentMediaProjection({");
+    expect(source).toContain("const repairLegacyAttachmentMediaInputSchema = z.object({");
+    expect(source).toContain('include_items: z.boolean().optional()');
+    expect(source).toContain("logger.error('Error in repair_legacy_attachment_media:'");
   });
 
   it('publishes canonical session taskflow contract for MCP/client parity', () => {

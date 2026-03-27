@@ -7,8 +7,9 @@
 
 - Epic ticket (`copilot-xmcm`): ✅Closed 1
 - Task-surface ticket line (`copilot-xmcm.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 12
-- Plan status: implemented contract; dependency chain fully closed in `bd`; companion spec finalized as `Status ✅Closed`.
+- Plan status: implemented contract; dependency chain fully closed in `bd`; companion spec finalized as `Status ✅Closed`; post-reboot recheck confirms no reopen in this wave.
 - Snapshot date: 2026-03-27
+- Canonical location: `plan/closed/2026-26-03-copilot-xmcm-swarm-plan.md` (source file was moved from `plan/` into `plan/closed/`).
 
 ## Normative Sources
 - [2026-26-03-voice-date-depth-and-range-fix-spec.md](/home/strato-space/copilot/plan/closed/2026-26-03-voice-date-depth-and-range-fix-spec.md)

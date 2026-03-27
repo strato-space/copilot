@@ -2,15 +2,18 @@
 
 ## Status ⚪Open
 
-- Task-surface ticket line: ⚪Open 4  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 0
-- Plan status: follow-up contract recorded; runtime simplification landed, Mongo parity folded in, and legacy payload migration wave applied; ambiguous residual tail still needs cleanup.
+- Spec/control ticket line (`copilot-jn28`, `copilot-br3m`): ⚪Open 1  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 1
+- Related runtime follow-up ticket line (`copilot-3d7n`, `copilot-muzv`): ⚪Open 2  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 0
+- Plan status: follow-up contract recorded; runtime simplification landed, Mongo parity folded in, legacy payload migration wave applied, and the status block is normalized to current `bd` state; ambiguous residual tail still needs cleanup.
 - Canonical follow-up spec ticket: `copilot-jn28`
-- Related runtime/docs tickets: `copilot-3d7n`, `copilot-muzv`, `copilot-br3m`
+- Related runtime tickets: `copilot-3d7n`, `copilot-muzv`
+- Status-normalization docs ticket: `copilot-br3m` (closed).
+- Landed-but-unclosed slices: `copilot-3d7n` and `copilot-muzv` already contain implementation evidence in `bd` comments, but formal closure and residual cleanup are still pending.
 - Mongo re-check (2026-03-21): live draft rows store label `Draft`, accepted voice rows store `Ready` / `Progress 10` / `Review / Ready`; route semantics normalize these stored values back to lifecycle keys.
 
-**Статус документа**: follow-up contract open; runtime simplification landed; doc normalization pending
+**Статус документа**: follow-up contract open; runtime simplification landed; status block normalized
 **Дата**: 2026-03-21
-**Основание**: текущие `bd` states for `copilot-jn28`, `copilot-3d7n`, `copilot-muzv`, `copilot-br3m`; текущие comments уже фиксируют landed draft-reconcile/backlog-cleanup work, но все follow-up tickets остаются open; live Mongo recheck against `automation_tasks` / `automation_voice_bot_sessions` done on 2026-03-21.
+**Основание**: текущие `bd` states for `copilot-jn28`, `copilot-3d7n`, `copilot-muzv`, `copilot-br3m`; текущие comments уже фиксируют landed draft-reconcile/backlog-cleanup work в `copilot-3d7n` и `copilot-muzv`, но все follow-up tickets остаются open; live Mongo recheck against `automation_tasks` / `automation_voice_bot_sessions` done on 2026-03-21.
 
 **Conceptual source**: [voice-dual-stream-ontology.md](/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md)
 

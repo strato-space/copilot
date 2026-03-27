@@ -113,6 +113,48 @@ export interface VoiceTaskEnrichmentParseResult {
     missingKeys: VoiceTaskEnrichmentSectionKey[];
 }
 
+export type VoicePayloadMediaKind = 'audio' | 'video' | 'image' | 'binary_document' | 'unknown';
+export type VoiceTranscriptionEligibility = 'eligible' | 'ineligible' | null;
+export type VoiceClassificationResolutionState = 'resolved' | 'pending';
+export type VoiceTranscriptionProcessingState =
+    | 'pending_classification'
+    | 'pending_transcription'
+    | 'transcribed'
+    | 'classified_skip'
+    | 'transcription_error';
+
+export interface VoiceAttachmentTranscriptionContract {
+    attachment_index?: number | null;
+    payload_media_kind?: VoicePayloadMediaKind | null;
+    speech_bearing_assessment?: string | null;
+    classification_resolution_state?: VoiceClassificationResolutionState | null;
+    transcription_eligibility?: VoiceTranscriptionEligibility;
+    transcription_processing_state?: VoiceTranscriptionProcessingState | null;
+    transcription_skip_reason?: string | null;
+    transcription_eligibility_basis?: string | null;
+    classification_rule_ref?: string | null;
+    transcription_text?: string | null;
+    transcription_raw?: unknown;
+    transcription_error?: string | null;
+    audio_track_state?: string | null;
+    duration_ms?: number | null;
+    duration_seconds?: number | string | null;
+    payloadMediaKind?: VoicePayloadMediaKind | null;
+    speechBearingAssessment?: string | null;
+    classificationResolutionState?: VoiceClassificationResolutionState | null;
+    transcriptionEligibility?: VoiceTranscriptionEligibility;
+    transcriptionProcessingState?: VoiceTranscriptionProcessingState | null;
+    transcriptionSkipReason?: string | null;
+    transcriptionEligibilityBasis?: string | null;
+    classificationRuleRef?: string | null;
+    transcriptionText?: string | null;
+    transcriptionRaw?: unknown;
+    transcriptionError?: string | null;
+    audioTrackState?: string | null;
+}
+
+export type VoiceMessageAttachment = VoiceAttachmentTranscriptionContract & Record<string, unknown>;
+
 export interface VoiceBotMessage {
     _id?: string;
     message_id?: string;
@@ -134,8 +176,8 @@ export interface VoiceBotMessage {
     file_hash?: string;
     mime_type?: string;
     to_transcribe?: boolean;
-    transcription_error?: string;
-    transcription_text?: string;
+    transcription_error?: string | null;
+    transcription_text?: string | null;
     transcription?: {
         duration_seconds?: number | string;
         segments?: Array<{
@@ -153,10 +195,37 @@ export interface VoiceBotMessage {
         speaker?: string | null;
         is_deleted?: boolean;
     }>;
+    primary_payload_media_kind?: VoicePayloadMediaKind | null;
+    primary_transcription_attachment_index?: number | null;
+    transcription_eligibility?: VoiceTranscriptionEligibility;
+    classification_resolution_state?: VoiceClassificationResolutionState | null;
+    transcription_processing_state?: VoiceTranscriptionProcessingState | null;
+    transcription_skip_reason?: string | null;
+    transcription_eligibility_basis?: string | null;
+    classification_rule_ref?: string | null;
+    source_note_text?: string | null;
+    audio_track_state?: string | null;
+    payload_media_kind?: VoicePayloadMediaKind | null;
+    primary_attachment_index?: number | null;
+    transcription_state?: VoiceTranscriptionProcessingState | null;
+    classification_state?: VoiceClassificationResolutionState | null;
+    eligibility?: VoiceTranscriptionEligibility;
+    skip_reason?: string | null;
+    source_note?: string | null;
+    payloadMediaKind?: VoicePayloadMediaKind | null;
+    primaryTranscriptionAttachmentIndex?: number | null;
+    transcriptionEligibility?: VoiceTranscriptionEligibility;
+    classificationResolutionState?: VoiceClassificationResolutionState | null;
+    transcriptionProcessingState?: VoiceTranscriptionProcessingState | null;
+    transcriptionSkipReason?: string | null;
+    transcriptionEligibilityBasis?: string | null;
+    classificationRuleRef?: string | null;
+    sourceNoteText?: string | null;
+    audioTrackState?: string | null;
     is_transcribed?: boolean;
     is_finalized?: boolean;
     categorization?: CategorizationChunk[];
-    attachments?: Array<Record<string, unknown>>;
+    attachments?: VoiceMessageAttachment[];
     processors_data?: Record<string, unknown> & {
         summarization?: { data?: Array<{ summary?: string }> };
         questioning?: { data?: unknown[] };

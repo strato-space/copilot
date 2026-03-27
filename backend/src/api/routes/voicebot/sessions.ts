@@ -76,6 +76,7 @@ import {
   buildCategorizationCleanupPayload,
   ensureMessageCanonicalTranscription,
   getOptionalTrimmedString,
+  normalizeMessageAttachmentTranscriptionContract,
   resolveCategorizationRowSegmentLocator,
   resetCategorizationForMessage,
   runtimeMessageQuery,
@@ -104,6 +105,9 @@ import {
     detectGarbageTranscription,
     type GarbageDetectionResult,
 } from '../../../services/voicebot/transcriptionGarbageDetector.js';
+import {
+    repairLegacyAttachmentMediaProjection,
+} from '../../../services/voicebot/legacyAttachmentMediaRepair.js';
 import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
 import {
     applyCreateTasksCompositeSessionPatch,
@@ -123,6 +127,7 @@ import {
 } from '../../../services/draftRecencyPolicy.js';
 import { writeSummaryAuditLog } from '../../../services/voicebot/voicebotDoneNotify.js';
 import { resolveDateLikeEpochMs, resolveMonotonicUpdatedAtNext } from '../../../services/taskUpdatedAt.js';
+import { resolveRetryOrchestrationState } from '../../../workers/voicebot/handlers/shared/retryOrchestrationState.js';
 
 // NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -161,6 +166,15 @@ const saveSummaryInputSchema = z.object({
     md_text: z.string().max(SESSION_SUMMARY_MAX_CHARS),
     summary_correlation_id: z.string().trim().min(1).optional(),
     correlation_id: z.string().trim().min(1).optional(),
+});
+const repairLegacyAttachmentMediaInputSchema = z.object({
+    apply: z.boolean().optional(),
+    dry_run: z.boolean().optional(),
+    limit: z.number().int().positive().optional(),
+    batch_size: z.number().int().positive().optional(),
+    session_id: z.string().trim().optional(),
+    message_ids: z.array(z.string().trim().min(1)).optional(),
+    include_items: z.boolean().optional(),
 });
 
 const SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD = 'row_id' as const;
@@ -1842,6 +1856,15 @@ type SessionAttachmentView = {
     width: number | null;
     height: number | null;
     caption: string;
+    payload_media_kind?: string | null;
+    speech_bearing_assessment?: string | null;
+    classification_resolution_state?: string | null;
+    transcription_eligibility?: string | null;
+    transcription_processing_state?: string | null;
+    transcription_skip_reason?: string | null;
+    transcription_eligibility_basis?: string | null;
+    classification_rule_ref?: string | null;
+    source_note_text?: string | null;
     file_id: string | null;
     file_unique_id: string | null;
     direct_uri: string | null;
@@ -1914,30 +1937,40 @@ const emitSessionRealtimeUpdate = ({
     sessionId: string;
     messageDoc: Record<string, unknown>;
 }): void => {
+    const normalizedMessageDoc = normalizeMessageAttachmentTranscriptionContract(messageDoc);
     const io = req.app.get('io') as SocketIOServer | undefined;
     if (!io) return;
     const room = getVoicebotSessionRoom(sessionId);
     const namespace = io.of('/voicebot');
-    const createdAt = messageDoc.created_at instanceof Date ? messageDoc.created_at : new Date();
-    const messageId = messageDoc._id instanceof ObjectId
-        ? messageDoc._id.toString()
-        : String(messageDoc._id || '');
+    const createdAt = normalizedMessageDoc.created_at instanceof Date ? normalizedMessageDoc.created_at : new Date();
+    const messageId = normalizedMessageDoc._id instanceof ObjectId
+        ? normalizedMessageDoc._id.toString()
+        : String(normalizedMessageDoc._id || '');
 
     namespace.to(room).emit('new_message', {
         _id: messageId,
         session_id: sessionId,
-        message_id: messageDoc.message_id,
-        message_timestamp: messageDoc.message_timestamp,
-        source_type: messageDoc.source_type,
-        message_type: messageDoc.message_type,
-        type: messageDoc.type,
-        text: messageDoc.text,
-        transcription_text: messageDoc.transcription_text,
-        is_transcribed: messageDoc.is_transcribed,
-        to_transcribe: messageDoc.to_transcribe,
-        attachments: Array.isArray(messageDoc.attachments) ? messageDoc.attachments : [],
-        image_anchor_message_id: messageDoc.image_anchor_message_id ?? null,
-        image_anchor_linked_message_id: messageDoc.image_anchor_linked_message_id ?? null,
+        message_id: normalizedMessageDoc.message_id,
+        message_timestamp: normalizedMessageDoc.message_timestamp,
+        source_type: normalizedMessageDoc.source_type,
+        message_type: normalizedMessageDoc.message_type,
+        type: normalizedMessageDoc.type,
+        text: normalizedMessageDoc.text,
+        transcription_text: normalizedMessageDoc.transcription_text,
+        is_transcribed: normalizedMessageDoc.is_transcribed,
+        to_transcribe: normalizedMessageDoc.to_transcribe,
+        primary_payload_media_kind: normalizedMessageDoc.primary_payload_media_kind ?? 'unknown',
+        primary_transcription_attachment_index: normalizedMessageDoc.primary_transcription_attachment_index ?? null,
+        transcription_eligibility: normalizedMessageDoc.transcription_eligibility ?? null,
+        classification_resolution_state: normalizedMessageDoc.classification_resolution_state ?? 'pending',
+        transcription_processing_state: normalizedMessageDoc.transcription_processing_state ?? 'pending_classification',
+        transcription_skip_reason: normalizedMessageDoc.transcription_skip_reason ?? null,
+        transcription_eligibility_basis: normalizedMessageDoc.transcription_eligibility_basis ?? null,
+        classification_rule_ref: normalizedMessageDoc.classification_rule_ref ?? null,
+        source_note_text: normalizedMessageDoc.source_note_text ?? null,
+        attachments: Array.isArray(normalizedMessageDoc.attachments) ? normalizedMessageDoc.attachments : [],
+        image_anchor_message_id: normalizedMessageDoc.image_anchor_message_id ?? null,
+        image_anchor_linked_message_id: normalizedMessageDoc.image_anchor_linked_message_id ?? null,
         created_at: createdAt.toISOString(),
         updated_at: createdAt.toISOString(),
     });
@@ -2298,7 +2331,8 @@ const voicebotApiAttachmentPath = (path: string): string => `/api/voicebot${path
 
 const buildSessionAttachments = (messages: Array<Record<string, unknown>>): SessionAttachmentView[] => {
     const attachments: SessionAttachmentView[] = [];
-    for (const message of messages) {
+    for (const rawMessage of messages) {
+        const message = normalizeMessageAttachmentTranscriptionContract(rawMessage);
         const messageAttachments = Array.isArray(message.attachments) ? message.attachments : [];
         if (messageAttachments.length === 0) continue;
 
@@ -2366,6 +2400,15 @@ const buildSessionAttachments = (messages: Array<Record<string, unknown>>): Sess
                 width: toFiniteNumber(attachment.width),
                 height: toFiniteNumber(attachment.height),
                 caption: attachment.caption != null ? String(attachment.caption) : messageText,
+                payload_media_kind: attachment.payload_media_kind != null ? String(attachment.payload_media_kind) : null,
+                speech_bearing_assessment: attachment.speech_bearing_assessment != null ? String(attachment.speech_bearing_assessment) : null,
+                classification_resolution_state: attachment.classification_resolution_state != null ? String(attachment.classification_resolution_state) : null,
+                transcription_eligibility: attachment.transcription_eligibility != null ? String(attachment.transcription_eligibility) : null,
+                transcription_processing_state: attachment.transcription_processing_state != null ? String(attachment.transcription_processing_state) : null,
+                transcription_skip_reason: attachment.transcription_skip_reason != null ? String(attachment.transcription_skip_reason) : null,
+                transcription_eligibility_basis: attachment.transcription_eligibility_basis != null ? String(attachment.transcription_eligibility_basis) : null,
+                classification_rule_ref: attachment.classification_rule_ref != null ? String(attachment.classification_rule_ref) : null,
+                source_note_text: attachment.source_note_text != null ? String(attachment.source_note_text) : null,
                 file_id: attachmentFileId,
                 file_unique_id: fileUniqueId,
                 direct_uri: directUri,
@@ -2877,7 +2920,9 @@ const getSession = async (req: Request, res: Response) => {
                 rows_removed: cleanupUpdates.reduce((sum, entry) => sum + entry.cleanupStats.removed_rows, 0),
             });
         }
-        const normalizedSessionMessages = sessionMessagesCleaned.map((entry) => entry.message);
+        const normalizedSessionMessages = sessionMessagesCleaned.map((entry) =>
+            normalizeMessageAttachmentTranscriptionContract(entry.message as Record<string, unknown>)
+        );
 
         // Get participants info
         let participants: VoiceSessionParticipant[] = [];
@@ -4869,8 +4914,9 @@ router.post('/restart_corrupted_session', async (req: Request, res: Response) =>
         if (!session) return res.status(404).json({ error: 'Session not found' });
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
+        const sessionObjectId = new ObjectId(session_id);
         await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
-            { _id: new ObjectId(session_id) },
+            { _id: sessionObjectId },
             {
                 $set: {
                     is_corrupted: false,
@@ -4885,25 +4931,218 @@ router.post('/restart_corrupted_session', async (req: Request, res: Response) =>
             }
         );
 
-        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateMany(
-            { session_id: new ObjectId(session_id) },
+        const sessionMessages = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(
+            runtimeMessageQuery({
+                session_id: sessionObjectId,
+                is_deleted: { $ne: true },
+            }),
             {
-                $set: {
-                    to_transcribe: true,
-                    is_transcribed: false,
-                    updated_at: new Date(),
-                },
-                $unset: {
+                projection: {
+                    _id: 1,
+                    message_type: 1,
+                    source_type: 1,
+                    attachments: 1,
+                    file_id: 1,
+                    file_unique_id: 1,
+                    file_name: 1,
+                    file_size: 1,
+                    mime_type: 1,
+                    is_transcribed: 1,
+                    to_transcribe: 1,
+                    transcribe_attempts: 1,
                     transcription_error: 1,
                     transcription_retry_reason: 1,
-                    error_message: 1,
+                    transcription_processing_state: 1,
+                    transcription_eligibility: 1,
+                    classification_resolution_state: 1,
+                    transcription_eligibility_basis: 1,
+                    primary_payload_media_kind: 1,
+                    primary_transcription_attachment_index: 1,
+                    transcription_skip_reason: 1,
+                    transcription_error_context: 1,
                 },
             }
-        );
+        ).toArray() as Array<Record<string, unknown> & { _id?: ObjectId }>;
 
-        return res.status(200).json({ success: true });
+        const retryableMessageIds: ObjectId[] = [];
+        const pendingMessageIds: ObjectId[] = [];
+        const ineligibleMessageIds: ObjectId[] = [];
+        for (const message of sessionMessages) {
+            const messageObjectId = message._id instanceof ObjectId ? message._id : null;
+            if (!messageObjectId) continue;
+            const state = resolveRetryOrchestrationState(message);
+            if (state.isTranscribed) continue;
+            if (state.state === 'eligible') {
+                retryableMessageIds.push(messageObjectId);
+                continue;
+            }
+            if (state.state === 'pending') {
+                pendingMessageIds.push(messageObjectId);
+                continue;
+            }
+            if (state.state === 'ineligible') {
+                ineligibleMessageIds.push(messageObjectId);
+            }
+        }
+
+        let retryUpdateModified = 0;
+        if (retryableMessageIds.length > 0) {
+            const retryUpdate = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateMany(
+                runtimeMessageQuery({
+                    _id: { $in: retryableMessageIds },
+                    is_deleted: { $ne: true },
+                }),
+                {
+                    $set: {
+                        to_transcribe: true,
+                        is_transcribed: false,
+                        transcribe_attempts: 0,
+                        transcription_eligibility: 'eligible',
+                        classification_resolution_state: 'resolved',
+                        transcription_processing_state: 'pending_transcription',
+                        updated_at: new Date(),
+                    },
+                    $unset: {
+                        transcription_inflight_job_key: 1,
+                        transcription_skip_reason: 1,
+                        transcription_error: 1,
+                        transcription_error_context: 1,
+                        transcription_retry_reason: 1,
+                        transcription_next_attempt_at: 1,
+                        error_message: 1,
+                        error_timestamp: 1,
+                    },
+                }
+            );
+            retryUpdateModified = retryUpdate.modifiedCount ?? 0;
+        }
+
+        let pendingProbeMarked = 0;
+        if (pendingMessageIds.length > 0) {
+            const pendingUpdate = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateMany(
+                runtimeMessageQuery({
+                    _id: { $in: pendingMessageIds },
+                    is_deleted: { $ne: true },
+                }),
+                {
+                    $set: {
+                        to_transcribe: false,
+                        is_transcribed: false,
+                        transcription_eligibility: null,
+                        classification_resolution_state: 'pending',
+                        transcription_processing_state: 'pending_classification',
+                        transcription_pending_probe_requested_at: new Date(),
+                        transcription_pending_probe_request_source: 'restart_corrupted_session',
+                        updated_at: new Date(),
+                    },
+                    $unset: {
+                        transcription_inflight_job_key: 1,
+                        transcription_skip_reason: 1,
+                        transcription_error: 1,
+                        transcription_error_context: 1,
+                        transcription_retry_reason: 1,
+                        transcription_next_attempt_at: 1,
+                        error_message: 1,
+                        error_timestamp: 1,
+                    },
+                }
+            );
+            pendingProbeMarked = pendingUpdate.modifiedCount ?? 0;
+        }
+
+        let ineligibleRefreshed = 0;
+        if (ineligibleMessageIds.length > 0) {
+            const ineligibleUpdate = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateMany(
+                runtimeMessageQuery({
+                    _id: { $in: ineligibleMessageIds },
+                    is_deleted: { $ne: true },
+                }),
+                {
+                    $set: {
+                        to_transcribe: false,
+                        is_transcribed: false,
+                        transcription_eligibility: 'ineligible',
+                        classification_resolution_state: 'resolved',
+                        transcription_processing_state: 'classified_skip',
+                        updated_at: new Date(),
+                    },
+                    $unset: {
+                        transcription_inflight_job_key: 1,
+                        transcription_error: 1,
+                        transcription_error_context: 1,
+                        transcription_retry_reason: 1,
+                        transcription_next_attempt_at: 1,
+                        error_message: 1,
+                        error_timestamp: 1,
+                    },
+                }
+            );
+            ineligibleRefreshed = ineligibleUpdate.modifiedCount ?? 0;
+        }
+
+        return res.status(200).json({
+            success: true,
+            messages_marked_for_retry: retryUpdateModified,
+            pending_classification_messages: pendingMessageIds.length,
+            pending_probe_marked: pendingProbeMarked,
+            ineligible_refreshed: ineligibleRefreshed,
+        });
     } catch (error) {
         logger.error('Error in restart_corrupted_session:', error);
+        return res.status(500).json({ error: String(error) });
+    }
+});
+
+router.post('/repair_legacy_attachment_media', async (req: Request, res: Response) => {
+    const vreq = req as VoicebotRequest;
+    const { performer } = vreq;
+    const db = getDb();
+
+    try {
+        const parsedBody = repairLegacyAttachmentMediaInputSchema.safeParse(req.body || {});
+        if (!parsedBody.success) {
+            return res.status(400).json({ error: 'invalid_payload' });
+        }
+
+        const apply = parsedBody.data.apply === true || parsedBody.data.dry_run === false;
+        if (apply) {
+            const userPermissions = await PermissionManager.getUserPermissions(performer as Performer, db);
+            if (!userPermissions.includes(PERMISSIONS.VOICEBOT_SESSIONS.UPDATE)) {
+                return res.status(403).json({ error: 'insufficient_permissions' });
+            }
+        }
+
+        const sessionIdRaw = String(parsedBody.data.session_id || '').trim();
+        if (sessionIdRaw && !ObjectId.isValid(sessionIdRaw)) {
+            return res.status(400).json({ error: 'invalid_session_id' });
+        }
+        const normalizedMessageIds = Array.from(
+            new Set(
+                (Array.isArray(parsedBody.data.message_ids) ? parsedBody.data.message_ids : [])
+                    .map((value) => String(value || '').trim())
+                    .filter(Boolean)
+            )
+        );
+        if (normalizedMessageIds.some((value) => !ObjectId.isValid(value))) {
+            return res.status(400).json({ error: 'invalid_message_ids' });
+        }
+
+        const result = await repairLegacyAttachmentMediaProjection({
+            db,
+            apply,
+            ...(parsedBody.data.limit != null ? { limit: parsedBody.data.limit } : {}),
+            ...(parsedBody.data.batch_size != null ? { batchSize: parsedBody.data.batch_size } : {}),
+            ...(sessionIdRaw ? { sessionId: sessionIdRaw } : {}),
+            ...(normalizedMessageIds.length > 0 ? { messageIds: normalizedMessageIds } : {}),
+            includeItems: parsedBody.data.include_items !== false,
+        });
+
+        return res.status(200).json({
+            success: true,
+            ...result,
+        });
+    } catch (error) {
+        logger.error('Error in repair_legacy_attachment_media:', error);
         return res.status(500).json({ error: String(error) });
     }
 });

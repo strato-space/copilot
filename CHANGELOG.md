@@ -261,7 +261,7 @@
 
 ### CHANGES
 - **22:02** Updated `AGENTS.md` and `README.md` so the repo instructions now record the `/root/.codex/sessions` cleanup guardrail and the accepted-only `POST /api/voicebot/session_tasks` `{ session_id, bucket: 'tasks' }` contract.
-- **22:02** Updated `plan/voice-task-surface-normalization-spec.md` and `plan/voice-task-surface-normalization-spec-2.md` to define `voice.session_tasks(session_id, bucket="tasks")` as an accepted-only bucket and mark any `DRAFT_10` rows there as bug `copilot-f6z4`.
+- **22:02** Updated `plan/closed/voice-task-surface-normalization-spec.md` and `plan/2026-03-21-voice-task-surface-normalization-spec-2.md` to define `voice.session_tasks(session_id, bucket="tasks")` as an accepted-only bucket and mark any `DRAFT_10` rows there as bug `copilot-f6z4`.
 - **22:02** Updated `agents/fastagent.config.yaml` so the checked-in runtime default model is `codexspark`, consistent with the repo’s documented account-aware auth/model sync rule.
 
 ## 2026-03-18
@@ -623,7 +623,7 @@
   - updated `app/src/components/voice/MeetingCard.tsx`, `app/src/store/voiceBotStore.ts`, `app/src/utils/voicePossibleTasks.ts`, `app/src/components/voice/PossibleTasks.tsx`, and `app/src/pages/voice/SessionPage.tsx`,
   - added `app/src/pages/operops/voiceTabGrouping.ts` and redesigned the `Voice` tab in `app/src/pages/operops/CRMPage.tsx` around orphan/session-grouped `NEW_0` tasks.
 - **12:03** Planning/docs:
-  - added `plan/archive/live-possible-tasks-during-meeting-plan.legacy.md`,
+  - added `plan/closed/2026-03-06-live-possible-tasks-during-meeting-plan.legacy.md`,
   - updated `docs/RUNTIME_TAG_DEPRECATION_PLAN_2026-03-04.md` with BD status/traceability formatting.
 - **12:03** Attachment/taskflow robustness:
   - updated `backend/src/services/taskAttachments.ts` to decode UTF-8 filenames exposed as latin1 mojibake by multipart parsing,
@@ -797,7 +797,7 @@
   - updated contracts in `app/__tests__/voice/*` and `app/__tests__/operops/*`.
 - **12:28** Documentation:
   - updated `AGENTS.md` and `README.md`;
-  - added/updated plan artifact `plan/archive/mcp-voice-session-taskflow-plan.legacy.md`.
+  - added/updated plan artifact `plan/closed/2026-03-03-mcp-voice-session-taskflow-plan.legacy.md`.
 - **13:55** Backend:
   - updated `backend/src/services/voicebot/voicebotDoneNotify.ts` to derive `metadata.source` from the actual close/worker path;
   - expanded `backend/__tests__/voicebot/notify/doneNotifyService.test.ts` for REST and queue source labels.
@@ -2750,9 +2750,13 @@
 ## 2026-03-27
 ### PROBLEM SOLVED
 - **10:10** Runtime recovery needed one strict path after restart: Codex/CRM transport drift, voice upload/session forensic trace continuity, noisy test warnings, and selector/task-pane deprecation fallout were still mixed in active diffs.
+- **22:47** Media-bearing Telegram/document attachments could land in Voice as empty `legacy_attachment` placeholders, which blocked ASR, hid retry/classification state, and made restart/recovery flows non-deterministic.
+- **22:47** Closed planning artifacts still had mixed live/archive paths, which left repo instructions and plan index entries inconsistent after the closure wave.
 
 ### FEATURE IMPLEMENTED
 - **10:10** Delivered a recovery-focused hardening package with deterministic route behavior, warning suppression policy in tests, and UI selector/task-pane contract cleanups.
+- **22:47** Added payload-first attachment transcription classification with operator resolution, stale-job-safe audio/video ASR, and legacy repair tooling for historical attachment placeholders.
+- **22:47** Archived the closed media-attachment planning wave under canonical references while keeping the remaining test-noise follow-up explicitly open.
 
 ### CHANGES
 - **09:32** Stabilized voice runtime recovery and temporal taskflow contracts (`1126f4f`).
@@ -2760,3 +2764,8 @@
 - **10:10** Added forensic trace continuity for `session_done` and `upload_audio` flows plus regression coverage (`backend/src/api/routes/voicebot/{sessions.ts,uploads.ts}`, `backend/__tests__/voicebot/*`, `backend/__tests__/smoke/voicebotApiSmoke.test.ts`).
 - **10:10** Centralized backend test logger noise policy and test script warning suppression (`backend/src/utils/logger.ts`, `backend/__tests__/services/logger.test.ts`, `backend/package.json`).
 - **10:10** Completed UI contract cleanup for shared selectors and OperOps `TaskPage` card API migration (`variant=\"borderless\"`) with parity test updates across `app/src/components/shared/*`, `app/src/pages/operops/*`, and `app/__tests__/*`.
+- **22:47** Added attachment projection/orchestration utilities and wired them through Telegram ingress, transcription routes, session restarts, processing loop, worker ASR, and legacy repair (`backend/src/{voicebot_tgbot/ingressHandlers.ts,api/routes/voicebot/{messageHelpers.ts,sessions.ts,transcription.ts},workers/voicebot/handlers/{processingLoop.ts,transcribeHandler.ts,shared/{retryOrchestrationState.ts,transcriptionProjection.ts}},services/voicebot/legacyAttachmentMediaRepair.ts}`), including `POST /api/voicebot/transcription/resolve_classification` and `POST /api/voicebot/repair_legacy_attachment_media`.
+- **22:47** Extended Voice UI/store typing to expose attachment-level transcription state, eligibility, skip reasons, and per-attachment details in the Transcription surface (`app/src/{types/voice.ts,store/voiceBotStore.ts,components/voice/{Transcription.tsx,TranscriptionTableRow.tsx}}`).
+- **22:47** Added regression coverage for ingress classification, projection normalization/repair, pending-classification orchestration, retry/stale-job guards, and smoke-path validation (`backend/__tests__/voicebot/runtime/*`, `backend/__tests__/voicebot/workers/*`, `backend/__tests__/smoke/voicebotTranscriptionRetrySmoke.test.ts`).
+- **22:47** Closed `copilot-qtcp` in the media-attachment spec, kept `copilot-8h9u` follow-up explicitly in progress, moved closed planning docs into canonical dated/`plan/closed` locations, synced repo references, and refreshed the plan index (`plan/{2026-03-27-voice-media-attachment-transcription-spec.md,2026-03-27-test-noise.md,index.md,closed/*}`, `README.md`, `AGENTS.md`).
+- **22:47** Captured refreshed forensic bundles for the Telemost driver incident under `tmp/voice-investigation-artifacts/*`.

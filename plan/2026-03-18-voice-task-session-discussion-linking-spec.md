@@ -2,14 +2,17 @@
 
 ## Status ⚪Open
 
-- Task-surface ticket line: ⚪Open 2  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 0
-- Plan status: discussion-linking contract recorded; runtime fold-in not yet completed; doc normalization pending.
+- Spec/control ticket line (`copilot-96tc`, `copilot-br3m`): ⚪Open 1  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 1
+- Planned implementation ticket line (`copilot-0ylv`, `copilot-m5wz`, `copilot-vii8`, `copilot-zvxa`): ⚪Open 4  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 0
+- Plan status: discussion-linking contract recorded; runtime fold-in not yet completed; status block normalized to current `bd` state.
 - Canonical follow-up spec ticket: `copilot-96tc`
-- Related docs ticket: `copilot-br3m`
+- Planned implementation tickets: `copilot-0ylv`, `copilot-m5wz`, `copilot-vii8`, `copilot-zvxa`
+- Status-normalization docs ticket: `copilot-br3m` (closed).
+- Greek-scholastic guardrail: repeated discussion of non-draft tasks remains distinct from `create_tasks` and must materialize through a separate discussion-link/comment path.
 
-**Статус документа**: follow-up contract open; discussion-linking remains design-first; doc normalization pending
+**Статус документа**: follow-up contract open; discussion-linking remains design-first; status block normalized
 **Дата**: 2026-03-18  
-**Основание**: текущие `bd` states for `copilot-96tc`, `copilot-br3m`; spec фиксирует target 1:N session-link/comment semantics, но эта wave всё ещё open в `bd`.
+**Основание**: текущие `bd` states for `copilot-96tc`, `copilot-br3m`, `copilot-0ylv`, `copilot-m5wz`, `copilot-vii8`, `copilot-zvxa`; spec фиксирует target 1:N session-link/comment semantics, но эта wave всё ещё open в `bd`.
 
 **Conceptual source**: [voice-dual-stream-ontology.md](/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md)
 

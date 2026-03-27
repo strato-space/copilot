@@ -21,8 +21,8 @@
 - Moved the canonical planning source from `plan/voice-dual-stream-ontology.md` to `ontology/plan/voice-dual-stream-ontology.md`.
 - Updated plan documents to point at the ontology-local canonical source:
   - `plan/voice-non-draft-discussion-analyzer-contract.md`
-  - `plan/voice-task-session-discussion-linking-spec.md`
-  - `plan/voice-task-surface-normalization-spec-2.md`
+  - `plan/2026-03-18-voice-task-session-discussion-linking-spec.md`
+  - `plan/2026-03-21-voice-task-surface-normalization-spec-2.md`
 - Added new ontology planning specs:
   - `ontology/plan/ontology-persistence-db-spec.md`
   - `ontology/plan/ontology-persistence-system-needs.ru.md`

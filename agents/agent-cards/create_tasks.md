@@ -66,7 +66,7 @@ default: false
 - Перед voice enrichment ОБЯЗАТЕЛЬНО прочитай через `fs.read_multiple_files`:
   - `/home/strato-space/copilot/factory/harness.md`
   - `/home/strato-space/copilot/ontology/plan/voice-dual-stream-ontology.md`
-  - `/home/strato-space/copilot/plan/voice-operops-codex-taskflow-spec.md`
+  - `/home/strato-space/copilot/plan/closed/voice-operops-codex-taskflow-spec.md`
 - Эти файлы не decorative reading:
   - `harness.md` — operational guidance по environment/handoff discipline;
   - `voice-dual-stream-ontology.md` — semantic target model для `task[DRAFT_10]`, `Ready+`, `context_enrichment`, `comment-first` и `review_md_text`.

@@ -40,8 +40,9 @@ describe('voicebot worker scaffold handlers', () => {
     });
 
     const result = await handleTranscribeJob({ message_id: messageId.toString() });
-    expect(result.ok).toBe(false);
-    expect(result.error).toBe('missing_file_path');
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.reason).toBe('pending_classification');
     expect(messagesUpdateOne).toHaveBeenCalledTimes(1);
   });
 
@@ -130,7 +131,11 @@ describe('voicebot worker scaffold handlers', () => {
         }),
       }));
 
-    const countDocuments = jest.fn().mockResolvedValueOnce(4).mockResolvedValueOnce(2);
+    const countDocuments = jest
+      .fn()
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2);
 
     getDbMock.mockReturnValue({
       collection: (name: string) => {
@@ -145,6 +150,7 @@ describe('voicebot worker scaffold handlers', () => {
     expect(result.mode).toBe('runtime');
     expect(result.scanned_sessions).toBe(2);
     expect(result.pending_transcriptions).toBe(4);
+    expect(result.pending_classification).toBe(1);
     expect(result.pending_categorizations).toBe(2);
   });
 

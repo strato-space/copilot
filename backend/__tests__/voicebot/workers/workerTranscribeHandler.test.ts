@@ -198,6 +198,231 @@ describe('handleTranscribeJob', () => {
     );
   });
 
+  it('demotes stale completion when in-flight key was revoked after operator reclassification', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-stale-'));
+    const filePath = join(dir, 'chunk.webm');
+    writeFileSync(filePath, 'fake-audio');
+
+    const initialMessage = {
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      to_transcribe: true,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      source_type: 'telegram',
+      message_type: 'document',
+      file_id: 'tg-stale-file',
+      file_unique_id: 'tg-stale-uniq',
+      file_name: 'meeting.ogg',
+      mime_type: 'audio/ogg',
+      primary_payload_media_kind: 'audio',
+      primary_transcription_attachment_index: 0,
+      transcription_eligibility: 'eligible',
+      classification_resolution_state: 'resolved',
+      transcription_processing_state: 'pending_transcription',
+      attachments: [
+        {
+          kind: 'file',
+          source: 'telegram',
+          file_id: 'tg-stale-file',
+          file_unique_id: 'tg-stale-uniq',
+          name: 'meeting.ogg',
+          mimeType: 'audio/ogg',
+          payload_media_kind: 'audio',
+          transcription_eligibility: 'eligible',
+          classification_resolution_state: 'resolved',
+          transcription_processing_state: 'pending_transcription',
+          duration_ms: 60_000,
+          size: 2_000_000,
+        },
+      ],
+      message_timestamp: 1770489126,
+      duration: 60,
+    };
+    const latestMessageAfterOperatorChange = {
+      ...initialMessage,
+      to_transcribe: false,
+      transcription_eligibility: 'ineligible',
+      classification_resolution_state: 'resolved',
+      transcription_processing_state: 'classified_skip',
+      transcription_skip_reason: 'operator_ineligible_classification',
+      transcription_inflight_job_key: null,
+      attachments: [
+        {
+          ...(initialMessage.attachments[0] as Record<string, unknown>),
+          transcription_eligibility: 'ineligible',
+          transcription_processing_state: 'classified_skip',
+          transcription_skip_reason: 'operator_ineligible_classification',
+        },
+      ],
+    };
+
+    const messagesFindOne = jest.fn(async () => initialMessage)
+      .mockImplementationOnce(async () => initialMessage)
+      .mockImplementation(async () => latestMessageAfterOperatorChange);
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValue({ text: 'obsolete transcript' });
+    getAudioDurationFromFileMock.mockResolvedValue(60);
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      skipped: true,
+      reason: 'stale_job_demoted',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    const staleDemotionCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      const slot = setPayload['transcription_results_by_attachment.idx_0'] as Record<string, unknown> | undefined;
+      return Boolean(slot?.stale_result);
+    });
+    expect(staleDemotionCall).toBeTruthy();
+    const staleSetPayload = ((staleDemotionCall?.[1] as Record<string, unknown>).$set || {}) as Record<string, unknown>;
+    const staleSlot = staleSetPayload['transcription_results_by_attachment.idx_0'] as Record<string, unknown>;
+    expect(staleSlot.stale_reason).toBe('eligibility_changed');
+    expect(staleSlot.text).toBe('obsolete transcript');
+
+    const committedTranscriptionCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.is_transcribed === true;
+    });
+    expect(committedTranscriptionCall).toBeUndefined();
+  });
+
+  it('demotes completion when atomic commit guard fails at write time', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-atomic-'));
+    const filePath = join(dir, 'chunk.ogg');
+    writeFileSync(filePath, 'fake-audio');
+
+    let capturedInflightJobKey = '';
+    const baseEligibleMessage = {
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      to_transcribe: true,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      source_type: 'telegram',
+      message_type: 'voice',
+      file_id: 'tg-atomic-file',
+      file_unique_id: 'tg-atomic-uniq',
+      file_name: 'atomic.ogg',
+      mime_type: 'audio/ogg',
+      primary_payload_media_kind: 'audio',
+      primary_transcription_attachment_index: 0,
+      transcription_eligibility: 'eligible',
+      classification_resolution_state: 'resolved',
+      transcription_processing_state: 'pending_transcription',
+      transcription_inflight_job_key: '',
+      attachments: [
+        {
+          kind: 'voice',
+          source: 'telegram',
+          file_id: 'tg-atomic-file',
+          file_unique_id: 'tg-atomic-uniq',
+          name: 'atomic.ogg',
+          mimeType: 'audio/ogg',
+          payload_media_kind: 'audio',
+          transcription_eligibility: 'eligible',
+          classification_resolution_state: 'resolved',
+          transcription_processing_state: 'pending_transcription',
+          duration_ms: 20_000,
+          size: 500_000,
+        },
+      ],
+      message_timestamp: 1770489126,
+      duration: 20,
+    };
+
+    const messagesFindOne = jest.fn(async () => ({
+      ...baseEligibleMessage,
+      transcription_inflight_job_key: capturedInflightJobKey || '',
+    }));
+    const messagesUpdateOne = jest.fn(async (_filter: unknown, update: unknown) => {
+      const setPayload = ((update as Record<string, unknown>)?.$set || {}) as Record<string, unknown>;
+      if (typeof setPayload.transcription_inflight_job_key === 'string') {
+        capturedInflightJobKey = setPayload.transcription_inflight_job_key;
+      }
+      if (setPayload.is_transcribed === true) {
+        return { matchedCount: 0, modifiedCount: 0 };
+      }
+      return { matchedCount: 1, modifiedCount: 1 };
+    });
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockResolvedValue({ text: 'atomic transcript' });
+    getAudioDurationFromFileMock.mockResolvedValue(20);
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      skipped: true,
+      reason: 'stale_job_demoted',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    const staleDemotionCall = messagesUpdateOne.mock.calls.find((call) => {
+      const setPayload = (((call?.[1] as Record<string, unknown>)?.$set || {}) as Record<string, unknown>);
+      const slot = setPayload['transcription_results_by_attachment.idx_0'] as Record<string, unknown> | undefined;
+      return Boolean(slot?.stale_result);
+    });
+    expect(staleDemotionCall).toBeTruthy();
+    const staleSetPayload = ((staleDemotionCall?.[1] as Record<string, unknown>).$set || {}) as Record<string, unknown>;
+    const staleSlot = staleSetPayload['transcription_results_by_attachment.idx_0'] as Record<string, unknown>;
+    expect(staleSlot.stale_reason).toBe('atomic_guard_failed');
+    expect(staleSlot.text).toBe('atomic transcript');
+  });
+
   it('drops downstream processors when post-transcribe detector marks chunk as garbage', async () => {
     const messageId = new ObjectId();
     const sessionId = new ObjectId();

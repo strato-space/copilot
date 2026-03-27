@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { createReadStream, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -37,6 +38,14 @@ import {
   normalizeErrorCode,
   resolveOpenAiRecoveryErrorCode,
 } from './shared/openAiErrors.js';
+import {
+  buildDeterministicTranscriptionJobKey,
+  resolveMessageProjection,
+  resolveTranscriptionEligibilityState,
+  toAttachmentResultSlotKey,
+  type AttachmentMediaKind,
+  type MessageProjection,
+} from './shared/transcriptionProjection.js';
 import {
   buildCreateTasksCategorizationNotQueuedDecision,
   persistCreateTasksNoTaskDecision,
@@ -83,6 +92,20 @@ type VoiceMessageRecord = {
   message_type?: string;
   file_id?: string;
   mime_type?: string;
+  file_name?: string;
+  file_size?: number;
+  attachments?: unknown[];
+  primary_payload_media_kind?: string;
+  primary_transcription_attachment_index?: number | null;
+  transcription_eligibility?: string | null;
+  classification_resolution_state?: string;
+  transcription_processing_state?: string;
+  transcription_eligibility_basis?: string;
+  transcription_skip_reason?: string | null;
+  classification_rule_ref?: string | null;
+  source_note_text?: string;
+  transcription_job_key?: string;
+  transcription_inflight_job_key?: string;
 };
 
 type VoiceSessionRecord = {
@@ -147,6 +170,15 @@ const TELEGRAM_EXTENSION_BY_MIME: Record<string, string> = {
   'audio/wav': '.wav',
   'audio/x-wav': '.wav',
 };
+const VIDEO_EXTENSION_SET = new Set(['.webm', '.mp4', '.m4v', '.mov', '.avi', '.mkv']);
+const TRANSCRIPTION_STATE = {
+  PENDING_CLASSIFICATION: 'pending_classification',
+  PENDING_TRANSCRIPTION: 'pending_transcription',
+  TRANSCRIBED: 'transcribed',
+  CLASSIFIED_SKIP: 'classified_skip',
+  TRANSCRIPTION_ERROR: 'transcription_error',
+} as const;
+
 const getOpenAiRecoveryMessage = (errorCode: string): string => {
   if (errorCode === 'invalid_api_key') {
     return 'OpenAI API key is invalid. Will resume automatically after credentials are fixed.';
@@ -575,6 +607,123 @@ const resolveTelegramAudioExtension = ({
   if (fromPath) return fromPath;
   const byMime = mimeType ? TELEGRAM_EXTENSION_BY_MIME[mimeType] : null;
   return byMime || '.ogg';
+};
+
+const resolveAsrMediaKind = ({
+  message,
+  projection,
+}: {
+  message: VoiceMessageRecord;
+  projection: MessageProjection;
+}): AttachmentMediaKind => {
+  if (projection.mediaKind !== 'unknown') return projection.mediaKind;
+  const mime = String(projection.canonicalTransport.mime_type || message.mime_type || '')
+    .trim()
+    .toLowerCase();
+  if (mime.startsWith('audio/')) return 'audio';
+  if (mime.startsWith('video/')) return 'video';
+  if (!projection.hasAttachments) return 'audio';
+
+  const extension = String(extname(message.file_path || projection.canonicalTransport.file_name || '') || '')
+    .trim()
+    .toLowerCase();
+  if (VIDEO_EXTENSION_SET.has(extension)) return 'video';
+  return 'unknown';
+};
+
+const isMediaBearingAttachmentMessage = ({
+  message,
+  projection,
+}: {
+  message: VoiceMessageRecord;
+  projection: MessageProjection;
+}): boolean => {
+  if (!projection.hasAttachments) return false;
+  const kind = resolveAsrMediaKind({ message, projection });
+  return kind === 'audio' || kind === 'video';
+};
+
+const buildTransportProjectionPatch = ({
+  projection,
+  now,
+}: {
+  projection: MessageProjection;
+  now: Date;
+}): Record<string, unknown> => {
+  const patch: Record<string, unknown> = {
+    projection_refreshed_at: now,
+  };
+  if (projection.primaryAttachmentIndex != null) {
+    patch.primary_transcription_attachment_index = projection.primaryAttachmentIndex;
+  }
+  if (projection.mediaKind && projection.mediaKind !== 'unknown') {
+    patch.primary_payload_media_kind = projection.mediaKind;
+  }
+
+  const canonical = projection.canonicalTransport;
+  if (canonical.file_id) patch.file_id = canonical.file_id;
+  if (canonical.file_unique_id) patch.file_unique_id = canonical.file_unique_id;
+  if (canonical.file_name) patch.file_name = canonical.file_name;
+  if (canonical.file_size != null) patch.file_size = canonical.file_size;
+  if (canonical.mime_type) patch.mime_type = canonical.mime_type;
+  if (canonical.source) patch.source_type = canonical.source;
+
+  if (projection.transportConflicts.length > 0) {
+    patch.transport_metadata_conflict = {
+      fields: projection.transportConflicts,
+      detected_at: now,
+      source: 'worker_transcribe_projection_refresh',
+    };
+  }
+
+  return patch;
+};
+
+const stageVideoToAudioForAsr = ({
+  sourcePath,
+  message_id,
+}: {
+  sourcePath: string;
+  message_id: string;
+}): { stagedFilePath: string; cleanupDir: string } => {
+  const stageDir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-stage-'));
+  const safeMessageId = message_id.replace(/[^a-zA-Z0-9_-]/g, '').slice(-24) || 'message';
+  const stagedFilePath = join(stageDir, `stage_${safeMessageId}.ogg`);
+  const extract = spawnSync(
+    'ffmpeg',
+    [
+      '-y',
+      '-v',
+      'error',
+      '-i',
+      sourcePath,
+      '-vn',
+      '-ac',
+      '1',
+      '-ar',
+      '16000',
+      '-c:a',
+      'libopus',
+      stagedFilePath,
+    ],
+    { encoding: 'utf8' }
+  );
+
+  if (extract.error) {
+    throw new Error(`ffmpeg_audio_extract_failed:${extract.error.message}`);
+  }
+  if (extract.status !== 0) {
+    const stderr = String(extract.stderr || '').trim();
+    throw new Error(stderr || `ffmpeg_audio_extract_exit_${extract.status}`);
+  }
+  if (!existsSync(stagedFilePath)) {
+    throw new Error('ffmpeg_audio_extract_missing_output');
+  }
+  const stagedSize = getFileSizeBytes(stagedFilePath);
+  if (stagedSize <= 0) {
+    throw new Error('ffmpeg_audio_extract_empty_output');
+  }
+  return { stagedFilePath, cleanupDir: stageDir };
 };
 
 const resolveTelegramBotToken = (): string | null => {
@@ -1059,7 +1208,7 @@ export const handleTranscribeJob = async (
 
   const db = getDb();
   const messageObjectId = new ObjectId(message_id);
-  const message = (await db
+  let message = (await db
     .collection(VOICEBOT_COLLECTIONS.MESSAGES)
     .findOne(runtimeQuery({ _id: messageObjectId, is_deleted: { $ne: true } }))) as VoiceMessageRecord | null;
 
@@ -1086,6 +1235,160 @@ export const handleTranscribeJob = async (
       ok: true,
       skipped: true,
       reason: 'already_transcribed',
+      message_id,
+      session_id,
+    };
+  }
+
+  let projection = resolveMessageProjection(message as unknown as Record<string, unknown>);
+  const projectionPatch = buildTransportProjectionPatch({
+    projection,
+    now: new Date(),
+  });
+  if (
+    projection.transportConflicts.length > 0 ||
+    (projection.canonicalTransport.file_id && !String(message.file_id || '').trim()) ||
+    (projection.canonicalTransport.file_unique_id && !String(message.file_unique_id || '').trim()) ||
+    (projection.primaryAttachmentIndex != null &&
+      message.primary_transcription_attachment_index !== projection.primaryAttachmentIndex)
+  ) {
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+      $set: projectionPatch,
+    });
+    message = {
+      ...message,
+      ...(projectionPatch as Partial<VoiceMessageRecord>),
+    };
+    projection = resolveMessageProjection(message as unknown as Record<string, unknown>);
+  }
+
+  const eligibility = resolveTranscriptionEligibilityState({
+    message: message as unknown as Record<string, unknown>,
+    projection,
+  });
+  if (eligibility.state === 'pending') {
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+      $set: {
+        is_transcribed: false,
+        to_transcribe: false,
+        transcription_eligibility: null,
+        classification_resolution_state: 'pending',
+        transcription_eligibility_basis: eligibility.basis,
+        transcription_processing_state: TRANSCRIPTION_STATE.PENDING_CLASSIFICATION,
+        transcribe_timestamp: Date.now(),
+      },
+      $unset: {
+        transcription_inflight_job_key: 1,
+        transcription_skip_reason: 1,
+        transcription_error: 1,
+        transcription_error_context: 1,
+        error_message: 1,
+        error_timestamp: 1,
+        transcription_retry_reason: 1,
+        transcription_next_attempt_at: 1,
+      },
+    });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
+    });
+    return {
+      ok: true,
+      skipped: true,
+      reason: TRANSCRIPTION_STATE.PENDING_CLASSIFICATION,
+      message_id,
+      session_id,
+    };
+  }
+
+  if (eligibility.state === 'ineligible') {
+    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+      $set: {
+        is_transcribed: false,
+        to_transcribe: false,
+        transcription_eligibility: 'ineligible',
+        classification_resolution_state: 'resolved',
+        transcription_eligibility_basis: eligibility.basis,
+        transcription_skip_reason: eligibility.skipReason || 'classified_ineligible',
+        transcription_processing_state: TRANSCRIPTION_STATE.CLASSIFIED_SKIP,
+        transcribe_timestamp: Date.now(),
+      },
+      $unset: {
+        transcription_inflight_job_key: 1,
+        transcription_error: 1,
+        transcription_error_context: 1,
+        error_message: 1,
+        error_timestamp: 1,
+        transcription_retry_reason: 1,
+        transcription_next_attempt_at: 1,
+      },
+    });
+    await emitMessageUpdateByIdSafe({
+      db,
+      messageObjectId,
+      message_id,
+      session_id,
+    });
+    return {
+      ok: true,
+      skipped: true,
+      reason: TRANSCRIPTION_STATE.CLASSIFIED_SKIP,
+      message_id,
+      session_id,
+    };
+  }
+
+  const transcriptionJobKey = buildDeterministicTranscriptionJobKey({
+    messageId: message_id,
+    projection,
+  });
+  const inflightKey = String(message.transcription_inflight_job_key || '').trim();
+  if (inflightKey && inflightKey === transcriptionJobKey && !payload.force) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'dedupe_inflight_same_key',
+      message_id,
+      session_id,
+    };
+  }
+
+  const startUpdate = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+    runtimeQuery({
+      _id: messageObjectId,
+      ...(payload.force
+        ? {}
+        : {
+          $or: [
+            { transcription_inflight_job_key: { $exists: false } },
+            { transcription_inflight_job_key: null },
+            { transcription_inflight_job_key: { $ne: transcriptionJobKey } },
+          ],
+        }),
+    }),
+    {
+      $set: {
+        transcription_job_key: transcriptionJobKey,
+        transcription_inflight_job_key: transcriptionJobKey,
+        transcription_processing_state: TRANSCRIPTION_STATE.PENDING_TRANSCRIPTION,
+        transcription_eligibility: 'eligible',
+        classification_resolution_state: 'resolved',
+        transcription_eligibility_basis: eligibility.basis,
+        transcribe_timestamp: Date.now(),
+      },
+      $unset: {
+        transcription_skip_reason: 1,
+      },
+    }
+  );
+
+  if (!payload.force && startUpdate.matchedCount <= 0) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'dedupe_inflight_same_key',
       message_id,
       session_id,
     };
@@ -1122,12 +1425,15 @@ export const handleTranscribeJob = async (
           transcription_chunks: Array.isArray(reuseSource.transcription_chunks) ? reuseSource.transcription_chunks : [],
           is_transcribed: true,
           transcription_method: 'reuse_by_file_hash',
+          transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIBED,
           transcribe_attempts: 0,
           to_transcribe: false,
+          transcription_job_key: transcriptionJobKey,
           transcription_reused_from_message_id: String(reuseSource._id),
           transcription_reuse_hash: contentHash,
         },
         $unset: {
+          transcription_inflight_job_key: 1,
           transcription_error: 1,
           transcription_error_context: 1,
           error_message: 1,
@@ -1199,8 +1505,9 @@ export const handleTranscribeJob = async (
   let filePath = String(message.file_path || '').trim();
   let telegramTransportError: Record<string, unknown> | null = null;
   if (!filePath) {
+    const isMediaAttachment = isMediaBearingAttachmentMessage({ message, projection });
     const textFallback = String(message.text || '').trim();
-    if (textFallback) {
+    if (textFallback && !isMediaAttachment) {
       await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
         $set: {
           is_transcribed: true,
@@ -1210,9 +1517,12 @@ export const handleTranscribeJob = async (
           to_transcribe: false,
           transcription_chunks: [],
           transcription_method: 'text_fallback',
+          transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIBED,
           transcribe_attempts: 0,
+          transcription_job_key: transcriptionJobKey,
         },
         $unset: {
+          transcription_inflight_job_key: 1,
           transcription_error: 1,
           transcription_error_context: 1,
           error_message: 1,
@@ -1258,8 +1568,12 @@ export const handleTranscribeJob = async (
       };
     }
 
-    const sourceType = String(message.source_type || '').trim().toLowerCase();
-    const fileId = String(message.file_id || '').trim();
+    const sourceType = String(
+      projection.canonicalTransport.source || message.source_type || ''
+    )
+      .trim()
+      .toLowerCase();
+    const fileId = String(projection.canonicalTransport.file_id || message.file_id || '').trim();
     if (sourceType === 'telegram' && fileId) {
       const transportDownload = await downloadTelegramFileToLocal({
         fileId,
@@ -1275,6 +1589,7 @@ export const handleTranscribeJob = async (
             telegram_file_path: transportDownload.telegram_file_path,
             file_transport: 'telegram_download',
             file_size: transportDownload.file_size,
+            transcription_job_key: transcriptionJobKey,
             ...(transportDownload.mime_type ? { mime_type: transportDownload.mime_type } : {}),
           },
         });
@@ -1294,8 +1609,12 @@ export const handleTranscribeJob = async (
     }
   }
   if (!filePath) {
-    const sourceType = String(message.source_type || '').trim().toLowerCase();
-    const fileId = String(message.file_id || '').trim();
+    const sourceType = String(
+      projection.canonicalTransport.source || message.source_type || ''
+    )
+      .trim()
+      .toLowerCase();
+    const fileId = String(projection.canonicalTransport.file_id || message.file_id || '').trim();
     const isTelegramTransportMissing = Boolean(fileId) && sourceType === 'telegram';
     const telegramTransportErrorCode = String(telegramTransportError?.code || '').trim();
     const telegramTransportErrorMessage = String(telegramTransportError?.message || '').trim();
@@ -1323,6 +1642,8 @@ export const handleTranscribeJob = async (
         error_timestamp: new Date(),
         transcribe_timestamp: Date.now(),
         to_transcribe: false,
+        transcription_job_key: transcriptionJobKey,
+        transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
         transcription_error_context: {
           ...getTranscriptionErrorContext({
             apiKey: '',
@@ -1330,10 +1651,12 @@ export const handleTranscribeJob = async (
             errorCode,
           }),
           ...(fileId ? { telegram_file_id: fileId } : {}),
+          ...(isTelegramTransportMissing ? { transport_recovery_state: 'transport_expired' } : {}),
           ...(transportContext ? { telegram_transport_error: transportContext } : {}),
         },
       },
       $unset: {
+        transcription_inflight_job_key: 1,
         transcription_retry_reason: 1,
         transcription_next_attempt_at: 1,
       },
@@ -1353,20 +1676,88 @@ export const handleTranscribeJob = async (
     };
   }
   if (!existsSync(filePath)) {
-    const errorCode = 'file_not_found';
+    const sourceType = String(
+      projection.canonicalTransport.source || message.source_type || ''
+    )
+      .trim()
+      .toLowerCase();
+    const fileId = String(projection.canonicalTransport.file_id || message.file_id || '').trim();
+    if (sourceType === 'telegram' && fileId) {
+      const transportDownload = await downloadTelegramFileToLocal({
+        fileId,
+        sessionId: session_id,
+        messageId: message_id,
+        mimeTypeHint: normalizeMimeType(message.mime_type),
+      });
+      if (transportDownload.ok) {
+        filePath = transportDownload.file_path;
+        await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+          $set: {
+            file_path: transportDownload.file_path,
+            telegram_file_path: transportDownload.telegram_file_path,
+            file_transport: 'telegram_download',
+            file_size: transportDownload.file_size,
+            transcription_job_key: transcriptionJobKey,
+            ...(transportDownload.mime_type ? { mime_type: transportDownload.mime_type } : {}),
+          },
+        });
+      } else {
+        telegramTransportError = {
+          code: transportDownload.error_code,
+          message: transportDownload.error_message,
+          ...(transportDownload.context ? { context: transportDownload.context } : {}),
+        };
+      }
+    }
+  }
+
+  if (!existsSync(filePath)) {
+    const sourceType = String(
+      projection.canonicalTransport.source || message.source_type || ''
+    )
+      .trim()
+      .toLowerCase();
+    const fileId = String(projection.canonicalTransport.file_id || message.file_id || '').trim();
+    const isTelegramTransportMissing = Boolean(fileId) && sourceType === 'telegram';
+    const errorCode = isTelegramTransportMissing ? 'missing_transport' : 'file_not_found';
+    const transportContext = isTelegramTransportMissing && telegramTransportError
+      ? {
+        ...(String(telegramTransportError.code || '').trim()
+          ? { code: String(telegramTransportError.code || '').trim() }
+          : {}),
+        ...(String(telegramTransportError.message || '').trim()
+          ? { message: String(telegramTransportError.message || '').trim() }
+          : {}),
+        ...(telegramTransportError.context && typeof telegramTransportError.context === 'object'
+          ? { context: telegramTransportError.context as Record<string, unknown> }
+          : {}),
+      }
+      : null;
     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
       $set: {
         is_transcribed: false,
         transcription_error: errorCode,
-        error_message: 'Audio file is missing on disk',
+        error_message: isTelegramTransportMissing
+          ? 'Telegram transport is unavailable for this media payload.'
+          : 'Audio file is missing on disk',
         error_timestamp: new Date(),
         transcribe_timestamp: Date.now(),
         to_transcribe: false,
-        transcription_error_context: getTranscriptionErrorContext({
-          apiKey: '',
-          filePath,
-          errorCode,
-        }),
+        transcription_job_key: transcriptionJobKey,
+        transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
+        transcription_error_context: {
+          ...getTranscriptionErrorContext({
+            apiKey: '',
+            filePath,
+            errorCode,
+          }),
+          ...(fileId ? { telegram_file_id: fileId } : {}),
+          ...(isTelegramTransportMissing ? { transport_recovery_state: 'transport_expired' } : {}),
+          ...(transportContext ? { telegram_transport_error: transportContext } : {}),
+        },
+      },
+      $unset: {
+        transcription_inflight_job_key: 1,
       },
     });
     await emitMessageUpdateByIdSafe({
@@ -1398,8 +1789,11 @@ export const handleTranscribeJob = async (
         error_timestamp: new Date(),
         transcribe_timestamp: Date.now(),
         to_transcribe: false,
+        transcription_job_key: transcriptionJobKey,
+        transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
       },
       $unset: {
+        transcription_inflight_job_key: 1,
         transcription_retry_reason: 1,
         transcription_next_attempt_at: 1,
       },
@@ -1429,11 +1823,16 @@ export const handleTranscribeJob = async (
         error_timestamp: new Date(),
         transcribe_timestamp: Date.now(),
         to_transcribe: false,
+        transcription_job_key: transcriptionJobKey,
+        transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
         transcription_error_context: getTranscriptionErrorContext({
           apiKey,
           filePath,
           errorCode,
         }),
+      },
+      $unset: {
+        transcription_inflight_job_key: 1,
       },
     });
     await emitMessageUpdateByIdSafe({
@@ -1450,9 +1849,27 @@ export const handleTranscribeJob = async (
     };
   }
 
+  const attachmentResultSlotKey = toAttachmentResultSlotKey(projection);
+  const asrMediaKind = resolveAsrMediaKind({ message, projection });
+  let stagedCleanupDir: string | null = null;
+  let processingFilePath = filePath;
+
   try {
-    const sourceFileSizeBytes = getFileSizeBytes(filePath);
-    const sourceExtension = String(extname(filePath) || '.webm').trim() || '.webm';
+    let asrFilePath = filePath;
+    let stagedFromVideo = false;
+    if (asrMediaKind === 'video') {
+      const staged = stageVideoToAudioForAsr({
+        sourcePath: filePath,
+        message_id,
+      });
+      asrFilePath = staged.stagedFilePath;
+      stagedCleanupDir = staged.cleanupDir;
+      stagedFromVideo = true;
+    }
+    processingFilePath = asrFilePath;
+
+    const sourceFileSizeBytes = getFileSizeBytes(asrFilePath);
+    const sourceExtension = String(extname(asrFilePath) || '.webm').trim() || '.webm';
     const fallbackTimestampMs = Number(message.message_timestamp)
       ? Number(message.message_timestamp) * 1000
       : Date.now();
@@ -1465,7 +1882,7 @@ export const handleTranscribeJob = async (
     let durationSeconds = durationFromMessage;
     if (durationSeconds == null) {
       try {
-        durationSeconds = await getAudioDurationFromFile(filePath);
+        durationSeconds = await getAudioDurationFromFile(asrFilePath);
       } catch (durationError) {
         logger.warn('[voicebot-worker] could not resolve duration via ffprobe', {
           message_id,
@@ -1478,12 +1895,13 @@ export const handleTranscribeJob = async (
     const transcriptionChunks: Array<Record<string, unknown>> = [];
     const transcriptionTextParts: string[] = [];
     let transcriptionMethod = 'direct';
+    if (stagedFromVideo) transcriptionMethod = 'video_audio_staged';
     let transcriptionRaw: unknown = null;
     let aggregatedDurationSeconds = durationSeconds || 0;
 
     if (sourceFileSizeBytes <= OPENAI_TRANSCRIBE_MAX_BYTES) {
       const transcription = await client.audio.transcriptions.create({
-        file: createReadStream(filePath),
+        file: createReadStream(asrFilePath),
         model: 'whisper-1',
       });
       const transcriptionText = String(transcription.text || '').trim();
@@ -1510,7 +1928,7 @@ export const handleTranscribeJob = async (
       const tempDir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-split-'));
       try {
         const segmentFiles = await splitAudioFileByDuration({
-          filePath,
+          filePath: asrFilePath,
           segmentDurationSeconds,
           outputDir: tempDir,
           outputPrefix: 'part_',
@@ -1589,6 +2007,47 @@ export const handleTranscribeJob = async (
       .join('\n\n')
       .trim();
 
+    if (!transcription_text) {
+      const errorCode = 'empty_result';
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+        $set: {
+          is_transcribed: false,
+          transcription_error: errorCode,
+          error_message: 'Transcription returned empty result.',
+          error_timestamp: new Date(),
+          transcribe_timestamp: Date.now(),
+          to_transcribe: false,
+          transcription_job_key: transcriptionJobKey,
+          transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
+          transcription_error_context: {
+            ...getTranscriptionErrorContext({
+              apiKey,
+              filePath: asrFilePath,
+              errorCode,
+            }),
+            asr_media_kind: asrMediaKind,
+          },
+        },
+        $unset: {
+          transcription_inflight_job_key: 1,
+          transcription_retry_reason: 1,
+          transcription_next_attempt_at: 1,
+        },
+      });
+      await emitMessageUpdateByIdSafe({
+        db,
+        messageObjectId,
+        message_id,
+        session_id,
+      });
+      return {
+        ok: false,
+        error: errorCode,
+        message_id,
+        session_id,
+      };
+    }
+
     const timeline = buildSegmentsFromChunks({
       chunks: transcriptionChunks,
       messageDurationSeconds: durationSeconds || aggregatedDurationSeconds || null,
@@ -1610,6 +2069,87 @@ export const handleTranscribeJob = async (
     }
 
     const nowTs = Date.now();
+    const latestMessage = (await db
+      .collection(VOICEBOT_COLLECTIONS.MESSAGES)
+      .findOne(runtimeQuery({ _id: messageObjectId, is_deleted: { $ne: true } }))) as VoiceMessageRecord | null;
+    if (!latestMessage) {
+      return {
+        ok: false,
+        error: 'message_not_found',
+        message_id,
+        session_id,
+      };
+    }
+
+    const latestProjection = resolveMessageProjection(latestMessage as unknown as Record<string, unknown>);
+    const latestEligibilityState = resolveTranscriptionEligibilityState({
+      message: latestMessage as unknown as Record<string, unknown>,
+      projection: latestProjection,
+    });
+    const latestJobKey = buildDeterministicTranscriptionJobKey({
+      messageId: message_id,
+      projection: latestProjection,
+    });
+    const latestInflightJobKey = String(latestMessage.transcription_inflight_job_key || '').trim();
+    const latestHasInflightJobKey = Object.prototype.hasOwnProperty.call(
+      latestMessage,
+      'transcription_inflight_job_key'
+    );
+    const isStaleByKeyChange = latestJobKey !== transcriptionJobKey;
+    const isStaleByInflightRevocation =
+      latestHasInflightJobKey && latestInflightJobKey !== transcriptionJobKey;
+    const isStaleByEligibilityChange =
+      latestEligibilityState.state !== 'eligible'
+      || Boolean(latestMessage.is_transcribed)
+      || String(latestMessage.transcription_processing_state || '').trim().toLowerCase() === TRANSCRIPTION_STATE.CLASSIFIED_SKIP;
+    if (isStaleByKeyChange || isStaleByInflightRevocation || isStaleByEligibilityChange) {
+      const staleReason = isStaleByKeyChange
+        ? 'job_key_changed'
+        : isStaleByEligibilityChange
+          ? 'eligibility_changed'
+          : 'inflight_key_revoked';
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+        $set: {
+          transcribe_timestamp: nowTs,
+          [`transcription_results_by_attachment.${attachmentResultSlotKey}`]: {
+            job_key: transcriptionJobKey,
+            stale_result: true,
+            stale_reason: staleReason,
+            completed_at: new Date(nowTs),
+            text: transcription_text,
+            transcription_raw: transcriptionRaw,
+            transcription_chunks: transcriptionChunks,
+            transcription_method: transcriptionMethod,
+          },
+          transcription_job_last_stale_key: transcriptionJobKey,
+        },
+      });
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+        runtimeQuery({
+          _id: messageObjectId,
+          transcription_inflight_job_key: transcriptionJobKey,
+        }),
+        {
+          $unset: {
+            transcription_inflight_job_key: 1,
+          },
+        }
+      );
+      await emitMessageUpdateByIdSafe({
+        db,
+        messageObjectId,
+        message_id,
+        session_id,
+      });
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'stale_job_demoted',
+        message_id,
+        session_id,
+      };
+    }
+
     const messageUpdateSet: Record<string, unknown> = {
       transcribe_timestamp: nowTs,
       transcription_text,
@@ -1641,8 +2181,19 @@ export const handleTranscribeJob = async (
       transcription_chunks: transcriptionChunks,
       is_transcribed: true,
       transcription_method: transcriptionMethod,
+      transcription_job_key: transcriptionJobKey,
+      transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIBED,
       transcribe_attempts: 0,
       to_transcribe: false,
+      [`transcription_results_by_attachment.${attachmentResultSlotKey}`]: {
+        job_key: transcriptionJobKey,
+        stale_result: false,
+        completed_at: new Date(nowTs),
+        text: transcription_text,
+        transcription_raw: transcriptionRaw,
+        transcription_chunks: transcriptionChunks,
+        transcription_method: transcriptionMethod,
+      },
     };
 
     if (garbageDetection) {
@@ -1669,17 +2220,70 @@ export const handleTranscribeJob = async (
       messageUpdateSet['processors_data.categorization.skipped_reason'] = 'garbage_detected';
     }
 
-    await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
-      $set: messageUpdateSet,
-      $unset: {
-        transcription_error: 1,
-        transcription_error_context: 1,
-        error_message: 1,
-        error_timestamp: 1,
-        transcription_retry_reason: 1,
-        transcription_next_attempt_at: 1,
-      },
-    });
+    const commitResult = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+      runtimeQuery({
+        _id: messageObjectId,
+        transcription_inflight_job_key: transcriptionJobKey,
+        is_transcribed: { $ne: true },
+        transcription_processing_state: { $ne: TRANSCRIPTION_STATE.CLASSIFIED_SKIP },
+        transcription_eligibility: { $in: ['eligible', null] },
+      }),
+      {
+        $set: messageUpdateSet,
+        $unset: {
+          transcription_inflight_job_key: 1,
+          transcription_error: 1,
+          transcription_error_context: 1,
+          error_message: 1,
+          error_timestamp: 1,
+          transcription_retry_reason: 1,
+          transcription_next_attempt_at: 1,
+        },
+      }
+    );
+
+    if (!commitResult?.matchedCount) {
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
+        $set: {
+          transcribe_timestamp: nowTs,
+          [`transcription_results_by_attachment.${attachmentResultSlotKey}`]: {
+            job_key: transcriptionJobKey,
+            stale_result: true,
+            stale_reason: 'atomic_guard_failed',
+            completed_at: new Date(nowTs),
+            text: transcription_text,
+            transcription_raw: transcriptionRaw,
+            transcription_chunks: transcriptionChunks,
+            transcription_method: transcriptionMethod,
+          },
+          transcription_job_last_stale_key: transcriptionJobKey,
+        },
+      });
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+        runtimeQuery({
+          _id: messageObjectId,
+          transcription_inflight_job_key: transcriptionJobKey,
+        }),
+        {
+          $unset: {
+            transcription_inflight_job_key: 1,
+          },
+        }
+      );
+      await emitMessageUpdateByIdSafe({
+        db,
+        messageObjectId,
+        message_id,
+        session_id,
+      });
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'stale_job_demoted',
+        message_id,
+        session_id,
+      };
+    }
 
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {
       $set: {
@@ -1780,11 +2384,14 @@ export const handleTranscribeJob = async (
     const quotaRetryable = Boolean(recoveryErrorCode);
     const payloadTooLarge = isPayloadTooLargeError(error);
     const splitFailedBySize = /oversized_segment_after_split/i.test(errorMessage);
+    const mediaStagingFailed = /ffmpeg_audio_extract|media_staging_failed|staging/i.test(errorMessage);
     const normalizedCode = quotaRetryable
       ? recoveryErrorCode || normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
-      : payloadTooLarge || splitFailedBySize
-        ? 'audio_too_large'
-        : normalizeErrorCode(error) || 'transcription_failed';
+      : mediaStagingFailed
+        ? 'media_staging_failed'
+        : payloadTooLarge || splitFailedBySize
+          ? 'audio_too_large'
+          : normalizeErrorCode(error) || 'transcription_failed';
     const nextAttemptAt = new Date(Date.now() + getRetryDelayMs(attempts));
 
     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(runtimeQuery({ _id: messageObjectId }), {
@@ -1795,9 +2402,11 @@ export const handleTranscribeJob = async (
         error_timestamp: new Date(),
         transcribe_timestamp: Date.now(),
         transcribe_attempts: attempts,
+        transcription_job_key: transcriptionJobKey,
+        transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
         transcription_error_context: getTranscriptionErrorContext({
           apiKey,
-          filePath,
+          filePath: processingFilePath,
           errorCode: normalizedCode,
         }),
         ...(quotaRetryable
@@ -1810,14 +2419,15 @@ export const handleTranscribeJob = async (
             to_transcribe: false,
           }),
       },
-      ...(quotaRetryable
-        ? {}
-        : {
-          $unset: {
+      $unset: {
+        transcription_inflight_job_key: 1,
+        ...(quotaRetryable
+          ? {}
+          : {
             transcription_retry_reason: 1,
             transcription_next_attempt_at: 1,
-          },
-        }),
+          }),
+      },
     });
 
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(runtimeQuery({ _id: sessionObjectId }), {
@@ -1831,7 +2441,7 @@ export const handleTranscribeJob = async (
           error_message_id: message_id,
           transcription_error_context: getTranscriptionErrorContext({
             apiKey,
-            filePath,
+            filePath: processingFilePath,
             errorCode: normalizedCode,
           }),
         }
@@ -1844,7 +2454,7 @@ export const handleTranscribeJob = async (
           error_message_id: message_id,
           transcription_error_context: getTranscriptionErrorContext({
             apiKey,
-            filePath,
+            filePath: processingFilePath,
             errorCode: normalizedCode,
           }),
         },
@@ -1869,5 +2479,9 @@ export const handleTranscribeJob = async (
       message_id,
       session_id,
     };
+  } finally {
+    if (stagedCleanupDir) {
+      rmSync(stagedCleanupDir, { recursive: true, force: true });
+    }
   }
 };

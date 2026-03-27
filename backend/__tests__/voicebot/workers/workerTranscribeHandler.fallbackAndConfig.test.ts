@@ -187,4 +187,71 @@ describe('handleTranscribeJob', () => {
     const context = setPayload.transcription_error_context as Record<string, unknown>;
     expect(String(context.error_code || '')).toBe('openai_api_key_missing');
   });
+
+  it('does not use text_fallback for media-bearing attachment messages', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: '',
+      text: 'should not be used as media fallback',
+      message_timestamp: 1770489126,
+      message_type: 'document',
+      primary_payload_media_kind: 'video',
+      attachments: [
+        {
+          kind: 'file',
+          name: 'recording.webm',
+          mimeType: 'video/webm',
+          payload_media_kind: 'video',
+        },
+      ],
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId, processors: ['transcription', 'categorization', 'finalization'] }));
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-text-fallback' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsQueueAdd,
+      },
+    });
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        return {};
+      },
+    });
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'missing_file_path',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    const textFallbackUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.transcription_method === 'text_fallback';
+    });
+    expect(textFallbackUpdateCall).toBeUndefined();
+    expect(processorsQueueAdd).not.toHaveBeenCalled();
+  });
 });

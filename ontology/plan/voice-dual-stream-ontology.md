@@ -1458,11 +1458,11 @@ But it is now recognized as one layer only:
 - task-plane storage/lifecycle contract
 not the full ontology of voice dialogs.
 
-### 2. For `voice-task-surface-normalization-spec-2.md`
+### 2. For `2026-03-21-voice-task-surface-normalization-spec-2.md`
 This remains the simplification spec for draft reconcile.
 It should explicitly inherit concepts from this ontology doc rather than restating ontology locally.
 
-### 3. For `voice-task-session-discussion-linking-spec.md`
+### 3. For `2026-03-18-voice-task-session-discussion-linking-spec.md`
 This remains the relation-layer spec for task<->session discussion.
 It should explicitly remain task-plane scoped and inherit non-task concepts from this ontology doc without restating them.
 

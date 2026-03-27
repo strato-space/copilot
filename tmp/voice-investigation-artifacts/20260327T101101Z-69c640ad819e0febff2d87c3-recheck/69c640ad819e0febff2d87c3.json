@@ -1,0 +1,2028 @@
+{
+  "generated_at": "2026-03-27T10:11:03.379Z",
+  "session": {
+    "session_id": "69c640ad819e0febff2d87c3",
+    "exists": true,
+    "session": {
+      "_id": "69c640ad819e0febff2d87c3",
+      "session_name": "LTX: сервер и агентные промпты",
+      "status": "",
+      "state": "",
+      "source_type": "",
+      "session_type": "multiprompt_voice_session",
+      "is_active": false,
+      "to_finalize": true,
+      "is_deleted": false,
+      "project_id": "",
+      "has_summary_md_text": true,
+      "has_review_md_text": true,
+      "summary_saved_at": "2026-03-27T09:44:36.917Z",
+      "title_generated_at": "",
+      "user_id": "6684069c0141435d411c01f6",
+      "chat_id": "200028234",
+      "created_at": "2026-03-27T08:32:45.430Z",
+      "updated_at": "2026-03-27T09:44:37.428Z",
+      "done_at": "2026-03-27T09:06:00.062Z"
+    },
+    "counters": {
+      "messages_total": 15,
+      "session_log_total": 3,
+      "linked_tasks_total": 5,
+      "linked_tasks_by_status": {
+        "Draft": 5
+      },
+      "pm2_log_hits_total": 80,
+      "queue_job_matches_total": 0
+    },
+    "create_tasks_state": {
+      "is_processing": false,
+      "is_processed": true,
+      "has_payload_array": false,
+      "payload_items": 0,
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "job_queued_timestamp": "2026-03-27T09:42:22.980Z",
+      "job_finished_timestamp": "2026-03-27T09:44:37.351Z",
+      "auto_requested_at": "2026-03-27T09:41:36.610Z",
+      "error_message": ""
+    },
+    "session_surfaces": {
+      "has_summary_md_text": true,
+      "has_review_md_text": true,
+      "summary_saved_at": "2026-03-27T09:44:36.917Z",
+      "title_generated_at": ""
+    },
+    "diagnostics": {
+      "queue_snapshot_error": "redis_unreachable"
+    },
+    "anomalies": [
+      "queue_snapshot_unavailable"
+    ],
+    "slices": {
+      "recent_messages": [
+        {
+          "_id": "69c6482e819e0febff2d87d2",
+          "created_at": "2026-03-27T09:04:46.126Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 153,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c6478d819e0febff2d87d1",
+          "created_at": "2026-03-27T09:02:05.735Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 86,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c64723819e0febff2d87d0",
+          "created_at": "2026-03-27T09:00:19.054Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 151,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c64688819e0febff2d87cf",
+          "created_at": "2026-03-27T08:57:44.373Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 113,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c64630819e0febff2d87ce",
+          "created_at": "2026-03-27T08:56:16.611Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 190,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c64553819e0febff2d87cd",
+          "created_at": "2026-03-27T08:52:35.929Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 238,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c64463819e0febff2d87cc",
+          "created_at": "2026-03-27T08:48:35.462Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 198,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c6439d819e0febff2d87cb",
+          "created_at": "2026-03-27T08:45:17.080Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 144,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c64306819e0febff2d87ca",
+          "created_at": "2026-03-27T08:42:46.505Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 94,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c642a7819e0febff2d87c9",
+          "created_at": "2026-03-27T08:41:11.319Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 100,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c64242819e0febff2d87c8",
+          "created_at": "2026-03-27T08:39:30.000Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 99,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c641dd819e0febff2d87c7",
+          "created_at": "2026-03-27T08:37:49.493Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 96,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c6417c819e0febff2d87c6",
+          "created_at": "2026-03-27T08:36:12.222Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 130,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c640f8819e0febff2d87c5",
+          "created_at": "2026-03-27T08:34:00.853Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 74,
+          "is_deleted": false
+        },
+        {
+          "_id": "69c640ad819e0febff2d87c4",
+          "created_at": "2026-03-27T08:32:45.548Z",
+          "updated_at": "",
+          "message_type": "voice",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "application/octet-stream",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 169,
+          "is_deleted": false
+        }
+      ],
+      "recent_session_log": [
+        {
+          "_id": "69c648799a94874839d9d529",
+          "event_time": "2026-03-27T09:06:01.759Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c648789a94874839d9d528",
+          "event_time": "2026-03-27T09:06:00.486Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69c64878819e0febff2d87d3",
+          "event_time": "2026-03-27T09:06:00.293Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        }
+      ],
+      "recent_linked_tasks": [
+        {
+          "_id": "69c64d819a94874839d9d537",
+          "id": "69c640ad819e0febff2d87c3-5",
+          "task_status": "Draft",
+          "priority": "P2",
+          "title": "",
+          "name": "Сделать агентную схему промптов и героев для LTX",
+          "created_at": "2026-03-27T09:27:29.757Z",
+          "updated_at": "2026-03-27T09:44:37.021Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c64d819a94874839d9d537"
+        },
+        {
+          "_id": "69c64bdf9a94874839d9d533",
+          "id": "69c640ad819e0febff2d87c3-4",
+          "task_status": "Draft",
+          "priority": "P2",
+          "title": "",
+          "name": "Протестировать LTX на изображениях и ссылке",
+          "created_at": "2026-03-27T09:20:31.837Z",
+          "updated_at": "2026-03-27T09:44:37.021Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c64bdf9a94874839d9d533"
+        },
+        {
+          "_id": "69c64ac89a94874839d9d52f",
+          "id": "69c640ad819e0febff2d87c3-3",
+          "task_status": "Draft",
+          "priority": "P3",
+          "title": "",
+          "name": "Собрать финальный пакет материалов для LTX",
+          "created_at": "2026-03-27T09:15:52.132Z",
+          "updated_at": "2026-03-27T09:44:37.021Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c64ac89a94874839d9d52f"
+        },
+        {
+          "_id": "69c64ac89a94874839d9d52e",
+          "id": "69c640ad819e0febff2d87c3-2",
+          "task_status": "Draft",
+          "priority": "P2",
+          "title": "",
+          "name": "Настроить загрузку подготовленных моделей через бота",
+          "created_at": "2026-03-27T09:15:52.132Z",
+          "updated_at": "2026-03-27T09:44:37.021Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c64ac89a94874839d9d52e"
+        },
+        {
+          "_id": "69c64ac89a94874839d9d52d",
+          "id": "69c640ad819e0febff2d87c3-1",
+          "task_status": "Draft",
+          "priority": "P2",
+          "title": "",
+          "name": "Составить проверяемый серверный чеклист для LTX",
+          "created_at": "2026-03-27T09:15:52.132Z",
+          "updated_at": "2026-03-27T09:44:37.021Z",
+          "source_ref": "https://copilot.stratospace.fun/operops/task/69c64ac89a94874839d9d52d"
+        }
+      ],
+      "recent_pm2_log_hits": [
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300819",
+          "line": 0,
+          "text": "32:49 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300854",
+          "line": 0,
+          "text": "34:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300857",
+          "line": 0,
+          "text": "34:04 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300892",
+          "line": 0,
+          "text": "35:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300923",
+          "line": 0,
+          "text": "36:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300926",
+          "line": 0,
+          "text": "36:15 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300961",
+          "line": 0,
+          "text": "37:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300964",
+          "line": 0,
+          "text": "37:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "300983",
+          "line": 0,
+          "text": "37:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301018",
+          "line": 0,
+          "text": "39:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301033",
+          "line": 0,
+          "text": "39:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301036",
+          "line": 0,
+          "text": "39:33 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301063",
+          "line": 0,
+          "text": "40:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301078",
+          "line": 0,
+          "text": "40:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301093",
+          "line": 0,
+          "text": "41:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301096",
+          "line": 0,
+          "text": "41:14 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301107",
+          "line": 0,
+          "text": "41:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301134",
+          "line": 0,
+          "text": "42:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301153",
+          "line": 0,
+          "text": "42:49 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301156",
+          "line": 0,
+          "text": "42:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301183",
+          "line": 0,
+          "text": "43:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301194",
+          "line": 0,
+          "text": "44:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301209",
+          "line": 0,
+          "text": "44:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301236",
+          "line": 0,
+          "text": "45:20 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301239",
+          "line": 0,
+          "text": "45:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301266",
+          "line": 0,
+          "text": "46:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301277",
+          "line": 0,
+          "text": "46:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301296",
+          "line": 0,
+          "text": "47:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301339",
+          "line": 0,
+          "text": "48:32 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301347",
+          "line": 0,
+          "text": "48:39 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301353",
+          "line": 0,
+          "text": "48:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301356",
+          "line": 0,
+          "text": "48:42 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301391",
+          "line": 0,
+          "text": "49:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301398",
+          "line": 0,
+          "text": "49:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301413",
+          "line": 0,
+          "text": "50:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301460",
+          "line": 0,
+          "text": "51:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301467",
+          "line": 0,
+          "text": "52:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301490",
+          "line": 0,
+          "text": "52:40 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301497",
+          "line": 0,
+          "text": "52:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301516",
+          "line": 0,
+          "text": "53:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301531",
+          "line": 0,
+          "text": "53:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301570",
+          "line": 0,
+          "text": "55:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301597",
+          "line": 0,
+          "text": "56:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301604",
+          "line": 0,
+          "text": "56:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301611",
+          "line": 0,
+          "text": "56:20 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301630",
+          "line": 0,
+          "text": "56:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301649",
+          "line": 0,
+          "text": "57:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301660",
+          "line": 0,
+          "text": "57:47 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301683",
+          "line": 0,
+          "text": "58:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301698",
+          "line": 0,
+          "text": "58:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301725",
+          "line": 0,
+          "text": "59:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301740",
+          "line": 0,
+          "text": "00:12 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301747",
+          "line": 0,
+          "text": "00:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301770",
+          "line": 0,
+          "text": "01:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301773",
+          "line": 0,
+          "text": "01:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301788",
+          "line": 0,
+          "text": "01:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301808",
+          "line": 0,
+          "text": "02:09 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301846",
+          "line": 0,
+          "text": "03:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301861",
+          "line": 0,
+          "text": "03:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301868",
+          "line": 0,
+          "text": "03:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301883",
+          "line": 0,
+          "text": "04:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301898",
+          "line": 0,
+          "text": "04:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301905",
+          "line": 0,
+          "text": "04:50 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301916",
+          "line": 0,
+          "text": "05:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301927",
+          "line": 0,
+          "text": "05:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301942",
+          "line": 0,
+          "text": "05:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301950",
+          "line": 0,
+          "text": "06:00 [\u001b[32minfo\u001b[39m]: [voicebot-worker] done_multiprompt handled {\"service\":\"copilot-backend\",\"session_id\":\"69c640ad819e0febff2d87c3\"}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301956",
+          "line": 0,
+          "text": "06:01 [\u001b[32minfo\u001b[39m]: [voicebot-worker] all_custom_prompts handled {\"service\":\"copilot-backend\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"queued\":0,\"skipped\":0,\"skipped_no_queue\":0,\"custom_processors_total\":5}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301959",
+          "line": 0,
+          "text": "06:01 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] audio_merging skipped: telegram merge transport not available in TS runtime {\"service\":\"copilot-backend\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"telegram_chunks\":15}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301962",
+          "line": 0,
+          "text": "06:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "301965",
+          "line": 0,
+          "text": "06:01 [\u001b[32minfo\u001b[39m]: [voicebot-worker] notify http sent {\"service\":\"copilot-backend\",\"event\":\"session_done\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"status\":200,\"semantic_ack_reason\":\"not_required\"}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302020",
+          "line": 0,
+          "text": "07:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302027",
+          "line": 0,
+          "text": "08:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302034",
+          "line": 0,
+          "text": "08:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302041",
+          "line": 0,
+          "text": "08:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302084",
+          "line": 0,
+          "text": "09:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302086",
+          "line": 0,
+          "text": "09:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302134",
+          "line": 0,
+          "text": "11:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302157",
+          "line": 0,
+          "text": "12:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        },
+        {
+          "session_id": "69c640ad819e0febff2d87c3",
+          "file": "302168",
+          "line": 0,
+          "text": "12:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      ],
+      "queue_snapshots": [],
+      "recent_queue_jobs": []
+    },
+    "timeline": [
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300819",
+          "line": 0,
+          "text": "32:49 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300854",
+          "line": 0,
+          "text": "34:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300857",
+          "line": 0,
+          "text": "34:04 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300892",
+          "line": 0,
+          "text": "35:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300923",
+          "line": 0,
+          "text": "36:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300926",
+          "line": 0,
+          "text": "36:15 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300961",
+          "line": 0,
+          "text": "37:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300964",
+          "line": 0,
+          "text": "37:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "300983",
+          "line": 0,
+          "text": "37:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301018",
+          "line": 0,
+          "text": "39:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301033",
+          "line": 0,
+          "text": "39:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301036",
+          "line": 0,
+          "text": "39:33 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301063",
+          "line": 0,
+          "text": "40:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301078",
+          "line": 0,
+          "text": "40:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301093",
+          "line": 0,
+          "text": "41:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301096",
+          "line": 0,
+          "text": "41:14 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301107",
+          "line": 0,
+          "text": "41:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301134",
+          "line": 0,
+          "text": "42:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301153",
+          "line": 0,
+          "text": "42:49 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301156",
+          "line": 0,
+          "text": "42:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301183",
+          "line": 0,
+          "text": "43:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301194",
+          "line": 0,
+          "text": "44:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301209",
+          "line": 0,
+          "text": "44:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301236",
+          "line": 0,
+          "text": "45:20 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301239",
+          "line": 0,
+          "text": "45:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301266",
+          "line": 0,
+          "text": "46:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301277",
+          "line": 0,
+          "text": "46:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301296",
+          "line": 0,
+          "text": "47:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301339",
+          "line": 0,
+          "text": "48:32 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301347",
+          "line": 0,
+          "text": "48:39 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301353",
+          "line": 0,
+          "text": "48:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301356",
+          "line": 0,
+          "text": "48:42 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301391",
+          "line": 0,
+          "text": "49:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301398",
+          "line": 0,
+          "text": "49:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301413",
+          "line": 0,
+          "text": "50:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301460",
+          "line": 0,
+          "text": "51:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301467",
+          "line": 0,
+          "text": "52:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301490",
+          "line": 0,
+          "text": "52:40 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301497",
+          "line": 0,
+          "text": "52:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301516",
+          "line": 0,
+          "text": "53:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301531",
+          "line": 0,
+          "text": "53:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301570",
+          "line": 0,
+          "text": "55:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301597",
+          "line": 0,
+          "text": "56:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301604",
+          "line": 0,
+          "text": "56:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301611",
+          "line": 0,
+          "text": "56:20 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301630",
+          "line": 0,
+          "text": "56:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c642a7819e0febff2d87c9\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301649",
+          "line": 0,
+          "text": "57:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301660",
+          "line": 0,
+          "text": "57:47 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301683",
+          "line": 0,
+          "text": "58:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64306819e0febff2d87ca\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301698",
+          "line": 0,
+          "text": "58:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301725",
+          "line": 0,
+          "text": "59:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301740",
+          "line": 0,
+          "text": "00:12 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301747",
+          "line": 0,
+          "text": "00:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301770",
+          "line": 0,
+          "text": "01:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301773",
+          "line": 0,
+          "text": "01:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6439d819e0febff2d87cb\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301788",
+          "line": 0,
+          "text": "01:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301808",
+          "line": 0,
+          "text": "02:09 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301846",
+          "line": 0,
+          "text": "03:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301861",
+          "line": 0,
+          "text": "03:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301868",
+          "line": 0,
+          "text": "03:52 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301883",
+          "line": 0,
+          "text": "04:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64463819e0febff2d87cc\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301898",
+          "line": 0,
+          "text": "04:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640ad819e0febff2d87c4\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301905",
+          "line": 0,
+          "text": "04:50 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301916",
+          "line": 0,
+          "text": "05:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64688819e0febff2d87cf\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301927",
+          "line": 0,
+          "text": "05:31 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301942",
+          "line": 0,
+          "text": "05:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c640f8819e0febff2d87c5\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301950",
+          "line": 0,
+          "text": "06:00 [\u001b[32minfo\u001b[39m]: [voicebot-worker] done_multiprompt handled {\"service\":\"copilot-backend\",\"session_id\":\"69c640ad819e0febff2d87c3\"}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301956",
+          "line": 0,
+          "text": "06:01 [\u001b[32minfo\u001b[39m]: [voicebot-worker] all_custom_prompts handled {\"service\":\"copilot-backend\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"queued\":0,\"skipped\":0,\"skipped_no_queue\":0,\"custom_processors_total\":5}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301959",
+          "line": 0,
+          "text": "06:01 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] audio_merging skipped: telegram merge transport not available in TS runtime {\"service\":\"copilot-backend\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"telegram_chunks\":15}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301962",
+          "line": 0,
+          "text": "06:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "301965",
+          "line": 0,
+          "text": "06:01 [\u001b[32minfo\u001b[39m]: [voicebot-worker] notify http sent {\"service\":\"copilot-backend\",\"event\":\"session_done\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"status\":200,\"semantic_ack_reason\":\"not_required\"}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302020",
+          "line": 0,
+          "text": "07:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64723819e0febff2d87d0\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302027",
+          "line": 0,
+          "text": "08:01 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6417c819e0febff2d87c6\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302034",
+          "line": 0,
+          "text": "08:11 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302041",
+          "line": 0,
+          "text": "08:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64553819e0febff2d87cd\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302084",
+          "line": 0,
+          "text": "09:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6478d819e0febff2d87d1\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302086",
+          "line": 0,
+          "text": "09:41 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c641dd819e0febff2d87c7\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302134",
+          "line": 0,
+          "text": "11:21 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64242819e0febff2d87c8\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302157",
+          "line": 0,
+          "text": "12:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c64630819e0febff2d87ce\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "302168",
+          "line": 0,
+          "text": "12:22 [\u001b[31merror\u001b[39m]: [voicebot-worker] transcribe failed {\"service\":\"copilot-backend\",\"message_id\":\"69c6482e819e0febff2d87d2\",\"session_id\":\"69c640ad819e0febff2d87c3\",\"error\":\"insufficient_quota\",\"retry\":true}"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:32:45.430Z",
+        "source": "session",
+        "kind": "session_created",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:32:45.548Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c640ad819e0febff2d87c4",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:34:00.853Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c640f8819e0febff2d87c5",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:36:12.222Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c6417c819e0febff2d87c6",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:37:49.493Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c641dd819e0febff2d87c7",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:39:30.000Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c64242819e0febff2d87c8",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:41:11.319Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c642a7819e0febff2d87c9",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:42:46.505Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c64306819e0febff2d87ca",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:45:17.080Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c6439d819e0febff2d87cb",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:48:35.462Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c64463819e0febff2d87cc",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:52:35.929Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c64553819e0febff2d87cd",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:56:16.611Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c64630819e0febff2d87ce",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T08:57:44.373Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c64688819e0febff2d87cf",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:00:19.054Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c64723819e0febff2d87d0",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:02:05.735Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c6478d819e0febff2d87d1",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:04:46.126Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69c6482e819e0febff2d87d2",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:06:00.062Z",
+        "source": "session",
+        "kind": "session_done",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:06:00.293Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c64878819e0febff2d87d3",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:06:00.486Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69c648789a94874839d9d528",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:06:01.759Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69c648799a94874839d9d529",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:15:52.132Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c64ac89a94874839d9d52f",
+          "id": "69c640ad819e0febff2d87c3-3",
+          "priority": "P3",
+          "title": "Собрать финальный пакет материалов для LTX"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:15:52.132Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c64ac89a94874839d9d52e",
+          "id": "69c640ad819e0febff2d87c3-2",
+          "priority": "P2",
+          "title": "Настроить загрузку подготовленных моделей через бота"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:15:52.132Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c64ac89a94874839d9d52d",
+          "id": "69c640ad819e0febff2d87c3-1",
+          "priority": "P2",
+          "title": "Составить проверяемый серверный чеклист для LTX"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:20:31.837Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c64bdf9a94874839d9d533",
+          "id": "69c640ad819e0febff2d87c3-4",
+          "priority": "P2",
+          "title": "Протестировать LTX на изображениях и ссылке"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:27:29.757Z",
+        "source": "task",
+        "kind": "Draft",
+        "details": {
+          "_id": "69c64d819a94874839d9d537",
+          "id": "69c640ad819e0febff2d87c3-5",
+          "priority": "P2",
+          "title": "Сделать агентную схему промптов и героев для LTX"
+        }
+      },
+      {
+        "session_id": "69c640ad819e0febff2d87c3",
+        "ts": "2026-03-27T09:44:37.428Z",
+        "source": "session",
+        "kind": "session_updated",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      }
+    ]
+  }
+}

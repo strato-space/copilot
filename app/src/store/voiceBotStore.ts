@@ -9,6 +9,7 @@ import { useSessionsUIStore } from './sessionsUIStore';
 import { useMCPRequestStore } from './mcpRequestStore';
 import type {
     VoiceBotMessage,
+    VoiceMessageAttachment,
     VoicePossibleTask,
     VoiceBotSession,
     VoiceMessageGroup,
@@ -22,6 +23,10 @@ import type {
     VoiceSessionTaskflowRefreshHint,
     VoiceSessionLogEvent,
     CodexTask,
+    VoiceTranscriptionEligibility,
+    VoiceClassificationResolutionState,
+    VoiceTranscriptionProcessingState,
+    VoicePayloadMediaKind,
 } from '../types/voice';
 import { getVoicebotSocket, SOCKET_EVENTS } from '../services/socket';
 import { normalizeTimelineRangeSeconds } from '../utils/voiceTimeline';
@@ -671,6 +676,243 @@ const normalizeAttachmentUri = (value: unknown): string | null => {
     return trimmed;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === 'object' && !Array.isArray(value);
+
+const readString = (record: Record<string, unknown>, keys: string[]): string | undefined => {
+    for (const key of keys) {
+        const value = record[key];
+        if (typeof value !== 'string') continue;
+        const trimmed = value.trim();
+        if (trimmed) return trimmed;
+    }
+    return undefined;
+};
+
+const readNullableString = (record: Record<string, unknown>, keys: string[]): string | null | undefined => {
+    let hasExplicitNull = false;
+    for (const key of keys) {
+        const value = record[key];
+        if (value == null) {
+            hasExplicitNull = true;
+            continue;
+        }
+        if (typeof value !== 'string') continue;
+        const trimmed = value.trim();
+        if (trimmed) return trimmed;
+        hasExplicitNull = true;
+    }
+    return hasExplicitNull ? null : undefined;
+};
+
+const readInteger = (record: Record<string, unknown>, keys: string[]): number | null | undefined => {
+    for (const key of keys) {
+        const value = record[key];
+        if (value == null) return null;
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return Math.floor(parsed);
+    }
+    return undefined;
+};
+
+const normalizePayloadMediaKind = (value: string | undefined): VoicePayloadMediaKind | undefined => {
+    if (!value) return undefined;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'audio') return 'audio';
+    if (normalized === 'video') return 'video';
+    if (normalized === 'image') return 'image';
+    if (normalized === 'binary_document' || normalized === 'binarydocument') return 'binary_document';
+    if (normalized === 'unknown') return 'unknown';
+    return undefined;
+};
+
+const normalizeTranscriptionEligibility = (value: string | null | undefined): VoiceTranscriptionEligibility | undefined => {
+    if (value == null) return value;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'eligible') return 'eligible';
+    if (normalized === 'ineligible') return 'ineligible';
+    return undefined;
+};
+
+const normalizeClassificationResolutionState = (
+    value: string | null | undefined
+): VoiceClassificationResolutionState | null | undefined => {
+    if (value == null) return value;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'resolved') return 'resolved';
+    if (normalized === 'pending') return 'pending';
+    return undefined;
+};
+
+const normalizeTranscriptionProcessingState = (
+    value: string | null | undefined
+): VoiceTranscriptionProcessingState | null | undefined => {
+    if (value == null) return value;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'pending_classification') return 'pending_classification';
+    if (normalized === 'pending_transcription') return 'pending_transcription';
+    if (normalized === 'transcribed') return 'transcribed';
+    if (normalized === 'classified_skip') return 'classified_skip';
+    if (normalized === 'transcription_error') return 'transcription_error';
+    return undefined;
+};
+
+const normalizeIsTranscribed = (value: unknown): boolean | undefined => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) return undefined;
+        if (normalized === 'true' || normalized === '1') return true;
+        if (normalized === 'false' || normalized === '0') return false;
+    }
+    return undefined;
+};
+
+const normalizeMessageAttachment = (
+    value: unknown,
+    fallbackAttachmentIndex: number
+): VoiceMessageAttachment | null => {
+    if (!isRecord(value)) return null;
+    const item = value;
+    const payloadMediaKind = normalizePayloadMediaKind(
+        readString(item, ['payload_media_kind', 'payloadMediaKind', 'media_kind', 'mediaKind'])
+    );
+    const classificationResolutionState = normalizeClassificationResolutionState(
+        readNullableString(item, ['classification_resolution_state', 'classificationResolutionState', 'classification_state'])
+    );
+    const transcriptionEligibility = normalizeTranscriptionEligibility(
+        readNullableString(item, ['transcription_eligibility', 'transcriptionEligibility', 'eligibility'])
+    );
+    const transcriptionProcessingState = normalizeTranscriptionProcessingState(
+        readNullableString(item, ['transcription_processing_state', 'transcriptionProcessingState', 'transcription_state'])
+    );
+
+    const attachmentIndex = readInteger(item, ['attachment_index', 'attachmentIndex']);
+    const transcriptionText = readNullableString(item, ['transcription_text', 'transcriptionText']);
+    const transcriptionError = readNullableString(item, ['transcription_error', 'transcriptionError']);
+    const transcriptionSkipReason = readNullableString(item, ['transcription_skip_reason', 'transcriptionSkipReason', 'skip_reason']);
+    const transcriptionRaw = item.transcription_raw ?? item.transcriptionRaw ?? item.transcription_result ?? item.provider_result;
+    const speechBearingAssessment = readNullableString(item, ['speech_bearing_assessment', 'speechBearingAssessment']);
+    const transcriptionEligibilityBasis = readNullableString(item, ['transcription_eligibility_basis', 'transcriptionEligibilityBasis']);
+    const classificationRuleRef = readNullableString(item, ['classification_rule_ref', 'classificationRuleRef']);
+    const audioTrackState = readNullableString(item, ['audio_track_state', 'audioTrackState']);
+
+    return {
+        ...item,
+        attachment_index: attachmentIndex ?? fallbackAttachmentIndex,
+        payload_media_kind: payloadMediaKind ?? null,
+        speech_bearing_assessment: speechBearingAssessment ?? null,
+        classification_resolution_state: classificationResolutionState ?? null,
+        transcription_eligibility: transcriptionEligibility ?? null,
+        transcription_processing_state: transcriptionProcessingState ?? null,
+        transcription_skip_reason: transcriptionSkipReason ?? null,
+        transcription_eligibility_basis: transcriptionEligibilityBasis ?? null,
+        classification_rule_ref: classificationRuleRef ?? null,
+        transcription_text: transcriptionText ?? null,
+        transcription_raw: transcriptionRaw ?? null,
+        transcription_error: transcriptionError ?? null,
+        audio_track_state: audioTrackState ?? null,
+        payloadMediaKind: payloadMediaKind ?? null,
+        speechBearingAssessment: speechBearingAssessment ?? null,
+        classificationResolutionState: classificationResolutionState ?? null,
+        transcriptionEligibility: transcriptionEligibility ?? null,
+        transcriptionProcessingState: transcriptionProcessingState ?? null,
+        transcriptionSkipReason: transcriptionSkipReason ?? null,
+        transcriptionEligibilityBasis: transcriptionEligibilityBasis ?? null,
+        classificationRuleRef: classificationRuleRef ?? null,
+        transcriptionText: transcriptionText ?? null,
+        transcriptionRaw: transcriptionRaw ?? null,
+        transcriptionError: transcriptionError ?? null,
+        audioTrackState: audioTrackState ?? null,
+    };
+};
+
+const normalizeVoiceBotMessage = (value: unknown): VoiceBotMessage | null => {
+    if (!isRecord(value)) return null;
+    const record = value;
+    const attachmentsSource = Array.isArray(record.attachments) ? record.attachments : [];
+    const attachments = attachmentsSource
+        .map((item, index) => normalizeMessageAttachment(item, index))
+        .filter((item): item is VoiceMessageAttachment => !!item);
+    const primaryAttachmentIndex = readInteger(record, [
+        'primary_transcription_attachment_index',
+        'primaryTranscriptionAttachmentIndex',
+        'primary_attachment_index',
+        'attachment_index',
+    ]);
+    const primaryPayloadMediaKind = normalizePayloadMediaKind(
+        readString(record, ['primary_payload_media_kind', 'primaryPayloadMediaKind', 'payload_media_kind', 'payloadMediaKind'])
+    );
+    const classificationResolutionState = normalizeClassificationResolutionState(
+        readNullableString(record, ['classification_resolution_state', 'classificationResolutionState', 'classification_state'])
+    );
+    const transcriptionEligibility = normalizeTranscriptionEligibility(
+        readNullableString(record, ['transcription_eligibility', 'transcriptionEligibility', 'eligibility'])
+    );
+    const sourceNoteText = readNullableString(record, ['source_note_text', 'sourceNoteText', 'source_note']);
+    const transcriptionSkipReason = readNullableString(record, ['transcription_skip_reason', 'transcriptionSkipReason', 'skip_reason']);
+    const transcriptionEligibilityBasis = readNullableString(record, ['transcription_eligibility_basis', 'transcriptionEligibilityBasis']);
+    const classificationRuleRef = readNullableString(record, ['classification_rule_ref', 'classificationRuleRef']);
+    const audioTrackState = readNullableString(record, ['audio_track_state', 'audioTrackState']);
+    const transcriptionText = readNullableString(record, ['transcription_text', 'transcriptionText']);
+    const transcriptionError = readNullableString(record, ['transcription_error', 'transcriptionError']);
+    const hasTranscriptionText = typeof transcriptionText === 'string' && transcriptionText.trim().length > 0;
+
+    let transcriptionProcessingState = normalizeTranscriptionProcessingState(
+        readNullableString(record, ['transcription_processing_state', 'transcriptionProcessingState', 'transcription_state'])
+    );
+    const normalizedIsTranscribed = normalizeIsTranscribed(record.is_transcribed);
+    if (!transcriptionProcessingState) {
+        if (classificationResolutionState === 'pending') {
+            transcriptionProcessingState = 'pending_classification';
+        } else if (transcriptionEligibility === 'ineligible') {
+            transcriptionProcessingState = 'classified_skip';
+        } else if (normalizedIsTranscribed === true || hasTranscriptionText) {
+            transcriptionProcessingState = 'transcribed';
+        } else if (transcriptionError) {
+            transcriptionProcessingState = 'transcription_error';
+        } else if (record.to_transcribe === true || transcriptionEligibility === 'eligible') {
+            transcriptionProcessingState = 'pending_transcription';
+        }
+    }
+
+    return {
+        ...record,
+        attachments,
+        primary_payload_media_kind: primaryPayloadMediaKind ?? null,
+        primary_transcription_attachment_index: primaryAttachmentIndex ?? null,
+        transcription_eligibility: transcriptionEligibility ?? null,
+        classification_resolution_state: classificationResolutionState ?? null,
+        transcription_processing_state: transcriptionProcessingState ?? null,
+        transcription_skip_reason: transcriptionSkipReason ?? null,
+        transcription_eligibility_basis: transcriptionEligibilityBasis ?? null,
+        classification_rule_ref: classificationRuleRef ?? null,
+        source_note_text: sourceNoteText ?? null,
+        audio_track_state: audioTrackState ?? null,
+        transcription_text: transcriptionText ?? '',
+        transcription_error: transcriptionError ?? null,
+        payload_media_kind: primaryPayloadMediaKind ?? null,
+        primary_attachment_index: primaryAttachmentIndex ?? null,
+        transcription_state: transcriptionProcessingState ?? null,
+        classification_state: classificationResolutionState ?? null,
+        eligibility: transcriptionEligibility ?? null,
+        skip_reason: transcriptionSkipReason ?? null,
+        source_note: sourceNoteText ?? null,
+        payloadMediaKind: primaryPayloadMediaKind ?? null,
+        primaryTranscriptionAttachmentIndex: primaryAttachmentIndex ?? null,
+        transcriptionEligibility: transcriptionEligibility ?? null,
+        classificationResolutionState: classificationResolutionState ?? null,
+        transcriptionProcessingState: transcriptionProcessingState ?? null,
+        transcriptionSkipReason: transcriptionSkipReason ?? null,
+        transcriptionEligibilityBasis: transcriptionEligibilityBasis ?? null,
+        classificationRuleRef: classificationRuleRef ?? null,
+        sourceNoteText: sourceNoteText ?? null,
+        audioTrackState: audioTrackState ?? null,
+        is_transcribed: normalizedIsTranscribed ?? (transcriptionProcessingState === 'transcribed'),
+    };
+};
+
 const toFiniteNumber = (value: unknown): number | null => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
@@ -810,8 +1052,11 @@ const buildSessionAttachmentsFromMessages = (messages: VoiceBotMessage[]): Voice
 const normalizeSessionResponse = (response: unknown): VoiceBotSessionResponse => {
     const payload = response as Record<string, unknown>;
     const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
-    const rawMessages = (data.session_messages as VoiceBotMessage[]) || [];
-    const messages = rawMessages.filter((msg) => !voiceMessageLinkUtils.isMessageDeleted(msg));
+    const rawMessages = Array.isArray(data.session_messages) ? data.session_messages : [];
+    const messages = rawMessages
+        .map((msg) => normalizeVoiceBotMessage(msg))
+        .filter((msg): msg is VoiceBotMessage => msg !== null)
+        .filter((msg) => !voiceMessageLinkUtils.isMessageDeleted(msg));
     const explicitAttachments = Array.isArray(data.session_attachments)
         ? data.session_attachments.map(normalizeSessionAttachment).filter((item): item is VoiceSessionAttachment => item !== null)
         : [];
@@ -1030,8 +1275,10 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
 
             socket.on('message_update', (data: { message_id?: string; message?: VoiceBotMessage; _id?: string }) => {
                 if (!data?.message) return;
+                const normalizedIncoming = normalizeVoiceBotMessage(data.message);
+                if (!normalizedIncoming) return;
                 set((state) => {
-                    const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, data.message as VoiceBotMessage);
+                    const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, normalizedIncoming);
                     const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups(updatedMessages);
                     const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
                     return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };
@@ -1039,13 +1286,15 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
             });
 
             socket.on('new_message', (data: VoiceBotMessage) => {
+                const normalizedIncoming = normalizeVoiceBotMessage(data);
+                if (!normalizedIncoming) return;
                 const existingMessage = get().voiceBotMessages.find(
-                    (msg) => msg._id === data.message_id || msg._id === data._id
+                    (msg) => msg._id === normalizedIncoming.message_id || msg._id === normalizedIncoming._id
                 );
                 if (existingMessage) return;
 
                 set((state) => {
-                    const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, data);
+                    const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, normalizedIncoming);
                     const updatedVoiceMesagesData = transformVoiceBotMessagesToGroups(updatedMessages);
                     const updatedAttachments = buildSessionAttachmentsFromMessages(updatedMessages);
                     return { voiceBotMessages: updatedMessages, voiceMesagesData: updatedVoiceMesagesData, sessionAttachments: updatedAttachments };

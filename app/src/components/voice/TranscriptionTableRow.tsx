@@ -3,7 +3,7 @@ import { CheckOutlined, CloseOutlined, CopyOutlined, DeleteOutlined, EditOutline
 import { useState } from 'react';
 import { useVoiceBotStore } from '../../store/voiceBotStore';
 import { useSessionsUIStore } from '../../store/sessionsUIStore';
-import type { VoiceBotMessage } from '../../types/voice';
+import type { VoiceBotMessage, VoiceMessageAttachment, VoiceTranscriptionProcessingState } from '../../types/voice';
 import { formatVoiceMetadataSignature } from '../../utils/voiceMetadataSignature';
 import { extractVoiceSourceFileName, normalizeVoiceSourceFileName } from '../../utils/voiceSourceFileName';
 
@@ -120,6 +120,68 @@ const formatTranscriptionErrorLabel = (errorCode: string): string => {
         audio_too_large: 'Файл слишком большой для транскрибации',
     };
     return labels[normalized] || normalized;
+};
+
+const toTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const toNullableNumber = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatPayloadMediaKind = (value: unknown): string => {
+    const normalized = toTrimmedString(value).toLowerCase();
+    if (normalized === 'binary_document') return 'binary document';
+    if (!normalized) return 'unknown';
+    return normalized.replace(/_/g, ' ');
+};
+
+const formatProcessingStateLabel = (value: VoiceTranscriptionProcessingState | string | null | undefined): string => {
+    const normalized = toTrimmedString(value).toLowerCase();
+    const labels: Record<string, string> = {
+        pending_classification: 'Pending classification',
+        pending_transcription: 'Pending transcription',
+        transcribed: 'Transcribed',
+        classified_skip: 'Classified skip',
+        transcription_error: 'Transcription error',
+    };
+    return labels[normalized] || (normalized ? normalized.replace(/_/g, ' ') : 'Unknown');
+};
+
+const formatSkipReasonLabel = (value: string): string => {
+    const normalized = value.trim().toLowerCase();
+    const labels: Record<string, string> = {
+        no_audio_track: 'No audio track',
+        no_speech_audio: 'No speech audio',
+        unsupported_payload_class: 'Unsupported payload class',
+    };
+    return labels[normalized] || normalized.replace(/_/g, ' ');
+};
+
+const getMessageProcessingState = (row: VoiceBotMessage): VoiceTranscriptionProcessingState | null => {
+    const state =
+        toTrimmedString(row.transcription_processing_state) ||
+        toTrimmedString((row as Record<string, unknown>).transcriptionProcessingState) ||
+        toTrimmedString((row as Record<string, unknown>).transcription_state);
+    if (!state) return null;
+    const normalized = state.toLowerCase();
+    if (
+        normalized === 'pending_classification' ||
+        normalized === 'pending_transcription' ||
+        normalized === 'transcribed' ||
+        normalized === 'classified_skip' ||
+        normalized === 'transcription_error'
+    ) {
+        return normalized;
+    }
+    return null;
+};
+
+const getMessageAttachments = (row: VoiceBotMessage): VoiceMessageAttachment[] => {
+    const raw = Array.isArray((row as Record<string, unknown>).attachments)
+        ? ((row as Record<string, unknown>).attachments as VoiceMessageAttachment[])
+        : [];
+    return raw.filter((item): item is VoiceMessageAttachment => Boolean(item && typeof item === 'object'));
 };
 
 const getTranscriptionText = (row: VoiceBotMessage): string =>
@@ -442,6 +504,59 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
     const setMaterialTargetMessageId = useSessionsUIStore((state) => state.setMaterialTargetMessageId);
 
     const segments = getSegmentsFromMessage(row);
+    const attachments = getMessageAttachments(row);
+    const primaryAttachmentIndexRaw = toNullableNumber(
+        row.primary_transcription_attachment_index ??
+            (row as Record<string, unknown>).primaryTranscriptionAttachmentIndex ??
+            (row as Record<string, unknown>).primary_attachment_index
+    );
+    const primaryAttachmentIndex = primaryAttachmentIndexRaw != null ? Math.max(0, Math.floor(primaryAttachmentIndexRaw)) : null;
+    const primaryAttachment =
+        primaryAttachmentIndex != null && primaryAttachmentIndex >= 0 && primaryAttachmentIndex < attachments.length
+            ? attachments[primaryAttachmentIndex]
+            : null;
+    const processingState = getMessageProcessingState(row);
+    const hasProcessingState = Boolean(processingState);
+    const primaryPayloadMediaKind =
+        toTrimmedString(row.primary_payload_media_kind) ||
+        toTrimmedString((row as Record<string, unknown>).primaryPayloadMediaKind) ||
+        toTrimmedString(row.payload_media_kind) ||
+        toTrimmedString((row as Record<string, unknown>).payloadMediaKind) ||
+        toTrimmedString(primaryAttachment?.payload_media_kind) ||
+        toTrimmedString((primaryAttachment as Record<string, unknown> | null)?.payloadMediaKind);
+    const classificationState =
+        toTrimmedString(row.classification_resolution_state) ||
+        toTrimmedString((row as Record<string, unknown>).classificationResolutionState) ||
+        toTrimmedString((row as Record<string, unknown>).classification_state) ||
+        toTrimmedString(primaryAttachment?.classification_resolution_state) ||
+        toTrimmedString((primaryAttachment as Record<string, unknown> | null)?.classificationResolutionState);
+    const eligibility =
+        toTrimmedString(row.transcription_eligibility) ||
+        toTrimmedString((row as Record<string, unknown>).transcriptionEligibility) ||
+        toTrimmedString((row as Record<string, unknown>).eligibility) ||
+        toTrimmedString(primaryAttachment?.transcription_eligibility) ||
+        toTrimmedString((primaryAttachment as Record<string, unknown> | null)?.transcriptionEligibility);
+    const skipReason =
+        toTrimmedString(row.transcription_skip_reason) ||
+        toTrimmedString((row as Record<string, unknown>).transcriptionSkipReason) ||
+        toTrimmedString((row as Record<string, unknown>).skip_reason) ||
+        toTrimmedString(primaryAttachment?.transcription_skip_reason) ||
+        toTrimmedString((primaryAttachment as Record<string, unknown> | null)?.transcriptionSkipReason);
+    const eligibilityBasis =
+        toTrimmedString(row.transcription_eligibility_basis) ||
+        toTrimmedString((row as Record<string, unknown>).transcriptionEligibilityBasis) ||
+        toTrimmedString(primaryAttachment?.transcription_eligibility_basis) ||
+        toTrimmedString((primaryAttachment as Record<string, unknown> | null)?.transcriptionEligibilityBasis);
+    const classificationRuleRef =
+        toTrimmedString(row.classification_rule_ref) ||
+        toTrimmedString((row as Record<string, unknown>).classificationRuleRef) ||
+        toTrimmedString(primaryAttachment?.classification_rule_ref) ||
+        toTrimmedString((primaryAttachment as Record<string, unknown> | null)?.classificationRuleRef);
+    const messageLevelError = toTrimmedString(row.transcription_error);
+    const sourceNoteText =
+        toTrimmedString(row.source_note_text) ||
+        toTrimmedString((row as Record<string, unknown>).sourceNoteText) ||
+        toTrimmedString((row as Record<string, unknown>).source_note);
     const rowMessageRef = typeof row?.message_id === 'string' && row.message_id.trim()
         ? row.message_id.trim()
         : typeof row?._id === 'string' && row._id.trim()
@@ -455,6 +570,17 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
         const text = typeof seg?.text === 'string' ? seg.text.trim() : '';
         return text.length > 0;
     });
+    const hasProjectionMeta = Boolean(
+        hasProcessingState ||
+            primaryAttachmentIndex != null ||
+            primaryPayloadMediaKind ||
+            classificationState ||
+            eligibility ||
+            skipReason ||
+            messageLevelError ||
+            sourceNoteText ||
+            attachments.length > 0
+    );
     const speakerDisplayMap = buildSpeakerDisplayMap(segments);
 
     const [editingOid, setEditingOid] = useState<string | null>(null);
@@ -723,6 +849,130 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                             ) : null}
                         </div>
                     )}
+                    {hasProjectionMeta ? (
+                        <div className="self-stretch px-1 pb-1">
+                            <div className="mt-1 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] leading-4 text-slate-700">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-semibold text-slate-900">State:</span>
+                                    <span className="rounded bg-white px-1.5 py-0.5 font-medium text-slate-800 ring-1 ring-slate-200">
+                                        {formatProcessingStateLabel(processingState)}
+                                    </span>
+                                    {primaryPayloadMediaKind ? (
+                                        <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">
+                                            media: {formatPayloadMediaKind(primaryPayloadMediaKind)}
+                                        </span>
+                                    ) : null}
+                                    {classificationState ? (
+                                        <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">
+                                            classification: {classificationState}
+                                        </span>
+                                    ) : null}
+                                    {eligibility ? (
+                                        <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">
+                                            eligibility: {eligibility}
+                                        </span>
+                                    ) : null}
+                                    {primaryAttachmentIndex != null ? (
+                                        <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">
+                                            primary attachment: #{primaryAttachmentIndex}
+                                        </span>
+                                    ) : null}
+                                </div>
+                                {skipReason ? (
+                                    <div className="mt-1">
+                                        <span className="font-semibold text-slate-900">Skip reason:</span>{' '}
+                                        <span>{formatSkipReasonLabel(skipReason)}</span>
+                                    </div>
+                                ) : null}
+                                {messageLevelError ? (
+                                    <div className="mt-1">
+                                        <span className="font-semibold text-slate-900">Error:</span>{' '}
+                                        <span>{formatTranscriptionErrorLabel(messageLevelError)}</span>
+                                    </div>
+                                ) : null}
+                                {eligibilityBasis ? (
+                                    <div className="mt-1">
+                                        <span className="font-semibold text-slate-900">Eligibility basis:</span>{' '}
+                                        <span className="whitespace-pre-wrap break-words">{eligibilityBasis}</span>
+                                    </div>
+                                ) : null}
+                                {classificationRuleRef ? (
+                                    <div className="mt-1">
+                                        <span className="font-semibold text-slate-900">Rule ref:</span>{' '}
+                                        <span className="whitespace-pre-wrap break-words">{classificationRuleRef}</span>
+                                    </div>
+                                ) : null}
+                                {sourceNoteText ? (
+                                    <div className="mt-1">
+                                        <span className="font-semibold text-slate-900">Source note:</span>{' '}
+                                        <span className="whitespace-pre-wrap break-words">{sourceNoteText}</span>
+                                    </div>
+                                ) : null}
+                                {attachments.length > 0 ? (
+                                    <details className="mt-1">
+                                        <summary className="cursor-pointer select-none font-semibold text-slate-900">
+                                            Attachments ({attachments.length})
+                                        </summary>
+                                        <div className="mt-1 space-y-1">
+                                            {attachments.map((attachment, index) => {
+                                                const attachmentRecord = attachment as Record<string, unknown>;
+                                                const attachmentState =
+                                                    toTrimmedString(attachment.transcription_processing_state) ||
+                                                    toTrimmedString(attachmentRecord.transcriptionProcessingState) ||
+                                                    toTrimmedString(attachmentRecord.transcription_state);
+                                                const attachmentMedia =
+                                                    toTrimmedString(attachment.payload_media_kind) ||
+                                                    toTrimmedString(attachmentRecord.payloadMediaKind);
+                                                const attachmentEligibility =
+                                                    toTrimmedString(attachment.transcription_eligibility) ||
+                                                    toTrimmedString(attachmentRecord.transcriptionEligibility);
+                                                const attachmentClassification =
+                                                    toTrimmedString(attachment.classification_resolution_state) ||
+                                                    toTrimmedString(attachmentRecord.classificationResolutionState);
+                                                const attachmentError =
+                                                    toTrimmedString(attachment.transcription_error) ||
+                                                    toTrimmedString(attachmentRecord.transcriptionError);
+                                                const attachmentSkipReason =
+                                                    toTrimmedString(attachment.transcription_skip_reason) ||
+                                                    toTrimmedString(attachmentRecord.transcriptionSkipReason);
+                                                const attachmentName =
+                                                    toTrimmedString(attachmentRecord.file_name) ||
+                                                    toTrimmedString(attachmentRecord.name) ||
+                                                    toTrimmedString(attachmentRecord.fileName);
+                                                const displayIndexRaw =
+                                                    toNullableNumber(attachment.attachment_index) ??
+                                                    toNullableNumber(attachmentRecord.attachmentIndex);
+                                                const displayIndex = displayIndexRaw != null ? Math.floor(displayIndexRaw) : index;
+                                                return (
+                                                    <div key={`${rowMessageRef || row._id || 'msg'}-attachment-${index}`} className="rounded bg-white px-1.5 py-1 ring-1 ring-slate-200">
+                                                        <div className="flex flex-wrap items-center gap-1.5">
+                                                            <span className="font-semibold text-slate-900">#{displayIndex}</span>
+                                                            {attachmentName ? <span>{attachmentName}</span> : null}
+                                                            {attachmentMedia ? <span>media: {formatPayloadMediaKind(attachmentMedia)}</span> : null}
+                                                            {attachmentState ? <span>state: {formatProcessingStateLabel(attachmentState)}</span> : null}
+                                                            {attachmentClassification ? <span>classification: {attachmentClassification}</span> : null}
+                                                            {attachmentEligibility ? <span>eligibility: {attachmentEligibility}</span> : null}
+                                                        </div>
+                                                        {attachmentSkipReason ? (
+                                                            <div className="mt-0.5">skip: {formatSkipReasonLabel(attachmentSkipReason)}</div>
+                                                        ) : null}
+                                                        {attachmentError ? (
+                                                            <div className="mt-0.5">error: {formatTranscriptionErrorLabel(attachmentError)}</div>
+                                                        ) : null}
+                                                        {toTrimmedString(attachment.transcription_text) ? (
+                                                            <div className="mt-0.5">
+                                                                transcript: {toTrimmedString(attachment.transcription_text)}
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </details>
+                                ) : null}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>

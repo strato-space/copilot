@@ -15,6 +15,7 @@ import {
   OPENAI_RECOVERY_RETRY_CODES,
   isOpenAiRecoveryRetryCode,
 } from './shared/openAiErrors.js';
+import { resolveRetryOrchestrationState } from './shared/retryOrchestrationState.js';
 
 const logger = getLogger();
 
@@ -27,6 +28,7 @@ type ProcessingLoopResult = {
   ok: boolean;
   scanned_sessions: number;
   pending_transcriptions: number;
+  pending_classification: number;
   pending_categorizations: number;
   mode: 'runtime';
   requeued_transcriptions: number;
@@ -74,8 +76,16 @@ type MessageRecord = {
   to_transcribe?: boolean;
   is_transcribed?: boolean;
   transcribe_attempts?: number;
+  transcription_error?: unknown;
+  transcription_error_context?: unknown;
   transcription_retry_reason?: string;
+  transcription_skip_reason?: string;
+  transcription_eligibility_basis?: string;
+  transcription_eligibility?: string | null;
+  classification_resolution_state?: string | null;
+  transcription_processing_state?: string | null;
   transcription_next_attempt_at?: number | Date | string;
+  transcription_pending_probe_requested_at?: number | Date | string;
   categorization_retry_reason?: string;
   categorization_next_attempt_at?: number | Date | string;
   categorization?: unknown;
@@ -114,6 +124,14 @@ const toTimestamp = (value: unknown): number | null => {
   const ts = new Date(value as string | Date).getTime();
   return Number.isNaN(ts) ? null : ts;
 };
+
+const toLowerTrimmedString = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+};
+
+const hasNonEmptyString = (value: unknown): boolean =>
+  typeof value === 'string' && value.trim().length > 0;
 
 const getMessageCreatedAtMs = (message: MessageRecord): number | null => {
   const createdAt = toTimestamp(message.created_at);
@@ -240,6 +258,31 @@ const canRetryTranscribe = (message: MessageRecord, now: number): boolean => {
   return now - transcribeTs > FIX_DELAY_MS;
 };
 
+const needsPendingClassificationRefresh = (message: MessageRecord): boolean => {
+  if (message.to_transcribe === true) return true;
+  if (message.is_transcribed === true) return true;
+  if (message.transcription_eligibility !== null && message.transcription_eligibility !== undefined) return true;
+  if (toLowerTrimmedString(message.classification_resolution_state) !== 'pending') return true;
+  if (toLowerTrimmedString(message.transcription_processing_state) !== 'pending_classification') return true;
+  if (toTimestamp(message.transcription_pending_probe_requested_at) === null) return true;
+  if (hasNonEmptyString(message.transcription_retry_reason)) return true;
+  if (hasNonEmptyString(message.transcription_skip_reason)) return true;
+  if (message.transcription_error !== null && message.transcription_error !== undefined) return true;
+  return false;
+};
+
+const needsIneligibleRefresh = (message: MessageRecord): boolean => {
+  if (message.to_transcribe === true) return true;
+  if (message.is_transcribed === true) return true;
+  if (toLowerTrimmedString(message.classification_resolution_state) !== 'resolved') return true;
+  if (toLowerTrimmedString(message.transcription_eligibility) !== 'ineligible') return true;
+  if (toLowerTrimmedString(message.transcription_processing_state) !== 'classified_skip') return true;
+  if (message.transcription_error !== null && message.transcription_error !== undefined) return true;
+  if (message.transcription_error_context !== null && message.transcription_error_context !== undefined) return true;
+  if (hasNonEmptyString(message.transcription_retry_reason)) return true;
+  return false;
+};
+
 const hasProcessorFinished = (session: SessionRecord, processor: string): boolean => {
   const processorsData = session.processors_data || {};
   const bucket = processorsData[processor] as Record<string, unknown> | undefined;
@@ -289,6 +332,18 @@ export const handleProcessingLoopJob = async (
             {
               is_transcribed: { $ne: true },
               to_transcribe: true,
+            },
+            {
+              is_transcribed: { $ne: true },
+              transcription_eligibility: 'eligible',
+            },
+            {
+              is_transcribed: { $ne: true },
+              classification_resolution_state: 'pending',
+            },
+            {
+              is_transcribed: { $ne: true },
+              transcription_processing_state: 'pending_classification',
             },
             {
               categorization_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] },
@@ -386,7 +441,14 @@ export const handleProcessingLoopJob = async (
 
     if (messages.length === 0) continue;
 
-    const retryableTranscriptionMessages = messages.filter(isQuotaBlockedMessage);
+    const messageStates = messages.map((message) => ({
+      message,
+      state: resolveRetryOrchestrationState(message as unknown as Record<string, unknown>),
+    }));
+
+    const retryableTranscriptionMessages = messageStates
+      .filter(({ message, state }) => state.state === 'eligible' && isQuotaBlockedMessage(message))
+      .map(({ message }) => message);
     for (const message of retryableTranscriptionMessages) {
       if (message.to_transcribe) continue;
       await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
@@ -395,6 +457,70 @@ export const handleProcessingLoopJob = async (
           $set: {
             to_transcribe: true,
             transcribe_attempts: 0,
+          },
+        }
+      );
+    }
+
+    const pendingClassificationMessages = messageStates
+      .filter(({ state }) => !state.isTranscribed && state.state === 'pending')
+      .map(({ message }) => message);
+    for (const message of pendingClassificationMessages) {
+      if (!needsPendingClassificationRefresh(message)) continue;
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+        runtimeQuery({ _id: new ObjectId(message._id) }),
+        {
+          $set: {
+            to_transcribe: false,
+            is_transcribed: false,
+            transcription_eligibility: null,
+            classification_resolution_state: 'pending',
+            transcription_processing_state: 'pending_classification',
+            transcription_eligibility_basis: String(message.transcription_eligibility_basis || 'pending_requires_probe'),
+            transcription_pending_probe_requested_at: new Date(now),
+            transcription_pending_probe_request_source: 'processing_loop',
+            updated_at: new Date(),
+          },
+          $unset: {
+            transcription_inflight_job_key: 1,
+            transcription_skip_reason: 1,
+            transcription_error: 1,
+            transcription_error_context: 1,
+            transcription_retry_reason: 1,
+            transcription_next_attempt_at: 1,
+            error_message: 1,
+            error_timestamp: 1,
+          },
+        }
+      );
+    }
+
+    const ineligibleMessages = messageStates
+      .filter(({ state }) => !state.isTranscribed && state.state === 'ineligible')
+      .map(({ message, state }) => ({ message, state }));
+    for (const { message, state } of ineligibleMessages) {
+      if (!needsIneligibleRefresh(message)) continue;
+      await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
+        runtimeQuery({ _id: new ObjectId(message._id) }),
+        {
+          $set: {
+            to_transcribe: false,
+            is_transcribed: false,
+            transcription_eligibility: 'ineligible',
+            classification_resolution_state: 'resolved',
+            transcription_processing_state: 'classified_skip',
+            transcription_eligibility_basis: state.basis,
+            transcription_skip_reason: String(message.transcription_skip_reason || 'classified_ineligible'),
+            updated_at: new Date(),
+          },
+          $unset: {
+            transcription_inflight_job_key: 1,
+            transcription_error: 1,
+            transcription_error_context: 1,
+            transcription_retry_reason: 1,
+            transcription_next_attempt_at: 1,
+            error_message: 1,
+            error_timestamp: 1,
           },
         }
       );
@@ -613,11 +739,14 @@ export const handleProcessingLoopJob = async (
       }
     }
 
-    const untranscribedMessages = messages.filter(
-      (message) => !message.is_transcribed && canRetryTranscribe(message, now)
-    );
+    const eligibleRetryMessages = messageStates
+      .filter(({ message, state }) =>
+        !state.isTranscribed
+        && state.state === 'eligible'
+        && canRetryTranscribe(message, now)
+      );
 
-    for (const message of untranscribedMessages) {
+    for (const { message, state } of eligibleRetryMessages) {
       const messageObjectId = new ObjectId(message._id);
       const messageId = messageObjectId.toString();
 
@@ -633,9 +762,21 @@ export const handleProcessingLoopJob = async (
             $set: {
               transcribe_timestamp: now,
               to_transcribe: false,
+              is_transcribed: false,
+              transcription_eligibility: 'eligible',
+              classification_resolution_state: 'resolved',
+              transcription_processing_state: 'pending_transcription',
+              transcription_eligibility_basis: state.basis,
+              updated_at: new Date(),
             },
             $unset: {
+              transcription_skip_reason: 1,
+              transcription_error: 1,
+              transcription_error_context: 1,
+              transcription_retry_reason: 1,
               transcription_next_attempt_at: 1,
+              error_message: 1,
+              error_timestamp: 1,
             },
           }
         );
@@ -813,26 +954,43 @@ export const handleProcessingLoopJob = async (
   const pendingTranscriptions = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).countDocuments(
     runtimeQuery({
       is_deleted: { $ne: true },
-      to_transcribe: true,
       is_transcribed: { $ne: true },
+      classification_resolution_state: { $ne: 'pending' },
+      $or: [
+        { to_transcribe: true },
+        { transcription_eligibility: 'eligible' },
+        { transcription_processing_state: 'pending_transcription' },
+      ],
     })
   );
 
-    const pendingCategorizations = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).countDocuments(
-      runtimeQuery({
-        is_deleted: { $ne: true },
-        is_transcribed: true,
-        $or: [
-          { categorization: { $exists: false } },
-          { [`processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}.is_processed`]: { $ne: true } },
-          { categorization_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] } },
-        ],
-      })
-    );
+  const pendingClassification = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).countDocuments(
+    runtimeQuery({
+      is_deleted: { $ne: true },
+      is_transcribed: { $ne: true },
+      $or: [
+        { classification_resolution_state: 'pending' },
+        { transcription_processing_state: 'pending_classification' },
+      ],
+    })
+  );
+
+  const pendingCategorizations = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).countDocuments(
+    runtimeQuery({
+      is_deleted: { $ne: true },
+      is_transcribed: true,
+      $or: [
+        { categorization: { $exists: false } },
+        { [`processors_data.${VOICEBOT_PROCESSORS.CATEGORIZATION}.is_processed`]: { $ne: true } },
+        { categorization_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] } },
+      ],
+    })
+  );
 
   logger.info('[voicebot-worker] processing_loop scan finished', {
     scanned_sessions: sessions.length,
     pending_transcriptions: pendingTranscriptions,
+    pending_classification: pendingClassification,
     pending_categorizations: pendingCategorizations,
     requeued_transcriptions: requeuedTranscriptions,
     requeued_categorizations: requeuedCategorizations,
@@ -851,6 +1009,7 @@ export const handleProcessingLoopJob = async (
     ok: true,
     scanned_sessions: sessions.length,
     pending_transcriptions: pendingTranscriptions,
+    pending_classification: pendingClassification,
     pending_categorizations: pendingCategorizations,
     mode: 'runtime',
     requeued_transcriptions: requeuedTranscriptions,

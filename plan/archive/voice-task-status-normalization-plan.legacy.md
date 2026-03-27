@@ -3,7 +3,7 @@
 Этот документ сохранён только как historical/as-built reference.
 
 - Он не является текущим runtime contract.
-- Актуальный contract: [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md).
+- Актуальный contract: [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/closed/voice-task-surface-normalization-spec.md).
 - Legacy статусы ниже сохраняются только для истории миграции.
 
 # Контракт статусов Voice-задач: текущая реализованная схема

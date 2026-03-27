@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-03-27T09:18:05.611Z",
+  "session_ids": [
+    "69c640ad819e0febff2d87c3"
+  ],
+  "session_summaries": [
+    {
+      "session_id": "69c640ad819e0febff2d87c3",
+      "exists": true,
+      "counters": {
+        "messages_total": 15,
+        "session_log_total": 3,
+        "linked_tasks_total": 3,
+        "linked_tasks_by_status": {
+          "Draft": 3
+        },
+        "pm2_log_hits_total": 80,
+        "queue_job_matches_total": 0
+      },
+      "diagnostics": {
+        "queue_snapshot_error": "redis_unreachable"
+      },
+      "anomalies": [
+        "create_tasks_processing_stuck_candidate",
+        "create_tasks_processing_true_without_payload",
+        "queue_snapshot_unavailable"
+      ]
+    }
+  ]
+}
