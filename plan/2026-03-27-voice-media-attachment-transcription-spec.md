@@ -311,7 +311,10 @@ If the payload has audio but is resolved as non-speech under the configured nega
 
 - `attachments[]` may contain multiple payloads even though the stored object is one `voice_message`
 - classification must therefore be performed per attachment first, and per-attachment classification inside `attachments[]` is authoritative
-- first-wave canonicalization chooses one `primary_transcription_attachment_index` by stable rule: prefer the eligible attachment with the greatest known duration; attachments with unknown duration sort after those with known duration on that tier; if duration does not decide, prefer the greatest known file size; attachments with unknown size sort after those with known size on that tier; only then tie-break by lowest attachment index
+- first-wave canonicalization chooses one `primary_transcription_attachment_index` by stable rule with an explicit candidate set:
+  - if one or more attachments are `eligible`, the candidate set is the eligible attachments only;
+  - if all attachments are `resolved` and none is `eligible`, the candidate set is all resolved attachments;
+  - within the chosen candidate set, prefer the attachment with the greatest known duration; attachments with unknown duration sort after those with known duration on that tier; if duration does not decide, prefer the greatest known file size; attachments with unknown size sort after those with known size on that tier; only then tie-break by lowest attachment index
 - message-level fields such as `primary_payload_media_kind` and `transcription_eligibility` describe that primary attachment projection only, not the attachment set as a whole
 - if no attachment is `eligible` but one or more attachments remain unresolved, the message remains `classification_resolution_state=pending`
 - in that pending case, `primary_transcription_attachment_index=null` until an eligible primary is resolved
@@ -418,6 +421,7 @@ Operator resolution contract for `classification_resolution_state=pending`:
 - if the transition changes eligibility or changes which attachment should be primary, the system must recompute `primary_transcription_attachment_index`, refresh message-level classification projection, and refresh top-level transport anchors in the same transition;
 - explicit operator override of `primary_transcription_attachment_index` is distinct from eligibility classification and may choose only among currently eligible attachments;
 - if a manual or deterministic review reclassifies `transcription_error=empty_result` into `classified_skip` or back into `pending classification`, the transition must clear `transcription_error`, update `transcription_processing_state`, and preserve an audit trail of the reclassification basis;
+- any transition from an eligible/error-bearing state into `ineligible` or `pending` must clear stale `transcription_error` before the new state is committed;
 - in Phase 1, pending messages must surface in an operator-visible queue or list immediately through the normal read model; stronger timed alerting may be added later;
 - once the message leaves `pending`, normal retry semantics apply.
 
@@ -459,6 +463,12 @@ Required per-attachment classification fields inside `attachments[]` whenever me
 - `transcription_eligibility`
 - `transcription_eligibility_basis`
 - `classification_rule_ref`
+
+Required per-attachment ASR-result fields inside `attachments[]` whenever non-primary or demoted attachment completions may be retained:
+
+- normalized transcript text for that attachment, or explicit null when no transcript fact exists
+- raw provider transcript/result payload or exact semantic equivalent for that attachment
+- `transcription_error` plus contextual diagnostics for that attachment when ASR failed
 
 Recommended per-attachment fields inside `attachments[]`:
 
